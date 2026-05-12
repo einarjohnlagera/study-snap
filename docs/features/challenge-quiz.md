@@ -82,18 +82,34 @@ Challenge mode supports on-demand question batching within a live session:
   - `+5 Questions` / `Adding...` — visible when `totalQuestions < MAX_SESSION_QUESTIONS` and `noMoreQuestions` is false
   - `Complete Quiz` — submits the session and navigates to the result screen
 - An action hint appears above the buttons at the last question: `What would you like to do next?`
+- The action bar is rendered by `StickyAssessmentFooter` (`components/ui/sticky-assessment-footer.tsx`) — fixed to the viewport bottom at all breakpoints with iOS safe-area inset and backdrop blur
+- The hint text is passed via the `hint` prop and appears above the buttons
 
 **Board Exam Mode:**
 
+- Uses `variant="board-exam"` on `StickyAssessmentFooter` (slightly different border color)
 - Retains the original submit button label (`submitButtonLabel`), unchanged by progressive quiz work
 
 ## Scoring
 
 - Score is based on **answered questions** (`selectedChoices.size()`), not the total questions in the session
 - `computeStatistics()` uses `selectedChoices.size()` as `totalQuestions` when the user has answered at least one question; falls back to `quiz.size()` only when nothing is answered
-- Result screen copy: `{correctAnswers} of {totalQuestions} answered correctly`
-- Score Summary column header: `Answered` (not `Total`)
 - This allows users to finish early and receive a fair score based only on what they attempted
+
+### Dual score display (Challenge mode only)
+
+When the user skips questions (`hasUnansweredQuestions = !isBoardExamMode && quiz.length > result.totalQuestions`), the result screen shows two scores side by side:
+
+- **Answered Accuracy** (`result.scorePercentage`) — correct out of answered; primary metric
+- **Overall Completion Score** (`Math.round(correctAnswers / totalGenerated * 100)`) — correct out of all generated questions
+
+Helper text explains the distinction. When all questions were answered, only Answered Accuracy is shown (same as before).
+
+**Score Summary** columns when `hasUnansweredQuestions`:
+- Correct, Answered Questions, Total Questions, Answered Accuracy (4 columns)
+
+**Score Summary** columns when all answered:
+- Correct, Answered Questions, Percentage (3 columns, same layout as before)
 
 ## UX microcopy
 
@@ -138,8 +154,10 @@ Current save toast:
 ## Review and export
 
 - completed sessions remain note-owned
-- answer review uses the shared review layout
+- answer review uses the shared review layout (`QuizAnswerReview`)
 - review/export must use persisted session data only
+- standalone session review (`NoteSessionReviewPageClient`) renders `QuizAnswerReview` with `stickyNav={true}`, which replaces the inline Prev/Next navigation with a `StickyAssessmentFooter` fixed to the viewport bottom — eliminates layout jitter when explanations expand/collapse
+- inline answer review on the challenge quiz result page does NOT use `stickyNav` (inline nav is correct there)
 
 ## Leave quiz guard
 

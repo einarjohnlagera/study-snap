@@ -170,7 +170,7 @@ export function NoteSessionReviewPageClient({
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4 sm:px-6 sm:py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4 pb-28 sm:px-6 sm:py-6 sm:pb-28">
       <BackLink href={backHref} label={backLabel} />
 
       <div className="space-y-1">

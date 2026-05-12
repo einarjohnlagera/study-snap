@@ -4,6 +4,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import type { QuizItem } from "@/lib/api";
 import {
   computeConceptBreakdown,
@@ -23,6 +24,7 @@ type QuizAnswerReviewProps = {
   title?: string;
   className?: string;
   footer?: ReactNode;
+  stickyNav?: boolean;
 };
 
 export function QuizAnswerReview({
@@ -32,6 +34,7 @@ export function QuizAnswerReview({
   title = "Review Answers",
   className,
   footer,
+  stickyNav = false,
 }: QuizAnswerReviewProps) {
   const [mode, setMode] = useState<ReviewMode>(initialMode);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
@@ -113,6 +116,7 @@ export function QuizAnswerReview({
     : "Correct answer unavailable";
 
   return (
+    <>
     <Card className={cn("motion-fade-enter space-y-4 p-4 sm:p-6", className)} aria-label="Answer review">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
@@ -356,31 +360,33 @@ export function QuizAnswerReview({
         </p>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-foreground/70">
-          Reviewing {visibleItems.length === 0 ? 0 : effectiveReviewIndex + 1} of {visibleItems.length}
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => setCurrentReviewIndex((current) => Math.max(0, current - 1))}
-            disabled={effectiveReviewIndex <= 0}
-          >
-            Previous Question
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => setCurrentReviewIndex((current) => Math.min(visibleItems.length - 1, current + 1))}
-            disabled={effectiveReviewIndex >= visibleItems.length - 1}
-          >
-            Next Question
-          </Button>
+      {!stickyNav ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-foreground/70">
+            Reviewing {visibleItems.length === 0 ? 0 : effectiveReviewIndex + 1} of {visibleItems.length}
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setCurrentReviewIndex((current) => Math.max(0, current - 1))}
+              disabled={effectiveReviewIndex <= 0}
+            >
+              Previous Question
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setCurrentReviewIndex((current) => Math.min(visibleItems.length - 1, current + 1))}
+              disabled={effectiveReviewIndex >= visibleItems.length - 1}
+            >
+              Next Question
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {footer ? (
         <div className="space-y-3 border-t border-border pt-4">
@@ -394,5 +400,36 @@ export function QuizAnswerReview({
         </div>
       ) : null}
     </Card>
+    {stickyNav ? (
+      <StickyAssessmentFooter
+        data-testid="quiz-answer-review-sticky-nav"
+        hint={
+          visibleItems.length > 0 ? (
+            <span>Reviewing {effectiveReviewIndex + 1} of {visibleItems.length}</span>
+          ) : null
+        }
+      >
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => setCurrentReviewIndex((current) => Math.max(0, current - 1))}
+            disabled={effectiveReviewIndex <= 0}
+          >
+            Previous Question
+          </Button>
+          <Button
+            type="button"
+            className="flex-1"
+            onClick={() => setCurrentReviewIndex((current) => Math.min(visibleItems.length - 1, current + 1))}
+            disabled={effectiveReviewIndex >= visibleItems.length - 1}
+          >
+            Next Question
+          </Button>
+        </div>
+      </StickyAssessmentFooter>
+    ) : null}
+    </>
   );
 }

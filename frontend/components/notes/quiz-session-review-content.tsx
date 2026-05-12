@@ -60,6 +60,7 @@ export function QuizSessionReviewContent({
           title={title}
           quiz={review.quiz}
           selectedChoices={toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz)}
+          stickyNav
         />
       ) : (
         <Card className="space-y-4 p-4 sm:p-6">
