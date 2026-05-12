@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { AppModal } from "@/components/ui/app-modal";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
+import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
@@ -1067,7 +1068,7 @@ export default function ChallengeQuizPage() {
   return (
     <main className={cn(
       "mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:px-6 sm:py-10",
-      phase === "running" && "pb-28 sm:pb-10",
+      phase === "running" && "pb-28 sm:pb-28",
     )}>
       {phase === "running" ? (
         <div
@@ -1594,24 +1595,22 @@ export default function ChallengeQuizPage() {
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </Card>
-          <div
+          <StickyAssessmentFooter
             data-testid="challenge-quiz-action-bar"
-            className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
+            variant={isBoardExamMode ? "board-exam" : "default"}
+            hint={!isBoardExamMode && currentIndex >= totalQuestions - 1 && !boardExamTimerExpired
+              ? noMoreQuestions || totalQuestions >= MAX_SESSION_QUESTIONS
+                ? `You've answered all ${totalQuestions} questions — ready to submit?`
+                : totalQuestions === 5
+                  ? "Good start — want to keep going?"
+                  : totalQuestions === 10
+                    ? "10 questions in — push to 15?"
+                    : totalQuestions === 15
+                      ? "Almost there — finish with all 20?"
+                      : "What would you like to do next?"
+              : undefined}
           >
-            {!isBoardExamMode && currentIndex >= totalQuestions - 1 && !boardExamTimerExpired ? (
-              <p className="mx-auto mb-2 w-full max-w-3xl text-xs text-foreground/55">
-                {noMoreQuestions || totalQuestions >= MAX_SESSION_QUESTIONS
-                  ? `You've answered all ${totalQuestions} questions — ready to submit?`
-                  : totalQuestions === 5
-                    ? "Good start — want to keep going?"
-                    : totalQuestions === 10
-                      ? "10 questions in — push to 15?"
-                      : totalQuestions === 15
-                        ? "Almost there — finish with all 20?"
-                        : "What would you like to do next?"}
-              </p>
-            ) : null}
-            <div className="mx-auto flex w-full max-w-3xl gap-2 sm:justify-start">
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -1673,7 +1672,7 @@ export default function ChallengeQuizPage() {
                 </>
               )}
             </div>
-          </div>
+          </StickyAssessmentFooter>
         </div>
       ) : phase === "complete" && result ? (
         <Card className={cn("motion-fade-enter space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
@@ -1711,45 +1710,81 @@ export default function ChallengeQuizPage() {
               </Button>
             </Card>
           ) : null}
-          <div className={cn(
-            "rounded-md border bg-background p-4",
-            isBoardExamMode ? "border-foreground/15" : "border-border",
-          )}>
-            <p className="text-lg font-semibold">{result.scorePercentage}%</p>
-            <p className="mt-1 text-sm text-foreground/80">
-              {result.correctAnswers} of {result.totalQuestions} answered correctly
-            </p>
-            <p className="mt-1 text-sm text-foreground/70">
-              Duration: {formatTimer(result.durationSeconds ?? 0)}
-            </p>
-            {timedOut ? (
-              <p className="mt-2 text-sm text-foreground/75">Time ran out. Your answers were submitted automatically.</p>
-            ) : null}
-            <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage, activeMode)}</p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Performance</span>
-              <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getPerformanceBadgeClass(result.performanceLevel)}`}>
-                {result.performanceLevel}
-              </div>
-            </div>
-          </div>
-          <Card className="space-y-3 p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Score Summary</h2>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="rounded-md border border-border bg-background px-3 py-2">
-                <p className="text-xs text-foreground/65">Correct</p>
-                <p className="text-sm font-semibold">{result.correctAnswers}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background px-3 py-2">
-                <p className="text-xs text-foreground/65">Answered</p>
-                <p className="text-sm font-semibold">{result.totalQuestions}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background px-3 py-2">
-                <p className="text-xs text-foreground/65">Percentage</p>
-                <p className="text-sm font-semibold">{result.scorePercentage}%</p>
-              </div>
-            </div>
-          </Card>
+          {(() => {
+            const totalGenerated = quiz.length > 0 ? quiz.length : result.totalQuestions;
+            const overallScorePercentage = totalGenerated > 0 ? Math.round((result.correctAnswers / totalGenerated) * 100) : 0;
+            const hasUnansweredQuestions = !isBoardExamMode && totalGenerated > result.totalQuestions;
+            return (
+              <>
+                <div className={cn(
+                  "rounded-md border bg-background p-4",
+                  isBoardExamMode ? "border-foreground/15" : "border-border",
+                )}>
+                  {hasUnansweredQuestions ? (
+                    <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Answered Accuracy</p>
+                        <p className="mt-1 text-2xl font-bold">{result.scorePercentage}%</p>
+                        <p className="mt-0.5 text-xs text-foreground/65">{result.correctAnswers} correct of {result.totalQuestions} answered</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Overall Completion Score</p>
+                        <p className="mt-1 text-2xl font-bold text-foreground/70">{overallScorePercentage}%</p>
+                        <p className="mt-0.5 text-xs text-foreground/65">{result.correctAnswers} correct of {totalGenerated} total</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-lg font-semibold">{result.scorePercentage}%</p>
+                  )}
+                  {!hasUnansweredQuestions ? (
+                    <p className="mt-1 text-sm text-foreground/80">
+                      {result.correctAnswers} of {result.totalQuestions} answered correctly
+                    </p>
+                  ) : (
+                    <p className="text-xs text-foreground/60">
+                      Answered Accuracy shows performance on attempted questions. Overall Completion Score counts unanswered questions as incomplete.
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm text-foreground/70">
+                    Duration: {formatTimer(result.durationSeconds ?? 0)}
+                  </p>
+                  {timedOut ? (
+                    <p className="mt-2 text-sm text-foreground/75">Time ran out. Your answers were submitted automatically.</p>
+                  ) : null}
+                  <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage, activeMode)}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Performance</span>
+                    <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getPerformanceBadgeClass(result.performanceLevel)}`}>
+                      {result.performanceLevel}
+                    </div>
+                  </div>
+                </div>
+                <Card className="space-y-3 p-4">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Score Summary</h2>
+                  <div className={cn("grid gap-2", hasUnansweredQuestions ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
+                    <div className="rounded-md border border-border bg-background px-3 py-2">
+                      <p className="text-xs text-foreground/65">Correct</p>
+                      <p className="text-sm font-semibold">{result.correctAnswers}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background px-3 py-2">
+                      <p className="text-xs text-foreground/65">Answered Questions</p>
+                      <p className="text-sm font-semibold">{result.totalQuestions}</p>
+                    </div>
+                    {hasUnansweredQuestions ? (
+                      <div className="rounded-md border border-border bg-background px-3 py-2">
+                        <p className="text-xs text-foreground/65">Total Questions</p>
+                        <p className="text-sm font-semibold">{totalGenerated}</p>
+                      </div>
+                    ) : null}
+                    <div className="rounded-md border border-border bg-background px-3 py-2">
+                      <p className="text-xs text-foreground/65">{hasUnansweredQuestions ? "Answered Accuracy" : "Percentage"}</p>
+                      <p className="text-sm font-semibold">{result.scorePercentage}%</p>
+                    </div>
+                  </div>
+                </Card>
+              </>
+            );
+          })()}
           <Card className="space-y-3 p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Concept Breakdown</h2>
             {result.conceptBreakdown.length > 0 ? (
