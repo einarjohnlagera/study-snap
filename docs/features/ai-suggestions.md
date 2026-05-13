@@ -49,6 +49,13 @@ In the normal note flow, these suggestions are transient UI state only. They mus
 - applying suggestions should merge tags with case-insensitive deduplication
 - skipping or closing the modal must not persist any metadata changes
 
+## Subject Resilience Rules
+
+- AI subject suggestions are optional metadata and must not fail Study Pack generation.
+- Broad AI-suggested subjects such as `Business`, `Medicine`, `Engineering`, and `Law` are ignored/rejected safely instead of being saved silently.
+- Valid specific suggestions such as `Electrical Engineering`, `Clinical Chemistry`, `Accountancy`, and `Criminal Law` remain available for the normal review/apply flow.
+- Existing note subjects remain unchanged when the AI subject suggestion is invalid.
+
 ## Onboarding Exception
 
 Onboarding may explicitly opt into backend auto-apply for empty metadata fields so the guided first-win flow stays low-friction. That exception must stay separate from the normal note flow.

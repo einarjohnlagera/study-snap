@@ -58,13 +58,14 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 
 ### Subject
 - exactly one subject value per Study Pack
-- must be a **broad academic domain or curriculum category** — domain only, no topic suffix
-- correct examples: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `History`, `Engineering`, `Medicine`, `Law`
+- should be a specific academic subject or curriculum category — label only, no topic suffix
+- correct examples: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `History`, `Civil Engineering`, `Electrical Engineering`, `Anatomy`, `Nursing`, `Accountancy`, `Constitutional Law`
 - incorrect: `Biology – Cell Division`, `Physics: Ohm's Law`, `Mathematics – Derivatives`
+- overly broad suggestions such as `Business`, `Medicine`, `Engineering`, and `Law` are rejected as AI metadata and ignored safely
 - topic-level specificity belongs in tags and key concepts, not in subject
 - concise and human-readable, not sentence-like, at most 4 words
 - backend enforcement: any combined domain-topic value (`Biology – Cell Division`) is stripped to the domain part (`Biology`) before saving
-- if stripping produces an empty/unusable result the study pack fails with `LLM_INVALID_OUTPUT`
+- if stripping produces an empty/unusable result, the subject suggestion is ignored; Study Pack generation continues when core summary/key concept/quiz output is valid
 
 ### Tags
 - generate 3 to 6 tags
@@ -82,7 +83,8 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 ### Validation reliability
 - subject and quiz concept validation now logs the failing field value with requestId, field name, and reason for safe debugging
 - full note content, full prompt, and full raw LLM output are never logged
-- sanitization/repair runs on subject and concept before a final validation failure is thrown
+- sanitization/repair runs on subject and concept before final handling
+- AI metadata suggestions are non-blocking: broad or invalid subject suggestions and optional tag metadata issues must not fail or roll back Study Pack generation
 - technical notes (Ohm's Law, electrical engineering, math formulas) should not fail due to harmless LLM metadata drift
 
 ## Note import flow
@@ -233,8 +235,9 @@ User-facing generation statuses:
   - no existing `tags` -> default `Use AI Tags`
 - Tag comparison must be case-insensitive and whitespace-trimmed when deciding whether an AI tag is actually new.
 - AI tag suggestions should show only new tags as suggestions and should mark overlapping tags as already present on the note instead of presenting them as fresh additions.
-- AI subject output must be a broad academic domain, not a specific topic. Topic specificity belongs in tags.
-- Subject must be domain-level (e.g., `Biology`, `Engineering`). Combined domain-topic values are normalized back to the domain before save.
+- AI subject output must be a reusable academic subject label, not a specific topic. Topic specificity belongs in tags.
+- Subject should avoid broad umbrella labels like `Engineering`, `Medicine`, `Business`, and `Law`; use a clearer subject such as `Electrical Engineering`, `Clinical Chemistry`, `Accountancy`, or `Criminal Law` when the note supports it.
+- Broad or invalid AI subject suggestions are ignored rather than saved or allowed to fail generation. Combined domain-topic values are normalized back to the domain before save.
 - Generation context should use learner level, course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free.
 - Onboarding is the exception: it may opt into backend auto-apply for empty metadata fields so the guided flow stays zero-friction.
 

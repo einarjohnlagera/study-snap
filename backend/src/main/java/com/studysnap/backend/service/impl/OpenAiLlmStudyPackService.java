@@ -260,7 +260,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             StudyPackGenerationContext context
     ) {
         validatePromptStudyPack(promptStudyPack);
-        String normalizedSubject = normalizeAndValidateSubject(promptStudyPack.subject(), context);
+        String normalizedSubject = normalizeGeneratedSubject(promptStudyPack.subject());
         List<String> normalizedKeyConcepts = normalizeAndValidateKeyConcepts(promptStudyPack.keyConcepts());
         List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
         List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz());
@@ -595,7 +595,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return message;
     }
 
-    private String normalizeAndValidateSubject(String subject, StudyPackGenerationContext context) {
+    private String normalizeGeneratedSubject(String subject) {
         String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
         // Strip subtopic suffix — subjects must be domain-only (e.g. "Biology", not "Biology – Cell Division")
         if (normalized != null) {
@@ -607,11 +607,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
         }
         boolean hasContent = StringNormalizationUtils.containsAlphaNumeric(normalized);
-        if (hasContent && SubjectSanitizer.isOverlyBroad(normalized)
-                && context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
-            log.warn("requestId={} field=subject value='{}' reason='overly broad given course/program context'",
+        if (hasContent && SubjectSanitizer.isOverlyBroad(normalized)) {
+            log.warn("requestId={} field=subject value='{}' reason='overly broad ai suggestion ignored'",
                     MDC.get("requestId"), truncateForLog(normalized));
-            throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
+            return null;
         }
         boolean withinWordLimit = hasContent && StringNormalizationUtils.hasWordCountBetween(normalized, 1, SubjectSanitizer.MAX_SUBJECT_WORDS);
         if (!hasContent || !withinWordLimit) {
@@ -628,7 +627,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
             log.warn("requestId={} field=subject value='{}' reason='{}'",
                     MDC.get("requestId"), truncateForLog(normalized), reason);
-            throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
+            return null;
         }
         return normalized;
     }
@@ -645,8 +644,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
 
     private List<String> normalizeAndValidateTags(List<String> tags, String title) {
-        if (tags == null || tags.size() < 3 || tags.size() > 6) {
-            throw invalidOutput("The study pack service returned invalid tag metadata. Please try again.");
+        if (tags == null || tags.isEmpty()) {
+            log.warn("requestId={} field=tags reason='missing ai tag suggestions ignored'", MDC.get("requestId"));
+            return List.of();
         }
 
         String normalizedTitle = StringNormalizationUtils.normalizeForDuplicateCheck(title);
@@ -656,14 +656,22 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String normalizedTag = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(tag);
             if (!StringNormalizationUtils.containsAlphaNumeric(normalizedTag)
                     || !StringNormalizationUtils.hasWordCountBetween(normalizedTag, 1, 3)) {
-                throw invalidOutput("The study pack service returned invalid tag metadata. Please try again.");
+                log.warn("requestId={} field=tags value='{}' reason='invalid ai tag ignored'",
+                        MDC.get("requestId"), truncateForLog(normalizedTag));
+                continue;
             }
 
             String normalizedTagForComparison = StringNormalizationUtils.normalizeForDuplicateCheck(normalizedTag);
             if (normalizedTagForComparison.isBlank()
-                    || normalizedTagForComparison.equals(normalizedTitle)
-                    || !normalizedSeenTags.add(normalizedTagForComparison)) {
-                throw invalidOutput("The study pack service returned invalid tag metadata. Please try again.");
+                    || normalizedTagForComparison.equals(normalizedTitle)) {
+                log.warn("requestId={} field=tags value='{}' reason='title-matching ai tag ignored'",
+                        MDC.get("requestId"), truncateForLog(normalizedTag));
+                continue;
+            }
+            if (!normalizedSeenTags.add(normalizedTagForComparison)) {
+                log.warn("requestId={} field=tags value='{}' reason='duplicate ai tag ignored'",
+                        MDC.get("requestId"), truncateForLog(normalizedTag));
+                continue;
             }
             normalizedTags.add(normalizedTag);
         }
@@ -859,7 +867,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         List<String> lines = new ArrayList<>();
         lines.add("Subject guidance: use the specific academic subject or professional discipline covered by the note — label only, no topic suffix.");
         lines.add("For K-12 learners, use the curriculum subject the note belongs to: Biology, Physics, Chemistry, Mathematics, History, English, Economics, Filipino, Science, Social Studies.");
-        lines.add("For college and professional learners, use the specific field of study: Civil Engineering, Nursing, Accountancy, Computer Science, Pharmacy, Architecture, Medicine, Law.");
+        lines.add("For college and professional learners, use the specific field of study: Civil Engineering, Electrical Engineering, Mechanical Engineering, Nursing, Anatomy, Pharmacology, Clinical Chemistry, Accountancy, Marketing, Business Finance, Computer Science, Pharmacy, Architecture, Constitutional Law, Criminal Law, Civil Law, Legal Ethics.");
+        lines.add("Do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law.");
+        lines.add("If no specific subject is clear, return null/no subject suggestion; do not guess a broad subject.");
         lines.add("Do not combine subject and topic. Incorrect: \"Biology – Cell Division\", \"Physics: Ohm's Law\", \"Math – Derivatives\".");
         lines.add("Topic-level specificity belongs in tags and key concepts, not in subject.");
         if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
@@ -1362,7 +1372,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         PromptStudyPack {
             Objects.requireNonNull(title, "title");
             Objects.requireNonNull(summary, "summary");
-            Objects.requireNonNull(subject, "subject");
             Objects.requireNonNull(tags, "tags");
             Objects.requireNonNull(keyConcepts, "keyConcepts");
             Objects.requireNonNull(quiz, "quiz");

@@ -33,9 +33,10 @@ Rules:
 - a saved custom subject becomes available in future subject suggestions after the note is persisted.
 - subject saves normalize whitespace plus dash formatting so equivalent values like `Biology-Cell Division` and `Biology – Cell Division` reuse the same subject suggestion when possible.
 - subject reuse checks are case-insensitive, but the saved/displayed subject should keep a readable academic label format.
-- AI-generated subject must be a **broad academic domain or curriculum category** — domain only, no topic suffix:
-  - correct: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `Filipino`, `Engineering`, `Medicine`, `Law`
+- AI-generated subject should be a reusable academic subject or curriculum category — label only, no topic suffix:
+  - correct: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `Filipino`, `Civil Engineering`, `Nursing`, `Accountancy`, `Criminal Law`
   - incorrect: `Biology – Cell Division`, `Physics: Ohm's Law`, `Mathematics – Derivatives`
+- Overly broad AI subject suggestions such as `Engineering`, `Medicine`, `Business`, and `Law` are ignored safely and must not fail Study Pack generation.
 - Topic-level specificity belongs in tags and key concepts, not in subject
 - Subject is a reusable library shelf label — it should group many notes, not describe one note
 - The backend strips any subtopic suffix (`Biology – Cell Division` → `Biology`) before saving

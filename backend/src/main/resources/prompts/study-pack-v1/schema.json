@@ -11,8 +11,7 @@
       "minLength": 20
     },
     "subject": {
-      "type": "string",
-      "minLength": 2,
+      "type": ["string", "null"],
       "maxLength": 64
     },
     "tags": {

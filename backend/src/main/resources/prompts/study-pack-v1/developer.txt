@@ -27,15 +27,22 @@ Summary
 
 Subject
 - exactly 1 value
-- subject must be a single broad academic domain or curriculum-friendly category
+- subject must be a single academic subject or curriculum-friendly category
 - do NOT include a topic or subtopic — domain only
 - do NOT return hyphenated, colon-separated, or dash-separated subject–topic combinations
-- correct examples: Biology, Physics, Mathematics, Computer Science, English, Filipino, History, Chemistry, Economics, Engineering, Medicine, Law
+- correct examples: Biology, Physics, Mathematics, Computer Science, English, Filipino, History, Chemistry, Economics, Civil Engineering, Electrical Engineering, Anatomy, Nursing, Accountancy, Constitutional Law
 - incorrect examples: "Biology - Photosynthesis", "Physics: Ohm's Law", "Mathematics – Derivatives", "Computer Science – Object-Oriented Programming"
 - topic-level specificity belongs in tags and key concepts, not in subject
 - subject is a reusable library shelf label — it should group many notes, not describe one note
 - concise and human-readable, at most 4 words
 - do not return a sentence
+- do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law
+- suggest a more specific subject when possible:
+  - Engineering -> Civil Engineering, Electrical Engineering, Mechanical Engineering, Engineering Mechanics
+  - Medicine -> Anatomy, Physiology, Pharmacology, Clinical Chemistry, Nursing
+  - Business -> Accountancy, Marketing, Economics, Business Finance, Entrepreneurship
+  - Law -> Constitutional Law, Criminal Law, Civil Law, Legal Ethics
+- if no specific subject is clear, return null/no subject suggestion; do not guess a broad subject
 
 Tags
 - 3 to 6 tags
