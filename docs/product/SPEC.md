@@ -2,7 +2,7 @@
 
 Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
-Current documentation baseline: `v0.11.0 - Learning Flow Foundation`
+Current documentation baseline: `v0.13.0 - Complete the Promise, Reach New Audiences`
 
 ## Product Overview
 

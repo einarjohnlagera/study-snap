@@ -6,15 +6,56 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.12.0 - Learning Experience, Discovery, and Retention` is the current in-progress release.
+`v0.13.0 - Complete the Promise, Reach New Audiences` is the current in-progress release.
 
-`v0.11.0 - Learning Flow Foundation` is complete and is the previous documentation baseline.
+`v0.12.0 - Learning Experience, Discovery, and Retention` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
-## v0.12.0 - Learning Experience, Discovery, and Retention
+## v0.13.0 - Complete the Promise, Reach New Audiences
 
 **Status: In Progress**
+
+Theme: ship the modes that were already promised (Long Exam), open NoteLib to a second audience (Professional / Interview Practice), improve organic discovery through SEO, and close out infrastructure research items deferred from v0.12.0.
+
+Primary focus:
+
+1. **Long Exam Mode v1 (Student-facing, Pro-only)** — backend session support, fixed long-form generation (not progressive), pause/resume, mastery report result screen; single-note at launch; shared Advanced Exam quota bucket with Board Exam Mode
+
+   - Backend: `LONG_EXAM` discriminator on `QuickReviewSessionMode`; question set generated and committed in full before the session starts; `PAUSED` state support; mastery report data stored in session state JSONB; reuses existing session lifecycle (`GENERATING → IN_PROGRESS → COMPLETED / FORFEITED / FAILED`) and generation lock
+   - Frontend: setup confirmation screen with expected duration; fixed progress indicator (no `+5 Questions` control); `Leave & Resume Later` as the primary leave action; mastery report result screen (coverage, weak domains, suggested next step, inline learner-level pill allowed)
+   - Access: Pro-only at launch; single note; multi-note deferred to v0.14.0+
+   - Profile visibility: Student profile (primary emphasis), Board Taker profile (secondary, less ceremony than Board Exam)
+
+2. **Professional Profile activation + Interview Practice Mode** — `PROFESSIONAL` profile type is no longer `Coming Soon`; users can select it in onboarding; Interview Practice is a profile-gated presentation layer over the existing Challenge Quiz engine with interview-style LLM prompt framing
+
+   - Backend: Professional profile selectable in onboarding; interview-style prompt framing for `PROFESSIONAL` users (definition + situational mix, based on existing LLM prompt hint stubs); no new session type, no new entity tables
+   - Frontend: `lib/exam-mode-visibility.ts` updated so Professional profile shows `Interview Practice` instead of `Challenge Quiz`; same challenge-quiz page, different label and setup copy; result screen copy adjusted to interview framing; Professional option enabled in onboarding profile-type selection
+   - Access: All plans (same access rules as Challenge Quiz for Professional users)
+   - Interview Practice is not a new session mode — it is `CHALLENGE` with profile-aware labels and prompts
+
+3. **Faster quiz generation** — promote from research-only (v0.12.0 deferred) to research → implement; profile current LLM latency end-to-end (prompt build, API call, JSON parse, DB write); evaluate streaming responses to unblock frontend earlier, model selection (`gpt-4.1-mini` for quiz generation), and early session creation; implement the approach that findings support; frontend may gain a generation progress indicator if streaming is adopted
+
+4. **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` landing pages replacing the current redirect to the filtered library; static `<title>` and `<meta description>` per subject; server-rendered note cards ranked by decay scoring; sitemap update to include subject pages; deferred from v0.12.0 (ROADMAP item J)
+
+5. **Proration / recomputation design doc** — design how mid-cycle plan changes (upgrade and downgrade) recompute Study Pack and quiz quotas; output: a design doc under `docs/product/`; no implementation until the design is reviewed; deferred from v0.12.0
+
+6. **Stale docs cleanup** — audit `docs/` for files still referencing v0.11.0 or earlier resolved items; update or remove
+
+### Implementation stances
+
+- Professional Profile must not fork entity tables — all profiles share the same Note/StudyPack/Session model
+- Interview Practice is a profile-gated label and prompt change only, not a new session type; implementation is `CHALLENGE` with `PROFESSIONAL` profile detection
+- Long Exam backend must reuse the existing session lifecycle and generation lock; no new persistence aggregate
+- Subject landing pages must be server-rendered; do not implement as a client-rendered filter redirect
+- No proration implementation until the design doc is reviewed and approved
+- Exactly five quiz-flavored modes exist: Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam; adding a sixth requires updating `docs/product/EXAM_MODES.md` and this roadmap together
+
+---
+
+## v0.12.0 - Learning Experience, Discovery, and Retention
+
+**Status: Released**
 
 Current phase emphasis:
 
@@ -249,18 +290,21 @@ Current session-review UX:
 
 ## Future Directions
 
-### v0.13+ exam-mode work (planned)
+### v0.13 exam-mode work (in progress)
 
-Sequencing for the exam-mode hierarchy defined in `docs/product/EXAM_MODES.md`:
+Long Exam Mode v1 and Interview Practice Mode are the primary exam-mode items in v0.13.0. See the v0.13.0 section above for full scope.
 
-- **v0.13** — Long Exam Mode v1 (single-note, fixed long-form, Pro-only); profile-aware mode-selection rendering; learner-level grouped UX in profile and the existing post-onboarding Dashboard prompt (no new onboarding step); Guidance Engine extensions (`cooldownMs`, dashboard contextual tips, course/program inline reminder)
-- **v0.14+** — multi-note Long Exam; Board Exam advanced result analytics (trend over time, percentile-style framing); Long Exam tier promotion to Plus only if usage data justifies it
+### v0.14+ exam-mode work (planned)
+
+- **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context
+- **Board Exam advanced result analytics** — trend over time, percentile-style framing; planned in `docs/product/EXAM_MODES.md`
+- **Long Exam tier promotion to Plus** — only if v0.13.0 usage data justifies the LLM cost
 - **Planning-only** — cross-profile mode unlock (Students opting into Board Exam without changing profile); curated exam decks / cohort content (Pro+); cross-profile journey (Student → Board Taker upgrade flow with continuity)
 
 ### Public Library Discovery — Future Items
 
 - **Trending this week section (H)** — a new discovery section above Featured showing notes gaining traction in the last 7 days; blocked on backend: `NoteListItemResponse` has no windowed engagement fields; requires `recentCopyCount` / `recentLikeCount` or a precomputed rolling 7-day aggregate before this section can be built correctly; do not implement under a "Trending" label using lifetime totals — the signal would be misleading
-- **Subject landing pages (J)** — `/public/library/[subject]` currently redirects to the filtered library; a proper landing page (SEO-friendly intro, Featured/Popular notes for that subject, sample mini-quiz) compounds "premium educational" perception and provides long-tail SEO; deferred until copywriter bandwidth is available
+- **Subject landing pages (J)** — moved to v0.13.0 scope; `/public/library/[subject]` proper server-rendered landing pages with per-subject metadata and decay-ranked note cards
 
 Potential expansion areas after `v0.8.0`:
 

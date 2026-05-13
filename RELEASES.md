@@ -1,8 +1,30 @@
 # RELEASES.md - NoteLib
 
-## v0.12.0 - Learning Experience, Discovery, and Retention
+## v0.13.0 - Complete the Promise, Reach New Audiences
 
 **Status: In Progress**
+
+Theme: ship the modes that were already promised (Long Exam), open NoteLib to professionals preparing for interviews, improve organic discovery through subject SEO pages, and close out infrastructure research items deferred from v0.12.0.
+
+### Planned Scope
+
+- **Long Exam Mode v1 (Pro-only)** — backend session support (`LONG_EXAM` discriminator), fixed long-form generation committed before session start, pause/resume, mastery report result screen; single-note at launch; reuses existing session lifecycle and generation lock
+- **Professional Profile activation** — `PROFESSIONAL` profile type selectable in onboarding (no longer `Coming Soon`); dashboard emphasis: applied, real-world framing
+- **Interview Practice Mode** — profile-gated presentation of Challenge Quiz engine for Professional users; interview-style LLM prompt framing (definition + situational mix); shows as `Interview Practice` in mode selection; same `CHALLENGE` session type, different label and prompts
+- **Faster quiz generation** — profile LLM latency end-to-end; evaluate streaming, model selection (`gpt-4.1-mini`), and early session creation; implement based on findings
+- **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` pages with per-subject `<title>`/`<meta>`; decay-ranked note cards; sitemap update; deferred from v0.12.0
+- **Proration / recomputation design doc** — design doc under `docs/product/` covering mid-cycle plan changes; no implementation until design is reviewed; deferred from v0.12.0
+- **Stale docs cleanup** — audit and update or remove `docs/` files still referencing v0.11.0 or earlier resolved items
+
+### ✅ Shipped
+
+_(items moved here as they land)_
+
+---
+
+## v0.12.0 - Learning Experience, Discovery, and Retention
+
+**Status: Released**
 
 Theme: deepen the learning experience, make the product easier to discover and navigate, and improve retention signals that bring users back to study.
 
