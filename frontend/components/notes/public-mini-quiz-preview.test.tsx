@@ -15,7 +15,6 @@ jest.mock("./public-seo-copy-cta", () => ({
   PublicSeoCopyCta: (props: {
     label?: string;
     redirectTarget?: "library" | "generate" | "quick-review";
-    guestAuthMode?: "login" | "signup";
   }) => publicSeoCopyCtaMock(props),
 }));
 
@@ -111,7 +110,7 @@ describe("PublicMiniQuizPreview", () => {
     expect(screen.queryByText("Question 1")).not.toBeInTheDocument();
   });
 
-  it("passes signup CTAs in completion state for anonymous visitors", () => {
+  it("passes the correct CTAs in completion state", () => {
     render(<PublicMiniQuizPreview quiz={singleQuiz} noteId="note-1" />);
 
     fireEvent.click(screen.getByRole("button", { name: /Choice A/i }));
@@ -119,17 +118,10 @@ describe("PublicMiniQuizPreview", () => {
     fireEvent.click(screen.getByRole("button", { name: "See Results" }));
 
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        label: "Copy & Start Practicing",
-        redirectTarget: "quick-review",
-        guestAuthMode: "signup",
-      }),
+      expect.objectContaining({ label: "Copy & Start Practicing", redirectTarget: "quick-review" }),
     );
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        label: "Copy to My Library",
-        guestAuthMode: "signup",
-      }),
+      expect.objectContaining({ label: "Copy to My Library" }),
     );
   });
 

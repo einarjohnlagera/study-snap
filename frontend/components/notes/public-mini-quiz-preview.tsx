@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { getAuthUser } from "@/lib/auth";
 import { getDisplayedQuizChoices, resolveQuizCorrectIndex } from "@/lib/quiz";
 import type { QuizItem } from "@/lib/api";
 import { normalizePublicNoteText } from "@/lib/public-note-text";
+import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 const MAX_PREVIEW_QUESTIONS = 3;
@@ -16,16 +18,25 @@ type QuestionState = {
   submitted: boolean;
 };
 
+type RelatedNote = {
+  id: string;
+  title: string | null | undefined;
+  subject: string | null | undefined;
+  summaryPreview: string | null | undefined;
+  contentPreview: string | null | undefined;
+};
+
 type PublicMiniQuizPreviewProps = Readonly<{
   quiz: QuizItem[];
   noteId: string;
+  relatedNotes?: RelatedNote[];
 }>;
 
 function getCorrectFeedback(questionIndex: number): string {
   return (["✅ Correct!", "🧠 Nice work!", "✅ That's right!"] as const)[questionIndex % 3];
 }
 
-export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewProps) {
+export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMiniQuizPreviewProps) {
   const previewItems = quiz.slice(0, MAX_PREVIEW_QUESTIONS);
   const [questionStates, setQuestionStates] = useState<QuestionState[]>(() =>
     previewItems.map(() => ({ selectedIndex: null, submitted: false })),
@@ -122,15 +133,40 @@ export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewPro
               noteId={noteId}
               label="Copy & Start Practicing"
               redirectTarget="quick-review"
-              guestAuthMode="signup"
             />
             <PublicSeoCopyCta
               noteId={noteId}
               label="Copy to My Library"
-              guestAuthMode="signup"
             />
           </div>
         </div>
+
+        {relatedNotes && relatedNotes.length > 0 ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground/80">
+              More from {relatedNotes[0].subject ?? "this subject"}
+            </h3>
+            <div className="space-y-2">
+              {relatedNotes.map((related) => {
+                const relatedTitle = normalizePublicNoteText(related.title) || "Untitled note";
+                const preview = normalizePublicNoteText(related.summaryPreview ?? related.contentPreview);
+                const href = buildPublicLibraryNotePath({ subject: related.subject, title: related.title });
+                return (
+                  <Link
+                    key={related.id}
+                    href={href}
+                    className="block rounded-xl border border-border bg-background p-3 transition-colors hover:border-blue-500/40 hover:bg-blue-500/5"
+                  >
+                    <p className="text-sm font-medium text-foreground">{relatedTitle}</p>
+                    {preview ? (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-foreground/60">{preview}</p>
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </Card>
     );
   }

@@ -9,6 +9,8 @@ export const PUBLIC_LIBRARY_RANKING = {
   FEATURED_LIKE_WEIGHT: 2,
   POPULAR_MIN_COPIES: 3,
   POPULAR_MIN_VIEWS: 20,
+  FEATURED_DECAY_HALF_LIFE_DAYS: 30,
+  FEATURED_DECAY_MIN_FACTOR: 0.1,
 } as const;
 
 function hasMeaningfulText(value: string | null | undefined): boolean {
@@ -46,33 +48,43 @@ export function isPopularNote(
   );
 }
 
+function computeDecayFactor(createdAt: string, now: Date): number {
+  const daysSince = (now.getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  const factor = 1 / (1 + Math.max(0, daysSince) / PUBLIC_LIBRARY_RANKING.FEATURED_DECAY_HALF_LIFE_DAYS);
+  return Math.max(factor, PUBLIC_LIBRARY_RANKING.FEATURED_DECAY_MIN_FACTOR);
+}
+
 /**
- * Compute the v1 Featured score from engagement signals.
- * Formula: views + (copies × 3) + (likes × 2)
+ * Compute the v2 Featured score: engagement × age-decay factor.
+ * Formula: (views + copies×3 + likes×2) × (1 / (1 + daysSince/30))
+ * Floor: 10% of raw score to prevent very old notes from vanishing entirely.
  */
 export function computeDiscoveryScore(
-  note: Pick<NoteListItemResponse, "viewCount" | "copyCount" | "likeCount">,
+  note: Pick<NoteListItemResponse, "viewCount" | "copyCount" | "likeCount" | "createdAt">,
+  now: Date = new Date(),
 ): number {
   const views = note.viewCount ?? 0;
   const copies = note.copyCount ?? 0;
   const likes = note.likeCount ?? 0;
-  return views
+  const baseScore = views
     + copies * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT
     + likes * PUBLIC_LIBRARY_RANKING.FEATURED_LIKE_WEIGHT;
+  return baseScore * computeDecayFactor(note.createdAt, now);
 }
 
 /**
- * Return top N Featured notes ranked by v1 score after quality gating.
+ * Return top N Featured notes ranked by v2 decay-adjusted score after quality gating.
  * Tiebreaks: copies desc, views desc, createdAt desc.
  */
 export function getFeaturedNotes(
   notes: NoteListItemResponse[],
   limit = DISCOVERY_SECTION_LIMIT,
+  now: Date = new Date(),
 ): NoteListItemResponse[] {
   return [...notes]
     .filter(isFeaturedEligible)
     .sort((a, b) => {
-      const scoreDiff = computeDiscoveryScore(b) - computeDiscoveryScore(a);
+      const scoreDiff = computeDiscoveryScore(b, now) - computeDiscoveryScore(a, now);
       if (scoreDiff !== 0) {
         return scoreDiff;
       }

@@ -335,7 +335,7 @@ Public note pages are shareable learning pages and top-of-funnel acquisition sur
 1. **Note title** — clear, topic-specific
 2. **Topic hook** — a short 1–2 sentence framing of the learning angle (e.g. `This note covers photosynthesis — the process plants use to make food from sunlight.`)
 3. **Tags and subject metadata** — helps the visitor evaluate relevance
-4. **Quick Check / mini quiz preview** — 1–2 questions, interactive, client-side only, no account required
+4. **Quick Check / mini quiz preview** — up to 3 questions, interactive, client-side only, no account required
 5. **Summary and Key Concepts** — the generated study outputs
 6. **Full quiz or gated continuation** — gate behind login after the preview experience
 7. **Soft conversion CTA** — `Turn your own notes into something like this`
@@ -343,9 +343,19 @@ Public note pages are shareable learning pages and top-of-funnel acquisition sur
 9. **Copy / create CTA** — keep the stronger actions after value is shown, not above the note
 10. **Share action** — always visible regardless of auth state, but secondary to the note and follow-up CTA
 
+### Lateral discovery from the public note detail page
+
+Tags and subject on the public note SEO page must link back to the filtered Public Library so a guest can continue browsing without needing an account.
+
+- each tag chip in the header links to `/public/library?tag={slug}` — uses `slugifyPublicLibraryFilterValue` before putting the value in the URL
+- the subject badge in the author line links to `/public/library?subject={slug}`
+- do not change `SubjectBadge` itself; wrap it in a `<Link>` at the call site
+- the `PublicLibraryBackLink` component intentionally returns `null` for unauthenticated visitors — for social/deep-arrival traffic, surfacing the auth-only breadcrumb is worse than nothing; clickable tags and subject cover the lateral-discovery need instead
+- do not add a sticky or persistent "Back to Library" link for guests; rely on tag/subject links and the global nav
+
 ### Mini quiz preview rules
 
-- expose 1–2 quiz questions without requiring login
+- expose up to 3 quiz questions without requiring login
 - allow public visitors to select an answer and see correct/incorrect feedback
 - do not create a quiz session row for anonymous users — all state is client-side only
 - do not persist score, progress, or session data for unauthenticated users
@@ -377,6 +387,26 @@ Signed-in users see the full experience:
 - `View Full Notes →` CTA inside the Summary section that deep-links to `#full-notes`
 - the public note detail page should mount the shared App Router hash-scroll pattern so direct `#full-notes` visits auto-scroll after the page content mounts
 
+### Copy-and-generate funnel handoff (new-signup path)
+
+When a guest clicks "Create your own Study Pack" on a public note, the intent is preserved through signup via URL query params:
+
+1. Guest clicks CTA → redirected to `/signup?redirectTo=/public/library/{subject}/{slug}?copy=1&intent=generate`
+2. After signup, the app returns to the public note page with `?copy=1&intent=generate`
+3. `PublicSeoCopyCta` auto-runs `copyNote` then redirects to `/notes/{copiedId}?copied=1&generate=1`
+4. The private note detail page reads `generate=1` and calls `handleGenerate`
+
+**Email verification pending state:**
+
+If the new user has not yet verified their email when `handleGenerate` runs:
+
+- do not silently fail — the generate intent would be permanently lost
+- set a `pendingPublicCopyGenerate` state flag instead of dropping the intent
+- show a dismissible amber banner: `Your note is saved — one step left` with body copy `Verify your email to generate your Study Pack. Once verified, use the button below to start.`
+- include a manual `Try again` button that re-invokes `handleGenerate` — do not promise automatic retry, since email verification may happen in a different tab
+- if `studysnap-auth-change` fires in the same tab (e.g., the verification link opens in the same browser session), the pending flag triggers an auto-retry via a `useEffect` watching `isEmailVerified && pendingPublicCopyGenerate`
+- the banner is dismissible with an `X` button; dismissing clears `pendingPublicCopyGenerate`
+
 ### Generated note formatting for public pages
 
 Public note pages benefit from better-formatted generated content. Prefer:
@@ -394,6 +424,52 @@ Avoid:
 - obvious mojibake or trust-breaking rendering issues such as broken apostrophes, mangled quotes, or malformed character sequences
 
 Note: formatting improvements apply to how generated content is displayed on public note pages. They do not change the underlying storage format or the authenticated note detail view unless explicitly specified.
+
+## Planned Improvements
+
+Items identified during the May 2026 conversion funnel audit, in priority order.
+
+### C — "Continue learning" block after mini quiz completes (medium effort)
+
+When the guest finishes the Quick Check, show 2–3 related public notes (same subject, exclude current) as compact cards alongside the existing two CTAs. Uses existing subject metadata; no backend change required.
+
+- place the block inside the `PublicMiniQuizPreview` completion card, after the existing CTAs
+- limit to 2–3 compact cards to avoid overwhelming the completion moment
+- if no related notes exist, show nothing rather than a generic "explore more" link
+
+### D — (resolved) Consolidate auth-prompt patterns
+
+All three guest auth surfaces now use the same dual `Log In` / `Sign Up` AppModal pattern:
+- `PublicLibraryCopyAction` → AppModal (unchanged)
+- `PublicLibraryLikeAction` → AppModal (unchanged)
+- `PublicSeoCopyCta` → AppModal (was: direct push to `/signup` or `/login`, now opens modal)
+
+The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Modal title: "Save this note". Redirect URLs carry the copy intent query params so auto-copy fires after auth.
+
+### E — (resolved in docs) Mini quiz preview count
+
+`MAX_PREVIEW_QUESTIONS = 3` in `public-mini-quiz-preview.tsx`. Spec updated to "up to 3" to match implementation.
+
+### F — (resolved) Remove dead code
+
+- `components/notes/public-note-detail-tabbed-content.tsx` — deleted. Was not imported anywhere; superseded by the stacked-card SEO page layout.
+- `app/notes/public/[id]/page.tsx` and `app/public/notes/[id]/page.tsx` — kept as backward-compatibility redirect routes. Cannot safely remove without server analytics confirming zero live inbound links (social shares, search-indexed URLs).
+
+### G — Time-decayed Featured score (resolved)
+
+`computeDiscoveryScore` (frontend) and `computeScore` (backend `PublicNotesScoringUtils`) now apply an age-decay factor: `score = baseScore × max(0.1, 1 / (1 + daysSince / 30))`. Notes halve in ranking weight every 30 days; the floor of 10× prevents very old high-engagement notes from fully disappearing. Both frontend and backend accept a `now` parameter for deterministic testing. Tiebreaks (copies desc → views desc → createdAt desc) still apply when decay factors are equal (same-age notes).
+
+### H — "Trending this week" section (blocked — needs backend windowed counts)
+
+`NoteListItemResponse` has no windowed engagement fields (`recentCopyCount`, `recentLikeCount`, etc.). Implementing a true 7-day trending signal requires backend support: either per-event timestamps queryable as a rolling aggregate, or precomputed windowed counts persisted alongside the note. Do not ship under a "Trending this week" label without real windowed data — lifetime totals on recent notes is not the same signal. Revisit when backend adds windowed count fields.
+
+### I — Practice-mode preview teaser on public note detail (resolved)
+
+A non-interactive "Practice modes available once you copy this note" block showing Challenge Quiz, Adaptive Practice, and Board Exam Mode as teaser cards. Implemented as `PublicPracticeModeTeaser` (static server component, no "use client"), placed after Full Notes and before Ownership Actions, gated on `!isDraft`. Board Exam Mode carries a Pro chip; the other two modes are shown as freely available.
+
+### J — Subject landing pages (content + design lift)
+
+The `/public/library/[subject]` route currently `permanentRedirect`s to the filtered library URL. A proper subject landing page — SEO-friendly intro, Featured/Popular notes for that subject, sample mini-quiz — compounds "premium educational" perception and provides long-tail SEO surface. Schedule when copywriter bandwidth is available.
 
 ## Limit-Reached Fallback (planned)
 

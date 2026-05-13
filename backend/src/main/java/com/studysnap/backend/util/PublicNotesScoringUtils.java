@@ -2,6 +2,8 @@ package com.studysnap.backend.util;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 
@@ -16,18 +18,35 @@ public final class PublicNotesScoringUtils {
     private static final long POPULAR_MIN_COPIES = 3L;
     private static final long POPULAR_MIN_VIEWS = 20L;
     private static final String FEATURED_READY_STATUS = "STUDY_PACK_READY";
+    private static final double FEATURED_DECAY_HALF_LIFE_DAYS = 30.0;
+    private static final double FEATURED_DECAY_MIN_FACTOR = 0.1;
 
     private PublicNotesScoringUtils() {}
 
+    private static double computeDecayFactor(NoteListItemResponse note, Instant now) {
+        if (note.createdAt() == null) {
+            return 1.0;
+        }
+        long daysSince = ChronoUnit.DAYS.between(note.createdAt().toInstant(), now);
+        double factor = 1.0 / (1.0 + Math.max(0, daysSince) / FEATURED_DECAY_HALF_LIFE_DAYS);
+        return Math.max(factor, FEATURED_DECAY_MIN_FACTOR);
+    }
+
     /**
-     * v1 Featured score for a note.
-     * score = views + (copies × 3) + (likes × 2)
+     * v2 Featured score: engagement × age-decay factor.
+     * score = (views + copies×3 + likes×2) × (1 / (1 + daysSince/30))
+     * Floor: 10% of raw score to prevent very old notes from vanishing entirely.
      */
     public static double computeScore(NoteListItemResponse note) {
+        return computeScore(note, Instant.now());
+    }
+
+    public static double computeScore(NoteListItemResponse note, Instant now) {
         long copies = metricValue(note.copyCount());
         long likes = metricValue(note.likeCount());
         long views = metricValue(note.viewCount());
-        return (copies * FEATURED_COPY_WEIGHT) + (likes * FEATURED_LIKE_WEIGHT) + (views * FEATURED_VIEW_WEIGHT);
+        double baseScore = ((double) copies * FEATURED_COPY_WEIGHT) + (likes * FEATURED_LIKE_WEIGHT) + (views * FEATURED_VIEW_WEIGHT);
+        return baseScore * computeDecayFactor(note, now);
     }
 
     public static boolean isFeaturedEligible(NoteListItemResponse note) {
@@ -45,10 +64,14 @@ public final class PublicNotesScoringUtils {
     }
 
     /**
-     * Filter to Featured-eligible notes, then sort by score desc,
+     * Filter to Featured-eligible notes, then sort by decay-adjusted score desc,
      * copies desc, views desc, and newest createdAt desc.
      */
     public static List<NoteListItemResponse> sortByFeatured(List<NoteListItemResponse> notes) {
+        return sortByFeatured(notes, Instant.now());
+    }
+
+    public static List<NoteListItemResponse> sortByFeatured(List<NoteListItemResponse> notes, Instant now) {
         Comparator<NoteListItemResponse> byCopies =
                 Comparator.comparing(n -> metricValue(n.copyCount()),
                         Comparator.reverseOrder());
@@ -60,7 +83,7 @@ public final class PublicNotesScoringUtils {
         return notes.stream()
                 .filter(PublicNotesScoringUtils::isFeaturedEligible)
                 .sorted(
-                        Comparator.comparingDouble(PublicNotesScoringUtils::computeScore).reversed()
+                        Comparator.comparingDouble((NoteListItemResponse n) -> computeScore(n, now)).reversed()
                                 .thenComparing(byCopies)
                                 .thenComparing(byViews)
                                 .thenComparing(byCreatedAt)

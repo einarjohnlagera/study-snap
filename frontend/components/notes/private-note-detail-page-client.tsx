@@ -4,7 +4,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Eye, MoreHorizontal, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronDown, Eye, MoreHorizontal, RotateCcw, Sparkles, X } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
@@ -287,6 +287,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
+  const [pendingPublicCopyGenerate, setPendingPublicCopyGenerate] = useState(false);
 
   const [isPaidPlan, setIsPaidPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") !== "FREE");
   const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
@@ -837,8 +838,21 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const next = new URLSearchParams(searchParams.toString());
     next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate);
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+
+    if (!isEmailVerified) {
+      setPendingPublicCopyGenerate(true);
+      return;
+    }
     void handleGenerate();
-  }, [canGenerateStudyPack, handleGenerate, note, pathname, router, searchParams]);
+  }, [canGenerateStudyPack, handleGenerate, isEmailVerified, note, pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!isEmailVerified || !pendingPublicCopyGenerate) {
+      return;
+    }
+    setPendingPublicCopyGenerate(false);
+    void handleGenerate();
+  }, [handleGenerate, isEmailVerified, pendingPublicCopyGenerate]);
 
   useEffect(() => {
     const shouldAutoEdit = searchParams.get("edit") === "1";
@@ -1309,6 +1323,32 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   label="View Next Steps"
                 />
               </div>
+            </Card>
+          ) : null}
+          {pendingPublicCopyGenerate && !isEmailVerified ? (
+            <Card className="relative space-y-3 border-amber-500/30 bg-amber-500/5 p-4 sm:p-6">
+              <button
+                type="button"
+                aria-label="Dismiss"
+                className="absolute right-3 top-3 rounded p-1 text-foreground/40 hover:text-foreground/70"
+                onClick={() => setPendingPublicCopyGenerate(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="space-y-1 pr-6">
+                <h2 className="text-base font-semibold">Your note is saved — one step left</h2>
+                <p className="text-sm text-foreground/80">
+                  Verify your email to generate your Study Pack. Once verified, use the button below to start.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleGenerate()}
+              >
+                Try again
+              </Button>
             </Card>
           ) : null}
           <Card className="space-y-4 p-4 sm:p-6">

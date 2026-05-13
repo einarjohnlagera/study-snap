@@ -41,25 +41,35 @@ describe("PublicSeoCopyCta", () => {
     });
   });
 
-  it("redirects anonymous visitors to login before copying", () => {
+  it("opens an auth modal for anonymous visitors before copying", () => {
     (getAuthUser as jest.Mock).mockReturnValue(null);
 
     render(<PublicSeoCopyCta noteId="note-1" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Copy to My Library" }));
 
-    expect(pushMock).toHaveBeenCalledWith(
-      "/login?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dlibrary",
-    );
+    expect(screen.getByRole("dialog", { name: "Save this note" })).toBeInTheDocument();
+    expect(screen.getByText("Create a free account or log in to copy this note to your library.")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
     expect(copyNote).not.toHaveBeenCalled();
   });
 
-  it("can send anonymous visitors to signup instead of login", () => {
+  it("routes auth-modal actions to login or signup with the copy intent redirect", () => {
     (getAuthUser as jest.Mock).mockReturnValue(null);
 
-    render(<PublicSeoCopyCta noteId="note-1" label="Create your own Study Pack" redirectTarget="generate" guestAuthMode="signup" />);
+    render(<PublicSeoCopyCta noteId="note-1" label="Create your own Study Pack" redirectTarget="generate" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Create your own Study Pack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
+
+    expect(pushMock).toHaveBeenCalledWith(
+      "/login?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dgenerate",
+    );
+
+    pushMock.mockReset();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create your own Study Pack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
 
     expect(pushMock).toHaveBeenCalledWith(
       "/signup?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dgenerate",

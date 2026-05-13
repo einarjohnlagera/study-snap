@@ -13,6 +13,8 @@ import {
   isPopularNote,
 } from "@/lib/public-library-discovery";
 
+const NOW = new Date("2026-05-12T00:00:00Z");
+
 // Minimal note factory for discovery tests
 function makeNote(
   overrides: Partial<NoteListItemResponse> & { id: string },
@@ -38,8 +40,8 @@ function makeNote(
     authorDisplayName: "Tester",
     isOfficialAuthor: false,
     isCurrentUser: false,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
     likedByCurrentUser: false,
     ...overrides,
   };
@@ -47,25 +49,39 @@ function makeNote(
 
 describe("computeDiscoveryScore", () => {
   it("returns 0 for a note with no engagement", () => {
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, likeCount: 0 })).toBe(0);
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, likeCount: 0, createdAt: NOW.toISOString() }, NOW)).toBe(0);
   });
 
   it("weights copies at 3x views and likes at 2x views", () => {
-    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0, likeCount: 0 })).toBe(10);
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 10, likeCount: 0 })).toBe(
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0, likeCount: 0, createdAt: NOW.toISOString() }, NOW)).toBe(10);
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 10, likeCount: 0, createdAt: NOW.toISOString() }, NOW)).toBe(
       10 * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT,
     );
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, likeCount: 10 })).toBe(
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, likeCount: 10, createdAt: NOW.toISOString() }, NOW)).toBe(
       10 * PUBLIC_LIBRARY_RANKING.FEATURED_LIKE_WEIGHT,
     );
   });
 
   it("combines views, copies, and likes correctly", () => {
-    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 5, likeCount: 4 })).toBe(33);
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 5, likeCount: 4, createdAt: NOW.toISOString() }, NOW)).toBe(33);
   });
 
   it("treats null counts as 0", () => {
-    expect(computeDiscoveryScore({ viewCount: null, copyCount: null, likeCount: null })).toBe(0);
+    expect(computeDiscoveryScore({ viewCount: null, copyCount: null, likeCount: null, createdAt: NOW.toISOString() }, NOW)).toBe(0);
+  });
+
+  it("reduces score for a 30-day-old note by the half-life factor", () => {
+    const thirtyDaysAgo = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // factor = 1 / (1 + 30/30) = 0.5 → score = 10 * 0.5 = 5
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0, likeCount: 0, createdAt: thirtyDaysAgo }, NOW)).toBeCloseTo(5, 2);
+  });
+
+  it("applies the minimum decay floor for very old notes", () => {
+    const veryOld = new Date(NOW.getTime() - 365 * 10 * 24 * 60 * 60 * 1000).toISOString();
+    // floor = FEATURED_DECAY_MIN_FACTOR → score = 10 * 0.1 = 1
+    expect(
+      computeDiscoveryScore({ viewCount: 10, copyCount: 0, likeCount: 0, createdAt: veryOld }, NOW),
+    ).toBeCloseTo(10 * PUBLIC_LIBRARY_RANKING.FEATURED_DECAY_MIN_FACTOR, 4);
   });
 });
 
@@ -119,7 +135,7 @@ describe("isFeaturedEligible", () => {
 });
 
 describe("getFeaturedNotes", () => {
-  it("returns only eligible notes sorted by Featured score descending", () => {
+  it("returns only eligible notes sorted by decay-adjusted score descending", () => {
     const highScore = makeNote({
       id: "high",
       viewCount: 20,
@@ -146,26 +162,35 @@ describe("getFeaturedNotes", () => {
       contentPreview: "Draft preview",
     });
 
-    const result = getFeaturedNotes([ineligible, midScore, highScore]);
+    const result = getFeaturedNotes([ineligible, midScore, highScore], DISCOVERY_SECTION_LIMIT, NOW);
 
     expect(result.map((n) => n.id)).toEqual(["high", "mid"]);
   });
 
-  it("tiebreaks by copies, then views, then createdAt when scores are equal", () => {
-    const newer = makeNote({
-      id: "newer",
-      viewCount: 8,
-      copyCount: 2,
-      createdAt: "2026-03-01T00:00:00Z",
-      summaryPreview: "Summary",
-      quizCount: 2,
-      contentPreview: "Preview",
+  it("ranks fresher notes higher when raw engagement scores are equal", () => {
+    const stale = makeNote({
+      id: "stale",
+      viewCount: 10,
+      createdAt: new Date(NOW.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
     });
+    const fresh = makeNote({
+      id: "fresh",
+      viewCount: 10,
+      createdAt: new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const result = getFeaturedNotes([stale, fresh], DISCOVERY_SECTION_LIMIT, NOW);
+
+    expect(result[0].id).toBe("fresh");
+  });
+
+  it("tiebreaks by copies then views when decay factors are equal (same createdAt)", () => {
+    const sameCreatedAt = NOW.toISOString();
     const moreCopies = makeNote({
       id: "more-copies",
       viewCount: 5,
       copyCount: 3,
-      createdAt: "2026-01-01T00:00:00Z",
+      createdAt: sameCreatedAt,
       summaryPreview: "Summary",
       quizCount: 2,
       contentPreview: "Preview",
@@ -174,15 +199,25 @@ describe("getFeaturedNotes", () => {
       id: "more-views",
       viewCount: 11,
       copyCount: 1,
-      createdAt: "2026-02-01T00:00:00Z",
+      createdAt: sameCreatedAt,
+      summaryPreview: "Summary",
+      quizCount: 2,
+      contentPreview: "Preview",
+    });
+    const balanced = makeNote({
+      id: "balanced",
+      viewCount: 8,
+      copyCount: 2,
+      createdAt: sameCreatedAt,
       summaryPreview: "Summary",
       quizCount: 2,
       contentPreview: "Preview",
     });
 
-    const result = getFeaturedNotes([newer, moreViews, moreCopies]);
+    const result = getFeaturedNotes([balanced, moreViews, moreCopies], DISCOVERY_SECTION_LIMIT, NOW);
 
-    expect(result.map((n) => n.id)).toEqual(["more-copies", "newer", "more-views"]);
+    // All have raw score 14 and identical decay factor → tiebreak by copies desc
+    expect(result.map((n) => n.id)).toEqual(["more-copies", "balanced", "more-views"]);
   });
 
   it("limits to the specified count", () => {
@@ -190,8 +225,8 @@ describe("getFeaturedNotes", () => {
       makeNote({ id: `note-${i}`, viewCount: 10 - i }),
     );
 
-    expect(getFeaturedNotes(notes, 3)).toHaveLength(3);
-    expect(getFeaturedNotes(notes, 3)[0].id).toBe("note-0");
+    expect(getFeaturedNotes(notes, 3, NOW)).toHaveLength(3);
+    expect(getFeaturedNotes(notes, 3, NOW)[0].id).toBe("note-0");
   });
 
   it("defaults to DISCOVERY_SECTION_LIMIT", () => {
@@ -199,17 +234,17 @@ describe("getFeaturedNotes", () => {
       makeNote({ id: `note-${i}`, viewCount: 20 - i }),
     );
 
-    expect(getFeaturedNotes(notes)).toHaveLength(DISCOVERY_SECTION_LIMIT);
+    expect(getFeaturedNotes(notes, DISCOVERY_SECTION_LIMIT, NOW)).toHaveLength(DISCOVERY_SECTION_LIMIT);
   });
 
   it("returns all notes when fewer than the limit exist", () => {
     const notes = [makeNote({ id: "a" }), makeNote({ id: "b" })];
 
-    expect(getFeaturedNotes(notes, 6)).toHaveLength(2);
+    expect(getFeaturedNotes(notes, 6, NOW)).toHaveLength(2);
   });
 
   it("returns an empty array for an empty input", () => {
-    expect(getFeaturedNotes([])).toEqual([]);
+    expect(getFeaturedNotes([], DISCOVERY_SECTION_LIMIT, NOW)).toEqual([]);
   });
 });
 

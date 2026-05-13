@@ -13,7 +13,6 @@ jest.mock("./public-seo-copy-cta", () => ({
   PublicSeoCopyCta: (props: {
     label?: string;
     redirectTarget?: "library" | "generate";
-    guestAuthMode?: "login" | "signup";
   }) => publicSeoCopyCtaMock(props),
 }));
 
@@ -99,14 +98,10 @@ describe("PublicNoteOwnershipActions", () => {
     expect(screen.getByRole("button", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Copy to My Library", guestAuthMode: "signup" }),
+      expect.objectContaining({ label: "Copy to My Library" }),
     );
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        label: "Create your own Study Pack",
-        redirectTarget: "generate",
-        guestAuthMode: "signup",
-      }),
+      expect.objectContaining({ label: "Create your own Study Pack", redirectTarget: "generate" }),
     );
   });
 

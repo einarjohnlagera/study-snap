@@ -3,14 +3,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { HashScrollListener } from "@/components/navigation/hash-scroll-listener";
 import { PublicMiniQuizPreview } from "@/components/notes/public-mini-quiz-preview";
+import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mode-teaser";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
+import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
-import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
+import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubjectSlug } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
 
@@ -65,6 +67,17 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
   if (!note) {
     notFound();
   }
+
+  const allSubjectNotes = await getServerPublicNotesBySubjectSlug(subject);
+  const relatedNotes = allSubjectNotes
+    .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")
+    .sort((a, b) => {
+      const scoreA = (a.viewCount ?? 0) + (a.copyCount ?? 0) * 3 + (a.likeCount ?? 0) * 2;
+      const scoreB = (b.viewCount ?? 0) + (b.copyCount ?? 0) * 3 + (b.likeCount ?? 0) * 2;
+      return scoreB - scoreA;
+    })
+    .slice(0, 3)
+    .map((n) => ({ id: n.id, title: n.title, subject: n.subject, summaryPreview: n.summaryPreview, contentPreview: n.contentPreview }));
 
   const title = normalizePublicNoteText(note.title?.trim()) || "Untitled note";
   const description = buildDescription(title, note.summary);
@@ -128,12 +141,13 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
 
             <div className="flex flex-wrap gap-2">
               {tags.length > 0 ? tags.map((tag) => (
-                <span
+                <Link
                   key={`${note.id}-${tag}`}
-                  className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/75"
+                  href={buildPublicLibraryUrl({ tags: [slugifyPublicLibraryFilterValue(tag)] })}
+                  className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/75 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   {tag}
-                </span>
+                </Link>
               )) : (
                 <span className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-foreground/55">
                   No tags
@@ -182,6 +196,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           <PublicMiniQuizPreview
             quiz={note.quiz}
             noteId={note.id}
+            relatedNotes={relatedNotes}
           />
         ) : null}
 
@@ -196,7 +211,6 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
               noteId={note.id}
               label="Create your own Study Pack"
               redirectTarget="generate"
-              guestAuthMode="signup"
             />
           </div>
         </Card>
@@ -221,6 +235,9 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             </div>
           </Card>
         </section>
+
+        {/* Practice mode teaser — before ownership actions */}
+        {!isDraft ? <PublicPracticeModeTeaser /> : null}
 
         {/* Ownership actions — bottom, after content */}
         <section aria-labelledby="public-note-actions-heading">
