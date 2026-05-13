@@ -36,7 +36,7 @@ import {
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
 } from "@/lib/api";
-import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import { getGroupedLearnerLevels } from "@/lib/learning-profile";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { PostSuccessUpgradeNudge } from "@/components/billing/post-success-upgrade-nudge";
 import {
@@ -172,6 +172,7 @@ export default function QuickReviewPage() {
   const [confidenceAcknowledged, setConfidenceAcknowledged] = useState(false);
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [viewerProfileType, setViewerProfileType] = useState<string | null>(() => getAuthUser()?.profileType ?? null);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
@@ -372,6 +373,10 @@ export default function QuickReviewPage() {
   const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const groupedLearnerLevels = useMemo(
+    () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
+    [viewerProfileType],
+  );
   const showPracticeAgainPrimary = !isPerfectScore && (!showAdaptiveGuidedCta || !note?.adaptivePracticeAvailable);
   const quickReviewProgressLabel = phase === "retry"
     ? `Retry ${Math.min(currentRoundIndex + 1, Math.max(activeQuestionIndexes.length, 1))} / ${Math.max(activeQuestionIndexes.length, 1)}`
@@ -381,6 +386,7 @@ export default function QuickReviewPage() {
     const syncAuthState = () => {
       const authUser = getAuthUser();
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      setViewerProfileType(authUser?.profileType ?? null);
     };
     syncAuthState();
     globalThis.addEventListener("studysnap-auth-change", syncAuthState);
@@ -997,22 +1003,49 @@ export default function QuickReviewPage() {
             {currentLearnerLevel ? (
               <div className="space-y-2 text-sm">
                 <p className="font-medium text-foreground">Adjust difficulty level</p>
-                <div className="flex flex-wrap gap-2">
-                  {LEARNER_LEVEL_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      disabled={savingLearnerLevel}
-                      onClick={() => void handleChangeLearnerLevel(option.value)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        currentLearnerLevel === option.value
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-background text-foreground/70 hover:border-foreground/30"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                <div className="space-y-2">
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-foreground/50">{groupedLearnerLevels.recommendedGroupLabel}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {groupedLearnerLevels.recommended.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={savingLearnerLevel}
+                          onClick={() => void handleChangeLearnerLevel(option.value)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            currentLearnerLevel === option.value
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {groupedLearnerLevels.other.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-foreground/50">Other Learning Styles</p>
+                      <div className="flex flex-wrap gap-2">
+                        {groupedLearnerLevels.other.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            disabled={savingLearnerLevel}
+                            onClick={() => void handleChangeLearnerLevel(option.value)}
+                            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                              currentLearnerLevel === option.value
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <p className="text-xs text-foreground/55">This applies to future generations.</p>
               </div>
