@@ -41,7 +41,7 @@ import {
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
 } from "@/lib/api";
-import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import { getGroupedLearnerLevels } from "@/lib/learning-profile";
 import { ToastMessage } from "@/components/ui/toast-message";
 import {
   computeScore,
@@ -283,6 +283,10 @@ export default function ChallengeQuizPage() {
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const [generateMoreToast, setGenerateMoreToast] = useState<string | null>(null);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const groupedLearnerLevels = useMemo(
+    () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
+    [viewerProfileType],
+  );
   const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
     progressRef.current = {
       currentIndex: nextIndex,
@@ -1863,22 +1867,49 @@ export default function ChallengeQuizPage() {
           {!isBoardExamMode && currentLearnerLevel ? (
             <div className="space-y-2 border-t border-border pt-4 text-sm">
               <p className="font-medium text-foreground">Adjust difficulty level</p>
-              <div className="flex flex-wrap gap-2">
-                {LEARNER_LEVEL_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    disabled={savingLearnerLevel}
-                    onClick={() => void handleChangeLearnerLevel(option.value)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      currentLearnerLevel === option.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background text-foreground/70 hover:border-foreground/30"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <p className="text-xs text-foreground/50">{groupedLearnerLevels.recommendedGroupLabel}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {groupedLearnerLevels.recommended.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={savingLearnerLevel}
+                        onClick={() => void handleChangeLearnerLevel(option.value)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          currentLearnerLevel === option.value
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {groupedLearnerLevels.other.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-foreground/50">Other Learning Styles</p>
+                    <div className="flex flex-wrap gap-2">
+                      {groupedLearnerLevels.other.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={savingLearnerLevel}
+                          onClick={() => void handleChangeLearnerLevel(option.value)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            currentLearnerLevel === option.value
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <p className="text-xs text-foreground/55">This applies to future generations.</p>
             </div>

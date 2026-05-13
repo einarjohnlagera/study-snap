@@ -34,6 +34,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
   - primary setup CTA is now `Begin Board Exam` while preserving existing Pro gating and mode-switching controls
   - completed Board Exams render a `Score Report` subtitle and formal score-report guidance copy
   - Board Exam results hide the inline learner-level adjustment and post-success upgrade nudge while preserving Challenge Quiz result behavior
+- **Learner Level grouped picker on quiz result screens** — Quick Review and Challenge Quiz results now split inline learner-level chips into profile-aware recommended levels and `Other Learning Styles`, preserving the existing chip save behavior while keeping Board Exam results free of learner-level controls
 
 - **Public Library conversion funnel polish (recommendations A–G)** — multi-part audit pass that hardens the public note detail page as a top-of-funnel acquisition surface:
   - **Related notes in quiz completion card (C)** — after finishing the Quick Check, visitors see a "More from {Subject}" section with up to 3 engagement-ranked notes from the same subject; fetched server-side via the existing 5-min cached `getServerPublicNotesBySubjectSlug` call at no extra network cost; linked via canonical public note URLs
