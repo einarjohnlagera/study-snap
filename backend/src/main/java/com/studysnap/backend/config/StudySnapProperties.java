@@ -113,6 +113,10 @@ public class StudySnapProperties {
         private int proMonthlyExportLimit = -1;
         private boolean adaptivePracticeProOnly = false;
         private boolean difficultySelectionProOnly = true;
+        private boolean longExamAvailableForPro = true;
+        private int longExamLowTierCount = 20;
+        private int longExamMidTierCount = 25;
+        private int longExamHighTierCount = 30;
 
         public int resolveMonthlyStudyPackLimit(PlanType planType) {
             return switch (normalizePlanType(planType)) {
@@ -180,6 +184,10 @@ public class StudySnapProperties {
                 return normalizedPlanType != PlanType.FREE;
             }
             return normalizedPlanType == PlanType.PRO;
+        }
+
+        public boolean isLongExamAvailable(PlanType planType) {
+            return longExamAvailableForPro && normalizePlanType(planType) == PlanType.PRO;
         }
 
         private PlanType normalizePlanType(PlanType planType) {

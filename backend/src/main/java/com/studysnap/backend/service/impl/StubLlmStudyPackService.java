@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.util.MockQuizGenerationUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -155,6 +156,26 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                     );
                 })
                 .toList();
+    }
+
+    @Override
+    public List<QuizItem> generateLongExam(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context
+        );
     }
 
     @Override

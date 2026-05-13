@@ -16,6 +16,7 @@ import java.util.List;
 public class QuizGenerationService {
     private static final String QUIZ_GENERATION_MODE_MOCK = "mock";
     private static final String QUIZ_TYPE_CHALLENGE = "challenge quiz";
+    private static final String QUIZ_TYPE_LONG_EXAM = "long exam";
     private static final String QUIZ_TYPE_ADAPTIVE = "adaptive practice";
     private static final String QUIZ_TYPE_TEACHER = "teacher quiz";
     private static final String MOCK_GENERATION_LOG_MESSAGE = "Quiz generation mock mode enabled for {}; real LLM not called.";
@@ -81,6 +82,39 @@ public class QuizGenerationService {
         }
 
         log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_CHALLENGE);
+        maybeApplyMockDelay();
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context
+        );
+    }
+
+    public List<QuizItem> generateLongExam(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateLongExam(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    questionCount,
+                    difficulty,
+                    context
+            );
+        }
+
+        log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_LONG_EXAM);
         maybeApplyMockDelay();
         return MockQuizGenerationUtils.generateChallengeQuiz(
                 studyPackTitle,

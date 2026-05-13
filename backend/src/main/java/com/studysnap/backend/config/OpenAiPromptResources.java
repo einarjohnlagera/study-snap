@@ -13,6 +13,8 @@ public record OpenAiPromptResources(
         String teacherQuizSystemPrompt,
         String teacherQuizDeveloperPromptTemplate,
         String adaptivePracticeSystemPrompt,
-        String adaptivePracticeDeveloperPromptTemplate
+        String adaptivePracticeDeveloperPromptTemplate,
+        String longExamSystemPrompt,
+        String longExamDeveloperPromptTemplate
 ) {
 }

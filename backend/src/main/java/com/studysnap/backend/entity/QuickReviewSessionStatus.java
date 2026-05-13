@@ -4,6 +4,7 @@ public enum QuickReviewSessionStatus {
     GENERATING,
     FAILED,
     IN_PROGRESS,
+    PAUSED,
     COMPLETED,
     FORFEITED
 }

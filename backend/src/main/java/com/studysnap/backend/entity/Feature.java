@@ -10,6 +10,9 @@ public enum Feature {
     DIFFICULTY_SELECTION(
             "Difficulty selection is a Pro feature. Upgrade to Pro to continue."
     ),
+    LONG_EXAM_SESSION(
+            "Long Exam Mode requires a Pro plan."
+    ),
     WEAK_CONCEPT_DETECTION(
             "Weak concepts are available."
     );

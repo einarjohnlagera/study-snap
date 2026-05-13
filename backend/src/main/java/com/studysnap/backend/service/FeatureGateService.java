@@ -3,9 +3,9 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.FeatureAccessDeniedException;
+import com.studysnap.backend.exception.LongExamNotAvailableException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -26,12 +26,11 @@ public class FeatureGateService {
             return;
         }
 
-        throw new AppException(
-                "PREMIUM_FEATURE_REQUIRED",
-                feature.getAccessDeniedMessage(),
-                "feature=" + feature.name(),
-                HttpStatus.FORBIDDEN
-        );
+        if (feature == Feature.LONG_EXAM_SESSION) {
+            throw new LongExamNotAvailableException();
+        }
+
+        throw new FeatureAccessDeniedException(feature);
     }
 
     public boolean hasFeatureAccess(UUID userId, Feature feature) {
@@ -46,6 +45,7 @@ public class FeatureGateService {
         return switch (feature) {
             case ADAPTIVE_QUIZ -> properties.getPricing().isAdaptivePracticeAvailable(planType);
             case DIFFICULTY_SELECTION -> properties.getPricing().isDifficultySelectionAvailable(planType);
+            case LONG_EXAM_SESSION -> properties.getPricing().isLongExamAvailable(planType);
             case WEAK_CONCEPT_DETECTION -> true;
         };
     }

@@ -33,6 +33,16 @@ public interface LlmStudyPackService {
 			StudyPackGenerationContext context
 	);
 
+	List<QuizItem> generateLongExam(
+			String studyPackTitle,
+			String studyPackSummary,
+			List<String> keyConcepts,
+			List<String> disallowedQuestions,
+			int questionCount,
+			String difficulty,
+			StudyPackGenerationContext context
+	);
+
 	default List<QuizItem> generateMoreChallengeQuiz(
 			String studyPackTitle,
 			String studyPackSummary,
