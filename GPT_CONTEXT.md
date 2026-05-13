@@ -2,7 +2,7 @@
 
 > Paste the block below as your **first message** in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.12.0 (near-complete) — 2026-05-13
+> Last updated: v0.13.0 (in progress) — 2026-05-13
 
 ---
 
@@ -70,11 +70,11 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 
 ---
 
-## v0.12.0 — Current Release
+## v0.12.0 — Released
 
 **Theme:** Learning Experience, Discovery, and Retention
 
-**Shipped so far:**
+**All shipped:**
 - Progressive Challenge Quiz (5→20 questions with +5 mid-session)
 - Google social login
 - Public Library conversion funnel (multi-question Quick Check, related notes, AppModal auth consolidation)
@@ -88,24 +88,25 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 - Board Exam premium UX polish — pre-flight checklist, "Score Report" result, learner-level pill removed
 - Learner Level grouped picker on quiz result screens (Recommended / Other Learning Styles by profile)
 
-**Still remaining in v0.12.0:**
+---
 
-| Item | Risk class |
+## v0.13.0 — Current Release (In Progress)
+
+**Theme:** Complete the Promise, Reach New Audiences
+
+| Item | Status |
 |---|---|
-| Faster quiz generation investigation | Research only (no production changes) |
-| Proration / recomputation design | Design doc only |
-
-These are research/design artifacts — safe to defer to cut the release or carry into v0.13.0.
+| Long Exam Mode v1 (Pro-only, single note) | Planned |
+| Professional Profile activation | Planned |
+| Interview Practice Mode (PROFESSIONAL profile) | Planned |
+| Faster quiz generation (research → implement) | Planned |
+| Subject landing pages (SEO) | Planned |
+| Proration / recomputation design doc | Planned |
+| Stale docs cleanup | Planned |
 
 ---
 
 ## Future Roadmap
-
-**v0.13.0:**
-- Long Exam Mode v1 — backend session support, fixed long-form, Pro-only, single note
-- Guidance Engine extensions (cooldown, dashboard contextual tips)
-- **Professional Profile MVP** — applied learning and interview practice (design in session)
-- **Parent Profile MVP** — oversight of child's performance (**requires new parent↔child relationship model — not a UI variant; needs schema design first**)
 
 **v0.14.0+:**
 - Multi-note Long Exam
@@ -118,13 +119,13 @@ These are research/design artifacts — safe to defer to cut the release or carr
 
 ---
 
-## New Profile Types to Design This Session
+## Profile Type Notes
 
-**Professional Profile** (`PROFESSIONAL` enum + LLM prompt hints already exist):
-- Use cases: professional upskilling, certifications, interview prep
-- Quiz style: applied scenarios, case-based framing, real-world decision points
-- No exam date field; same quiz modes as Student
-- Open question: dedicated interview-practice quiz mode, or just prompt-level framing?
+**Professional Profile** (`PROFESSIONAL` enum + LLM prompt hints already exist — activating in v0.13.0):
+- Use case: interview preparation (technical + situational questions)
+- Quiz style: definition + situational mix, real-world decision points
+- No exam date field; Interview Practice = Challenge Quiz engine with profile-gated label and interview-style prompts
+- Decided: prompt-level framing only (not a new session type); dedicated interview-simulation mode is v0.14.0+ if usage warrants it
 
 **Parent Profile** (`PARENT` enum exists, zero implementation):
 - Use case: read-only oversight of a linked child's notes, scores, and weak areas
