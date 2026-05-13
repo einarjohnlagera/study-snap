@@ -12,16 +12,16 @@ It should stay focused on:
 
 ## Current availability
 
-Runtime gating currently treats Adaptive Practice as:
+Adaptive Practice is available on Plus and Pro with a monthly quota per `PLANS.md` (canonical):
 
-- unavailable on Free
-- unavailable on Plus
-- available on Pro with a monthly quota
+- Free: unavailable
+- Plus: 10 sessions / month
+- Pro: 30 sessions / month
 
 If the user cannot access it:
 
-- use the shared Pro upsell flow for locked access
-- use the dedicated limit state when a Pro user has exhausted the monthly quota
+- Free users: use the shared Plus/Pro upsell flow for locked access
+- Plus or Pro users who have exhausted the monthly quota: use the dedicated limit-reached state
 
 ## Generation behavior
 

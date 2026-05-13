@@ -23,7 +23,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - **Long Exam Mode coming-soon foundation** — Long Exam Mode card and setup screen are live for Students; "Start Long Exam" shows a graceful coming-soon state so the mode identity is established without a backend session; no engine changes; backend discriminator and session logic shipped in v0.13.0
 - **Learner Level helper text** — updated inline helper text from generic "Controls difficulty, explanation depth, and quiz complexity." to "Quiz questions and explanations will better match your learning stage."; `getGroupedLearnerLevels()` added to `lib/learning-profile.ts` for future grouped picker UI (Student / Board Taker / Teacher recommendations)
 - **Board Exam premium UX polish (presentation-only)** — pre-flight setup, score-report-style result framing, fullscreen behavior, and removal of the inline learner-level pill on Board Exam result so the mode reads as a simulation, not a "longer Challenge Quiz"; no engine changes; details in `docs/product/EXAM_MODES.md`
-- **Adaptive Practice tier reconciliation** — align `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, `docs/PROJECT_CONTEXT.md`, and runtime gating with `PLANS.md` (Plus = 10 / mo, Pro = 30 / mo) so Long Exam monetization design starts from a consistent baseline
+- ~~**Adaptive Practice tier reconciliation**~~ ✅ — aligned `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, `docs/PROJECT_CONTEXT.md`, and runtime gating (`StudySnapProperties`, `application.yaml`) with `PLANS.md`: Plus = 10 sessions / mo, Pro = 30 sessions / mo; `adaptivePracticeProOnly` default corrected to `false`; open discrepancy in `EXAM_MODES.md` closed
 
 ### ✅ Shipped
 

@@ -38,8 +38,7 @@ Shared ownership rule:
 ### Adaptive Practice
 
 - weak-area follow-up mode
-- per `PLANS.md` (canonical): Plus = 10 / month, Pro = 30 / month
-- runtime gating and other feature docs currently treat this as Pro-only — reconciliation to `PLANS.md` is tracked in `EXAM_MODES.md` *Open Discrepancies*
+- Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
 - generated separately from Quick Review and Challenge Quiz
 
 ### Long Exam Mode (coming soon — backend pending)

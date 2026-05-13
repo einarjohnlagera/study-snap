@@ -128,7 +128,7 @@ NoteLib has three plans: Free, Plus, and Pro.
 - Annual Pro is available at ₱1,999/year (PH).
 - Plus annual is not yet available; Plus always uses monthly checkout.
 - Billing is manual renewal — no automatic charges.
-- Current runtime gating still treats Adaptive Practice, Difficulty Selection, and Board Exam Mode as Pro-only features even when some pricing surfaces position Plus as the regular-study step-up tier.
+- Adaptive Practice is available on Plus (10 sessions / month) and Pro (30 sessions / month). Difficulty Selection and Board Exam Mode remain Pro-only.
 
 ## Payments
 

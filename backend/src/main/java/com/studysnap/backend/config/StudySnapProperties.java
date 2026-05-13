@@ -100,7 +100,7 @@ public class StudySnapProperties {
         private int freeMonthlyChallengeQuizLimit = 5;
         private int plusMonthlyChallengeQuizLimit = 25;
         private int proMonthlyChallengeQuizLimit = 50;
-        private int plusMonthlyAdaptivePracticeLimit = 0;
+        private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
         private int freeMonthlyOcrLimit = 20;
         private int plusMonthlyOcrLimit = 50;
@@ -111,7 +111,7 @@ public class StudySnapProperties {
         private int freeMonthlyExportLimit = 2;
         private int plusMonthlyExportLimit = 15;
         private int proMonthlyExportLimit = -1;
-        private boolean adaptivePracticeProOnly = true;
+        private boolean adaptivePracticeProOnly = false;
         private boolean difficultySelectionProOnly = true;
 
         public int resolveMonthlyStudyPackLimit(PlanType planType) {

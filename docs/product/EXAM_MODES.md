@@ -279,7 +279,7 @@ All exam modes resolve generation context the same way (already in place):
 
 ## Open Discrepancies (resolve before next milestone)
 
-1. **Adaptive Practice tier mismatch.** `PLANS.md` says Plus = 10 / mo and Pro = 30 / mo. `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, and `docs/PROJECT_CONTEXT.md` say *"runtime gating treats Adaptive Practice as Pro-only."* `PLANS.md` declares itself the canonical source. Reconcile the feature docs and runtime gating to match `PLANS.md`. Do **not** let this propagate into Long Exam monetization decisions.
+1. ~~**Adaptive Practice tier mismatch.**~~ ✅ Resolved in v0.12.0 — `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, `docs/PROJECT_CONTEXT.md`, and runtime gating now all align with `PLANS.md`: Plus = 10 / mo, Pro = 30 / mo.
 2. **Roadmap continuity.** The v0.12.0 line `"Multi-topic exam / Long Exam mode planning"` should be updated to point to this doc and reflect the redefined scope (Long Exam = Student-facing exam mode; multi-topic = a capability).
 
 ---
