@@ -1243,23 +1243,24 @@ A feature is not complete unless:
 
 ## Subject Generation Strategy
 
-LLM-generated subjects must be **domain-only** — a broad academic domain or curriculum category, no topic suffix.
+LLM-generated subjects must be reusable academic subject labels, with no topic suffix.
 
-- Correct: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `Filipino`, `Engineering`, `Medicine`, `Law`
+- Correct: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `Filipino`, `Civil Engineering`, `Electrical Engineering`, `Nursing`, `Accountancy`, `Criminal Law`
 - Incorrect: `Biology – Cell Division`, `Physics: Ohm's Law`, `Mathematics – Derivatives`
+- Overly broad umbrella labels such as `Engineering`, `Medicine`, `Business`, and `Law` must be ignored/rejected safely when they come from AI metadata suggestions.
 - Topic-level specificity belongs in tags and key concepts, not in subject
 
 Backend enforcement (`SubjectSanitizer.stripSubtopicSuffix`):
 - Any separator (" – " or ":") triggers stripping → only the left/domain part is kept
 - `"Electrical Engineering – Ohm's Law"` → `"Electrical Engineering"`
-- Broad single-word domains (`Engineering`, `Medicine`, `Law`, `Business`, `Education`) are now valid and accepted without retry
-- Empty/unusable result after stripping → throws `LLM_INVALID_OUTPUT`
+- Broad single-word AI suggestions (`Engineering`, `Medicine`, `Law`, `Business`, `Education`) are ignored and must not fail Study Pack generation
+- Empty/unusable result after stripping is ignored as missing subject metadata; Study Pack generation continues if core summary/key concept/quiz output is valid
 
 ## Study Pack Sanitization
 
 `OpenAiLlmStudyPackService` validates and repairs LLM output before saving:
 
-- **Subject**: max 6 words (`SubjectSanitizer`); overly-broad or course-echo subjects cause retry
+- **Subject**: max 6 words (`SubjectSanitizer`); invalid or overly broad AI subject suggestions are non-blocking and become no subject suggestion
 - **Quiz concept**: max 4 words (`KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS`); filler prefixes stripped before truncation
 - **Key concepts**: max 4 words each (`KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS`); repaired in-place, never block study pack creation due to word-count alone
 

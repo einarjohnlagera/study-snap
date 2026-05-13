@@ -10,7 +10,7 @@ import java.util.Set;
  * <p>Handles two distinct failure modes:
  * <ul>
  *   <li>Overlong subjects (exceed MAX_SUBJECT_WORDS): attempt structured trimming before rejecting.</li>
- *   <li>Overly broad labels (Medicine, Engineering…): reject so the LLM retries with a more specific one.</li>
+ *   <li>Overly broad labels (Medicine, Engineering…): identify so LLM metadata can be ignored safely.</li>
  * </ul>
  */
 public final class SubjectSanitizer {

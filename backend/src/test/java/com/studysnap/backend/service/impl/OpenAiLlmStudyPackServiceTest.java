@@ -137,8 +137,9 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(requestBody).contains("Course / Program: Civil Engineering")
             .contains("Current subject: Engineering")
-            .contains("Subject guidance: use a broad academic domain or curriculum category")
-            .contains("domain only, no topic suffix");
+            .contains("Subject guidance: use the specific academic subject or professional discipline")
+            .contains("Do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law")
+            .contains("label only, no topic suffix");
     }
 
     @Test
@@ -163,8 +164,7 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateStudyPack_acceptsBroadDomainSubjects() throws JsonProcessingException {
-        // Domain-level subjects like "Engineering" and "Medicine" are now valid — no retry needed
+    void generateStudyPack_ignoresOverlyBroadSubjectSuggestions() throws JsonProcessingException {
         stubResponsesCall();
         for (String domain : List.of("Engineering", "Medicine", "Law", "Business", "Education")) {
             ObjectNode payload = buildValidStudyPackPayload();
@@ -176,7 +176,7 @@ class OpenAiLlmStudyPackServiceTest {
                 new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
             );
 
-            assertThat(content.subject()).isEqualTo(domain);
+            assertThat(content.subject()).isNull();
         }
         // Only one API call per domain — no retry
         verify(responseSpec, times(5)).body(String.class);
@@ -426,20 +426,84 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateStudyPack_rejectsEmptySubject() throws JsonProcessingException {
+    void generateStudyPack_ignoresEmptySubject() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = buildValidStudyPackPayload();
         payload.put("subject", "   ");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
-        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
-        assertThatThrownBy(() -> service.generateStudyPack(
+        GeneratedStudyPackContent content = service.generateStudyPack(
             "Cell respiration notes",
-            context
-        ))
-            .isInstanceOf(AppException.class)
-            .extracting(e -> ((AppException) e).getCode())
-            .isEqualTo("LLM_INVALID_OUTPUT");
+            new StudyPackGenerationContext(null, null, null, List.of())
+        );
+
+        assertThat(content.subject()).isNull();
+    }
+
+    @Test
+    void generateStudyPack_acceptsNullSubjectSuggestion() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.putNull("subject");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+            "Cell respiration notes",
+            new StudyPackGenerationContext(null, null, null, List.of())
+        );
+
+        assertThat(content.subject()).isNull();
+    }
+
+    @Test
+    void generateStudyPack_repairsOverlongSubjectWithoutFailing() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.put("subject", "This Is A Very Long Unclear Subject Label");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+            "Cell respiration notes",
+            new StudyPackGenerationContext(null, null, null, List.of())
+        );
+
+        assertThat(content.subject()).isEqualTo("This Is A Very Long Unclear");
+    }
+
+    @Test
+    void generateStudyPack_keepsValidSpecificSubjectSuggestion() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.put("subject", "Electrical Engineering");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+            "Circuit notes",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", null, List.of())
+        );
+
+        assertThat(content.subject()).isEqualTo("Electrical Engineering");
+    }
+
+    @Test
+    void generateStudyPack_ignoresDuplicateAndInvalidTagSuggestions() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ArrayNode tags = objectMapper.createArrayNode();
+        tags.add("circuits");
+        tags.add("circuits");
+        tags.add("Cell Respiration Review");
+        tags.add("relationship between voltage and resistance");
+        tags.add("Ohm's Law");
+        payload.set("tags", tags);
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+            "Circuit notes",
+            new StudyPackGenerationContext(null, null, null, List.of())
+        );
+
+        assertThat(content.tags()).containsExactly("circuits", "Ohm's Law");
     }
 
     @Test

@@ -131,7 +131,7 @@ Metadata behavior shared with note authoring:
 - Library subject filters depend on the same persisted `notes.subject` values used by the Note Editor autocomplete.
 - When a user saves a custom subject on a note, that subject becomes available in later `Subject` suggestions and filters.
 - Equivalent subject variants should collapse through shared normalization so filters do not split labels only because of case or dash formatting.
-- AI-generated subjects should stay broad, reusable academic domains because backend normalizes subject metadata to domain-level labels before save.
+- AI-generated subjects should stay reusable academic labels; overly broad AI suggestions such as `Engineering`, `Medicine`, `Business`, and `Law` are ignored safely instead of being saved as Library filters.
 - Notes now persist optional per-note `courseProgram` metadata so future library filters can group notes more accurately without relying only on the user's profile default.
 
 ## Public Profile

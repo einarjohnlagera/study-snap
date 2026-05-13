@@ -918,8 +918,9 @@ Users can:
   - saved custom subjects become future suggestions once the note is persisted
   - subject saves should normalize whitespace and dash formatting so values such as `Biology-Cell Division` and `Biology – Cell Division` collapse into one reusable subject key
   - subject reuse checks should be case-insensitive so equivalent saved subjects resolve to the same autocomplete/filter label when possible
-  - AI-generated subjects should be broad academic domains because backend normalizes subject metadata to domain-level labels before save
-  - avoid vague catch-all labels when a clearer domain is available, but do not rely on `Primary field – subtopic` storage for current behavior
+  - AI-generated subjects should be reusable academic subject labels because backend normalizes subject metadata before save
+  - avoid vague catch-all labels such as `Engineering`, `Medicine`, `Business`, and `Law`; invalid AI subject suggestions are ignored safely and must not fail Study Pack generation
+  - do not rely on `Primary field – subtopic` storage for current behavior
   - example targets: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `Nursing`, `Criminal Law`
   - no normalized `subjects` table is required for the current version
 - Course / Program persistence and suggestions:

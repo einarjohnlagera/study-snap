@@ -526,6 +526,102 @@ class StudyPackServiceTest {
         assertThat(draftNote.getTags()).containsExactly("History", "Battle of Puebla", "Culture");
     }
 
+    @Test
+    void startAsyncGenerationFromNote_succeedsWhenAiSubjectSuggestionWasRejected() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        draftNote.setSubject("Electrical Engineering");
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Suggested Title",
+                "Generated summary",
+                null,
+                List.of("circuits", "voltage", "current"),
+                List.of("Voltage", "Current"),
+                List.of(new QuizItem(
+                        "What does Ohm's Law relate?",
+                        List.of("Force and mass", "Voltage and current", "Heat and pressure", "Speed and time"),
+                        "Voltage and current",
+                        "Ohm's Law",
+                        "Ohm's Law relates voltage, current, and resistance."
+                )),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId, true);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        assertThat(studyPackCaptor.getValue().getSubject()).isNull();
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
+        assertThat(draftNote.getSubject()).isEqualTo("Electrical Engineering");
+        verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), eq(studyPackCaptor.getValue().getId()), any());
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_succeedsWhenOptionalMetadataSuggestionsAreEmpty() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Suggested Title",
+                "Generated summary",
+                null,
+                List.of(),
+                List.of("Core idea"),
+                List.of(new QuizItem(
+                        "What is the core idea?",
+                        List.of("A", "B", "C", "D"),
+                        "A",
+                        "Core idea",
+                        "The note explains the core idea."
+                )),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        assertThat(studyPackCaptor.getValue().getSubject()).isNull();
+        assertThat(studyPackCaptor.getValue().getTags()).containsExactly("Suggested Title");
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
+        verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));
+    }
+
     private NoteEntity buildDraftNote(UUID noteId, UUID ownerUserId, String content) {
         NoteEntity note = new NoteEntity();
         note.setId(noteId);
