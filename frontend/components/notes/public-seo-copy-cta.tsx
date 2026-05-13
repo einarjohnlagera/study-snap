@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { AppModal } from "@/components/ui/app-modal";
+import { Button } from "@/components/ui/button";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent } from "@/lib/api";
@@ -11,25 +13,32 @@ import {
   type PublicCopyRedirectTarget,
 } from "@/lib/public-note-copy";
 
+const AUTH_MODAL_TITLE = "Save this note";
+const AUTH_MODAL_BODY = "Create a free account or log in to copy this note to your library.";
+
 type PublicSeoCopyCtaProps = {
   noteId: string;
   label?: string;
   redirectTarget?: PublicCopyRedirectTarget;
-  guestAuthMode?: "login" | "signup";
 };
 
 export function PublicSeoCopyCta({
   noteId,
   label = "Copy to My Library",
   redirectTarget = "library",
-  guestAuthMode = "login",
 }: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const copyHandledRef = useRef(false);
+
+  const authRedirectTarget = useMemo(
+    () => `${pathname}?${buildPublicCopyIntentQuery(redirectTarget)}`,
+    [pathname, redirectTarget],
+  );
 
   const resolveRequestedRedirectTarget = (): PublicCopyRedirectTarget => {
     const intent = searchParams.get("intent");
@@ -83,12 +92,7 @@ export function PublicSeoCopyCta({
       },
     });
     if (!getAuthUser()) {
-      const redirectTo = `${pathname}?${buildPublicCopyIntentQuery(redirectTarget)}`;
-      if (guestAuthMode === "signup") {
-        router.push(`/signup?redirect=${encodeURIComponent(redirectTo)}`);
-      } else {
-        router.push(buildLoginPath({ redirectTo }));
-      }
+      setAuthModalOpen(true);
       return;
     }
 
@@ -115,6 +119,35 @@ export function PublicSeoCopyCta({
         showTextOnMobile
       />
       {copyError ? <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p> : null}
+      <AppModal
+        isOpen={authModalOpen}
+        title={AUTH_MODAL_TITLE}
+        description={AUTH_MODAL_BODY}
+        onClose={() => setAuthModalOpen(false)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAuthModalOpen(false);
+                router.push(buildLoginPath({ redirectTo: authRedirectTarget }));
+              }}
+            >
+              Log In
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setAuthModalOpen(false);
+                router.push(`/signup?redirect=${encodeURIComponent(authRedirectTarget)}`);
+              }}
+            >
+              Sign Up
+            </Button>
+          </div>
+        )}
+      />
     </div>
   );
 }

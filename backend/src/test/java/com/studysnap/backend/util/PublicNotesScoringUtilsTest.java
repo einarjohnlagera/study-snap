@@ -3,6 +3,7 @@ package com.studysnap.backend.util;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -11,18 +12,34 @@ import static org.assertj.core.api.Assertions.within;
 
 class PublicNotesScoringUtilsTest {
 
+    private static final Instant NOW = Instant.parse("2026-05-12T00:00:00Z");
+
     @Test
     void computeScore_usesViewsCopiesAndLikesWeights() {
-        NoteListItemResponse note = makeNote("id", 4L, 3L, 7L, OffsetDateTime.now());
+        // Note created at NOW → decay factor = 1.0 → score = (4×3) + (3×2) + (7×1) = 25
+        NoteListItemResponse note = makeNote("id", 4L, 3L, 7L, OffsetDateTime.parse("2026-05-12T00:00:00Z"));
 
-        assertThat(PublicNotesScoringUtils.computeScore(note)).isCloseTo(25.0, within(0.001));
+        assertThat(PublicNotesScoringUtils.computeScore(note, NOW)).isCloseTo(25.0, within(0.001));
     }
 
     @Test
     void computeScore_treatsNullCountsAsZero() {
-        NoteListItemResponse note = makeNote("id", null, null, null, OffsetDateTime.now());
+        NoteListItemResponse note = makeNote("id", null, null, null, OffsetDateTime.parse("2026-05-12T00:00:00Z"));
 
-        assertThat(PublicNotesScoringUtils.computeScore(note)).isZero();
+        assertThat(PublicNotesScoringUtils.computeScore(note, NOW)).isZero();
+    }
+
+    @Test
+    void computeScore_reducesScoreForOlderNotes() {
+        // 30-day-old note → decay factor = 1/(1+30/30) = 0.5 → score = 10×0.5 = 5
+        NoteListItemResponse freshNote = makeNote("fresh", 0L, 0L, 10L, OffsetDateTime.parse("2026-05-12T00:00:00Z"));
+        NoteListItemResponse oldNote = makeNote("old", 0L, 0L, 10L, OffsetDateTime.parse("2026-04-12T00:00:00Z"));
+
+        double freshScore = PublicNotesScoringUtils.computeScore(freshNote, NOW);
+        double oldScore = PublicNotesScoringUtils.computeScore(oldNote, NOW);
+
+        assertThat(freshScore).isCloseTo(10.0, within(0.001));
+        assertThat(oldScore).isCloseTo(5.0, within(0.01));
     }
 
     @Test
@@ -43,30 +60,50 @@ class PublicNotesScoringUtilsTest {
     }
 
     @Test
-    void sortByFeatured_filtersIneligibleNotesAndAppliesTieBreakers() {
-        OffsetDateTime base = OffsetDateTime.now();
-        NoteListItemResponse moreCopies = makeNote("moreCopies", 3L, 0L, 5L, base.minusDays(3));
-        NoteListItemResponse moreViews = makeNote("moreViews", 1L, 0L, 11L, base.minusDays(2));
-        NoteListItemResponse newer = makeNote("newer", 2L, 0L, 8L, base.minusDays(1));
+    void sortByFeatured_filtersIneligibleAndRanksByDecayedScore() {
+        // highScore note: copyCount=10, viewCount=20, fresh → large decayed score
+        NoteListItemResponse high = makeNote("high", 10L, 0L, 20L, OffsetDateTime.parse("2026-05-11T00:00:00Z"));
+        // midScore note: copyCount=3, viewCount=5, fresh → smaller decayed score
+        NoteListItemResponse mid = makeNote("mid", 3L, 0L, 5L, OffsetDateTime.parse("2026-05-11T00:00:00Z"));
+        // ineligible draft with huge raw engagement — must be excluded
         NoteListItemResponse ineligible = makeNote(
-                "ineligible",
-                20L,
-                0L,
-                100L,
-                base,
-                "PUBLIC",
-                "DRAFT",
-                "preview",
-                "summary",
-                0
+                "ineligible", 100L, 0L, 1000L,
+                OffsetDateTime.parse("2026-05-12T00:00:00Z"),
+                "PUBLIC", "DRAFT", "preview", "summary", 0
         );
 
         List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByFeatured(
-                List.of(newer, ineligible, moreViews, moreCopies)
+                List.of(mid, ineligible, high), NOW
         );
 
         assertThat(sorted).extracting(NoteListItemResponse::id)
-                .containsExactly("moreCopies", "newer", "moreViews");
+                .containsExactly("high", "mid");
+    }
+
+    @Test
+    void sortByFeatured_ranksFresherNotesHigherWhenRawScoresAreEqual() {
+        // Same raw engagement (viewCount=10 each) but different ages → fresher wins
+        NoteListItemResponse fresh = makeNote("fresh", 0L, 0L, 10L, OffsetDateTime.parse("2026-05-11T00:00:00Z"));
+        NoteListItemResponse stale = makeNote("stale", 0L, 0L, 10L, OffsetDateTime.parse("2026-02-10T00:00:00Z"));
+
+        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByFeatured(List.of(stale, fresh), NOW);
+
+        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("fresh", "stale");
+    }
+
+    @Test
+    void sortByFeatured_tiebreaksByCopiesWhenDecayFactorsAreEqual() {
+        // Same createdAt → same decay factor → tiebreak by copies desc
+        OffsetDateTime sameTime = OffsetDateTime.parse("2026-05-12T00:00:00Z");
+        // Both have raw score 14 (copies×3 + views)
+        NoteListItemResponse moreCopies = makeNote("moreCopies", 3L, 0L, 5L, sameTime);
+        NoteListItemResponse moreViews = makeNote("moreViews", 1L, 0L, 11L, sameTime);
+
+        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByFeatured(
+                List.of(moreViews, moreCopies), NOW
+        );
+
+        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("moreCopies", "moreViews");
     }
 
     @Test

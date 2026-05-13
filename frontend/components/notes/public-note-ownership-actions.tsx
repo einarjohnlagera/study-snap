@@ -9,6 +9,7 @@ import { trackAnalyticsEvent } from "@/lib/api";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
+import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
@@ -63,7 +64,16 @@ export function PublicNoteAuthorLine({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
-      <SubjectBadge subject={subject} />
+      {subject ? (
+        <Link
+          href={buildPublicLibraryUrl({ subject: slugifyPublicLibraryFilterValue(subject) })}
+          className="transition-opacity hover:opacity-80"
+        >
+          <SubjectBadge subject={subject} />
+        </Link>
+      ) : (
+        <SubjectBadge subject={subject} />
+      )}
       <span className="text-foreground/45">•</span>
       {ownerUserId || authorUsername ? (
         <Link
@@ -167,9 +177,8 @@ export function PublicNoteOwnershipActions({
               noteId={noteId}
               label="Create your own Study Pack"
               redirectTarget="generate"
-              guestAuthMode="signup"
             />
-            <PublicSeoCopyCta noteId={noteId} label="Copy to My Library" guestAuthMode="signup" />
+            <PublicSeoCopyCta noteId={noteId} label="Copy to My Library" />
             <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share this note" />
           </div>
         </div>
