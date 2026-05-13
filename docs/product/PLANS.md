@@ -67,6 +67,7 @@ Designed for serious learners preparing for board and entrance exams.
 - Adaptive Practice (higher limit — `30` sessions / month)
 - Difficulty selection (Easy / Medium / Hard)
 - Board Exam Mode
+- Long Exam Mode
 - Highest note generation limits (`100` topic notes / month)
 - Everything in Plus
 
@@ -107,6 +108,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Adaptive Practice | — | 10 sessions | 30 sessions |
 | Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | ✓ |
+| Long Exam Mode | — | — | ✓ |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |
 
 ---

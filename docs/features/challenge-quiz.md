@@ -13,7 +13,7 @@ It is separate from Quick Review:
 - stricter timing and setup
 - result screen designed around next-step practice
 
-It is also separate from Board Exam Mode and (planned) Long Exam Mode:
+It is also separate from Board Exam Mode and Long Exam Mode:
 
 - Challenge Quiz is flexible and progressive; Long Exam is fixed and pause-friendly; Board Exam is a strict simulation with reduced UI chrome and no progressive controls
 - per-mode identity contracts are in `docs/product/EXAM_MODES.md`
@@ -39,9 +39,10 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 
 - Skips mode-selection entirely; lands directly on the Challenge Quiz setup step
 
-### Planned (v0.13+, per `EXAM_MODES.md`)
+### Long Exam backend (v0.13.0)
 
-- Long Exam Mode backend session support: fixed question set, pause-friendly, mastery-report result screen; "Start Long Exam" becomes active
+- Long Exam Mode backend session support is shipped: `LONG_EXAM` sessions use the shared quiz-session table, generate and commit a fixed question set before the session begins, support `PAUSED` resume state, and return a mastery report on completion
+- Frontend activation can wire `Start Long Exam` to the dedicated `/long-exam` endpoints when the UI is ready
 
 ## Current plan gating
 

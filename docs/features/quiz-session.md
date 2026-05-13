@@ -11,6 +11,18 @@ Shared session storage supports:
 - `QUICK_REVIEW`
 - `CHALLENGE`
 - `ADAPTIVE`
+- `LONG_EXAM`
+
+## Status Lifecycle
+
+Shared session status values:
+
+- `GENERATING` — generated question set is being created and committed to session state
+- `FAILED` — generation failed; the caller can recover without losing note or Study Pack data
+- `IN_PROGRESS` — session is active and accepting progress updates
+- `PAUSED` — Long Exam session is paused and resumable; active-session exclusivity still applies
+- `COMPLETED` — session has been submitted and scored
+- `FORFEITED` — session was abandoned through an explicit forfeit flow
 
 ## Dashboard Resume Metadata
 

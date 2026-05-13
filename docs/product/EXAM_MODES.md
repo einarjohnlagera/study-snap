@@ -29,7 +29,7 @@ NoteLib supports exactly **five quiz-flavored modes** — three exam modes plus 
 | Quick Review | Practice | All | Lightweight, encouraging | `QUICK_REVIEW` (uses base Study Pack quiz) |
 | Challenge Quiz | Exam | All | Flexible, progressive, practice with stakes | `CHALLENGE` |
 | Adaptive Practice | Practice | Plus / Pro (per `PLANS.md`) | Targeted weak-area reinforcement | `ADAPTIVE` |
-| Long Exam | Exam | Student profile (primary), Board Taker (secondary) | Long-form mastery testing | `LONG_EXAM` (planned) |
+| Long Exam | Exam | Student profile (primary), Board Taker (secondary) | Long-form mastery testing | `LONG_EXAM` |
 | Board Exam | Exam | Board Taker profile | High-stakes simulation | `BOARD_EXAM` (currently presented as a Challenge variant; future: own discriminator) |
 
 ### Naming clarification (history)
@@ -296,7 +296,8 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 
 ### v0.13+ (planned)
 
-- **Long Exam Mode v1** (single-note, fixed long-form, Pro-only).
+- **Long Exam Mode v1 backend** shipped: single-note, fixed long-form, Pro-only session support with pause/resume and mastery report.
+- **Long Exam Mode frontend activation**: wire the existing coming-soon entry to the backend endpoints.
 - **Profile-aware mode-selection rendering** (hide Board Exam from Students; cross-profile escape-hatch line).
 - **Learner-level grouped UX** in profile and post-onboarding confirmation surfaces (the existing Dashboard prompt; **not** a new step inside `/onboarding`).
 - **Guidance Engine extensions**: `cooldownMs`, dashboard contextual tips, course/program inline reminder.

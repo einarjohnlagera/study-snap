@@ -1,0 +1,37 @@
+TASK:
+Generate exactly {QUESTION_COUNT} NEW multiple-choice questions for a Long Exam mastery test.
+
+RULES:
+- Base ONLY on the provided summary and key concepts.
+- Difficulty target: {DIFFICULTY}.
+- Learner level target: {LEARNER_LEVEL}.
+- {LEARNER_LEVEL_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- {TIME_EXPECTATION}
+- This is a comprehensive mastery test, not targeted weak-area practice.
+- Cover the broadest reasonable range of note concepts.
+- Do not cluster most questions in one domain when multiple concepts are available.
+- Include a fair mix of recall, interpretation, and application questions.
+- Questions must test understanding, not memorization.
+- Questions must be unique.
+- Do NOT repeat or rephrase existing questions.
+- Avoid similar wording.
+- Each question must have 4 choices.
+- Answer must be exactly one of: A, B, C, D.
+- Exactly 1 choice must be correct.
+- Explanation is required for every question.
+- Concept is required for every question.
+- Use the provided excluded question list as hard constraints.
+- Return ONLY valid JSON with this structure:
+  {
+    "questions": [
+      {
+        "question": "...",
+        "choices": ["...", "...", "...", "..."],
+        "answer": "A",
+        "explanation": "...",
+        "concept": "..."
+      }
+    ]
+  }
+- Do not include markdown, comments, or text before or after JSON.

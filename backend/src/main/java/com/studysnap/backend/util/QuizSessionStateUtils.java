@@ -38,6 +38,30 @@ public class QuizSessionStateUtils {
         return state;
     }
 
+    public Map<String, Object> withSelectedChoice(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            int choiceIndex
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+
+        Map<String, Object> selectedChoices = new LinkedHashMap<>();
+        Object existingSelectedChoices = state.get(SELECTED_CHOICES_KEY);
+        if (existingSelectedChoices instanceof Map<?, ?> existingMap) {
+            for (Map.Entry<?, ?> entry : existingMap.entrySet()) {
+                if (entry.getKey() != null) {
+                    selectedChoices.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+        }
+        selectedChoices.put(String.valueOf(questionIndex), choiceIndex);
+        state.put(SELECTED_CHOICES_KEY, selectedChoices);
+        return state;
+    }
+
     public List<QuizItem> extractQuiz(Map<String, Object> sessionState) {
         if (sessionState == null) {
             return List.of();

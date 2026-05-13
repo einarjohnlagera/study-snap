@@ -8,7 +8,7 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to pr
 
 ### Planned Scope
 
-- **Long Exam Mode v1 (Pro-only)** — backend session support (`LONG_EXAM` discriminator), fixed long-form generation committed before session start, pause/resume, mastery report result screen; single-note at launch; reuses existing session lifecycle and generation lock
+- ~~**Long Exam Mode v1 (Pro-only)**~~ ✅ — see Shipped below
 - **Professional Profile activation** — `PROFESSIONAL` profile type selectable in onboarding (no longer `Coming Soon`); dashboard emphasis: applied, real-world framing
 - **Interview Practice Mode** — profile-gated presentation of Challenge Quiz engine for Professional users; interview-style LLM prompt framing (definition + situational mix); shows as `Interview Practice` in mode selection; same `CHALLENGE` session type, different label and prompts
 - **Faster quiz generation** — profile LLM latency end-to-end; evaluate streaming, model selection (`gpt-4.1-mini`), and early session creation; implement based on findings
@@ -18,7 +18,7 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to pr
 
 ### ✅ Shipped
 
-_(items moved here as they land)_
+- **Long Exam Mode v1 — backend** — added Pro-only `/long-exam` endpoints backed by the shared `quick_review_sessions` lifecycle: fixed question generation is committed before session start, `LONG_EXAM` sessions support `PAUSED` pause/resume state, completion returns a mastery report with domain breakdown / weak domains / suggested next step, FeatureGateService owns access control, and Flyway V55 adds the active-or-paused uniqueness guard
 
 ---
 
