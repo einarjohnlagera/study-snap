@@ -2,7 +2,7 @@
 
 > Paste the block below as your **first message** in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.12.0 (in progress) — 2026-05-13
+> Last updated: v0.12.0 (near-complete) — 2026-05-13
 
 ---
 
@@ -83,19 +83,19 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 - Conversion funnel polish (PaywallModal redesign, PostSuccessUpgradeNudge, context-aware getUpgradeCtas)
 - Public creator attribution with stable @usernames
 - Note metadata fixes: courseProgram source-of-truth, AI subject resilience, quiz context consistency
+- Adaptive Practice tier reconciliation — Plus = 10/mo, Pro = 30/mo aligned across all docs and runtime
+- Profile-aware mode selection + Long Exam coming-soon placeholder (`lib/exam-mode-visibility.ts`)
+- Board Exam premium UX polish — pre-flight checklist, "Score Report" result, learner-level pill removed
+- Learner Level grouped picker on quiz result screens (Recommended / Other Learning Styles by profile)
 
 **Still remaining in v0.12.0:**
 
 | Item | Risk class |
 |---|---|
-| Board Exam premium UX polish | Presentation-only (pre-flight, score-report framing, fullscreen) |
-| Adaptive Practice tier reconciliation | Doc/config align (Plus = 10/mo, Pro = 30/mo) |
-| Profile-aware mode selection + Long Exam placeholder | Frontend only |
-| Learner Level grouped picker UX | Frontend only (`getGroupedLearnerLevels()` already added) |
 | Faster quiz generation investigation | Research only (no production changes) |
 | Proration / recomputation design | Design doc only |
 
-Good v0.12.0 completions before cutting the release: top 4 (presentation/frontend, low risk).
+These are research/design artifacts — safe to defer to cut the release or carry into v0.13.0.
 
 ---
 
