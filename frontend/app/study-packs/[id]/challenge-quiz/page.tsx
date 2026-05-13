@@ -1394,42 +1394,32 @@ export default function ChallengeQuizPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
               Board Exam Mode
             </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">Board Exam Setup</h1>
+            <h1 className="text-xl font-semibold sm:text-2xl">Begin Board Exam</h1>
             <p className="text-sm text-foreground/80">
               Review the exam setup for {note?.title ?? "this note"} before you begin.
             </p>
 
             <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
-              <div className="space-y-2">
-                <h2 className="text-base font-semibold text-foreground">Description</h2>
-                <p>Simulate a focused exam session with mixed difficulty.</p>
-                {!boardExamAvailable ? (
-                  <p className="text-amber-700 dark:text-amber-300">Pro required to start Board Exam Mode.</p>
-                ) : null}
-              </div>
+              <h2 className="text-base font-semibold text-foreground">Pre-flight checklist</h2>
+              <ul className="space-y-2">
+                {[
+                  "Time required: approximately 15–20 minutes",
+                  "Do not refresh or navigate away — leaving counts as submission",
+                  "Fullscreen is recommended for focus (the exam will request it)",
+                  "Score is based on all questions, including unanswered ones",
+                  "Results are revealed only after you submit",
+                ].map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span className="mt-1 h-3 w-3 shrink-0 rounded-sm border border-foreground/35" aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Timer</p>
-                  <p>Strict timed session.</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Rules</p>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>No navigation during exam</li>
-                    <li>Results shown after completion</li>
-                    <li>Leaving counts as submission</li>
-                  </ul>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Monthly limit</p>
-                  <p>{boardExamAvailable ? "Counts toward your monthly quiz limit." : "Unlock with Pro. Challenge Quiz stays available on your current plan."}</p>
-                </div>
-              </div>
-            </div>
-
+            {!boardExamAvailable ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">Pro required to start Board Exam Mode.</p>
+            ) : null}
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your board exam...</p>
             ) : null}
@@ -1457,7 +1447,7 @@ export default function ChallengeQuizPage() {
                 disabled={challengeGenerationLocked}
               >
                 {boardExamAvailable
-                  ? challengeGenerationLocked ? "Starting..." : "Start Exam"
+                  ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
                   : "Unlock Board Exam Mode"}
               </Button>
             </div>
@@ -1680,14 +1670,14 @@ export default function ChallengeQuizPage() {
             "text-xs font-semibold uppercase tracking-wide",
             isBoardExamMode ? "text-foreground/70" : "text-blue-600 dark:text-blue-400",
           )}>
-            {isBoardExamMode ? "Board Exam Mode" : quizResultLabel}
+            {isBoardExamMode ? "Score Report" : quizResultLabel}
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">
             {isBoardExamMode ? "Exam Result" : (note?.title ?? quizModeLabel)}
           </h1>
           <p className="text-sm text-foreground/75">
             {isBoardExamMode
-              ? "Your board exam simulation is complete. Review your performance first, then use the follow-up actions to recover weak areas."
+              ? "Your board exam is complete. Review your score report below, then plan your next study step."
               : "Your Challenge Quiz is complete. Review the result summary first, then choose the next study action."}
           </p>
           {showFirstQuizCompletionBanner ? (
@@ -1870,7 +1860,7 @@ export default function ChallengeQuizPage() {
               )}
             />
           ) : null}
-          {currentLearnerLevel ? (
+          {!isBoardExamMode && currentLearnerLevel ? (
             <div className="space-y-2 border-t border-border pt-4 text-sm">
               <p className="font-medium text-foreground">Adjust difficulty level</p>
               <div className="flex flex-wrap gap-2">
@@ -1893,7 +1883,7 @@ export default function ChallengeQuizPage() {
               <p className="text-xs text-foreground/55">This applies to future generations.</p>
             </div>
           ) : null}
-          {!note?.adaptivePracticeAvailable ? (
+          {!isBoardExamMode && !note?.adaptivePracticeAvailable ? (
             <PostSuccessUpgradeNudge trigger="challenge-quiz" />
           ) : null}
           <QuizFeedbackPanel

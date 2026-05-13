@@ -22,13 +22,18 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - ~~**Profile-aware mode selection UX**~~ ✅ — see Shipped below
 - ~~**Long Exam Mode coming-soon foundation**~~ ✅ — see Shipped below
 - **Learner Level helper text** — updated inline helper text from generic "Controls difficulty, explanation depth, and quiz complexity." to "Quiz questions and explanations will better match your learning stage."; `getGroupedLearnerLevels()` added to `lib/learning-profile.ts` for future grouped picker UI (Student / Board Taker / Teacher recommendations)
-- **Board Exam premium UX polish (presentation-only)** — pre-flight setup, score-report-style result framing, fullscreen behavior, and removal of the inline learner-level pill on Board Exam result so the mode reads as a simulation, not a "longer Challenge Quiz"; no engine changes; details in `docs/product/EXAM_MODES.md`
+- ~~**Board Exam premium UX polish (presentation-only)**~~ ✅ — see Shipped below
 - ~~**Adaptive Practice tier reconciliation**~~ ✅ — aligned `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, `docs/PROJECT_CONTEXT.md`, and runtime gating (`StudySnapProperties`, `application.yaml`) with `PLANS.md`: Plus = 10 sessions / mo, Pro = 30 sessions / mo; `adaptivePracticeProOnly` default corrected to `false`; open discrepancy in `EXAM_MODES.md` closed
 
 ### ✅ Shipped
 
 - **Profile-aware mode selection UX** — mode-selection screen shows the right modes per profile: Students see Challenge Quiz + Long Exam (coming-soon); Board Takers see Challenge Quiz + Board Exam; Teachers skip mode-selection and go directly to Challenge Quiz setup; cross-profile escape hatch (`"Preparing for boards? Switch your profile in Settings"`) guides Students who want Board Exam Mode; `lib/exam-mode-visibility.ts` is the single source of truth and is fully unit-tested
 - **Long Exam Mode coming-soon foundation** — Long Exam Mode card is live in mode selection for Students with a `Coming Soon` badge; clicking it opens a graceful coming-soon setup screen with a disabled `"Long Exam — Coming Soon"` CTA and a link back to mode selection; mode identity is established in the UI without a backend session; `LONG_EXAM` engine discriminator and session logic ship in v0.13.0
+- **Board Exam premium UX polish (presentation-only)** — Board Exam Mode now reads as a higher-ceremony simulation without changing quiz engine behavior:
+  - setup screen uses `Begin Board Exam` framing with a five-item pre-flight checklist
+  - primary setup CTA is now `Begin Board Exam` while preserving existing Pro gating and mode-switching controls
+  - completed Board Exams render a `Score Report` subtitle and formal score-report guidance copy
+  - Board Exam results hide the inline learner-level adjustment and post-success upgrade nudge while preserving Challenge Quiz result behavior
 
 - **Public Library conversion funnel polish (recommendations A–G)** — multi-part audit pass that hardens the public note detail page as a top-of-funnel acquisition surface:
   - **Related notes in quiz completion card (C)** — after finishing the Quick Check, visitors see a "More from {Subject}" section with up to 3 engagement-ranked notes from the same subject; fetched server-side via the existing 5-min cached `getServerPublicNotesBySubjectSlug` call at no extra network cost; linked via canonical public note URLs
