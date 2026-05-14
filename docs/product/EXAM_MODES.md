@@ -124,6 +124,7 @@ Profile type controls **which exam modes are visible** in mode-selection. The en
 | Student | ✓ | ✓ (default emphasis) | ✓ (per `PLANS.md`) | ✓ (default emphasis on long-form entry) | Hidden by default |
 | Board Taker | ✓ | ✓ | ✓ (per `PLANS.md`) | ✓ (secondary; less ceremony than Board Exam) | ✓ (default emphasis) |
 | Teacher | Quiz Preview only | Quiz Preview only | — | — | — |
+| Professional | ✓ | ✓ (shown as "Certification Review") | ✓ (per `PLANS.md`) | ✓ Pro only (shown as "Full Practice Exam") | Hidden |
 
 ### Cross-profile escape hatch
 
@@ -136,6 +137,17 @@ This preserves discoverability without forcing a Pro-grade simulation experience
 ### Teacher
 
 Teacher remains scoped to Quiz Preview / Export workflows per `teacher-flow.md`. Teacher does not "take" any exam mode. No Teacher-facing exam-mode work is in scope here.
+
+### Professional
+
+Professional Profile uses the same exam mode access as Student, with profile-aware display label overrides. See `docs/features/professional-profile.md` for the full feature spec.
+
+Label overrides applied in `exam-mode-visibility.ts`:
+
+- Challenge Quiz → displayed as **"Certification Review"**
+- Long Exam → displayed as **"Full Practice Exam"**
+
+Engine discriminators (`CHALLENGE`, `LONG_EXAM`) do not change. Labels must not appear in backend APIs, session storage, or analytics events.
 
 ---
 
@@ -344,6 +356,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - Board Exam never becomes "longer Challenge Quiz."
 - Teacher remains scoped to Quiz Preview / Export.
 - No new persistence aggregates per profile or per mode.
+- Professional Profile label overrides ("Certification Review", "Full Practice Exam") are display-only in `exam-mode-visibility.ts`. Engine discriminators do not change.
 
 ---
 
@@ -353,6 +366,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - Practice modes: `docs/features/quick-review.md`, `docs/features/adaptive-practice.md`
 - Exam modes: `docs/features/challenge-quiz.md` (Long Exam and Board Exam to extend)
 - Profile context: `docs/features/profile-learning-context.md`
+- Professional Profile: `docs/features/professional-profile.md`
 - Plans (canonical): `docs/product/PLANS.md`
 - Spec: `docs/product/SPEC.md` §`Quiz entry defaults`, §`Profile type effects`, §`Challenge Quiz`
 - Project context: `docs/PROJECT_CONTEXT.md`
