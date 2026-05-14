@@ -19,6 +19,7 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to pr
 ### ✅ Shipped
 
 - **Long Exam Mode v1 — backend** — added Pro-only `/long-exam` endpoints backed by the shared `quick_review_sessions` lifecycle: fixed question generation is committed before session start, `LONG_EXAM` sessions support `PAUSED` pause/resume state, completion returns a mastery report with domain breakdown / weak domains / suggested next step, FeatureGateService owns access control, and Flyway V55 adds the active-or-paused uniqueness guard
+- **Long Exam Mode v1 frontend** — added the `/notes/[id]/long-exam` page with prestart, generating, paused-recovery, running, and complete phases; wired Pro paywall gating from Challenge Quiz mode selection; removed the Long Exam `Coming Soon` placeholder; added the legacy `/study-packs/[id]/long-exam` redirect shim
 
 ---
 
