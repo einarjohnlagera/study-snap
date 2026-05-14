@@ -6,6 +6,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -14,7 +15,6 @@ import {
   getActiveLongExamSession,
   getLongExamSession,
   getNote,
-  pauseLongExamSession,
   resumeLongExamSession,
   saveLongExamProgress,
   startLongExam,
@@ -42,6 +42,13 @@ type ToastState = {
 };
 
 const LONG_EXAM_POLL_INTERVAL_MS = 2000;
+const LONG_EXAM_LEAVE_TITLE = "Leave exam?";
+const LONG_EXAM_LEAVE_DESCRIPTION = "Your progress will be forfeited. This action cannot be undone.";
+const LONG_EXAM_LEAVE_CONFIRM_LABEL = "Forfeit Exam";
+const LONG_EXAM_LEAVE_ERROR = "Could not forfeit exam. Please try again.";
+const LONG_EXAM_BEFORE_UNLOAD_MESSAGE = "You are currently in Long Exam Mode. Leaving will forfeit your progress.";
+const LONG_EXAM_FOCUS_TIP_STORAGE_KEY = "notelib-long-exam-mode-tip-dismissed";
+const LONG_EXAM_FOCUS_TIP = "Long Exam Mode simulates a comprehensive exam. Stay focused — leaving will forfeit your session.";
 const LONG_EXAM_DIFFICULTIES: Array<{ value: LongExamDifficulty; label: string; description: string }> = [
   { value: "easy", label: "Easy", description: "Build confidence with lighter recall." },
   { value: "medium", label: "Medium", description: "Balanced recall and application." },
@@ -89,8 +96,8 @@ export default function LongExamPage() {
   const [starting, setStarting] = useState(false);
   const [savingProgress, setSavingProgress] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [pausing, setPausing] = useState(false);
   const [forfeiting, setForfeiting] = useState(false);
+  const [showFocusTip, setShowFocusTip] = useState(false);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -116,6 +123,7 @@ export default function LongExamPage() {
   const progressPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
   const hasActiveInProgressPrompt = activeStartResponse?.status === "IN_PROGRESS" && activeStartResponse.canResume;
   const timerState = resolveBoardExamTimerState(remainingSeconds);
+  const longExamActive = phase === "running" && Boolean(sessionId);
 
   const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
     setToast({ message, tone });
@@ -245,6 +253,19 @@ export default function LongExamPage() {
     const timeoutId = globalThis.setTimeout(() => setToast(null), 3000);
     return () => globalThis.clearTimeout(timeoutId);
   }, [toast]);
+
+  useEffect(() => {
+    if (phase !== "running") {
+      setShowFocusTip(false);
+      return;
+    }
+    setShowFocusTip(globalThis.localStorage?.getItem(LONG_EXAM_FOCUS_TIP_STORAGE_KEY) !== "dismissed");
+  }, [phase]);
+
+  const dismissFocusTip = useCallback(() => {
+    globalThis.localStorage?.setItem(LONG_EXAM_FOCUS_TIP_STORAGE_KEY, "dismissed");
+    setShowFocusTip(false);
+  }, []);
 
   useEffect(() => {
     if (phase !== "generating" || !studyPackId) {
@@ -406,22 +427,6 @@ export default function LongExamPage() {
     }
   }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
 
-  const handlePause = useCallback(async () => {
-    if (!sessionId || pausing) {
-      return;
-    }
-    setPausing(true);
-    setError(null);
-    try {
-      await pauseLongExamSession(sessionId);
-      router.push(noteDetailHref);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not pause this Long Exam.");
-    } finally {
-      setPausing(false);
-    }
-  }, [noteDetailHref, pausing, router, sessionId]);
-
   const handleComplete = useCallback(async (timeoutTriggered = false) => {
     if (!sessionId || submitting) {
       return;
@@ -504,34 +509,34 @@ export default function LongExamPage() {
     };
   }, [deadlineEpochSeconds, handleComplete, phase]);
 
-  const handleForfeit = useCallback(async () => {
-    if (!sessionId || forfeiting) {
+  const handleLeaveExam = useCallback(async () => {
+    if (!sessionId) {
       return;
     }
-    if (!globalThis.confirm("Forfeit this Long Exam? Your current session will end.")) {
-      return;
-    }
-    setForfeiting(true);
-    setError(null);
-    try {
-      await forfeitLongExamSession(sessionId);
-      void trackAnalyticsEvent({
-        eventType: "LONG_EXAM_FORFEITED",
-        entityId: sessionId,
-        metadata: {
-          noteId,
-          studyPackId,
-          answeredQuestions: answeredCount,
-          totalQuestions,
-        },
-      });
-      router.push(noteDetailHref);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not forfeit this Long Exam.");
-    } finally {
-      setForfeiting(false);
-    }
-  }, [answeredCount, forfeiting, noteDetailHref, noteId, router, sessionId, studyPackId, totalQuestions]);
+    await forfeitLongExamSession(sessionId);
+    void trackAnalyticsEvent({
+      eventType: "LONG_EXAM_FORFEITED",
+      entityId: sessionId,
+      metadata: {
+        noteId,
+        studyPackId,
+        answeredQuestions: answeredCount,
+        totalQuestions,
+      },
+    });
+  }, [answeredCount, noteId, sessionId, studyPackId, totalQuestions]);
+
+  const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
+    active: longExamActive,
+    fallbackHref: noteDetailHref,
+    onConfirmLeave: handleLeaveExam,
+    dialogTitle: LONG_EXAM_LEAVE_TITLE,
+    dialogDescription: LONG_EXAM_LEAVE_DESCRIPTION,
+    confirmLabel: LONG_EXAM_LEAVE_CONFIRM_LABEL,
+    confirmLoadingLabel: "Forfeiting...",
+    leaveErrorMessage: LONG_EXAM_LEAVE_ERROR,
+    beforeUnloadMessage: LONG_EXAM_BEFORE_UNLOAD_MESSAGE,
+  });
 
   if (getAuthUser()?.planType !== "PRO") {
     return null;
@@ -552,7 +557,47 @@ export default function LongExamPage() {
 
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-      <BackLink href={noteDetailHref} label="Back to Note" />
+      {phase === "running" ? (
+        <div
+          data-testid="long-exam-top-bar"
+          className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-foreground/15 bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
+        >
+          <Button variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
+            Leave Exam
+          </Button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className="truncate text-sm font-semibold text-foreground">Long Exam Mode</p>
+          </div>
+          <div
+            data-testid="long-exam-timer"
+            data-timer-state={timerState}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold",
+              timerState === "normal"
+                ? "border-foreground/15 bg-background text-foreground"
+                : timerState === "warning"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                  : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300",
+            )}
+            aria-label="Exam timer"
+          >
+            {formatTimer(remainingSeconds)}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <BackLink href={noteDetailHref} label="Note" />
+        </div>
+      )}
+
+      {phase === "running" && showFocusTip ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground/75">
+          <span>{LONG_EXAM_FOCUS_TIP}</span>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={dismissFocusTip}>
+            Got it
+          </Button>
+        </div>
+      ) : null}
 
       {error ? (
         <Card className="space-y-3 border-red-500/30 bg-red-500/5 p-4 text-sm text-red-700 dark:text-red-300 sm:p-5">
@@ -624,7 +669,7 @@ export default function LongExamPage() {
               <div className="rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/75">
                 <p className="font-medium text-foreground">Before you begin</p>
                 <p className="mt-1">
-                  The full question set is generated before the exam starts. You can pause and resume later, and your mastery report appears after submission.
+                  The full question set is generated before the exam starts. Stay focused once the exam begins; your mastery report appears after submission.
                 </p>
               </div>
 
@@ -666,32 +711,13 @@ export default function LongExamPage() {
       {phase === "running" && currentQuestion ? (
         <div className="space-y-4">
           <Card className="space-y-4 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">
-                  Question {currentQuestionIndex + 1} of {totalQuestions}
-                </p>
-                <p className="text-sm text-foreground/65">
-                  {answeredCount} of {totalQuestions} answered
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 sm:items-end">
-                <p
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-sm font-semibold tabular-nums",
-                    timerState === "urgent" || timerState === "expired"
-                      ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-                      : timerState === "warning"
-                        ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                        : "border-border bg-background text-foreground/75",
-                  )}
-                >
-                  {formatTimer(remainingSeconds)}
-                </p>
-                <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => void handlePause()} disabled={pausing || submitting}>
-                  {pausing ? "Pausing..." : "Pause"}
-                </Button>
-              </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">
+                Question {currentQuestionIndex + 1} of {totalQuestions}
+              </p>
+              <p className="text-sm text-foreground/65">
+                {answeredCount} of {totalQuestions} answered
+              </p>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${progressPercentage}%` }} />
@@ -715,46 +741,35 @@ export default function LongExamPage() {
             ) : null}
           </Card>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => setCurrentQuestionIndex((index) => Math.max(index - 1, 0))}
-                disabled={currentQuestionIndex === 0 || submitting}
-              >
-                Previous
-              </Button>
-              {currentQuestionIndex < totalQuestions - 1 ? (
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => setCurrentQuestionIndex((index) => Math.min(index + 1, totalQuestions - 1))}
-                  disabled={submitting}
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleComplete()}
-                  disabled={submitting}
-                >
-                  {submitting ? "Submitting..." : "Submit Long Exam"}
-                </Button>
-              )}
-            </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
-              variant="ghost"
-              className="w-full text-red-600 hover:text-red-700 dark:text-red-400 sm:w-auto"
-              onClick={() => void handleForfeit()}
-              disabled={forfeiting || submitting}
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setCurrentQuestionIndex((index) => Math.max(index - 1, 0))}
+              disabled={currentQuestionIndex === 0 || submitting}
             >
-              {forfeiting ? "Forfeiting..." : "Forfeit"}
+              Previous
             </Button>
+            {currentQuestionIndex < totalQuestions - 1 ? (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => setCurrentQuestionIndex((index) => Math.min(index + 1, totalQuestions - 1))}
+                disabled={submitting}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleComplete()}
+                disabled={submitting}
+              >
+                {submitting ? "Submitting..." : "Submit Long Exam"}
+              </Button>
+            )}
           </div>
         </div>
       ) : null}
@@ -836,6 +851,8 @@ export default function LongExamPage() {
           </div>
         </Card>
       ) : null}
+
+      <LeaveQuizModal />
 
       {toast ? <ToastMessage message={toast.message} tone={toast.tone} /> : null}
     </main>
