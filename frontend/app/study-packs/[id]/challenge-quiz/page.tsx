@@ -932,6 +932,15 @@ export default function ChallengeQuizPage() {
           totalQuestions: response.totalQuestions,
         };
       });
+      const nextDeadline = resolveDeadlineEpochSeconds(
+        response.timeLimitSeconds,
+        { timerStartedAtEpochSeconds: response.timerStartedAtEpochSeconds },
+        getNowEpochSeconds(),
+      );
+      const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(nextDeadline, getNowEpochSeconds());
+      setDeadlineEpochSeconds(nextDeadline);
+      setRemainingSeconds(nextRemainingSeconds);
+      remainingSecondsRef.current = nextRemainingSeconds;
       const nextIndex = challengeSession.quiz.length;
       syncProgressRef(nextIndex, progressRef.current.selectedChoices);
       setCurrentIndex(nextIndex);

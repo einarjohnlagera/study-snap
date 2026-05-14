@@ -424,12 +424,18 @@ public class ChallengeQuizService {
         int newTotal = previousQuizSize + unique.size();
         int addedQuestions = newTotal - previousQuizSize;
         int extension = Math.max(0, addedQuestions) * SECONDS_PER_QUESTION_CHALLENGE;
-        nextSessionState.put(SESSION_STATE_TIME_LIMIT_SECONDS, previousLimit + extension);
+        int newTimeLimitSeconds = previousLimit + extension;
+        nextSessionState.put(SESSION_STATE_TIME_LIMIT_SECONDS, newTimeLimitSeconds);
         session.setSessionState(nextSessionState);
         session.setTotalQuestions(newTotal);
         quickReviewSessionRepository.save(session);
 
-        return new GenerateMoreChallengeQuizResponse(unique, newTotal);
+        return new GenerateMoreChallengeQuizResponse(
+                unique,
+                newTotal,
+                newTimeLimitSeconds,
+                extractTimerStartedAtEpochSeconds(nextSessionState)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -682,6 +688,17 @@ public class ChallengeQuizService {
             return number.intValue();
         }
         return INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE;
+    }
+
+    private long extractTimerStartedAtEpochSeconds(Map<String, Object> sessionState) {
+        if (sessionState == null) {
+            return 0L;
+        }
+        Object raw = sessionState.get(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS);
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        return 0L;
     }
 
     private Map<String, Object> sanitizeSessionStateForClient(Map<String, Object> sessionState) {
