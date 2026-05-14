@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.13.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.14.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -163,3 +163,9 @@ type: concise subject
 ```
 
 Always update `RELEASES.md` with a bullet under the current version section when shipping any change.
+
+**Release kickoff checklist** (do this when opening a new version, before the first feature commit):
+1. Add new version section to `RELEASES.md` and mark prior version Released.
+2. Add new version section to `ROADMAP.md` and update "Current Release Baseline".
+3. Bump `Current version` in `CLAUDE.md`.
+4. Bump `version` in `frontend/package.json` and `backend/pom.xml` to match the new version number.
