@@ -21,6 +21,7 @@ import {
   type LearnerLevel,
   type MeResponse,
   type ProfileType,
+  updateExamDate,
   updateUserProfile,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -107,6 +108,30 @@ function ProfileLoading() {
   );
 }
 
+function formatExamCountdown(examDate: string | null): string | null {
+  if (!examDate) {
+    return null;
+  }
+  const exam = new Date(`${examDate}T00:00:00`);
+  if (Number.isNaN(exam.getTime())) {
+    return null;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = exam.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) {
+    return "Your exam date has passed. Keep practicing to stay sharp.";
+  }
+  if (diffDays === 0) {
+    return "Your exam is today. Focus on a final round of review.";
+  }
+  if (diffDays === 1) {
+    return "You have 1 day until your exam.";
+  }
+  return `You have ${diffDays} days until your exam.`;
+}
+
 type ProfileTypeSwitchModalProps = {
   pendingProfileType: ProfileType | null;
   saving: boolean;
@@ -187,6 +212,10 @@ export default function ProfilePage() {
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
   const [pendingProfileType, setPendingProfileType] = useState<ProfileType | null>(null);
   const [profileTypeSwitchToast, setProfileTypeSwitchToast] = useState<string | null>(null);
+  const [examDateInput, setExamDateInput] = useState("");
+  const [savingExamDate, setSavingExamDate] = useState(false);
+  const [examDateMessage, setExamDateMessage] = useState<string | null>(null);
+  const [examDateError, setExamDateError] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
@@ -225,6 +254,8 @@ export default function ProfilePage() {
     setError(null);
     setIdentityMessage(null);
     setProfileTypeMessage(null);
+    setExamDateMessage(null);
+    setExamDateError(null);
     setLearningProfileMessage(null);
     setSignInMethodsMessage(null);
     setLearningProfileErrors({});
@@ -252,6 +283,7 @@ export default function ProfilePage() {
         bio: me.bio ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
+      setExamDateInput(me.examDate ?? "");
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
       setSignInMethods(signInMethodsResult.status === "fulfilled" ? signInMethodsResult.value : null);
     } catch (err) {
@@ -259,6 +291,7 @@ export default function ProfilePage() {
       setError(message);
       setProfile(null);
       setSelectedProfileType("");
+      setExamDateInput("");
       setCourseProgramSuggestions([]);
       setSignInMethods(null);
     } finally {
@@ -338,6 +371,11 @@ export default function ProfilePage() {
       [profile?.courseProgram],
     ),
     [courseProgramSuggestions, learningProfileForm.courseProgram, profile?.courseProgram],
+  );
+
+  const examCountdown = useMemo(
+    () => formatExamCountdown(profile?.examDate ?? null),
+    [profile?.examDate],
   );
 
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
@@ -488,6 +526,7 @@ export default function ProfilePage() {
       const updatedProfile = await completeOnboardingProfileType({ profileType: targetType });
       setProfile(updatedProfile);
       setSelectedProfileType(updatedProfile.profileType ?? targetType);
+      setExamDateInput(updatedProfile.examDate ?? "");
 
       // Show a mode-specific success toast.
       const content = getProfileTypeSwitchContent(targetType);
@@ -503,6 +542,26 @@ export default function ProfilePage() {
       setProfileTypeMessage(message);
     } finally {
       setSavingProfileType(false);
+    }
+  };
+
+  const handleSaveExamDate = async () => {
+    if (savingExamDate) {
+      return;
+    }
+    setSavingExamDate(true);
+    setExamDateMessage(null);
+    setExamDateError(null);
+    try {
+      const updatedProfile = await updateExamDate(examDateInput || null);
+      setProfile(updatedProfile);
+      setExamDateInput(updatedProfile.examDate ?? "");
+      setExamDateMessage(updatedProfile.examDate ? "Exam date updated successfully." : "Exam date cleared.");
+    } catch (err) {
+      setExamDateInput(profile?.examDate ?? "");
+      setExamDateError(err instanceof Error ? err.message : "Could not update exam date.");
+    } finally {
+      setSavingExamDate(false);
     }
   };
 
@@ -732,6 +791,44 @@ export default function ProfilePage() {
                 );
               })}
             </div>
+            {profile.profileType === "BOARD_EXAM" ? (
+              <div className="space-y-3 border-t border-border pt-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground">Exam Date</h3>
+                  <p className="text-xs text-foreground/60">
+                    Used for your dashboard countdown. Clear the field to remove the countdown.
+                  </p>
+                </div>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium">Exam Date</span>
+                  <input
+                    type="date"
+                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                    value={examDateInput}
+                    onChange={(event) => {
+                      setExamDateInput(event.target.value);
+                      setExamDateMessage(null);
+                      setExamDateError(null);
+                    }}
+                    aria-label="Exam Date"
+                  />
+                </label>
+                {examCountdown ? <p className="text-xs text-foreground/60">{examCountdown}</p> : null}
+                {examDateMessage ? <p className="text-xs text-foreground/60">{examDateMessage}</p> : null}
+                {examDateError ? <p className="text-xs text-red-600 dark:text-red-400">{examDateError}</p> : null}
+                <div className="flex justify-end">
+                  <ResponsiveActionButton
+                    type="button"
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleSaveExamDate()}
+                    loading={savingExamDate}
+                    loadingText="Saving..."
+                    action="save"
+                    label="Save Exam Date"
+                  />
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
               {profileTypeMessage ? (
                 <p className="text-xs text-foreground/60">{profileTypeMessage}</p>

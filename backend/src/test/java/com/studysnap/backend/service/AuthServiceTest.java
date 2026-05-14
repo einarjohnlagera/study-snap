@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
+import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
@@ -727,6 +728,55 @@ class AuthServiceTest {
         assertThat(user.getLearnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
         assertThat(user.getCourseProgram()).isEqualTo("Medicine");
         verify(emailVerificationService).sendVerificationEmail(user, false);
+    }
+
+    @Test
+    void updateExamDate_savesDateAndReturnsUpdatedProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setProfileType(ProfileType.BOARD_EXAM);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateExamDate(
+            userId,
+            new UpdateExamDateRequest(LocalDate.parse("2026-10-15"))
+        );
+
+        assertThat(response.examDate()).isEqualTo(LocalDate.parse("2026-10-15"));
+        assertThat(user.getExamDate()).isEqualTo(LocalDate.parse("2026-10-15"));
+    }
+
+    @Test
+    void updateExamDate_acceptsNullAndClearsDate() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setProfileType(ProfileType.BOARD_EXAM);
+        user.setExamDate(LocalDate.parse("2026-10-15"));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateExamDate(
+            userId,
+            new UpdateExamDateRequest(null)
+        );
+
+        assertThat(response.examDate()).isNull();
+        assertThat(user.getExamDate()).isNull();
     }
 
     @Test

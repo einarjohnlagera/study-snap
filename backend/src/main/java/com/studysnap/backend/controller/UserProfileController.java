@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -28,6 +29,15 @@ public class UserProfileController {
             @Valid @RequestBody UpdateUserProfileRequest request
     ) {
         return authService.updateUserProfile(user.userId(), request);
+    }
+
+    @PutMapping("/profile/exam-date")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateExamDate(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody UpdateExamDateRequest request
+    ) {
+        return authService.updateExamDate(user.userId(), request);
     }
 
     @PutMapping("/profile/public-visibility")

@@ -1328,6 +1328,21 @@ export async function updateLearningProfileContext(
   });
 }
 
+export async function updateExamDate(examDate: string | null): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile/exam-date",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ examDate: examDate ?? null }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update exam date. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
 export async function updatePublicProfileVisibility(
   request: UpdatePublicProfileVisibilityRequest,
 ): Promise<MeResponse> {
