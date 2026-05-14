@@ -12,7 +12,7 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to a 
 - ~~**Professional Profile activation**~~ ✅ — see Shipped below
 - **Faster quiz generation** — profile LLM latency end-to-end; evaluate streaming, model selection (`gpt-4.1-mini`), and early session creation; implement based on findings
 - **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` pages with per-subject `<title>`/`<meta>`; decay-ranked note cards; sitemap update; deferred from v0.12.0
-- **Proration / recomputation design doc** — design doc under `docs/product/` covering mid-cycle plan changes; no implementation until design is reviewed; deferred from v0.12.0
+- ~~**Proration / recomputation design doc**~~ ✅ — see Shipped below
 - **Stale docs cleanup** — audit and update or remove `docs/` files still referencing v0.11.0 or earlier resolved items
 
 ### ✅ Shipped
@@ -24,7 +24,8 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to a 
 - **Navigation footer alignment fix** — Challenge Quiz, Board Exam, and Long Exam sticky footers now keep `Previous` left-aligned and Next / Submit / add-question actions right-aligned within the assessment column
 - **Professional Profile activated** — `PROFESSIONAL` profile type selectable in profile settings and onboarding (no longer `Coming Soon`); Challenge Quiz shown as `Certification Review` and Long Exam as `Full Practice Exam` for Professional users; learner level grouped picker shows "Recommended for Professionals"; professional dashboard emphasis for certification and career learning; Interview Practice Mode deferred to v0.14.0+
 - **Onboarding overhaul** — profile type cards redesigned as a 2×2 grid with emoji icons for all four active profile types (🎓 Student, 📋 Board Taker, 🏫 Teacher, 💼 Professional); step 2 "What's your goal?" replaced with Learner Level + Course/Program step that feeds AI generation context directly; step 2 pre-populates from the user's saved profile on re-entry; step 4 Back button removed post-generation to prevent study pack quota exhaustion; learner level now collected during onboarding instead of deferred to dashboard prompt
-- **Board Taker exam date editable in profile settings** — Board Taker users can update their exam date after onboarding via the Profile Type card in profile settings; supports retakes and reschedules; new `PUT /users/profile/exam-date` endpoint; dashboard countdown reflects the updated date
+- **Board Taker exam date editable in profile settings**
+- **Proration / recomputation design doc** — `docs/product/PRORATION.md`; defines upgrade (fresh 30-day cycle, no credit), downgrade (deferred to post auto-renewal), same-plan renewal (stack period, no reset), cancellation (end-of-period, manual refund via support), and quota recomputation rules per scenario; four open questions identified for pre-implementation resolution — Board Taker users can update their exam date after onboarding via the Profile Type card in profile settings; supports retakes and reschedules; new `PUT /users/profile/exam-date` endpoint; dashboard countdown reflects the updated date
 
 ---
 
