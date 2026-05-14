@@ -21,6 +21,8 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to pr
 - **Long Exam Mode v1 — backend** — added Pro-only `/long-exam` endpoints backed by the shared `quick_review_sessions` lifecycle: fixed question generation is committed before session start, `LONG_EXAM` sessions support `PAUSED` pause/resume state, completion returns a mastery report with domain breakdown / weak domains / suggested next step, FeatureGateService owns access control, and Flyway V55 adds the active-or-paused uniqueness guard
 - **Long Exam Mode v1 frontend** — added the `/notes/[id]/long-exam` page with prestart, generating, paused-recovery, running, and complete phases; wired Pro paywall gating from Challenge Quiz mode selection; removed the Long Exam `Coming Soon` placeholder; added the legacy `/study-packs/[id]/long-exam` redirect shim
 - **Timer fix** — Challenge Quiz and Board Exam time limits are now computed per question (`90s` per Challenge question, `60s` per Board Exam question); generate-more extends the deadline correctly; Long Exam now uses the same server-anchored deadline mechanism
+- **Long Exam UI consistency** — running Long Exams now use the Board Exam-style focused top bar, leave/forfeit modal with navigation guard, sticky Previous/Next/Submit footer, beforeunload warning, and one-time focus guidance instead of inline pause/forfeit controls
+- **Navigation footer alignment fix** — Challenge Quiz, Board Exam, and Long Exam sticky footers now keep `Previous` left-aligned and Next / Submit / add-question actions right-aligned within the assessment column
 
 ---
 
