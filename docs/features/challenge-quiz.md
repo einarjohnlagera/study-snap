@@ -160,6 +160,50 @@ Current save toast:
 - standalone session review (`NoteSessionReviewPageClient`) renders `QuizAnswerReview` with `stickyNav={true}`, which replaces the inline Prev/Next navigation with a `StickyAssessmentFooter` fixed to the viewport bottom — eliminates layout jitter when explanations expand/collapse
 - inline answer review on the challenge quiz result page does NOT use `stickyNav` (inline nav is correct there)
 
+## AI Generation Spec
+
+### Shared JSON contract
+
+All generated quiz payloads must return JSON only with this shape:
+
+```json
+{
+  "questions": [
+    {
+      "question": "...",
+      "choices": ["A", "B", "C", "D"],
+      "answer": "B",
+      "explanation": "...",
+      "concept": "..."
+    }
+  ]
+}
+```
+
+Rules: exactly 4 choices; `answer` must be `A`, `B`, `C`, or `D`; `explanation` and `concept` are required; no markdown, no comments, no prose before or after JSON.
+
+### Learner level guidance
+
+If the user has no saved learner level, default prompt difficulty to `College`.
+
+| Level | Expected behavior |
+|---|---|
+| `GRADE_SCHOOL` | Very simple definitions and identification; no tricky distractors; no complex computation |
+| `JUNIOR_HIGH` | Concept understanding; simple problem solving; basic computation when supported |
+| `SENIOR_HIGH` | Concept understanding plus moderate application; simple to moderate computation |
+| `COLLEGE` | Deeper concept questions; situational and analytical prompts; moderate computation |
+| `BOARD_EXAM_REVIEW` | Exam-style questions; plausible distractors; situational and multi-step reasoning; computation when quantitative |
+| `PROFESSIONAL` | Applied or case-based framing; real-world scenarios |
+| `PERSONAL_LEARNING` | Practical and accessible; around a college-foundation baseline unless notes suggest otherwise |
+
+### Quantitative / computation guidance
+
+When the note context suggests a quantitative subject (engineering, physics, math, accounting, finance, chemistry, statistics), the prompt should allow computation questions, formula-based questions, word problems, unit conversions, and multi-step calculations when appropriate. Keep them multiple choice; ensure the computed answer matches one choice exactly; explanation should show short step-by-step solution flow.
+
+### Explanation quality
+
+Explanations should sound like a tutor, explain why the correct answer is correct, stay concise but useful, and include short steps for numeric problems. Avoid empty explanations such as `B is correct because it is correct.`
+
 ## Leave quiz guard
 
 - `useQuizSessionGuard` intercepts navigation (document click, popstate, beforeunload) when the quiz is active
