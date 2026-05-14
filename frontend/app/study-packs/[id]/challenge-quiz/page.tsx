@@ -1587,7 +1587,7 @@ export default function ChallengeQuizPage() {
                       : "What would you like to do next?"
               : undefined}
           >
-            <div className="flex gap-2">
+            <div className="flex items-center justify-between">
               <Button
                 type="button"
                 variant="outline"
@@ -1602,52 +1602,54 @@ export default function ChallengeQuizPage() {
               >
                 Previous
               </Button>
-              {currentIndex < totalQuestions - 1 && !boardExamTimerExpired ? (
-                <Button
-                  type="button"
-                  className="flex-1 sm:w-auto sm:flex-none"
-                  onClick={() => {
-                    const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
-                    syncProgressRef(nextIndex, selectedChoices);
-                    setCurrentIndex(nextIndex);
-                    persistProgress(nextIndex, selectedChoices);
-                  }}
-                  disabled={quizInteractionDisabled}
-                >
-                  Next
-                </Button>
-              ) : isBoardExamMode ? (
-                <Button
-                  type="button"
-                  className="flex-1 sm:w-auto sm:flex-none"
-                  onClick={() => void handleSubmit(false)}
-                  disabled={submitting}
-                >
-                  {submitting ? "Submitting..." : submitButtonLabel}
-                </Button>
-              ) : (
-                <>
-                  {!noMoreQuestions && totalQuestions < MAX_SESSION_QUESTIONS ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 sm:w-auto sm:flex-none"
-                      onClick={() => void handleGenerateMore()}
-                      disabled={generatingMore || submitting}
-                    >
-                      {generatingMore ? "Adding..." : "+5 Questions"}
-                    </Button>
-                  ) : null}
+              <div className="flex gap-2">
+                {currentIndex < totalQuestions - 1 && !boardExamTimerExpired ? (
+                  <Button
+                    type="button"
+                    className="flex-1 sm:w-auto sm:flex-none"
+                    onClick={() => {
+                      const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
+                      syncProgressRef(nextIndex, selectedChoices);
+                      setCurrentIndex(nextIndex);
+                      persistProgress(nextIndex, selectedChoices);
+                    }}
+                    disabled={quizInteractionDisabled}
+                  >
+                    Next
+                  </Button>
+                ) : isBoardExamMode ? (
                   <Button
                     type="button"
                     className="flex-1 sm:w-auto sm:flex-none"
                     onClick={() => void handleSubmit(false)}
-                    disabled={submitting || generatingMore}
+                    disabled={submitting}
                   >
-                    {submitting ? "Submitting..." : "Complete Quiz"}
+                    {submitting ? "Submitting..." : submitButtonLabel}
                   </Button>
-                </>
-              )}
+                ) : (
+                  <>
+                    {!noMoreQuestions && totalQuestions < MAX_SESSION_QUESTIONS ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 sm:w-auto sm:flex-none"
+                        onClick={() => void handleGenerateMore()}
+                        disabled={generatingMore || submitting}
+                      >
+                        {generatingMore ? "Adding..." : "+5 Questions"}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      className="flex-1 sm:w-auto sm:flex-none"
+                      onClick={() => void handleSubmit(false)}
+                      disabled={submitting || generatingMore}
+                    >
+                      {submitting ? "Submitting..." : "Complete Quiz"}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </StickyAssessmentFooter>
         </div>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -124,6 +125,7 @@ export default function LongExamPage() {
   const hasActiveInProgressPrompt = activeStartResponse?.status === "IN_PROGRESS" && activeStartResponse.canResume;
   const timerState = resolveBoardExamTimerState(remainingSeconds);
   const longExamActive = phase === "running" && Boolean(sessionId);
+  const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
 
   const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
     setToast({ message, tone });
@@ -427,6 +429,14 @@ export default function LongExamPage() {
     }
   }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
 
+  const handlePrevious = useCallback(() => {
+    setCurrentQuestionIndex((index) => Math.max(index - 1, 0));
+  }, []);
+
+  const handleNext = useCallback(() => {
+    setCurrentQuestionIndex((index) => Math.min(index + 1, totalQuestions - 1));
+  }, [totalQuestions]);
+
   const handleComplete = useCallback(async (timeoutTriggered = false) => {
     if (!sessionId || submitting) {
       return;
@@ -556,7 +566,12 @@ export default function LongExamPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
+    <main
+      className={cn(
+        "mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:px-6 sm:py-10",
+        phase === "running" && "pb-28 sm:pb-28",
+      )}
+    >
       {phase === "running" ? (
         <div
           data-testid="long-exam-top-bar"
@@ -740,37 +755,6 @@ export default function LongExamPage() {
               <p className="text-xs text-foreground/55">Saving answer...</p>
             ) : null}
           </Card>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setCurrentQuestionIndex((index) => Math.max(index - 1, 0))}
-              disabled={currentQuestionIndex === 0 || submitting}
-            >
-              Previous
-            </Button>
-            {currentQuestionIndex < totalQuestions - 1 ? (
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => setCurrentQuestionIndex((index) => Math.min(index + 1, totalQuestions - 1))}
-                disabled={submitting}
-              >
-                Next
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => void handleComplete()}
-                disabled={submitting}
-              >
-                {submitting ? "Submitting..." : "Submit Long Exam"}
-              </Button>
-            )}
-          </div>
         </div>
       ) : null}
 
@@ -850,6 +834,32 @@ export default function LongExamPage() {
             </Button>
           </div>
         </Card>
+      ) : null}
+
+      {phase === "running" ? (
+        <StickyAssessmentFooter>
+          <div className="flex items-center justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePrevious}
+              disabled={currentQuestionIndex === 0 || submitting}
+            >
+              Previous
+            </Button>
+            <div className="flex gap-2">
+              {isLastQuestion ? (
+                <Button type="button" onClick={() => void handleComplete(false)} disabled={submitting}>
+                  {submitting ? "Submitting..." : "Submit Exam"}
+                </Button>
+              ) : (
+                <Button type="button" onClick={handleNext} disabled={submitting}>
+                  Next
+                </Button>
+              )}
+            </div>
+          </div>
+        </StickyAssessmentFooter>
       ) : null}
 
       <LeaveQuizModal />
