@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
@@ -403,6 +404,14 @@ public class AuthService {
             emailVerificationService.sendVerificationEmail(user, false);
         }
 
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
+    public MeResponse updateExamDate(UUID userId, UpdateExamDateRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+
+        user.setExamDate(request.examDate());
         user.setUpdatedAt(OffsetDateTime.now());
         return toMeResponse(user);
     }

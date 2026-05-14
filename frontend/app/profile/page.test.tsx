@@ -1,6 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ProfilePage from "./page";
-import { completeOnboardingProfileType, connectGoogle, getMe, getSignInMethods, listCoursePrograms, updateUserProfile } from "@/lib/api";
+import {
+  completeOnboardingProfileType,
+  connectGoogle,
+  getMe,
+  getSignInMethods,
+  listCoursePrograms,
+  updateExamDate,
+  updateUserProfile,
+} from "@/lib/api";
 
 const routerMock = {
   push: jest.fn(),
@@ -27,6 +35,7 @@ jest.mock("@/lib/api", () => ({
   getSignInMethods: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   listCoursePrograms: jest.fn(),
+  updateExamDate: jest.fn(),
   updateUserProfile: jest.fn(),
 }));
 
@@ -72,6 +81,7 @@ describe("Profile page", () => {
     (updateUserProfile as jest.Mock).mockReset();
     (connectGoogle as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
+    (updateExamDate as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
     (getSignInMethods as jest.Mock).mockResolvedValue({
       email: "[email protected]",
@@ -81,6 +91,7 @@ describe("Profile page", () => {
     });
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Computer Science"]);
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
+    (updateExamDate as jest.Mock).mockResolvedValue(profileResponse);
   });
 
   it("saves identity fields without changing profile type settings", async () => {
@@ -143,6 +154,94 @@ describe("Profile page", () => {
     });
     expect(updateUserProfile).not.toHaveBeenCalled();
     expect(await screen.findByText("You're now in Teacher mode — focused on generate, review, and export.")).toBeInTheDocument();
+  });
+
+  it("shows and saves exam date for Board Taker profiles", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "BOARD_EXAM",
+      examDate: "2999-10-15",
+    });
+    (updateExamDate as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "BOARD_EXAM",
+      examDate: "2999-12-20",
+    });
+
+    render(<ProfilePage />);
+
+    const examDateInput = await screen.findByLabelText("Exam Date");
+    expect(examDateInput).toHaveValue("2999-10-15");
+    expect(screen.getByText(/days until your exam\./)).toBeInTheDocument();
+
+    fireEvent.change(examDateInput, { target: { value: "2999-12-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Exam Date" }));
+
+    await waitFor(() => {
+      expect(updateExamDate).toHaveBeenCalledWith("2999-12-20");
+    });
+    expect(await screen.findByText("Exam date updated successfully.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Exam Date")).toHaveValue("2999-12-20");
+  });
+
+  it.each(["STUDENT", "TEACHER", "PROFESSIONAL"])(
+    "hides exam date for %s profiles",
+    async (profileType) => {
+      (getMe as jest.Mock).mockResolvedValue({
+        ...profileResponse,
+        profileType,
+        examDate: "2999-10-15",
+      });
+
+      render(<ProfilePage />);
+
+      await screen.findByText("Profile Type");
+      expect(screen.queryByLabelText("Exam Date")).not.toBeInTheDocument();
+    },
+  );
+
+  it("clears Board Taker exam date when the saved input is empty", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "BOARD_EXAM",
+      examDate: "2999-10-15",
+    });
+    (updateExamDate as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "BOARD_EXAM",
+      examDate: null,
+    });
+
+    render(<ProfilePage />);
+
+    const examDateInput = await screen.findByLabelText("Exam Date");
+    fireEvent.change(examDateInput, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Exam Date" }));
+
+    await waitFor(() => {
+      expect(updateExamDate).toHaveBeenCalledWith(null);
+    });
+    expect(await screen.findByText("Exam date cleared.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Exam Date")).toHaveValue("");
+    expect(screen.queryByText(/days until your exam\./)).not.toBeInTheDocument();
+  });
+
+  it("shows exam date save errors without keeping the unsaved date", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "BOARD_EXAM",
+      examDate: "2999-10-15",
+    });
+    (updateExamDate as jest.Mock).mockRejectedValue(new Error("Could not update exam date."));
+
+    render(<ProfilePage />);
+
+    const examDateInput = await screen.findByLabelText("Exam Date");
+    fireEvent.change(examDateInput, { target: { value: "2999-12-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Exam Date" }));
+
+    expect(await screen.findByText("Could not update exam date.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Exam Date")).toHaveValue("2999-10-15");
   });
 
   it("shows pending email verification guidance after email change", async () => {

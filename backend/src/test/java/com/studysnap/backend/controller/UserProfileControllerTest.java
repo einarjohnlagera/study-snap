@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
+import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.EngagementMode;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -128,5 +130,46 @@ class UserProfileControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(authService).updatePublicProfileVisibility(userId, request);
+    }
+
+    @Test
+    void updateExamDate_delegatesToAuthService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdateExamDateRequest request = new UpdateExamDateRequest(LocalDate.parse("2026-10-15"));
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                true,
+                null,
+                ProfileType.BOARD_EXAM,
+                LocalDate.parse("2026-10-15"),
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updateExamDate(userId, request)).thenReturn(expected);
+
+        MeResponse response = controller.updateExamDate(user, request);
+
+        assertThat(response).isEqualTo(expected);
+        verify(authService).updateExamDate(userId, request);
     }
 }

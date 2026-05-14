@@ -68,6 +68,10 @@ Important product rule:
 - `learnerLevel` is the primary difficulty and explanation-depth signal for future generations
 - `courseProgram` provides domain context only; it is not the direct difficulty control
 
+## Profile Type
+
+For Board Taker profile, an Exam Date field is shown in the Profile Type card and saved independently. Clearing the date removes the dashboard countdown.
+
 ## Learning Profile UX
 
 - `Course / Program` uses the shared combobox pattern also used by note metadata inputs
