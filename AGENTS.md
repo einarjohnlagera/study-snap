@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.12.0 - Learning Experience, Discovery, and Retention`
+- `v0.14.0 - Grow the Surface, Deepen the Practice`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1454,7 +1454,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.12.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, and `AGENTS.md` version references in sync when bumping a version.
+- The current version is `v0.14.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
@@ -1528,10 +1528,11 @@ These rules exist to prevent the most common forms of context drift across AI co
 - The soft conversion CTA (`Turn your own notes into something like this`) must appear before `Copy to My Library` and `Generate Study Pack` in the visual hierarchy.
 - After a public visitor signs up from a public note page, route them toward copying that note or creating their own Study Pack — not back to the same public note preview.
 - Generated note formatting improvements for public pages must not change how content is stored in the database or how authenticated note detail renders it.
-- Before implementing any public note detail change, confirm the RELEASES.md v0.12.0 section and `docs/features/public-library.md` Public Note Detail section are current.
+- Before implementing any public note detail change, confirm the current RELEASES.md section and `docs/features/public-library.md` Public Note Detail section are current.
 
-### v0.12.0 Pre-Implementation Checklist Anti-Drift
+### v0.14.0 Pre-Implementation Checklist Anti-Drift
 
-- Before implementing any v0.12.0 feature, confirm `RELEASES.md` and `docs/product/ROADMAP.md` v0.12.0 sections reflect the current planned scope.
-- `Public Library public note conversion` is the top-priority feature. Do not deprioritize it in favor of other v0.12.0 items without an explicit direction change from the user.
-- Research-only v0.12.0 items (quiz latency investigation, Long Exam mode planning) must produce a written doc before any code is written. Do not start implementation of these items directly.
+- Before implementing any v0.14.0 feature, confirm `RELEASES.md` and `docs/product/ROADMAP.md` v0.14.0 sections reflect the current planned scope.
+- `Subject landing pages (SEO)` is the top-priority feature. Do not deprioritize it in favor of other v0.14.0 items without an explicit direction change from the user.
+- `Interview Practice Mode` must not be implemented before EXAM_MODES.md and ROADMAP.md are updated to add it as a 6th mode — this is a locked contract change, not a regular feature.
+- `Faster quiz generation` changes must be based on latency profiling findings; do not implement speculative optimizations before the investigation is complete.

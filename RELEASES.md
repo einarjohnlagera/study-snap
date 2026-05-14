@@ -8,7 +8,7 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 
 ### Planned Scope
 
-- **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` landing pages with per-subject `<title>`/`<meta description>`, decay-ranked note cards, and sitemap update; deferred from v0.12.0 and v0.13.0
+- ~~**Subject landing pages (SEO)**~~ ✅ — see Shipped below
 - **Faster quiz generation** — implement findings from the latency investigation: streaming responses, model selection (`gpt-4.1-mini` for quiz generation), and/or early session creation; deferred from v0.13.0
 - **Interview Practice Mode (Professional Profile)** — conversational AI evaluation variant for mock interviews and applied learning scenarios; deferred from v0.13.0 (requires evaluation engine not present in current quiz architecture)
 - **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; deferred from v0.13.0
@@ -16,7 +16,7 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 
 ### ✅ Shipped
 
-_(none yet)_
+- **Subject landing pages** — server-rendered `/public/library/[subject]` pages with per-subject metadata, decay-ranked sections, and static generation
 
 ---
 

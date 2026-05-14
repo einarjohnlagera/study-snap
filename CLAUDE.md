@@ -169,3 +169,4 @@ Always update `RELEASES.md` with a bullet under the current version section when
 2. Add new version section to `ROADMAP.md` and update "Current Release Baseline".
 3. Bump `Current version` in `CLAUDE.md`.
 4. Bump `version` in `frontend/package.json` and `backend/pom.xml` to match the new version number.
+5. Update documentation baseline and version reference in `AGENTS.md`.

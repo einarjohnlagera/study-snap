@@ -467,9 +467,18 @@ The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Modal title: 
 
 A non-interactive "Practice modes available once you copy this note" block showing Challenge Quiz, Adaptive Practice, and Board Exam Mode as teaser cards. Implemented as `PublicPracticeModeTeaser` (static server component, no "use client"), placed after Full Notes and before Ownership Actions, gated on `!isDraft`. Board Exam Mode carries a Pro chip; the other two modes are shown as freely available.
 
-### J — Subject landing pages (content + design lift)
+### J — Subject landing pages (shipped in v0.14.0)
 
-The `/public/library/[subject]` route currently `permanentRedirect`s to the filtered library URL. A proper subject landing page — SEO-friendly intro, Featured/Popular notes for that subject, sample mini-quiz — compounds "premium educational" perception and provides long-tail SEO surface. Schedule when copywriter bandwidth is available.
+The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()`.
+
+Final implementation:
+
+- static, server-rendered discovery page; no client filters or anonymous session state
+- subject label resolves from matching note metadata with a slug fallback
+- three ranked sections: Featured Notes, Most Popular, Recently Added
+- section ordering and deduplication reuse the existing discovery helpers: Featured first, Popular excludes Featured, Recent excludes both
+- note cards link to canonical `/public/library/[subject]/[slug]` detail pages
+- empty subjects show a simple "No notes yet" state linking back to the Public Library
 
 ## Limit-Reached Fallback (planned)
 
