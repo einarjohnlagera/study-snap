@@ -1,6 +1,6 @@
 import type { ProfileType } from "@/lib/api";
 
-export type OnboardingProfileType = Extract<ProfileType, "STUDENT" | "BOARD_EXAM" | "TEACHER">;
+export type OnboardingProfileType = Extract<ProfileType, "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL">;
 export type OnboardingGoal =
   | "UNDERSTAND_TOPIC_IN_DEPTH"
   | "PRACTICE_WITH_QUIZZES"

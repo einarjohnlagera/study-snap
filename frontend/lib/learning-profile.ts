@@ -146,6 +146,12 @@ export function getGroupedLearnerLevels(
     return { recommended, other, recommendedGroupLabel: "Recommended for Teachers" };
   }
 
+  if (profileType === "PROFESSIONAL") {
+    const recommended = pick("PROFESSIONAL", "PERSONAL_LEARNING");
+    const other = LEARNER_LEVEL_OPTIONS.filter((opt) => !recommended.some((r) => r.value === opt.value));
+    return { recommended, other, recommendedGroupLabel: "Recommended for Professionals" };
+  }
+
   // STUDENT and fallback
   const recommended = pick("GRADE_SCHOOL", "JUNIOR_HIGH", "SENIOR_HIGH", "COLLEGE");
   const other = LEARNER_LEVEL_OPTIONS.filter((opt) => !recommended.some((r) => r.value === opt.value));

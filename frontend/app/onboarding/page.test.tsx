@@ -400,6 +400,23 @@ describe("OnboardingPage", () => {
     });
   });
 
+  it("shows Professional profile option with goals and no exam date field", async () => {
+    render(<OnboardingPage />);
+
+    expect(await screen.findByText("🎓 Student")).toBeInTheDocument();
+    expect(screen.getByText("📋 Board Taker")).toBeInTheDocument();
+    expect(screen.getByText("🏫 Teacher")).toBeInTheDocument();
+    expect(screen.getByText("💼 Professional")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Professional"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("button", { name: "Practice and test myself with quizzes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Understand a topic in depth" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review and reinforce weak concepts" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("When is your exam? (optional)")).not.toBeInTheDocument();
+  });
+
   it("keeps the Study Pack CTA disabled until the own-note minimum is met", async () => {
     render(<OnboardingPage />);
 

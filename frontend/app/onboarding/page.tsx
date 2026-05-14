@@ -60,23 +60,33 @@ const STEP_FOUR_BACK_NOTICE =
 
 const PROFILE_OPTIONS: Array<{
   value: OnboardingProfileType;
+  icon: string;
   label: string;
   description: string;
 }> = [
   {
     value: "STUDENT",
+    icon: "🎓",
     label: "Student",
     description: "Reviewing notes and preparing for quizzes",
   },
   {
     value: "BOARD_EXAM",
+    icon: "📋",
     label: "Board Taker",
     description: "Preparing for a board or licensure exam",
   },
   {
     value: "TEACHER",
+    icon: "🏫",
     label: "Teacher",
     description: "Creating study materials for students",
+  },
+  {
+    value: "PROFESSIONAL",
+    icon: "💼",
+    label: "Professional",
+    description: "Certification prep and applied knowledge review",
   },
 ];
 
@@ -96,6 +106,11 @@ const GOAL_OPTIONS: Record<OnboardingProfileType, Array<{ value: OnboardingGoal;
     { value: "GENERATE_QUIZ_OR_EXAM", label: "Generate a quiz or exam" },
     { value: "UNDERSTAND_TO_TEACH", label: "Understand a topic to teach it" },
   ],
+  PROFESSIONAL: [
+    { value: "PRACTICE_WITH_QUIZZES", label: "Practice and test myself with quizzes" },
+    { value: "UNDERSTAND_TOPIC_IN_DEPTH", label: "Understand a topic in depth" },
+    { value: "REINFORCE_WEAK_CONCEPTS", label: "Review and reinforce weak concepts" },
+  ],
 };
 
 const STEP_NAMES: Record<number, StepName> = {
@@ -110,10 +125,11 @@ const COMPLETION_COPY: Record<OnboardingProfileType, string> = {
   STUDENT: "Your Study Pack is ready. Start practicing when you're ready.",
   BOARD_EXAM: "Your first practice material is ready. Keep going and build toward exam day.",
   TEACHER: "Your Study Pack is ready. You can export a quiz for your students any time.",
+  PROFESSIONAL: "Your study material is ready. Start your certification review whenever you're set.",
 };
 
 function isOnboardingProfileType(value: string | null | undefined): value is OnboardingProfileType {
-  return value === "STUDENT" || value === "BOARD_EXAM" || value === "TEACHER";
+  return value === "STUDENT" || value === "BOARD_EXAM" || value === "TEACHER" || value === "PROFESSIONAL";
 }
 
 function getStepName(step: number): StepName {
@@ -858,7 +874,7 @@ export default function OnboardingPage() {
                 aria-label={option.label}
               >
                 <div className="space-y-1 text-left">
-                  <div className="text-base font-semibold text-foreground sm:text-lg">{option.label}</div>
+                  <div className="text-base font-semibold text-foreground sm:text-lg">{option.icon} {option.label}</div>
                   <p className="text-sm text-foreground/70 sm:text-base">{option.description}</p>
                 </div>
               </button>
