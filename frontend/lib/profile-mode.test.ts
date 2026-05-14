@@ -33,7 +33,7 @@ describe("resolveProfileMode", () => {
     expect(resolveProfileMode("PARENT")).toBe("LEARNING");
   });
 
-  it("returns LEARNING for PROFESSIONAL (disabled type)", () => {
+  it("returns LEARNING for PROFESSIONAL", () => {
     expect(resolveProfileMode("PROFESSIONAL")).toBe("LEARNING");
   });
 });
@@ -70,8 +70,15 @@ describe("getProfileTypeSwitchContent", () => {
     expect(content.toast).toContain("Teacher");
   });
 
+  it("returns content for PROFESSIONAL mentioning certification and career learning", () => {
+    const content = getProfileTypeSwitchContent("PROFESSIONAL");
+    expect(content.title).toBe("Switch to Professional mode?");
+    expect(content.body.some((line) => line.toLowerCase().includes("certification prep"))).toBe(true);
+    expect(content.toast).toContain("Professional mode");
+  });
+
   it("all active types include the switch-back note", () => {
-    const types = ["STUDENT", "BOARD_EXAM", "TEACHER"] as const;
+    const types = ["STUDENT", "BOARD_EXAM", "TEACHER", "PROFESSIONAL"] as const;
     for (const type of types) {
       const content = getProfileTypeSwitchContent(type);
       expect(content.note).toBe("You can switch back anytime.");
@@ -84,10 +91,10 @@ describe("isActiveProfileTypeForSwitch", () => {
     expect(isActiveProfileTypeForSwitch("STUDENT")).toBe(true);
     expect(isActiveProfileTypeForSwitch("BOARD_EXAM")).toBe(true);
     expect(isActiveProfileTypeForSwitch("TEACHER")).toBe(true);
+    expect(isActiveProfileTypeForSwitch("PROFESSIONAL")).toBe(true);
   });
 
   it("rejects disabled profile types", () => {
-    expect(isActiveProfileTypeForSwitch("PROFESSIONAL")).toBe(false);
     expect(isActiveProfileTypeForSwitch("PARENT")).toBe(false);
   });
 

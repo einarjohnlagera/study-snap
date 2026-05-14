@@ -8,6 +8,7 @@ import type {
 
 type ContinueSpotlightProps = {
   recommendation: ContinueStudyingResponse;
+  profileType?: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL";
 };
 
 function formatScorePercentage(value: number) {
@@ -24,16 +25,26 @@ function formatMetadataLine(subject: string | null, courseProgram: string | null
   return parts.join(" • ");
 }
 
-function resolveResumePresentation(resumeType: ContinueStudyingResumeType | null): {
+function resolveResumePresentation(
+  resumeType: ContinueStudyingResumeType | null,
+  profileType?: ContinueSpotlightProps["profileType"],
+): {
   action: ActionIconName;
-  hrefSuffix: "quick-review" | "challenge-quiz" | "adaptive-practice";
+  hrefSuffix: "quick-review" | "challenge-quiz" | "adaptive-practice" | "long-exam";
   label: string;
 } {
   if (resumeType === "CHALLENGE") {
     return {
       action: "challengeQuiz",
       hrefSuffix: "challenge-quiz",
-      label: "Resume Challenge Quiz",
+      label: profileType === "PROFESSIONAL" ? "Continue Certification Review" : "Resume Challenge Quiz",
+    };
+  }
+  if (resumeType === "LONG_EXAM") {
+    return {
+      action: "challengeQuiz",
+      hrefSuffix: "long-exam",
+      label: profileType === "PROFESSIONAL" ? "Continue Full Practice Exam" : "Resume Long Exam",
     };
   }
   if (resumeType === "ADAPTIVE") {
@@ -78,7 +89,9 @@ function getCardTone(recommendation: ContinueStudyingResponse) {
       ? "Challenge Quiz"
       : recommendation.resumeType === "ADAPTIVE"
         ? "Adaptive Practice"
-        : null;
+        : recommendation.resumeType === "LONG_EXAM"
+          ? "Long Exam"
+          : null;
     return {
       label: "In Progress",
       icon: TrendingUp,
@@ -111,14 +124,14 @@ function getCardTone(recommendation: ContinueStudyingResponse) {
   };
 }
 
-export function ContinueSpotlight({ recommendation }: Readonly<ContinueSpotlightProps>) {
+export function ContinueSpotlight({ recommendation, profileType }: Readonly<ContinueSpotlightProps>) {
   if (!recommendation.noteId) {
     return null;
   }
 
   const cardTone = getCardTone(recommendation);
   const ToneIcon = cardTone.icon;
-  const resumePresentation = resolveResumePresentation(recommendation.resumeType);
+  const resumePresentation = resolveResumePresentation(recommendation.resumeType, profileType);
   const noteTitle = recommendation.noteTitle?.trim() || "Untitled note";
   const metadataLine = formatMetadataLine(recommendation.subject, recommendation.courseProgram);
   const resumeHref = `/notes/${recommendation.noteId}/${resumePresentation.hrefSuffix}`;

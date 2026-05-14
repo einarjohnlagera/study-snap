@@ -53,7 +53,7 @@ import {
 } from "@/lib/dashboard-personalization-prompt";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
 
-type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
+type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL";
 type TeacherGeneratedQuizSummary = {
   noteId: string;
   title: string;
@@ -78,7 +78,7 @@ function formatDashboardDate(value: string): string {
 }
 
 function resolveDashboardProfileType(profileType: ProfileType | null | undefined): SupportedDashboardProfileType {
-  if (profileType === "BOARD_EXAM" || profileType === "TEACHER") {
+  if (profileType === "BOARD_EXAM" || profileType === "TEACHER" || profileType === "PROFESSIONAL") {
     return profileType;
   }
   return "STUDENT";
@@ -135,16 +135,22 @@ function resolveChallengeQuizHref(
   return "/notes/new";
 }
 
-function getTeacherWelcomeMessage(profileType: SupportedDashboardProfileType) {
+function getWelcomeMessage(profileType: SupportedDashboardProfileType) {
   if (profileType === "TEACHER") {
     return "Welcome to NoteLib! Start by creating a note, then generate a Study Pack and review the quiz in Quiz Preview.";
+  }
+  if (profileType === "PROFESSIONAL") {
+    return "Welcome to NoteLib! Start by creating a note, then generate a Study Pack and start your certification review.";
   }
   return "Welcome to NoteLib! Start by creating a note, then generate your first Study Pack.";
 }
 
-function getTeacherFirstStudyDescription(profileType: SupportedDashboardProfileType) {
+function getFirstStudyDescription(profileType: SupportedDashboardProfileType) {
   if (profileType === "TEACHER") {
     return "NoteLib helps teachers turn notes into summaries, key concepts, and export-ready quiz previews. Let’s create your first teaching note.";
+  }
+  if (profileType === "PROFESSIONAL") {
+    return "NoteLib helps you turn your study materials into scenario-based quizzes and certification practice. Let's create your first study pack.";
   }
   return "NoteLib helps you turn notes into summaries, key concepts, and quizzes. Let’s create your first study pack.";
 }
@@ -517,11 +523,15 @@ export default function DashboardPage() {
           ? "Ready to focus on exam prep?"
           : dashboardProfileType === "TEACHER"
             ? "Ready to build your next class review?"
+            : dashboardProfileType === "PROFESSIONAL"
+              ? "Ready to build certification readiness?"
             : undefined}
         description={dashboardProfileType === "BOARD_EXAM"
           ? "Your exam prep workspace. Practice, review weak areas, and keep your momentum steady."
           : dashboardProfileType === "TEACHER"
             ? "Turn materials into quiz-ready study packs, question sets, and reusable class review content."
+            : dashboardProfileType === "PROFESSIONAL"
+              ? "Your professional learning workspace. Review study material, practice applied scenarios, and track certification readiness."
             : "Your note workspace. Revisit saved notes, reinforce weak concepts, and keep studying with less friction."}
       />
 
@@ -550,7 +560,7 @@ export default function DashboardPage() {
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">
-                {getTeacherWelcomeMessage(dashboardProfileType)}
+                {getWelcomeMessage(dashboardProfileType)}
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="w-full sm:w-auto" />
@@ -558,17 +568,19 @@ export default function DashboardPage() {
               </div>
             </Card>
           ) : null}
-          {dashboardProfileType === "STUDENT" ? (
+          {dashboardProfileType === "STUDENT" || dashboardProfileType === "PROFESSIONAL" ? (
             <>
               {continueStudying?.noteId ? (
                 <section className="space-y-3">
                   <h2 className="text-lg font-semibold sm:text-xl">Continue Studying</h2>
-                  <ContinueSpotlight recommendation={continueStudying} />
+                  <ContinueSpotlight recommendation={continueStudying} profileType={dashboardProfileType} />
                 </section>
               ) : (
                 <DashboardActionCard
                   title="Continue Studying"
-                  description="Jump back into your latest note or start a fresh review session."
+                  description={dashboardProfileType === "PROFESSIONAL"
+                    ? "Jump back into your study material or start a certification-focused review session."
+                    : "Jump back into your latest note or start a fresh review session."}
                   actionLabel="Continue Studying"
                   actionHref={studentPrimaryHref}
                   actionIcon="open"
@@ -586,7 +598,9 @@ export default function DashboardPage() {
               <DashboardFocusAreasCard
                 title="Weak Concepts"
                 focusAreas={overview?.focusAreas ?? null}
-                emptyStateText="Finish a few Challenge Quizzes to reveal the concepts that need more review."
+                emptyStateText={dashboardProfileType === "PROFESSIONAL"
+                  ? "Finish a few Certification Reviews to reveal the concepts that need more applied practice."
+                  : "Finish a few Challenge Quizzes to reveal the concepts that need more review."}
                 primaryActionLabel="Practice Weak Concepts"
                 lockedActionLabel="Unlock Adaptive Practice"
                 onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
@@ -606,7 +620,9 @@ export default function DashboardPage() {
               <DashboardStrongestNotes />
               <DashboardActionCard
                 title="Quick Review"
-                description="Use Quick Review to reinforce what you just studied and keep recall active."
+                description={dashboardProfileType === "PROFESSIONAL"
+                  ? "Use Quick Review to reinforce your study material and keep applied knowledge fresh."
+                  : "Use Quick Review to reinforce what you just studied and keep recall active."}
                 actionLabel="Start Quick Review"
                 actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
                 actionIcon="quickReview"
@@ -620,7 +636,7 @@ export default function DashboardPage() {
 
           {dashboardProfileType === "BOARD_EXAM" ? (
             <>
-              {examCountdown ? (
+              {dashboardProfileType === "BOARD_EXAM" && examCountdown ? (
                 <Card className="space-y-3 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Exam Countdown</h2>
                   <p className="text-sm text-foreground/75">{examCountdown}</p>
@@ -739,7 +755,7 @@ export default function DashboardPage() {
       <AppModal
         isOpen={showFirstStudyWelcomeModal}
         title="Welcome to NoteLib"
-        description={getTeacherFirstStudyDescription(dashboardProfileType)}
+        description={getFirstStudyDescription(dashboardProfileType)}
         onClose={() => {
           void handleSkipFirstStudyOnboarding();
         }}

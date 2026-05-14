@@ -66,4 +66,55 @@ describe("ContinueSpotlight", () => {
       "/notes/note-2/adaptive-practice",
     );
   });
+
+  it("uses professional label overrides for challenge and long exam resumes", () => {
+    const baseRecommendation = {
+      studyPackId: "pack-3",
+      noteId: "note-3",
+      noteTitle: "AWS Certification Review",
+      subject: "Cloud",
+      courseProgram: "Solutions Architect",
+      summaryPreview: null,
+      reason: "RESUME_REVIEW" as const,
+      lastScorePercentage: null,
+      lastReviewedAt: null,
+      lastOpenedAt: null,
+      createdAt: "2026-04-03T09:00:00Z",
+      currentQuestionIndex: 0,
+      totalQuestions: 20,
+      currentRound: "INITIAL" as const,
+      remainingQuestions: null,
+      resumeState: "QUESTION_IN_PROGRESS" as const,
+    };
+
+    const { rerender } = render(
+      <ContinueSpotlight
+        profileType="PROFESSIONAL"
+        recommendation={{
+          ...baseRecommendation,
+          resumeType: "CHALLENGE",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Continue Certification Review" })).toHaveAttribute(
+      "href",
+      "/notes/note-3/challenge-quiz",
+    );
+
+    rerender(
+      <ContinueSpotlight
+        profileType="PROFESSIONAL"
+        recommendation={{
+          ...baseRecommendation,
+          resumeType: "LONG_EXAM",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Continue Full Practice Exam" })).toHaveAttribute(
+      "href",
+      "/notes/note-3/long-exam",
+    );
+  });
 });

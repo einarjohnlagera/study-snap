@@ -80,7 +80,7 @@ export type StudyPackListPageResponse = {
 
 export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
-export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE";
+export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
 export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"
