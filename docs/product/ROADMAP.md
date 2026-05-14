@@ -6,15 +6,42 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.13.0 - Complete the Promise, Reach New Audiences` is the current in-progress release.
+`v0.14.0 - Grow the Surface, Deepen the Practice` is the current in-progress release.
 
-`v0.12.0 - Learning Experience, Discovery, and Retention` is complete and is the previous documentation baseline.
+`v0.13.0 - Complete the Promise, Reach New Audiences` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
-## v0.13.0 - Complete the Promise, Reach New Audiences
+## v0.14.0 - Grow the Surface, Deepen the Practice
 
 **Status: In Progress**
+
+Theme: expand organic reach through subject SEO pages, unlock professional-audience depth with Interview Practice, extend Long Exam to span multiple notes, and close out the quiz generation performance work deferred from v0.13.0.
+
+Primary focus:
+
+1. **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` landing pages replacing the current redirect; static `<title>` and `<meta description>` per subject; server-rendered note cards ranked by decay scoring; sitemap update to include subject pages; deferred from v0.12.0 and v0.13.0
+
+2. **Faster quiz generation** — promote from deferred to implement; profile current LLM latency end-to-end (prompt build, API call, JSON parse, DB write); evaluate streaming responses to unblock frontend earlier, model selection (`gpt-4.1-mini` for quiz generation), and early session creation; implement the approach that latency findings support; frontend may gain a progress indicator if streaming is adopted
+
+3. **Interview Practice Mode (Professional Profile)** — dedicated mode for mock interviews and applied learning scenarios; Pro-only at launch; session format TBD (conversational AI evaluation vs. existing MC engine with professional-framed prompts); deferred from v0.13.0 pending evaluation engine design; see `docs/features/professional-profile.md`
+
+4. **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; single-note Long Exam remains the stable baseline; deferred from v0.13.0
+
+5. **Stale docs cleanup** — audit `docs/` for files still referencing v0.11.0 or earlier resolved items; update or remove; deferred from v0.13.0
+
+### Implementation stances
+
+- Subject landing pages must be server-rendered; do not implement as a client-rendered filter redirect
+- Interview Practice must not break the 5-mode locked contract — it requires adding a 6th mode, which requires updating `docs/product/EXAM_MODES.md` and this roadmap together before any implementation begins
+- Multi-note Long Exam must reuse the existing session lifecycle; no new persistence aggregate
+- Faster generation changes must be gated behind findings; do not optimize speculatively
+
+---
+
+## v0.13.0 - Complete the Promise, Reach New Audiences
+
+**Status: Released**
 
 Theme: ship the modes that were already promised (Long Exam), open NoteLib to a second audience (Professional Profile), improve organic discovery through SEO, and close out infrastructure research items deferred from v0.12.0.
 
@@ -289,10 +316,6 @@ Current session-review UX:
 
 ## Future Directions
 
-### v0.13 exam-mode work (in progress)
-
-Long Exam Mode v1 and Interview Practice Mode are the primary exam-mode items in v0.13.0. See the v0.13.0 section above for full scope.
-
 ### v0.14+ exam-mode work (planned)
 
 - **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context
@@ -303,7 +326,7 @@ Long Exam Mode v1 and Interview Practice Mode are the primary exam-mode items in
 ### Public Library Discovery — Future Items
 
 - **Trending this week section (H)** — a new discovery section above Featured showing notes gaining traction in the last 7 days; blocked on backend: `NoteListItemResponse` has no windowed engagement fields; requires `recentCopyCount` / `recentLikeCount` or a precomputed rolling 7-day aggregate before this section can be built correctly; do not implement under a "Trending" label using lifetime totals — the signal would be misleading
-- **Subject landing pages (J)** — moved to v0.13.0 scope; `/public/library/[subject]` proper server-rendered landing pages with per-subject metadata and decay-ranked note cards
+- **Subject landing pages (J)** — moved to v0.14.0 scope; `/public/library/[subject]` proper server-rendered landing pages with per-subject metadata and decay-ranked note cards
 
 Potential expansion areas after `v0.8.0`:
 
