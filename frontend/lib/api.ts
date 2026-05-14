@@ -674,6 +674,8 @@ export type ChallengeQuizSessionResponse = {
 export type GenerateMoreChallengeQuizResponse = {
   newQuestions: QuizItem[];
   totalQuestions: number;
+  timeLimitSeconds: number;
+  timerStartedAtEpochSeconds: number;
 };
 
 export type ChallengeQuizSessionSummaryResponse = {
