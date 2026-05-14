@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,8 @@ import java.util.UUID;
 public class LongExamService {
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
     private static final String SESSION_STATE_COMPLETED = "completed";
+    private static final String SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
+    private static final String SESSION_STATE_TIME_LIMIT_SECONDS = "timeLimitSeconds";
     private static final String SESSION_METADATA_DOMAIN_BREAKDOWN = "domainBreakdown";
     private static final String SESSION_METADATA_WEAK_DOMAINS = "weakDomains";
     private static final String SESSION_METADATA_PERFORMANCE_SUMMARY = "performanceSummary";
@@ -79,6 +82,7 @@ public class LongExamService {
     private static final int FAIR_SCORE_THRESHOLD = 50;
     private static final int GOOD_SCORE_THRESHOLD = 70;
     private static final int EXCELLENT_SCORE_THRESHOLD = 90;
+    private static final int SECONDS_PER_QUESTION = 90;
     private static final BigDecimal ZERO_SCORE = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final List<QuickReviewSessionStatus> ACTIVE_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
@@ -302,27 +306,33 @@ public class LongExamService {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         boolean canResume = session.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
                 || session.getStatus() == QuickReviewSessionStatus.PAUSED;
+        int totalQuestions = quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size();
         return new LongExamStartResponse(
                 session.getId(),
                 session.getStatus().name(),
                 canResume ? quiz : List.of(),
-                quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size(),
+                totalQuestions,
                 extractDifficulty(session.getSessionState()),
-                canResume
+                canResume,
+                extractTimeLimitSeconds(session.getSessionState(), totalQuestions),
+                extractTimerStartedAtEpochSeconds(session.getSessionState())
         );
     }
 
     private LongExamSessionResponse buildSessionResponse(QuickReviewSessionEntity session) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        int totalQuestions = quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size();
         return new LongExamSessionResponse(
                 session.getId(),
                 session.getStatus().name(),
                 quiz,
                 QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz),
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
-                quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size(),
+                totalQuestions,
                 extractDifficulty(session.getSessionState()),
-                session.getStatus() == QuickReviewSessionStatus.PAUSED
+                session.getStatus() == QuickReviewSessionStatus.PAUSED,
+                extractTimeLimitSeconds(session.getSessionState(), totalQuestions),
+                extractTimerStartedAtEpochSeconds(session.getSessionState())
         );
     }
 
@@ -352,6 +362,10 @@ public class LongExamService {
     }
 
     private void markSessionReady(QuickReviewSessionEntity session, List<QuizItem> quiz, String difficulty) {
+        Map<String, Object> state = QuizSessionStateUtils.withQuiz(quiz, buildInitialSessionState(difficulty));
+        state.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
+        state.put(SESSION_STATE_TIME_LIMIT_SECONDS, quiz.size() * SECONDS_PER_QUESTION);
+
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -360,7 +374,7 @@ public class LongExamService {
         session.setScorePercentage(ZERO_SCORE);
         session.setRetryCount(0);
         session.setSessionMetadata(null);
-        session.setSessionState(QuizSessionStateUtils.withQuiz(quiz, buildInitialSessionState(difficulty)));
+        session.setSessionState(state);
         session.setCompletedAt(null);
     }
 
@@ -502,6 +516,28 @@ public class LongExamService {
             return difficulty;
         }
         return DIFFICULTY_MEDIUM;
+    }
+
+    private long extractTimerStartedAtEpochSeconds(Map<String, Object> sessionState) {
+        if (sessionState == null) {
+            return 0L;
+        }
+        Object raw = sessionState.get(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS);
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        return 0L;
+    }
+
+    private int extractTimeLimitSeconds(Map<String, Object> sessionState, int questionCount) {
+        if (sessionState == null) {
+            return questionCount * SECONDS_PER_QUESTION;
+        }
+        Object raw = sessionState.get(SESSION_STATE_TIME_LIMIT_SECONDS);
+        if (raw instanceof Number number) {
+            return number.intValue();
+        }
+        return questionCount * SECONDS_PER_QUESTION;
     }
 
     private List<String> extractQuestionTexts(List<QuizItem> quiz) {

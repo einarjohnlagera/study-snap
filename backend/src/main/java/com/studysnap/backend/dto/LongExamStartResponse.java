@@ -9,6 +9,8 @@ public record LongExamStartResponse(
         List<QuizItem> quiz,
         int totalQuestions,
         String difficulty,
-        boolean canResume
+        boolean canResume,
+        int timeLimitSeconds,
+        long timerStartedAtEpochSeconds
 ) {
 }

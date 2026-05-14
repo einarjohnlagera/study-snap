@@ -123,7 +123,8 @@ public class ChallengeQuizService {
     private static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
     private static final int GENERATE_MORE_BATCH_SIZE = 5;
     private static final int MIN_NEW_QUESTIONS_AFTER_DEDUP = 3;
-    private static final int DEFAULT_TIME_LIMIT_SECONDS = 600;
+    private static final int SECONDS_PER_QUESTION_CHALLENGE = 90;
+    private static final int SECONDS_PER_QUESTION_BOARD_EXAM = 60;
     private static final String DEFAULT_SELECTED_DIFFICULTY = DIFFICULTY_MEDIUM;
 
     private final StudyPackRepository studyPackRepository;
@@ -417,8 +418,14 @@ public class ChallengeQuizService {
             throw new NotEnoughNewQuestionsException();
         }
 
-        session.setSessionState(QuizSessionStateUtils.appendQuizItems(session.getSessionState(), unique));
-        int newTotal = existingQuiz.size() + unique.size();
+        int previousQuizSize = existingQuiz.size();
+        Map<String, Object> nextSessionState = QuizSessionStateUtils.appendQuizItems(session.getSessionState(), unique);
+        int previousLimit = extractTimeLimitSeconds(session.getSessionState());
+        int newTotal = previousQuizSize + unique.size();
+        int addedQuestions = newTotal - previousQuizSize;
+        int extension = Math.max(0, addedQuestions) * SECONDS_PER_QUESTION_CHALLENGE;
+        nextSessionState.put(SESSION_STATE_TIME_LIMIT_SECONDS, previousLimit + extension);
+        session.setSessionState(nextSessionState);
         session.setTotalQuestions(newTotal);
         quickReviewSessionRepository.save(session);
 
@@ -637,8 +644,6 @@ public class ChallengeQuizService {
 
     private Map<String, Object> buildInitialSessionState(String difficulty, String mode) {
         Map<String, Object> state = new LinkedHashMap<>();
-        state.put(SESSION_STATE_TIME_LIMIT_SECONDS, DEFAULT_TIME_LIMIT_SECONDS);
-        state.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
         state.put(SESSION_STATE_SELECTED_CHOICES, Map.of());
         state.put(SESSION_STATE_COMPLETED, false);
         state.put(SESSION_STATE_DIFFICULTY, difficulty);
@@ -670,13 +675,13 @@ public class ChallengeQuizService {
 
     private int extractTimeLimitSeconds(Map<String, Object> sessionState) {
         if (sessionState == null) {
-            return DEFAULT_TIME_LIMIT_SECONDS;
+            return INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE;
         }
         Object raw = sessionState.get(SESSION_STATE_TIME_LIMIT_SECONDS);
         if (raw instanceof Number number) {
             return number.intValue();
         }
-        return DEFAULT_TIME_LIMIT_SECONDS;
+        return INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE;
     }
 
     private Map<String, Object> sanitizeSessionStateForClient(Map<String, Object> sessionState) {
@@ -706,7 +711,7 @@ public class ChallengeQuizService {
             merged.put(SESSION_STATE_SELECTED_CHOICES, Map.of());
         }
         if (!merged.containsKey(SESSION_STATE_TIME_LIMIT_SECONDS)) {
-            merged.put(SESSION_STATE_TIME_LIMIT_SECONDS, DEFAULT_TIME_LIMIT_SECONDS);
+            merged.put(SESSION_STATE_TIME_LIMIT_SECONDS, INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE);
         }
         if (!merged.containsKey(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS)) {
             merged.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
@@ -1015,7 +1020,7 @@ public class ChallengeQuizService {
                 studyPack.getId().toString(),
                 studyPack.getTitle(),
                 0,
-                DEFAULT_TIME_LIMIT_SECONDS,
+                INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE,
                 usedThisMonth,
                 resolveMonthlyChallengeQuizLimit(planType),
                 isDifficultySelectionAvailable(planType),
@@ -1061,6 +1066,13 @@ public class ChallengeQuizService {
     }
 
     private void markSessionReady(QuickReviewSessionEntity session, List<QuizItem> challengeQuiz, String difficulty) {
+        String mode = extractMode(session.getSessionState());
+        int rateSeconds = MODE_BOARD_EXAM.equals(mode) ? SECONDS_PER_QUESTION_BOARD_EXAM : SECONDS_PER_QUESTION_CHALLENGE;
+        int timeLimitSeconds = challengeQuiz.size() * rateSeconds;
+        Map<String, Object> state = buildInitialSessionState(difficulty, mode);
+        state.put(SESSION_STATE_TIME_LIMIT_SECONDS, timeLimitSeconds);
+        state.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
+
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -1071,7 +1083,7 @@ public class ChallengeQuizService {
         session.setSessionMetadata(null);
         session.setSessionState(QuizSessionStateUtils.withQuiz(
                 challengeQuiz,
-                buildInitialSessionState(difficulty, extractMode(session.getSessionState()))
+                state
         ));
         session.setCompletedAt(null);
     }

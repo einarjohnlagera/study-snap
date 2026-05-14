@@ -12,6 +12,8 @@ public record LongExamSessionResponse(
         int currentQuestionIndex,
         int totalQuestions,
         String difficulty,
-        boolean paused
+        boolean paused,
+        int timeLimitSeconds,
+        long timerStartedAtEpochSeconds
 ) {
 }

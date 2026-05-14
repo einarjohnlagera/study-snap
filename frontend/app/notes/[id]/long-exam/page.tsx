@@ -26,6 +26,11 @@ import {
   type QuizItem,
 } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import {
+  resolveBoardExamTimerState,
+  resolveDeadlineEpochSeconds,
+  resolveRemainingSecondsFromDeadline,
+} from "@/lib/challenge-quiz-timer";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +64,16 @@ function getAnsweredCount(selectedChoices: Record<string, number>): number {
   return Object.keys(selectedChoices).length;
 }
 
+function getNowEpochSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function formatTimer(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 export default function LongExamPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -86,7 +101,11 @@ export default function LongExamPage() {
   const [selectedChoices, setSelectedChoices] = useState<Record<string, number>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [masteryReport, setMasteryReport] = useState<LongExamMasteryReportResponse | null>(null);
-  const startedAtMsRef = useRef<number | null>(null);
+  const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(0);
+  const remainingSecondsRef = useRef(0);
+  const timeoutAutoSubmitRequestedRef = useRef(false);
   const startedTrackedRef = useRef(false);
 
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : `/notes/${noteId}`), [note, noteId]);
@@ -96,9 +115,24 @@ export default function LongExamPage() {
   const answeredCount = useMemo(() => getAnsweredCount(selectedChoices), [selectedChoices]);
   const progressPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
   const hasActiveInProgressPrompt = activeStartResponse?.status === "IN_PROGRESS" && activeStartResponse.canResume;
+  const timerState = resolveBoardExamTimerState(remainingSeconds);
 
   const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
     setToast({ message, tone });
+  }, []);
+
+  const applyTimer = useCallback((response: { timeLimitSeconds: number; timerStartedAtEpochSeconds: number }) => {
+    const deadline = resolveDeadlineEpochSeconds(
+      response.timeLimitSeconds,
+      { timerStartedAtEpochSeconds: response.timerStartedAtEpochSeconds },
+      getNowEpochSeconds(),
+    );
+    const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(deadline, getNowEpochSeconds());
+    setTimeLimitSeconds(response.timeLimitSeconds);
+    setDeadlineEpochSeconds(deadline);
+    setRemainingSeconds(nextRemainingSeconds);
+    remainingSecondsRef.current = nextRemainingSeconds;
+    timeoutAutoSubmitRequestedRef.current = false;
   }, []);
 
   const trackStarted = useCallback((response: { sessionId: string; totalQuestions?: number; difficulty?: string | null }) => {
@@ -124,11 +158,11 @@ export default function LongExamPage() {
     setQuiz(response.quiz);
     setSelectedChoices({});
     setCurrentQuestionIndex(0);
-    startedAtMsRef.current = Date.now();
+    applyTimer(response);
     setPhase("running");
     setError(null);
     trackStarted(response);
-  }, [trackStarted]);
+  }, [applyTimer, trackStarted]);
 
   const enterRunningFromSession = useCallback((response: LongExamSessionResponse) => {
     setActiveStartResponse(null);
@@ -136,11 +170,11 @@ export default function LongExamPage() {
     setQuiz(response.quiz);
     setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
     setCurrentQuestionIndex(Math.min(Math.max(response.currentQuestionIndex, 0), Math.max(response.totalQuestions - 1, 0)));
-    startedAtMsRef.current = Date.now();
+    applyTimer(response);
     setPhase("running");
     setError(null);
     trackStarted(response);
-  }, [trackStarted]);
+  }, [applyTimer, trackStarted]);
 
   const loadInitialState = useCallback(async () => {
     if (!noteId) {
@@ -334,6 +368,11 @@ export default function LongExamPage() {
       setQuiz([]);
       setSelectedChoices({});
       setCurrentQuestionIndex(0);
+      setDeadlineEpochSeconds(null);
+      setRemainingSeconds(0);
+      setTimeLimitSeconds(0);
+      remainingSecondsRef.current = 0;
+      timeoutAutoSubmitRequestedRef.current = false;
       startedTrackedRef.current = false;
       await handleStartExam();
     } catch (err) {
@@ -383,15 +422,17 @@ export default function LongExamPage() {
     }
   }, [noteDetailHref, pausing, router, sessionId]);
 
-  const handleComplete = useCallback(async () => {
+  const handleComplete = useCallback(async (timeoutTriggered = false) => {
     if (!sessionId || submitting) {
       return;
+    }
+    if (timeoutTriggered) {
+      timeoutAutoSubmitRequestedRef.current = true;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const startedAtMs = startedAtMsRef.current ?? Date.now();
-      const durationSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+      const durationSeconds = Math.max(0, timeLimitSeconds - remainingSecondsRef.current);
       const response = await completeLongExamSession(sessionId, { durationSeconds });
       setMasteryReport(response);
       setPhase("complete");
@@ -412,7 +453,56 @@ export default function LongExamPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [noteId, sessionId, showToast, studyPackId, submitting]);
+  }, [noteId, sessionId, showToast, studyPackId, submitting, timeLimitSeconds]);
+
+  useEffect(() => {
+    if (phase !== "running" || deadlineEpochSeconds === null) {
+      return;
+    }
+
+    const tick = () => {
+      const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(deadlineEpochSeconds, getNowEpochSeconds());
+      remainingSecondsRef.current = nextRemainingSeconds;
+      setRemainingSeconds(nextRemainingSeconds);
+      if (nextRemainingSeconds <= 0 && !timeoutAutoSubmitRequestedRef.current) {
+        timeoutAutoSubmitRequestedRef.current = true;
+        void handleComplete(true);
+      }
+    };
+
+    tick();
+    const intervalId = globalThis.setInterval(tick, 1000);
+    return () => globalThis.clearInterval(intervalId);
+  }, [deadlineEpochSeconds, handleComplete, phase]);
+
+  useEffect(() => {
+    if (phase !== "running" || deadlineEpochSeconds === null) {
+      return;
+    }
+
+    const syncOnVisible = () => {
+      const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(deadlineEpochSeconds, getNowEpochSeconds());
+      remainingSecondsRef.current = nextRemainingSeconds;
+      setRemainingSeconds(nextRemainingSeconds);
+      if (nextRemainingSeconds <= 0 && !timeoutAutoSubmitRequestedRef.current) {
+        timeoutAutoSubmitRequestedRef.current = true;
+        void handleComplete(true);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncOnVisible();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    globalThis.addEventListener("focus", syncOnVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      globalThis.removeEventListener("focus", syncOnVisible);
+    };
+  }, [deadlineEpochSeconds, handleComplete, phase]);
 
   const handleForfeit = useCallback(async () => {
     if (!sessionId || forfeiting) {
@@ -585,9 +675,23 @@ export default function LongExamPage() {
                   {answeredCount} of {totalQuestions} answered
                 </p>
               </div>
-              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => void handlePause()} disabled={pausing || submitting}>
-                {pausing ? "Pausing..." : "Pause"}
-              </Button>
+              <div className="flex flex-col gap-2 sm:items-end">
+                <p
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-sm font-semibold tabular-nums",
+                    timerState === "urgent" || timerState === "expired"
+                      ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                      : timerState === "warning"
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        : "border-border bg-background text-foreground/75",
+                  )}
+                >
+                  {formatTimer(remainingSeconds)}
+                </p>
+                <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => void handlePause()} disabled={pausing || submitting}>
+                  {pausing ? "Pausing..." : "Pause"}
+                </Button>
+              </div>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${progressPercentage}%` }} />
