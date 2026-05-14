@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PaywallModal } from "@/components/billing/paywall-modal";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,8 @@ import {
   isNoteGenerationLimitReachedError,
   getNote,
   trackAnalyticsEvent,
+  updateLearningProfileContext,
+  type LearnerLevel,
   type NoteResponse,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -30,10 +33,13 @@ import {
   saveOnboardingDraft,
   setDeferredOnboardingCompletion,
   type OnboardingDraft,
-  type OnboardingGoal,
   type OnboardingInputMethod,
   type OnboardingProfileType,
 } from "@/lib/onboarding-v2";
+import {
+  COURSE_PROGRAM_SUGGESTIONS,
+  getGroupedLearnerLevels,
+} from "@/lib/learning-profile";
 import {
   formatStudyPackResetDate,
   isStudyPackLimitReachedMessage,
@@ -43,7 +49,7 @@ import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
-type StepName = "profile" | "goal" | "input" | "study-pack" | "completion";
+type StepName = "profile" | "learning-context" | "input" | "study-pack" | "completion";
 
 const TOPIC_MIN_LENGTH = 3;
 const NOTE_CONTENT_MIN_LENGTH = 50;
@@ -90,32 +96,9 @@ const PROFILE_OPTIONS: Array<{
   },
 ];
 
-const GOAL_OPTIONS: Record<OnboardingProfileType, Array<{ value: OnboardingGoal; label: string }>> = {
-  STUDENT: [
-    { value: "UNDERSTAND_TOPIC_IN_DEPTH", label: "Understand a topic in depth" },
-    { value: "PRACTICE_WITH_QUIZZES", label: "Practice and test myself with quizzes" },
-    { value: "REVIEW_EXISTING_NOTES", label: "Review notes I already have" },
-  ],
-  BOARD_EXAM: [
-    { value: "UNDERSTAND_BEFORE_EXAM_DAY", label: "Understand a topic before exam day" },
-    { value: "PRACTICE_EXAM_STYLE", label: "Practice under exam-style conditions" },
-    { value: "REINFORCE_WEAK_CONCEPTS", label: "Review and reinforce weak concepts" },
-  ],
-  TEACHER: [
-    { value: "CREATE_STUDY_MATERIALS", label: "Create study material for students" },
-    { value: "GENERATE_QUIZ_OR_EXAM", label: "Generate a quiz or exam" },
-    { value: "UNDERSTAND_TO_TEACH", label: "Understand a topic to teach it" },
-  ],
-  PROFESSIONAL: [
-    { value: "PRACTICE_WITH_QUIZZES", label: "Practice and test myself with quizzes" },
-    { value: "UNDERSTAND_TOPIC_IN_DEPTH", label: "Understand a topic in depth" },
-    { value: "REINFORCE_WEAK_CONCEPTS", label: "Review and reinforce weak concepts" },
-  ],
-};
-
 const STEP_NAMES: Record<number, StepName> = {
   1: "profile",
-  2: "goal",
+  2: "learning-context",
   3: "input",
   4: "study-pack",
   5: "completion",
@@ -284,8 +267,7 @@ export default function OnboardingPage() {
   const profileType = draft.profileType;
   const currentStep = draft.currentStep;
   const currentStepName = getStepName(currentStep);
-  const goalOptions = profileType ? GOAL_OPTIONS[profileType] : [];
-  const selectedGoal = draft.goal;
+  const groupedLearnerLevels = getGroupedLearnerLevels(profileType);
   const selectedInputMethod = draft.inputMethod;
   const generatedNoteReady = draft.generatedNoteReady;
   const topicLength = draft.topic.trim().length;
@@ -316,7 +298,7 @@ export default function OnboardingPage() {
   const quizPreview = note?.quiz[0] ?? null;
 
   const canContinueFromStepOne = profileType !== null;
-  const canContinueFromStepTwo = selectedGoal !== null;
+  const canContinueFromStepTwo = true;
   const canGenerateNoteDraft = selectedInputMethod === "generate" && topicLength >= TOPIC_MIN_LENGTH;
   const canStartStudyPack = selectedInputMethod === "generate"
     ? generatedNoteReady && noteLength >= NOTE_CONTENT_MIN_LENGTH
@@ -564,6 +546,12 @@ export default function OnboardingPage() {
             productOnboardingCompletedAt: me.productOnboardingCompletedAt,
           });
         }
+        if (draft.learnerLevel !== null || draft.courseProgram.trim() !== "") {
+          void updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null)
+            .catch(() => {
+              // Learning context can be adjusted later in profile settings.
+            });
+        }
       })
       .catch(() => {
         const userId = userIdRef.current;
@@ -578,20 +566,28 @@ export default function OnboardingPage() {
           shouldTrackAbandonmentRef.current = false;
           trackOnboardingEvent("ONBOARDING_V2_COMPLETED", {
             profile_type: profileType,
-            goal: draft.goal,
+            learner_level: draft.learnerLevel ?? null,
+            course_program: draft.courseProgram.trim() || null,
             method: draft.inputMethod,
             time_elapsed_seconds: Math.max(0, Math.round((Date.now() - draft.startedAtMs) / 1000)),
           });
         }
         setCompletingOnboarding(false);
       });
-  }, [currentStep, draft.examDate, draft.goal, draft.inputMethod, draft.startedAtMs, profileType]);
+  }, [
+    currentStep,
+    draft.courseProgram,
+    draft.examDate,
+    draft.inputMethod,
+    draft.learnerLevel,
+    draft.startedAtMs,
+    profileType,
+  ]);
 
   const selectProfileType = (value: OnboardingProfileType) => {
     setDraft((previous) => ({
       ...previous,
       profileType: value,
-      goal: previous.profileType === value ? previous.goal : null,
       examDate: value === "BOARD_EXAM" ? previous.examDate : "",
     }));
     trackOnboardingEvent("ONBOARDING_V2_PROFILE_SELECTED", {
@@ -599,18 +595,27 @@ export default function OnboardingPage() {
     });
   };
 
-  const selectGoal = (value: OnboardingGoal) => {
-    if (!profileType) {
-      return;
-    }
+  const selectLearnerLevel = (value: LearnerLevel) => {
     setDraft((previous) => ({
       ...previous,
-      goal: value,
+      learnerLevel: value,
     }));
-    trackOnboardingEvent("ONBOARDING_V2_GOAL_SELECTED", {
-      goal: value,
-      profile_type: profileType,
-    });
+  };
+
+  const updateCourseProgram = (value: string) => {
+    setDraft((previous) => ({
+      ...previous,
+      courseProgram: value,
+    }));
+  };
+
+  const skipLearningContext = () => {
+    setDraft((previous) => ({
+      ...previous,
+      learnerLevel: null,
+      courseProgram: "",
+      currentStep: 3,
+    }));
   };
 
   const selectInputMethod = (value: OnboardingInputMethod) => {
@@ -860,7 +865,7 @@ export default function OnboardingPage() {
             </CardDescription>
           </div>
 
-          <div className="grid gap-2.5">
+          <div className="grid gap-2.5 sm:grid-cols-2">
             {PROFILE_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -889,28 +894,79 @@ export default function OnboardingPage() {
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
             <CardTitle className="text-2xl leading-tight sm:text-3xl">
-              What&apos;s your goal right now?
+              Set up your learning profile
             </CardTitle>
             <CardDescription className="text-sm">
-              Choose the goal that fits your first study session.
+              This helps us tailor quizzes and explanations to your level and field. You can update these anytime in Settings.
             </CardDescription>
           </div>
 
-          <div className="grid gap-2.5">
-            {goalOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={getSelectionCardClassName({
-                  selected: selectedGoal === option.value,
-                  className: "p-4 sm:p-5",
-                })}
-                onClick={() => selectGoal(option.value)}
-                aria-pressed={selectedGoal === option.value}
-              >
-                <div className="text-left text-base font-medium text-foreground sm:text-lg">{option.label}</div>
-              </button>
-            ))}
+          <div className="space-y-5">
+            <section className="space-y-2">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Learner Level</p>
+                <p className="text-xs text-foreground/60">Optional. Choose the level that best fits this study material.</p>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <p className="text-xs text-foreground/50">{groupedLearnerLevels.recommendedGroupLabel}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {groupedLearnerLevels.recommended.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => selectLearnerLevel(option.value)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          draft.learnerLevel === option.value
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                        }`}
+                        aria-pressed={draft.learnerLevel === option.value}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {groupedLearnerLevels.other.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-foreground/50">Other options</p>
+                    <div className="flex flex-wrap gap-2">
+                      {groupedLearnerLevels.other.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => selectLearnerLevel(option.value)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            draft.learnerLevel === option.value
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                          }`}
+                          aria-pressed={draft.learnerLevel === option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Course / Program</p>
+              <CourseProgramCombobox
+                id="onboarding-course-program"
+                value={draft.courseProgram}
+                suggestions={COURSE_PROGRAM_SUGGESTIONS}
+                onChange={updateCourseProgram}
+                learnerLevel={draft.learnerLevel}
+                ariaLabel="Course / Program"
+                placeholder="Choose or type your course / program"
+                context="onboarding"
+              />
+            </section>
           </div>
 
           {profileType === "BOARD_EXAM" ? (
@@ -936,6 +992,14 @@ export default function OnboardingPage() {
               />
             </label>
           ) : null}
+
+          <button
+            type="button"
+            className="w-fit text-sm font-medium text-foreground/65 underline-offset-4 hover:text-foreground hover:underline"
+            onClick={skipLearningContext}
+          >
+            Skip for now
+          </button>
         </div>
       );
     }

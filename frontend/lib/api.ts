@@ -1311,6 +1311,23 @@ export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<Me
   });
 }
 
+export async function updateLearningProfileContext(
+  learnerLevel: LearnerLevel | null,
+  courseProgram: string | null,
+): Promise<MeResponse> {
+  const current = await getMe();
+  return updateUserProfile({
+    firstName: current.firstName,
+    lastName: current.lastName ?? "",
+    displayName: current.displayName ?? "",
+    username: current.username ?? "",
+    bio: current.bio ?? "",
+    learnerLevel: learnerLevel ?? current.learnerLevel ?? null,
+    courseProgram: courseProgram?.trim() || current.courseProgram || "",
+    email: current.email,
+  });
+}
+
 export async function updatePublicProfileVisibility(
   request: UpdatePublicProfileVisibilityRequest,
 ): Promise<MeResponse> {

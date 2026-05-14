@@ -24,6 +24,7 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to pr
 - **Long Exam UI consistency** — running Long Exams now use the Board Exam-style focused top bar, leave/forfeit modal with navigation guard, sticky Previous/Next/Submit footer, beforeunload warning, and one-time focus guidance instead of inline pause/forfeit controls
 - **Navigation footer alignment fix** — Challenge Quiz, Board Exam, and Long Exam sticky footers now keep `Previous` left-aligned and Next / Submit / add-question actions right-aligned within the assessment column
 - **Professional Profile activated** — exam mode labels now frame Challenge Quiz as `Certification Review` and Long Exam as `Full Practice Exam` for professionals, with professional dashboard framing for certification and career learning
+- **polish: onboarding step 1 2×2 grid layout; step 2 replaced goal selection with learner level + course/program context collection**
 
 ---
 

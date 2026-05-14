@@ -9,6 +9,7 @@ import {
   getMyPlan,
   getNote,
   trackAnalyticsEvent,
+  updateLearningProfileContext,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 
@@ -110,6 +111,7 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   trackAnalyticsEvent: jest.fn(),
+  updateLearningProfileContext: jest.fn(),
 }));
 
 describe("OnboardingPage", () => {
@@ -129,6 +131,7 @@ describe("OnboardingPage", () => {
     (getNote as jest.Mock).mockReset();
     (completeOnboarding as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    (updateLearningProfileContext as jest.Mock).mockReset();
 
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -179,6 +182,7 @@ describe("OnboardingPage", () => {
       profileType: "STUDENT",
       onboardingCompletedAt: "2026-04-27T00:05:00Z",
     });
+    (updateLearningProfileContext as jest.Mock).mockResolvedValue(baseMe);
   });
 
   it("redirects users who already completed onboarding", async () => {
@@ -230,8 +234,11 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByLabelText("Student"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByText("What's your goal right now?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Understand a topic in depth" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "College" }));
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: "AWS Certification" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
@@ -269,6 +276,9 @@ describe("OnboardingPage", () => {
         examDate: null,
       });
     });
+    await waitFor(() => {
+      expect(updateLearningProfileContext).toHaveBeenCalledWith("COLLEGE", "AWS Certification");
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Continue Studying" }));
 
@@ -287,7 +297,7 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(await screen.findByLabelText("Student"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Review notes I already have" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
@@ -335,7 +345,7 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(await screen.findByLabelText("Student"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Understand a topic in depth" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
 
@@ -380,7 +390,6 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByLabelText("When is your exam? (optional)")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Practice under exam-style conditions" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
@@ -400,7 +409,7 @@ describe("OnboardingPage", () => {
     });
   });
 
-  it("shows Professional profile option with goals and no exam date field", async () => {
+  it("shows Professional profile option with learner context and no exam date field", async () => {
     render(<OnboardingPage />);
 
     expect(await screen.findByText("🎓 Student")).toBeInTheDocument();
@@ -411,10 +420,14 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByLabelText("Professional"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByRole("button", { name: "Practice and test myself with quizzes" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Understand a topic in depth" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Review and reinforce weak concepts" })).toBeInTheDocument();
+    expect(await screen.findByText("Recommended for Professionals")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Professional" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Personal Learning" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Course / Program")).toBeInTheDocument();
     expect(screen.queryByLabelText("When is your exam? (optional)")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
   });
 
   it("keeps the Study Pack CTA disabled until the own-note minimum is met", async () => {
@@ -422,7 +435,7 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(await screen.findByLabelText("Teacher"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Create study material for students" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
