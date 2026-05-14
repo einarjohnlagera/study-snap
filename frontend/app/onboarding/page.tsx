@@ -1402,10 +1402,7 @@ export default function OnboardingPage() {
 
     if (studyPackReady) {
       return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-            Back
-          </Button>
+        <div className="flex justify-end">
           <Button type="button" className="min-h-12 text-base sm:min-w-40" onClick={() => goToStep(5)}>
             Continue
           </Button>
@@ -1415,10 +1412,7 @@ export default function OnboardingPage() {
 
     if (generationError && note?.id) {
       return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-            Back
-          </Button>
+        <div className="flex justify-end">
           <Button
             type="button"
             className="min-h-12 text-base sm:min-w-40"
