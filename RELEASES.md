@@ -4,13 +4,12 @@
 
 **Status: In Progress**
 
-Theme: ship the modes that were already promised (Long Exam), open NoteLib to professionals preparing for interviews, improve organic discovery through subject SEO pages, and close out infrastructure research items deferred from v0.12.0.
+Theme: ship the modes that were already promised (Long Exam), open NoteLib to a new professional audience, improve organic discovery through subject SEO pages, and close out infrastructure research items deferred from v0.12.0.
 
 ### Planned Scope
 
 - ~~**Long Exam Mode v1 (Pro-only)**~~ ✅ — see Shipped below
-- **Professional Profile activation** — `PROFESSIONAL` profile type selectable in onboarding (no longer `Coming Soon`); dashboard emphasis: applied, real-world framing
-- **Interview Practice Mode** — profile-gated presentation of Challenge Quiz engine for Professional users; interview-style LLM prompt framing (definition + situational mix); shows as `Interview Practice` in mode selection; same `CHALLENGE` session type, different label and prompts
+- ~~**Professional Profile activation**~~ ✅ — see Shipped below
 - **Faster quiz generation** — profile LLM latency end-to-end; evaluate streaming, model selection (`gpt-4.1-mini`), and early session creation; implement based on findings
 - **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` pages with per-subject `<title>`/`<meta>`; decay-ranked note cards; sitemap update; deferred from v0.12.0
 - **Proration / recomputation design doc** — design doc under `docs/product/` covering mid-cycle plan changes; no implementation until design is reviewed; deferred from v0.12.0
@@ -23,9 +22,9 @@ Theme: ship the modes that were already promised (Long Exam), open NoteLib to pr
 - **Timer fix** — Challenge Quiz and Board Exam time limits are now computed per question (`90s` per Challenge question, `60s` per Board Exam question); generate-more extends the deadline correctly; Long Exam now uses the same server-anchored deadline mechanism
 - **Long Exam UI consistency** — running Long Exams now use the Board Exam-style focused top bar, leave/forfeit modal with navigation guard, sticky Previous/Next/Submit footer, beforeunload warning, and one-time focus guidance instead of inline pause/forfeit controls
 - **Navigation footer alignment fix** — Challenge Quiz, Board Exam, and Long Exam sticky footers now keep `Previous` left-aligned and Next / Submit / add-question actions right-aligned within the assessment column
-- **Professional Profile activated** — exam mode labels now frame Challenge Quiz as `Certification Review` and Long Exam as `Full Practice Exam` for professionals, with professional dashboard framing for certification and career learning
-- **polish: onboarding step 1 2×2 grid layout; step 2 replaced goal selection with learner level + course/program context collection**
-- **feat: Board Taker exam date is now editable in profile settings**
+- **Professional Profile activated** — `PROFESSIONAL` profile type selectable in profile settings and onboarding (no longer `Coming Soon`); Challenge Quiz shown as `Certification Review` and Long Exam as `Full Practice Exam` for Professional users; learner level grouped picker shows "Recommended for Professionals"; professional dashboard emphasis for certification and career learning; Interview Practice Mode deferred to v0.14.0+
+- **Onboarding overhaul** — profile type cards redesigned as a 2×2 grid with emoji icons for all four active profile types (🎓 Student, 📋 Board Taker, 🏫 Teacher, 💼 Professional); step 2 "What's your goal?" replaced with Learner Level + Course/Program step that feeds AI generation context directly; step 2 pre-populates from the user's saved profile on re-entry; step 4 Back button removed post-generation to prevent study pack quota exhaustion; learner level now collected during onboarding instead of deferred to dashboard prompt
+- **Board Taker exam date editable in profile settings** — Board Taker users can update their exam date after onboarding via the Profile Type card in profile settings; supports retakes and reschedules; new `PUT /users/profile/exam-date` endpoint; dashboard countdown reflects the updated date
 
 ---
 

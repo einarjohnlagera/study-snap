@@ -16,23 +16,23 @@ Older milestone labels below are preserved as planning history only. They are no
 
 **Status: In Progress**
 
-Theme: ship the modes that were already promised (Long Exam), open NoteLib to a second audience (Professional / Interview Practice), improve organic discovery through SEO, and close out infrastructure research items deferred from v0.12.0.
+Theme: ship the modes that were already promised (Long Exam), open NoteLib to a second audience (Professional Profile), improve organic discovery through SEO, and close out infrastructure research items deferred from v0.12.0.
 
 Primary focus:
 
-1. **Long Exam Mode v1 (Student-facing, Pro-only)** — backend session support, fixed long-form generation (not progressive), pause/resume, mastery report result screen; single-note at launch; shared Advanced Exam quota bucket with Board Exam Mode
+1. **Long Exam Mode v1 (Student-facing, Pro-only)** — backend session support, fixed long-form generation (not progressive), forfeit-only leave, mastery report result screen; single-note at launch; shared Advanced Exam quota bucket with Board Exam Mode
 
-   - Backend: `LONG_EXAM` discriminator on `QuickReviewSessionMode`; question set generated and committed in full before the session starts; `PAUSED` state support; mastery report data stored in session state JSONB; reuses existing session lifecycle (`GENERATING → IN_PROGRESS → COMPLETED / FORFEITED / FAILED`) and generation lock
-   - Frontend: setup confirmation screen with expected duration; fixed progress indicator (no `+5 Questions` control); `Leave & Resume Later` as the primary leave action; mastery report result screen (coverage, weak domains, suggested next step, inline learner-level pill allowed)
+   - Backend: `LONG_EXAM` discriminator on `QuickReviewSessionMode`; question set generated and committed in full before the session starts; mastery report data stored in session state JSONB; reuses existing session lifecycle (`GENERATING → IN_PROGRESS → COMPLETED / FORFEITED / FAILED`) and generation lock
+   - Frontend: setup confirmation screen with expected duration; fixed progress indicator (no `+5 Questions` control); Board Exam-style top bar with server-anchored countdown timer (90s/question); leave = forfeit — no pause/resume option exposed to the user (anti-procrastination principle, matches Board Exam behavior); mastery report result screen (coverage, weak domains, suggested next step, inline learner-level pill allowed)
    - Access: Pro-only at launch; single note; multi-note deferred to v0.14.0+
-   - Profile visibility: Student profile (primary emphasis), Board Taker profile (secondary, less ceremony than Board Exam)
+   - Profile visibility: Student profile (primary emphasis), Board Taker profile (secondary, less ceremony than Board Exam); hidden from Professional profile
 
-2. **Professional Profile activation + Interview Practice Mode** — `PROFESSIONAL` profile type is no longer `Coming Soon`; users can select it in onboarding; Interview Practice is a profile-gated presentation layer over the existing Challenge Quiz engine with interview-style LLM prompt framing
+2. **Professional Profile activation** — `PROFESSIONAL` profile type is no longer `Coming Soon`; users can select it in onboarding and profile settings; profile-aware mode label overrides and professional-framed dashboard
 
-   - Backend: Professional profile selectable in onboarding; interview-style prompt framing for `PROFESSIONAL` users (definition + situational mix, based on existing LLM prompt hint stubs); no new session type, no new entity tables
-   - Frontend: `lib/exam-mode-visibility.ts` updated so Professional profile shows `Interview Practice` instead of `Challenge Quiz`; same challenge-quiz page, different label and setup copy; result screen copy adjusted to interview framing; Professional option enabled in onboarding profile-type selection
-   - Access: All plans (same access rules as Challenge Quiz for Professional users)
-   - Interview Practice is not a new session mode — it is `CHALLENGE` with profile-aware labels and prompts
+   - Backend: no new entities; `PROFESSIONAL` enum already existed
+   - Frontend: `lib/exam-mode-visibility.ts` updated so Professional profile shows `Certification Review` (Challenge Quiz) and `Full Practice Exam` (Long Exam); Board Exam hidden; professional dashboard framing; Professional option in onboarding with profile icon; learner level grouped picker shows "Recommended for Professionals"; labels are display-only — engine discriminators (`CHALLENGE`, `LONG_EXAM`) unchanged
+   - Access: All plans (same access rules as Student)
+   - **Interview Practice Mode deferred to v0.14.0+** — requires a conversational AI evaluation engine not present in the current quiz architecture; see `docs/features/professional-profile.md`
 
 3. **Faster quiz generation** — promote from research-only (v0.12.0 deferred) to research → implement; profile current LLM latency end-to-end (prompt build, API call, JSON parse, DB write); evaluate streaming responses to unblock frontend earlier, model selection (`gpt-4.1-mini` for quiz generation), and early session creation; implement the approach that findings support; frontend may gain a generation progress indicator if streaming is adopted
 
@@ -45,7 +45,6 @@ Primary focus:
 ### Implementation stances
 
 - Professional Profile must not fork entity tables — all profiles share the same Note/StudyPack/Session model
-- Interview Practice is a profile-gated label and prompt change only, not a new session type; implementation is `CHALLENGE` with `PROFESSIONAL` profile detection
 - Long Exam backend must reuse the existing session lifecycle and generation lock; no new persistence aggregate
 - Subject landing pages must be server-rendered; do not implement as a client-rendered filter redirect
 - No proration implementation until the design doc is reviewed and approved
@@ -104,7 +103,7 @@ Primary focus:
 
 - **Board Exam Mode optimization** — improve generation speed, explore partial or progressive loading only if it preserves the exam-like experience, and keep progressive generation out of Board Exam Mode for now; identity contract is locked in `docs/product/EXAM_MODES.md`
 - **Long Exam Mode v1 (Student-facing, Pro-only)** — backend session support, fixed long-form generation, pause/resume, mastery report result screen; Pro gating and shared Advanced Exam quota
-- **Onboarding/profile type icon polish** — add subtle, theme-consistent icons to profile type cards in onboarding and matching Profile Settings surfaces
+- ~~**Onboarding/profile type icon polish**~~ ✅ shipped in v0.13.0 — emoji icons added to all four active profile type cards in onboarding
 
 ### Future Guidance System Expansion (Post-v0.12.0)
 
@@ -124,7 +123,7 @@ Implementation stances:
 - public note pages must teach first, then convert — do not hard-gate visitors before they see value; mini quiz preview is a lightweight surface, not a full session; no anonymous session state is persisted
 - generated note formatting should prioritize scannability and study usefulness; prefer short sections, clear headings, key-fact blocks, and exam-friendly wording over long paragraph dumps
 - keep Learner Level and Course/Program as separate concerns — Learner Level controls difficulty/style; Course/Program controls domain context — do not merge them
-- do not add learner level to onboarding; deferred collection via Dashboard prompt is the settled pattern
+- ~~do not add learner level to onboarding~~ — **reversed in v0.13.0**: onboarding step 2 now collects learner level and course/program directly; Dashboard prompt remains for users who skip onboarding step 2 or completed onboarding before this change
 - social login must be an alternative, not a replacement; existing email accounts must continue to work
 - quiz latency investigation is research-only in v0.12.0; no production latency changes without findings
 - Long Exam Mode is design-only in v0.12.0; canonical mode-hierarchy and identity contract live in `docs/product/EXAM_MODES.md`; no implementation until the spec is reviewed
