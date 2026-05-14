@@ -723,6 +723,8 @@ export type LongExamStartResponse = {
   totalQuestions: number;
   difficulty: string | null;
   canResume: boolean;
+  timeLimitSeconds: number;
+  timerStartedAtEpochSeconds: number;
 };
 
 export type LongExamSessionResponse = {
@@ -734,6 +736,8 @@ export type LongExamSessionResponse = {
   totalQuestions: number;
   difficulty: string | null;
   paused: boolean;
+  timeLimitSeconds: number;
+  timerStartedAtEpochSeconds: number;
 };
 
 export type LongExamMasteryReportResponse = {
