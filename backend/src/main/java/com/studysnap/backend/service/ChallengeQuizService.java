@@ -181,15 +181,25 @@ public class ChallengeQuizService {
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         int quizCount = MODE_BOARD_EXAM.equals(selectedMode) ? profile.questionCount() : INITIAL_CHALLENGE_QUIZ_COUNT;
         try {
-            List<QuizItem> generatedQuiz = quizGenerationService.generateChallengeQuiz(
-                    studyPack.getTitle(),
-                    studyPack.getSummary(),
-                    getKeyConcepts(studyPack),
-                    disallowedQuestions,
-                    quizCount,
-                    profile.difficulty(),
-                    generationContext
-            );
+            List<QuizItem> generatedQuiz = MODE_BOARD_EXAM.equals(selectedMode)
+                    ? quizGenerationService.generateBoardExamQuiz(
+                            studyPack.getTitle(),
+                            studyPack.getSummary(),
+                            getKeyConcepts(studyPack),
+                            disallowedQuestions,
+                            quizCount,
+                            profile.difficulty(),
+                            generationContext
+                    )
+                    : quizGenerationService.generateChallengeQuiz(
+                            studyPack.getTitle(),
+                            studyPack.getSummary(),
+                            getKeyConcepts(studyPack),
+                            disallowedQuestions,
+                            quizCount,
+                            profile.difficulty(),
+                            generationContext
+                    );
             List<QuizItem> challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuiz,
                     QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)

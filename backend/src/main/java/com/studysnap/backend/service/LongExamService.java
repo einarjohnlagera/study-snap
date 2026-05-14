@@ -33,8 +33,14 @@ import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -48,6 +54,7 @@ import java.util.UUID;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class LongExamService {
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
     private static final String SESSION_STATE_COMPLETED = "completed";
@@ -106,67 +113,122 @@ public class LongExamService {
     private final AnalyticsService analyticsService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final StudySnapProperties properties;
+    private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
+    private final TransactionOperations studyPackGenerationTransactionOperations;
+    private final AsyncTaskExecutor studyPackGenerationTaskExecutor;
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LongExamStartResponse startSession(String studyPackIdRaw, UUID userId, LongExamStartRequest request) {
         authService.requireEmailVerified(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.LONG_EXAM_SESSION);
 
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
-        StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
-        QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        userId,
-                        studyPackId,
-                        QuickReviewSessionMode.LONG_EXAM,
-                        ACTIVE_STATUSES
-                )
-                .orElse(null);
-        if (existing != null && (existing.getStatus() == QuickReviewSessionStatus.GENERATING
-                || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty())) {
-            return buildStartResponse(existing);
-        }
-
         String difficulty = resolveDifficulty(request);
         int questionCount = resolveQuestionCount(userId);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
-                userId,
-                studyPack,
-                difficulty
-        ));
-        StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(userId, studyPack);
-        List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
 
-        try {
-            List<QuizItem> generatedQuiz = quizGenerationService.generateLongExam(
-                    studyPack.getTitle(),
-                    studyPack.getSummary(),
-                    getKeyConcepts(studyPack),
-                    disallowedQuestions,
-                    questionCount,
-                    difficulty,
-                    generationContext
-            );
-            List<QuizItem> longExamQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                    generatedQuiz,
-                    QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
-            );
-            if (longExamQuiz.size() != questionCount) {
-                throw new LongExamGenerationFailedException();
+        QuickReviewSessionEntity session = studyPackGenerationTransactionOperations.execute(status -> {
+            StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
+            QuickReviewSessionEntity existing = quickReviewSessionRepository
+                    .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                            userId,
+                            studyPackId,
+                            QuickReviewSessionMode.LONG_EXAM,
+                            ACTIVE_STATUSES
+                    )
+                    .orElse(null);
+            if (existing != null && (existing.getStatus() == QuickReviewSessionStatus.GENERATING
+                    || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty())) {
+                return existing;
             }
 
-            markSessionReady(session, longExamQuiz, difficulty);
-            QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-            trackAnalytics(userId, AnalyticsEventType.LONG_EXAM_STARTED, saved.getStudyPackId(), Map.of(
-                    ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
-                    ANALYTICS_METADATA_QUESTION_COUNT, longExamQuiz.size(),
-                    ANALYTICS_METADATA_DIFFICULTY, difficulty
+            QuickReviewSessionEntity saved = quickReviewSessionRepository.save(buildGeneratingSession(
+                    userId,
+                    studyPack,
+                    difficulty,
+                    questionCount
             ));
-            return buildStartResponse(saved);
+            dispatchLongExamGenerationAfterCommit(saved.getId(), studyPackId, difficulty, questionCount);
+            return saved;
+        });
+        if (session == null) {
+            throw new LongExamGenerationFailedException();
+        }
+        return buildStartResponse(session);
+    }
+
+    private void dispatchLongExamGenerationAfterCommit(
+            UUID sessionId,
+            UUID studyPackId,
+            String difficulty,
+            int questionCount
+    ) {
+        Runnable generationTask = () -> generateLongExamAsync(sessionId, studyPackId, difficulty, questionCount);
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    studyPackGenerationTaskDispatcher.execute(generationTask);
+                }
+            });
+            return;
+        }
+        studyPackGenerationTaskDispatcher.execute(generationTask);
+    }
+
+    private void generateLongExamAsync(UUID sessionId, UUID studyPackId, String difficulty, int questionCount) {
+        try {
+            studyPackGenerationTransactionOperations.execute(status -> {
+                QuickReviewSessionEntity session = quickReviewSessionRepository.findById(sessionId)
+                        .orElseThrow(LongExamSessionNotFoundException::new);
+                if (session.getStatus() != QuickReviewSessionStatus.GENERATING) {
+                    return null;
+                }
+                StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, session.getUserId());
+                UserEntity user = userRepository.findById(session.getUserId())
+                        .orElseThrow(LongExamSessionNotFoundException::new);
+                StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(
+                        user.getId(),
+                        studyPack
+                );
+                List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+                List<QuizItem> generatedQuiz = quizGenerationService.generateLongExamParallel(
+                        studyPack.getTitle(),
+                        studyPack.getSummary(),
+                        getKeyConcepts(studyPack),
+                        disallowedQuestions,
+                        questionCount,
+                        difficulty,
+                        generationContext,
+                        studyPackGenerationTaskExecutor
+                );
+                List<QuizItem> longExamQuiz = QuizDeduplicationUtils.uniqueQuestions(
+                        generatedQuiz,
+                        QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
+                );
+                if (longExamQuiz.size() != questionCount) {
+                    throw new LongExamGenerationFailedException();
+                }
+
+                markSessionReady(session, longExamQuiz, difficulty);
+                QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+                trackAnalytics(session.getUserId(), AnalyticsEventType.LONG_EXAM_STARTED, saved.getStudyPackId(), Map.of(
+                        ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                        ANALYTICS_METADATA_QUESTION_COUNT, longExamQuiz.size(),
+                        ANALYTICS_METADATA_DIFFICULTY, difficulty
+                ));
+                return null;
+            });
         } catch (Exception ex) {
-            markSessionFailed(session);
-            QuickReviewSessionEntity failed = quickReviewSessionRepository.save(session);
-            return buildStartResponse(failed);
+            log.warn("Long Exam generation failed for sessionId={}: {}", sessionId, ex.getMessage());
+            studyPackGenerationTransactionOperations.execute(status -> {
+                quickReviewSessionRepository.findById(sessionId).ifPresent(session -> {
+                    markSessionFailed(session);
+                    quickReviewSessionRepository.save(session);
+                });
+                return null;
+            });
         }
     }
 
@@ -339,7 +401,8 @@ public class LongExamService {
     private QuickReviewSessionEntity buildGeneratingSession(
             UUID userId,
             StudyPackEntity studyPack,
-            String difficulty
+            String difficulty,
+            int questionCount
     ) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
@@ -350,7 +413,7 @@ public class LongExamService {
         session.setStatus(QuickReviewSessionStatus.GENERATING);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
-        session.setTotalQuestions(0);
+        session.setTotalQuestions(questionCount);
         session.setCorrectAnswers(0);
         session.setScorePercentage(ZERO_SCORE);
         session.setRetryCount(0);

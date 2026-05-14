@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.dto.QuizItem;
+import org.springframework.core.task.AsyncTaskExecutor;
 
 import java.util.List;
 
@@ -33,6 +34,16 @@ public interface LlmStudyPackService {
 			StudyPackGenerationContext context
 	);
 
+	List<QuizItem> generateBoardExamQuiz(
+			String studyPackTitle,
+			String studyPackSummary,
+			List<String> keyConcepts,
+			List<String> disallowedQuestions,
+			int questionCount,
+			String difficulty,
+			StudyPackGenerationContext context
+	);
+
 	List<QuizItem> generateLongExam(
 			String studyPackTitle,
 			String studyPackSummary,
@@ -41,6 +52,17 @@ public interface LlmStudyPackService {
 			int questionCount,
 			String difficulty,
 			StudyPackGenerationContext context
+	);
+
+	List<QuizItem> generateLongExamParallel(
+			String studyPackTitle,
+			String studyPackSummary,
+			List<String> keyConcepts,
+			List<String> disallowedQuestions,
+			int totalQuestions,
+			String difficulty,
+			StudyPackGenerationContext context,
+			AsyncTaskExecutor taskExecutor
 	);
 
 	default List<QuizItem> generateMoreChallengeQuiz(

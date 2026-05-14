@@ -6,6 +6,7 @@ import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -173,6 +174,48 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 keyConcepts,
                 disallowedQuestions,
                 questionCount,
+                difficulty,
+                context
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateBoardExamQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateLongExamParallel(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int totalQuestions,
+            String difficulty,
+            StudyPackGenerationContext context,
+            AsyncTaskExecutor taskExecutor
+    ) {
+        return generateLongExam(
+                studyPackTitle,
+                studyPackSummary,
+                keyConcepts,
+                disallowedQuestions,
+                totalQuestions,
                 difficulty,
                 context
         );

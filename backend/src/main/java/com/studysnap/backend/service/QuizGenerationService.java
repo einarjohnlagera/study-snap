@@ -6,6 +6,7 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.List;
 public class QuizGenerationService {
     private static final String QUIZ_GENERATION_MODE_MOCK = "mock";
     private static final String QUIZ_TYPE_CHALLENGE = "challenge quiz";
+    private static final String QUIZ_TYPE_BOARD_EXAM = "board exam quiz";
     private static final String QUIZ_TYPE_LONG_EXAM = "long exam";
     private static final String QUIZ_TYPE_ADAPTIVE = "adaptive practice";
     private static final String QUIZ_TYPE_TEACHER = "teacher quiz";
@@ -93,6 +95,39 @@ public class QuizGenerationService {
         );
     }
 
+    public List<QuizItem> generateBoardExamQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateBoardExamQuiz(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    questionCount,
+                    difficulty,
+                    context
+            );
+        }
+
+        log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_BOARD_EXAM);
+        maybeApplyMockDelay();
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context
+        );
+    }
+
     public List<QuizItem> generateLongExam(
             String studyPackTitle,
             String studyPackSummary,
@@ -121,6 +156,41 @@ public class QuizGenerationService {
                 keyConcepts,
                 disallowedQuestions,
                 questionCount,
+                difficulty,
+                context
+        );
+    }
+
+    public List<QuizItem> generateLongExamParallel(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int totalQuestions,
+            String difficulty,
+            StudyPackGenerationContext context,
+            AsyncTaskExecutor taskExecutor
+    ) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateLongExamParallel(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    totalQuestions,
+                    difficulty,
+                    context,
+                    taskExecutor
+            );
+        }
+
+        log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_LONG_EXAM);
+        maybeApplyMockDelay();
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                totalQuestions,
                 difficulty,
                 context
         );

@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -26,7 +27,7 @@ public class AppConfig {
     public TaskExecutor analyticsTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("analytics-");
-        executor.setCorePoolSize(1);
+        executor.setCorePoolSize(3);
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(500);
         executor.initialize();
@@ -34,7 +35,7 @@ public class AppConfig {
     }
 
     @Bean
-    public TaskExecutor studyPackGenerationTaskExecutor() {
+    public AsyncTaskExecutor studyPackGenerationTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("study-pack-generation-");
         executor.setCorePoolSize(1);
