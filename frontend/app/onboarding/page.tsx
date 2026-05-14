@@ -391,6 +391,12 @@ export default function OnboardingPage() {
         if (!nextDraft.examDate && me.examDate) {
           nextDraft.examDate = me.examDate;
         }
+        if (!nextDraft.learnerLevel && me.learnerLevel) {
+          nextDraft.learnerLevel = me.learnerLevel;
+        }
+        if (!nextDraft.courseProgram && me.courseProgram) {
+          nextDraft.courseProgram = me.courseProgram;
+        }
         if (nextDraft.currentStep > 3 && !nextDraft.noteId) {
           nextDraft.currentStep = 3;
         }
@@ -599,15 +605,6 @@ export default function OnboardingPage() {
     setDraft((previous) => ({
       ...previous,
       courseProgram: value,
-    }));
-  };
-
-  const skipLearningContext = () => {
-    setDraft((previous) => ({
-      ...previous,
-      learnerLevel: null,
-      courseProgram: "",
-      currentStep: 3,
     }));
   };
 
@@ -971,13 +968,6 @@ export default function OnboardingPage() {
             </label>
           ) : null}
 
-          <button
-            type="button"
-            className="w-fit text-sm font-medium text-foreground/65 underline-offset-4 hover:text-foreground hover:underline"
-            onClick={skipLearningContext}
-          >
-            Skip for now
-          </button>
         </div>
       );
     }
