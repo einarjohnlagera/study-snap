@@ -66,7 +66,7 @@ import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
-type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup" | "long-exam-setup";
+type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup";
 type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
   timerStartedAtEpochSeconds?: number;
@@ -256,7 +256,7 @@ export default function ChallengeQuizPage() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [viewerPlanType, setViewerPlanType] = useState<ChallengeViewerPlanType>(null);
   const [viewerProfileType, setViewerProfileType] = useState<ChallengeViewerProfileType>(null);
-  const [activePaywallModal, setActivePaywallModal] = useState<"board-exam-mode" | "difficulty-selection" | "challenge-quiz-limit" | null>(null);
+  const [activePaywallModal, setActivePaywallModal] = useState<"board-exam-mode" | "long-exam-mode" | "difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
   const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(() => (
     resolvePreferredChallengeMode(getAuthUser()?.profileType)
@@ -294,12 +294,14 @@ export default function ChallengeQuizPage() {
     };
   }, []);
   const openLockedFeaturePaywall = useCallback(
-    (variant: "board-exam-mode" | "difficulty-selection" | "challenge-quiz-limit", source: string) => {
+    (variant: "board-exam-mode" | "long-exam-mode" | "difficulty-selection" | "challenge-quiz-limit", source: string) => {
       const feature = variant === "difficulty-selection"
         ? "difficulty"
         : variant === "challenge-quiz-limit"
           ? "quiz_limit"
-          : "board_exam";
+          : variant === "long-exam-mode"
+            ? "long_exam"
+            : "board_exam";
       void trackAnalyticsEvent({
         eventType: "FEATURE_LOCKED_CLICKED",
         metadata: {
@@ -890,7 +892,7 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, selectedMode]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, selectedMode, viewerPlanType]);
 
   const handleRetry = () => {
     timeoutAutoSubmitRequestedRef.current = false;
@@ -993,8 +995,12 @@ export default function ChallengeQuizPage() {
   }, [boardExamAvailable, openLockedFeaturePaywall]);
   const handleSelectLongExamMode = useCallback(() => {
     setError(null);
-    setPrestartStep("long-exam-setup");
-  }, []);
+    if (viewerPlanType !== "PRO") {
+      openLockedFeaturePaywall("long-exam-mode", "long_exam_mode_selection");
+      return;
+    }
+    router.push(`/notes/${noteId}/long-exam`);
+  }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
   const returnToModeSelection = useCallback(() => {
     setError(null);
     setShowBoardExamStartModal(false);
@@ -1243,15 +1249,19 @@ export default function ChallengeQuizPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-foreground">Long Exam Mode</p>
-                    <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
-                      Coming Soon
-                    </span>
+                    {viewerPlanType !== "PRO" ? (
+                      <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                        Pro
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-foreground/70">
                     Comprehensive review across broader topics.
                   </p>
                   <p className="mt-3 text-xs text-foreground/60">
-                    A longer session mode for deeper mastery testing.
+                    {viewerPlanType === "PRO"
+                      ? "A longer session mode for deeper mastery testing."
+                      : "Pro only. Upgrade to unlock full-length mastery exams."}
                   </p>
                 </button>
               ) : null}
@@ -1354,42 +1364,6 @@ export default function ChallengeQuizPage() {
                 disabled={challengeGenerationLocked}
               >
                 {challengeGenerationLocked ? "Starting..." : "Start Quiz"}
-              </Button>
-            </div>
-          </Card>
-        ) : prestartStep === "long-exam-setup" ? (
-          <Card className="space-y-4 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-              Long Exam Mode
-            </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">Long Exam Mode</h1>
-            <p className="text-sm text-foreground/80">
-              Long Exam Mode is designed for deeper, broader mastery testing — a longer review
-              session across more topics from {note?.title ?? "this note"}.
-            </p>
-            <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
-              <p className="font-medium text-foreground">Coming soon</p>
-              <p>
-                Long Exam Mode is in development and will be available in an upcoming update.
-                Use Challenge Quiz for focused practice in the meantime.
-              </p>
-            </div>
-            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={returnToModeSelection}
-              >
-                Choose another mode
-              </Button>
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                disabled
-              >
-                Long Exam — Coming Soon
               </Button>
             </div>
           </Card>

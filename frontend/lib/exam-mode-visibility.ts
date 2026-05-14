@@ -45,7 +45,7 @@ export function getAvailableExamModes(
       label: "Long Exam Mode",
       description: "Comprehensive review across broader topics.",
       recommended: false,
-      comingSoon: true,
+      comingSoon: false,
     },
   ];
 }

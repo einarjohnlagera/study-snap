@@ -207,6 +207,9 @@ export type AnalyticsEventType =
   | "QUICK_REVIEW_COMPLETED"
   | "CHALLENGE_QUIZ_STARTED"
   | "CHALLENGE_QUIZ_COMPLETED"
+  | "LONG_EXAM_STARTED"
+  | "LONG_EXAM_COMPLETED"
+  | "LONG_EXAM_FORFEITED"
   | "ADAPTIVE_PRACTICE_STARTED"
   | "ADAPTIVE_PRACTICE_COMPLETED"
   | "PAYWALL_VIEWED"
@@ -573,7 +576,7 @@ export type QuickReviewStudyTipResponse = {
   studyTip: string | null;
 };
 
-export type QuizSessionStatus = "GENERATING" | "FAILED" | "IN_PROGRESS" | "COMPLETED" | "FORFEITED";
+export type QuizSessionStatus = "GENERATING" | "FAILED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "FORFEITED";
 
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
@@ -592,7 +595,7 @@ export type AdaptivePracticeCompleteRequest = {
 };
 
 export type ChallengeQuizMode = "challenge" | "board_exam";
-export type QuizSessionMode = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE";
+export type QuizSessionMode = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
 
 export type NotePerformanceSummaryResponse = {
   noteId: string;
@@ -711,6 +714,42 @@ export type QuizSessionReviewResponse = {
   selectedChoices: Record<string, number>;
   createdAt: string;
   completedAt: string | null;
+};
+
+export type LongExamStartResponse = {
+  sessionId: string;
+  status: QuizSessionStatus;
+  quiz: QuizItem[];
+  totalQuestions: number;
+  difficulty: string | null;
+  canResume: boolean;
+};
+
+export type LongExamSessionResponse = {
+  sessionId: string;
+  status: QuizSessionStatus;
+  quiz: QuizItem[];
+  selectedChoices: Record<string, number>;
+  currentQuestionIndex: number;
+  totalQuestions: number;
+  difficulty: string | null;
+  paused: boolean;
+};
+
+export type LongExamMasteryReportResponse = {
+  sessionId: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+  scorePercentage: number;
+  domainBreakdown: Array<{
+    domain: string;
+    totalQuestions: number;
+    correctAnswers: number;
+    accuracyPercentage: number;
+  }>;
+  weakDomains: string[];
+  performanceSummary: string;
+  suggestedNextStep: string;
 };
 
 export type ChallengeQuizPerformanceSummaryResponse = {
@@ -2168,6 +2207,131 @@ export async function getChallengeQuizSessionReview(
     response,
     "Could not load Challenge Quiz session review.",
   );
+}
+
+export async function startLongExam(
+  studyPackId: string,
+  body: { difficulty?: string } = {},
+): Promise<LongExamStartResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/study-packs/${studyPackId}/start`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(body),
+    },
+    true,
+  );
+  return parseApiResponse<LongExamStartResponse>(response, "Could not start Long Exam.");
+}
+
+export async function getActiveLongExamSession(
+  studyPackId: string,
+): Promise<LongExamStartResponse | null> {
+  const response = await fetchWithAuth(
+    `/long-exam/study-packs/${studyPackId}/active`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    return throwApiRequestError(response, "Could not load active Long Exam.");
+  }
+  const text = await response.text();
+  if (!text || text.trim() === "" || text.trim() === "null") {
+    return null;
+  }
+  return JSON.parse(text) as LongExamStartResponse;
+}
+
+export async function getLongExamSession(
+  sessionId: string,
+): Promise<LongExamSessionResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/sessions/${sessionId}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<LongExamSessionResponse>(response, "Could not load Long Exam session.");
+}
+
+export async function saveLongExamProgress(
+  sessionId: string,
+  body: { questionIndex: number; selectedChoiceIndex: number },
+): Promise<LongExamSessionResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/sessions/${sessionId}/progress`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(body),
+    },
+    true,
+  );
+  return parseApiResponse<LongExamSessionResponse>(response, "Could not save Long Exam progress.");
+}
+
+export async function pauseLongExamSession(
+  sessionId: string,
+): Promise<LongExamSessionResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/sessions/${sessionId}/pause`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<LongExamSessionResponse>(response, "Could not pause Long Exam.");
+}
+
+export async function resumeLongExamSession(
+  sessionId: string,
+): Promise<LongExamSessionResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/sessions/${sessionId}/resume`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<LongExamSessionResponse>(response, "Could not resume Long Exam.");
+}
+
+export async function completeLongExamSession(
+  sessionId: string,
+  body: { durationSeconds: number },
+): Promise<LongExamMasteryReportResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/sessions/${sessionId}/complete`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(body),
+    },
+    true,
+  );
+  return parseApiResponse<LongExamMasteryReportResponse>(response, "Could not complete Long Exam.");
+}
+
+export async function forfeitLongExamSession(
+  sessionId: string,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/long-exam/sessions/${sessionId}/forfeit`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not forfeit Long Exam.");
 }
 
 export async function getTodayFocus(): Promise<TodayFocusResponse> {

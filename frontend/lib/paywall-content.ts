@@ -7,6 +7,7 @@ export type PaywallContextType =
   | "ADAPTIVE_PRACTICE_LOCKED"
   | "EXPORT_LIMIT"
   | "BOARD_EXAM_MODE_LOCKED"
+  | "LONG_EXAM_MODE_LOCKED"
   | "DIFFICULTY_SELECTION_LOCKED"
   | "OCR_LIMIT"
   | "QUIZ_GENERATION_LIMIT";
@@ -29,6 +30,7 @@ export type PaywallContext = {
 export type PaywallModalVariant =
   | "adaptive-practice"
   | "board-exam-mode"
+  | "long-exam-mode"
   | "difficulty-selection"
   | "challenge-quiz-limit"
   | "quiz-generation-limit"
@@ -73,6 +75,8 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "EXPORT_LIMIT";
     case "board-exam-mode":
       return "BOARD_EXAM_MODE_LOCKED";
+    case "long-exam-mode":
+      return "LONG_EXAM_MODE_LOCKED";
     case "difficulty-selection":
       return "DIFFICULTY_SELECTION_LOCKED";
     case "ocr-limit":
@@ -158,6 +162,17 @@ export function resolvePaywallPresentation(
         headline: "Unlock Board Exam Mode",
         body: "Simulate exam-day pressure with stricter timed practice designed for serious review.",
         feature: "board_exam",
+        primaryPlanType: "PRO",
+        secondaryPlanType: "PLUS",
+        primaryCtaLabel: PRIMARY_CTA_LABEL,
+        secondaryCtaLabel: SECONDARY_CTA_LABEL,
+        lastAction: "QUIZ",
+      };
+    case "LONG_EXAM_MODE_LOCKED":
+      return {
+        headline: "Long Exam Mode",
+        body: "Test your mastery with a comprehensive, full-length exam tailored to your notes. Pro unlocks fixed long exams, pause and resume, and mastery reports with domain breakdowns.",
+        feature: "long_exam",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
         primaryCtaLabel: PRIMARY_CTA_LABEL,
