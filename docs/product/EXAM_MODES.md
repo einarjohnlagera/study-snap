@@ -12,7 +12,7 @@ This document does **not** prescribe specific question counts, time limits, or q
 
 ## Vocabulary
 
-- **Quiz Session Engine** (informally "the engine") — the shared backend session, generation, scoring, persistence, and recovery pipeline used by all timed quiz modes. Defined by the existing `quizSession` aggregate with a mode discriminator (`QUICK_REVIEW`, `CHALLENGE`, `ADAPTIVE`; future: `LONG_EXAM`, `BOARD_EXAM`).
+- **Quiz Session Engine** (informally "the engine") — the shared backend session, generation, scoring, persistence, and recovery pipeline used by all timed quiz modes. Defined by the existing `quizSession` aggregate with a mode discriminator (`QUICK_REVIEW`, `CHALLENGE`, `ADAPTIVE`, `LONG_EXAM`, `BOARD_EXAM`).
 - **Mode** — a product-facing presentation layer over the engine. Modes share the engine; they differ in identity, framing, parameters, and surfaces.
 - **Mode family**:
   - *Practice modes* — Quick Review, Adaptive Practice
@@ -78,13 +78,14 @@ No identity changes from `quick-review.md`; included here for completeness.
 - **Boundary**:
   - **Question count**: fixed at start, adapts to learner level. Larger than Challenge Quiz, smaller than a board sitting. Specific values are an implementation decision.
   - **Generation**: not progressive. The exam set is generated and committed before the user begins.
-  - **Pacing**: flexible — pause and resume allowed; per-section timing optional; total time is loose. Focus is on completion, not speed.
-  - **Source**: single note at launch; multi-note as a follow-up capability.
+  - **Pacing**: countdown timer (90 seconds per question, server-anchored). Timer never stops — tab close does not pause the clock. Timer expiry triggers auto-submit. Leave = forfeit; there is no pause/resume option available to the user.
+  - **Source**: single note at v1 launch; multi-note (cross-topic exam spanning 2–4 notes from the same subject) is the planned v0.14+ evolution — see Roadmap Pointers.
   - **Result**: a *mastery report* — coverage, weak domains, suggested next study step. Inline learner-level adjustment IS allowed (this is still a study tool).
   - **Setup**: confirmation screen ("This is a longer session — set aside ~N minutes"). Less ceremony than Board Exam.
 - **What Long Exam must never become**:
   - A longer Challenge Quiz with the same UX. The experience must feel structured and graded, not progressive.
   - A board exam simulation. If a user wants a strict exam, that is Board Exam Mode.
+  - A mode where pause/resume is offered as a leave option. Leave = forfeit, same as Board Exam. The anti-procrastination principle applies equally here.
 
 ### Board Exam Mode (existing — sharpen identity)
 
@@ -163,14 +164,31 @@ Setup tone is part of mode identity. Do **not** unify these into a single `ExamS
 ### In-Session
 
 - **Challenge Quiz**: keep current progressive UX intact.
-- **Long Exam**: no progressive generation; allow pause/resume; show progress out of fixed total; section markers optional.
-- **Board Exam**: reduced chrome, fullscreen, no learner-level controls, no `+N Questions`, no encouraging microcopy. Timer is dominant.
+- **Long Exam**: no progressive generation; countdown timer dominant (90s/question, server-anchored); show progress out of fixed total; leave = forfeit with gatekeeper modal; beforeunload warning on tab close; sticky navigation footer; Board Exam-style top bar (Leave Exam / mode label / timer).
+- **Board Exam**: reduced chrome, fullscreen, no learner-level controls, no `+N Questions`, no encouraging microcopy. Timer is dominant (60s/question, server-anchored).
 
 ### Leave Guard
 
-- **Challenge Quiz**: existing forfeit guard.
-- **Long Exam**: pause-friendly. `Leave & Resume Later` is the primary leave action; `Forfeit Long Exam` is secondary.
-- **Board Exam**: `Forfeit Exam` is the only leave path; phrasing matches simulation framing. No "save & resume."
+- **Challenge Quiz**: `Leave Quiz` modal; confirming forfeits the session.
+- **Long Exam**: `Leave Exam` modal; confirming forfeits the session. Same forfeit-only pattern as Board Exam. No pause/resume escape hatch. Tab close triggers a `beforeunload` browser warning; the session timer continues running server-side and auto-submits on expiry.
+- **Board Exam**: `Forfeit Exam` modal with strongest language; confirming forfeits the session. No "save & resume."
+
+Rationale for unified forfeit behavior across Long Exam and Board Exam: both modes simulate a real exam sitting. Allowing a pause option undermines focus and enables procrastination. The anti-procrastination principle applies equally to both.
+
+### Timer Policy
+
+All three exam modes use a **server-anchored absolute deadline** — not a client-side countdown reset on tab restore.
+
+| Mode | Rate | Extends mid-session? |
+|---|---|---|
+| Challenge Quiz | 90 seconds / question | Yes — extends by 90s per question when `+5 Questions` is generated |
+| Long Exam | 90 seconds / question | No — fixed at session start |
+| Board Exam | 60 seconds / question | No — fixed at session start |
+
+- `timerStartedAtEpochSeconds` is stamped server-side when the quiz becomes ready (not at GENERATING time).
+- `deadlineEpochSeconds = timerStartedAtEpochSeconds + timeLimitSeconds`.
+- On tab return, the frontend recalculates `deadline − now`. If expired, auto-submit fires immediately.
+- Timer display uses warning (amber, ≤ 3 min) and urgent (red, ≤ 1 min) states in all three modes.
 
 ### Result Screen
 
@@ -280,7 +298,7 @@ All exam modes resolve generation context the same way (already in place):
 ## Open Discrepancies (resolve before next milestone)
 
 1. ~~**Adaptive Practice tier mismatch.**~~ ✅ Resolved in v0.12.0 — `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, `docs/PROJECT_CONTEXT.md`, and runtime gating now all align with `PLANS.md`: Plus = 10 / mo, Pro = 30 / mo.
-2. **Roadmap continuity.** The v0.12.0 line `"Multi-topic exam / Long Exam mode planning"` should be updated to point to this doc and reflect the redefined scope (Long Exam = Student-facing exam mode; multi-topic = a capability).
+2. ~~**Roadmap continuity.**~~ ✅ Resolved in v0.13.0 — `ROADMAP.md` updated to reflect Long Exam as a Student-facing exam mode; multi-note is a v0.14+ capability documented above.
 
 ---
 
@@ -288,23 +306,23 @@ All exam modes resolve generation context the same way (already in place):
 
 This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.md` and `RELEASES.md`.
 
-### v0.12.x (in-flight)
+### v0.12.x (shipped)
 
-- Resolve the **Adaptive Practice tier mismatch** in docs and runtime.
-- **Board Exam premium UX polish**: pre-flight setup, score-report-style result framing, fullscreen behavior, removal of inline learner-level pill on result. **Presentation only — no engine changes.**
-- **Long Exam Mode spec** finalized based on this doc; remains planning-only in v0.12.x.
+- ✅ Resolved the **Adaptive Practice tier mismatch** in docs and runtime.
+- ✅ **Board Exam premium UX polish**: pre-flight setup, score-report-style result framing, fullscreen behavior, removal of inline learner-level pill on result.
+- ✅ **Long Exam Mode spec** finalized in this doc.
 
-### v0.13+ (planned)
+### v0.13 (in progress)
 
-- **Long Exam Mode v1 backend** shipped: single-note, fixed long-form, Pro-only session support with pause/resume and mastery report.
-- **Long Exam Mode frontend activation**: wire the existing coming-soon entry to the backend endpoints.
-- **Profile-aware mode-selection rendering** (hide Board Exam from Students; cross-profile escape-hatch line).
-- **Learner-level grouped UX** in profile and post-onboarding confirmation surfaces (the existing Dashboard prompt; **not** a new step inside `/onboarding`).
-- **Guidance Engine extensions**: `cooldownMs`, dashboard contextual tips, course/program inline reminder.
+- ✅ **Long Exam Mode v1 backend**: single-note, fixed long-form, Pro-only session with mastery report. Pause/resume endpoints exist in the backend but are not exposed in the frontend (leave = forfeit per product decision).
+- ✅ **Long Exam Mode frontend**: new `/notes/[id]/long-exam` page; Board Exam-style top bar; forfeit-only leave guard; sticky navigation footer; Coming Soon placeholder removed from challenge-quiz mode selection.
+- ✅ **Profile-aware mode-selection rendering**: Long Exam hidden from BOARD_EXAM and TEACHER profiles; Board Exam hidden from STUDENT profile with cross-profile escape-hatch line.
+- **Timer fix**: per-question time limits replace hardcoded 600s constant across Challenge Quiz, Board Exam, and Long Exam; server-anchored deadline mechanism for Long Exam; Challenge Quiz timer extends when more questions are generated.
+- **UI consistency**: Previous/Next navigation aligned left/right within card width across all three exam modes.
 
 ### v0.14+ (later)
 
-- **Multi-note Long Exam**.
+- **Multi-note Long Exam** — the primary identity differentiator between Long Exam and Board Exam. Entry: from a note, user can add 1–3 additional notes from the same subject during the prestart step. Backend must support a `LongExamNoteRef` model for aggregate question generation across multiple study packs. Questions are generated proportionally from each note's study pack. UX vision: "You're starting with [Note Title]. Add more notes to include in this exam." See Architecture Direction for constraints.
 - **Board Exam advanced result analytics** (trend over time, percentile-style framing).
 - **Long Exam tier promotion to Plus** if usage data justifies it.
 
@@ -322,6 +340,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - Learner Level and Course/Program remain separate concerns.
 - Onboarding stays simplified; new prompts ride the Guidance Engine.
 - Challenge Quiz keeps progressive flexibility.
+- Long Exam never offers pause/resume to the user. Leave = forfeit.
 - Board Exam never becomes "longer Challenge Quiz."
 - Teacher remains scoped to Quiz Preview / Export.
 - No new persistence aggregates per profile or per mode.
