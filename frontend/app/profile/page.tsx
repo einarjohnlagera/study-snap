@@ -93,8 +93,7 @@ const PROFILE_TYPE_OPTIONS: ProfileTypeOption[] = [
   {
     value: "PROFESSIONAL",
     label: "Professional",
-    description: "Interview prep and applied knowledge review.",
-    disabled: true,
+    description: "Certification prep and applied knowledge review.",
   },
 ];
 

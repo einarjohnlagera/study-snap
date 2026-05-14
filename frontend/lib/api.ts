@@ -80,7 +80,7 @@ export type StudyPackListPageResponse = {
 
 export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
-export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE";
+export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
 export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"
@@ -1307,6 +1307,23 @@ export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<Me
     bio: current.bio ?? "",
     learnerLevel: level,
     courseProgram: current.courseProgram ?? "",
+    email: current.email,
+  });
+}
+
+export async function updateLearningProfileContext(
+  learnerLevel: LearnerLevel | null,
+  courseProgram: string | null,
+): Promise<MeResponse> {
+  const current = await getMe();
+  return updateUserProfile({
+    firstName: current.firstName,
+    lastName: current.lastName ?? "",
+    displayName: current.displayName ?? "",
+    username: current.username ?? "",
+    bio: current.bio ?? "",
+    learnerLevel: learnerLevel ?? current.learnerLevel ?? null,
+    courseProgram: courseProgram?.trim() || current.courseProgram || "",
     email: current.email,
   });
 }

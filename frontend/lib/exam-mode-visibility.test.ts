@@ -26,16 +26,41 @@ describe("getAvailableExamModes", () => {
     expect(modes.map((m) => m.id)).toEqual(["challenge"]);
   });
 
+  it("returns Certification Review and Full Practice Exam for PROFESSIONAL", () => {
+    const modes = getAvailableExamModes("PROFESSIONAL");
+    expect(modes).toHaveLength(2);
+    expect(modes.map((m) => m.id)).toEqual(["challenge", "long_exam"]);
+    expect(modes.map((m) => m.label)).toEqual(["Certification Review", "Full Practice Exam"]);
+  });
+
+  it("keeps Professional label overrides display-only", () => {
+    const modes = getAvailableExamModes("PROFESSIONAL");
+    expect(modes[0]).toMatchObject({
+      id: "challenge",
+      label: "Certification Review",
+      description: "Practice with real-world scenarios at your own pace.",
+      recommended: true,
+      comingSoon: false,
+    });
+    expect(modes[1]).toMatchObject({
+      id: "long_exam",
+      label: "Full Practice Exam",
+      description: "Comprehensive practice exam to test your certification readiness.",
+      recommended: false,
+      comingSoon: false,
+    });
+  });
+
   it("marks Challenge Quiz as recommended for STUDENT", () => {
     const modes = getAvailableExamModes("STUDENT");
     expect(modes.find((m) => m.id === "challenge")?.recommended).toBe(true);
   });
 
-  it("marks Long Exam as not recommended and coming soon for STUDENT", () => {
+  it("marks Long Exam as not recommended and available for STUDENT", () => {
     const modes = getAvailableExamModes("STUDENT");
     const longExam = modes.find((m) => m.id === "long_exam");
     expect(longExam?.recommended).toBe(false);
-    expect(longExam?.comingSoon).toBe(true);
+    expect(longExam?.comingSoon).toBe(false);
   });
 
   it("marks Board Exam as recommended and not coming soon for BOARD_EXAM", () => {
@@ -58,5 +83,10 @@ describe("getAvailableExamModes", () => {
   it("does not include Long Exam for BOARD_EXAM", () => {
     const modes = getAvailableExamModes("BOARD_EXAM");
     expect(modes.some((m) => m.id === "long_exam")).toBe(false);
+  });
+
+  it("does not include Board Exam for PROFESSIONAL", () => {
+    const modes = getAvailableExamModes("PROFESSIONAL");
+    expect(modes.some((m) => m.id === "board_exam")).toBe(false);
   });
 });

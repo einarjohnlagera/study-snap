@@ -14,10 +14,10 @@ export const ACTIVE_PROFILE_TYPES: readonly ProfileType[] = [
   "STUDENT",
   "BOARD_EXAM",
   "TEACHER",
+  "PROFESSIONAL",
 ];
 
 export const DISABLED_PROFILE_TYPES: readonly ProfileType[] = [
-  "PROFESSIONAL",
   "PARENT",
 ];
 
@@ -68,7 +68,7 @@ export type ProfileTypeSwitchContent = {
   toast: string;
 };
 
-type ActiveProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
+type ActiveProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL";
 
 const SWITCH_NOTE = "You can switch back anytime.";
 
@@ -103,6 +103,15 @@ const PROFILE_TYPE_SWITCH_CONTENT: Record<
     note: SWITCH_NOTE,
     toast: "You're now in Teacher mode — focused on generate, review, and export.",
   },
+  PROFESSIONAL: {
+    title: "Switch to Professional mode?",
+    body: [
+      "Professional mode is designed for certification prep and career-focused learning.",
+      "Your dashboard and quizzes will be framed around applied scenarios and real-world practice.",
+    ],
+    note: SWITCH_NOTE,
+    toast: "You're now in Professional mode — focused on certification and career learning.",
+  },
 };
 
 export function getProfileTypeSwitchContent(
@@ -117,6 +126,7 @@ export function isActiveProfileTypeForSwitch(
   return (
     profileType === "STUDENT" ||
     profileType === "BOARD_EXAM" ||
-    profileType === "TEACHER"
+    profileType === "TEACHER" ||
+    profileType === "PROFESSIONAL"
   );
 }

@@ -38,6 +38,23 @@ export function getAvailableExamModes(
     return [CHALLENGE_CARD];
   }
 
+  if (profileType === "PROFESSIONAL") {
+    return [
+      {
+        ...CHALLENGE_CARD,
+        label: "Certification Review",
+        description: "Practice with real-world scenarios at your own pace.",
+      },
+      {
+        id: "long_exam",
+        label: "Full Practice Exam",
+        description: "Comprehensive practice exam to test your certification readiness.",
+        recommended: false,
+        comingSoon: false,
+      },
+    ];
+  }
+
   return [
     CHALLENGE_CARD,
     {

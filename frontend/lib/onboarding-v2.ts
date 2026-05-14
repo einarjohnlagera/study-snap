@@ -1,23 +1,14 @@
-import type { ProfileType } from "@/lib/api";
+import type { LearnerLevel, ProfileType } from "@/lib/api";
 
-export type OnboardingProfileType = Extract<ProfileType, "STUDENT" | "BOARD_EXAM" | "TEACHER">;
-export type OnboardingGoal =
-  | "UNDERSTAND_TOPIC_IN_DEPTH"
-  | "PRACTICE_WITH_QUIZZES"
-  | "REVIEW_EXISTING_NOTES"
-  | "UNDERSTAND_BEFORE_EXAM_DAY"
-  | "PRACTICE_EXAM_STYLE"
-  | "REINFORCE_WEAK_CONCEPTS"
-  | "CREATE_STUDY_MATERIALS"
-  | "GENERATE_QUIZ_OR_EXAM"
-  | "UNDERSTAND_TO_TEACH";
+export type OnboardingProfileType = Extract<ProfileType, "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL">;
 export type OnboardingInputMethod = "generate" | "own_note";
 
 export type OnboardingDraft = {
   startedAtMs: number;
   currentStep: number;
   profileType: OnboardingProfileType | null;
-  goal: OnboardingGoal | null;
+  learnerLevel: LearnerLevel | null;
+  courseProgram: string;
   examDate: string;
   inputMethod: OnboardingInputMethod | null;
   topic: string;
@@ -39,7 +30,8 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     startedAtMs: Date.now(),
     currentStep: 1,
     profileType: null,
-    goal: null,
+    learnerLevel: null,
+    courseProgram: "",
     examDate: "",
     inputMethod: null,
     topic: "",

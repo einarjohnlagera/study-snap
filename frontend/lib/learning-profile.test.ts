@@ -1,4 +1,4 @@
-import { getCourseProgramHelperText, mergeCourseProgramSuggestions, normalizeCourseProgram } from "./learning-profile";
+import { getCourseProgramHelperText, getGroupedLearnerLevels, mergeCourseProgramSuggestions, normalizeCourseProgram } from "./learning-profile";
 
 describe("normalizeCourseProgram", () => {
   it("standardizes dash spacing for display and filtering", () => {
@@ -47,5 +47,31 @@ describe("getCourseProgramHelperText", () => {
     expect(getCourseProgramHelperText("BOARD_EXAM_REVIEW", "note")).toBe(
       "Enter the program or board exam track like Nursing, Pharmacy, Civil Engineering, etc. This note can use a different value from your profile.",
     );
+  });
+});
+
+describe("getGroupedLearnerLevels", () => {
+  it("keeps Student recommendations unchanged", () => {
+    const grouped = getGroupedLearnerLevels("STUDENT");
+
+    expect(grouped.recommendedGroupLabel).toBe("Recommended for Students");
+    expect(grouped.recommended.map((option) => option.value)).toEqual([
+      "GRADE_SCHOOL",
+      "JUNIOR_HIGH",
+      "SENIOR_HIGH",
+      "COLLEGE",
+    ]);
+  });
+
+  it("returns Professional and Personal Learning for Professional users", () => {
+    const grouped = getGroupedLearnerLevels("PROFESSIONAL");
+
+    expect(grouped.recommendedGroupLabel).toBe("Recommended for Professionals");
+    expect(grouped.recommended.map((option) => option.value)).toEqual([
+      "PROFESSIONAL",
+      "PERSONAL_LEARNING",
+    ]);
+    expect(grouped.other.map((option) => option.value)).not.toContain("PROFESSIONAL");
+    expect(grouped.other.map((option) => option.value)).not.toContain("PERSONAL_LEARNING");
   });
 });

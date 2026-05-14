@@ -62,6 +62,7 @@ import {
   CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
   isModeSelectionChallengeQuizEntry,
 } from "@/lib/challenge-quiz-entry";
+import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 
@@ -72,7 +73,7 @@ type ChallengeSessionStatePayload = {
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
-type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | null;
+type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" | null;
 type ChallengeViewerPlanType = "FREE" | "PLUS" | "PRO" | null;
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
@@ -145,7 +146,7 @@ function resolvePreferredChallengeMode(profileType: string | null | undefined): 
 }
 
 function isChallengeViewerProfileType(value: string | null | undefined): value is Exclude<ChallengeViewerProfileType, null> {
-  return value === "STUDENT" || value === "BOARD_EXAM" || value === "TEACHER";
+  return value === "STUDENT" || value === "BOARD_EXAM" || value === "TEACHER" || value === "PROFESSIONAL";
 }
 
 async function requestBoardExamFullscreen() {
@@ -978,6 +979,13 @@ export default function ChallengeQuizPage() {
   const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable);
   const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
   const boardExamAvailable = viewerPlanType === "PRO";
+  const availableExamModes = useMemo(
+    () => getAvailableExamModes(viewerProfileType),
+    [viewerProfileType],
+  );
+  const challengeModeCard = availableExamModes.find((mode) => mode.id === "challenge");
+  const boardExamModeCard = availableExamModes.find((mode) => mode.id === "board_exam");
+  const longExamModeCard = availableExamModes.find((mode) => mode.id === "long_exam");
   const boardExamTimerState = useMemo(
     () => resolveBoardExamTimerState(remainingSeconds),
     [remainingSeconds],
@@ -1179,35 +1187,37 @@ export default function ChallengeQuizPage() {
                 : `Choose how you want to study ${note?.title ?? "this note"} today.`}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                aria-pressed={selectedMode === CHALLENGE_MODE}
-                className={getSelectionCardClassName({
-                  selected: selectedMode === CHALLENGE_MODE,
-                  disabled: challengeGenerationLocked,
-                  className: "p-4",
-                })}
-                onClick={() => void handleSelectChallengeQuizMode()}
-                disabled={challengeGenerationLocked}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
-                  {selectedMode === CHALLENGE_MODE ? (
-                    <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
-                      {viewerProfileType === "BOARD_EXAM" ? "Alternate" : "Recommended"}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-sm text-foreground/70">
-                  Focused practice with flexible pacing.
-                </p>
-                <p className="mt-3 text-xs text-foreground/60">
-                  {canChooseChallengeDifficulty
-                    ? "Pro users can choose the challenge difficulty before generation."
-                    : "Review the recommended setup before you start."}
-                </p>
-              </button>
-              {viewerProfileType === "BOARD_EXAM" ? (
+              {challengeModeCard ? (
+                <button
+                  type="button"
+                  aria-pressed={selectedMode === CHALLENGE_MODE}
+                  className={getSelectionCardClassName({
+                    selected: selectedMode === CHALLENGE_MODE,
+                    disabled: challengeGenerationLocked,
+                    className: "p-4",
+                  })}
+                  onClick={() => void handleSelectChallengeQuizMode()}
+                  disabled={challengeGenerationLocked}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">{challengeModeCard.label}</p>
+                    {selectedMode === CHALLENGE_MODE ? (
+                      <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                        {challengeModeCard.recommended ? "Recommended" : "Alternate"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-foreground/70">
+                    {challengeModeCard.description}
+                  </p>
+                  <p className="mt-3 text-xs text-foreground/60">
+                    {canChooseChallengeDifficulty
+                      ? "Pro users can choose the challenge difficulty before generation."
+                      : "Review the recommended setup before you start."}
+                  </p>
+                </button>
+              ) : null}
+              {boardExamModeCard ? (
                 <button
                   type="button"
                   aria-pressed={selectedMode === BOARD_EXAM_MODE}
@@ -1225,7 +1235,7 @@ export default function ChallengeQuizPage() {
                   disabled={challengeGenerationLocked}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
+                    <p className="text-sm font-semibold text-foreground">{boardExamModeCard.label}</p>
                     {selectedMode === BOARD_EXAM_MODE ? (
                       <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                         Recommended
@@ -1233,7 +1243,7 @@ export default function ChallengeQuizPage() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-foreground/70">
-                    Simulate a realistic board-style exam experience.
+                    {boardExamModeCard.description}
                   </p>
                   <p className="mt-3 text-xs text-foreground/60">
                     {boardExamAvailable
@@ -1241,7 +1251,8 @@ export default function ChallengeQuizPage() {
                       : "Pro only. Upgrade to unlock a stricter board-style exam flow."}
                   </p>
                 </button>
-              ) : viewerProfileType !== "TEACHER" ? (
+              ) : null}
+              {longExamModeCard ? (
                 <button
                   type="button"
                   aria-pressed={false}
@@ -1257,7 +1268,7 @@ export default function ChallengeQuizPage() {
                   disabled={challengeGenerationLocked}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-foreground">Long Exam Mode</p>
+                    <p className="text-sm font-semibold text-foreground">{longExamModeCard.label}</p>
                     {viewerPlanType !== "PRO" ? (
                       <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                         Pro
@@ -1265,7 +1276,7 @@ export default function ChallengeQuizPage() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-foreground/70">
-                    Comprehensive review across broader topics.
+                    {longExamModeCard.description}
                   </p>
                   <p className="mt-3 text-xs text-foreground/60">
                     {viewerPlanType === "PRO"
