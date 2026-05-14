@@ -595,13 +595,6 @@ export default function OnboardingPage() {
     });
   };
 
-  const selectLearnerLevel = (value: LearnerLevel) => {
-    setDraft((previous) => ({
-      ...previous,
-      learnerLevel: value,
-    }));
-  };
-
   const updateCourseProgram = (value: string) => {
     setDraft((previous) => ({
       ...previous,
@@ -907,51 +900,36 @@ export default function OnboardingPage() {
                 <p className="text-sm font-medium text-foreground">Learner Level</p>
                 <p className="text-xs text-foreground/60">Optional. Choose the level that best fits this study material.</p>
               </div>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <p className="text-xs text-foreground/50">{groupedLearnerLevels.recommendedGroupLabel}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {groupedLearnerLevels.recommended.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => selectLearnerLevel(option.value)}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                          draft.learnerLevel === option.value
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-background text-foreground/70 hover:border-foreground/30"
-                        }`}
-                        aria-pressed={draft.learnerLevel === option.value}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
+              <select
+                value={draft.learnerLevel ?? ""}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setDraft((previous) => ({
+                    ...previous,
+                    learnerLevel: nextValue ? nextValue as LearnerLevel : null,
+                  }));
+                }}
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                aria-label="Learner Level"
+              >
+                <option value="">Choose your learner level</option>
+                <optgroup label={groupedLearnerLevels.recommendedGroupLabel}>
+                  {groupedLearnerLevels.recommended.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
                 {groupedLearnerLevels.other.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-foreground/50">Other options</p>
-                    <div className="flex flex-wrap gap-2">
-                      {groupedLearnerLevels.other.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => selectLearnerLevel(option.value)}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                            draft.learnerLevel === option.value
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border bg-background text-foreground/70 hover:border-foreground/30"
-                          }`}
-                          aria-pressed={draft.learnerLevel === option.value}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <optgroup label="Other options">
+                    {groupedLearnerLevels.other.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ) : null}
-              </div>
+              </select>
             </section>
 
             <section className="space-y-2">
