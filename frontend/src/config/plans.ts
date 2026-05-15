@@ -73,6 +73,7 @@ export const PLANS: Record<AppPlanType, {
       { label: `${pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month` },
       { label: "Unlimited exports", helper: EXPORT_HELPER },
       { label: `Adaptive Practice (${pricingConfig.pro.adaptivePracticePerMonth} sessions / month)` },
+      { label: `Interview Practice (${pricingConfig.pro.interviewPracticePerMonth} sessions / month)` },
       { label: "Difficulty selection" },
       { label: "Board Exam Mode" },
     ],
@@ -129,6 +130,14 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     },
   },
   {
+    label: "Interview Practice",
+    values: {
+      FREE: null,
+      PLUS: null,
+      PRO: `${pricingConfig.pro.interviewPracticePerMonth} sessions`,
+    },
+  },
+  {
     label: "Difficulty selection",
     values: {
       FREE: null,
@@ -164,7 +173,7 @@ export type UpgradeCtaSet = {
   secondary: UpgradeCta | null;
 };
 
-export type UpgradeCtaContext = "study-pack-limit" | "adaptive-practice" | "general";
+export type UpgradeCtaContext = "study-pack-limit" | "adaptive-practice" | "interview-practice" | "general";
 
 export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaContext): UpgradeCtaSet {
   if (currentPlan === "FREE") {
@@ -172,6 +181,12 @@ export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaCon
       return {
         primary: { label: "Unlock Adaptive Practice", targetPlan: "PLUS" },
         secondary: { label: "Go Pro", targetPlan: "PRO" },
+      };
+    }
+    if (context === "interview-practice") {
+      return {
+        primary: { label: "Unlock Interview Practice", targetPlan: "PRO" },
+        secondary: null,
       };
     }
     if (context === "study-pack-limit") {
@@ -186,6 +201,12 @@ export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaCon
     };
   }
   if (currentPlan === "PLUS") {
+    if (context === "interview-practice") {
+      return {
+        primary: { label: "Unlock Interview Practice", targetPlan: "PRO" },
+        secondary: null,
+      };
+    }
     if (context === "study-pack-limit") {
       return {
         primary: { label: "Get More Study Packs", targetPlan: "PRO" },

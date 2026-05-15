@@ -3,6 +3,7 @@ package com.studysnap.backend.service.impl;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -123,6 +124,37 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                     );
                 })
                 .toList();
+    }
+
+    @Override
+    public List<QuizItem> generateInterviewPracticeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                "mixed",
+                context
+        );
+    }
+
+    @Override
+    public InterviewPracticeCritique generateInterviewCritique(QuizItem question, int selectedChoiceIndex) {
+        String verdict = question.correctIndex() != null && question.correctIndex() == selectedChoiceIndex
+                ? "STRONG"
+                : "RECONSIDER";
+        return new InterviewPracticeCritique(
+                verdict,
+                "This answer is evaluated against the strongest interview approach.",
+                "How would you explain your reasoning to a senior interviewer?"
+        );
     }
 
     @Override

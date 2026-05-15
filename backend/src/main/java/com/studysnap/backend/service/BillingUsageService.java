@@ -24,7 +24,10 @@ public class BillingUsageService {
                 plan.limits().challengeQuizzesPerMonth(),
                 plan.usage().adaptivePracticeUsed(),
                 plan.limits().adaptivePracticePerMonth(),
+                plan.usage().interviewPracticeUsed(),
+                plan.limits().interviewPracticePerMonth(),
                 plan.features().adaptivePracticeAvailable(),
+                plan.features().interviewPracticeAvailable(),
                 plan.features().difficultySelectionAvailable()
         );
     }

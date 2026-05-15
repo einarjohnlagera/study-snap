@@ -32,6 +32,16 @@ NoteLib supports exactly **five quiz-flavored modes** — three exam modes plus 
 | Long Exam | Exam | Student profile (primary), Board Taker (secondary) | Long-form mastery testing | `LONG_EXAM` |
 | Board Exam | Exam | Board Taker profile | High-stakes simulation | `BOARD_EXAM` (currently presented as a Challenge variant; future: own discriminator) |
 
+### Sub-modes (variants of an existing mode, do NOT count toward the 5)
+
+Sub-modes are presentation/generation variants that share an existing engine discriminator. They are surfaced under different labels and entry points but do not add a sixth mode. Sub-mode identity is carried in session state JSONB (e.g. `subMode: "INTERVIEW"`), never as a new discriminator.
+
+| Sub-mode | Parent mode | Discriminator | Audience | Differentiator |
+|----------|-------------|---------------|----------|----------------|
+| Interview Practice | Adaptive Practice | `ADAPTIVE` + `subMode: "INTERVIEW"` | Professional profile, Pro plan only | Scenario-based questions + per-answer AI critique + Interview Readiness Report result framing |
+
+Adding a new sub-mode requires updating this table and the parent feature doc. A sub-mode that requires a new persistence aggregate, new session lifecycle state, or its own engine logic is **not a sub-mode** — it must be promoted to a full mode and go through the 5-mode contract review.
+
 ### Naming clarification (history)
 
 The earlier roadmap line *"Multi-topic exam / Long Exam mode planning — design a Board Exam session that spans multiple notes or topics"* framed Long Exam as a multi-topic Board Exam. **This document supersedes that framing.**
@@ -268,16 +278,18 @@ Direction:
 Reasoning:
 
 - **Long Exam launches Pro-only** to control multi-note generation cost and to preserve Pro's "exam prep" identity. Plus already has a unique value prop in Adaptive Practice; it does not need Long Exam to differentiate at launch.
-- **Shared "Advanced Exam" quota bucket** for Long + Board reduces per-mode counter sprawl. One quota; two modes. The specific number is an implementation decision.
+- **Shared "Advanced Exam" quota bucket** for Long + Board was the v0.13.0 intent but was not implemented — at v0.14.0 both modes are gated by Pro plan only with no explicit per-mode cap. This is a known margin risk being addressed in v0.15+ (see below).
 - **Promote Long Exam to Plus only after** runtime usage data justifies the LLM cost — and only if Plus needs the differentiator. State this as a future direction, not a v1 decision.
 
 ### Future premium positioning opportunities (planning-only)
 
+- **Per-mode quota separation (v0.15+)** — Long Exam, Board Exam, and Interview Practice each get their own explicit monthly cap on Pro (proposed: Long 10/mo, Board 5/mo, Interview 10/mo). Replaces today's uncapped Long/Board state. Frames as a transparency uplift, not a quota reduction. Cost-control rationale: a single power user running unlimited Board Exams (~$0.056/session in LLM cost) can exceed Pro revenue from one feature alone. See `ROADMAP.md` Premium Mode Uplift entry.
+- **Premium feel for Long Exam and Board Exam (v0.15+)** — visual / framing / pacing polish to differentiate from Challenge Quiz without adding mid-exam coaching. Board Exam stays feedback-free during the session by design; Long Exam stays forfeit-only with no mid-exam coaching. Premium uplift is presentation, not interactive AI.
 - **Score-report depth** (percentile-style framing, trend over time, schedule re-take) as Pro-only Board Exam refinements.
 - **Curated exam decks / cohort content** (Board Exam practice on curated content packs) as a future Pro+ tier.
 - **Exam analytics history** (long-term performance tracking) as a Pro-only refinement.
 
-These are scaffolding for future tier work, **not v0.13 commitments**.
+These are scaffolding for future tier work, sequenced in `ROADMAP.md`.
 
 ---
 
@@ -349,6 +361,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 ## Constraints (recap)
 
 - **Three exam modes total**: Challenge / Long / Board. Adding a fourth requires updating this document and `ROADMAP.md` together.
+- **Five quiz-flavored modes total** (Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam). Sub-modes (e.g. Interview Practice) ride existing discriminators and do not count toward this five.
 - Learner Level and Course/Program remain separate concerns.
 - Onboarding stays simplified; new prompts ride the Guidance Engine.
 - Challenge Quiz keeps progressive flexibility.
@@ -357,6 +370,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - Teacher remains scoped to Quiz Preview / Export.
 - No new persistence aggregates per profile or per mode.
 - Professional Profile label overrides ("Certification Review", "Full Practice Exam") are display-only in `exam-mode-visibility.ts`. Engine discriminators do not change.
+- Interview Practice (sub-mode of Adaptive Practice) carries its variant identity in session state JSONB only. No new `QuickReviewSessionMode` enum value. Pro-only at launch.
 
 ---
 

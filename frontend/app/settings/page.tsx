@@ -407,6 +407,8 @@ export default function SettingsPage() {
   const challengeQuizLimit = usageSummary?.limits.challengeQuizzesPerMonth ?? 0;
   const adaptivePracticeUsed = usageSummary?.usage.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
+  const interviewPracticeUsed = usageSummary?.usage.interviewPracticeUsed ?? 0;
+  const interviewPracticeLimit = usageSummary?.limits.interviewPracticePerMonth ?? 0;
   const exportsUsed = usageSummary?.usage.exportsUsed ?? 0;
   const exportsLimit = usageSummary?.limits.exportsPerMonth ?? null;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
@@ -726,6 +728,14 @@ export default function SettingsPage() {
                     label="Adaptive Practice"
                     used={adaptivePracticeUsed}
                     limit={adaptivePracticeLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
+                {currentPlan === "PRO" || interviewPracticeUsed > 0 ? (
+                  <UsageMetric
+                    label="Interview Practice"
+                    used={interviewPracticeUsed}
+                    limit={interviewPracticeLimit}
                     resetDateLabel={usageResetDateLabel}
                   />
                 ) : null}

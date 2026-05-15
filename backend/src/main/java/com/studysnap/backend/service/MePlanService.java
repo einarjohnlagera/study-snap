@@ -29,6 +29,7 @@ public class MePlanService {
         int studyPackLimit = properties.getPricing().resolveMonthlyStudyPackLimit(planType);
         int challengeQuizLimit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
         int adaptivePracticeLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
+        int interviewPracticeLimit = properties.getPricing().resolveMonthlyInterviewPracticeLimit(planType);
         int ocrLimit = properties.getPricing().resolveMonthlyOcrLimit(planType);
         int noteGenerationLimit = properties.getPricing().resolveMonthlyNoteGenerationLimit(planType);
         Integer exportLimit = properties.getPricing().resolveMonthlyExportLimit(planType);
@@ -36,6 +37,7 @@ public class MePlanService {
         int studyPackUsed = studyPackUsage.usedCount();
         int challengeQuizUsed = usage.challengeQuizGenerations();
         int adaptivePracticeUsed = usage.adaptiveQuizGenerations();
+        int interviewPracticeUsed = usage.interviewPracticeUsedThisMonth();
         int ocrUsed = usage.ocrExtractions();
         int noteGenerationUsed = usage.noteGenerations();
         int exportUsed = usage.exportsCount();
@@ -50,6 +52,7 @@ public class MePlanService {
                         studyPackLimit,
                         challengeQuizLimit,
                         adaptivePracticeLimit,
+                        interviewPracticeLimit,
                         ocrLimit,
                         noteGenerationLimit,
                         exportLimit
@@ -58,6 +61,7 @@ public class MePlanService {
                         studyPackUsed,
                         challengeQuizUsed,
                         adaptivePracticeUsed,
+                        interviewPracticeUsed,
                         ocrUsed,
                         noteGenerationUsed,
                         exportUsed
@@ -66,12 +70,14 @@ public class MePlanService {
                         remaining(studyPackLimit, studyPackUsed),
                         remaining(challengeQuizLimit, challengeQuizUsed),
                         remaining(adaptivePracticeLimit, adaptivePracticeUsed),
+                        remaining(interviewPracticeLimit, interviewPracticeUsed),
                         remaining(ocrLimit, ocrUsed),
                         remaining(noteGenerationLimit, noteGenerationUsed),
                         remainingNullable(exportLimit, exportUsed)
                 ),
                 new MePlanResponse.Features(
                         properties.getPricing().isAdaptivePracticeAvailable(planType),
+                        properties.getPricing().isInterviewPracticeAvailable(planType),
                         properties.getPricing().isDifficultySelectionAvailable(planType),
                         true,
                         ocrLimit > 0,

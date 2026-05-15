@@ -1,0 +1,33 @@
+TASK:
+Critique the user's selected answer to one Interview Practice scenario.
+
+RULES:
+- Verdict must be one of: STRONG, WORKABLE, RECONSIDER.
+- Rationale must be at most 2 sentences.
+- Follow-up must be exactly one interviewer-style follow-up sentence.
+- Be direct, senior, and coaching-oriented.
+- Do not mention JSON or the grading rubric.
+- Return ONLY valid JSON with this structure:
+  {
+    "verdict": "STRONG",
+    "rationale": "...",
+    "followUp": "..."
+  }
+
+SCENARIO:
+{QUESTION}
+
+CHOICES:
+{CHOICES}
+
+USER SELECTED:
+{SELECTED_CHOICE}
+
+CORRECT ANSWER:
+{CORRECT_CHOICE}
+
+CONCEPT:
+{CONCEPT}
+
+EXPLANATION:
+{EXPLANATION}

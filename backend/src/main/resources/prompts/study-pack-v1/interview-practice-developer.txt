@@ -1,0 +1,30 @@
+TASK:
+Generate exactly {QUESTION_COUNT} NEW multiple-choice questions for Interview Practice.
+
+RULES:
+- Base ONLY on the provided summary and key concepts.
+- Learner level target: {LEARNER_LEVEL}.
+- {LEARNER_LEVEL_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- Scan the key concepts and spread questions across technical, applied, and behavioral facets when the content supports it.
+- Each question must be a 3–5 sentence scenario framed like a senior interviewer testing practical judgment.
+- Ask for the best approach, best explanation, or strongest next step — not pure recall.
+- Each question must have exactly 4 choices.
+- Answer must be exactly one of: A, B, C, D.
+- Exactly 1 choice must be correct.
+- Explanation is required for every question and should explain what a strong candidate would recognize.
+- Concept is required for every question and should be senior-framed, concise, and specific.
+- Do NOT repeat or rephrase excluded questions.
+- Return ONLY valid JSON with this structure:
+  {
+    "questions": [
+      {
+        "question": "...",
+        "choices": ["...", "...", "...", "..."],
+        "answer": "A",
+        "explanation": "...",
+        "concept": "..."
+      }
+    ]
+  }
+- Do not include markdown, comments, or text before or after JSON.

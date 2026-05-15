@@ -42,6 +42,10 @@ export function DashboardMonthlyUsageCard({
         label: "Adaptive Practice",
         used: usageSummary.usage.adaptivePracticeUsed,
         limit: usageSummary.limits.adaptivePracticePerMonth,
+      }, {
+        label: "Interview Practice",
+        used: usageSummary.usage.interviewPracticeUsed ?? 0,
+        limit: usageSummary.limits.interviewPracticePerMonth ?? 0,
       }]
       : []),
   ];

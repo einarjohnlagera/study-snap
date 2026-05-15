@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class QuizGenerationService {
     private static final String QUIZ_TYPE_BOARD_EXAM = "board exam quiz";
     private static final String QUIZ_TYPE_LONG_EXAM = "long exam";
     private static final String QUIZ_TYPE_ADAPTIVE = "adaptive practice";
+    private static final String QUIZ_TYPE_INTERVIEW = "interview practice";
     private static final String QUIZ_TYPE_TEACHER = "teacher quiz";
     private static final String MOCK_GENERATION_LOG_MESSAGE = "Quiz generation mock mode enabled for {}; real LLM not called.";
     private static final int MAX_MOCK_DELAY_MS = 5_000;
@@ -225,6 +227,48 @@ public class QuizGenerationService {
                 disallowedQuestions,
                 questionCount,
                 context
+        );
+    }
+
+    public List<QuizItem> generateInterviewPracticeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateInterviewPracticeQuiz(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    questionCount,
+                    context
+            );
+        }
+
+        log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_INTERVIEW);
+        maybeApplyMockDelay();
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                "mixed",
+                context
+        );
+    }
+
+    public InterviewPracticeCritique generateInterviewCritique(QuizItem question, int selectedChoiceIndex) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateInterviewCritique(question, selectedChoiceIndex);
+        }
+        return new InterviewPracticeCritique(
+                question.correctIndex() != null && question.correctIndex() == selectedChoiceIndex ? "STRONG" : "RECONSIDER",
+                "Compare your answer against the strongest interview approach.",
+                "How would you explain your reasoning to a senior interviewer?"
         );
     }
 

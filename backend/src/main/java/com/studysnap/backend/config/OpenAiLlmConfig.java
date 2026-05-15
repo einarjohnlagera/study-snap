@@ -43,6 +43,10 @@ public class OpenAiLlmConfig {
         String teacherQuizDeveloperPromptTemplate = readResourceAsString(promptDir + "/teacher-quiz-developer.txt");
         String adaptivePracticeSystemPrompt = readResourceAsString(promptDir + "/adaptive-practice-system.txt");
         String adaptivePracticeDeveloperPromptTemplate = readResourceAsString(promptDir + "/adaptive-practice-developer.txt");
+        String interviewPracticeSystemPrompt = readResourceAsString(promptDir + "/interview-practice-system.txt");
+        String interviewPracticeDeveloperPromptTemplate = readResourceAsString(promptDir + "/interview-practice-developer.txt");
+        String interviewCritiqueSystemPrompt = readResourceAsString(promptDir + "/interview-critique-system.txt");
+        String interviewCritiqueDeveloperPromptTemplate = readResourceAsString(promptDir + "/interview-critique-developer.txt");
         String longExamSystemPrompt = readResourceAsString(promptDir + "/long-exam-system.txt");
         String longExamDeveloperPromptTemplate = readResourceAsString(promptDir + "/long-exam-developer.txt");
         JsonNode responseSchema = readResourceAsJson(promptDir + "/schema.json", objectMapper);
@@ -60,6 +64,10 @@ public class OpenAiLlmConfig {
                 teacherQuizDeveloperPromptTemplate,
                 adaptivePracticeSystemPrompt,
                 adaptivePracticeDeveloperPromptTemplate,
+                interviewPracticeSystemPrompt,
+                interviewPracticeDeveloperPromptTemplate,
+                interviewCritiqueSystemPrompt,
+                interviewCritiqueDeveloperPromptTemplate,
                 longExamSystemPrompt,
                 longExamDeveloperPromptTemplate
         );

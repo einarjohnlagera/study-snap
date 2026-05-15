@@ -60,11 +60,13 @@ Designed for serious learners preparing for board and entrance exams.
 - `100` Study Packs / month
 - `50` Quizzes / month
 - `30` Adaptive Practice sessions / month
+- `10` Interview Practice sessions / month
 - Unlimited exports
 
 **Features**
 
 - Adaptive Practice (higher limit — `30` sessions / month)
+- Interview Practice (`10` sessions / month, Professional profile)
 - Difficulty selection (Easy / Medium / Hard)
 - Board Exam Mode
 - Long Exam Mode
@@ -106,6 +108,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Exports / month | 2 | 15 | Unlimited |
 | Topic note generation | Limited | Higher | Highest |
 | Adaptive Practice | — | 10 sessions | 30 sessions |
+| Interview Practice | — | — | 10 sessions |
 | Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | ✓ |
 | Long Exam Mode | — | — | ✓ |

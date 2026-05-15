@@ -212,6 +212,10 @@ export type AnalyticsEventType =
   | "LONG_EXAM_FORFEITED"
   | "ADAPTIVE_PRACTICE_STARTED"
   | "ADAPTIVE_PRACTICE_COMPLETED"
+  | "INTERVIEW_PRACTICE_STARTED"
+  | "INTERVIEW_PRACTICE_COMPLETED"
+  | "INTERVIEW_PRACTICE_FORFEITED"
+  | "INTERVIEW_PRACTICE_QUOTA_EXHAUSTED"
   | "PAYWALL_VIEWED"
   | "PAYWALL_DISMISSED"
   | "FEATURE_LOCKED_CLICKED"
@@ -758,6 +762,39 @@ export type LongExamMasteryReportResponse = {
   suggestedNextStep: string;
 };
 
+export type InterviewPracticeStartResponse = {
+  sessionId: string;
+  status: QuizSessionStatus;
+  noteId: string;
+  studyPackId: string;
+  questionCount: number;
+  currentQuestionIndex: number;
+  softTimerSeconds: number;
+  question: QuizItem | null;
+};
+
+export type InterviewPracticeAnswerResponse = {
+  verdict: "STRONG" | "WORKABLE" | "RECONSIDER";
+  rationale: string;
+  followUp: string;
+  nextQuestion: QuizItem | null;
+};
+
+export type InterviewReadinessReportResponse = {
+  sessionId: string;
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  band: "READY" | "ALMOST_READY" | "NEEDS_PRACTICE";
+  strengths: string[];
+  gaps: Array<{
+    concept: string;
+    noteId: string;
+  }>;
+  talkingPoints: string[];
+  pacingNotes: number[];
+};
+
 export type ChallengeQuizPerformanceSummaryResponse = {
   bestScorePercentage: number | null;
   attempts: number;
@@ -803,7 +840,10 @@ export type BillingUsageSummaryResponse = {
   challengeQuizLimit: number;
   adaptivePracticeUsed: number;
   adaptivePracticeLimit: number;
+  interviewPracticeUsed: number;
+  interviewPracticeLimit: number;
   adaptivePracticeAvailable: boolean;
+  interviewPracticeAvailable: boolean;
   difficultySelectionAvailable: boolean;
 };
 
@@ -2370,6 +2410,65 @@ export async function forfeitLongExamSession(
     true,
   );
   return parseApiResponse<SimpleMessageResponse>(response, "Could not forfeit Long Exam.");
+}
+
+export async function startInterviewPractice(
+  body: { noteId: string; questionCount: number },
+): Promise<InterviewPracticeStartResponse> {
+  const response = await fetchWithAuth(
+    "/interview-practice/start",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(body),
+    },
+    true,
+  );
+  return parseApiResponse<InterviewPracticeStartResponse>(response, "Could not start Interview Practice.");
+}
+
+export async function answerInterviewPracticeQuestion(
+  sessionId: string,
+  body: { questionIndex: number; selectedChoice: "A" | "B" | "C" | "D"; timeSpentSeconds: number },
+): Promise<InterviewPracticeAnswerResponse> {
+  const response = await fetchWithAuth(
+    `/interview-practice/sessions/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(body),
+    },
+    true,
+  );
+  return parseApiResponse<InterviewPracticeAnswerResponse>(response, "Could not review your interview answer.");
+}
+
+export async function completeInterviewPracticeSession(
+  sessionId: string,
+): Promise<InterviewReadinessReportResponse> {
+  const response = await fetchWithAuth(
+    `/interview-practice/sessions/${sessionId}/complete`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<InterviewReadinessReportResponse>(response, "Could not complete Interview Practice.");
+}
+
+export async function forfeitInterviewPracticeSession(
+  sessionId: string,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/interview-practice/sessions/${sessionId}/forfeit`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not forfeit Interview Practice.");
 }
 
 export async function getTodayFocus(): Promise<TodayFocusResponse> {
