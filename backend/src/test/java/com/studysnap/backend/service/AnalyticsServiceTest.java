@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,7 +74,7 @@ class AnalyticsServiceTest {
 
     @Test
     void trackEvent_swallowsPersistenceFailures() {
-        when(analyticsEventRepository.save(org.mockito.ArgumentMatchers.any(AnalyticsEventEntity.class)))
+        when(analyticsEventRepository.save(any(AnalyticsEventEntity.class)))
                 .thenThrow(new RuntimeException("db down"));
 
         assertThatCode(() -> analyticsService.trackEvent(

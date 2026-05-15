@@ -104,7 +104,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         if (weakConcepts == null || weakConcepts.isEmpty()) {
             return List.of();
         }
-        int normalizedCount = Math.max(5, Math.min(10, questionCount));
+        int normalizedCount = Math.clamp(questionCount, 5, 10);
         return IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = weakConcepts.get(index % weakConcepts.size());
@@ -138,7 +138,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         List<String> concepts = keyConcepts == null || keyConcepts.isEmpty()
                 ? List.of("Core Concept")
                 : keyConcepts;
-        int normalizedCount = Math.max(10, Math.min(15, questionCount));
+        int normalizedCount = Math.clamp(questionCount, 10, 15);
         return IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = concepts.get(index % concepts.size());
@@ -229,7 +229,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
             int questionCount,
             StudyPackGenerationContext context
     ) {
-        int normalizedCount = Math.max(5, Math.min(12, questionCount));
+        int normalizedCount = Math.clamp(questionCount, 5, 12);
         String concept = context != null && context.subject() != null && !context.subject().isBlank()
                 ? context.subject()
                 : "Core Concept";

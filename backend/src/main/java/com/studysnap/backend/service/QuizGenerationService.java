@@ -262,7 +262,7 @@ public class QuizGenerationService {
 
     private void maybeApplyMockDelay() {
         int configuredDelayMs = properties.getQuizGeneration().getMockDelayMs();
-        int normalizedDelayMs = Math.max(0, Math.min(configuredDelayMs, MAX_MOCK_DELAY_MS));
+        int normalizedDelayMs = Math.clamp(configuredDelayMs, 0, MAX_MOCK_DELAY_MS);
         if (normalizedDelayMs <= 0) {
             return;
         }

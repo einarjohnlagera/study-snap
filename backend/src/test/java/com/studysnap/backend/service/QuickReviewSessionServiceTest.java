@@ -28,6 +28,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Pageable;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
@@ -648,6 +650,54 @@ class QuickReviewSessionServiceTest {
                 .hasMessage("Quick Review session must be completed before saving confidence feedback.")
                 .extracting(ex -> ((AppException) ex).getCode())
                 .isEqualTo("SESSION_NOT_COMPLETED");
+    }
+
+    @Test
+    void listRecentSessions_clampsLimitBelowMinimumToOne() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(StudyPackEntityBuilder.aStudyPack().withId(studyPackId).withOwnerUserId(userId).build()));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.QUICK_REVIEW), pageableCaptor.capture()))
+                .thenReturn(List.of());
+
+        quickReviewSessionService.listRecentSessions(studyPackId.toString(), userId, 0);
+
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(1);
+    }
+
+    @Test
+    void listRecentSessions_clampsLimitAboveMaximumToTen() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(StudyPackEntityBuilder.aStudyPack().withId(studyPackId).withOwnerUserId(userId).build()));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.QUICK_REVIEW), pageableCaptor.capture()))
+                .thenReturn(List.of());
+
+        quickReviewSessionService.listRecentSessions(studyPackId.toString(), userId, 15);
+
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(10);
+    }
+
+    @Test
+    void listRecentSessions_passesValidLimitThrough() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(StudyPackEntityBuilder.aStudyPack().withId(studyPackId).withOwnerUserId(userId).build()));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.QUICK_REVIEW), pageableCaptor.capture()))
+                .thenReturn(List.of());
+
+        quickReviewSessionService.listRecentSessions(studyPackId.toString(), userId, 5);
+
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId, int quizCount) {

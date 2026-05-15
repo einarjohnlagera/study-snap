@@ -257,7 +257,7 @@ public class LongExamService {
         assertSessionInProgress(session);
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        int currentQuestionIndex = Math.max(0, Math.min(request.questionIndex(), Math.max(0, quiz.size() - 1)));
+        int currentQuestionIndex = Math.clamp(request.questionIndex(), 0, Math.max(0, quiz.size() - 1));
         session.setCurrentQuestionIndex(currentQuestionIndex);
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(
                 session.getSessionState(),
