@@ -21,6 +21,7 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 - **Faster quiz generation** — Board Exam now uses dedicated simulation-framed prompts; Long Exam start returns `GENERATING` immediately and completes generation in the background; Long Exam generation splits work across parallel LLM calls with sequential fallback
 - **Subject landing pages** — server-rendered `/public/library/[subject]` pages with per-subject metadata, decay-ranked sections, and static generation
 - **Stale docs cleanup** — removed 17 stale/legacy files; merged AI generation spec and overflow menu rules into active docs; renamed `SPEC.md` → `BILLING_ADDENDUM.md`
+- **Help Center strengthened for non-technical users** — split the old "Study Packs & Quizzes" card into two focused cards (Study Packs and Quiz Modes); added a Board Exam Guide card with a 4-step board exam workflow, tips, and a profile-switch CTA; Quiz Modes guide now covers all 5 modes with plan badges (Plus/Pro); Study Packs guide rewritten with 3 sections, bullets, and a tip callout; corrected Adaptive Practice badge from "Pro" to "Plus / Pro"; added Note vs Study Pack mental model to Getting Started step 1; updated Teacher Guide steps 3–4 with explicit location context for Quiz Preview and Export; updated Student Guide and Getting Started to mention Long Exam and Board Exam Mode
 
 ---
 
