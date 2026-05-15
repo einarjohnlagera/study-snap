@@ -17,12 +17,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,12 +72,14 @@ class OpenAiLlmStudyPackServiceTest {
                 "Note generation developer prompt for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} Built for studying, not just exploring information. Max {MAX_WORDS} words.",
                 "Challenge quiz system prompt",
                 "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Board exam system prompt",
+                "Board exam developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Teacher quiz system prompt",
                 "Teacher quiz developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE}",
                 "Adaptive practice system prompt",
                 "Adaptive practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Long exam system prompt",
-                "Long exam developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
+                "Long exam developer prompt for {QUESTION_COUNT}. {BATCH_HINT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
             )
         );
 
@@ -596,6 +602,93 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateBoardExamQuiz_usesBoardExamPrompts() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+
+        service.generateBoardExamQuiz(
+            "Cell Respiration Review",
+            "Cell respiration summary",
+            List.of("ATP production"),
+            List.of("What is the main goal of cell respiration?"),
+            2,
+            "mixed",
+            new StudyPackGenerationContext(LearnerLevel.BOARD_EXAM_REVIEW, "Biology", "Biology", List.of())
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+            .contains("Board exam system prompt")
+            .contains("Board exam developer prompt")
+            .doesNotContain("Challenge quiz system prompt")
+            .doesNotContain("Challenge quiz developer prompt");
+    }
+
+    @Test
+    void generateLongExamParallel_mergesAndDeduplicatesBatchResults() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode batch1 = buildGeneratedQuizPayload("Batch A", 13);
+        ObjectNode batch2 = buildGeneratedQuizPayload("Batch B", 13);
+        ((ArrayNode) batch2.get("questions")).set(0, generatedQuizItem(
+            "Batch A question 0",
+            List.of("Correct 0", "Choice B", "Choice C", "Choice D"),
+            "A",
+            "Explanation 0",
+            "Concept 0"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(
+            generatedQuizResponseJson(batch1),
+            generatedQuizResponseJson(batch2)
+        );
+
+        List<QuizItem> quizItems = service.generateLongExamParallel(
+            "Long Exam Review",
+            "Summary",
+            List.of("Concept"),
+            List.of(),
+            14,
+            "medium",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()),
+            new DirectAsyncTaskExecutor()
+        );
+
+        assertThat(quizItems).hasSize(14);
+        assertThat(quizItems.stream().map(QuizItem::question).distinct()).hasSize(14);
+        assertThat(quizItems.stream().map(QuizItem::question))
+            .contains("Batch A question 0", "Batch B question 1");
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec, times(2)).body(requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues())
+            .anySatisfy(body -> assertThat(body).contains("Generate questions covering the first half of the material."))
+            .anySatisfy(body -> assertThat(body).contains("Generate questions covering the second half of the material."));
+    }
+
+    @Test
+    void generateLongExamParallelFallsBackToSequentialWhenBatchFails() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenThrow(new RuntimeException("batch failed"))
+            .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Batch B", 13)))
+            .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Sequential", 14)));
+
+        List<QuizItem> quizItems = service.generateLongExamParallel(
+            "Long Exam Review",
+            "Summary",
+            List.of("Concept"),
+            List.of(),
+            14,
+            "medium",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of()),
+            new DirectAsyncTaskExecutor()
+        );
+
+        assertThat(quizItems).hasSize(14);
+        assertThat(quizItems.getFirst().question()).isEqualTo("Sequential question 0");
+        verify(responseSpec, times(3)).body(String.class);
+    }
+
+    @Test
     void generateChallengeQuiz_allowsDistinctMathExpressionChoices() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = buildGeneratedQuizPayload();
@@ -932,6 +1025,21 @@ class OpenAiLlmStudyPackServiceTest {
         return payload;
     }
 
+    private ObjectNode buildGeneratedQuizPayload(String prefix, int count) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        for (int index = 0; index < count; index++) {
+            questions.add(generatedQuizItem(
+                prefix + " question " + index,
+                List.of("Correct " + index, "Choice B", "Choice C", "Choice D"),
+                "A",
+                "Explanation " + index,
+                "Concept " + index
+            ));
+        }
+        return payload;
+    }
+
     private ObjectNode promptQuizItem(String question, List<String> choices, String answer, String concept) {
         ObjectNode item = objectMapper.createObjectNode();
         item.put("question", question);
@@ -955,5 +1063,32 @@ class OpenAiLlmStudyPackServiceTest {
         item.put("explanation", explanation);
         item.put("concept", concept);
         return item;
+    }
+
+    private static final class DirectAsyncTaskExecutor implements AsyncTaskExecutor {
+        @Override
+        public void execute(Runnable task, long startTimeout) {
+            task.run();
+        }
+
+        @Override
+        public void execute(Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public Future<?> submit(Runnable task) {
+            task.run();
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public <T> Future<T> submit(Callable<T> task) {
+            try {
+                return CompletableFuture.completedFuture(task.call());
+            } catch (Exception ex) {
+                return CompletableFuture.failedFuture(ex);
+            }
+        }
     }
 }

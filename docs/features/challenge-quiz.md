@@ -60,6 +60,12 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 - Challenge mode starts with **5 questions** (`INITIAL_CHALLENGE_QUIZ_COUNT = 5`)
 - Board Exam Mode generates based on the user's learner profile (10–15 questions) and does not use progressive generation
 
+### AI Generation Spec
+
+- Challenge mode uses `challenge-quiz-*.txt` prompts for flexible practice with stakes.
+- Board Exam uses `board-exam-*.txt` prompts for high-stakes licensure / certification simulation framing.
+- Do not route Board Exam through `generateChallengeQuiz()`; it must call the dedicated Board Exam generation method while keeping the fixed question count and no-progressive-generation contract.
+
 ## Progressive Quiz Generation (Challenge mode only)
 
 Challenge mode supports on-demand question batching within a live session:

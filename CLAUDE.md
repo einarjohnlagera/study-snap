@@ -148,7 +148,7 @@ NoteLib does not overwrite generated content. The "Make a Copy" model is enforce
 - Throw named exception subclasses (e.g. `NoteNotFoundException`) rather than `new AppException(...)` inline. Create a new subclass if none exists.
 - Repeated string literals in the same class must be extracted to `private static final` constants.
 - `assertThatThrownBy` lambdas must contain exactly one method call (Sonar S5778).
-- Do not use `Math.clamp` — use `Math.min(max, Math.max(min, value))` instead.
+- Use `Math.clamp(value, min, max)` for range-clamping (Java 21 standard; Sonar S6877 flags the nested `Math.min/Math.max` form).
 
 **Frontend:**
 - Upgrade CTAs always go through `getUpgradeCtas(currentPlan)` from `src/config/plans.ts`. Never hardcode upgrade copy.

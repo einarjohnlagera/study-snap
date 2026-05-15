@@ -6,6 +6,7 @@ import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -103,7 +104,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         if (weakConcepts == null || weakConcepts.isEmpty()) {
             return List.of();
         }
-        int normalizedCount = Math.max(5, Math.min(10, questionCount));
+        int normalizedCount = Math.clamp(questionCount, 5, 10);
         return IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = weakConcepts.get(index % weakConcepts.size());
@@ -137,7 +138,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         List<String> concepts = keyConcepts == null || keyConcepts.isEmpty()
                 ? List.of("Core Concept")
                 : keyConcepts;
-        int normalizedCount = Math.max(10, Math.min(15, questionCount));
+        int normalizedCount = Math.clamp(questionCount, 10, 15);
         return IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = concepts.get(index % concepts.size());
@@ -179,6 +180,48 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
+    public List<QuizItem> generateBoardExamQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateLongExamParallel(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int totalQuestions,
+            String difficulty,
+            StudyPackGenerationContext context,
+            AsyncTaskExecutor taskExecutor
+    ) {
+        return generateLongExam(
+                studyPackTitle,
+                studyPackSummary,
+                keyConcepts,
+                disallowedQuestions,
+                totalQuestions,
+                difficulty,
+                context
+        );
+    }
+
+    @Override
     public List<QuizItem> generateTeacherQuiz(
             String noteTitle,
             String noteContent,
@@ -186,7 +229,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
             int questionCount,
             StudyPackGenerationContext context
     ) {
-        int normalizedCount = Math.max(5, Math.min(12, questionCount));
+        int normalizedCount = Math.clamp(questionCount, 5, 12);
         String concept = context != null && context.subject() != null && !context.subject().isBlank()
                 ? context.subject()
                 : "Core Concept";

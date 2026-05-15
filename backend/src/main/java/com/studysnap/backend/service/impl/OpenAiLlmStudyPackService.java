@@ -14,6 +14,7 @@ import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.KeyConceptSanitizer;
 import com.studysnap.backend.util.LlmResponseUtils;
+import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizValidationUtils;
 import com.studysnap.backend.util.StringNormalizationUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
@@ -23,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 @Service
@@ -53,9 +56,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
+    private static final int PARALLEL_BUFFER = 6;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
     private static final int MAX_LOG_VALUE_LENGTH = 80;
+    private static final String LONG_EXAM_FIRST_HALF_HINT = "Generate questions covering the first half of the material.";
+    private static final String LONG_EXAM_SECOND_HALF_HINT = "Generate questions covering the second half of the material.";
+    private static final String PARALLEL_LONG_EXAM_FALLBACK_LOG =
+            "Parallel long exam generation failed, falling back to sequential: {}";
     private static final List<String> DISALLOWED_NOTE_GENERATION_PHRASES = List.of(
             "important study topic",
             "important topic",
@@ -462,7 +470,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
-    private ArrayNode buildLongExamInputMessages(
+    private ArrayNode buildBoardExamInputMessages(
             String studyPackSummary,
             List<String> keyConcepts,
             List<String> disallowedQuestions,
@@ -471,10 +479,60 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             StudyPackGenerationContext context
     ) {
         ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.boardExamSystemPrompt()));
+        boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
+        String boardExamDeveloperPrompt = promptResources.boardExamDeveloperPromptTemplate()
+                .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
+                .replace("{DIFFICULTY}", difficulty)
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.BOARD_EXAM))
+                .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.BOARD_EXAM))
+                .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.BOARD_EXAM));
+        input.add(buildTextMessage("developer", boardExamDeveloperPrompt));
+        input.add(buildTextMessage(
+                "user",
+                buildLearnerContextBlock(context) + "\n" +
+                        "Summary: " + studyPackSummary + "\n" +
+                        "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
+                        "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
+        ));
+        return input;
+    }
+
+    private ArrayNode buildLongExamInputMessages(
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        return buildLongExamInputMessages(
+                studyPackSummary,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context,
+                ""
+        );
+    }
+
+    private ArrayNode buildLongExamInputMessages(
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context,
+            String batchHint
+    ) {
+        ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.longExamSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
         String longExamDeveloperPrompt = promptResources.longExamDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
+                .replace("{BATCH_HINT}", batchHint == null ? "" : batchHint)
                 .replace("{DIFFICULTY}", difficulty)
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
                 .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.LONG_EXAM))
@@ -862,6 +920,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return switch (quizMode) {
             case QUICK_REVIEW -> "The material appears quantitative. Include at most one simple numerical or formula-based question if it is clearly supported by the notes, and keep the rest fast concept checks.";
             case CHALLENGE -> "The material appears quantitative. Include computation, formula-based, or problem-solving multiple-choice questions when appropriate. Use numbers, word problems, or applied calculations when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
+            case BOARD_EXAM -> "The material appears quantitative. Include exam-relevant computations, formula-based judgment, and applied interpretation when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
             case LONG_EXAM -> "The material appears quantitative. Include a balanced set of computation, formula-based, and conceptual interpretation questions when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
             case ADAPTIVE_PRACTICE -> "The material appears quantitative. Focus weak-concept reinforcement on targeted numerical or formula-based questions when appropriate. Explanations for computation questions must show clear step-by-step solution flow.";
             case TEACHER_PREVIEW -> "The material appears quantitative. Include computation or formula-based questions only when the notes clearly support them. Explanations should show the reasoning or steps a teacher would want to review before export.";
@@ -872,6 +931,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return switch (quizMode) {
             case QUICK_REVIEW -> "Each question should feel answerable in about 30 to 60 seconds.";
             case CHALLENGE -> "Each question should feel answerable in about 1 to 2 minutes.";
+            case BOARD_EXAM -> "Each question should feel answerable in about 1 minute under high-stakes exam pacing.";
             case LONG_EXAM -> "Each question should feel answerable in about 1 to 2 minutes as part of a longer mastery exam.";
             case ADAPTIVE_PRACTICE -> "Each question should feel answerable in about 45 to 90 seconds.";
             case TEACHER_PREVIEW -> "Each question should feel classroom-ready rather than speed-focused, with enough substance for teachers to review answers and explanations before export.";
@@ -1069,6 +1129,34 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
+    public List<QuizItem> generateBoardExamQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
+        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+        return generateQuizWithSchema(
+                buildBoardExamInputMessages(
+                        studyPackSummary == null ? "" : studyPackSummary,
+                        normalizedKeyConcepts,
+                        normalizedDisallowedQuestions,
+                        questionCount,
+                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
+                        context
+                ),
+                questionCount,
+                "note_lib_board_exam",
+                "Board exam quiz generation",
+                normalizedKeyConcepts
+        );
+    }
+
+    @Override
     public List<QuizItem> generateLongExam(
             String studyPackTitle,
             String studyPackSummary,
@@ -1092,6 +1180,110 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_long_exam",
                 "Long exam generation",
+                normalizedKeyConcepts
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateLongExamParallel(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int totalQuestions,
+            String difficulty,
+            StudyPackGenerationContext context,
+            AsyncTaskExecutor taskExecutor
+    ) {
+        int batchSize = (int) Math.ceil(totalQuestions / 2.0) + PARALLEL_BUFFER;
+        CompletableFuture<List<QuizItem>> firstBatch = CompletableFuture.supplyAsync(
+                () -> generateLongExamBatch(
+                        studyPackTitle,
+                        studyPackSummary,
+                        keyConcepts,
+                        disallowedQuestions,
+                        batchSize,
+                        difficulty,
+                        context,
+                        LONG_EXAM_FIRST_HALF_HINT
+                ),
+                taskExecutor::execute
+        );
+        CompletableFuture<List<QuizItem>> secondBatch = CompletableFuture.supplyAsync(
+                () -> generateLongExamBatch(
+                        studyPackTitle,
+                        studyPackSummary,
+                        keyConcepts,
+                        disallowedQuestions,
+                        batchSize,
+                        difficulty,
+                        context,
+                        LONG_EXAM_SECOND_HALF_HINT
+                ),
+                taskExecutor::execute
+        );
+        try {
+            CompletableFuture.allOf(firstBatch, secondBatch).join();
+            List<QuizItem> batch1 = firstBatch.get();
+            List<QuizItem> batch2 = secondBatch.get();
+            List<QuizItem> uniqueBatch2 = QuizDeduplicationUtils.uniqueQuestions(
+                    batch2,
+                    QuizDeduplicationUtils.toNormalizedQuestionSet(batch1)
+            );
+            List<QuizItem> merged = new ArrayList<>(batch1);
+            merged.addAll(uniqueBatch2);
+            return merged.subList(0, Math.min(merged.size(), totalQuestions));
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn(PARALLEL_LONG_EXAM_FALLBACK_LOG, ex.getMessage());
+            return generateLongExam(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    totalQuestions,
+                    difficulty,
+                    context
+            );
+        } catch (Exception ex) {
+            log.warn(PARALLEL_LONG_EXAM_FALLBACK_LOG, ex.getMessage());
+            return generateLongExam(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    totalQuestions,
+                    difficulty,
+                    context
+            );
+        }
+    }
+
+    private List<QuizItem> generateLongExamBatch(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context,
+            String batchHint
+    ) {
+        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
+        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+        return generateQuizWithSchema(
+                buildLongExamInputMessages(
+                        studyPackSummary == null ? "" : studyPackSummary,
+                        normalizedKeyConcepts,
+                        normalizedDisallowedQuestions,
+                        questionCount,
+                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
+                        context,
+                        batchHint
+                ),
+                questionCount,
+                "note_lib_long_exam",
+                "Long exam generation batch",
                 normalizedKeyConcepts
         );
     }
@@ -1509,6 +1701,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private enum QuizMode {
         QUICK_REVIEW,
         CHALLENGE,
+        BOARD_EXAM,
         LONG_EXAM,
         ADAPTIVE_PRACTICE,
         TEACHER_PREVIEW

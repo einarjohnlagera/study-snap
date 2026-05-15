@@ -1,0 +1,17 @@
+TASK:
+Generate exactly {QUESTION_COUNT} board exam simulation questions from the study material below.
+
+RULES:
+- Base ONLY on the supplied summary and key concepts.
+- Difficulty target: {DIFFICULTY}.
+- Learner level: {LEARNER_LEVEL}.
+- {LEARNER_LEVEL_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- {TIME_EXPECTATION}
+- Distribute questions across different knowledge domains in the note.
+- Simulate a high-stakes professional licensure or board certification setting.
+- Each question must test applied reasoning, judgment, and mastery rather than surface recall.
+- Distractors must be plausible and reflect common misconceptions, not obviously wrong.
+- Each question should be answerable by a well-prepared candidate; avoid trick questions.
+- Avoid reusing or closely paraphrasing any excluded questions.
+- Return ONLY valid JSON matching the required schema.

@@ -169,6 +169,7 @@ class ChallengeQuizServiceTest {
         verify(authService).requireEmailVerified(userId);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
@@ -326,6 +327,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.mode()).isEqualTo("challenge");
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
+        verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
     }
 
@@ -367,7 +369,7 @@ class ChallengeQuizServiceTest {
                 studyPack.getSubject(),
                 studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
         ));
-        when(quizGenerationService.generateChallengeQuiz(
+        when(quizGenerationService.generateBoardExamQuiz(
                 eq("Pack title"),
                 eq("Summary"),
                 eq(List.of("Concept")),
@@ -402,6 +404,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
         assertThat(response.monthlyLimit()).isEqualTo(5);
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
+        verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(featureGateService, never()).checkFeatureAccess(PlanType.FREE, Feature.DIFFICULTY_SELECTION);
     }
 

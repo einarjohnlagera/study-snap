@@ -1,5 +1,6 @@
 TASK:
 Generate exactly {QUESTION_COUNT} NEW multiple-choice questions for a Long Exam mastery test.
+{BATCH_HINT}
 
 RULES:
 - Base ONLY on the provided summary and key concepts.

@@ -181,15 +181,25 @@ public class ChallengeQuizService {
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         int quizCount = MODE_BOARD_EXAM.equals(selectedMode) ? profile.questionCount() : INITIAL_CHALLENGE_QUIZ_COUNT;
         try {
-            List<QuizItem> generatedQuiz = quizGenerationService.generateChallengeQuiz(
-                    studyPack.getTitle(),
-                    studyPack.getSummary(),
-                    getKeyConcepts(studyPack),
-                    disallowedQuestions,
-                    quizCount,
-                    profile.difficulty(),
-                    generationContext
-            );
+            List<QuizItem> generatedQuiz = MODE_BOARD_EXAM.equals(selectedMode)
+                    ? quizGenerationService.generateBoardExamQuiz(
+                            studyPack.getTitle(),
+                            studyPack.getSummary(),
+                            getKeyConcepts(studyPack),
+                            disallowedQuestions,
+                            quizCount,
+                            profile.difficulty(),
+                            generationContext
+                    )
+                    : quizGenerationService.generateChallengeQuiz(
+                            studyPack.getTitle(),
+                            studyPack.getSummary(),
+                            getKeyConcepts(studyPack),
+                            disallowedQuestions,
+                            quizCount,
+                            profile.difficulty(),
+                            generationContext
+                    );
             List<QuizItem> challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuiz,
                     QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
@@ -242,7 +252,7 @@ public class ChallengeQuizService {
         UUID studyPackId = parseStudyPackId(studyPackIdRaw);
         findOwnedStudyPackOrThrow(studyPackId, userId);
 
-        int normalizedLimit = Math.max(1, Math.min(limit, MAX_RECENT_SESSION_LIMIT));
+        int normalizedLimit = Math.clamp(limit, 1, MAX_RECENT_SESSION_LIMIT);
         return quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
@@ -301,7 +311,7 @@ public class ChallengeQuizService {
         assertSessionInProgress(session);
 
         int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
-        int normalizedIndex = Math.max(0, Math.min(request.currentQuestionIndex(), Math.max(0, totalQuestions - 1)));
+        int normalizedIndex = Math.clamp(request.currentQuestionIndex(), 0, Math.max(0, totalQuestions - 1));
         session.setCurrentQuestionIndex(normalizedIndex);
         session.setSessionState(mergeSessionState(session.getSessionState(), request.sessionState()));
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
@@ -836,7 +846,7 @@ public class ChallengeQuizService {
     ) {
         if (quiz == null || quiz.isEmpty()) {
             int totalQuestions = Math.max(1, fallbackTotalQuestions);
-            int correctAnswers = Math.max(0, Math.min(fallbackCorrectAnswers, totalQuestions));
+            int correctAnswers = Math.clamp(fallbackCorrectAnswers, 0, totalQuestions);
             BigDecimal percentage = BigDecimal.valueOf(correctAnswers)
                     .multiply(BigDecimal.valueOf(100))
                     .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);

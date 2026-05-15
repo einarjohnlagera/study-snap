@@ -9,14 +9,18 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 ### Planned Scope
 
 - ~~**Subject landing pages (SEO)**~~ ✅ — see Shipped below
-- **Faster quiz generation** — implement findings from the latency investigation: streaming responses, model selection (`gpt-4.1-mini` for quiz generation), and/or early session creation; deferred from v0.13.0
+- ~~**Faster quiz generation**~~ ✅ — see Shipped below
 - **Interview Practice Mode (Professional Profile)** — conversational AI evaluation variant for mock interviews and applied learning scenarios; deferred from v0.13.0 (requires evaluation engine not present in current quiz architecture)
 - **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; deferred from v0.13.0
-- **Stale docs cleanup** — audit and update or remove `docs/` files still referencing v0.11.0 or earlier resolved items; deferred from v0.13.0
+- ~~**Faster quiz generation**~~ ✅ — see Shipped below
+- **Interview Practice Mode (Professional Profile)** — conversational AI evaluation variant for mock interviews and applied learning scenarios; deferred from v0.13.0 (requires evaluation engine not present in current quiz architecture)
+- **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; deferred from v0.13.0
 
 ### ✅ Shipped
 
+- **Faster quiz generation** — Board Exam now uses dedicated simulation-framed prompts; Long Exam start returns `GENERATING` immediately and completes generation in the background; Long Exam generation splits work across parallel LLM calls with sequential fallback
 - **Subject landing pages** — server-rendered `/public/library/[subject]` pages with per-subject metadata, decay-ranked sections, and static generation
+- **Stale docs cleanup** — removed 17 stale/legacy files; merged AI generation spec and overflow menu rules into active docs; renamed `SPEC.md` → `BILLING_ADDENDUM.md`
 
 ---
 
