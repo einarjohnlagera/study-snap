@@ -15,7 +15,8 @@ const STEPS: Step[] = [
     number: 1,
     icon: FileText,
     title: "Create a Note",
-    description: "Write or paste your study material — lecture notes, textbook excerpts, or reviewer content.",
+    description:
+      "Write or paste your study material — lecture notes, textbook excerpts, or reviewer content. A Note is your raw study material. A Study Pack is what NoteLib generates from it: a summary, key concepts, and quiz questions.",
     cta: { label: "Create Note", href: "/notes/new" },
   },
   {
@@ -29,7 +30,7 @@ const STEPS: Step[] = [
     number: 3,
     icon: Brain,
     title: "Practice with Quizzes",
-    description: "Use Quick Review to reinforce recall, or Challenge Quiz to test yourself under timed conditions.",
+    description: "Use Quick Review to warm up, Challenge Quiz to test yourself under timed conditions, or Long Exam and Board Exam Mode for high-stakes exam prep (Pro).",
     cta: { label: "Open Library", href: "/library" },
   },
 ];

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Download, FileText, Search } from "lucide-react";
+import { ArrowRight, FileText, Settings, Shield, Target, Timer } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -8,6 +8,7 @@ type Step = {
   icon: LucideIcon;
   title: string;
   description: string;
+  badge?: string;
   cta: { label: string; href: string };
 };
 
@@ -15,51 +16,53 @@ const STEPS: Step[] = [
   {
     number: 1,
     icon: FileText,
-    title: "Add Lesson Material",
+    title: "Build Your Notes by Topic",
     description:
-      "Paste your lesson notes, reviewer content, or teaching material. Save it as a note — this becomes the source for everything else.",
+      "Organize your reviewer material one topic at a time — one note per topic works best. The more complete the note, the better the generated exam.",
     cta: { label: "Create Note", href: "/notes/new" },
   },
   {
     number: 2,
-    icon: BookOpen,
-    title: "Generate a Quiz",
+    icon: Timer,
+    title: "Practice with Long Exam",
     description:
-      "Turn the note into a teacher-ready quiz with questions, answers, and explanations in one click.",
+      "Run a Long Exam to test yourself across a full topic under timed conditions. Set aside uninterrupted time — leaving the session forfeits your score.",
+    badge: "Pro",
     cta: { label: "Open Library", href: "/library" },
   },
   {
     number: 3,
-    icon: Search,
-    title: "Review the Output",
+    icon: Target,
+    title: "Review Your Mastery Report",
     description:
-      "From your Library, open the note and go to its Study Pack page. Click Quiz Preview to review every question with the correct answer and explanation already visible.",
-    cta: { label: "Open Library", href: "/library" },
+      "After each Long Exam, review weak domains and low-accuracy concepts. Use Adaptive Practice to drill the concepts you keep getting wrong.",
+    cta: { label: "See Dashboard", href: "/dashboard" },
   },
   {
     number: 4,
-    icon: Download,
-    title: "Export for Reuse",
+    icon: Shield,
+    title: "Simulate with Board Exam Mode",
     description:
-      "Inside Quiz Preview, click the Export button and choose Quiz Only or Quiz + Answers to download a classroom-ready DOCX.",
+      "When you're ready, run Board Exam Mode for a full high-stakes simulation — strict timer, no pausing, score report at the end.",
+    badge: "Pro",
     cta: { label: "Open Library", href: "/library" },
   },
 ];
 
 const TIPS = [
-  "Start with one lesson topic at a time — focused notes produce tighter quiz questions.",
-  "Clearer, well-structured notes lead to more accurate summaries and quiz outputs.",
-  "Review the generated answer key before printing or sharing with students.",
-  "Use Make a Copy on any note to refine material without losing the original Study Pack.",
+  "Long Exam is practice. Board Exam Mode is the simulation. Use Long Exam first to find gaps.",
+  "Both Long Exam and Board Exam have a strict timer — leaving the session forfeits your score.",
+  "The timer keeps running if you close the tab. Stay in the browser during both modes.",
+  "Use Adaptive Practice between long sessions to reinforce weak concepts before your next exam.",
+  "Preparing for boards? Switch your profile type in Settings to unlock Long Exam and Board Exam Mode.",
 ];
 
-export function TeacherGuide() {
+export function BoardExamGuide() {
   return (
     <div className="space-y-6">
-      {/* Study System */}
       <section className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Workflow
+          Study Workflow
         </p>
         <ol className="space-y-3">
           {STEPS.map((step, index) => {
@@ -77,6 +80,11 @@ export function TeacherGuide() {
                   <div className="mb-1.5 flex items-center gap-2">
                     <Icon className="h-4 w-4 shrink-0 text-foreground/60" aria-hidden="true" />
                     <p className="text-sm font-semibold text-foreground">{step.title}</p>
+                    {step.badge ? (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-foreground/60">
+                        {step.badge}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mb-2.5 text-xs leading-relaxed text-foreground/65">{step.description}</p>
                   <Link
@@ -93,17 +101,6 @@ export function TeacherGuide() {
         </ol>
       </section>
 
-      {/* Current limitations note */}
-      <section className="rounded-xl border border-dashed border-border bg-muted/10 px-4 py-3">
-        <p className="mb-1 text-sm font-medium text-foreground">Where NoteLib fits today</p>
-        <p className="text-xs leading-relaxed text-foreground/60">
-          Teacher-focused workflows are still improving. Right now, NoteLib works best for turning your lesson
-          notes into quiz material, answer keys, and exportable review content — a practical shortcut for
-          building reviewer resources faster.
-        </p>
-      </section>
-
-      {/* Tips */}
       <section className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           Tips
@@ -118,7 +115,6 @@ export function TeacherGuide() {
         </ul>
       </section>
 
-      {/* CTA */}
       <section className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
         <Link
           href="/notes/new"
@@ -127,13 +123,14 @@ export function TeacherGuide() {
           Create Note
         </Link>
         <Link
-          href="/public/library"
+          href="/settings"
           className={
             buttonVariants({ variant: "outline", size: "sm" }) +
             " inline-flex w-full items-center gap-1.5 sm:w-auto"
           }
         >
-          Browse Public Library
+          <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+          Switch Profile in Settings
         </Link>
       </section>
     </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
+import { ArrowRight, Award, BookOpen, Brain, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -11,6 +11,8 @@ import { GettingStartedGuide } from "@/components/help/getting-started-guide";
 import { CreatingNotesGuide } from "@/components/help/creating-notes-guide";
 import { StudyPacksGuide } from "@/components/help/study-packs-guide";
 import { ExportSharingGuide } from "@/components/help/export-sharing-guide";
+import { BoardExamGuide } from "@/components/help/board-exam-guide";
+import { QuizModesGuide } from "@/components/help/quiz-modes-guide";
 import { StudentGuide } from "@/components/help/student-guide";
 import { TeacherGuide } from "@/components/help/teacher-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -38,10 +40,16 @@ const HELP_CARDS: HelpCard[] = [
     description: "How to write, organize, and manage notes effectively.",
   },
   {
-    id: "study-packs-quizzes",
+    id: "study-packs",
     icon: BookOpen,
-    title: "Study Packs & Quizzes",
-    description: "Summaries, key concepts, and the three quiz modes explained.",
+    title: "Study Packs",
+    description: "What gets generated from your note — summary and key concepts.",
+  },
+  {
+    id: "quiz-modes",
+    icon: Brain,
+    title: "Quiz Modes",
+    description: "All five quiz modes explained — from Quick Review to Board Exam.",
   },
   {
     id: "export-sharing",
@@ -55,6 +63,13 @@ const HELP_CARDS: HelpCard[] = [
     title: "Student Guide",
     description: "A step-by-step study workflow to get the most out of NoteLib.",
     modalDescription: "Study smarter using notes.",
+  },
+  {
+    id: "board-exam-guide",
+    icon: Award,
+    title: "Board Exam Guide",
+    description: "Long Exam, Board Exam Mode, and a study workflow for high-stakes exam preparation.",
+    modalDescription: "Study smarter for licensure and board exams.",
   },
   {
     id: "teacher-guide",
@@ -71,10 +86,14 @@ function GuideContent({ cardId }: { cardId: string }) {
       return <GettingStartedGuide />;
     case "creating-notes":
       return <CreatingNotesGuide />;
-    case "study-packs-quizzes":
+    case "study-packs":
       return <StudyPacksGuide />;
+    case "quiz-modes":
+      return <QuizModesGuide />;
     case "export-sharing":
       return <ExportSharingGuide />;
+    case "board-exam-guide":
+      return <BoardExamGuide />;
     case "student-guide":
       return <StudentGuide />;
     case "teacher-guide":
