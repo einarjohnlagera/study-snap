@@ -66,6 +66,7 @@ export default function InterviewPracticePage() {
   const [report, setReport] = useState<InterviewReadinessReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const completingRef = useRef(false);
+  const modeSelectHref = note?.studyPackId ? `/study-packs/${note.studyPackId}/challenge-quiz` : noteHref;
 
   useEffect(() => {
     let active = true;
@@ -245,41 +246,64 @@ export default function InterviewPracticePage() {
       </div>
 
       {phase === "prestart" ? (
-        <Card className="space-y-5 p-4 sm:p-6">
+        <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-primary">Professional Profile</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">INTERVIEW PRACTICE</p>
             <h1 className="text-2xl font-semibold">Start Interview Practice</h1>
-            <p className="text-sm text-foreground/70">
-              {note?.title ? `Use ${note.title} for a coached scenario-based practice session.` : "Use one ready note for a coached scenario-based practice session."}
+            <p className="text-sm text-foreground/80">
+              Review your practice setup for {note?.title ?? "this note"}.
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {QUESTION_COUNT_OPTIONS.map((count) => (
-              <button
-                key={count}
-                type="button"
-                onClick={() => setQuestionCount(count)}
-                className={cn(
-                  "rounded-lg border p-4 text-left transition-colors",
-                  questionCount === count
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-border bg-background text-foreground/75 hover:border-foreground/30",
-                )}
-              >
-                <span className="block text-sm font-semibold">{count} questions</span>
-                <span className="text-xs text-foreground/60">
-                  {count === 5 ? "Focused warm-up" : "Full practice session"}
-                </span>
-              </button>
-            ))}
+
+          <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Session length</p>
+                <p>Pick how many scenarios to run.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {QUESTION_COUNT_OPTIONS.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => setQuestionCount(count)}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-left transition",
+                      questionCount === count
+                        ? "border-blue-500 bg-blue-500/10 text-foreground"
+                        : "border-border bg-background text-foreground/75 hover:border-foreground/30",
+                    )}
+                  >
+                    <span className="block text-sm font-medium">{count} questions</span>
+                    <span className="mt-1 block text-xs text-foreground/60">
+                      {count === 5 ? "Focused warm-up" : "Full practice session"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Soft timer</p>
+                <p>2 min per question. Non-enforcing - you can keep going past the timer.</p>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Format</p>
+                <p>Scenario MCQ with AI critique after each answer.</p>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Monthly limit</p>
+                <p>Counts toward your monthly Interview Practice limit (10/mo).</p>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-foreground/60">This will use 1 of your 10 Interview Practice sessions this month.</p>
+
           <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={() => router.push(modeSelectHref)}>
+              Choose another mode
+            </Button>
             <Button type="button" onClick={() => void handleStart()}>
               Start Interview Practice
-            </Button>
-            <Button type="button" variant="outline" onClick={() => router.push("/dashboard")}>
-              Cancel
             </Button>
           </div>
         </Card>

@@ -28,9 +28,9 @@ Professional Profile uses the full exam mode set with profile-aware label overri
 | Adaptive Practice | ✓ Plus / Pro | "Adaptive Practice" | Same engine; weak concept targeting is central for cert prep |
 | Long Exam | ✓ Pro only | **"Full Practice Exam"** | Same `LONG_EXAM` engine; label override only |
 | Board Exam | Hidden | — | Board Taker profile only |
-| Interview Practice (sub-mode) | ✓ Pro only | **"Interview Practice"** | Sub-mode of Adaptive Practice. Surfaced as a dedicated dashboard card, not a mode-selection tile. See "Interview Practice Mode (v0.14.0)" below. |
+| Interview Practice (sub-mode) | ✓ Pro only | **"Interview Practice"** | Sub-mode of Adaptive Practice. Surfaced as a dedicated dashboard card and a Professional mode-selection tile. See "Interview Practice Mode (v0.14.0)" below. |
 
-Label overrides are display-only. Engine discriminators (`CHALLENGE`, `LONG_EXAM`, `ADAPTIVE`) and all backend mechanics are unchanged. `exam-mode-visibility.ts` is the single source of truth for mode-selection visibility and label decisions. Interview Practice is **not** routed through `exam-mode-visibility.ts` because it is not on the mode-selection screen — it lives on the Professional dashboard.
+Label overrides are display-only. Engine discriminators (`CHALLENGE`, `LONG_EXAM`, `ADAPTIVE`) and all backend mechanics are unchanged. `exam-mode-visibility.ts` remains the source of truth for primary mode-selection visibility and label decisions. Interview Practice is rendered as a Professional-only sub-mode tile in the mode-selection UI while continuing to run through `ADAPTIVE` with `subMode: "INTERVIEW"`.
 
 Labels must **not** appear in backend APIs, session storage, or analytics event names — only in `exam-mode-visibility.ts` and the UI rendering layer.
 
@@ -73,7 +73,7 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 
 - **Audience**: Professional profile, Pro plan only
 - **Vibe**: Coached interview prep — scenario-based questions with per-answer AI critique, framed like a senior interviewer following up
-- **Surface**: Dedicated dashboard card on the Professional dashboard. **Not** on the mode-selection screen (which keeps two cards for Professional: Certification Review + Full Practice Exam)
+- **Surface**: Dedicated dashboard card on the Professional dashboard plus a Professional mode-selection tile. The mode-selection tile is the canonical per-note entry; the dashboard card auto-picks the most-recent ready note for quick re-entry.
 - **Differentiator from Adaptive Practice**: scenario-style prompts, per-answer AI critique mid-session, Interview Readiness Report instead of standard score result
 
 ### Setup
@@ -132,7 +132,7 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 
 ### Future direction (v0.15+)
 
-- **Multi-note Interview Practice**: pull questions across 2–3 notes from the same subject. Requires the same multi-source generation context as Multi-note Long Exam — do not build until that infrastructure proves stable.
+- **Multi-note Interview Practice (smart context aggregation)**: instead of single-note v1, generate from the base note PLUS related notes that share `courseProgram` AND at least one tag (e.g., `courseProgram="Software Engineer"` + tag `Java` → pull all Java-tagged notes under that program). Cap at 2–3 sibling notes to manage prompt size and per-session cost. Requires the same multi-source generation context as Multi-note Long Exam — build that infrastructure first, prove stability, then extend to Interview Practice. Re-validate cost math at v0.15.0 start since aggregating sibling notes increases prompt tokens against `gpt-4.1`.
 - **Structured interview templates** (e.g. "Backend Engineer = PL + DB + Behavioral"): would need a role taxonomy or user-defined template system. Out of scope until v1 usage data shows demand and v1 limitations are real.
 - **Open-ended / conversational evaluation**: free-text answers with AI rubric scoring instead of MC. Architecturally different — would need new session schema, new evaluation pipeline, new result model. Consider only if v1 usage proves the demand and the MC-with-critique format hits its ceiling.
 - **Profile / role enrichment**: capturing target role explicitly on the user profile (not on the note) to drive better generation context. Bigger architectural decision; do not bundle with Interview Practice work.
@@ -141,7 +141,7 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 
 ## Cross-Reference
 
-- Mode visibility and label overrides: `frontend/lib/exam-mode-visibility.ts` (source of truth for mode-selection only — Interview Practice is dashboard-surfaced)
+- Mode visibility and label overrides: `frontend/lib/exam-mode-visibility.ts` for primary modes; Interview Practice is a Professional-only sub-mode tile rendered in the mode-selection UI
 - Exam mode hierarchy and 5-mode contract: `docs/product/EXAM_MODES.md`
 - Adaptive Practice (parent mode): `docs/features/adaptive-practice.md`
 - Profile settings surface: `docs/features/profile.md`

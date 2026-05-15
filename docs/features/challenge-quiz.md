@@ -39,6 +39,12 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 
 - Skips mode-selection entirely; lands directly on the Challenge Quiz setup step
 
+**Professional:**
+
+- `Certification Review` — Challenge Quiz engine with professional-facing label
+- `Full Practice Exam` — Long Exam engine with professional-facing label
+- `Interview Practice` — Adaptive Practice sub-mode tile for Pro users; Free/Plus users see the Interview Practice paywall
+
 ### Long Exam backend (v0.13.0)
 
 - Long Exam Mode backend session support is shipped: `LONG_EXAM` sessions use the shared quiz-session table, generate and commit a fixed question set before the session begins, support `PAUSED` resume state, and return a mastery report on completion
@@ -59,6 +65,7 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 - active generation uses the shared generation lock and recovery flow
 - Challenge mode starts with **5 questions** (`INITIAL_CHALLENGE_QUIZ_COUNT = 5`)
 - Board Exam Mode generates based on the user's learner profile (10–15 questions) and does not use progressive generation
+- Board Exam Mode does not expose a difficulty selector; it defaults to Mixed to preserve exam-simulation framing
 
 ### AI Generation Spec
 

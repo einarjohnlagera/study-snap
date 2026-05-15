@@ -171,8 +171,8 @@ describe("ChallengeQuizPage", () => {
 
   function setupChallengePrestart(
     difficultySelectionAvailable = true,
-    profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" = "STUDENT",
-    planType?: "FREE" | "PRO",
+    profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" = "STUDENT",
+    planType?: "FREE" | "PLUS" | "PRO",
     options: {
       usedThisMonth?: number;
       monthlyLimit?: number;
@@ -318,7 +318,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     expect(await getModeCard("Long Exam Mode")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Board Exam Mode/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+    expect(screen.queryByText("Coming Soon")).not.toBeInTheDocument();
   });
 
   it("shows the cross-profile escape-hatch line for STUDENT", async () => {
@@ -330,30 +330,39 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText(/Preparing for boards/)).toBeInTheDocument();
   });
 
-  it("shows Long Exam coming-soon setup after STUDENT clicks Long Exam Mode", async () => {
+  it("routes students to Long Exam after clicking Long Exam Mode", async () => {
     setupChallengePrestart(true, "STUDENT");
 
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await getModeCard("Long Exam Mode"));
 
-    expect(await screen.findByRole("heading", { name: "Long Exam Mode" })).toBeInTheDocument();
-    expect(screen.getByText(/Long Exam Mode is in development/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Long Exam — Coming Soon" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam");
   });
 
-  it("returns to mode selection from Long Exam coming-soon screen", async () => {
-    setupChallengePrestart(true, "STUDENT");
+  it("shows Interview Practice for Professional Pro users and routes to the note session", async () => {
+    setupChallengePrestart(true, "PROFESSIONAL", "PRO");
 
     render(<ChallengeQuizPage />);
 
-    fireEvent.click(await getModeCard("Long Exam Mode"));
-    expect(await screen.findByRole("heading", { name: "Long Exam Mode" })).toBeInTheDocument();
+    expect(await getModeCard("Certification Review")).toBeInTheDocument();
+    expect(await getModeCard("Full Practice Exam")).toBeInTheDocument();
+    fireEvent.click(await getModeCard("Interview Practice"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose another mode" }));
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/interview-practice");
+  });
 
-    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+  it("opens the Interview Practice paywall for Professional non-Pro users", async () => {
+    setupChallengePrestart(false, "PROFESSIONAL", "PLUS");
+
+    render(<ChallengeQuizPage />);
+
+    const interviewPracticeCard = await getModeCard("Interview Practice");
+    expect(within(interviewPracticeCard).getByText("Pro")).toBeInTheDocument();
+    fireEvent.click(interviewPracticeCard);
+
+    expect(await screen.findByRole("dialog", { name: "Unlock Interview Practice" })).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for students even when an in-progress session exists", async () => {
@@ -481,18 +490,25 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await getModeCard("Board Exam Mode"));
 
-    expect(await screen.findByRole("heading", { name: "Board Exam Setup" })).toBeInTheDocument();
+    expect(await screen.findByText("BOARD EXAM MODE")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Begin Board Exam" })).toBeInTheDocument();
     expect(screen.getByText("Review the exam setup for Challenge Note before you begin.")).toBeInTheDocument();
-    expect(screen.getByText("Simulate a focused exam session with mixed difficulty.")).toBeInTheDocument();
-    expect(screen.getByText("Strict timed session.")).toBeInTheDocument();
-    expect(screen.getByText("No navigation during exam")).toBeInTheDocument();
-    expect(screen.getByText("Results shown after completion")).toBeInTheDocument();
-    expect(screen.getByText("Leaving counts as submission")).toBeInTheDocument();
-    expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
+    expect(screen.getByText("Pre-flight checklist")).toBeInTheDocument();
+    expect(screen.getByText("Do not refresh or navigate away — leaving counts as submission")).toBeInTheDocument();
+    expect(screen.getByText("Fullscreen is recommended for focus (the exam will request it)")).toBeInTheDocument();
+    expect(screen.getByText("Score is based on all questions, including unanswered ones")).toBeInTheDocument();
+    expect(screen.getByText("Results are revealed only after you submit")).toBeInTheDocument();
+    expect(screen.queryByText("Time required: approximately 15–20 minutes")).not.toBeInTheDocument();
+    expect(screen.getByText("Timer")).toBeInTheDocument();
+    expect(screen.getByText("Question count")).toBeInTheDocument();
+    expect(screen.getByText("Monthly limit")).toBeInTheDocument();
+    expect(screen.getByText("~1 min per question (timed).")).toBeInTheDocument();
+    expect(screen.getByText("Fixed board-style set.")).toBeInTheDocument();
+    expect(screen.getByText("Counts toward your monthly Board Exam usage.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start Exam" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Begin Board Exam" })).toBeInTheDocument();
   });
 
   it("shows the Board Exam paywall for free Board Takers from mode selection instead of entering setup", async () => {
@@ -503,7 +519,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     fireEvent.click(await getModeCard("Board Exam Mode"));
 
-    expect(await screen.findByRole("dialog", { name: "Board Exam Mode is a Pro feature" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Unlock Board Exam Mode" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Board Exam Setup" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
@@ -514,7 +530,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You've reached your quiz limit" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
   });
 
@@ -616,7 +632,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await getModeCard("Board Exam Mode"));
-    fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Begin Board Exam" }));
 
     expect(screen.getByRole("dialog", { name: "Start Board Exam Mode?" })).toBeInTheDocument();
     expect(screen.getByText("You are about to start a board exam simulation.")).toBeInTheDocument();

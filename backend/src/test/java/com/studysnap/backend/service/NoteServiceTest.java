@@ -471,7 +471,7 @@ class NoteServiceTest {
         var response = noteService.getPublicBySeoPath("history", "world-war-1-causes", null);
 
         assertThat(response.id()).isEqualTo(noteId.toString());
-        assertThat(response.ownerUserId()).isEqualTo(ownerUserId.toString());
+        assertThat(response.ownerUserId()).isNull();
         assertThat(response.authorDisplayName()).isEqualTo("historyhero");
         assertThat(response.isOfficialAuthor()).isFalse();
         assertThat(response.isCurrentUser()).isFalse();
@@ -553,7 +553,7 @@ class NoteServiceTest {
         assertThat(response)
                 .extracting(NoteListItemResponse::id)
                 .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
-        assertThat(response.getFirst().ownerUserId()).isEqualTo(viewerUserId.toString());
+        assertThat(response.getFirst().ownerUserId()).isNull();
         assertThat(response.getFirst().courseProgram()).isEqualTo("Nursing");
         assertThat(response.getFirst().learnerLevel()).isEqualTo("COLLEGE");
         assertThat(response.getFirst().targetProfileType()).isEqualTo("STUDENT");
@@ -569,7 +569,7 @@ class NoteServiceTest {
         assertThat(response.getFirst().copiedFromNoteId()).isNull();
         assertThat(response.getFirst().copiedFromPublic()).isFalse();
         assertThat(response.getFirst().likedByCurrentUser()).isFalse();
-        assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
+        assertThat(response.get(1).ownerUserId()).isNull();
         assertThat(response.get(1).courseProgram()).isEqualTo("Chemistry");
         assertThat(response.get(1).learnerLevel()).isEqualTo("PROFESSIONAL");
         assertThat(response.get(1).targetProfileType()).isEqualTo("BOARD_TAKER");

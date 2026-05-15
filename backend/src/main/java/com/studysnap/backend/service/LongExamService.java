@@ -561,7 +561,7 @@ public class LongExamService {
 
     private String resolveDifficulty(LongExamStartRequest request) {
         if (request == null || request.difficulty() == null || request.difficulty().isBlank()) {
-            return DIFFICULTY_MEDIUM;
+            return DIFFICULTY_MIXED;
         }
         String normalized = request.difficulty().trim().toLowerCase();
         return switch (normalized) {
@@ -572,13 +572,13 @@ public class LongExamService {
 
     private String extractDifficulty(Map<String, Object> sessionState) {
         if (sessionState == null) {
-            return DIFFICULTY_MEDIUM;
+            return DIFFICULTY_MIXED;
         }
         Object raw = sessionState.get(SESSION_STATE_DIFFICULTY);
         if (raw instanceof String difficulty && !difficulty.isBlank()) {
             return difficulty;
         }
-        return DIFFICULTY_MEDIUM;
+        return DIFFICULTY_MIXED;
     }
 
     private long extractTimerStartedAtEpochSeconds(Map<String, Object> sessionState) {

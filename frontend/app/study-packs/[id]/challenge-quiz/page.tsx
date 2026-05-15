@@ -75,6 +75,12 @@ type ChallengeSessionStatePayload = {
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" | null;
 type ChallengeViewerPlanType = "FREE" | "PLUS" | "PRO" | null;
+type ChallengePaywallVariant =
+  | "board-exam-mode"
+  | "long-exam-mode"
+  | "interview-practice-limit"
+  | "difficulty-selection"
+  | "challenge-quiz-limit";
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
@@ -257,7 +263,7 @@ export default function ChallengeQuizPage() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [viewerPlanType, setViewerPlanType] = useState<ChallengeViewerPlanType>(null);
   const [viewerProfileType, setViewerProfileType] = useState<ChallengeViewerProfileType>(null);
-  const [activePaywallModal, setActivePaywallModal] = useState<"board-exam-mode" | "long-exam-mode" | "difficulty-selection" | "challenge-quiz-limit" | null>(null);
+  const [activePaywallModal, setActivePaywallModal] = useState<ChallengePaywallVariant | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
   const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(() => (
     resolvePreferredChallengeMode(getAuthUser()?.profileType)
@@ -295,14 +301,16 @@ export default function ChallengeQuizPage() {
     };
   }, []);
   const openLockedFeaturePaywall = useCallback(
-    (variant: "board-exam-mode" | "long-exam-mode" | "difficulty-selection" | "challenge-quiz-limit", source: string) => {
+    (variant: ChallengePaywallVariant, source: string) => {
       const feature = variant === "difficulty-selection"
         ? "difficulty"
         : variant === "challenge-quiz-limit"
           ? "quiz_limit"
           : variant === "long-exam-mode"
             ? "long_exam"
-            : "board_exam";
+            : variant === "interview-practice-limit"
+              ? "interview_practice"
+              : "board_exam";
       void trackAnalyticsEvent({
         eventType: "FEATURE_LOCKED_CLICKED",
         metadata: {
@@ -986,6 +994,7 @@ export default function ChallengeQuizPage() {
   const challengeModeCard = availableExamModes.find((mode) => mode.id === "challenge");
   const boardExamModeCard = availableExamModes.find((mode) => mode.id === "board_exam");
   const longExamModeCard = availableExamModes.find((mode) => mode.id === "long_exam");
+  const showInterviewPracticeModeCard = viewerProfileType === "PROFESSIONAL" && note?.studyPackStatus === "STUDY_PACK_READY";
   const boardExamTimerState = useMemo(
     () => resolveBoardExamTimerState(remainingSeconds),
     [remainingSeconds],
@@ -1017,6 +1026,14 @@ export default function ChallengeQuizPage() {
       return;
     }
     router.push(`/notes/${noteId}/long-exam`);
+  }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
+  const handleSelectInterviewPracticeMode = useCallback(() => {
+    setError(null);
+    if (viewerPlanType !== "PRO") {
+      openLockedFeaturePaywall("interview-practice-limit", "interview_practice_mode_selection");
+      return;
+    }
+    router.push(`/notes/${noteId}/interview-practice`);
   }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
   const returnToModeSelection = useCallback(() => {
     setError(null);
@@ -1285,6 +1302,39 @@ export default function ChallengeQuizPage() {
                   </p>
                 </button>
               ) : null}
+              {showInterviewPracticeModeCard ? (
+                <button
+                  type="button"
+                  aria-pressed={false}
+                  className={cn(
+                    getSelectionCardClassName({
+                      selected: false,
+                      disabled: challengeGenerationLocked,
+                      className: "p-4",
+                    }),
+                    "hover:border-foreground/30 hover:bg-foreground/3 dark:hover:bg-foreground/5",
+                  )}
+                  onClick={() => handleSelectInterviewPracticeMode()}
+                  disabled={challengeGenerationLocked}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">Interview Practice</p>
+                    {viewerPlanType !== "PRO" ? (
+                      <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                        Pro
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-foreground/70">
+                    Coached scenario-based interview prep with per-answer AI critique.
+                  </p>
+                  <p className="mt-3 text-xs text-foreground/60">
+                    {viewerPlanType === "PRO"
+                      ? "Practice professional scenarios from this note with guided critique."
+                      : "Pro only. Upgrade to unlock coached interview preparation."}
+                  </p>
+                </button>
+              ) : null}
             </div>
             <p className="text-xs text-foreground/60">
               {viewerProfileType === "BOARD_EXAM"
@@ -1388,31 +1438,46 @@ export default function ChallengeQuizPage() {
             </div>
           </Card>
         ) : (
-          <Card className="space-y-4 border-foreground/15 bg-muted/20 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-              Board Exam Mode
+          <Card className="space-y-4 p-4 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              BOARD EXAM MODE
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Begin Board Exam</h1>
             <p className="text-sm text-foreground/80">
               Review the exam setup for {note?.title ?? "this note"} before you begin.
             </p>
 
-            <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
-              <h2 className="text-base font-semibold text-foreground">Pre-flight checklist</h2>
-              <ul className="space-y-2">
-                {[
-                  "Time required: approximately 15–20 minutes",
-                  "Do not refresh or navigate away — leaving counts as submission",
-                  "Fullscreen is recommended for focus (the exam will request it)",
-                  "Score is based on all questions, including unanswered ones",
-                  "Results are revealed only after you submit",
-                ].map((item) => (
-                  <li key={item} className="flex gap-2">
-                    <span className="mt-1 h-3 w-3 shrink-0 rounded-sm border border-foreground/35" aria-hidden="true" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
+              <div className="space-y-2">
+                <h2 className="text-base font-semibold text-foreground">Pre-flight checklist</h2>
+                <ul className="space-y-2">
+                  {[
+                    "Do not refresh or navigate away — leaving counts as submission",
+                    "Fullscreen is recommended for focus (the exam will request it)",
+                    "Score is based on all questions, including unanswered ones",
+                    "Results are revealed only after you submit",
+                  ].map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span className="mt-1 h-3 w-3 shrink-0 rounded-sm border border-foreground/35" aria-hidden="true" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Timer</p>
+                  <p>~1 min per question (timed).</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Question count</p>
+                  <p>Fixed board-style set.</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Monthly limit</p>
+                  <p>Counts toward your monthly Board Exam usage.</p>
+                </div>
+              </div>
             </div>
 
             {!boardExamAvailable ? (

@@ -91,7 +91,7 @@ No identity changes from `quick-review.md`; included here for completeness.
   - **Pacing**: countdown timer (90 seconds per question, server-anchored). Timer never stops — tab close does not pause the clock. Timer expiry triggers auto-submit. Leave = forfeit; there is no pause/resume option available to the user.
   - **Source**: single note at v1 launch; multi-note (cross-topic exam spanning 2–4 notes from the same subject) is the planned v0.14+ evolution — see Roadmap Pointers.
   - **Result**: a *mastery report* — coverage, weak domains, suggested next study step. Inline learner-level adjustment IS allowed (this is still a study tool).
-  - **Setup**: confirmation screen ("This is a longer session — set aside ~N minutes"). Less ceremony than Board Exam.
+  - **Setup**: confirmation screen ("This is a longer session — set aside ~N minutes"). Less ceremony than Board Exam. No difficulty selector; Long Exam defaults to Mixed.
 - **What Long Exam must never become**:
   - A longer Challenge Quiz with the same UX. The experience must feel structured and graded, not progressive.
   - A board exam simulation. If a user wants a strict exam, that is Board Exam Mode.
@@ -112,6 +112,7 @@ No identity changes from `quick-review.md`; included here for completeness.
 | **Navigation** | Standard `Leave Quiz` modal; forfeit available | `Forfeit Exam` modal with stronger language; full-screen request; confirmed leaves are recorded as forfeits with timestamp |
 | **Scoring** | Score against answered questions (early submit fair) | Score against full question count (unanswered = wrong, like a real exam) |
 | **Pacing** | Per-question or freeform | Fixed total timer; section markers if multi-domain; no pause |
+| **Difficulty** | User-selectable for eligible plans | No selector; defaults to Mixed to preserve simulation framing |
 | **Result** | "Practice Weak Concepts" / retry / keep going | A *score report*: overall result, domain breakdown, study-plan recommendation, optional `Schedule re-take`. No inline learner-level pill |
 | **Psychological** | Encouraging, low-friction | Serious, consequential, premium |
 
@@ -159,6 +160,8 @@ Label overrides applied in `exam-mode-visibility.ts`:
 
 Engine discriminators (`CHALLENGE`, `LONG_EXAM`) do not change. Labels must not appear in backend APIs, session storage, or analytics events.
 
+Interview Practice also appears as a Professional-only mode-selection tile, but it remains a sub-mode of Adaptive Practice (`ADAPTIVE` + `subMode: "INTERVIEW"`), not a sixth quiz mode.
+
 ---
 
 ## UX Boundaries
@@ -179,7 +182,7 @@ Setup screens scale with the seriousness of the mode:
 
 - **Challenge Quiz**: minimal setup; user can begin immediately.
 - **Long Exam**: confirmation screen with expected duration and what is included (single note vs. multi-note). Light disclaimer, friendly tone.
-- **Board Exam**: pre-flight checklist — "Time required: X. Do not refresh. Fullscreen recommended." The setup screen is part of the simulation.
+- **Board Exam**: pre-flight checklist — "Time required: X. Do not refresh. Fullscreen recommended." The setup screen is part of the simulation. No difficulty selector; Board Exam defaults to Mixed.
 
 Setup tone is part of mode identity. Do **not** unify these into a single `ExamSetup` component without preserving per-mode framing.
 
@@ -369,7 +372,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - Board Exam never becomes "longer Challenge Quiz."
 - Teacher remains scoped to Quiz Preview / Export.
 - No new persistence aggregates per profile or per mode.
-- Professional Profile label overrides ("Certification Review", "Full Practice Exam") are display-only in `exam-mode-visibility.ts`. Engine discriminators do not change.
+- Professional Profile label overrides ("Certification Review", "Full Practice Exam") are display-only in `exam-mode-visibility.ts` and the mode-selection UI. Engine discriminators do not change.
 - Interview Practice (sub-mode of Adaptive Practice) carries its variant identity in session state JSONB only. No new `QuickReviewSessionMode` enum value. Pro-only at launch.
 
 ---
