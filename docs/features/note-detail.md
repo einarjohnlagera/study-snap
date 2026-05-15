@@ -100,6 +100,23 @@ Copy-first generation rule:
 - generation continues on the viewer's own note route after the copy is created.
 - do not run private study actions directly against the public source note
 
+## Note Actions Menu
+
+The private note header overflow menu is the canonical secondary-action pattern for Note Detail.
+
+Menu trigger:
+- top-right `⋯` button inside the header card
+- opens on click or tap
+- closes on outside click
+- closes on `Escape` when practical
+
+Rules:
+- do not render these actions inline in the header when the overflow menu is available
+- keep menu items readable on mobile with full text labels
+- destructive actions such as `Delete` should stay visually distinct
+- study actions (Generate Study Pack, Start Quick Review, Challenge Quiz) must stay visually primary — the overflow menu is for secondary note-management actions only
+- inline `Save` / `Cancel` controls are still allowed while metadata edit mode is active
+
 ## Share Modal Pattern
 
 The Note Detail share modal is the canonical share UI pattern for the entire app:
