@@ -136,8 +136,13 @@ function SubjectSection({ title, description, notes }: Readonly<SubjectSectionPr
 }
 
 export async function generateStaticParams() {
-  const subjects = await getServerPublicSubjects();
-  return subjects.map((entry) => ({ subject: entry.slug }));
+  try {
+    const subjects = await getServerPublicSubjects();
+    return subjects.map((entry) => ({ subject: entry.slug }));
+  } catch {
+    // Backend unreachable at build time (e.g. Vercel build); ISR will generate pages on first request.
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: SubjectLandingPageProps): Promise<Metadata> {
