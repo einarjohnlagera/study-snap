@@ -36,7 +36,6 @@ import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
 
 type LongExamPhase = "prestart" | "generating" | "paused-recovery" | "running" | "complete";
-type LongExamDifficulty = "easy" | "medium" | "hard" | "mixed";
 type ToastState = {
   message: string;
   tone: "success" | "error" | "info";
@@ -50,12 +49,6 @@ const LONG_EXAM_LEAVE_ERROR = "Could not forfeit exam. Please try again.";
 const LONG_EXAM_BEFORE_UNLOAD_MESSAGE = "You are currently in Long Exam Mode. Leaving will forfeit your progress.";
 const LONG_EXAM_FOCUS_TIP_STORAGE_KEY = "notelib-long-exam-mode-tip-dismissed";
 const LONG_EXAM_FOCUS_TIP = "Long Exam Mode simulates a comprehensive exam. Stay focused — leaving will forfeit your session.";
-const LONG_EXAM_DIFFICULTIES: Array<{ value: LongExamDifficulty; label: string; description: string }> = [
-  { value: "easy", label: "Easy", description: "Build confidence with lighter recall." },
-  { value: "medium", label: "Medium", description: "Balanced recall and application." },
-  { value: "hard", label: "Hard", description: "Push deeper understanding." },
-  { value: "mixed", label: "Mixed", description: "Blend difficulty across the exam." },
-];
 
 function normalizeSelectedChoices(selectedChoices?: Record<string, number> | null): Record<string, number> {
   return { ...(selectedChoices ?? {}) };
@@ -102,7 +95,6 @@ export default function LongExamPage() {
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [difficulty, setDifficulty] = useState<LongExamDifficulty>("medium");
   const [activeStartResponse, setActiveStartResponse] = useState<LongExamStartResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quiz, setQuiz] = useState<QuizItem[]>([]);
@@ -118,6 +110,7 @@ export default function LongExamPage() {
 
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : `/notes/${noteId}`), [note, noteId]);
   const studyPackId = note?.studyPackId ?? null;
+  const modeSelectHref = studyPackId ? `/study-packs/${studyPackId}/challenge-quiz` : noteDetailHref;
   const totalQuestions = quiz.length;
   const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
   const answeredCount = useMemo(() => getAnsweredCount(selectedChoices), [selectedChoices]);
@@ -333,7 +326,7 @@ export default function LongExamPage() {
     setError(null);
     startedTrackedRef.current = false;
     try {
-      const response = await startLongExam(studyPackId, { difficulty });
+      const response = await startLongExam(studyPackId);
       setActiveStartResponse(response);
       setSessionId(response.sessionId);
       trackStarted(response);
@@ -357,7 +350,7 @@ export default function LongExamPage() {
     } finally {
       setStarting(false);
     }
-  }, [difficulty, enterRunningFromStart, starting, studyPackId, trackStarted]);
+  }, [enterRunningFromStart, starting, studyPackId, trackStarted]);
 
   const handleResumeActiveSession = useCallback(async () => {
     if (!activeStartResponse?.sessionId) {
@@ -624,14 +617,14 @@ export default function LongExamPage() {
       ) : null}
 
       {phase === "prestart" ? (
-        <Card className="space-y-5 p-4 sm:p-6">
+        <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Long Exam Mode
+              LONG EXAM MODE
             </p>
             <h1 className="text-2xl font-semibold">Start Long Exam</h1>
-            <p className="text-sm text-foreground/75">
-              Generate a fixed, full-length exam from {note?.title ?? "this note"} and complete it at your own pace.
+            <p className="text-sm text-foreground/80">
+              Review the exam setup for {note?.title ?? "this note"} before you begin.
             </p>
           </div>
 
@@ -658,44 +651,48 @@ export default function LongExamPage() {
             </div>
           ) : (
             <>
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">Difficulty</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {LONG_EXAM_DIFFICULTIES.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={cn(
-                        "rounded-md border px-3 py-3 text-left transition",
-                        difficulty === option.value
-                          ? "border-blue-500 bg-blue-500/10 text-foreground"
-                          : "border-border bg-background text-foreground/75 hover:border-foreground/30",
-                      )}
-                      onClick={() => setDifficulty(option.value)}
-                      disabled={starting}
-                    >
-                      <span className="block text-sm font-medium">{option.label}</span>
-                      <span className="mt-1 block text-xs text-foreground/60">{option.description}</span>
-                    </button>
-                  ))}
+              <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Before you begin</p>
+                  <p>
+                    The full question set is generated before the exam starts. Stay focused once the exam begins; your mastery report appears after submission.
+                  </p>
+                </div>
+                <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Timer</p>
+                    <p>Untimed - complete at your own pace.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Question count</p>
+                    <p>Fixed long-form exam (20 / 25 / 30 by learner level).</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Monthly limit</p>
+                    <p>Counts toward your monthly Long Exam usage.</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/75">
-                <p className="font-medium text-foreground">Before you begin</p>
-                <p className="mt-1">
-                  The full question set is generated before the exam starts. Stay focused once the exam begins; your mastery report appears after submission.
-                </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => router.push(modeSelectHref)}
+                  disabled={starting}
+                >
+                  Choose another mode
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleStartExam()}
+                  disabled={!studyPackId || starting}
+                >
+                  {starting ? "Starting..." : "Start Long Exam"}
+                </Button>
               </div>
-
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => void handleStartExam()}
-                disabled={!studyPackId || starting}
-              >
-                {starting ? "Starting..." : "Start Long Exam"}
-              </Button>
             </>
           )}
         </Card>

@@ -5,6 +5,7 @@ export type PaywallContextType =
   | "GENERATE_NOTE_LIMIT"
   | "QUIZ_LIMIT"
   | "ADAPTIVE_PRACTICE_LOCKED"
+  | "INTERVIEW_PRACTICE_LOCKED"
   | "EXPORT_LIMIT"
   | "BOARD_EXAM_MODE_LOCKED"
   | "LONG_EXAM_MODE_LOCKED"
@@ -17,6 +18,7 @@ export type PaywallResumeAction =
   | "GENERATE_NOTE"
   | "QUIZ"
   | "ADAPTIVE_PRACTICE"
+  | "INTERVIEW_PRACTICE"
   | "EXPORT"
   | "OCR";
 
@@ -29,6 +31,7 @@ export type PaywallContext = {
 
 export type PaywallModalVariant =
   | "adaptive-practice"
+  | "interview-practice-limit"
   | "board-exam-mode"
   | "long-exam-mode"
   | "difficulty-selection"
@@ -71,6 +74,8 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "QUIZ_LIMIT";
     case "adaptive-practice":
       return "ADAPTIVE_PRACTICE_LOCKED";
+    case "interview-practice-limit":
+      return "INTERVIEW_PRACTICE_LOCKED";
     case "export-limit":
       return "EXPORT_LIMIT";
     case "board-exam-mode":
@@ -145,6 +150,17 @@ export function resolvePaywallPresentation(
         primaryCtaLabel: PRIMARY_CTA_LABEL,
         secondaryCtaLabel: SECONDARY_CTA_LABEL,
         lastAction: "ADAPTIVE_PRACTICE",
+      };
+    case "INTERVIEW_PRACTICE_LOCKED":
+      return {
+        headline: "Unlock Interview Practice",
+        body: "Practice senior-style scenario questions, get AI critique after every answer, and finish with an Interview Readiness Report.",
+        feature: "interview_practice",
+        primaryPlanType: "PRO",
+        secondaryPlanType: "PLUS",
+        primaryCtaLabel: PRIMARY_CTA_LABEL,
+        secondaryCtaLabel: SECONDARY_CTA_LABEL,
+        lastAction: "INTERVIEW_PRACTICE",
       };
     case "EXPORT_LIMIT":
       return {

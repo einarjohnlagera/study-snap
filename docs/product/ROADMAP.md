@@ -24,7 +24,7 @@ Primary focus:
 
 2. **Faster quiz generation** — promote from deferred to implement; profile current LLM latency end-to-end (prompt build, API call, JSON parse, DB write); evaluate streaming responses to unblock frontend earlier, model selection (`gpt-4.1-mini` for quiz generation), and early session creation; implement the approach that latency findings support; frontend may gain a progress indicator if streaming is adopted
 
-3. **Interview Practice Mode (Professional Profile)** — dedicated mode for mock interviews and applied learning scenarios; Pro-only at launch; session format TBD (conversational AI evaluation vs. existing MC engine with professional-framed prompts); deferred from v0.13.0 pending evaluation engine design; see `docs/features/professional-profile.md`
+3. **Interview Practice Mode (Professional Profile)** — sub-mode of Adaptive Practice (reuses `ADAPTIVE` discriminator with `subMode: "INTERVIEW"` in session JSONB); does NOT add a 6th mode; locked 5-mode contract preserved. Pro-only at launch with a dedicated 10/month quota separate from Adaptive Practice. Surfaced as a Professional dashboard card and a Professional mode-selection tile for per-note entry. Session format: scenario-style MCQ (5 or 10 questions) + per-answer AI critique (verdict + rationale + interview follow-up) using `gpt-4.1-mini` for critique to control cost while generation stays on `gpt-4.1`. Soft 2-min per-question timer (visible, non-enforcing). Result is an Interview Readiness Report (band, strengths, gaps, talking points, pacing notes). Section-aware generation prompt scans note Key Concepts to spread questions across technical / applied / behavioral facets. Single-note v1; multi-note and role templates deferred to v0.15+. Full spec in `docs/features/professional-profile.md`.
 
 4. **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; single-note Long Exam remains the stable baseline; deferred from v0.13.0
 
@@ -33,7 +33,9 @@ Primary focus:
 ### Implementation stances
 
 - Subject landing pages must be server-rendered; do not implement as a client-rendered filter redirect
-- Interview Practice must not break the 5-mode locked contract — it requires adding a 6th mode, which requires updating `docs/product/EXAM_MODES.md` and this roadmap together before any implementation begins
+- Interview Practice must reuse the `ADAPTIVE` engine discriminator and carry sub-mode identity in session JSONB (`subMode: "INTERVIEW"`). Do not introduce a new `QuickReviewSessionMode` enum value. Do not add a 6th mode. Do not introduce new persistence aggregates.
+- Interview Practice must use `gpt-4.1-mini` for per-answer critique calls and `gpt-4.1` for generation. Do not unify on the premium model — the cost split is the launch viability case.
+- Interview Practice quota is dedicated (10/month Pro-only) and tracked separately from Adaptive Practice / Challenge Quiz quotas. Do not double-charge other quotas.
 - Multi-note Long Exam must reuse the existing session lifecycle; no new persistence aggregate
 - Faster generation changes must be gated behind findings; do not optimize speculatively
 
@@ -322,6 +324,50 @@ Current session-review UX:
 - **Board Exam advanced result analytics** — trend over time, percentile-style framing; planned in `docs/product/EXAM_MODES.md`
 - **Long Exam tier promotion to Plus** — only if v0.13.0 usage data justifies the LLM cost
 - **Planning-only** — cross-profile mode unlock (Students opting into Board Exam without changing profile); curated exam decks / cohort content (Pro+); cross-profile journey (Student → Board Taker upgrade flow with continuity)
+
+### v0.15+ Premium Mode Uplift + Cost-Control Quota Refactor (planned)
+
+Theme: make Long Exam and Board Exam *feel* premium (not just gated behind a paywall) and close the unbounded-LLM-cost gap on uncapped modes. This is a **margin fix framed as a UX uplift**, not a feature add.
+
+**Premium feel for Long Exam and Board Exam** (no AI coaching — keep the simulation austere by design):
+- Stronger pre-session framing: pre-flight presentation, expected duration, "this is not a quiz" cues
+- Stronger post-session presentation: score report layout polish, domain-coverage visualization, suggested-next-step framing
+- Possible visual differentiation: distinct top-bar treatment, calm color palette, larger result-page typography
+- Constraint: Board Exam stays feedback-free during the session; Long Exam stays forfeit-only with no mid-exam coaching (locked in `EXAM_MODES.md`)
+
+**Cost-control quota refactor** (per-mode caps replacing the current "Pro = effectively unlimited" state on Long/Board):
+
+| Mode | Current Pro state | Proposed v0.15+ cap |
+|---|---|---|
+| Challenge Quiz | 50/mo | 50/mo (unchanged — already cheap per session, do not trim) |
+| Adaptive Practice | 30/mo | 30/mo (unchanged) |
+| Long Exam | uncapped (gated by Pro plan only) | 10/mo |
+| Board Exam | uncapped (gated by Pro plan only) | 5/mo (highest LLM cost per session) |
+| Interview Practice | (ships in v0.14.0 at 10/mo) | 10/mo (unchanged) |
+
+Specific numbers are runtime config and must be tuned against actual usage data from v0.14.0 once captured. Do not lower Pro Study Pack quota (100/mo) or Pro Challenge Quiz quota (50/mo) without usage evidence — those are existing value the user is paying for.
+
+**Implementation stance**:
+- New explicit per-mode quotas on `UserUsageEntity` and `StudySnapProperties`; reset by `BillingUsageResetJob`
+- Existing uncapped behavior on Long/Board is a margin risk (single power user can exceed Pro revenue in LLM cost) — caps are the fix, not coaching
+- Honest user-facing framing: "Each mode now has its own monthly cap so you can see exactly what your plan includes" — avoid framing as a quota reduction
+- Surface per-mode usage in Settings → Plan & Billing alongside the existing counters
+
+**Cost math reference** (rough — re-validate against actual rates and usage when v0.15.0 starts):
+- Pro revenue: ~$4.50 blended (PH ₱249 + USD $4.99)
+- Worst-case current LLM cost per Pro user/mo (every quota maxed, Long/Board uncapped): ~$4.83 — i.e. negative margin on heavy users
+- Worst-case post-cap: ~$0.94 saved on Long/Board, restoring healthy margin
+- Realistic-usage cost: ~$1.50/mo (~67% gross margin) — caps protect the worst case without affecting most users
+
+### v0.15+ Interview Practice evolution (planned)
+
+Sequencing depends on v0.14.0 launch usage data. Do not commit to any of these until Interview Practice v1 has run for at least one billing cycle.
+
+- **Multi-note Interview Practice (smart context aggregation)** — generate from the base note plus related notes that share `courseProgram` AND at least one tag (e.g., `courseProgram="Software Engineer"` + tag `Java` → pull all Java-tagged notes under that program); cap at 2–3 sibling notes to manage prompt size and per-session cost; requires the same multi-source generation context as Multi-note Long Exam (build that first, prove stability, then extend to Interview Practice); re-validate cost math at v0.15.0 start since aggregating siblings increases prompt tokens against `gpt-4.1`
+- **Structured interview templates by role/job family** — opinionated section breakdowns (e.g. Backend Engineer = PL fundamentals + DB + Behavioral); requires either a curated role taxonomy or a user-defined template builder; do not build until v1 usage data shows real demand and the section-aware generation prompt's limitations are observed
+- **Open-ended / conversational evaluation** — replace MC structure with free-text answers and AI rubric scoring; architecturally heavy (new session schema, new evaluation pipeline, new result model); only consider if MC + critique format hits its ceiling and Pro users explicitly ask for it
+- **Profile / role enrichment** — capture target role explicitly on the user profile (instead of inferring from notes) to drive better generation context; bigger architectural decision; do not bundle with any of the above — design separately
+- **Interview Practice tier promotion to Plus** — only if v0.14.0 usage data justifies the LLM cost; current model split (gpt-4.1 generation + gpt-4.1-mini critique) is what makes Pro-only economically viable, and lowering the tier requires re-running that math
 
 ### Public Library Discovery — Future Items
 

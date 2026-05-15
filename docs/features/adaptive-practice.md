@@ -4,6 +4,8 @@
 
 Adaptive Practice is the weak-area follow-up quiz mode for a Study Pack-ready note.
 
+Interview Practice is a Pro-only Professional Profile sub-mode of Adaptive Practice. It keeps the `ADAPTIVE` session discriminator and stores `subMode: "INTERVIEW"` in session state.
+
 It should stay focused on:
 
 - weak concepts from prior performance

@@ -791,7 +791,7 @@ export default function ProfilePage() {
                 );
               })}
             </div>
-            {profile.profileType === "BOARD_EXAM" ? (
+            {selectedProfileType === "BOARD_EXAM" ? (
               <div className="space-y-3 border-t border-border pt-4">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold text-foreground">Exam Date</h3>
@@ -799,20 +799,17 @@ export default function ProfilePage() {
                     Used for your dashboard countdown. Clear the field to remove the countdown.
                   </p>
                 </div>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">Exam Date</span>
-                  <input
-                    type="date"
-                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                    value={examDateInput}
-                    onChange={(event) => {
-                      setExamDateInput(event.target.value);
-                      setExamDateMessage(null);
-                      setExamDateError(null);
-                    }}
-                    aria-label="Exam Date"
-                  />
-                </label>
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={examDateInput}
+                  onChange={(event) => {
+                    setExamDateInput(event.target.value);
+                    setExamDateMessage(null);
+                    setExamDateError(null);
+                  }}
+                  aria-label="Exam Date"
+                />
                 {examCountdown ? <p className="text-xs text-foreground/60">{examCountdown}</p> : null}
                 {examDateMessage ? <p className="text-xs text-foreground/60">{examDateMessage}</p> : null}
                 {examDateError ? <p className="text-xs text-red-600 dark:text-red-400">{examDateError}</p> : null}

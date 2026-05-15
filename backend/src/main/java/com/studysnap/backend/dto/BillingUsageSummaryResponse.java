@@ -10,7 +10,10 @@ public record BillingUsageSummaryResponse(
         int challengeQuizLimit,
         int adaptivePracticeUsed,
         int adaptivePracticeLimit,
+        int interviewPracticeUsed,
+        int interviewPracticeLimit,
         boolean adaptivePracticeAvailable,
+        boolean interviewPracticeAvailable,
         boolean difficultySelectionAvailable
 ) {
 }

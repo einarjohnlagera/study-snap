@@ -21,6 +21,10 @@ public class QuizSessionStateUtils {
     private static final String CONCEPT_KEY = "concept";
     private static final String EXPLANATION_KEY = "explanation";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
+    private static final String SUB_MODE_KEY = "subMode";
+    private static final String AI_FEEDBACK_KEY = "aiFeedback";
+    private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
+    private static final String TIME_SPENT_SECONDS_KEY = "timeSpentSeconds";
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
         List<QuizItem> existing = extractQuiz(sessionState);
@@ -59,6 +63,55 @@ public class QuizSessionStateUtils {
         }
         selectedChoices.put(String.valueOf(questionIndex), choiceIndex);
         state.put(SELECTED_CHOICES_KEY, selectedChoices);
+        return state;
+    }
+
+    public Map<String, Object> withInterviewPracticeState(
+            List<QuizItem> quiz,
+            String subMode,
+            int softTimerSeconds
+    ) {
+        Map<String, Object> state = withQuiz(quiz, null);
+        state.put(SUB_MODE_KEY, subMode);
+        state.put(AI_FEEDBACK_KEY, List.of());
+        state.put(SOFT_TIMER_SECONDS_KEY, softTimerSeconds);
+        state.put(SELECTED_CHOICES_KEY, Map.of());
+        state.put(TIME_SPENT_SECONDS_KEY, Map.of());
+        return state;
+    }
+
+    public Map<String, Object> withInterviewAnswer(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            int choiceIndex,
+            int timeSpentSeconds
+    ) {
+        Map<String, Object> state = withSelectedChoice(sessionState, questionIndex, choiceIndex);
+        Map<String, Object> timeSpentByQuestion = copyStringKeyMap(state.get(TIME_SPENT_SECONDS_KEY));
+        timeSpentByQuestion.put(String.valueOf(questionIndex), timeSpentSeconds);
+        state.put(TIME_SPENT_SECONDS_KEY, timeSpentByQuestion);
+        return state;
+    }
+
+    public Map<String, Object> withInterviewFeedback(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            Map<String, Object> feedback
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        List<Object> feedbackItems = new ArrayList<>();
+        Object raw = state.get(AI_FEEDBACK_KEY);
+        if (raw instanceof List<?> rawList) {
+            feedbackItems.addAll(rawList);
+        }
+        while (feedbackItems.size() <= questionIndex) {
+            feedbackItems.add(null);
+        }
+        feedbackItems.set(questionIndex, feedback == null ? Map.of() : new LinkedHashMap<>(feedback));
+        state.put(AI_FEEDBACK_KEY, feedbackItems);
         return state;
     }
 
@@ -108,6 +161,40 @@ public class QuizSessionStateUtils {
         }
 
         return quiz;
+    }
+
+    public String extractSubMode(Map<String, Object> sessionState) {
+        if (sessionState == null) {
+            return null;
+        }
+        Object raw = sessionState.get(SUB_MODE_KEY);
+        return raw instanceof String value && !value.isBlank() ? value : null;
+    }
+
+    public Map<Integer, Integer> extractInterviewTimeSpentSeconds(Map<String, Object> sessionState, List<QuizItem> quiz) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> rawMap = copyStringKeyMap(sessionState.get(TIME_SPENT_SECONDS_KEY));
+        if (rawMap.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, Integer> parsed = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : rawMap.entrySet()) {
+            try {
+                int questionIndex = Integer.parseInt(entry.getKey());
+                if (questionIndex < 0 || questionIndex >= quiz.size()) {
+                    continue;
+                }
+                if (entry.getValue() instanceof Number number) {
+                    parsed.put(questionIndex, number.intValue());
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return parsed.isEmpty() ? Map.of() : Map.copyOf(parsed);
     }
 
     public Map<Integer, Integer> extractSelectedChoiceIndexes(Map<String, Object> sessionState, List<QuizItem> quiz) {
@@ -200,5 +287,17 @@ public class QuizSessionStateUtils {
             }
         }
         return null;
+    }
+
+    private Map<String, Object> copyStringKeyMap(Object raw) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        if (raw instanceof Map<?, ?> rawMap) {
+            for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                if (entry.getKey() != null) {
+                    copy.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+        }
+        return copy;
     }
 }

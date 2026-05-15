@@ -49,6 +49,7 @@ studysnap:
     quiz-questions-free: ${QUIZ_QUESTIONS_FREE:5}
     model-free: ${LLM_MODEL_FREE:gpt-4.1-mini}
     model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
+    model-critique: ${LLM_MODEL_CRITIQUE:gpt-4.1-mini}
     prompt-dir: ${LLM_PROMPT_DIR:prompts/study-pack-v1}
   ocr:
     provider: ${OCR_PROVIDER:stub}
@@ -87,6 +88,7 @@ studysnap:
     pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}}
     plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:10}
     pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}}
+    pro-monthly-interview-practice-limit: ${PRO_MONTHLY_INTERVIEW_PRACTICE_LIMIT:10}
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
     plus-monthly-ocr-limit: ${PLUS_MONTHLY_OCR_LIMIT:50}
     pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:${PREMIUM_MONTHLY_OCR_LIMIT:100}}
@@ -97,6 +99,7 @@ studysnap:
     plus-monthly-export-limit: ${PLUS_MONTHLY_EXPORT_LIMIT:15}
     pro-monthly-export-limit: ${PRO_MONTHLY_EXPORT_LIMIT:-1}
     adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:false}
+    interview-practice-pro-only: ${INTERVIEW_PRACTICE_PRO_ONLY:true}
     difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}

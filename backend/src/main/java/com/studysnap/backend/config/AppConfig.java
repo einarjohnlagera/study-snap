@@ -27,7 +27,7 @@ public class AppConfig {
     public TaskExecutor analyticsTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("analytics-");
-        executor.setCorePoolSize(3);
+        executor.setCorePoolSize(1);
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(500);
         executor.initialize();

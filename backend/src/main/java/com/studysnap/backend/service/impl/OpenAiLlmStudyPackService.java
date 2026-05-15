@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.KeyConceptSanitizer;
 import com.studysnap.backend.util.LlmResponseUtils;
@@ -64,6 +65,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String LONG_EXAM_SECOND_HALF_HINT = "Generate questions covering the second half of the material.";
     private static final String PARALLEL_LONG_EXAM_FALLBACK_LOG =
             "Parallel long exam generation failed, falling back to sequential: {}";
+    private static final String CRITIQUE_VERDICT_STRONG = "STRONG";
+    private static final String CRITIQUE_VERDICT_WORKABLE = "WORKABLE";
+    private static final String CRITIQUE_VERDICT_RECONSIDER = "RECONSIDER";
     private static final List<String> DISALLOWED_NOTE_GENERATION_PHRASES = List.of(
             "important study topic",
             "important topic",
@@ -169,14 +173,25 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private String requireConfiguredModel() {
+        return requireConfiguredModel(properties.getSettings().getModelFree(), "LLM model is missing. Please configure LLM_MODEL_FREE.");
+    }
+
+    private String requireConfiguredPremiumModel() {
+        return requireConfiguredModel(properties.getSettings().getModelPremium(), "LLM premium model is missing. Please configure LLM_MODEL_PREMIUM.");
+    }
+
+    private String requireConfiguredCritiqueModel() {
+        return requireConfiguredModel(properties.getSettings().getModelCritique(), "LLM critique model is missing. Please configure LLM_MODEL_CRITIQUE.");
+    }
+
+    private String requireConfiguredModel(String configuredModel, String missingModelMessage) {
         if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
             throw configurationError("LLM API key is missing. Please configure LLM_API_KEY.");
         }
-        String model = properties.getSettings().getModelFree();
-        if (model == null || model.isBlank()) {
-            throw configurationError("LLM model is missing. Please configure LLM_MODEL_FREE.");
+        if (configuredModel == null || configuredModel.isBlank()) {
+            throw configurationError(missingModelMessage);
         }
-        return model;
+        return configuredModel;
     }
 
     private ObjectNode buildJsonSchemaRequest(String model, ArrayNode inputMessages, String schemaName, JsonNode schema) {
@@ -437,6 +452,48 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
+    private ArrayNode buildInterviewPracticeInputMessages(
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.interviewPracticeSystemPrompt()));
+        boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
+        String developerPrompt = promptResources.interviewPracticeDeveloperPromptTemplate()
+                .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.INTERVIEW_PRACTICE))
+                .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.INTERVIEW_PRACTICE));
+        input.add(buildTextMessage("developer", developerPrompt));
+        input.add(buildTextMessage(
+                "user",
+                buildLearnerContextBlock(context) + "\n" +
+                        "Summary: " + studyPackSummary + "\n" +
+                        "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
+                        "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
+        ));
+        return input;
+    }
+
+    private ArrayNode buildInterviewCritiqueInputMessages(QuizItem question, int selectedChoiceIndex) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.interviewCritiqueSystemPrompt()));
+        String selectedChoice = resolveChoice(question, selectedChoiceIndex);
+        String correctChoice = question == null ? "" : question.answer();
+        String developerPrompt = promptResources.interviewCritiqueDeveloperPromptTemplate()
+                .replace("{QUESTION}", question == null ? "" : question.question())
+                .replace("{CHOICES}", buildChoiceList(question))
+                .replace("{SELECTED_CHOICE}", selectedChoice)
+                .replace("{CORRECT_CHOICE}", correctChoice == null ? "" : correctChoice)
+                .replace("{CONCEPT}", question == null || question.concept() == null ? "" : question.concept())
+                .replace("{EXPLANATION}", question == null || question.explanation() == null ? "" : question.explanation());
+        input.add(buildTextMessage("developer", developerPrompt));
+        return input;
+    }
+
     private ArrayNode buildChallengeQuizInputMessages(
             String studyPackSummary,
             List<String> keyConcepts,
@@ -626,6 +683,26 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .put("type", "string")
                 .put("minLength", 1)
                 .put("maxLength", 180);
+        return root;
+    }
+
+    private JsonNode buildInterviewCritiqueSchema() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("type", "object");
+        root.put("additionalProperties", false);
+        root.putArray("required")
+                .add("verdict")
+                .add("rationale")
+                .add("followUp");
+        ObjectNode properties = root.putObject("properties");
+        ObjectNode verdict = properties.putObject("verdict");
+        verdict.put("type", "string");
+        verdict.putArray("enum")
+                .add(CRITIQUE_VERDICT_STRONG)
+                .add(CRITIQUE_VERDICT_WORKABLE)
+                .add(CRITIQUE_VERDICT_RECONSIDER);
+        properties.putObject("rationale").put("type", "string").put("minLength", 1);
+        properties.putObject("followUp").put("type", "string").put("minLength", 1);
         return root;
     }
 
@@ -923,6 +1000,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             case BOARD_EXAM -> "The material appears quantitative. Include exam-relevant computations, formula-based judgment, and applied interpretation when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
             case LONG_EXAM -> "The material appears quantitative. Include a balanced set of computation, formula-based, and conceptual interpretation questions when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
             case ADAPTIVE_PRACTICE -> "The material appears quantitative. Focus weak-concept reinforcement on targeted numerical or formula-based questions when appropriate. Explanations for computation questions must show clear step-by-step solution flow.";
+            case INTERVIEW_PRACTICE -> "The material appears quantitative. Frame computations as interview scenarios about choosing, explaining, or validating an approach. Explanations must show the reasoning a strong candidate would articulate.";
             case TEACHER_PREVIEW -> "The material appears quantitative. Include computation or formula-based questions only when the notes clearly support them. Explanations should show the reasoning or steps a teacher would want to review before export.";
         };
     }
@@ -934,8 +1012,29 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             case BOARD_EXAM -> "Each question should feel answerable in about 1 minute under high-stakes exam pacing.";
             case LONG_EXAM -> "Each question should feel answerable in about 1 to 2 minutes as part of a longer mastery exam.";
             case ADAPTIVE_PRACTICE -> "Each question should feel answerable in about 45 to 90 seconds.";
+            case INTERVIEW_PRACTICE -> "Each question should feel answerable in about 2 minutes as part of interview prep.";
             case TEACHER_PREVIEW -> "Each question should feel classroom-ready rather than speed-focused, with enough substance for teachers to review answers and explanations before export.";
         };
+    }
+
+    private String buildChoiceList(QuizItem question) {
+        if (question == null || question.choices() == null || question.choices().isEmpty()) {
+            return "";
+        }
+        List<String> labels = List.of("A", "B", "C", "D");
+        List<String> lines = new ArrayList<>();
+        for (int index = 0; index < question.choices().size() && index < labels.size(); index++) {
+            lines.add(labels.get(index) + ". " + question.choices().get(index));
+        }
+        return String.join("\n", lines);
+    }
+
+    private String resolveChoice(QuizItem question, int selectedChoiceIndex) {
+        if (question == null || question.choices() == null
+                || selectedChoiceIndex < 0 || selectedChoiceIndex >= question.choices().size()) {
+            return "";
+        }
+        return question.choices().get(selectedChoiceIndex);
     }
 
     private String buildLearnerContextBlock(StudyPackGenerationContext context) {
@@ -1065,6 +1164,50 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 "note_lib_adaptive_quiz",
                 "Adaptive practice quiz generation",
                 normalizedWeakConcepts
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateInterviewPracticeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
+        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+        return generateQuizWithSchema(
+                requireConfiguredPremiumModel(),
+                buildInterviewPracticeInputMessages(
+                        studyPackSummary == null ? "" : studyPackSummary,
+                        normalizedKeyConcepts,
+                        normalizedDisallowedQuestions,
+                        questionCount,
+                        context
+                ),
+                questionCount,
+                "note_lib_interview_practice",
+                "Interview practice generation",
+                normalizedKeyConcepts
+        );
+    }
+
+    @Override
+    public InterviewPracticeCritique generateInterviewCritique(QuizItem question, int selectedChoiceIndex) {
+        JsonSchemaResponse<PromptInterviewCritique> response = executeJsonSchemaOperation(
+                requireConfiguredCritiqueModel(),
+                buildInterviewCritiqueInputMessages(question, selectedChoiceIndex),
+                quizOperation("note_lib_interview_critique", "Interview critique generation"),
+                buildInterviewCritiqueSchema(),
+                PromptInterviewCritique.class
+        );
+        PromptInterviewCritique critique = response.payload();
+        return new InterviewPracticeCritique(
+                critique.verdict(),
+                critique.rationale(),
+                critique.followUp()
         );
     }
 
@@ -1320,6 +1463,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> conceptFallbackPool
     ) {
         String model = requireConfiguredModel();
+        return generateQuizWithSchema(
+                model,
+                inputMessages,
+                questionCount,
+                schemaName,
+                operationLabel,
+                conceptFallbackPool
+        );
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            String model,
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool
+    ) {
         return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
                 model,
                 inputMessages,
@@ -1652,6 +1813,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     ) {
     }
 
+    private record PromptInterviewCritique(
+            String verdict,
+            String rationale,
+            String followUp
+    ) {
+    }
+
     private record PromptStudyTip(String tip) {
     }
 
@@ -1704,6 +1872,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         BOARD_EXAM,
         LONG_EXAM,
         ADAPTIVE_PRACTICE,
+        INTERVIEW_PRACTICE,
         TEACHER_PREVIEW
     }
 }

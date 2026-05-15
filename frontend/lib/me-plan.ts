@@ -10,6 +10,7 @@ export type MePlanResponse = {
     studyPacksPerMonth: number;
     challengeQuizzesPerMonth: number;
     adaptivePracticePerMonth: number;
+    interviewPracticePerMonth?: number;
     ocrPerMonth: number;
     noteGenerationsPerMonth?: number;
     exportsPerMonth?: number | null;
@@ -18,6 +19,7 @@ export type MePlanResponse = {
     studyPacksUsed: number;
     challengeQuizzesUsed: number;
     adaptivePracticeUsed: number;
+    interviewPracticeUsed?: number;
     ocrUsed: number;
     noteGenerationsUsed?: number;
     exportsUsed?: number;
@@ -26,12 +28,14 @@ export type MePlanResponse = {
     studyPacksRemaining: number;
     challengeQuizzesRemaining: number;
     adaptivePracticeRemaining: number;
+    interviewPracticeRemaining?: number;
     ocrRemaining: number;
     noteGenerationsRemaining?: number;
     exportsRemaining?: number | null;
   };
   features: {
     adaptivePracticeAvailable: boolean;
+    interviewPracticeAvailable?: boolean;
     difficultySelectionAvailable: boolean;
     fileUploadAvailable: boolean;
     ocrAvailable: boolean;

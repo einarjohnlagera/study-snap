@@ -44,6 +44,9 @@ public class UserUsageEntity {
     @Column(name = "adaptive_quiz_generations", nullable = false)
     private Integer adaptiveQuizGenerations;
 
+    @Column(name = "interview_practice_used_this_month", nullable = false)
+    private Integer interviewPracticeUsedThisMonth;
+
     @Column(name = "ocr_extractions", nullable = false)
     private Integer ocrExtractions;
 
@@ -55,4 +58,10 @@ public class UserUsageEntity {
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
+
+    public void incrementInterviewPracticeUsedThisMonth() {
+        interviewPracticeUsedThisMonth = interviewPracticeUsedThisMonth == null
+                ? 1
+                : interviewPracticeUsedThisMonth + 1;
+    }
 }

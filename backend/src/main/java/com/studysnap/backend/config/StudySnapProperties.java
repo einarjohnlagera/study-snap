@@ -34,6 +34,7 @@ public class StudySnapProperties {
         private int quizQuestionsFree = 5;
         private String modelFree = "gpt-4.1-mini";
         private String modelPremium = "gpt-4.1";
+        private String modelCritique = "gpt-4.1-mini";
         private String promptDir = "prompts/study-pack-v1";
     }
 
@@ -102,6 +103,7 @@ public class StudySnapProperties {
         private int proMonthlyChallengeQuizLimit = 50;
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
+        private int proMonthlyInterviewPracticeLimit = 10;
         private int freeMonthlyOcrLimit = 20;
         private int plusMonthlyOcrLimit = 50;
         private int proMonthlyOcrLimit = 100;
@@ -112,6 +114,7 @@ public class StudySnapProperties {
         private int plusMonthlyExportLimit = 15;
         private int proMonthlyExportLimit = -1;
         private boolean adaptivePracticeProOnly = false;
+        private boolean interviewPracticeProOnly = true;
         private boolean difficultySelectionProOnly = true;
         private boolean longExamAvailableForPro = true;
         private int longExamLowTierCount = 20;
@@ -144,6 +147,14 @@ public class StudySnapProperties {
                 case PLUS -> plusMonthlyAdaptivePracticeLimit;
                 case FREE -> 0;
             };
+        }
+
+        public int resolveMonthlyInterviewPracticeLimit(PlanType planType) {
+            PlanType normalizedPlanType = normalizePlanType(planType);
+            if (interviewPracticeProOnly && normalizedPlanType != PlanType.PRO) {
+                return 0;
+            }
+            return normalizedPlanType == PlanType.PRO ? proMonthlyInterviewPracticeLimit : 0;
         }
 
         public int resolveMonthlyOcrLimit(PlanType planType) {
@@ -188,6 +199,14 @@ public class StudySnapProperties {
 
         public boolean isLongExamAvailable(PlanType planType) {
             return longExamAvailableForPro && normalizePlanType(planType) == PlanType.PRO;
+        }
+
+        public boolean isInterviewPracticeAvailable(PlanType planType) {
+            PlanType normalizedPlanType = normalizePlanType(planType);
+            if (!interviewPracticeProOnly) {
+                return normalizedPlanType != PlanType.FREE;
+            }
+            return normalizedPlanType == PlanType.PRO;
         }
 
         private PlanType normalizePlanType(PlanType planType) {

@@ -55,7 +55,7 @@ import org.springframework.transaction.support.TransactionOperations;
 
 @ExtendWith(MockitoExtension.class)
 class LongExamServiceTest {
-    private static final String DEFAULT_DIFFICULTY = "medium";
+    private static final String DEFAULT_DIFFICULTY = "mixed";
 
     @Mock
     private StudyPackRepository studyPackRepository;
@@ -159,6 +159,7 @@ class LongExamServiceTest {
         assertThat(response.status()).isEqualTo("GENERATING");
         assertThat(response.quiz()).isEmpty();
         assertThat(response.totalQuestions()).isEqualTo(25);
+        assertThat(response.difficulty()).isEqualTo(DEFAULT_DIFFICULTY);
         assertThat(response.canResume()).isFalse();
         assertThat(dispatchedTask).isNotNull();
         QuickReviewSessionEntity generatingSession = savedSessions.getFirst();

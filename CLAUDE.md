@@ -68,7 +68,7 @@ Required env vars (put in `backend/.env`):
 - `LLM_API_KEY` (OpenAI key)
 - `JWT_SECRET`
 
-LLM models are config-driven: `LLM_MODEL_FREE` (default: `gpt-4.1-mini`) and `LLM_MODEL_PREMIUM` (default: `gpt-4.1`).
+LLM models are config-driven: `LLM_MODEL_FREE` (default: `gpt-4.1-mini`), `LLM_MODEL_PREMIUM` (default: `gpt-4.1`), and `LLM_MODEL_CRITIQUE` (default: `gpt-4.1-mini` for short Interview Practice feedback).
 
 ### Frontend (Next.js)
 

@@ -41,6 +41,7 @@ import { DashboardError } from "./dashboard-error";
 import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
+import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   clearFirstStudyOnboardingStep,
@@ -503,6 +504,7 @@ export default function DashboardPage() {
     )
     : false;
   const shouldShowFreeUpgradeCard = usageSummary?.plan === "FREE" && dashboardProfileType !== "TEACHER";
+  const currentPlan = usageSummary?.plan ?? profile?.planType ?? "FREE";
   const teacherGeneratedQuizEmptyAction = recentReadyNotes[0]?.id
     ? {
         href: `/notes/${recentReadyNotes[0].id}`,
@@ -593,6 +595,14 @@ export default function DashboardPage() {
                 <DashboardPersonalizationPrompt
                   onDismiss={dismissPersonalizationPrompt}
                   onOpenPreferences={handleOpenPreferences}
+                />
+              ) : null}
+              {dashboardProfileType === "PROFESSIONAL" ? (
+                <ProfessionalInterviewPracticeCard
+                  currentPlan={currentPlan}
+                  usageSummary={usageSummary}
+                  readyNoteId={recentReadyNotes[0]?.id ?? null}
+                  onUpgrade={() => setActivePaywallModal("interview-practice-limit")}
                 />
               ) : null}
               <DashboardFocusAreasCard

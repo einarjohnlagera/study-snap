@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.dto.QuizItem;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -22,6 +23,20 @@ public interface LlmStudyPackService {
 			List<String> disallowedQuestions,
 			int questionCount,
 			StudyPackGenerationContext context
+	);
+
+	List<QuizItem> generateInterviewPracticeQuiz(
+			String studyPackTitle,
+			String studyPackSummary,
+			List<String> keyConcepts,
+			List<String> disallowedQuestions,
+			int questionCount,
+			StudyPackGenerationContext context
+	);
+
+	InterviewPracticeCritique generateInterviewCritique(
+			QuizItem question,
+			int selectedChoiceIndex
 	);
 
 	List<QuizItem> generateChallengeQuiz(
