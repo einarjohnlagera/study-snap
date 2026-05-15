@@ -30,7 +30,7 @@ const STEPS: Step[] = [
     number: 3,
     icon: Zap,
     title: "Practice with Quizzes",
-    description: "Start with Quick Review to reinforce recall, then take a Challenge Quiz to test yourself.",
+    description: "Start with Quick Review to reinforce recall, then take a Challenge Quiz to test yourself. Use Long Exam for full-topic practice when you're ready (Pro).",
     cta: { label: "Start Reviewing", href: "/library" },
   },
   {
@@ -54,6 +54,7 @@ const TIPS = [
   "Wrong answers are more useful than correct ones. Always check explanations.",
   "Weak Concepts on your Dashboard show exactly what needs more practice.",
   "Challenge Quiz once a week keeps recall sharp across older notes.",
+  "Preparing for boards? Switch your profile type in Settings to unlock Board Exam Mode.",
 ];
 
 export function StudentGuide() {
