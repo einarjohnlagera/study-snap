@@ -2,7 +2,7 @@
 
 Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
-Current documentation baseline: `v0.13.0 - Complete the Promise, Reach New Audiences`
+Current documentation baseline: `v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor`
 
 ## Product Overview
 

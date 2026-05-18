@@ -1,8 +1,25 @@
 # RELEASES.md - NoteLib
 
-## v0.14.0 - Grow the Surface, Deepen the Practice
+## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor
 
 **Status: In Progress**
+
+Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywall, and close the unbounded-LLM-cost gap on uncapped modes. This is a margin fix framed as a UX uplift, not a feature add.
+
+### Planned Scope
+
+- **Premium feel for Long Exam and Board Exam** — stronger pre-session framing, expected-duration and simulation cues, post-session score-report polish, domain-coverage visualization, suggested-next-step framing, and distinct mode presentation while keeping both modes austere by design
+- **Cost-control quota refactor** — replace uncapped Long Exam and Board Exam behavior with explicit per-mode monthly caps, keep existing Pro Challenge Quiz / Adaptive Practice / Study Pack value intact unless v0.14.0 usage data says otherwise, and surface per-mode usage in Settings -> Plan & Billing
+- **Quota infrastructure alignment** — add explicit per-mode quotas on `UserUsageEntity` and `StudySnapProperties`, reset them through `BillingUsageResetJob`, and frame the change honestly as clearer monthly plan inclusions
+- **Interview Practice evolution review** — evaluate multi-note Interview Practice, structured interview templates, open-ended evaluation, profile / role enrichment, and possible Plus promotion only after Interview Practice v1 has run for at least one billing cycle
+
+### ✅ Shipped
+
+---
+
+## v0.14.0 - Grow the Surface, Deepen the Practice
+
+**Status: Released**
 
 Theme: expand organic reach through subject SEO pages, unlock professional-audience depth with Interview Practice, extend Long Exam to span multiple notes, and close out the quiz generation performance work deferred from v0.13.0.
 
