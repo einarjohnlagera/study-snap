@@ -213,9 +213,6 @@ export default function ProfilePage() {
   const [pendingProfileType, setPendingProfileType] = useState<ProfileType | null>(null);
   const [profileTypeSwitchToast, setProfileTypeSwitchToast] = useState<string | null>(null);
   const [examDateInput, setExamDateInput] = useState("");
-  const [savingExamDate, setSavingExamDate] = useState(false);
-  const [examDateMessage, setExamDateMessage] = useState<string | null>(null);
-  const [examDateError, setExamDateError] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
@@ -254,8 +251,6 @@ export default function ProfilePage() {
     setError(null);
     setIdentityMessage(null);
     setProfileTypeMessage(null);
-    setExamDateMessage(null);
-    setExamDateError(null);
     setLearningProfileMessage(null);
     setSignInMethodsMessage(null);
     setLearningProfileErrors({});
@@ -499,20 +494,39 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveProfileType = () => {
+  const handleSaveProfileType = async () => {
     if (savingProfileType || !selectedProfileType || !profile) {
       return;
     }
-    if (selectedProfileType === profile.profileType) {
+    const profileTypeChanged = selectedProfileType !== profile.profileType;
+    const examDateChanged = selectedProfileType === "BOARD_EXAM" && examDateInput !== (profile.examDate ?? "");
+    if (!profileTypeChanged && !examDateChanged) {
       setProfileTypeMessage("Profile type is already up to date.");
       return;
     }
-    if (!isActiveProfileTypeForSwitch(selectedProfileType)) {
+    if (profileTypeChanged) {
+      if (!isActiveProfileTypeForSwitch(selectedProfileType)) {
+        return;
+      }
+      // Show the confirmation modal before committing the switch.
+      setPendingProfileType(selectedProfileType);
+      setProfileTypeMessage(null);
       return;
     }
-    // Show the confirmation modal before committing the switch.
-    setPendingProfileType(selectedProfileType);
+    // Only exam date changed (profile type is BOARD_EXAM and unchanged).
+    setSavingProfileType(true);
     setProfileTypeMessage(null);
+    try {
+      const updatedProfile = await updateExamDate(examDateInput || null);
+      setProfile(updatedProfile);
+      setExamDateInput(updatedProfile.examDate ?? "");
+      setProfileTypeMessage(updatedProfile.examDate ? "Exam date updated successfully." : "Exam date cleared.");
+    } catch (err) {
+      setExamDateInput(profile.examDate ?? "");
+      setProfileTypeMessage(err instanceof Error ? err.message : "Could not update exam date.");
+    } finally {
+      setSavingProfileType(false);
+    }
   };
 
   const handleConfirmProfileTypeSwitch = async () => {
@@ -524,9 +538,16 @@ export default function ProfilePage() {
     setPendingProfileType(null);
     try {
       const updatedProfile = await completeOnboardingProfileType({ profileType: targetType });
-      setProfile(updatedProfile);
-      setSelectedProfileType(updatedProfile.profileType ?? targetType);
-      setExamDateInput(updatedProfile.examDate ?? "");
+
+      // Also save exam date if switching to BOARD_EXAM with a pending change.
+      let finalProfile = updatedProfile;
+      if (targetType === "BOARD_EXAM" && examDateInput !== (updatedProfile.examDate ?? "")) {
+        finalProfile = await updateExamDate(examDateInput || null);
+      }
+
+      setProfile(finalProfile);
+      setSelectedProfileType(finalProfile.profileType ?? targetType);
+      setExamDateInput(finalProfile.examDate ?? "");
 
       // Show a mode-specific success toast.
       const content = getProfileTypeSwitchContent(targetType);
@@ -545,25 +566,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveExamDate = async () => {
-    if (savingExamDate) {
-      return;
-    }
-    setSavingExamDate(true);
-    setExamDateMessage(null);
-    setExamDateError(null);
-    try {
-      const updatedProfile = await updateExamDate(examDateInput || null);
-      setProfile(updatedProfile);
-      setExamDateInput(updatedProfile.examDate ?? "");
-      setExamDateMessage(updatedProfile.examDate ? "Exam date updated successfully." : "Exam date cleared.");
-    } catch (err) {
-      setExamDateInput(profile?.examDate ?? "");
-      setExamDateError(err instanceof Error ? err.message : "Could not update exam date.");
-    } finally {
-      setSavingExamDate(false);
-    }
-  };
 
   const handleConnectGoogle = useCallback(async (code: string) => {
     if (connectingGoogle) {
@@ -805,25 +807,11 @@ export default function ProfilePage() {
                   value={examDateInput}
                   onChange={(event) => {
                     setExamDateInput(event.target.value);
-                    setExamDateMessage(null);
-                    setExamDateError(null);
+                    setProfileTypeMessage(null);
                   }}
                   aria-label="Exam Date"
                 />
                 {examCountdown ? <p className="text-xs text-foreground/60">{examCountdown}</p> : null}
-                {examDateMessage ? <p className="text-xs text-foreground/60">{examDateMessage}</p> : null}
-                {examDateError ? <p className="text-xs text-red-600 dark:text-red-400">{examDateError}</p> : null}
-                <div className="flex justify-end">
-                  <ResponsiveActionButton
-                    type="button"
-                    className="w-full sm:w-auto"
-                    onClick={() => void handleSaveExamDate()}
-                    loading={savingExamDate}
-                    loadingText="Saving..."
-                    action="save"
-                    label="Save Exam Date"
-                  />
-                </div>
               </div>
             ) : null}
             <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -837,7 +825,7 @@ export default function ProfilePage() {
               <ResponsiveActionButton
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={handleSaveProfileType}
+                onClick={() => void handleSaveProfileType()}
                 disabled={savingProfileType || !selectedProfileType}
                 loading={savingProfileType}
                 loadingText="Saving..."

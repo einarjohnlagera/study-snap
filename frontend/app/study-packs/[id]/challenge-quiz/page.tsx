@@ -264,6 +264,7 @@ export default function ChallengeQuizPage() {
   const [viewerPlanType, setViewerPlanType] = useState<ChallengeViewerPlanType>(null);
   const [viewerProfileType, setViewerProfileType] = useState<ChallengeViewerProfileType>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<ChallengePaywallVariant | null>(null);
+  const [challengeQuizLimitReached, setChallengeQuizLimitReached] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
   const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(() => (
     resolvePreferredChallengeMode(getAuthUser()?.profileType)
@@ -594,14 +595,9 @@ export default function ChallengeQuizPage() {
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
         setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
-        const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
-        const shouldShowLimitPage = hasReachedMonthlyLimit && shouldShowChallengeQuizLimitPage(resolvedViewerPlanType);
-        setPhase(shouldShowLimitPage ? "limit-reached" : "prestart");
-        if (hasReachedMonthlyLimit) {
-          setActivePaywallModal(shouldShowLimitPage ? null : "challenge-quiz-limit");
-        } else {
-          setActivePaywallModal(null);
-        }
+        setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
+        setPhase("prestart");
+        setActivePaywallModal(null);
         return;
       }
 
@@ -623,14 +619,9 @@ export default function ChallengeQuizPage() {
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
         setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
-        const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
-        const shouldShowLimitPage = hasReachedMonthlyLimit && shouldShowChallengeQuizLimitPage(resolvedViewerPlanType);
-        setPhase(shouldShowLimitPage ? "limit-reached" : "prestart");
-        if (hasReachedMonthlyLimit) {
-          setActivePaywallModal(shouldShowLimitPage ? null : "challenge-quiz-limit");
-        } else {
-          setActivePaywallModal(null);
-        }
+        setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
+        setPhase("prestart");
+        setActivePaywallModal(null);
       }
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
@@ -1006,10 +997,18 @@ export default function ChallengeQuizPage() {
     [viewerId],
   );
   const handleSelectChallengeQuizMode = useCallback(() => {
-    setSelectedMode(CHALLENGE_MODE);
     setError(null);
+    if (challengeQuizLimitReached) {
+      if (shouldShowChallengeQuizLimitPage(viewerPlanType)) {
+        setPhase("limit-reached");
+      } else {
+        openLockedFeaturePaywall("challenge-quiz-limit", "challenge_mode_selection");
+      }
+      return;
+    }
+    setSelectedMode(CHALLENGE_MODE);
     setPrestartStep("challenge-setup");
-  }, []);
+  }, [challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
   const handleSelectBoardExamMode = useCallback(() => {
     setSelectedMode(BOARD_EXAM_MODE);
     setError(null);
@@ -1017,8 +1016,16 @@ export default function ChallengeQuizPage() {
       openLockedFeaturePaywall("board-exam-mode", "board_exam_mode_selection");
       return;
     }
+    if (challengeQuizLimitReached) {
+      if (shouldShowChallengeQuizLimitPage(viewerPlanType)) {
+        setPhase("limit-reached");
+      } else {
+        openLockedFeaturePaywall("challenge-quiz-limit", "board_exam_mode_selection");
+      }
+      return;
+    }
     setPrestartStep("board-exam-setup");
-  }, [boardExamAvailable, openLockedFeaturePaywall]);
+  }, [boardExamAvailable, challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
   const handleSelectLongExamMode = useCallback(() => {
     setError(null);
     if (viewerPlanType !== "PRO") {
@@ -1038,6 +1045,7 @@ export default function ChallengeQuizPage() {
   const returnToModeSelection = useCallback(() => {
     setError(null);
     setShowBoardExamStartModal(false);
+    setPhase("prestart");
     setPrestartStep("mode-selection");
     setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
   }, [viewerProfileType]);
@@ -1187,7 +1195,16 @@ export default function ChallengeQuizPage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">You’ve reached your quiz limit for this month</h1>
           <p className="text-sm text-foreground/75">Your quiz limit resets on your next billing cycle.</p>
-          <BackLink href={noteDetailHref} label="Note" />
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={returnToModeSelection}
+            >
+              Choose another mode
+            </Button>
+          </div>
         </Card>
       ) : phase === "generating" ? (
         <ChallengeQuizLoading />

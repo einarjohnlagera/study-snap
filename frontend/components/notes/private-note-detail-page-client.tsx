@@ -1122,10 +1122,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Generate a Study Pack with quiz questions before starting Challenge Quiz.");
       return;
     }
-    if (hasReachedChallengeQuizLimit) {
-      openPaywallModal("challenge-quiz-limit", "private_note_detail_challenge_quiz_limit");
-      return;
-    }
     navigateTo(buildChallengeQuizHref(note.id, { entry: CHALLENGE_QUIZ_MODE_SELECTION_ENTRY }));
   };
 
