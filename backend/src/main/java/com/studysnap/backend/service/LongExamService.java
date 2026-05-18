@@ -5,6 +5,8 @@ import com.studysnap.backend.dto.LongExamCompleteRequest;
 import com.studysnap.backend.dto.LongExamMasteryReportResponse;
 import com.studysnap.backend.dto.LongExamProgressRequest;
 import com.studysnap.backend.dto.LongExamSessionResponse;
+import com.studysnap.backend.dto.LongExamSourceNote;
+import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.LongExamStartRequest;
 import com.studysnap.backend.dto.LongExamStartResponse;
 import com.studysnap.backend.dto.QuizItem;
@@ -20,6 +22,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.InvalidLongExamDifficultyException;
+import com.studysnap.backend.exception.InvalidLongExamSourceException;
 import com.studysnap.backend.exception.LongExamGenerationFailedException;
 import com.studysnap.backend.exception.LongExamSessionNotFoundException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
@@ -46,9 +49,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -58,8 +65,13 @@ import java.util.UUID;
 public class LongExamService {
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
     private static final String SESSION_STATE_COMPLETED = "completed";
+    private static final String SESSION_STATE_SOURCE_NOTE_REFS = "sourceNoteRefs";
     private static final String SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
     private static final String SESSION_STATE_TIME_LIMIT_SECONDS = "timeLimitSeconds";
+    private static final String SOURCE_STUDY_PACK_ID_KEY = "studyPackId";
+    private static final String SOURCE_NOTE_ID_KEY = "noteId";
+    private static final String SOURCE_NOTE_TITLE_KEY = "noteTitle";
+    private static final String SOURCE_QUESTION_COUNT_KEY = "questionCount";
     private static final String SESSION_METADATA_DOMAIN_BREAKDOWN = "domainBreakdown";
     private static final String SESSION_METADATA_WEAK_DOMAINS = "weakDomains";
     private static final String SESSION_METADATA_PERFORMANCE_SUMMARY = "performanceSummary";
@@ -90,6 +102,8 @@ public class LongExamService {
     private static final int GOOD_SCORE_THRESHOLD = 70;
     private static final int EXCELLENT_SCORE_THRESHOLD = 90;
     private static final int SECONDS_PER_QUESTION = 90;
+    private static final int MAX_ADDITIONAL_SOURCE_COUNT = 3;
+    private static final int MIN_QUESTIONS_PER_SOURCE = 3;
     private static final BigDecimal ZERO_SCORE = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final List<QuickReviewSessionStatus> ACTIVE_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
@@ -126,6 +140,7 @@ public class LongExamService {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         String difficulty = resolveDifficulty(request);
         int questionCount = resolveQuestionCount(userId);
+        List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
 
         QuickReviewSessionEntity session = studyPackGenerationTransactionOperations.execute(status -> {
             StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
@@ -142,13 +157,20 @@ public class LongExamService {
                 return existing;
             }
 
+            List<LongExamSourceNoteRef> sourceNoteRefs = resolveSourceNoteRefs(
+                    studyPack,
+                    userId,
+                    additionalStudyPackIds,
+                    questionCount
+            );
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(buildGeneratingSession(
                     userId,
                     studyPack,
                     difficulty,
-                    questionCount
+                    questionCount,
+                    sourceNoteRefs
             ));
-            dispatchLongExamGenerationAfterCommit(saved.getId(), studyPackId, difficulty, questionCount);
+            dispatchLongExamGenerationAfterCommit(saved.getId(), difficulty);
             return saved;
         });
         if (session == null) {
@@ -159,11 +181,9 @@ public class LongExamService {
 
     private void dispatchLongExamGenerationAfterCommit(
             UUID sessionId,
-            UUID studyPackId,
-            String difficulty,
-            int questionCount
+            String difficulty
     ) {
-        Runnable generationTask = () -> generateLongExamAsync(sessionId, studyPackId, difficulty, questionCount);
+        Runnable generationTask = () -> generateLongExamAsync(sessionId, difficulty);
         if (TransactionSynchronizationManager.isSynchronizationActive()
                 && TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -177,7 +197,7 @@ public class LongExamService {
         studyPackGenerationTaskDispatcher.execute(generationTask);
     }
 
-    private void generateLongExamAsync(UUID sessionId, UUID studyPackId, String difficulty, int questionCount) {
+    private void generateLongExamAsync(UUID sessionId, String difficulty) {
         try {
             studyPackGenerationTransactionOperations.execute(status -> {
                 QuickReviewSessionEntity session = quickReviewSessionRepository.findById(sessionId)
@@ -185,29 +205,19 @@ public class LongExamService {
                 if (session.getStatus() != QuickReviewSessionStatus.GENERATING) {
                     return null;
                 }
-                StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, session.getUserId());
                 UserEntity user = userRepository.findById(session.getUserId())
                         .orElseThrow(LongExamSessionNotFoundException::new);
-                StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(
-                        user.getId(),
-                        studyPack
-                );
-                List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
-                List<QuizItem> generatedQuiz = quizGenerationService.generateLongExamParallel(
-                        studyPack.getTitle(),
-                        studyPack.getSummary(),
-                        getKeyConcepts(studyPack),
-                        disallowedQuestions,
-                        questionCount,
-                        difficulty,
-                        generationContext,
-                        studyPackGenerationTaskExecutor
-                );
-                List<QuizItem> longExamQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                        generatedQuiz,
-                        QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
-                );
-                if (longExamQuiz.size() != questionCount) {
+                List<LongExamSourceNoteRef> sourceNoteRefs = extractSourceNoteRefs(session.getSessionState());
+                if (sourceNoteRefs.isEmpty()) {
+                    StudyPackEntity primaryStudyPack = findOwnedStudyPackForGenerationOrThrow(
+                            session.getStudyPackId(),
+                            session.getUserId()
+                    );
+                    sourceNoteRefs = List.of(buildSourceNoteRef(primaryStudyPack, safeTotalQuestions(session)));
+                }
+                List<QuizItem> longExamQuiz = generateQuizForSources(user, sourceNoteRefs, difficulty);
+                int expectedQuestionCount = safeTotalQuestions(session);
+                if (longExamQuiz.size() != expectedQuestionCount) {
                     throw new LongExamGenerationFailedException();
                 }
 
@@ -325,7 +335,7 @@ public class LongExamService {
                 ANALYTICS_METADATA_QUESTION_COUNT, statistics.totalQuestions(),
                 ANALYTICS_METADATA_SCORE_PERCENTAGE, statistics.scorePercentage()
         ));
-        return buildMasteryReportResponse(saved.getId(), statistics);
+        return buildMasteryReportResponse(saved.getId(), statistics, saved.getSessionState());
     }
 
     public SimpleMessageResponse forfeitSession(UUID sessionId, UUID userId) {
@@ -377,7 +387,8 @@ public class LongExamService {
                 extractDifficulty(session.getSessionState()),
                 canResume,
                 extractTimeLimitSeconds(session.getSessionState(), totalQuestions),
-                extractTimerStartedAtEpochSeconds(session.getSessionState())
+                extractTimerStartedAtEpochSeconds(session.getSessionState()),
+                extractSourceNoteRefs(session.getSessionState())
         );
     }
 
@@ -394,7 +405,8 @@ public class LongExamService {
                 extractDifficulty(session.getSessionState()),
                 session.getStatus() == QuickReviewSessionStatus.PAUSED,
                 extractTimeLimitSeconds(session.getSessionState(), totalQuestions),
-                extractTimerStartedAtEpochSeconds(session.getSessionState())
+                extractTimerStartedAtEpochSeconds(session.getSessionState()),
+                extractSourceNoteRefs(session.getSessionState())
         );
     }
 
@@ -402,7 +414,8 @@ public class LongExamService {
             UUID userId,
             StudyPackEntity studyPack,
             String difficulty,
-            int questionCount
+            int questionCount,
+            List<LongExamSourceNoteRef> sourceNoteRefs
     ) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
@@ -418,14 +431,15 @@ public class LongExamService {
         session.setScorePercentage(ZERO_SCORE);
         session.setRetryCount(0);
         session.setSessionMetadata(null);
-        session.setSessionState(buildInitialSessionState(difficulty));
+        session.setSessionState(buildInitialSessionState(difficulty, sourceNoteRefs));
         session.setCreatedAt(OffsetDateTime.now());
         session.setCompletedAt(null);
         return session;
     }
 
     private void markSessionReady(QuickReviewSessionEntity session, List<QuizItem> quiz, String difficulty) {
-        Map<String, Object> state = QuizSessionStateUtils.withQuiz(quiz, buildInitialSessionState(difficulty));
+        List<LongExamSourceNoteRef> sourceNoteRefs = extractSourceNoteRefs(session.getSessionState());
+        Map<String, Object> state = QuizSessionStateUtils.withQuiz(quiz, buildInitialSessionState(difficulty, sourceNoteRefs));
         state.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
         state.put(SESSION_STATE_TIME_LIMIT_SECONDS, quiz.size() * SECONDS_PER_QUESTION);
 
@@ -514,7 +528,11 @@ public class LongExamService {
         return metadata;
     }
 
-    private LongExamMasteryReportResponse buildMasteryReportResponse(UUID sessionId, LongExamStatistics statistics) {
+    private LongExamMasteryReportResponse buildMasteryReportResponse(
+            UUID sessionId,
+            LongExamStatistics statistics,
+            Map<String, Object> sessionState
+    ) {
         return new LongExamMasteryReportResponse(
                 sessionId,
                 statistics.totalQuestions(),
@@ -523,7 +541,8 @@ public class LongExamService {
                 statistics.domainBreakdown(),
                 statistics.weakDomains(),
                 statistics.performanceSummary(),
-                statistics.suggestedNextStep()
+                statistics.suggestedNextStep(),
+                extractSourceNotes(sessionState)
         );
     }
 
@@ -537,11 +556,140 @@ public class LongExamService {
                 .orElseThrow(StudyPackNotFoundException::new);
     }
 
-    private Map<String, Object> buildInitialSessionState(String difficulty) {
+    private StudyPackEntity findOwnedLongExamSourceOrThrow(UUID studyPackId, UUID userId) {
+        return studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)
+                .orElseThrow(InvalidLongExamSourceException::new);
+    }
+
+    private List<UUID> resolveAdditionalStudyPackIds(LongExamStartRequest request, UUID primaryStudyPackId) {
+        if (request == null || request.additionalStudyPackIds() == null || request.additionalStudyPackIds().isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> uniqueIds = new LinkedHashSet<>();
+        for (String rawStudyPackId : request.additionalStudyPackIds()) {
+            if (rawStudyPackId == null || rawStudyPackId.isBlank()) {
+                throw new InvalidLongExamSourceException();
+            }
+            UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                    rawStudyPackId,
+                    InvalidLongExamSourceException::new
+            );
+            if (studyPackId.equals(primaryStudyPackId)) {
+                throw new InvalidLongExamSourceException();
+            }
+            uniqueIds.add(studyPackId);
+        }
+        if (uniqueIds.size() > MAX_ADDITIONAL_SOURCE_COUNT) {
+            throw new InvalidLongExamSourceException();
+        }
+        return List.copyOf(uniqueIds);
+    }
+
+    private List<LongExamSourceNoteRef> resolveSourceNoteRefs(
+            StudyPackEntity primaryStudyPack,
+            UUID userId,
+            List<UUID> additionalStudyPackIds,
+            int questionCount
+    ) {
+        List<StudyPackEntity> sources = new ArrayList<>(1 + additionalStudyPackIds.size());
+        sources.add(primaryStudyPack);
+        String primarySubject = normalizeSubjectForMatch(primaryStudyPack.getSubject());
+        if (!additionalStudyPackIds.isEmpty() && primarySubject.isBlank()) {
+            throw new InvalidLongExamSourceException();
+        }
+        for (UUID additionalStudyPackId : additionalStudyPackIds) {
+            StudyPackEntity additionalStudyPack = findOwnedLongExamSourceOrThrow(additionalStudyPackId, userId);
+            if (!primarySubject.equals(normalizeSubjectForMatch(additionalStudyPack.getSubject()))) {
+                throw new InvalidLongExamSourceException();
+            }
+            sources.add(additionalStudyPack);
+        }
+
+        int sourceCount = sources.size();
+        int baseQuestionCount = questionCount / sourceCount;
+        if (baseQuestionCount < MIN_QUESTIONS_PER_SOURCE) {
+            throw new InvalidLongExamSourceException();
+        }
+        int remainder = questionCount % sourceCount;
+        List<LongExamSourceNoteRef> sourceNoteRefs = new ArrayList<>(sourceCount);
+        for (int index = 0; index < sources.size(); index++) {
+            StudyPackEntity source = sources.get(index);
+            int sourceQuestionCount = baseQuestionCount + (index == 0 ? remainder : 0);
+            sourceNoteRefs.add(buildSourceNoteRef(source, sourceQuestionCount));
+        }
+        return sourceNoteRefs;
+    }
+
+    private LongExamSourceNoteRef buildSourceNoteRef(StudyPackEntity studyPack, int questionCount) {
+        return new LongExamSourceNoteRef(
+                studyPack.getId().toString(),
+                studyPack.getNoteId().toString(),
+                studyPack.getTitle(),
+                questionCount
+        );
+    }
+
+    private List<QuizItem> generateQuizForSources(
+            UserEntity user,
+            List<LongExamSourceNoteRef> sourceNoteRefs,
+            String difficulty
+    ) {
+        List<QuizItem> mergedQuiz = new ArrayList<>();
+        Set<String> disallowedQuestions = new LinkedHashSet<>();
+        for (LongExamSourceNoteRef sourceNoteRef : sourceNoteRefs) {
+            UUID sourceStudyPackId = UuidParsingUtils.parseUuidOrThrow(
+                    sourceNoteRef.studyPackId(),
+                    StudyPackNotFoundException::new
+            );
+            StudyPackEntity sourceStudyPack = findOwnedStudyPackForGenerationOrThrow(sourceStudyPackId, user.getId());
+            StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(
+                    user.getId(),
+                    sourceStudyPack
+            );
+            List<String> sourceDisallowedQuestions = extractQuestionTexts(sourceStudyPack.getQuiz());
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(sourceDisallowedQuestions));
+            List<QuizItem> generatedQuiz = quizGenerationService.generateLongExamParallel(
+                    sourceStudyPack.getTitle(),
+                    sourceStudyPack.getSummary(),
+                    getKeyConcepts(sourceStudyPack),
+                    sourceDisallowedQuestions,
+                    sourceNoteRef.questionCount(),
+                    difficulty,
+                    generationContext,
+                    studyPackGenerationTaskExecutor
+            );
+            List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
+                    generatedQuiz,
+                    disallowedQuestions
+            );
+            mergedQuiz.addAll(uniqueGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+        }
+        return mergedQuiz;
+    }
+
+    private Map<String, Object> buildInitialSessionState(String difficulty, List<LongExamSourceNoteRef> sourceNoteRefs) {
         Map<String, Object> state = new LinkedHashMap<>();
         state.put(SESSION_STATE_DIFFICULTY, difficulty);
         state.put(SESSION_STATE_COMPLETED, false);
+        state.put(SESSION_STATE_SOURCE_NOTE_REFS, sourceNoteRefsToState(sourceNoteRefs));
         return state;
+    }
+
+    private List<Map<String, Object>> sourceNoteRefsToState(List<LongExamSourceNoteRef> sourceNoteRefs) {
+        if (sourceNoteRefs == null || sourceNoteRefs.isEmpty()) {
+            return List.of();
+        }
+        return sourceNoteRefs.stream()
+                .map(sourceNoteRef -> {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put(SOURCE_STUDY_PACK_ID_KEY, sourceNoteRef.studyPackId());
+                    entry.put(SOURCE_NOTE_ID_KEY, sourceNoteRef.noteId());
+                    entry.put(SOURCE_NOTE_TITLE_KEY, sourceNoteRef.noteTitle());
+                    entry.put(SOURCE_QUESTION_COUNT_KEY, sourceNoteRef.questionCount());
+                    return entry;
+                })
+                .toList();
     }
 
     private Map<String, Object> markSessionStateCompleted(Map<String, Object> existingState) {
@@ -603,6 +751,64 @@ public class LongExamService {
         return questionCount * SECONDS_PER_QUESTION;
     }
 
+    private List<LongExamSourceNoteRef> extractSourceNoteRefs(Map<String, Object> sessionState) {
+        if (sessionState == null) {
+            return List.of();
+        }
+        Object raw = sessionState.get(SESSION_STATE_SOURCE_NOTE_REFS);
+        if (!(raw instanceof List<?> rawEntries) || rawEntries.isEmpty()) {
+            return List.of();
+        }
+        List<LongExamSourceNoteRef> sourceNoteRefs = new ArrayList<>(rawEntries.size());
+        for (Object rawEntry : rawEntries) {
+            LongExamSourceNoteRef sourceNoteRef = extractSourceNoteRef(rawEntry);
+            if (sourceNoteRef != null) {
+                sourceNoteRefs.add(sourceNoteRef);
+            }
+        }
+        return sourceNoteRefs;
+    }
+
+    private LongExamSourceNoteRef extractSourceNoteRef(Object rawEntry) {
+        if (rawEntry instanceof LongExamSourceNoteRef sourceNoteRef) {
+            return sourceNoteRef;
+        }
+        if (!(rawEntry instanceof Map<?, ?> sourceMap)) {
+            return null;
+        }
+        String studyPackId = readStringValue(sourceMap, SOURCE_STUDY_PACK_ID_KEY);
+        String noteId = readStringValue(sourceMap, SOURCE_NOTE_ID_KEY);
+        String noteTitle = readStringValue(sourceMap, SOURCE_NOTE_TITLE_KEY);
+        int questionCount = readIntValue(sourceMap, SOURCE_QUESTION_COUNT_KEY);
+        if (studyPackId == null || noteId == null || questionCount <= 0) {
+            return null;
+        }
+        return new LongExamSourceNoteRef(studyPackId, noteId, noteTitle, questionCount);
+    }
+
+    private List<LongExamSourceNote> extractSourceNotes(Map<String, Object> sessionState) {
+        return extractSourceNoteRefs(sessionState)
+                .stream()
+                .map(sourceNoteRef -> new LongExamSourceNote(sourceNoteRef.noteId(), sourceNoteRef.noteTitle()))
+                .toList();
+    }
+
+    private String readStringValue(Map<?, ?> sourceMap, String key) {
+        Object raw = sourceMap.get(key);
+        if (raw instanceof String value && !value.isBlank()) {
+            return value;
+        }
+        return null;
+    }
+
+    private int readIntValue(Map<?, ?> sourceMap, String key) {
+        Object raw = sourceMap.get(key);
+        if (raw instanceof Number number) {
+            return number.intValue();
+        }
+        return 0;
+    }
+
     private List<String> extractQuestionTexts(List<QuizItem> quiz) {
         if (quiz == null || quiz.isEmpty()) {
             return List.of();
@@ -615,6 +821,10 @@ public class LongExamService {
 
     private List<String> getKeyConcepts(StudyPackEntity studyPack) {
         return studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts();
+    }
+
+    private String normalizeSubjectForMatch(String subject) {
+        return subject == null ? "" : subject.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeDomain(String value) {

@@ -14,6 +14,7 @@ public record LongExamSessionResponse(
         String difficulty,
         boolean paused,
         int timeLimitSeconds,
-        long timerStartedAtEpochSeconds
+        long timerStartedAtEpochSeconds,
+        List<LongExamSourceNoteRef> sourceNoteRefs
 ) {
 }

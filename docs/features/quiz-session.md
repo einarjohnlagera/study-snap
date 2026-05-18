@@ -51,3 +51,16 @@ Rules:
 - dashboard resume payloads should use one API response
 - note metadata should prefer current note values over older generated Study Pack metadata when both exist
 - if note metadata is missing, fallback display should still remain usable
+
+## Long Exam Multi-source State
+
+Long Exam sessions stay anchored to the primary `studyPackId`. When the user adds same-subject notes, additional source attribution is stored in `sessionState.sourceNoteRefs`.
+
+Each entry contains:
+
+- `studyPackId`
+- `noteId`
+- `noteTitle`
+- `questionCount`
+
+This keeps multi-source Long Exam generation inside the shared quiz-session lifecycle without adding a new persistence aggregate.

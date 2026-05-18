@@ -29,6 +29,7 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.InvalidLongExamSourceException;
 import com.studysnap.backend.exception.LongExamNotAvailableException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
@@ -56,6 +57,9 @@ import org.springframework.transaction.support.TransactionOperations;
 @ExtendWith(MockitoExtension.class)
 class LongExamServiceTest {
     private static final String DEFAULT_DIFFICULTY = "mixed";
+    private static final String BIOLOGY_SUBJECT = "Biology";
+    private static final String PRIMARY_BIOLOGY_TITLE = "Primary Biology";
+    private static final String CELL_BIOLOGY_TITLE = "Cell Biology";
 
     @Mock
     private StudyPackRepository studyPackRepository;
@@ -161,6 +165,8 @@ class LongExamServiceTest {
         assertThat(response.totalQuestions()).isEqualTo(25);
         assertThat(response.difficulty()).isEqualTo(DEFAULT_DIFFICULTY);
         assertThat(response.canResume()).isFalse();
+        assertThat(response.sourceNoteRefs()).hasSize(1);
+        assertThat(response.sourceNoteRefs().getFirst().questionCount()).isEqualTo(25);
         assertThat(dispatchedTask).isNotNull();
         QuickReviewSessionEntity generatingSession = savedSessions.getFirst();
         when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(Optional.of(generatingSession));
@@ -258,6 +264,164 @@ class LongExamServiceTest {
         dispatchedTask.run();
 
         assertThat(savedStatuses).containsExactly(QuickReviewSessionStatus.GENERATING, QuickReviewSessionStatus.FAILED);
+    }
+
+    @Test
+    void startSession_withOneAdditionalNoteStoresSourceNoteRefs() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, CELL_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(QuickReviewSessionMode.LONG_EXAM),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LongExamStartResponse response = longExamService.startSession(
+                primaryStudyPackId.toString(),
+                userId,
+                new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()))
+        );
+
+        assertThat(response.totalQuestions()).isEqualTo(25);
+        assertThat(response.sourceNoteRefs())
+                .extracting(source -> source.noteTitle() + ":" + source.questionCount())
+                .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
+    }
+
+    @Test
+    void startSession_withThreeAdditionalNotesAssignsRemainderToPrimary() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        List<UUID> additionalStudyPackIds = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        for (int index = 0; index < additionalStudyPackIds.size(); index++) {
+            UUID additionalStudyPackId = additionalStudyPackIds.get(index);
+            when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                    .thenReturn(Optional.of(buildStudyPack(
+                            additionalStudyPackId,
+                            userId,
+                            "Additional Biology " + index,
+                            BIOLOGY_SUBJECT
+                    )));
+        }
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(QuickReviewSessionMode.LONG_EXAM),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LongExamStartResponse response = longExamService.startSession(
+                primaryStudyPackId.toString(),
+                userId,
+                new LongExamStartRequest(
+                        null,
+                        additionalStudyPackIds.stream().map(UUID::toString).toList()
+                )
+        );
+
+        assertThat(response.sourceNoteRefs())
+                .extracting(source -> source.noteTitle() + ":" + source.questionCount())
+                .containsExactly(
+                        PRIMARY_BIOLOGY_TITLE + ":7",
+                        "Additional Biology 0:6",
+                        "Additional Biology 1:6",
+                        "Additional Biology 2:6"
+                );
+    }
+
+    @Test
+    void startSession_withDifferentSubjectAdditionalNoteThrows() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, "Organic Chemistry", "Chemistry");
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(QuickReviewSessionMode.LONG_EXAM),
+                any()
+        )).thenReturn(Optional.empty());
+        LongExamStartRequest request = new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()));
+
+        String id = primaryStudyPackId.toString();
+        assertThatThrownBy(() -> longExamService.startSession(id, userId, request))
+                .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_withUnownedAdditionalNoteThrowsInvalidSource() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(QuickReviewSessionMode.LONG_EXAM),
+                any()
+        )).thenReturn(Optional.empty());
+        LongExamStartRequest request = new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()));
+
+        String id = primaryStudyPackId.toString();
+        assertThatThrownBy(() -> longExamService.startSession(id, userId, request))
+                .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+
+    @Test
+    void startSession_withFourAdditionalNotesThrows() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        List<String> additionalStudyPackIds = List.of(
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString()
+        );
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        LongExamStartRequest request = new LongExamStartRequest(null, additionalStudyPackIds);
+
+        String id = primaryStudyPackId.toString();
+        assertThatThrownBy(() -> longExamService.startSession(id, userId, request))
+                .isInstanceOf(InvalidLongExamSourceException.class);
     }
 
     @Test
@@ -422,11 +586,16 @@ class LongExamServiceTest {
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId) {
+        return buildStudyPack(studyPackId, userId, "Long Exam Pack", BIOLOGY_SUBJECT);
+    }
+
+    private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId, String title, String subject) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(studyPackId);
         studyPack.setOwnerUserId(userId);
         studyPack.setNoteId(UUID.randomUUID());
-        studyPack.setTitle("Long Exam Pack");
+        studyPack.setTitle(title);
+        studyPack.setSubject(subject);
         studyPack.setSummary("Summary");
         studyPack.setKeyConcepts(List.of("Cells", "Genetics"));
         studyPack.setQuiz(List.of(new QuizItem(

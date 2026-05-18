@@ -10,11 +10,9 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 
 - ~~**Subject landing pages (SEO)**~~ ✅ — see Shipped below
 - ~~**Faster quiz generation**~~ ✅ — see Shipped below
-- **Interview Practice Mode (Professional Profile)** — conversational AI evaluation variant for mock interviews and applied learning scenarios; deferred from v0.13.0 (requires evaluation engine not present in current quiz architecture)
-- **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; deferred from v0.13.0
-- ~~**Faster quiz generation**~~ ✅ — see Shipped below
-- **Interview Practice Mode (Professional Profile)** — conversational AI evaluation variant for mock interviews and applied learning scenarios; deferred from v0.13.0 (requires evaluation engine not present in current quiz architecture)
-- **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; deferred from v0.13.0
+- ~~**Interview Practice Mode (Professional Profile)**~~ ✅ — see Shipped below
+- ~~**Multi-note Long Exam**~~ ✅ — see Shipped below
+- ~~**Stale docs cleanup**~~ ✅ — see Shipped below
 
 ### ✅ Shipped
 
@@ -22,8 +20,10 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 - **Interview Practice Mode v1** — Professional Profile Pro users get an Adaptive Practice sub-mode with scenario MCQs, per-answer AI critique, a soft 2-minute pacing timer, dedicated monthly quota, dashboard entry card, and an Interview Readiness Report
 - **Quiz mode launch polish** — Professional mode selection now includes Interview Practice for per-note entry; Long Exam and Interview Practice prestart screens link back to mode selection; Board Exam and Long Exam default to Mixed without a difficulty selector
 - **Prestart consistency pass** — aligned Interview Practice, Long Exam, and Board Exam prestart layouts with Challenge Quiz using uppercase eyebrows and inset cards with mode-specific top sections plus 3-column meta grids
+- **Multi-note Long Exam** — Pro users can add up to 3 additional same-subject notes from Long Exam prestart; generation stores source note refs in session JSONB, distributes questions proportionally across sources, and includes covered sources in the mastery report
 - **Subject landing pages** — server-rendered `/public/library/[subject]` pages with per-subject metadata, decay-ranked sections, and static generation
 - **Stale docs cleanup** — removed 17 stale/legacy files; merged AI generation spec and overflow menu rules into active docs; renamed `SPEC.md` → `BILLING_ADDENDUM.md`
+- **Fix: Challenge Quiz question navigator shows stale count on Previous navigation** — added `key={currentIndex}` to the navigator summary `<p>` to force remount on index change, clearing a stale GPU compositing layer bitmap caused by `will-change: transform` on the toggle button (iOS Safari rendering quirk)
 - **Help Center strengthened for non-technical users** — split the old "Study Packs & Quizzes" card into two focused cards (Study Packs and Quiz Modes); added a Board Exam Guide card with a 4-step board exam workflow, tips, and a profile-switch CTA; Quiz Modes guide now covers all 5 modes with plan badges (Plus/Pro); Study Packs guide rewritten with 3 sections, bullets, and a tip callout; corrected Adaptive Practice badge from "Pro" to "Plus / Pro"; added Note vs Study Pack mental model to Getting Started step 1; updated Teacher Guide steps 3–4 with explicit location context for Quiz Preview and Export; updated Student Guide and Getting Started to mention Long Exam and Board Exam Mode
 
 ---

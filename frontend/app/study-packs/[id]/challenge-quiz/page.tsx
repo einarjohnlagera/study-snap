@@ -1586,7 +1586,7 @@ export default function ChallengeQuizPage() {
                   >
                     <div className="space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
-                      <p className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
+                      <p key={currentIndex} className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
                     </div>
                     <ChevronDown
                       className={cn(

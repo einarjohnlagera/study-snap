@@ -20,15 +20,15 @@ Theme: expand organic reach through subject SEO pages, unlock professional-audie
 
 Primary focus:
 
-1. **Subject landing pages (SEO)** — proper server-rendered `/public/library/[subject]` landing pages replacing the current redirect; static `<title>` and `<meta description>` per subject; server-rendered note cards ranked by decay scoring; sitemap update to include subject pages; deferred from v0.12.0 and v0.13.0
+1. ~~**Subject landing pages (SEO)**~~ ✅ — server-rendered `/public/library/[subject]` pages with per-subject metadata, decay-ranked sections, and static generation shipped in v0.14.0.
 
-2. **Faster quiz generation** — promote from deferred to implement; profile current LLM latency end-to-end (prompt build, API call, JSON parse, DB write); evaluate streaming responses to unblock frontend earlier, model selection (`gpt-4.1-mini` for quiz generation), and early session creation; implement the approach that latency findings support; frontend may gain a progress indicator if streaming is adopted
+2. ~~**Faster quiz generation**~~ ✅ — Board Exam dedicated simulation prompts, async Long Exam generation, and parallel LLM calls with sequential fallback shipped in v0.14.0.
 
-3. **Interview Practice Mode (Professional Profile)** — sub-mode of Adaptive Practice (reuses `ADAPTIVE` discriminator with `subMode: "INTERVIEW"` in session JSONB); does NOT add a 6th mode; locked 5-mode contract preserved. Pro-only at launch with a dedicated 10/month quota separate from Adaptive Practice. Surfaced as a Professional dashboard card and a Professional mode-selection tile for per-note entry. Session format: scenario-style MCQ (5 or 10 questions) + per-answer AI critique (verdict + rationale + interview follow-up) using `gpt-4.1-mini` for critique to control cost while generation stays on `gpt-4.1`. Soft 2-min per-question timer (visible, non-enforcing). Result is an Interview Readiness Report (band, strengths, gaps, talking points, pacing notes). Section-aware generation prompt scans note Key Concepts to spread questions across technical / applied / behavioral facets. Single-note v1; multi-note and role templates deferred to v0.15+. Full spec in `docs/features/professional-profile.md`.
+3. ~~**Interview Practice Mode (Professional Profile)**~~ ✅ — shipped in v0.14.0 as an Adaptive Practice sub-mode (`ADAPTIVE` discriminator, `subMode: "INTERVIEW"` in session JSONB); 5-mode contract preserved; Pro-only, 10/month dedicated quota; `gpt-4.1-mini` critique + `gpt-4.1` generation; Interview Readiness Report result. Full spec in `docs/features/professional-profile.md`.
 
-4. **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context; single-note Long Exam remains the stable baseline; deferred from v0.13.0
+4. ~~**Multi-note Long Exam**~~ ✅ — shipped in v0.14.0; Pro users can add up to 3 same-subject notes to one Long Exam, with source refs stored in session JSONB and questions split proportionally by source.
 
-5. **Stale docs cleanup** — audit `docs/` for files still referencing v0.11.0 or earlier resolved items; update or remove; deferred from v0.13.0
+5. ~~**Stale docs cleanup**~~ ✅ — removed 17 stale/legacy files; merged AI generation spec and overflow menu rules into active docs shipped in v0.14.0.
 
 ### Implementation stances
 
