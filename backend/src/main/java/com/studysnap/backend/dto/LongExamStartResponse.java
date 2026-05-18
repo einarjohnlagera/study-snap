@@ -11,6 +11,7 @@ public record LongExamStartResponse(
         String difficulty,
         boolean canResume,
         int timeLimitSeconds,
-        long timerStartedAtEpochSeconds
+        long timerStartedAtEpochSeconds,
+        List<LongExamSourceNoteRef> sourceNoteRefs
 ) {
 }

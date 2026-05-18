@@ -11,7 +11,8 @@ public record LongExamMasteryReportResponse(
         List<LongExamDomainStat> domainBreakdown,
         List<String> weakDomains,
         String performanceSummary,
-        String suggestedNextStep
+        String suggestedNextStep,
+        List<LongExamSourceNote> sourceNotes
 ) {
     public record LongExamDomainStat(
             String domain,

@@ -1530,9 +1530,10 @@ These rules exist to prevent the most common forms of context drift across AI co
 - Generated note formatting improvements for public pages must not change how content is stored in the database or how authenticated note detail renders it.
 - Before implementing any public note detail change, confirm the current RELEASES.md section and `docs/features/public-library.md` Public Note Detail section are current.
 
-### v0.14.0 Pre-Implementation Checklist Anti-Drift
+### v0.14.0 Post-Ship Anti-Drift
 
-- Before implementing any v0.14.0 feature, confirm `RELEASES.md` and `docs/product/ROADMAP.md` v0.14.0 sections reflect the current planned scope.
-- `Subject landing pages (SEO)` is the top-priority feature. Do not deprioritize it in favor of other v0.14.0 items without an explicit direction change from the user.
-- `Interview Practice Mode` must not be implemented before EXAM_MODES.md and ROADMAP.md are updated to add it as a 6th mode — this is a locked contract change, not a regular feature.
-- `Faster quiz generation` changes must be based on latency profiling findings; do not implement speculative optimizations before the investigation is complete.
+All v0.14.0 planned scope has shipped. Do not reopen these decisions:
+
+- **Multi-note Long Exam** ships via `LongExamService.resolveAdditionalStudyPackIds` / `resolveSourceNoteRefs` / `generateQuizForSources`. It reuses the existing session lifecycle with no new persistence aggregate and no new `QuickReviewSessionMode` enum value. `LongExamStartRequest` accepts an optional `additionalStudyPackIds` list (max 3). Do not alter the proportional question distribution or subject-match validation without a product decision.
+- **Interview Practice shipped as a sub-mode of Adaptive Practice** (JSONB `subMode: "INTERVIEW"` on the `ADAPTIVE` discriminator). The 5-mode contract is preserved. It uses a dedicated 10/month Pro-only quota, `gpt-4.1-mini` for critique calls, and `gpt-4.1` for generation. Do not revert or alter this cost split.
+- When opening v0.15.0 work, run the release kickoff checklist in `CLAUDE.md` before the first feature commit.

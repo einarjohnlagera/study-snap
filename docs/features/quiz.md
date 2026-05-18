@@ -9,7 +9,7 @@ Quiz features turn a Study Pack-ready note into active-recall practice without b
 Shared ownership rule:
 
 - generated quiz content belongs to `noteId`
-- Quick Review, Challenge Quiz, Adaptive Practice, and (planned) Long Exam and Board Exam sessions are note-scoped
+- Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, and Board Exam sessions are note-scoped
 
 ## Current quiz modes
 
@@ -41,14 +41,14 @@ Shared ownership rule:
 - Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
 - generated separately from Quick Review and Challenge Quiz
 
-### Long Exam Mode (coming soon — backend pending)
+### Long Exam Mode
 
 - Student-facing long-form exam mode; identity contract in `docs/product/EXAM_MODES.md`
-- mode card and setup screen are live in v0.12.0 as a coming-soon placeholder (Students see the mode identity now; "Start Long Exam" is disabled pending backend session support)
-- fixed question set generated at start (not progressive); pause/resume planned
-- mastery-report result screen; inline learner-level adjustment is allowed
-- planned Pro-only at launch; backend session discriminator and generation logic ship in v0.13.0
-- single-note at v1; multi-note coverage is a follow-up capability
+- Pro-only at launch, using the shared `LONG_EXAM` session discriminator
+- fixed question set generated at start (not progressive)
+- prestart supports one primary note plus up to 3 additional same-subject Study Pack-ready notes
+- multi-note generation stores source refs in session JSONB and distributes the resolved question count proportionally across sources
+- mastery-report result screen includes coverage, weak domains, suggested next step, and source attribution when multiple notes are covered
 
 ## Learner-level context
 

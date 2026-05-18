@@ -339,17 +339,21 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - ✅ **Board Exam premium UX polish**: pre-flight setup, score-report-style result framing, fullscreen behavior, removal of inline learner-level pill on result.
 - ✅ **Long Exam Mode spec** finalized in this doc.
 
-### v0.13 (in progress)
+### v0.13 (shipped)
 
 - ✅ **Long Exam Mode v1 backend**: single-note, fixed long-form, Pro-only session with mastery report. Pause/resume endpoints exist in the backend but are not exposed in the frontend (leave = forfeit per product decision).
 - ✅ **Long Exam Mode frontend**: new `/notes/[id]/long-exam` page; Board Exam-style top bar; forfeit-only leave guard; sticky navigation footer; Coming Soon placeholder removed from challenge-quiz mode selection.
 - ✅ **Profile-aware mode-selection rendering**: Long Exam hidden from BOARD_EXAM and TEACHER profiles; Board Exam hidden from STUDENT profile with cross-profile escape-hatch line.
-- **Timer fix**: per-question time limits replace hardcoded 600s constant across Challenge Quiz, Board Exam, and Long Exam; server-anchored deadline mechanism for Long Exam; Challenge Quiz timer extends when more questions are generated.
-- **UI consistency**: Previous/Next navigation aligned left/right within card width across all three exam modes.
+- ✅ **Timer fix**: per-question time limits replace hardcoded 600s constant across Challenge Quiz, Board Exam, and Long Exam; server-anchored deadline mechanism for Long Exam; Challenge Quiz timer extends when more questions are generated.
+- ✅ **UI consistency**: Previous/Next navigation aligned left/right within card width across all three exam modes.
 
-### v0.14+ (later)
+### v0.14 (shipped)
 
-- **Multi-note Long Exam** — the primary identity differentiator between Long Exam and Board Exam. Entry: from a note, user can add 1–3 additional notes from the same subject during the prestart step. Backend must support a `LongExamNoteRef` model for aggregate question generation across multiple study packs. Questions are generated proportionally from each note's study pack. UX vision: "You're starting with [Note Title]. Add more notes to include in this exam." See Architecture Direction for constraints.
+- ✅ **Multi-note Long Exam**: from a note, Pro users can add 1–3 additional notes from the same subject during the prestart step. The primary Study Pack remains the session anchor, additional sources are stored as `sourceNoteRefs` in session JSONB, and questions are generated proportionally from each source without adding a new persistence aggregate.
+- ✅ **Interview Practice sub-mode**: Professional profile Pro users get an Adaptive Practice sub-mode with scenario MCQs, per-answer AI critique, dedicated monthly quota, and an Interview Readiness Report result screen. Runs on the `ADAPTIVE` discriminator with `subMode: "INTERVIEW"` in session JSONB. 5-mode contract preserved.
+
+### v0.15+ (later)
+
 - **Board Exam advanced result analytics** (trend over time, percentile-style framing).
 - **Long Exam tier promotion to Plus** if usage data justifies it.
 

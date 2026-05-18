@@ -731,6 +731,7 @@ export type LongExamStartResponse = {
   canResume: boolean;
   timeLimitSeconds: number;
   timerStartedAtEpochSeconds: number;
+  sourceNoteRefs: LongExamSourceNoteRef[];
 };
 
 export type LongExamSessionResponse = {
@@ -744,6 +745,19 @@ export type LongExamSessionResponse = {
   paused: boolean;
   timeLimitSeconds: number;
   timerStartedAtEpochSeconds: number;
+  sourceNoteRefs: LongExamSourceNoteRef[];
+};
+
+export type LongExamSourceNoteRef = {
+  studyPackId: string;
+  noteId: string;
+  noteTitle: string;
+  questionCount: number;
+};
+
+export type LongExamSourceNote = {
+  noteId: string;
+  noteTitle: string;
 };
 
 export type LongExamMasteryReportResponse = {
@@ -760,6 +774,7 @@ export type LongExamMasteryReportResponse = {
   weakDomains: string[];
   performanceSummary: string;
   suggestedNextStep: string;
+  sourceNotes: LongExamSourceNote[];
 };
 
 export type InterviewPracticeStartResponse = {
@@ -2289,7 +2304,7 @@ export async function getChallengeQuizSessionReview(
 
 export async function startLongExam(
   studyPackId: string,
-  body: { difficulty?: string } = {},
+  body: { difficulty?: string; additionalStudyPackIds?: string[] } = {},
 ): Promise<LongExamStartResponse> {
   const response = await fetchWithAuth(
     `/long-exam/study-packs/${studyPackId}/start`,
