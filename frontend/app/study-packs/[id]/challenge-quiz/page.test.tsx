@@ -451,7 +451,7 @@ describe("ChallengeQuizPage", () => {
     });
   });
 
-  it("starts Board Takers on the shared mode-selection screen with Board Exam emphasized", async () => {
+  it("starts Exam Reviewers on the shared mode-selection screen with Board Exam emphasized", async () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
 
     render(<ChallengeQuizPage />);
@@ -463,7 +463,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText(/Board Exam Mode emphasizes exam simulation/)).toBeInTheDocument();
   });
 
-  it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for Board Takers even when an in-progress session exists", async () => {
+  it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for Exam Reviewers even when an in-progress session exists", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     setupInProgressChallengeQuiz("board_exam");
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -483,7 +483,7 @@ describe("ChallengeQuizPage", () => {
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
   });
 
-  it("opens Board Exam setup for Pro Board Takers after mode selection", async () => {
+  it("opens Board Exam setup for Pro Exam Reviewers after mode selection", async () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
 
     render(<ChallengeQuizPage />);
@@ -511,7 +511,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "Begin Board Exam" })).toBeInTheDocument();
   });
 
-  it("shows the Board Exam paywall for free Board Takers from mode selection instead of entering setup", async () => {
+  it("shows the Board Exam paywall for free Exam Reviewers from mode selection instead of entering setup", async () => {
     setupChallengePrestart(false, "BOARD_EXAM", "FREE");
 
     render(<ChallengeQuizPage />);

@@ -59,8 +59,8 @@ describe("getProfileTypeSwitchContent", () => {
 
   it("returns content with note for BOARD_EXAM", () => {
     const content = getProfileTypeSwitchContent("BOARD_EXAM");
-    expect(content.title).toBe("Switch to Board Taker mode?");
-    expect(content.toast).toContain("Board Taker");
+    expect(content.title).toBe("Switch to Exam Reviewer mode?");
+    expect(content.toast).toContain("Exam Reviewer");
   });
 
   it("returns content for TEACHER mentioning quiz review and export", () => {

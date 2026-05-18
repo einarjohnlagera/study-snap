@@ -93,7 +93,7 @@ describe("LandingPage", () => {
     expect(screen.getByText("Who It's For")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Made for learners who need more than passive notes" })).toBeInTheDocument();
     expect(screen.getByText("Students")).toBeInTheDocument();
-    expect(screen.getByText("Board Exam Takers")).toBeInTheDocument();
+    expect(screen.getByText("Exam Reviewers")).toBeInTheDocument();
     expect(screen.getByText("Teachers")).toBeInTheDocument();
 
     expect(screen.getByText("Pricing section placeholder")).toBeInTheDocument();

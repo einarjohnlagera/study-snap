@@ -137,7 +137,7 @@ export function getGroupedLearnerLevels(
   if (profileType === "BOARD_EXAM") {
     const recommended = pick("BOARD_EXAM_REVIEW");
     const other = LEARNER_LEVEL_OPTIONS.filter((opt) => !recommended.some((r) => r.value === opt.value));
-    return { recommended, other, recommendedGroupLabel: "Recommended for Board Takers" };
+    return { recommended, other, recommendedGroupLabel: "Recommended for Exam Reviewers" };
   }
 
   if (profileType === "TEACHER") {

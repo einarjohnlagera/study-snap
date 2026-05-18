@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import LongExamPage from "./page";
 import { getAuthUser } from "@/lib/auth";
-import { getActiveLongExamSession, getNote, listNotes, startLongExam } from "@/lib/api";
+import { getActiveLongExamSession, getMe, getNote, listNotes, startLongExam } from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -34,6 +34,7 @@ jest.mock("@/lib/api", () => ({
   forfeitLongExamSession: jest.fn(),
   getActiveLongExamSession: jest.fn(),
   getLongExamSession: jest.fn(),
+  getMe: jest.fn(),
   getNote: jest.fn(),
   listNotes: jest.fn(),
   resumeLongExamSession: jest.fn(),
@@ -48,6 +49,9 @@ describe("LongExamPage", () => {
     replaceMock.mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
+    });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
     });
     (getNote as jest.Mock).mockResolvedValue({
       id: "note-1",

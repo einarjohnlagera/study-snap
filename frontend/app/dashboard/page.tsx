@@ -654,7 +654,7 @@ export default function DashboardPage() {
               ) : null}
               <DashboardActionCard
                 title="Start Board Exam"
-                description="Board Taker mode opens in Board Exam by default, with Challenge Quiz still available from the setup flow."
+                description="Exam Reviewer mode opens in Board Exam by default, with Challenge Quiz still available from the setup flow."
                 actionLabel="Start Board Exam"
                 actionHref={boardExamChallengeHref}
                 actionIcon="challengeQuiz"

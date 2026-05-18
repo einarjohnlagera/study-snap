@@ -12,7 +12,7 @@ export const PUBLIC_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDE
 export function getNoteTargetProfileLabel(value: NoteTargetProfileType): string {
   switch (value) {
     case "BOARD_TAKER":
-      return "Board Taker";
+      return "Exam Reviewer";
     case "STUDENT":
     default:
       return "Student";

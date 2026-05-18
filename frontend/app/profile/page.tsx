@@ -73,28 +73,28 @@ const PROFILE_TYPE_OPTIONS: ProfileTypeOption[] = [
   {
     value: "STUDENT",
     label: "Student",
-    description: "Active learning, quiz tracking, and study recall.",
+    description: "Active learning with quiz tracking, weak-concept practice, and study recall.",
   },
   {
     value: "BOARD_EXAM",
-    label: "Board Taker",
-    description: "Exam prep focus with performance tracking and weak-concept review.",
+    label: "Exam Reviewer",
+    description: "For board, licensure, and civil service exam prep — with performance tracking and targeted review.",
   },
   {
     value: "TEACHER",
     label: "Teacher",
-    description: "Create and export quiz materials from your notes.",
+    description: "Generate, preview, and export quiz materials from your notes.",
   },
   {
     value: "PARENT",
     label: "Parent",
-    description: "Student support and learning oversight.",
+    description: "Support and monitor your child's learning progress.",
     disabled: true,
   },
   {
     value: "PROFESSIONAL",
     label: "Professional",
-    description: "Certification prep and applied knowledge review.",
+    description: "Scenario-based practice and knowledge review for certifications and career growth.",
   },
 ];
 

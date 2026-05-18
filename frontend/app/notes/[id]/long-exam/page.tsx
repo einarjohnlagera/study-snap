@@ -6,6 +6,7 @@ import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
+import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
 import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
 import {ToastMessage} from "@/components/ui/toast-message";
@@ -820,17 +821,17 @@ export default function LongExamPage() {
             ) : null}
 
             {phase === "generating" ? (
-                <Card className="space-y-4 p-4 text-center sm:p-8">
-                    <div
-                        className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"
-                        aria-hidden="true"/>
-                    <div className="space-y-1">
-                        <h1 className="text-xl font-semibold">Generating your exam...</h1>
-                        <p className="text-sm text-foreground/70">
-                            Creating a fixed Long Exam from the full Study Pack. This may take a moment.
-                        </p>
-                    </div>
-                </Card>
+                <QuizGenerationOverlay
+                    title="Generating your long exam..."
+                    message="Building a comprehensive exam from your study material"
+                    rotatingMessages={[
+                        "Analyzing your study material...",
+                        "Distributing questions across topics...",
+                        "Setting exam difficulty...",
+                        "Generating comprehensive questions...",
+                        "Almost ready...",
+                    ]}
+                />
             ) : null}
 
             {phase === "paused-recovery" ? (

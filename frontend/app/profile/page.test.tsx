@@ -156,7 +156,7 @@ describe("Profile page", () => {
     expect(await screen.findByText("You're now in Teacher mode — focused on generate, review, and export.")).toBeInTheDocument();
   });
 
-  it("shows and saves exam date for Board Taker profiles", async () => {
+  it("shows and saves exam date for Exam Reviewer profiles", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...profileResponse,
       profileType: "BOARD_EXAM",
@@ -200,7 +200,7 @@ describe("Profile page", () => {
     },
   );
 
-  it("clears Board Taker exam date when the saved input is empty", async () => {
+  it("clears Exam Reviewer exam date when the saved input is empty", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...profileResponse,
       profileType: "BOARD_EXAM",
