@@ -216,6 +216,29 @@ body *::after {
   }
 }
 
+@keyframes quiz-gen-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes quiz-gen-progress {
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: 80%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body,
   body *,

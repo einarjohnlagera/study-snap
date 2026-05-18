@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -310,10 +311,16 @@ export default function InterviewPracticePage() {
       ) : null}
 
       {phase === "generating" ? (
-        <Card className="space-y-3 p-6 text-center">
-          <h1 className="text-xl font-semibold">Generating your interview session...</h1>
-          <p className="text-sm text-foreground/65">Building scenario questions from your note.</p>
-        </Card>
+        <QuizGenerationOverlay
+          title="Building your interview session..."
+          message="Creating scenario questions from your notes"
+          rotatingMessages={[
+            "Building scenario questions...",
+            "Setting difficulty for your level...",
+            "Preparing follow-up criteria...",
+            "Almost ready...",
+          ]}
+        />
       ) : null}
 
       {phase === "running" && currentQuestion ? (

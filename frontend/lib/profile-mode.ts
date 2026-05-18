@@ -86,13 +86,13 @@ const PROFILE_TYPE_SWITCH_CONTENT: Record<
     toast: "You're now in Student mode — focused on active learning.",
   },
   BOARD_EXAM: {
-    title: "Switch to Board Taker mode?",
+    title: "Switch to Exam Reviewer mode?",
     body: [
-      "Board Taker mode is designed for exam preparation.",
+      "Exam Reviewer mode is designed for exam preparation.",
       "Your dashboard will focus on performance, weak concepts, and targeted review.",
     ],
     note: SWITCH_NOTE,
-    toast: "You're now in Board Taker mode — focused for exam prep.",
+    toast: "You're now in Exam Reviewer mode — focused for exam prep.",
   },
   TEACHER: {
     title: "Switch to Teacher mode?",

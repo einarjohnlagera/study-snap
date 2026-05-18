@@ -235,7 +235,9 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "College" }));
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: "COLLEGE" },
+    });
     fireEvent.change(screen.getByLabelText("Course / Program"), {
       target: { value: "AWS Certification" },
     });
@@ -386,7 +388,7 @@ describe("OnboardingPage", () => {
 
     render(<OnboardingPage />);
 
-    fireEvent.click(await screen.findByLabelText("Board Taker"));
+    fireEvent.click(await screen.findByLabelText("Exam Reviewer"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByLabelText("When is your exam? (optional)")).toBeInTheDocument();
@@ -413,20 +415,20 @@ describe("OnboardingPage", () => {
     render(<OnboardingPage />);
 
     expect(await screen.findByText("🎓 Student")).toBeInTheDocument();
-    expect(screen.getByText("📋 Board Taker")).toBeInTheDocument();
+    expect(screen.getByText("📋 Exam Reviewer")).toBeInTheDocument();
     expect(screen.getByText("🏫 Teacher")).toBeInTheDocument();
     expect(screen.getByText("💼 Professional")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Professional"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByText("Recommended for Professionals")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Professional" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Personal Learning" })).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: "Recommended for Professionals" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Professional" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Personal Learning" })).toBeInTheDocument();
     expect(screen.getByLabelText("Course / Program")).toBeInTheDocument();
     expect(screen.queryByLabelText("When is your exam? (optional)")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
   });
 

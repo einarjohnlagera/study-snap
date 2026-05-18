@@ -15,24 +15,27 @@ type QuizGenerationOverlayProps = {
   title?: string;
   message?: string;
   helperText?: string;
+  rotatingMessages?: readonly string[];
 };
 
 export function QuizGenerationOverlay({
   title = "Generating your quiz...",
   message = "Creating personalized questions from your notes",
   helperText = "Please keep this page open",
+  rotatingMessages,
 }: QuizGenerationOverlayProps) {
   const [messageIndex, setMessageIndex] = useState(0);
+  const messages = rotatingMessages && rotatingMessages.length > 0 ? rotatingMessages : ROTATING_MESSAGES;
 
   useEffect(() => {
     const intervalId = globalThis.setInterval(() => {
-      setMessageIndex((currentIndex) => (currentIndex + 1) % ROTATING_MESSAGES.length);
+      setMessageIndex((currentIndex) => (currentIndex + 1) % messages.length);
     }, MESSAGE_ROTATION_INTERVAL_MS);
 
     return () => {
       globalThis.clearInterval(intervalId);
     };
-  }, []);
+  }, [messages.length]);
 
   return (
     <div
@@ -47,19 +50,28 @@ export function QuizGenerationOverlay({
           {[0, 1, 2].map((index) => (
             <span
               key={`quiz-generation-dot-${index}`}
-              className="h-2.5 w-2.5 animate-bounce rounded-full bg-primary"
-              style={{ animationDelay: `${index * 160}ms` }}
+              className="h-2.5 w-2.5 rounded-full bg-primary"
+              style={{
+                animation: "quiz-gen-dot 1.2s ease-in-out infinite",
+                animationDelay: `${index * 160}ms`,
+              }}
             />
           ))}
         </div>
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{message}</p>
         <p className="mt-4 min-h-5 text-sm font-medium text-foreground" aria-live="polite">
-          {ROTATING_MESSAGES[messageIndex]}
+          {messages[messageIndex % messages.length]}
         </p>
         <p className="mt-3 text-xs text-muted-foreground">
           {helperText}
         </p>
+        <div className="mt-5 h-0.5 w-full overflow-hidden rounded-full bg-foreground/10">
+          <div
+            className="h-full rounded-full bg-primary/40"
+            style={{ animation: "quiz-gen-progress 10s ease-out forwards" }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -112,7 +112,7 @@ const targetUsers = [
     icon: BookOpen,
   },
   {
-    title: "Board Exam Takers",
+    title: "Exam Reviewers",
     description: "Practice topics and test your understanding.",
     icon: Trophy,
   },

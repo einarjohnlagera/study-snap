@@ -72,7 +72,7 @@ public class NoteService {
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE = "NOTE_TARGET_PROFILE_TYPE_REQUIRED";
     private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_CODE = "NOTE_TARGET_PROFILE_TYPE_INVALID";
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE = "Please choose who this note is for.";
-    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student or Board Taker for this note.";
+    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student or Exam Reviewer for this note.";
     private static final String PUBLIC_SORT_FEATURED = "featured";
     private static final String PUBLIC_SORT_POPULAR = "popular";
     private static final String PUBLIC_SORT_RECENT = "recent";

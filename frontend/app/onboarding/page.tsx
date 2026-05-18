@@ -79,8 +79,8 @@ const PROFILE_OPTIONS: Array<{
   {
     value: "BOARD_EXAM",
     icon: "📋",
-    label: "Board Taker",
-    description: "Preparing for a board or licensure exam",
+    label: "Exam Reviewer",
+    description: "Preparing for a board, licensure, or civil service exam",
   },
   {
     value: "TEACHER",
@@ -92,7 +92,7 @@ const PROFILE_OPTIONS: Array<{
     value: "PROFESSIONAL",
     icon: "💼",
     label: "Professional",
-    description: "Certification prep and applied knowledge review",
+    description: "Preparing for certifications or growing professionally",
   },
 ];
 
