@@ -6,15 +6,68 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.14.0 - Grow the Surface, Deepen the Practice` is the current in-progress release.
+`v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor` is the current in-progress release.
 
-`v0.13.0 - Complete the Promise, Reach New Audiences` is complete and is the previous documentation baseline.
+`v0.14.0 - Grow the Surface, Deepen the Practice` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
-## v0.14.0 - Grow the Surface, Deepen the Practice
+## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor
 
 **Status: In Progress**
+
+Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywall, and close the unbounded-LLM-cost gap on uncapped modes. This is a margin fix framed as a UX uplift, not a feature add.
+
+Primary focus:
+
+1. **Premium feel for Long Exam and Board Exam** — improve the paid-mode experience without adding AI coaching or changing the locked simulation identity.
+
+   - Stronger pre-session framing: pre-flight presentation, expected duration, and "this is not a quiz" cues
+   - Stronger post-session presentation: score report layout polish, domain-coverage visualization, and suggested-next-step framing
+   - Possible visual differentiation: distinct top-bar treatment, calm color palette, and larger result-page typography
+   - Constraint: Board Exam stays feedback-free during the session; Long Exam stays forfeit-only with no mid-exam coaching, as locked in `docs/product/EXAM_MODES.md`
+
+2. **Cost-control quota refactor** — replace the current "Pro = effectively unlimited" Long Exam and Board Exam state with explicit per-mode caps.
+
+   | Mode | Current Pro state | Proposed v0.15.0 cap |
+   |---|---|---|
+   | Challenge Quiz | 50/mo | 50/mo (unchanged — already cheap per session, do not trim) |
+   | Adaptive Practice | 30/mo | 30/mo (unchanged) |
+   | Long Exam | uncapped (gated by Pro plan only) | 10/mo |
+   | Board Exam | uncapped (gated by Pro plan only) | 5/mo (highest LLM cost per session) |
+   | Interview Practice | 10/mo | 10/mo (unchanged) |
+
+   Specific numbers are runtime config and must be tuned against actual usage data from v0.14.0 once captured. Do not lower Pro Study Pack quota (100/mo) or Pro Challenge Quiz quota (50/mo) without usage evidence — those are existing value the user is paying for.
+
+3. **Interview Practice evolution post-v0.14.0** — review what to do next only after Interview Practice v1 has run for at least one billing cycle.
+
+   - **Multi-note Interview Practice (smart context aggregation)** — generate from the base note plus related notes that share `courseProgram` and at least one tag; cap at 2–3 sibling notes to manage prompt size and per-session cost
+   - **Structured interview templates by role/job family** — consider opinionated section breakdowns such as Backend Engineer = PL fundamentals + DB + Behavioral only if v1 usage data shows demand
+   - **Open-ended / conversational evaluation** — only consider if MC + critique format hits its ceiling and Pro users explicitly ask for it
+   - **Profile / role enrichment** — design separately before capturing target role on the user profile
+   - **Interview Practice tier promotion to Plus** — only if v0.14.0 usage data justifies the LLM cost; current `gpt-4.1` generation + `gpt-4.1-mini` critique split is what makes Pro-only economically viable
+
+### Implementation stances
+
+- New explicit per-mode quotas should live on `UserUsageEntity` and `StudySnapProperties`; reset by `BillingUsageResetJob`
+- Existing uncapped Long Exam and Board Exam behavior is a margin risk; caps are the fix, not coaching
+- Use honest user-facing framing: "Each mode now has its own monthly cap so you can see exactly what your plan includes"; avoid framing as a quota reduction
+- Surface per-mode usage in Settings -> Plan & Billing alongside the existing counters
+- Keep Board Exam feedback-free during the session and keep Long Exam forfeit-only with no mid-exam coaching
+- Re-validate cost math against actual rates and usage before finalizing cap values
+
+### Cost math reference
+
+- Pro revenue: roughly $4.50 blended (PH ₱249 + USD $4.99)
+- Worst-case current LLM cost per Pro user/mo when every quota is maxed and Long/Board remain uncapped: roughly $4.83, creating negative margin on heavy users
+- Worst-case post-cap: roughly $0.94 saved on Long/Board, restoring healthier margin
+- Realistic-usage cost: roughly $1.50/mo, with caps protecting the worst case without affecting most users
+
+---
+
+## v0.14.0 - Grow the Surface, Deepen the Practice
+
+**Status: Released**
 
 Theme: expand organic reach through subject SEO pages, unlock professional-audience depth with Interview Practice, extend Long Exam to span multiple notes, and close out the quiz generation performance work deferred from v0.13.0.
 
@@ -318,52 +371,21 @@ Current session-review UX:
 
 ## Future Directions
 
-### v0.14+ exam-mode work (planned)
+### Exam-mode work (planned)
 
-- **Multi-note Long Exam** — extend Long Exam Mode to span multiple notes; requires backend multi-source generation context
-- **Board Exam advanced result analytics** — trend over time, percentile-style framing; planned in `docs/product/EXAM_MODES.md`
-- **Long Exam tier promotion to Plus** — only if v0.13.0 usage data justifies the LLM cost
+- **Multi-note Long Exam** — shipped in v0.14.0
+- **Board Exam advanced result analytics** — promoted into the active v0.15.0 premium-mode result presentation scope
+- **Long Exam tier promotion to Plus** — only if usage data justifies the LLM cost; not part of the current v0.15.0 cap refactor unless the cost review supports it
 - **Planning-only** — cross-profile mode unlock (Students opting into Board Exam without changing profile); curated exam decks / cohort content (Pro+); cross-profile journey (Student → Board Taker upgrade flow with continuity)
 
-### v0.15+ Premium Mode Uplift + Cost-Control Quota Refactor (planned)
+### Premium mode uplift + cost-control quota refactor
 
-Theme: make Long Exam and Board Exam *feel* premium (not just gated behind a paywall) and close the unbounded-LLM-cost gap on uncapped modes. This is a **margin fix framed as a UX uplift**, not a feature add.
+Promoted to the active `v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor` section above.
 
-**Premium feel for Long Exam and Board Exam** (no AI coaching — keep the simulation austere by design):
-- Stronger pre-session framing: pre-flight presentation, expected duration, "this is not a quiz" cues
-- Stronger post-session presentation: score report layout polish, domain-coverage visualization, suggested-next-step framing
-- Possible visual differentiation: distinct top-bar treatment, calm color palette, larger result-page typography
-- Constraint: Board Exam stays feedback-free during the session; Long Exam stays forfeit-only with no mid-exam coaching (locked in `EXAM_MODES.md`)
+### Interview Practice evolution
 
-**Cost-control quota refactor** (per-mode caps replacing the current "Pro = effectively unlimited" state on Long/Board):
+Initial evaluation is promoted to the active v0.15.0 section. The following remain unsequenced follow-up directions and should not be committed until Interview Practice v1 has usage data from at least one billing cycle.
 
-| Mode | Current Pro state | Proposed v0.15+ cap |
-|---|---|---|
-| Challenge Quiz | 50/mo | 50/mo (unchanged — already cheap per session, do not trim) |
-| Adaptive Practice | 30/mo | 30/mo (unchanged) |
-| Long Exam | uncapped (gated by Pro plan only) | 10/mo |
-| Board Exam | uncapped (gated by Pro plan only) | 5/mo (highest LLM cost per session) |
-| Interview Practice | (ships in v0.14.0 at 10/mo) | 10/mo (unchanged) |
-
-Specific numbers are runtime config and must be tuned against actual usage data from v0.14.0 once captured. Do not lower Pro Study Pack quota (100/mo) or Pro Challenge Quiz quota (50/mo) without usage evidence — those are existing value the user is paying for.
-
-**Implementation stance**:
-- New explicit per-mode quotas on `UserUsageEntity` and `StudySnapProperties`; reset by `BillingUsageResetJob`
-- Existing uncapped behavior on Long/Board is a margin risk (single power user can exceed Pro revenue in LLM cost) — caps are the fix, not coaching
-- Honest user-facing framing: "Each mode now has its own monthly cap so you can see exactly what your plan includes" — avoid framing as a quota reduction
-- Surface per-mode usage in Settings → Plan & Billing alongside the existing counters
-
-**Cost math reference** (rough — re-validate against actual rates and usage when v0.15.0 starts):
-- Pro revenue: ~$4.50 blended (PH ₱249 + USD $4.99)
-- Worst-case current LLM cost per Pro user/mo (every quota maxed, Long/Board uncapped): ~$4.83 — i.e. negative margin on heavy users
-- Worst-case post-cap: ~$0.94 saved on Long/Board, restoring healthy margin
-- Realistic-usage cost: ~$1.50/mo (~67% gross margin) — caps protect the worst case without affecting most users
-
-### v0.15+ Interview Practice evolution (planned)
-
-Sequencing depends on v0.14.0 launch usage data. Do not commit to any of these until Interview Practice v1 has run for at least one billing cycle.
-
-- **Multi-note Interview Practice (smart context aggregation)** — generate from the base note plus related notes that share `courseProgram` AND at least one tag (e.g., `courseProgram="Software Engineer"` + tag `Java` → pull all Java-tagged notes under that program); cap at 2–3 sibling notes to manage prompt size and per-session cost; requires the same multi-source generation context as Multi-note Long Exam (build that first, prove stability, then extend to Interview Practice); re-validate cost math at v0.15.0 start since aggregating siblings increases prompt tokens against `gpt-4.1`
 - **Structured interview templates by role/job family** — opinionated section breakdowns (e.g. Backend Engineer = PL fundamentals + DB + Behavioral); requires either a curated role taxonomy or a user-defined template builder; do not build until v1 usage data shows real demand and the section-aware generation prompt's limitations are observed
 - **Open-ended / conversational evaluation** — replace MC structure with free-text answers and AI rubric scoring; architecturally heavy (new session schema, new evaluation pipeline, new result model); only consider if MC + critique format hits its ceiling and Pro users explicitly ask for it
 - **Profile / role enrichment** — capture target role explicitly on the user profile (instead of inferring from notes) to drive better generation context; bigger architectural decision; do not bundle with any of the above — design separately
