@@ -145,7 +145,7 @@ describe("Profile page", () => {
 
     render(<ProfilePage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Teacher Create and export quiz materials from your notes\./i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Teacher Generate, preview, and export quiz materials from your notes\./i }));
     fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
     fireEvent.click(await screen.findByRole("button", { name: "Switch" }));
 
@@ -175,7 +175,7 @@ describe("Profile page", () => {
     expect(screen.getByText(/days until your exam\./)).toBeInTheDocument();
 
     fireEvent.change(examDateInput, { target: { value: "2999-12-20" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Exam Date" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
 
     await waitFor(() => {
       expect(updateExamDate).toHaveBeenCalledWith("2999-12-20");
@@ -216,7 +216,7 @@ describe("Profile page", () => {
 
     const examDateInput = await screen.findByLabelText("Exam Date");
     fireEvent.change(examDateInput, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Exam Date" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
 
     await waitFor(() => {
       expect(updateExamDate).toHaveBeenCalledWith(null);
@@ -238,7 +238,7 @@ describe("Profile page", () => {
 
     const examDateInput = await screen.findByLabelText("Exam Date");
     fireEvent.change(examDateInput, { target: { value: "2999-12-20" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Exam Date" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
 
     expect(await screen.findByText("Could not update exam date.")).toBeInTheDocument();
     expect(screen.getByLabelText("Exam Date")).toHaveValue("2999-10-15");

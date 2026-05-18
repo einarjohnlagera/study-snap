@@ -524,20 +524,29 @@ describe("ChallengeQuizPage", () => {
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 
-  it("shows the premium modal instead of the limit page for free users who exhausted Challenge Quiz credits", async () => {
+  it("shows the mode-selection screen first, then premium modal on click, for free users who exhausted Challenge Quiz credits", async () => {
     setupChallengePrestart(false, "STUDENT", "FREE", { usedThisMonth: 5, monthlyLimit: 5 });
 
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(await screen.findByRole("dialog", { name: "You've reached your quiz limit" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+
+    expect(await screen.findByRole("dialog", { name: /quiz limit/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
   });
 
-  it("shows the limit page for Pro users who exhausted Challenge Quiz credits", async () => {
+  it("shows the mode-selection screen first, then limit page on click, for Pro users who exhausted Challenge Quiz credits", async () => {
     setupChallengePrestart(true, "STUDENT", "PRO", { usedThisMonth: 50, monthlyLimit: 50 });
 
     render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
+
+    fireEvent.click(await getModeCard("Challenge Quiz"));
 
     expect(await screen.findByRole("heading", { name: "You’ve reached your quiz limit for this month" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "You’ve reached your quiz limit" })).not.toBeInTheDocument();

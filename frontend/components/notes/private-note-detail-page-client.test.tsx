@@ -591,7 +591,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
-  it("shows the paywall modal immediately when a free user exhausted Challenge Quiz credits", async () => {
+  it("navigates to quiz mode selection when a free user exhausted Challenge Quiz credits", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
@@ -633,8 +633,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(await screen.findByText("You've reached your quiz limit")).toBeInTheDocument();
-    expect(pushMock).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?entry=mode-selection");
+    expect(screen.queryByText("You've reached your quiz limit")).not.toBeInTheDocument();
   });
 
   it("shows a paywall modal when a free user clicks Adaptive Practice", async () => {
