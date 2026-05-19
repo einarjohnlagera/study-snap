@@ -490,20 +490,14 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await getModeCard("Board Exam Mode"));
 
-    expect(await screen.findByText("BOARD EXAM MODE")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Begin Board Exam" })).toBeInTheDocument();
-    expect(screen.getByText("Review the exam setup for Challenge Note before you begin.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
+    expect(screen.getByText("A timed simulation. The clock does not pause. Unanswered questions count against you.")).toBeInTheDocument();
+    expect(screen.getByText("Challenge Note")).toBeInTheDocument();
     expect(screen.getByText("Pre-flight checklist")).toBeInTheDocument();
-    expect(screen.getByText("Do not refresh or navigate away — leaving counts as submission")).toBeInTheDocument();
-    expect(screen.getByText("Fullscreen is recommended for focus (the exam will request it)")).toBeInTheDocument();
-    expect(screen.getByText("Score is based on all questions, including unanswered ones")).toBeInTheDocument();
-    expect(screen.getByText("Results are revealed only after you submit")).toBeInTheDocument();
-    expect(screen.queryByText("Time required: approximately 15–20 minutes")).not.toBeInTheDocument();
-    expect(screen.getByText("Timer")).toBeInTheDocument();
-    expect(screen.getByText("Question count")).toBeInTheDocument();
-    expect(screen.getByText("Monthly limit")).toBeInTheDocument();
-    expect(screen.getByText("~1 min per question (timed).")).toBeInTheDocument();
-    expect(screen.getByText("Fixed board-style set.")).toBeInTheDocument();
+    expect(screen.getByText("Do not leave the page")).toBeInTheDocument();
+    expect(screen.getByText("Fullscreen recommended")).toBeInTheDocument();
+    expect(screen.getByText("~1 minute per question")).toBeInTheDocument();
+    expect(screen.getByText("Scored against every question")).toBeInTheDocument();
     expect(screen.getByText("Counts toward your monthly Board Exam usage.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
@@ -601,7 +595,7 @@ describe("ChallengeQuizPage", () => {
     const actionBar = screen.getByTestId("challenge-quiz-action-bar");
     const navigatorDisclosure = screen.getByTestId("challenge-question-navigator-disclosure");
 
-    expect(topBar).toHaveTextContent("Board Exam Mode");
+    expect(topBar).toHaveTextContent("Board Exam");
     expect(actionBar).toHaveClass("fixed");
     expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
@@ -665,7 +659,7 @@ describe("ChallengeQuizPage", () => {
     setupBoardExamSession();
     render(<ChallengeQuizPage />);
 
-    expect(await screen.findByTestId("challenge-quiz-top-bar")).toHaveTextContent("Board Exam Mode");
+    expect(await screen.findByTestId("challenge-quiz-top-bar")).toHaveTextContent("Board Exam");
     expect(screen.queryByText("Board Exam Mode hides distractions to simulate a real test environment.")).not.toBeInTheDocument();
   });
 
@@ -724,7 +718,7 @@ describe("ChallengeQuizPage", () => {
         durationSeconds: 600,
       });
     });
-    expect(await screen.findByText("Exam Result")).toBeInTheDocument();
+    expect(await screen.findByText("Board Exam Result")).toBeInTheDocument();
     expect(screen.getByText("Time ran out. Your answers were submitted automatically.")).toBeInTheDocument();
 
     nowSpy.mockRestore();
@@ -1165,7 +1159,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
-    await screen.findByText("Exam Result");
+    await screen.findByText("Board Exam Result");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
   });
@@ -1247,10 +1241,10 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
-    await screen.findByText("Exam Result");
+    await screen.findByText("Board Exam Result");
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
-    expect(screen.getByText("Performance")).toBeInTheDocument();
+    expect(screen.getByText("Excellent")).toBeInTheDocument();
     expect(screen.getByText("No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take Another Board Exam" })).toHaveClass("bg-primary");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
@@ -1335,7 +1329,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
-    await screen.findByText("Exam Result");
+    await screen.findByText("Board Exam Result");
     fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
 
     const review = screen.getByLabelText("Answer review");

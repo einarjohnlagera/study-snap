@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemePreferenceSync } from "@/components/theme-preference-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
+import { ExamFocusProvider } from "@/components/exam-mode/exam-focus-context";
 import { RouteProgressProvider } from "@/components/navigation/route-progress-provider";
 import { DEFAULT_OG_IMAGE_ALT, DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
 import { THEME_CLASS_NAME_BY_MODE } from "@/lib/theme-preferences";
@@ -79,7 +80,9 @@ export default function RootLayout({
           <ThemePreferenceSync />
           <Suspense fallback={null}>
             <RouteProgressProvider>
-              <AppShell>{children}</AppShell>
+              <ExamFocusProvider>
+                <AppShell>{children}</AppShell>
+              </ExamFocusProvider>
             </RouteProgressProvider>
           </Suspense>
         </ThemeProvider>

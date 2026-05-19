@@ -19,7 +19,9 @@ import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
+import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
+import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -478,6 +480,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const pageTitle = getPageTitle(pathname || "");
   const showVerificationBanner = shouldUseShell && hasAuthUser && !user.emailVerifiedAt;
 
+  const { isExamFocusActive } = useExamFocusContext();
+
   if (!shouldUseShell) {
     return (
       <div className="min-h-screen bg-background text-foreground">
@@ -488,20 +492,28 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground md:grid md:grid-cols-[256px_1fr]">
-      <aside className="hidden border-r border-border bg-background md:sticky md:top-0 md:flex md:h-screen md:w-64 md:flex-col">
-        <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-          <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
-            <BrandMonogram size={36} className="h-9 w-9" priority />
-          </span>
-          <span className="text-sm font-semibold">NoteLib</span>
-        </div>
-        <nav className="flex-1 space-y-6 p-4">
-          <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} />
-        </nav>
-      </aside>
+    <div
+      className={cn(
+        "min-h-screen bg-background text-foreground",
+        !isExamFocusActive && "md:grid md:grid-cols-[256px_1fr]",
+      )}
+    >
+      {!isExamFocusActive ? (
+        <aside className="hidden border-r border-border bg-background md:sticky md:top-0 md:flex md:h-screen md:w-64 md:flex-col">
+          <div className="flex h-16 items-center gap-3 border-b border-border px-4">
+            <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+              <BrandMonogram size={36} className="h-9 w-9" priority />
+            </span>
+            <span className="text-sm font-semibold">NoteLib</span>
+          </div>
+          <nav className="flex-1 space-y-6 p-4">
+            <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} />
+          </nav>
+        </aside>
+      ) : null}
 
       <div className="min-h-screen">
+        {!isExamFocusActive ? (
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3">
             <button
@@ -576,8 +588,9 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
             </div>
           </div>
         </header>
+        ) : null}
 
-        {showVerificationBanner ? (
+        {!isExamFocusActive && showVerificationBanner ? (
           <div className="border-b border-amber-300/50 bg-amber-50/70 px-4 py-3 dark:border-amber-700/50 dark:bg-amber-950/20 sm:px-6">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
@@ -603,7 +616,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         <main>{children}</main>
       </div>
 
-      {drawerOpen ? (
+      {!isExamFocusActive && drawerOpen ? (
         <>
           <button
             type="button"
@@ -647,8 +660,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         </>
       ) : null}
 
-      {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
-      {shouldShowFloatingFeedbackWidget(pathname || "") ? <SendFeedbackWidget /> : null}
+      {!isExamFocusActive && toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
+      {!isExamFocusActive && shouldShowFloatingFeedbackWidget(pathname || "") ? <SendFeedbackWidget /> : null}
     </div>
   );
 }

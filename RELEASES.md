@@ -17,6 +17,8 @@ Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywa
 
 - Add monthly quotas for Long Exam (10/mo Pro) and Board Exam (5/mo Pro, shared Challenge Quiz budget)
 - Surface Interview Practice and Professional profile on landing page, help center, and learn page
+- **Premium feel for Long Exam and Board Exam — prestart anticipation and score-reveal result** — replaced the blue eyebrow + dense 3-column info grid with a confident hero heading, sitting-framing subtitle, and vertical icon-led "What to expect" stack on both prestart screens; replaced the small 2-column score grid on results with a hero `ScoreReveal` (large tabular percentage, performance pill, supporting line); converted domain/concept breakdown tables to vertical bar lists; quieted weak-domain and weak-concept callouts; elevated "Suggested Next Step" framing. Calm neutral palette, no brand blue. New shared `ScoreReveal` primitive in `components/exam-mode/`. In-session chrome polish ships in a follow-up
+- **Premium feel for Long Exam and Board Exam — in-session focus mode** — app-shell sidebar and page header hide during the `running` phase of both modes via a new `ExamFocusContext` + `useExamFocusMode` hook (Long Exam was previously left with the full chrome since it doesn't request fullscreen); new shared `ExamTopBar` primitive with a prominent tabular-nums timer and "Time remaining" label; extracted `QuestionNavigator` primitive and added it to Long Exam (previously had no jump-between-questions navigation, which made the mode feel harder than Board Exam); Long Exam question card polished with larger leading and calmer chrome; Board Exam now exits fullscreen on submit/forfeit/auto-submit so the score report renders in normal layout
 
 ---
 

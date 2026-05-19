@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AppShell } from "./app-shell";
+import { ExamFocusProvider, useExamFocusMode } from "./exam-mode/exam-focus-context";
 import { getMe, getMyPlan, logout } from "@/lib/api";
 
 const routerMock = {
@@ -263,5 +264,29 @@ describe("AppShell", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Edit Note" })).toBeInTheDocument();
+  });
+
+  it("hides the sidebar and page header when exam focus is active", async () => {
+    currentPathname = "/notes/note-1/long-exam";
+    window.history.replaceState({}, "", currentPathname);
+
+    function ExamFocusActivator() {
+      useExamFocusMode(true);
+      return <div>Long Exam in session</div>;
+    }
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <ExamFocusActivator />
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Long Exam in session")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Open user menu")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Open navigation menu")).not.toBeInTheDocument();
+    expect(screen.queryByText("Public Navbar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Note" })).not.toBeInTheDocument();
   });
 });

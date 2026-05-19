@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { EyeOff, Hourglass, ListChecks, Maximize2 } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
+import { ExamTopBar } from "@/components/exam-mode/exam-top-bar";
+import { useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
+import { QuestionNavigator } from "@/components/exam-mode/question-navigator";
+import { ScoreReveal } from "@/components/exam-mode/score-reveal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { PostSuccessUpgradeNudge } from "@/components/billing/post-success-upgrade-nudge";
 import { QuizFeedbackPanel } from "@/components/feedback/quiz-feedback-panel";
@@ -163,6 +167,16 @@ async function requestBoardExamFullscreen() {
   await element.requestFullscreen().catch(() => undefined);
 }
 
+async function exitBoardExamFullscreen() {
+  if (typeof globalThis.document === "undefined" || !globalThis.document.fullscreenElement) {
+    return;
+  }
+  if (typeof globalThis.document.exitFullscreen !== "function") {
+    return;
+  }
+  await globalThis.document.exitFullscreen().catch(() => undefined);
+}
+
 function formatTimer(seconds: number): string {
   const safeSeconds = Math.max(0, seconds);
   const minutes = Math.floor(safeSeconds / 60);
@@ -273,7 +287,6 @@ export default function ChallengeQuizPage() {
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
-  const [isQuestionNavigatorCollapsed, setIsQuestionNavigatorCollapsed] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -966,6 +979,14 @@ export default function ChallengeQuizPage() {
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
+  useExamFocusMode(isBoardExamMode && phase === "running");
+
+  useEffect(() => {
+    if (!isBoardExamMode || phase === "running") {
+      return;
+    }
+    void exitBoardExamFullscreen();
+  }, [isBoardExamMode, phase]);
   const quizInteractionDisabled = submitting || generatingMore || boardExamTimerExpired;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
   const quizResultLabel = isBoardExamMode ? "Exam Result" : "Challenge Quiz Result";
@@ -1106,14 +1127,6 @@ export default function ChallengeQuizPage() {
     setShowBoardExamFocusTip(false);
   }, [boardExamFocusTipStorageKey]);
 
-  useEffect(() => {
-    if (phase !== "running" || !challengeSession?.sessionId || totalQuestions === 0) {
-      return;
-    }
-    setIsQuestionNavigatorCollapsed(
-      shouldCollapseQuestionNavigatorByDefault(activeMode, isMobileNavigatorViewport),
-    );
-  }, [activeMode, challengeSession?.sessionId, isMobileNavigatorViewport, phase, totalQuestions]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
@@ -1123,42 +1136,40 @@ export default function ChallengeQuizPage() {
       phase === "running" && "pb-28 sm:pb-28",
     )}>
       {phase === "running" ? (
-        <div
-          data-testid="challenge-quiz-top-bar"
-          className={cn(
-            "sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border",
-            isBoardExamMode ? "border-foreground/15" : "border-border",
-          )}
-        >
-          <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
-            {isBoardExamMode ? "Leave Exam" : "Leave Quiz"}
-          </Button>
-          <div className="min-w-0 flex-1 text-center">
-            <p className={cn(
-              "truncate text-sm font-semibold",
-              isBoardExamMode ? "text-foreground" : "text-blue-700 dark:text-blue-300",
-            )}>
-              {quizModeLabel}
-            </p>
-          </div>
+        isBoardExamMode ? (
+          <ExamTopBar
+            modeLabel="Board Exam"
+            leaveLabel="Leave Exam"
+            onLeave={() => requestLeave()}
+            leaveDisabled={submitting}
+            remainingSeconds={remainingSeconds}
+            timerState={boardExamTimerState}
+            tone="board-exam"
+            testId="challenge-quiz-top-bar"
+            timerTestId="board-exam-timer"
+          />
+        ) : (
           <div
-            data-testid={isBoardExamMode ? "board-exam-timer" : "challenge-quiz-timer"}
-            data-timer-state={isBoardExamMode ? boardExamTimerState : undefined}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold",
-              isBoardExamMode
-                ? boardExamTimerState === "normal"
-                  ? "border-foreground/15 bg-background text-foreground"
-                  : boardExamTimerState === "warning"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                    : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300"
-                : "border-border bg-background text-foreground",
-            )}
-            aria-label="Exam timer"
+            data-testid="challenge-quiz-top-bar"
+            className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
           >
-            {formatTimer(remainingSeconds)}
+            <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
+              Leave Quiz
+            </Button>
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate text-sm font-semibold text-blue-700 dark:text-blue-300">
+                {quizModeLabel}
+              </p>
+            </div>
+            <div
+              data-testid="challenge-quiz-timer"
+              className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold text-foreground"
+              aria-label="Exam timer"
+            >
+              {formatTimer(remainingSeconds)}
+            </div>
           </div>
-        </div>
+        )
       ) : (
         <div className="flex items-center justify-between gap-3">
           <BackLink href={noteDetailHref} label="Note" />
@@ -1455,46 +1466,63 @@ export default function ChallengeQuizPage() {
             </div>
           </Card>
         ) : (
-          <Card className="space-y-4 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              BOARD EXAM MODE
-            </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">Begin Board Exam</h1>
-            <p className="text-sm text-foreground/80">
-              Review the exam setup for {note?.title ?? "this note"} before you begin.
-            </p>
+          <section className="space-y-6 sm:space-y-8">
+            <header className="space-y-3">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                Board Exam
+              </h1>
+              <p className="max-w-2xl text-base leading-relaxed text-foreground/70 sm:text-lg">
+                A timed simulation. The clock does not pause. Unanswered questions count against you.
+              </p>
+              {note?.title ? (
+                <p className="text-sm text-foreground/55">
+                  Built from <span className="font-medium text-foreground/80">{note.title}</span>
+                </p>
+              ) : null}
+            </header>
 
-            <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
-              <div className="space-y-2">
-                <h2 className="text-base font-semibold text-foreground">Pre-flight checklist</h2>
-                <ul className="space-y-2">
-                  {[
-                    "Do not refresh or navigate away — leaving counts as submission",
-                    "Fullscreen is recommended for focus (the exam will request it)",
-                    "Score is based on all questions, including unanswered ones",
-                    "Results are revealed only after you submit",
-                  ].map((item) => (
-                    <li key={item} className="flex gap-2">
-                      <span className="mt-1 h-3 w-3 shrink-0 rounded-sm border border-foreground/35" aria-hidden="true" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Timer</p>
-                  <p>~1 min per question (timed).</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Question count</p>
-                  <p>Fixed board-style set.</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Monthly limit</p>
-                  <p>Counts toward your monthly Board Exam usage.</p>
-                </div>
-              </div>
+            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                Pre-flight checklist
+              </h2>
+              <ul className="mt-5 space-y-5">
+                <li className="flex gap-4">
+                  <EyeOff className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Do not leave the page</p>
+                    <p className="text-sm leading-relaxed text-foreground/70">
+                      Refreshing or navigating away counts as submission.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <Maximize2 className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Fullscreen recommended</p>
+                    <p className="text-sm leading-relaxed text-foreground/70">
+                      The exam will request fullscreen for a focused sitting.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <Hourglass className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">~1 minute per question</p>
+                    <p className="text-sm leading-relaxed text-foreground/70">
+                      A fixed board-style set. Timer is set at start and does not extend.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <ListChecks className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Scored against every question</p>
+                    <p className="text-sm leading-relaxed text-foreground/70">
+                      Unanswered items count as wrong. Your score report appears only after you submit.
+                    </p>
+                  </div>
+                </li>
+              </ul>
             </div>
 
             {!boardExamAvailable ? (
@@ -1504,34 +1532,38 @@ export default function ChallengeQuizPage() {
               <p className="text-sm text-foreground/75">Preparing your board exam...</p>
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={returnToModeSelection}
-                disabled={challengeGenerationLocked}
-              >
-                Choose another mode
-              </Button>
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  if (!boardExamAvailable) {
-                    openLockedFeaturePaywall("board-exam-mode", "board_exam_setup");
-                    return;
-                  }
-                  setShowBoardExamStartModal(true);
-                }}
-                disabled={challengeGenerationLocked}
-              >
-                {boardExamAvailable
-                  ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
-                  : "Unlock Board Exam Mode"}
-              </Button>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-foreground/65">Counts toward your monthly Board Exam usage.</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={returnToModeSelection}
+                  disabled={challengeGenerationLocked}
+                >
+                  Choose another mode
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    if (!boardExamAvailable) {
+                      openLockedFeaturePaywall("board-exam-mode", "board_exam_setup");
+                      return;
+                    }
+                    setShowBoardExamStartModal(true);
+                  }}
+                  disabled={challengeGenerationLocked}
+                >
+                  {boardExamAvailable
+                    ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
+                    : "Unlock Board Exam Mode"}
+                </Button>
+              </div>
             </div>
-          </Card>
+          </section>
         )
       ) : phase === "running" && challengeSession ? (
         <div className="space-y-4">
@@ -1590,72 +1622,22 @@ export default function ChallengeQuizPage() {
                 {!isBoardExamMode ? (
                   <p className="text-xs text-foreground/50">You can finish anytime. Score is based on answered questions.</p>
                 ) : null}
-                <div className={cn(
-                  "rounded-md border p-3",
-                  isBoardExamMode ? "border-foreground/15 bg-muted/10" : "border-border bg-background",
-                )}>
-                  <button
-                    type="button"
-                    className="motion-pressable flex w-full items-center justify-between gap-3 rounded-md text-left"
-                    onClick={() => setIsQuestionNavigatorCollapsed((current) => !current)}
-                    aria-expanded={!isQuestionNavigatorCollapsed}
-                    aria-controls="challenge-question-navigator-grid"
-                  >
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
-                      <p key={currentIndex} className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-foreground/65 transition-transform",
-                        !isQuestionNavigatorCollapsed && "rotate-180",
-                      )}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  <div
-                    id="challenge-question-navigator-grid"
-                    data-testid="challenge-question-navigator-disclosure"
-                    className="motion-collapse mt-3"
-                    data-state={isQuestionNavigatorCollapsed ? "collapsed" : "expanded"}
-                    aria-hidden={isQuestionNavigatorCollapsed}
-                  >
-                    <div className="motion-collapse-inner">
-                      <div className="grid grid-cols-5 gap-2 sm:grid-cols-8" aria-label="Question navigator">
-                        {quiz.map((item, index) => {
-                          const isCurrentQuestion = index === currentIndex;
-                          const isAnswered = selectedChoices[index] != null;
-                          return (
-                            <button
-                              key={`${item.question}-${index}`}
-                              type="button"
-                              tabIndex={isQuestionNavigatorCollapsed ? -1 : 0}
-                              aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
-                              className={cn(
-                                "motion-pressable rounded-md border px-2 py-1.5 text-sm font-medium",
-                                isCurrentQuestion
-                                  ? isBoardExamMode
-                                    ? "border-foreground/40 bg-foreground/6 text-foreground"
-                                    : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                  : isAnswered
-                                    ? "border-foreground/30 bg-muted/60 text-foreground"
-                                    : "border-border bg-background text-foreground/70",
-                              )}
-                              onClick={() => {
-                                syncProgressRef(index, selectedChoices);
-                                setCurrentIndex(index);
-                                persistProgress(index, selectedChoices);
-                              }}
-                              disabled={quizInteractionDisabled}
-                            >
-                              {index + 1}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <QuestionNavigator
+                  total={totalQuestions}
+                  currentIndex={currentIndex}
+                  isAnswered={(index) => selectedChoices[index] != null}
+                  onSelect={(index) => {
+                    syncProgressRef(index, selectedChoices);
+                    setCurrentIndex(index);
+                    persistProgress(index, selectedChoices);
+                  }}
+                  summary={questionNavigatorSummary}
+                  disabled={quizInteractionDisabled}
+                  defaultCollapsed={shouldCollapseQuestionNavigatorByDefault(activeMode, isMobileNavigatorViewport)}
+                  tone={isBoardExamMode ? "board-exam" : "challenge"}
+                  testId="challenge-question-navigator"
+                  disclosureTestId="challenge-question-navigator-disclosure"
+                />
               </div>
             ) : null}
             {timedOut && submitting && isBoardExamMode ? (
@@ -1746,21 +1728,140 @@ export default function ChallengeQuizPage() {
             </div>
           </StickyAssessmentFooter>
         </div>
+      ) : phase === "complete" && result && isBoardExamMode ? (
+        <section className="motion-fade-enter space-y-6 sm:space-y-8">
+          <header className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Score Report</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Board Exam Result</h1>
+          </header>
+
+          <ScoreReveal
+            percentage={result.scorePercentage}
+            label="Score"
+            supportingLine={`${result.correctAnswers} of ${result.totalQuestions} correct · ${formatTimer(result.durationSeconds ?? 0)}`}
+            performanceLevel={result.performanceLevel}
+            tone="board-exam"
+          />
+
+          {timedOut ? (
+            <p className="text-center text-sm text-foreground/70">
+              Time ran out. Your answers were submitted automatically.
+            </p>
+          ) : null}
+
+          <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Concept Breakdown</h2>
+            {result.conceptBreakdown.length > 0 ? (
+              <ul className="mt-4 space-y-4" aria-label="Concept breakdown">
+                {result.conceptBreakdown.map((stat) => (
+                  <li key={stat.concept} className="space-y-1.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium text-foreground">{stat.concept}</span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground/85">
+                        {stat.accuracyPercentage}%
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-foreground/8" aria-hidden="true">
+                      <div
+                        className="h-full rounded-full bg-foreground/70 transition-all"
+                        style={{ width: `${Math.max(0, Math.min(100, stat.accuracyPercentage))}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-foreground/55">
+                      {stat.correctAnswers} of {stat.totalQuestions} correct
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-foreground/70">No concept breakdown is available for this exam.</p>
+            )}
+          </div>
+
+          <div ref={weakConceptsRef} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Weak Concepts</h2>
+            {result.weakConcepts.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {result.weakConcepts.map((concept) => (
+                  <span key={concept}
+                        className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    {concept}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-foreground/70">
+                No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {result.weakConcepts.length > 0 ? (
+              <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+                <Button type="button" className="w-full sm:w-auto">
+                  Practice Weak Concepts
+                </Button>
+              </Link>
+            ) : null}
+            <Button
+              type="button"
+              variant={result.weakConcepts.length > 0 ? "outline" : "default"}
+              className="w-full sm:w-auto"
+              onClick={handleRetry}
+            >
+              {retryButtonLabel}
+            </Button>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
+              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
+            </Button>
+          </div>
+          <div>
+            <BackLink href={noteDetailHref} label="Back to Note" />
+          </div>
+          {showAnswerReview ? (
+            <QuizAnswerReview
+              quiz={quiz}
+              selectedChoices={selectedChoices}
+              className="mt-2"
+              footer={(
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? (
+                    <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
+                      <Button type="button" className="w-full sm:w-auto">
+                        Practice Weak Concepts
+                      </Button>
+                    </Link>
+                  ) : null}
+                  <Link href={noteDetailHref} className="w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant={result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? "outline" : "default"}
+                      className="w-full sm:w-auto"
+                    >
+                      Review Study Pack
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            />
+          ) : null}
+          <QuizFeedbackPanel
+            quizLabel="Board Exam Mode"
+            noteTitle={note?.title}
+            section={showAnswerReview ? "review" : "results"}
+          />
+        </section>
       ) : phase === "complete" && result ? (
-        <Card className={cn("motion-fade-enter space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
-          <p className={cn(
-            "text-xs font-semibold uppercase tracking-wide",
-            isBoardExamMode ? "text-foreground/70" : "text-blue-600 dark:text-blue-400",
-          )}>
-            {isBoardExamMode ? "Score Report" : quizResultLabel}
+        <Card className="motion-fade-enter space-y-4 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            {quizResultLabel}
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">
-            {isBoardExamMode ? "Exam Result" : (note?.title ?? quizModeLabel)}
+            {note?.title ?? quizModeLabel}
           </h1>
           <p className="text-sm text-foreground/75">
-            {isBoardExamMode
-              ? "Your board exam is complete. Review your score report below, then plan your next study step."
-              : "Your Challenge Quiz is complete. Review the result summary first, then choose the next study action."}
+            Your Challenge Quiz is complete. Review the result summary first, then choose the next study action.
           </p>
           {showFirstQuizCompletionBanner ? (
             <Card className="space-y-3 border-emerald-500/30 bg-emerald-500/5 p-4">
