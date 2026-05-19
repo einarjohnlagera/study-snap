@@ -78,18 +78,17 @@ describe("LongExamPage", () => {
   it("renders the polished Long Exam prestart setup rhythm", async () => {
     render(<LongExamPage />);
 
-    expect(await screen.findByText("LONG EXAM MODE")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Start Long Exam" })).toBeInTheDocument();
-    expect(screen.getByText("Review the exam setup for Comprehensive Biology before you begin.")).toBeInTheDocument();
-    expect(screen.getByText("Before you begin")).toBeInTheDocument();
-    expect(screen.getByText("The full question set is generated before the exam starts. Stay focused once the exam begins; your mastery report appears after submission.")).toBeInTheDocument();
-    expect(screen.getByText("Timer")).toBeInTheDocument();
-    expect(screen.getByText("Question count")).toBeInTheDocument();
-    expect(screen.getByText("Monthly limit")).toBeInTheDocument();
-    expect(screen.getByText("Untimed - complete at your own pace.")).toBeInTheDocument();
-    expect(screen.getByText("Fixed long-form exam (20 / 25 / 30 by learner level).")).toBeInTheDocument();
-    expect(screen.getByText("Counts toward your monthly Long Exam usage.")).toBeInTheDocument();
-    expect(screen.getByText("Exam will cover 1 note (25 questions).")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Long Exam" })).toBeInTheDocument();
+    expect(screen.getByText("A comprehensive mastery sitting built from your note. Treat it as a focused study session, not a quick quiz.")).toBeInTheDocument();
+    expect(screen.getByText("Comprehensive Biology")).toBeInTheDocument();
+    expect(screen.getByText("What to expect")).toBeInTheDocument();
+    expect(screen.getByText("Fixed question set")).toBeInTheDocument();
+    expect(screen.getByText("Generated upfront — no progressive add. 25 questions from this note.")).toBeInTheDocument();
+    expect(screen.getByText("The clock does not pause")).toBeInTheDocument();
+    expect(screen.getByText("Scored against every question")).toBeInTheDocument();
+    expect(screen.getByText("Mastery report at the end")).toBeInTheDocument();
+    expect(screen.getByText("1 note · 25 questions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Begin Long Exam" })).toBeInTheDocument();
   });
 
   it("routes Choose another mode back to the shared mode picker", async () => {
@@ -120,7 +119,7 @@ describe("LongExamPage", () => {
 
     render(<LongExamPage />);
 
-    expect(await screen.findByText("Add notes from this subject")).toBeInTheDocument();
+    expect(await screen.findByText("Span this exam across more notes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Cell Transport/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Organic Chemistry/ })).not.toBeInTheDocument();
   });
@@ -147,9 +146,9 @@ describe("LongExamPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Cell Transport/ }));
     fireEvent.click(screen.getByRole("button", { name: /Genetics Lab/ }));
-    expect(screen.getByText("Exam will cover 3 notes (25 questions).")).toBeInTheDocument();
+    expect(screen.getByText("3 notes · 25 questions")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Long Exam" }));
+    fireEvent.click(screen.getByRole("button", { name: "Begin Long Exam" }));
 
     expect(startLongExam).toHaveBeenCalledWith("sp-1", {
       additionalStudyPackIds: ["sp-2", "sp-3"],
@@ -159,7 +158,7 @@ describe("LongExamPage", () => {
   it("omits additional study pack ids when no extra notes are selected", async () => {
     render(<LongExamPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start Long Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Begin Long Exam" }));
 
     expect(startLongExam).toHaveBeenCalledWith("sp-1", {});
   });

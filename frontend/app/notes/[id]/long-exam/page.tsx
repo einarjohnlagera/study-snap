@@ -2,9 +2,11 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useParams, useRouter} from "next/navigation";
+import {BarChart3, BookOpen, Hourglass, ListChecks} from "lucide-react";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
+import {ScoreReveal} from "@/components/exam-mode/score-reveal";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
@@ -83,6 +85,13 @@ function formatTimer(totalSeconds: number): string {
 
 function normalizeSubjectForMatch(subject?: string | null): string {
     return subject?.trim().toLowerCase() ?? "";
+}
+
+function resolveLongExamPerformanceLevel(scorePercentage: number): string {
+    if (scorePercentage >= 90) return "Excellent";
+    if (scorePercentage >= 70) return "Good";
+    if (scorePercentage >= 50) return "Fair";
+    return "Needs Improvement";
 }
 
 function resolveExpectedLongExamQuestionCount(learnerLevel?: string | null): number {
@@ -697,23 +706,26 @@ export default function LongExamPage() {
             ) : null}
 
             {phase === "prestart" ? (
-                <Card className="space-y-4 p-4 sm:p-6">
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                            LONG EXAM MODE
+                <section className="space-y-6 sm:space-y-8">
+                    <header className="space-y-3">
+                        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                            Long Exam
+                        </h1>
+                        <p className="max-w-2xl text-base leading-relaxed text-foreground/70 sm:text-lg">
+                            A comprehensive mastery sitting built from your note. Treat it as a focused study session, not a quick quiz.
                         </p>
-                        <h1 className="text-2xl font-semibold">Start Long Exam</h1>
-                        <p className="text-sm text-foreground/80">
-                            Review the exam setup for {note?.title ?? "this note"} before you begin.
-                        </p>
-                    </div>
+                        {note?.title ? (
+                            <p className="text-sm text-foreground/55">
+                                Built from <span className="font-medium text-foreground/80">{note.title}</span>
+                            </p>
+                        ) : null}
+                    </header>
 
                     {hasActiveInProgressPrompt ? (
-                        <div className="space-y-3 rounded-xl border border-foreground/15 bg-muted/20 p-4 text-sm">
-                            <p className="font-medium text-foreground">You have an active session. Resume it?</p>
-                            <p className="text-foreground/70">
-                                Resume to keep your saved answers and current question position, or start fresh to
-                                forfeit the active session.
+                        <div className="space-y-3 rounded-2xl border border-border bg-card p-5 sm:p-6">
+                            <p className="text-base font-medium text-foreground">You have an active session.</p>
+                            <p className="text-sm leading-relaxed text-foreground/70">
+                                Resume to keep your saved answers and current question position, or start fresh to forfeit the active session.
                             </p>
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <Button type="button" className="w-full sm:w-auto"
@@ -733,91 +745,114 @@ export default function LongExamPage() {
                         </div>
                     ) : (
                         <>
-                            <div
-                                className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
-                                <div className="space-y-1">
-                                    <p className="font-medium text-foreground">Before you begin</p>
-                                    <p>
-                                        The full question set is generated before the exam starts. Stay focused once the
-                                        exam begins; your mastery report appears after submission.
-                                    </p>
-                                </div>
-                                {availableSourceNotes.length > 0 ? (
-                                    <div className="space-y-3 border-t border-border pt-3">
+                            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                                    What to expect
+                                </h2>
+                                <ul className="mt-5 space-y-5">
+                                    <li className="flex gap-4">
+                                        <BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true"/>
                                         <div className="space-y-1">
-                                            <p className="font-medium text-foreground">Add notes from this subject</p>
-                                            <p>Select up to 3 more ready Study Packs to span this Long Exam.</p>
+                                            <p className="text-sm font-medium text-foreground">Fixed question set</p>
+                                            <p className="text-sm leading-relaxed text-foreground/70">
+                                                Generated upfront — no progressive add. {expectedQuestionCount} questions
+                                                {selectedSourceCount > 1 ? ` spanning ${selectedSourceCount} notes` : " from this note"}.
+                                            </p>
                                         </div>
-                                        <div className="grid gap-2">
-                                            {availableSourceNotes.map((sourceNote) => {
-                                                const sourceStudyPackId = sourceNote.studyPackId ?? "";
-                                                const selected = selectedAdditionalStudyPackIds.includes(sourceStudyPackId);
-                                                return (
-                                                    <button
-                                                        key={sourceNote.id}
-                                                        type="button"
-                                                        className={cn(
-                                                            "rounded-lg border px-3 py-2 text-left transition",
-                                                            selected
-                                                                ? "border-blue-500 bg-blue-500/10 text-foreground ring-2 ring-blue-500/20"
-                                                                : "border-border bg-muted/20 text-foreground/75 hover:border-foreground/25 hover:bg-muted/40",
-                                                        )}
-                                                        aria-pressed={selected}
-                                                        onClick={() => toggleAdditionalSource(sourceStudyPackId)}
-                                                    >
-                                                        <span
-                                                            className="block text-sm font-medium text-foreground">{sourceNote.title ?? "Untitled note"}</span>
-                                                        <span
-                                                            className="block text-xs text-foreground/60">{sourceNote.subject}</span>
-                                                    </button>
-                                                );
-                                            })}
+                                    </li>
+                                    <li className="flex gap-4">
+                                        <Hourglass className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true"/>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-foreground">The clock does not pause</p>
+                                            <p className="text-sm leading-relaxed text-foreground/70">
+                                                About 90 seconds per question, fixed at start. Leaving forfeits the session.
+                                            </p>
                                         </div>
-                                    </div>
-                                ) : null}
-                                <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
-                                    <div className="space-y-1">
-                                        <p className="font-medium text-foreground">Timer</p>
-                                        <p>Untimed - complete at your own pace.</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium text-foreground">Question count</p>
-                                        <p>Fixed long-form exam (20 / 25 / 30 by learner level).</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium text-foreground">Monthly limit</p>
-                                        <p>Counts toward your monthly Long Exam usage.</p>
-                                    </div>
-                                </div>
+                                    </li>
+                                    <li className="flex gap-4">
+                                        <ListChecks className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true"/>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-foreground">Scored against every question</p>
+                                            <p className="text-sm leading-relaxed text-foreground/70">
+                                                Unanswered items count toward your final score.
+                                            </p>
+                                        </div>
+                                    </li>
+                                    <li className="flex gap-4">
+                                        <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true"/>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-foreground">Mastery report at the end</p>
+                                            <p className="text-sm leading-relaxed text-foreground/70">
+                                                Domain breakdown, weak areas, and a suggested next step.
+                                            </p>
+                                        </div>
+                                    </li>
+                                </ul>
                             </div>
 
-                            <p className="text-sm text-foreground/70">
-                                Exam will
-                                cover {selectedSourceCount} {selectedSourceCount === 1 ? "note" : "notes"} ({expectedQuestionCount} questions).
-                            </p>
+                            {availableSourceNotes.length > 0 ? (
+                                <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                    <div className="space-y-1">
+                                        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                                            Span this exam across more notes
+                                        </h2>
+                                        <p className="text-sm text-foreground/70">
+                                            Add up to 3 ready Study Packs from this subject.
+                                        </p>
+                                    </div>
+                                    <div className="mt-4 grid gap-2">
+                                        {availableSourceNotes.map((sourceNote) => {
+                                            const sourceStudyPackId = sourceNote.studyPackId ?? "";
+                                            const selected = selectedAdditionalStudyPackIds.includes(sourceStudyPackId);
+                                            return (
+                                                <button
+                                                    key={sourceNote.id}
+                                                    type="button"
+                                                    className={cn(
+                                                        "rounded-xl border px-4 py-3 text-left transition",
+                                                        selected
+                                                            ? "border-foreground/40 bg-foreground/5 text-foreground"
+                                                            : "border-border bg-background text-foreground/75 hover:border-foreground/25 hover:bg-muted/30",
+                                                    )}
+                                                    aria-pressed={selected}
+                                                    onClick={() => toggleAdditionalSource(sourceStudyPackId)}
+                                                >
+                                                    <span className="block text-sm font-medium text-foreground">{sourceNote.title ?? "Untitled note"}</span>
+                                                    <span className="block text-xs text-foreground/60">{sourceNote.subject}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : null}
 
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full sm:w-auto"
-                                    onClick={() => router.push(modeSelectHref)}
-                                    disabled={starting}
-                                >
-                                    Choose another mode
-                                </Button>
-                                <Button
-                                    type="button"
-                                    className="w-full sm:w-auto"
-                                    onClick={() => void handleStartExam()}
-                                    disabled={!studyPackId || starting}
-                                >
-                                    {starting ? "Starting..." : "Start Long Exam"}
-                                </Button>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm text-foreground/65">
+                                    {selectedSourceCount} {selectedSourceCount === 1 ? "note" : "notes"} · {expectedQuestionCount} questions
+                                </p>
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full sm:w-auto"
+                                        onClick={() => router.push(modeSelectHref)}
+                                        disabled={starting}
+                                    >
+                                        Choose another mode
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        className="w-full sm:w-auto"
+                                        onClick={() => void handleStartExam()}
+                                        disabled={!studyPackId || starting}
+                                    >
+                                        {starting ? "Starting..." : "Begin Long Exam"}
+                                    </Button>
+                                </div>
                             </div>
                         </>
                     )}
-                </Card>
+                </section>
             ) : null}
 
             {phase === "generating" ? (
@@ -885,86 +920,88 @@ export default function LongExamPage() {
             ) : null}
 
             {phase === "complete" && masteryReport ? (
-                <Card className="space-y-5 border-foreground/15 p-4 sm:p-6">
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Mastery
-                            Report</p>
-                        <h1 className="text-2xl font-semibold">Long Exam Complete</h1>
-                        <p className="text-sm text-foreground/70">{masteryReport.performanceSummary}</p>
-                    </div>
+                <section className="space-y-6 sm:space-y-8">
+                    <header className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Mastery Report</p>
+                        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                            Long Exam Complete
+                        </h1>
+                    </header>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border border-border bg-background p-4">
-                            <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Score</p>
-                            <p className="mt-1 text-3xl font-semibold">{masteryReport.scorePercentage}%</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-background p-4">
-                            <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Answered</p>
-                            <p className="mt-1 text-3xl font-semibold">
-                                {masteryReport.answeredQuestions} / {masteryReport.totalQuestions}
-                            </p>
-                        </div>
-                    </div>
+                    <ScoreReveal
+                        percentage={masteryReport.scorePercentage}
+                        label="Overall Mastery"
+                        supportingLine={`${masteryReport.answeredQuestions} of ${masteryReport.totalQuestions} answered`}
+                        performanceLevel={resolveLongExamPerformanceLevel(masteryReport.scorePercentage)}
+                        tone="long-exam"
+                    />
 
-                    <div className="space-y-2">
-                        <h2 className="text-base font-semibold">Domain Breakdown</h2>
-                        <div className="overflow-x-auto rounded-xl border border-border">
-                            <table className="w-full min-w-130 text-left text-sm">
-                                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-foreground/55">
-                                <tr>
-                                    <th className="px-3 py-2 font-medium">Domain</th>
-                                    <th className="px-3 py-2 font-medium">Correct</th>
-                                    <th className="px-3 py-2 font-medium">Accuracy</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {masteryReport.domainBreakdown.map((domain) => (
-                                    <tr key={domain.domain} className="border-t border-border">
-                                        <td className="px-3 py-2 text-foreground">{domain.domain}</td>
-                                        <td className="px-3 py-2 text-foreground/75">
-                                            {domain.correctAnswers} / {domain.totalQuestions}
-                                        </td>
-                                        <td className="px-3 py-2 text-foreground/75">{domain.accuracyPercentage}%</td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
+                    {masteryReport.performanceSummary ? (
+                        <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-foreground/70 sm:text-base">
+                            {masteryReport.performanceSummary}
+                        </p>
+                    ) : null}
+
+                    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Domain Breakdown</h2>
+                        <ul className="mt-4 space-y-4" aria-label="Domain breakdown">
+                            {masteryReport.domainBreakdown.map((domain) => (
+                                <li key={domain.domain} className="space-y-1.5">
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-sm font-medium text-foreground">{domain.domain}</span>
+                                        <span className="text-sm font-semibold tabular-nums text-foreground/85">
+                                            {domain.accuracyPercentage}%
+                                        </span>
+                                    </div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-foreground/8" aria-hidden="true">
+                                        <div
+                                            className="h-full rounded-full bg-foreground/70 transition-all"
+                                            style={{width: `${Math.max(0, Math.min(100, domain.accuracyPercentage))}%`}}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-foreground/55">
+                                        {domain.correctAnswers} of {domain.totalQuestions} correct
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
 
                     {(masteryReport.sourceNotes ?? []).length > 1 ? (
-                        <div className="space-y-2">
-                            <h2 className="text-base font-semibold">Sources covered</h2>
-                            <div className="flex flex-wrap gap-2">
+                        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Sources Covered</h2>
+                            <div className="mt-4 flex flex-wrap gap-2">
                                 {(masteryReport.sourceNotes ?? []).map((sourceNote) => (
                                     <span key={sourceNote.noteId}
-                                          className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/75">
-                    {sourceNote.noteTitle}
-                  </span>
+                                          className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground/75">
+                                        {sourceNote.noteTitle}
+                                    </span>
                                 ))}
                             </div>
                         </div>
                     ) : null}
 
-                    <div className="space-y-2">
-                        <h2 className="text-base font-semibold">Weak Domains</h2>
+                    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Weak Domains</h2>
                         {masteryReport.weakDomains.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
+                            <div className="mt-4 flex flex-wrap gap-2">
                                 {masteryReport.weakDomains.map((domain) => (
                                     <span key={domain}
-                                          className="rounded-full border border-amber-500/35 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-200">
-                    {domain}
-                  </span>
+                                          className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                        {domain}
+                                    </span>
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-sm text-foreground/70">No weak domains flagged.</p>
+                            <p className="mt-3 text-sm text-foreground/70">No weak domains flagged.</p>
                         )}
                     </div>
 
-                    <div className="rounded-xl border border-border bg-background p-4 text-sm text-foreground/75">
-                        <p className="font-medium text-foreground">Suggested Next Step</p>
-                        <p className="mt-1">{masteryReport.suggestedNextStep}</p>
+                    <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+                        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Suggested Next Step</h2>
+                        <p className="mt-3 text-base leading-relaxed text-foreground sm:text-lg">
+                            {masteryReport.suggestedNextStep}
+                        </p>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -976,7 +1013,7 @@ export default function LongExamPage() {
                             Study Again
                         </Button>
                     </div>
-                </Card>
+                </section>
             ) : null}
 
             {phase === "running" ? (
