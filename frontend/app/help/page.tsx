@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Award, BookOpen, Brain, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
+import { ArrowRight, Award, BookOpen, Brain, Briefcase, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -15,6 +15,7 @@ import { BoardExamGuide } from "@/components/help/board-exam-guide";
 import { QuizModesGuide } from "@/components/help/quiz-modes-guide";
 import { StudentGuide } from "@/components/help/student-guide";
 import { TeacherGuide } from "@/components/help/teacher-guide";
+import { ProfessionalGuide } from "@/components/help/professional-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import type { LucideIcon } from "lucide-react";
 
@@ -78,6 +79,13 @@ const HELP_CARDS: HelpCard[] = [
     description: "Turn your lesson materials into study packs and exportable quiz content.",
     modalDescription: "Use your lesson materials to build review-ready study content faster.",
   },
+  {
+    id: "professional-guide",
+    icon: Briefcase,
+    title: "Professional Guide",
+    description: "Use Interview Practice to prepare for job interviews using your own notes.",
+    modalDescription: "Practice smarter for job interviews using your notes.",
+  },
 ];
 
 function GuideContent({ cardId }: { cardId: string }) {
@@ -98,6 +106,8 @@ function GuideContent({ cardId }: { cardId: string }) {
       return <StudentGuide />;
     case "teacher-guide":
       return <TeacherGuide />;
+    case "professional-guide":
+      return <ProfessionalGuide />;
     default:
       return null;
   }

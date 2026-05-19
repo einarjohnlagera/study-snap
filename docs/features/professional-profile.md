@@ -74,6 +74,7 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 - **Audience**: Professional profile, Pro plan only
 - **Vibe**: Coached interview prep — scenario-based questions with per-answer AI critique, framed like a senior interviewer following up
 - **Surface**: Dedicated dashboard card on the Professional dashboard plus a Professional mode-selection tile. The mode-selection tile is the canonical per-note entry; the dashboard card auto-picks the most-recent ready note for quick re-entry.
+- **Discovery surfaces**: Landing page target users, Help Center Professional Guide, and Learn page Professional guides should all mention Interview Practice so Professional-profile users can find the workflow before they enter the app.
 - **Differentiator from Adaptive Practice**: scenario-style prompts, per-answer AI critique mid-session, Interview Readiness Report instead of standard score result
 
 ### Setup
