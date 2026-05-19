@@ -6,6 +6,9 @@ import {BarChart3, BookOpen, Hourglass, ListChecks} from "lucide-react";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
+import {ExamTopBar} from "@/components/exam-mode/exam-top-bar";
+import {useExamFocusMode} from "@/components/exam-mode/exam-focus-context";
+import {QuestionNavigator} from "@/components/exam-mode/question-navigator";
 import {ScoreReveal} from "@/components/exam-mode/score-reveal";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
@@ -75,12 +78,6 @@ function getAnsweredCount(selectedChoices: Record<string, number>): number {
 
 function getNowEpochSeconds(): number {
     return Math.floor(Date.now() / 1000);
-}
-
-function formatTimer(totalSeconds: number): string {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function normalizeSubjectForMatch(subject?: string | null): string {
@@ -175,6 +172,7 @@ export default function LongExamPage() {
     const timerState = resolveBoardExamTimerState(remainingSeconds);
     const longExamActive = phase === "running" && Boolean(sessionId);
     const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
+    useExamFocusMode(phase === "running");
 
     const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
         setToast({message, tone});
@@ -651,33 +649,17 @@ export default function LongExamPage() {
             )}
         >
             {phase === "running" ? (
-                <div
-                    data-testid="long-exam-top-bar"
-                    className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-foreground/15 bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
-                >
-                    <Button variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()}
-                            disabled={submitting}>
-                        Leave Exam
-                    </Button>
-                    <div className="min-w-0 flex-1 text-center">
-                        <p className="truncate text-sm font-semibold text-foreground">Long Exam Mode</p>
-                    </div>
-                    <div
-                        data-testid="long-exam-timer"
-                        data-timer-state={timerState}
-                        className={cn(
-                            "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold",
-                            timerState === "normal"
-                                ? "border-foreground/15 bg-background text-foreground"
-                                : timerState === "warning"
-                                    ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                                    : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300",
-                        )}
-                        aria-label="Exam timer"
-                    >
-                        {formatTimer(remainingSeconds)}
-                    </div>
-                </div>
+                <ExamTopBar
+                    modeLabel="Long Exam"
+                    leaveLabel="Leave Exam"
+                    onLeave={() => requestLeave()}
+                    leaveDisabled={submitting}
+                    remainingSeconds={remainingSeconds}
+                    timerState={timerState}
+                    tone="long-exam"
+                    testId="long-exam-top-bar"
+                    timerTestId="long-exam-timer"
+                />
             ) : (
                 <div className="flex items-center justify-between gap-3">
                     <BackLink href={noteDetailHref} label="Note"/>
@@ -883,32 +865,31 @@ export default function LongExamPage() {
             ) : null}
 
             {phase === "running" && currentQuestion ? (
-                <div className="space-y-4">
-                    <Card className="space-y-4 p-4 sm:p-5">
-                        <div className="space-y-1">
-                            <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">
+                <div className="space-y-5">
+                    <div className="space-y-2 px-1">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
                                 Question {currentQuestionIndex + 1} of {totalQuestions}
                             </p>
-                            <p className="text-sm text-foreground/65">
-                                {answeredCount} of {totalQuestions} answered
-                                {sourceNoteRefs.length > 1 ? ` | Spanning ${sourceNoteRefs.length} notes` : ""}
+                            <p className="text-xs tabular-nums text-foreground/55">
+                                {answeredCount} / {totalQuestions} answered{sourceNoteRefs.length > 1 ? ` · ${sourceNoteRefs.length} notes` : ""}
                             </p>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full bg-blue-500 transition-all"
+                        <div className="h-1 overflow-hidden rounded-full bg-foreground/8" aria-hidden="true">
+                            <div className="h-full rounded-full bg-foreground/60 transition-all"
                                  style={{width: `${progressPercentage}%`}}/>
                         </div>
-                    </Card>
+                    </div>
 
-                    <Card className="space-y-4 p-4 sm:p-5">
-                        <h1 className="text-lg font-semibold leading-relaxed sm:text-xl">{currentQuestion.question}</h1>
+                    <Card className="space-y-5 border-foreground/15 bg-card p-5 sm:p-6">
+                        <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl">{currentQuestion.question}</h1>
                         <QuizChoiceList
                             questionKey={`${currentQuestion.question}-${currentQuestionIndex}`}
                             choices={currentQuestion.choices}
                             correctIndex={resolveQuizCorrectIndex(currentQuestion)}
                             selectedChoiceIndex={getSelectedChoice(selectedChoices, currentQuestionIndex)}
                             revealAnswer={false}
-                            selectionStyle="exam"
+                            selectionStyle="board-exam"
                             disabled={submitting}
                             onSelectChoice={(choiceIndex) => void handleSelectChoice(choiceIndex)}
                         />
@@ -916,6 +897,18 @@ export default function LongExamPage() {
                             <p className="text-xs text-foreground/55">Saving answer...</p>
                         ) : null}
                     </Card>
+
+                    <QuestionNavigator
+                        total={totalQuestions}
+                        currentIndex={currentQuestionIndex}
+                        isAnswered={(index) => getSelectedChoice(selectedChoices, index) !== null}
+                        onSelect={(index) => setCurrentQuestionIndex(index)}
+                        summary={`Question ${currentQuestionIndex + 1} of ${totalQuestions} · ${answeredCount} answered`}
+                        disabled={submitting}
+                        tone="long-exam"
+                        testId="long-exam-question-navigator"
+                        disclosureTestId="long-exam-question-navigator-disclosure"
+                    />
                 </div>
             ) : null}
 

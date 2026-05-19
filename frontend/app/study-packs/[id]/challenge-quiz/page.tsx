@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, EyeOff, Hourglass, ListChecks, Maximize2 } from "lucide-react";
+import { EyeOff, Hourglass, ListChecks, Maximize2 } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
+import { ExamTopBar } from "@/components/exam-mode/exam-top-bar";
+import { useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
+import { QuestionNavigator } from "@/components/exam-mode/question-navigator";
 import { ScoreReveal } from "@/components/exam-mode/score-reveal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { PostSuccessUpgradeNudge } from "@/components/billing/post-success-upgrade-nudge";
@@ -164,6 +167,16 @@ async function requestBoardExamFullscreen() {
   await element.requestFullscreen().catch(() => undefined);
 }
 
+async function exitBoardExamFullscreen() {
+  if (typeof globalThis.document === "undefined" || !globalThis.document.fullscreenElement) {
+    return;
+  }
+  if (typeof globalThis.document.exitFullscreen !== "function") {
+    return;
+  }
+  await globalThis.document.exitFullscreen().catch(() => undefined);
+}
+
 function formatTimer(seconds: number): string {
   const safeSeconds = Math.max(0, seconds);
   const minutes = Math.floor(safeSeconds / 60);
@@ -274,7 +287,6 @@ export default function ChallengeQuizPage() {
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
-  const [isQuestionNavigatorCollapsed, setIsQuestionNavigatorCollapsed] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -967,6 +979,14 @@ export default function ChallengeQuizPage() {
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
+  useExamFocusMode(isBoardExamMode && phase === "running");
+
+  useEffect(() => {
+    if (!isBoardExamMode || phase === "running") {
+      return;
+    }
+    void exitBoardExamFullscreen();
+  }, [isBoardExamMode, phase]);
   const quizInteractionDisabled = submitting || generatingMore || boardExamTimerExpired;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
   const quizResultLabel = isBoardExamMode ? "Exam Result" : "Challenge Quiz Result";
@@ -1107,14 +1127,6 @@ export default function ChallengeQuizPage() {
     setShowBoardExamFocusTip(false);
   }, [boardExamFocusTipStorageKey]);
 
-  useEffect(() => {
-    if (phase !== "running" || !challengeSession?.sessionId || totalQuestions === 0) {
-      return;
-    }
-    setIsQuestionNavigatorCollapsed(
-      shouldCollapseQuestionNavigatorByDefault(activeMode, isMobileNavigatorViewport),
-    );
-  }, [activeMode, challengeSession?.sessionId, isMobileNavigatorViewport, phase, totalQuestions]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
@@ -1124,42 +1136,40 @@ export default function ChallengeQuizPage() {
       phase === "running" && "pb-28 sm:pb-28",
     )}>
       {phase === "running" ? (
-        <div
-          data-testid="challenge-quiz-top-bar"
-          className={cn(
-            "sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border",
-            isBoardExamMode ? "border-foreground/15" : "border-border",
-          )}
-        >
-          <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
-            {isBoardExamMode ? "Leave Exam" : "Leave Quiz"}
-          </Button>
-          <div className="min-w-0 flex-1 text-center">
-            <p className={cn(
-              "truncate text-sm font-semibold",
-              isBoardExamMode ? "text-foreground" : "text-blue-700 dark:text-blue-300",
-            )}>
-              {quizModeLabel}
-            </p>
-          </div>
+        isBoardExamMode ? (
+          <ExamTopBar
+            modeLabel="Board Exam"
+            leaveLabel="Leave Exam"
+            onLeave={() => requestLeave()}
+            leaveDisabled={submitting}
+            remainingSeconds={remainingSeconds}
+            timerState={boardExamTimerState}
+            tone="board-exam"
+            testId="challenge-quiz-top-bar"
+            timerTestId="board-exam-timer"
+          />
+        ) : (
           <div
-            data-testid={isBoardExamMode ? "board-exam-timer" : "challenge-quiz-timer"}
-            data-timer-state={isBoardExamMode ? boardExamTimerState : undefined}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold",
-              isBoardExamMode
-                ? boardExamTimerState === "normal"
-                  ? "border-foreground/15 bg-background text-foreground"
-                  : boardExamTimerState === "warning"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                    : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300"
-                : "border-border bg-background text-foreground",
-            )}
-            aria-label="Exam timer"
+            data-testid="challenge-quiz-top-bar"
+            className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
           >
-            {formatTimer(remainingSeconds)}
+            <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
+              Leave Quiz
+            </Button>
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate text-sm font-semibold text-blue-700 dark:text-blue-300">
+                {quizModeLabel}
+              </p>
+            </div>
+            <div
+              data-testid="challenge-quiz-timer"
+              className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold text-foreground"
+              aria-label="Exam timer"
+            >
+              {formatTimer(remainingSeconds)}
+            </div>
           </div>
-        </div>
+        )
       ) : (
         <div className="flex items-center justify-between gap-3">
           <BackLink href={noteDetailHref} label="Note" />
@@ -1612,72 +1622,22 @@ export default function ChallengeQuizPage() {
                 {!isBoardExamMode ? (
                   <p className="text-xs text-foreground/50">You can finish anytime. Score is based on answered questions.</p>
                 ) : null}
-                <div className={cn(
-                  "rounded-md border p-3",
-                  isBoardExamMode ? "border-foreground/15 bg-muted/10" : "border-border bg-background",
-                )}>
-                  <button
-                    type="button"
-                    className="motion-pressable flex w-full items-center justify-between gap-3 rounded-md text-left"
-                    onClick={() => setIsQuestionNavigatorCollapsed((current) => !current)}
-                    aria-expanded={!isQuestionNavigatorCollapsed}
-                    aria-controls="challenge-question-navigator-grid"
-                  >
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
-                      <p key={currentIndex} className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-foreground/65 transition-transform",
-                        !isQuestionNavigatorCollapsed && "rotate-180",
-                      )}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  <div
-                    id="challenge-question-navigator-grid"
-                    data-testid="challenge-question-navigator-disclosure"
-                    className="motion-collapse mt-3"
-                    data-state={isQuestionNavigatorCollapsed ? "collapsed" : "expanded"}
-                    aria-hidden={isQuestionNavigatorCollapsed}
-                  >
-                    <div className="motion-collapse-inner">
-                      <div className="grid grid-cols-5 gap-2 sm:grid-cols-8" aria-label="Question navigator">
-                        {quiz.map((item, index) => {
-                          const isCurrentQuestion = index === currentIndex;
-                          const isAnswered = selectedChoices[index] != null;
-                          return (
-                            <button
-                              key={`${item.question}-${index}`}
-                              type="button"
-                              tabIndex={isQuestionNavigatorCollapsed ? -1 : 0}
-                              aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
-                              className={cn(
-                                "motion-pressable rounded-md border px-2 py-1.5 text-sm font-medium",
-                                isCurrentQuestion
-                                  ? isBoardExamMode
-                                    ? "border-foreground/40 bg-foreground/6 text-foreground"
-                                    : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                  : isAnswered
-                                    ? "border-foreground/30 bg-muted/60 text-foreground"
-                                    : "border-border bg-background text-foreground/70",
-                              )}
-                              onClick={() => {
-                                syncProgressRef(index, selectedChoices);
-                                setCurrentIndex(index);
-                                persistProgress(index, selectedChoices);
-                              }}
-                              disabled={quizInteractionDisabled}
-                            >
-                              {index + 1}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <QuestionNavigator
+                  total={totalQuestions}
+                  currentIndex={currentIndex}
+                  isAnswered={(index) => selectedChoices[index] != null}
+                  onSelect={(index) => {
+                    syncProgressRef(index, selectedChoices);
+                    setCurrentIndex(index);
+                    persistProgress(index, selectedChoices);
+                  }}
+                  summary={questionNavigatorSummary}
+                  disabled={quizInteractionDisabled}
+                  defaultCollapsed={shouldCollapseQuestionNavigatorByDefault(activeMode, isMobileNavigatorViewport)}
+                  tone={isBoardExamMode ? "board-exam" : "challenge"}
+                  testId="challenge-question-navigator"
+                  disclosureTestId="challenge-question-navigator-disclosure"
+                />
               </div>
             ) : null}
             {timedOut && submitting && isBoardExamMode ? (

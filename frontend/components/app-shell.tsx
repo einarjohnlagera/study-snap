@@ -19,6 +19,7 @@ import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
+import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 
 type AppShellProps = {
@@ -477,6 +478,16 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const avatarLetter = avatarSeed.charAt(0).toUpperCase();
   const pageTitle = getPageTitle(pathname || "");
   const showVerificationBanner = shouldUseShell && hasAuthUser && !user.emailVerifiedAt;
+
+  const { isExamFocusActive } = useExamFocusContext();
+
+  if (isExamFocusActive) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <main>{children}</main>
+      </div>
+    );
+  }
 
   if (!shouldUseShell) {
     return (

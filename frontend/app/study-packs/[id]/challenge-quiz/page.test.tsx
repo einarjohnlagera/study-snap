@@ -595,7 +595,7 @@ describe("ChallengeQuizPage", () => {
     const actionBar = screen.getByTestId("challenge-quiz-action-bar");
     const navigatorDisclosure = screen.getByTestId("challenge-question-navigator-disclosure");
 
-    expect(topBar).toHaveTextContent("Board Exam Mode");
+    expect(topBar).toHaveTextContent("Board Exam");
     expect(actionBar).toHaveClass("fixed");
     expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
@@ -659,7 +659,7 @@ describe("ChallengeQuizPage", () => {
     setupBoardExamSession();
     render(<ChallengeQuizPage />);
 
-    expect(await screen.findByTestId("challenge-quiz-top-bar")).toHaveTextContent("Board Exam Mode");
+    expect(await screen.findByTestId("challenge-quiz-top-bar")).toHaveTextContent("Board Exam");
     expect(screen.queryByText("Board Exam Mode hides distractions to simulate a real test environment.")).not.toBeInTheDocument();
   });
 
