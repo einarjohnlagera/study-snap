@@ -33,6 +33,7 @@ import com.studysnap.backend.exception.InvalidLongExamSourceException;
 import com.studysnap.backend.exception.LongExamNotAvailableException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
+import com.studysnap.backend.exception.MonthlyLongExamLimitReachedException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -81,6 +82,8 @@ class LongExamServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
+    @Mock
+    private UserUsageService userUsageService;
 
     private LongExamService longExamService;
     private Runnable dispatchedTask;
@@ -92,6 +95,8 @@ class LongExamServiceTest {
             dispatchedTask = invocation.getArgument(0);
             return null;
         }).when(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
+        lenient().when(userUsageService.getMonthlyUsage(any(UUID.class), any(OffsetDateTime.class)))
+                .thenReturn(UserUsageService.MonthlyUsage.zero());
         TransactionOperations transactionOperations = new TransactionOperations() {
             @Override
             public <T> T execute(TransactionCallback<T> action) {
@@ -109,6 +114,7 @@ class LongExamServiceTest {
                 analyticsService,
                 generationContextResolver,
                 new StudySnapProperties(),
+                userUsageService,
                 studyPackGenerationTaskDispatcher,
                 transactionOperations,
                 new SimpleAsyncTaskExecutor()
@@ -167,6 +173,8 @@ class LongExamServiceTest {
         assertThat(response.canResume()).isFalse();
         assertThat(response.sourceNoteRefs()).hasSize(1);
         assertThat(response.sourceNoteRefs().getFirst().questionCount()).isEqualTo(25);
+        assertThat(response.usedThisMonth()).isZero();
+        assertThat(response.monthlyLimit()).isEqualTo(10);
         assertThat(dispatchedTask).isNotNull();
         QuickReviewSessionEntity generatingSession = savedSessions.getFirst();
         when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(Optional.of(generatingSession));
@@ -178,6 +186,7 @@ class LongExamServiceTest {
                 QuickReviewSessionStatus.IN_PROGRESS
         );
         verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.LONG_EXAM_SESSION);
+        verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_STARTED), eq(studyPackId), any());
     }
 
@@ -224,6 +233,35 @@ class LongExamServiceTest {
         verify(quizGenerationService, never()).generateLongExam(any(), any(), any(), any(), anyInt(), any(), any());
         verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(), any(), any());
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementLongExamGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_monthlyLongExamLimitReachedThrowsBeforeGeneration() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.now().minusDays(1),
+                        OffsetDateTime.now().plusDays(29),
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        10,
+                        0
+                ));
+
+        String studyPackIdRaw = studyPackId.toString();
+        assertThatThrownBy(() -> longExamService.startSession(studyPackIdRaw, userId, null))
+                .isInstanceOf(MonthlyLongExamLimitReachedException.class);
+
+        verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(any(), any());
+        verify(userUsageService, never()).incrementLongExamGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
     @Test

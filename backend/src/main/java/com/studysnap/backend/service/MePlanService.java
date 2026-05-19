@@ -30,6 +30,8 @@ public class MePlanService {
         int challengeQuizLimit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
         int adaptivePracticeLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
         int interviewPracticeLimit = properties.getPricing().resolveMonthlyInterviewPracticeLimit(planType);
+        int longExamLimit = properties.getPricing().resolveMonthlyLongExamLimit(planType);
+        int boardExamLimit = properties.getPricing().resolveMonthlyBoardExamLimit(planType);
         int ocrLimit = properties.getPricing().resolveMonthlyOcrLimit(planType);
         int noteGenerationLimit = properties.getPricing().resolveMonthlyNoteGenerationLimit(planType);
         Integer exportLimit = properties.getPricing().resolveMonthlyExportLimit(planType);
@@ -38,6 +40,8 @@ public class MePlanService {
         int challengeQuizUsed = usage.challengeQuizGenerations();
         int adaptivePracticeUsed = usage.adaptiveQuizGenerations();
         int interviewPracticeUsed = usage.interviewPracticeUsedThisMonth();
+        int longExamUsed = usage.longExamUsedThisMonth();
+        int boardExamUsed = usage.boardExamUsedThisMonth();
         int ocrUsed = usage.ocrExtractions();
         int noteGenerationUsed = usage.noteGenerations();
         int exportUsed = usage.exportsCount();
@@ -55,7 +59,9 @@ public class MePlanService {
                         interviewPracticeLimit,
                         ocrLimit,
                         noteGenerationLimit,
-                        exportLimit
+                        exportLimit,
+                        longExamLimit,
+                        boardExamLimit
                 ),
                 new MePlanResponse.Usage(
                         studyPackUsed,
@@ -64,7 +70,9 @@ public class MePlanService {
                         interviewPracticeUsed,
                         ocrUsed,
                         noteGenerationUsed,
-                        exportUsed
+                        exportUsed,
+                        longExamUsed,
+                        boardExamUsed
                 ),
                 new MePlanResponse.Remaining(
                         remaining(studyPackLimit, studyPackUsed),
@@ -73,7 +81,9 @@ public class MePlanService {
                         remaining(interviewPracticeLimit, interviewPracticeUsed),
                         remaining(ocrLimit, ocrUsed),
                         remaining(noteGenerationLimit, noteGenerationUsed),
-                        remainingNullable(exportLimit, exportUsed)
+                        remainingNullable(exportLimit, exportUsed),
+                        remaining(longExamLimit, longExamUsed),
+                        remaining(boardExamLimit, boardExamUsed)
                 ),
                 new MePlanResponse.Features(
                         properties.getPricing().isAdaptivePracticeAvailable(planType),

@@ -49,10 +49,12 @@ Do not derive plan access from:
 
 - `100` Study Packs / month
 - `50` Challenge Quizzes / month
+- Board Exam Mode uses the shared Challenge Quiz budget and has a dedicated `5` sessions / month hard cap
 - topic note generation: backend-configured Pro limit (`100` by default)
 - OCR: backend-configured Pro limit (`100` by default)
 - exports: unlimited
 - Adaptive Practice available and quota-limited (`30` / month by default)
+- Long Exam available and quota-limited (`10` / month by default)
 - Difficulty selection available
 - Board Exam Mode available
 
@@ -76,6 +78,13 @@ For actual behavior and gating decisions:
 ## Topic note generation and OCR
 
 Topic note generation and OCR are distinct monthly quotas from Study Packs.
+
+Long Exam and Board Exam quotas are distinct monthly counters:
+
+- Long Exam is Pro-only and consumes `longExamUsed` only after successful session generation starts
+- Board Exam is Pro-only, still consumes the shared Challenge Quiz budget, and also consumes `boardExamUsed`
+- Board Exam must be blocked when either the Challenge Quiz budget is exhausted or the Board Exam hard cap is exhausted
+- Challenge Quiz, Adaptive Practice, Interview Practice, Study Pack, topic note generation, OCR, and export quotas remain separate from these counters unless explicitly stated above
 
 When topic note generation is exhausted:
 

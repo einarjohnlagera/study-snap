@@ -15,6 +15,8 @@ Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywa
 
 ### ✅ Shipped
 
+- Add monthly quotas for Long Exam (10/mo Pro) and Board Exam (5/mo Pro, shared Challenge Quiz budget)
+
 ---
 
 ## v0.14.0 - Grow the Surface, Deepen the Practice

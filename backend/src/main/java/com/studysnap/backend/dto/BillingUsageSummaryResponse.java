@@ -12,6 +12,10 @@ public record BillingUsageSummaryResponse(
         int adaptivePracticeLimit,
         int interviewPracticeUsed,
         int interviewPracticeLimit,
+        int longExamUsed,
+        int longExamLimit,
+        int boardExamUsed,
+        int boardExamLimit,
         boolean adaptivePracticeAvailable,
         boolean interviewPracticeAvailable,
         boolean difficultySelectionAvailable

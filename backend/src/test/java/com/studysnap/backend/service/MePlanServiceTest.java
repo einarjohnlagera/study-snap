@@ -37,6 +37,8 @@ class MePlanServiceTest {
         properties.getPricing().setFreeMonthlyChallengeQuizLimit(5);
         properties.getPricing().setProMonthlyChallengeQuizLimit(50);
         properties.getPricing().setProMonthlyAdaptivePracticeLimit(30);
+        properties.getPricing().setProMonthlyLongExamLimit(10);
+        properties.getPricing().setProMonthlyBoardExamLimit(5);
         properties.getPricing().setFreeMonthlyOcrLimit(20);
         properties.getPricing().setProMonthlyOcrLimit(100);
         properties.getPricing().setFreeMonthlyNoteGenerationLimit(5);
@@ -79,18 +81,24 @@ class MePlanServiceTest {
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(10);
         assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(5);
         assertThat(response.limits().adaptivePracticePerMonth()).isZero();
+        assertThat(response.limits().longExamPerMonth()).isZero();
+        assertThat(response.limits().boardExamPerMonth()).isZero();
         assertThat(response.limits().ocrPerMonth()).isEqualTo(20);
         assertThat(response.limits().noteGenerationsPerMonth()).isEqualTo(5);
         assertThat(response.limits().exportsPerMonth()).isEqualTo(2);
         assertThat(response.usage().studyPacksUsed()).isEqualTo(3);
         assertThat(response.usage().challengeQuizzesUsed()).isEqualTo(2);
         assertThat(response.usage().adaptivePracticeUsed()).isZero();
+        assertThat(response.usage().longExamUsed()).isZero();
+        assertThat(response.usage().boardExamUsed()).isZero();
         assertThat(response.usage().ocrUsed()).isEqualTo(5);
         assertThat(response.usage().noteGenerationsUsed()).isEqualTo(2);
         assertThat(response.usage().exportsUsed()).isEqualTo(1);
         assertThat(response.remaining().studyPacksRemaining()).isEqualTo(7);
         assertThat(response.remaining().challengeQuizzesRemaining()).isEqualTo(3);
         assertThat(response.remaining().adaptivePracticeRemaining()).isZero();
+        assertThat(response.remaining().longExamRemaining()).isZero();
+        assertThat(response.remaining().boardExamRemaining()).isZero();
         assertThat(response.remaining().ocrRemaining()).isEqualTo(15);
         assertThat(response.remaining().noteGenerationsRemaining()).isEqualTo(3);
         assertThat(response.remaining().exportsRemaining()).isEqualTo(1);
@@ -112,9 +120,12 @@ class MePlanServiceTest {
                         101,
                         50,
                         33,
+                        0,
                         120,
                         100,
-                        42
+                        42,
+                        8,
+                        5
                 ));
         when(studyPackUsageService.resolveUsage(eq(userId), any(UserUsageService.MonthlyUsage.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -130,12 +141,18 @@ class MePlanServiceTest {
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(100);
         assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(50);
         assertThat(response.limits().adaptivePracticePerMonth()).isEqualTo(30);
+        assertThat(response.limits().longExamPerMonth()).isEqualTo(10);
+        assertThat(response.limits().boardExamPerMonth()).isEqualTo(5);
         assertThat(response.limits().ocrPerMonth()).isEqualTo(100);
         assertThat(response.limits().noteGenerationsPerMonth()).isEqualTo(100);
         assertThat(response.limits().exportsPerMonth()).isNull();
         assertThat(response.remaining().studyPacksRemaining()).isZero();
         assertThat(response.remaining().challengeQuizzesRemaining()).isZero();
         assertThat(response.remaining().adaptivePracticeRemaining()).isZero();
+        assertThat(response.usage().longExamUsed()).isEqualTo(8);
+        assertThat(response.usage().boardExamUsed()).isEqualTo(5);
+        assertThat(response.remaining().longExamRemaining()).isEqualTo(2);
+        assertThat(response.remaining().boardExamRemaining()).isZero();
         assertThat(response.remaining().ocrRemaining()).isZero();
         assertThat(response.remaining().noteGenerationsRemaining()).isZero();
         assertThat(response.remaining().exportsRemaining()).isNull();

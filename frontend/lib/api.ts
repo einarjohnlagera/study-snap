@@ -732,6 +732,8 @@ export type LongExamStartResponse = {
   timeLimitSeconds: number;
   timerStartedAtEpochSeconds: number;
   sourceNoteRefs: LongExamSourceNoteRef[];
+  usedThisMonth: number;
+  monthlyLimit: number;
 };
 
 export type LongExamSessionResponse = {
@@ -857,6 +859,10 @@ export type BillingUsageSummaryResponse = {
   adaptivePracticeLimit: number;
   interviewPracticeUsed: number;
   interviewPracticeLimit: number;
+  longExamUsed: number;
+  longExamLimit: number;
+  boardExamUsed: number;
+  boardExamLimit: number;
   adaptivePracticeAvailable: boolean;
   interviewPracticeAvailable: boolean;
   difficultySelectionAvailable: boolean;

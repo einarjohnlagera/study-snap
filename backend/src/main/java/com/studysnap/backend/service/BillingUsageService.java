@@ -26,6 +26,10 @@ public class BillingUsageService {
                 plan.limits().adaptivePracticePerMonth(),
                 plan.usage().interviewPracticeUsed(),
                 plan.limits().interviewPracticePerMonth(),
+                plan.usage().longExamUsed(),
+                plan.limits().longExamPerMonth(),
+                plan.usage().boardExamUsed(),
+                plan.limits().boardExamPerMonth(),
                 plan.features().adaptivePracticeAvailable(),
                 plan.features().interviewPracticeAvailable(),
                 plan.features().difficultySelectionAvailable()

@@ -91,7 +91,7 @@
 
 The Settings page (`/settings#plan-billing`) surfaces plan selection and billing history in one place:
 
-- **Monthly Usage** — progress bars for Study Packs, Quizzes, Exports, and Adaptive Practice. Displays the limit-reached message inline; no inline upgrade button (the plan cards below are the upgrade path).
+- **Monthly Usage** — progress bars for Study Packs, Quizzes, Exports, Adaptive Practice, Interview Practice, Long Exam, and Board Exam where available. Displays the limit-reached message inline; no inline upgrade button (the plan cards below are the upgrade path).
 - **Billing cycle toggle** — pill toggle between Monthly and Annual. Annual tab shows a savings badge (e.g. "Save 33%") computed from Pro annual vs. 12× monthly. Toggle always renders because Pro has annual pricing in all regions.
 - **Plan cards** — three side-by-side cards (Free, Plus, Pro):
   - Current plan card shows a "Current plan" badge and a disabled "Current Plan" button.
