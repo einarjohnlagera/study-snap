@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import {
   ArrowRight,
   BookOpen,
+  Briefcase,
   FileText,
   Library,
   Sparkles,
@@ -120,6 +121,11 @@ const targetUsers = [
     title: "Teachers",
     description: "Turn notes into ready-to-use quizzes and materials.",
     icon: Library,
+  },
+  {
+    title: "Professionals",
+    description: "Practice for job interviews with scenario-based questions from your own notes.",
+    icon: Briefcase,
   },
 ];
 

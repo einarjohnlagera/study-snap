@@ -12,16 +12,17 @@ It should help visitors understand how to use NoteLib and how to study with revi
 
 ## Product Positioning
 
-`NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.`
+`NoteLib helps students, board exam reviewees, teachers, and professionals turn notes into summaries, key concepts, quizzes, and interview prep so they can study and prepare faster.`
 
 ## Learn Hub Structure
 
-The Learn hub should group guides into four categories:
+The Learn hub should group guides into five categories:
 
 1. `For Students`
 2. `For Board Exams`
 3. `For Teachers`
-4. `Study Tips`
+4. `For Professionals`
+5. `Study Tips`
 
 Each category should contain guide cards with:
 
@@ -48,6 +49,12 @@ Each category should contain guide cards with:
 - `How Teachers Can Use NoteLib to Generate Study Packs`
 - `How to Turn Lesson Notes Into Quiz Questions`
 - `How to Create Reviewer Materials Faster`
+
+### For Professionals
+
+- `How to Prepare for Job Interviews With Your Notes`
+- `How to Use AI Critique in Interview Practice`
+- `How to Read Your Interview Readiness Report`
 
 ### Study Tips
 

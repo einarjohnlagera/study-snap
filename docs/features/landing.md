@@ -139,6 +139,7 @@ Landing should clearly call out ideal users such as:
 - students
 - board exam reviewees
 - teachers or tutors
+- professionals preparing for job interviews
 
 The copy should stay broad enough for the public homepage while still reflecting the strongest review use cases.
 

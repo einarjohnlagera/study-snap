@@ -8,7 +8,7 @@ export type LearnGuidePracticeQuestion = {
   answer: string;
 };
 
-export type LearnGuideCategory = "students" | "board-exams" | "teachers" | "study-tips";
+export type LearnGuideCategory = "students" | "board-exams" | "teachers" | "professionals" | "study-tips";
 
 export type LearnGuide = {
   slug: string;
@@ -45,6 +45,11 @@ export const learnGuideCategories: LearnGuideCategoryMeta[] = [
     key: "teachers",
     title: "For Teachers",
     description: "Guides for turning lesson notes into quiz and reviewer materials faster.",
+  },
+  {
+    key: "professionals",
+    title: "For Professionals",
+    description: "Guides for using your notes to practice for job interviews and build confidence before real interview rounds.",
   },
   {
     key: "study-tips",
@@ -334,6 +339,99 @@ const learnGuideSeeds: LearnGuideSeed[] = [
     ],
   },
   {
+    slug: "how-to-prepare-for-job-interviews-with-notes",
+    category: "professionals",
+    title: "How to Prepare for Job Interviews With Your Notes",
+    description: "Use your existing notes to generate scenario-based practice questions for job interview prep.",
+    intro:
+      "Job interview preparation works better when it is built around the domain knowledge you actually have. Notes on your field, role, or technical subject area become the source for practice questions that match the kind of thinking real interviews demand.",
+    sections: [
+      {
+        heading: "Start with what you already know",
+        paragraphs: [
+          "A note about your domain, technical field, or core role responsibilities is the right starting point.",
+          "Practicing from your own notes makes the questions more relevant than working through generic interview prep lists.",
+        ],
+      },
+      {
+        heading: "Use scenario questions to test real understanding",
+        paragraphs: [
+          "Scenario-based questions push you to apply the concept, not just recall a definition.",
+          "That is closer to how real interview panels actually test candidates.",
+        ],
+      },
+      {
+        heading: "Track which topics still feel weak",
+        paragraphs: [
+          "Weak areas in your practice results show the topics worth reviewing before the real interview.",
+          "That makes your prep more targeted than rereading the same material repeatedly.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "how-to-use-ai-critique-in-interview-practice",
+    category: "professionals",
+    title: "How to Use AI Critique in Interview Practice",
+    description: "Read AI critique after each answer to improve how you explain and apply your knowledge.",
+    intro:
+      "AI critique after each question gives you more than a right or wrong signal. It shows you whether your reasoning was sound, where the explanation fell short, and what the stronger answer would have covered.",
+    sections: [
+      {
+        heading: "Read the critique even on correct answers",
+        paragraphs: [
+          "A correct answer can still be partially reasoned.",
+          "The critique will show you what additional context or nuance would strengthen the same answer in a real interview.",
+        ],
+      },
+      {
+        heading: "Use critique to improve your explanations",
+        paragraphs: [
+          "Interview panels often care as much about how you explain an idea as whether you got the answer right.",
+          "Critique helps you practice tighter, more confident explanations of the concepts you know.",
+        ],
+      },
+      {
+        heading: "Build on critique between sessions",
+        paragraphs: [
+          "If the same gap appears across multiple questions, use it to update your notes and run another session.",
+          "Repeated critique on the same topic is a reliable sign that it needs deeper review.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "how-to-read-your-interview-readiness-report",
+    category: "professionals",
+    title: "How to Read Your Interview Readiness Report",
+    description: "Understand what your Interview Readiness Report tells you and how to use it before your next session.",
+    intro:
+      "The Interview Readiness Report summarizes how well you covered your domain knowledge in a single practice session. It is most useful when you treat it as a study signal, not just a score.",
+    sections: [
+      {
+        heading: "What the report is measuring",
+        paragraphs: [
+          "The report reflects how accurately and completely you answered scenario questions drawn from your note.",
+          "It is based on your specific session — not a benchmark against other users.",
+        ],
+      },
+      {
+        heading: "How to read weak areas",
+        paragraphs: [
+          "Weak areas are the concepts where your answers were incorrect or incomplete.",
+          "These are the topics most worth reviewing before your next interview or practice session.",
+        ],
+      },
+      {
+        heading: "Using the report to plan the next session",
+        paragraphs: [
+          "Update or expand your note to cover the weak areas better, then run another session.",
+          "Each pass through the report-review-practice cycle should make the next session more accurate.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "what-is-active-recall",
     category: "study-tips",
     title: "What is Active Recall",
@@ -606,6 +704,66 @@ const learnGuideArticleContentBySlug: Record<string, LearnGuideArticleContent> =
       {
         question: "What is the benefit of a fast first draft?",
         answer: "It leaves more time for refinement, examples, and class-specific context.",
+      },
+    ],
+  },
+  "how-to-prepare-for-job-interviews-with-notes": {
+    summary: [
+      "Job interview prep works best when it comes from your own domain notes, not generic question banks.",
+      "Scenario questions test real application and weak areas show where to focus before the real interview.",
+    ],
+    practiceQuestions: [
+      {
+        question: "Why is practicing from your own notes better than using generic interview prep lists?",
+        answer: "Your notes cover the domain knowledge you actually have, making questions more relevant to your target role.",
+      },
+      {
+        question: "What do scenario-based questions test that recall questions do not?",
+        answer: "They test how you apply the concept, which is closer to what real interview panels actually evaluate.",
+      },
+      {
+        question: "How should weak areas from practice affect your prep plan?",
+        answer: "They should become the priority topics for review before the real interview.",
+      },
+    ],
+  },
+  "how-to-use-ai-critique-in-interview-practice": {
+    summary: [
+      "AI critique gives more than a score — it shows where your reasoning fell short and what a stronger answer would have included.",
+      "Reading critique on correct answers helps improve the quality of your explanations, not just your accuracy.",
+    ],
+    practiceQuestions: [
+      {
+        question: "Why should you read AI critique even on correct answers?",
+        answer: "A correct answer can still be partially reasoned, and critique shows what additional context would make it stronger.",
+      },
+      {
+        question: "What does critique help you improve beyond answer accuracy?",
+        answer: "It helps you give tighter, more confident explanations, which matter as much as correctness in real interviews.",
+      },
+      {
+        question: "What does it mean when the same critique gap appears in multiple questions?",
+        answer: "It signals that the underlying concept needs deeper review before the next session.",
+      },
+    ],
+  },
+  "how-to-read-your-interview-readiness-report": {
+    summary: [
+      "The Interview Readiness Report reflects your accuracy and coverage in one session and is most useful as a study signal.",
+      "Weak areas in the report show where to update your notes and focus before the next session.",
+    ],
+    practiceQuestions: [
+      {
+        question: "What is the Interview Readiness Report measuring?",
+        answer: "How accurately and completely you answered scenario questions drawn from your own note in that session.",
+      },
+      {
+        question: "What should you do with weak areas shown in the report?",
+        answer: "Use them to decide which concepts to review before your next interview or practice session.",
+      },
+      {
+        question: "How do you improve your report over time?",
+        answer: "Update your note to cover weak areas better, then run another session and compare.",
       },
     ],
   },

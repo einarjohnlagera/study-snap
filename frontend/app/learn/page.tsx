@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Study Guides — Turn Notes Into Quizzes | NoteLib",
-  description: "Study guides for students, board exam reviewees, and teachers who want to turn notes into reviewers, practice questions, and better exam prep.",
+  description: "Study guides for students, board exam reviewees, teachers, and professionals who want to turn notes into reviewers, practice questions, and better exam prep.",
   path: "/learn",
 });
 
@@ -25,10 +25,10 @@ export default function LearnPage() {
           Learn
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          Learn How to Turn Notes Into Quizzes
+          Learn How to Turn Notes Into Quizzes and Interview Prep
         </h1>
         <p className="max-w-3xl text-base leading-relaxed text-foreground/75">
-          Study guides and onboarding content for students, board exam reviewees, and teachers. Learn how to turn notes into reviewers, practice questions, weak-concept review, and better study habits.
+          Study guides and onboarding content for students, board exam reviewees, teachers, and professionals preparing for job interviews. Learn how to turn notes into reviewers, practice questions, weak-concept review, and better study habits.
         </p>
       </section>
 
