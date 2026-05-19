@@ -1,7 +1,14 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LongExamPage from "./page";
 import { getAuthUser } from "@/lib/auth";
-import { getActiveLongExamSession, getMe, getNote, listNotes, startLongExam } from "@/lib/api";
+import {
+  forfeitLongExamSession,
+  getActiveLongExamSession,
+  getMe,
+  getNote,
+  listNotes,
+  startLongExam,
+} from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -47,6 +54,9 @@ describe("LongExamPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    (forfeitLongExamSession as jest.Mock).mockReset();
+    (startLongExam as jest.Mock).mockReset();
+    (getActiveLongExamSession as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
     });
@@ -161,5 +171,55 @@ describe("LongExamPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Begin Long Exam" }));
 
     expect(startLongExam).toHaveBeenCalledWith("sp-1", {});
+  });
+
+  it("silently forfeits an IN_PROGRESS session whose timer has expired so the prompt is not shown", async () => {
+    const startedAt = Math.floor(Date.now() / 1000) - 60 * 60 * 3; // 3 hours ago
+    (getActiveLongExamSession as jest.Mock).mockResolvedValue({
+      sessionId: "stale-session-1",
+      status: "IN_PROGRESS",
+      quiz: [],
+      totalQuestions: 25,
+      difficulty: "mixed",
+      canResume: true,
+      timeLimitSeconds: 25 * 90,
+      timerStartedAtEpochSeconds: startedAt,
+      sourceNoteRefs: [],
+      usedThisMonth: 1,
+      monthlyLimit: 10,
+    });
+    (forfeitLongExamSession as jest.Mock).mockResolvedValue({ message: "ok" });
+
+    render(<LongExamPage />);
+
+    await screen.findByRole("heading", { name: "Long Exam" });
+    await waitFor(() => {
+      expect(forfeitLongExamSession).toHaveBeenCalledWith("stale-session-1");
+    });
+    expect(screen.queryByText("You have an active session.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Begin Long Exam" })).toBeInTheDocument();
+  });
+
+  it("keeps the resume prompt when the IN_PROGRESS session's timer is still valid", async () => {
+    const startedAt = Math.floor(Date.now() / 1000) - 30; // 30 seconds ago, plenty of time left
+    (getActiveLongExamSession as jest.Mock).mockResolvedValue({
+      sessionId: "active-session-1",
+      status: "IN_PROGRESS",
+      quiz: [],
+      totalQuestions: 25,
+      difficulty: "mixed",
+      canResume: true,
+      timeLimitSeconds: 25 * 90,
+      timerStartedAtEpochSeconds: startedAt,
+      sourceNoteRefs: [],
+      usedThisMonth: 1,
+      monthlyLimit: 10,
+    });
+    (forfeitLongExamSession as jest.Mock).mockResolvedValue({ message: "ok" });
+
+    render(<LongExamPage />);
+
+    expect(await screen.findByText("You have an active session.")).toBeInTheDocument();
+    expect(forfeitLongExamSession).not.toHaveBeenCalled();
   });
 });

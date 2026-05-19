@@ -84,6 +84,18 @@ function normalizeSubjectForMatch(subject?: string | null): string {
     return subject?.trim().toLowerCase() ?? "";
 }
 
+function isLongExamSessionExpired(activeSession: LongExamStartResponse): boolean {
+    if (!activeSession.timeLimitSeconds || !activeSession.timerStartedAtEpochSeconds) {
+        return false;
+    }
+    const deadline = resolveDeadlineEpochSeconds(
+        activeSession.timeLimitSeconds,
+        { timerStartedAtEpochSeconds: activeSession.timerStartedAtEpochSeconds },
+        getNowEpochSeconds(),
+    );
+    return resolveRemainingSecondsFromDeadline(deadline, getNowEpochSeconds()) <= 0;
+}
+
 function resolveLongExamPerformanceLevel(scorePercentage: number): string {
     if (scorePercentage >= 90) return "Excellent";
     if (scorePercentage >= 70) return "Good";
@@ -272,6 +284,17 @@ export default function LongExamPage() {
             const activeSession = await getActiveLongExamSession(noteDetail.studyPackId);
             if (!activeSession) {
                 setActiveStartResponse(null);
+                return;
+            }
+
+            if (activeSession.status === "IN_PROGRESS" && isLongExamSessionExpired(activeSession)) {
+                try {
+                    await forfeitLongExamSession(activeSession.sessionId);
+                } catch {
+                    // If forfeit fails we still treat the session as gone locally; the user can start fresh.
+                }
+                setActiveStartResponse(null);
+                setSessionId(null);
                 return;
             }
 
