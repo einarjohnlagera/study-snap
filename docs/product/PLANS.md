@@ -61,15 +61,17 @@ Designed for serious learners preparing for board and entrance exams.
 - `50` Quizzes / month
 - `30` Adaptive Practice sessions / month
 - `10` Interview Practice sessions / month
+- `10` Long Exam sessions / month
+- `5` Board Exam sessions / month
 - Unlimited exports
 
 **Features**
 
 - Adaptive Practice (higher limit — `30` sessions / month)
 - Interview Practice (`10` sessions / month, Professional profile)
+- Long Exam Mode (`10` sessions / month)
+- Board Exam Mode (`5` sessions / month, also uses the shared Quiz budget)
 - Difficulty selection (Easy / Medium / Hard)
-- Board Exam Mode
-- Long Exam Mode
 - Highest note generation limits (`100` topic notes / month)
 - Everything in Plus
 
@@ -110,9 +112,55 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Adaptive Practice | — | 10 sessions | 30 sessions |
 | Interview Practice | — | — | 10 sessions |
 | Difficulty selection | — | — | ✓ |
-| Board Exam Mode | — | — | ✓ |
-| Long Exam Mode | — | — | ✓ |
+| Board Exam Mode | — | — | 5 sessions |
+| Long Exam Mode | — | — | 10 sessions |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |
+
+---
+
+## Profile-Aware Plan Rules (v0.15.0+)
+
+Some plan limits are adjusted based on the user's profile type. These overrides sit on top of the base plan — the user still pays the same price, but their primary workflow gets more headroom where it matters.
+
+### Teacher Profile — Export Override
+
+**Problem:** For Teacher-profile users, DOCX export is the terminal action of their entire workflow — Generate → View → **Export**. Capping exports at `2` (Free) or `15` (Plus) directly blocks teachers from doing their job, since a single teacher may prepare quizzes across many subjects and classes per month. The LLM cost of a DOCX export is zero (it uses stored `generatedQuiz` data, not new AI calls), so the cost of being generous here is minimal.
+
+**Decision:**
+
+| Plan | Standard export limit | Teacher export limit |
+| --- | --- | --- |
+| Free | 2 / month | 10 / month |
+| Plus | 15 / month | Unlimited |
+| Pro | Unlimited | Unlimited (unchanged) |
+
+This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use the standard plan limits — PDF is a student-facing format and does not need a teacher override.
+
+**Rationale:**
+- A Teacher on Plus (₱179/mo PH) gets a complete, professional quiz-authoring workflow with no export ceiling.
+- Pro features that teachers do not need — Board Exam Mode, Long Exam Mode, Adaptive Practice tracking, Difficulty Selection, Interview Practice — remain Pro-only. The Pro ladder is intact.
+- The export override costs nothing in LLM spend. The risk of abuse (non-teachers claiming Teacher profile to get unlimited exports) is low and the downside is limited to a cost-free feature.
+- This reflects a deliberate product value: NoteLib should be genuinely useful to Filipino teachers, for whom ₱249/mo Pro is proportionally steep relative to a government teacher's salary.
+
+**UI implications:**
+- The Plus plan card (landing page, Settings → Plan & Billing) should surface a teacher-specific callout: *"Teachers get unlimited quiz exports on Plus."*
+- The upgrade CTA shown to Teacher-profile Free users should lead with export headroom: *"Unlock more exports — get Plus"* rather than the generic study-focused copy.
+- A Teacher-profile Plus user should **not** see *"Upgrade to Pro for unlimited exports"* — that message is no longer true for them. The upgrade nudge for Teacher Plus should focus on the quiz generation limits, not exports.
+
+**Implementation note:** `FeatureGateService` (backend) must check `profileType == TEACHER` when resolving the export limit, before applying the plan-based default. Frontend export limit display in Settings → Plan & Billing must read the profile-aware resolved limit, not the raw plan limit.
+
+**Verification:** Profile type is user-declared (honor system). No external verification is required for v0.15.0. If abuse becomes measurable in a future release, a lightweight signal (e.g., checking that the user has generated at least one `generatedQuiz`) can be added without changing the rule structure.
+
+---
+
+## Upgrade Ladder — Teacher Profile Variant
+
+For Teacher-profile users, the upgrade story is about **generation volume**, not quiz modes:
+
+- **Free → Plus:** more exports (10 → unlimited), more Study Packs (10 → 50), more quiz generation (5 → 25)
+- **Plus → Pro:** highest generation limits (50 Study Packs → 100, 25 quizzes → 50), multi-note Exam Builder without session limits
+
+The standard exam-prep framing ("Board Exam Mode", "Adaptive Practice") does not resonate with teachers. Upgrade CTAs shown to Teacher-profile users must use teacher-framed copy. Use `getUpgradeCtas(currentPlan)` with a `"teacher"` context variant (to be added in v0.15.0).
 
 ---
 
@@ -122,6 +170,6 @@ When plan changes happen, update in this order:
 
 1. `frontend/lib/pricing-config.ts` — runtime numbers and prices.
 2. `frontend/src/config/plans.ts` — feature lists and CTA labels.
-3. Backend plan rules (`PlanRulesService` etc.) — runtime enforcement.
+3. Backend plan rules (`PlanRulesService` / `FeatureGateService`) — runtime enforcement.
 4. This document — narrative + ladder.
 5. `docs/product/SPEC.md` — referencing rules in spec context.

@@ -74,8 +74,9 @@ export const PLANS: Record<AppPlanType, {
       { label: "Unlimited exports", helper: EXPORT_HELPER },
       { label: `Adaptive Practice (${pricingConfig.pro.adaptivePracticePerMonth} sessions / month)` },
       { label: `Interview Practice (${pricingConfig.pro.interviewPracticePerMonth} sessions / month)` },
+      { label: `Long Exam (${pricingConfig.pro.longExamPerMonth} sessions / month)` },
+      { label: `Board Exam Mode (${pricingConfig.pro.boardExamPerMonth} sessions / month)` },
       { label: "Difficulty selection" },
-      { label: "Board Exam Mode" },
     ],
   },
 };
@@ -150,7 +151,15 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       FREE: null,
       PLUS: null,
-      PRO: "check",
+      PRO: `${pricingConfig.pro.boardExamPerMonth} sessions`,
+    },
+  },
+  {
+    label: "Long Exam Mode",
+    values: {
+      FREE: null,
+      PLUS: null,
+      PRO: `${pricingConfig.pro.longExamPerMonth} sessions`,
     },
   },
 ];

@@ -12,6 +12,8 @@ public record LongExamStartResponse(
         boolean canResume,
         int timeLimitSeconds,
         long timerStartedAtEpochSeconds,
-        List<LongExamSourceNoteRef> sourceNoteRefs
+        List<LongExamSourceNoteRef> sourceNoteRefs,
+        int usedThisMonth,
+        int monthlyLimit
 ) {
 }

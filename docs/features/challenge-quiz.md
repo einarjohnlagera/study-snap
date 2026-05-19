@@ -54,6 +54,7 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 
 - Challenge Quiz is available on Free, Plus, and Pro with monthly limits
 - Board Exam Mode is Pro-only
+- Board Exam Mode consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`5` / month by default)
 - Free and Plus users who choose Board Exam Mode must hit the shared Pro upsell flow
 - monthly quiz-limit exhaustion is separate from Pro-only feature gating
 

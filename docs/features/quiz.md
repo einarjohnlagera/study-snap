@@ -32,6 +32,7 @@ Shared ownership rule:
 
 - strict exam-simulation presentation of the Challenge Quiz engine
 - Pro-only at entry
+- consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`5` / month by default)
 - selected from the same mode-selection screen
 - keeps separate framing and stricter setup, but still uses note-owned session persistence
 
@@ -45,6 +46,7 @@ Shared ownership rule:
 
 - Student-facing long-form exam mode; identity contract in `docs/product/EXAM_MODES.md`
 - Pro-only at launch, using the shared `LONG_EXAM` session discriminator
+- quota-limited separately from Challenge Quiz (`10` sessions / month by default)
 - fixed question set generated at start (not progressive)
 - prestart supports one primary note plus up to 3 additional same-subject Study Pack-ready notes
 - multi-note generation stores source refs in session JSONB and distributes the resolved question count proportionally across sources

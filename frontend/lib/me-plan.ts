@@ -11,6 +11,8 @@ export type MePlanResponse = {
     challengeQuizzesPerMonth: number;
     adaptivePracticePerMonth: number;
     interviewPracticePerMonth?: number;
+    longExamPerMonth?: number;
+    boardExamPerMonth?: number;
     ocrPerMonth: number;
     noteGenerationsPerMonth?: number;
     exportsPerMonth?: number | null;
@@ -20,6 +22,8 @@ export type MePlanResponse = {
     challengeQuizzesUsed: number;
     adaptivePracticeUsed: number;
     interviewPracticeUsed?: number;
+    longExamUsed?: number;
+    boardExamUsed?: number;
     ocrUsed: number;
     noteGenerationsUsed?: number;
     exportsUsed?: number;
@@ -29,6 +33,8 @@ export type MePlanResponse = {
     challengeQuizzesRemaining: number;
     adaptivePracticeRemaining: number;
     interviewPracticeRemaining?: number;
+    longExamRemaining?: number;
+    boardExamRemaining?: number;
     ocrRemaining: number;
     noteGenerationsRemaining?: number;
     exportsRemaining?: number | null;

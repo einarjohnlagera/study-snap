@@ -409,9 +409,12 @@ export default function SettingsPage() {
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
   const interviewPracticeUsed = usageSummary?.usage.interviewPracticeUsed ?? 0;
   const interviewPracticeLimit = usageSummary?.limits.interviewPracticePerMonth ?? 0;
+  const longExamUsed = usageSummary?.usage.longExamUsed ?? 0;
+  const longExamLimit = usageSummary?.limits.longExamPerMonth ?? 0;
+  const boardExamUsed = usageSummary?.usage.boardExamUsed ?? 0;
+  const boardExamLimit = usageSummary?.limits.boardExamPerMonth ?? 0;
   const exportsUsed = usageSummary?.usage.exportsUsed ?? 0;
   const exportsLimit = usageSummary?.limits.exportsPerMonth ?? null;
-  const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
   const plusMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
   const proMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
   const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
@@ -736,6 +739,22 @@ export default function SettingsPage() {
                     label="Interview Practice"
                     used={interviewPracticeUsed}
                     limit={interviewPracticeLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
+                {currentPlan === "PRO" || longExamUsed > 0 ? (
+                  <UsageMetric
+                    label="Long Exam"
+                    used={longExamUsed}
+                    limit={longExamLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
+                {currentPlan === "PRO" || boardExamUsed > 0 ? (
+                  <UsageMetric
+                    label="Board Exam"
+                    used={boardExamUsed}
+                    limit={boardExamLimit}
                     resetDateLabel={usageResetDateLabel}
                   />
                 ) : null}

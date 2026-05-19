@@ -25,7 +25,9 @@ public record MePlanResponse(
             int interviewPracticePerMonth,
             int ocrPerMonth,
             int noteGenerationsPerMonth,
-            Integer exportsPerMonth
+            Integer exportsPerMonth,
+            int longExamPerMonth,
+            int boardExamPerMonth
     ) {
         public Limits(
                 int studyPacksPerMonth,
@@ -42,9 +44,12 @@ public record MePlanResponse(
                     0,
                     ocrPerMonth,
                     noteGenerationsPerMonth,
-                    exportsPerMonth
+                    exportsPerMonth,
+                    0,
+                    0
             );
         }
+
     }
 
     public record Usage(
@@ -54,7 +59,9 @@ public record MePlanResponse(
             int interviewPracticeUsed,
             int ocrUsed,
             int noteGenerationsUsed,
-            int exportsUsed
+            int exportsUsed,
+            int longExamUsed,
+            int boardExamUsed
     ) {
         public Usage(
                 int studyPacksUsed,
@@ -71,9 +78,12 @@ public record MePlanResponse(
                     0,
                     ocrUsed,
                     noteGenerationsUsed,
-                    exportsUsed
+                    exportsUsed,
+                    0,
+                    0
             );
         }
+
     }
 
     public record Remaining(
@@ -83,7 +93,9 @@ public record MePlanResponse(
             int interviewPracticeRemaining,
             int ocrRemaining,
             int noteGenerationsRemaining,
-            Integer exportsRemaining
+            Integer exportsRemaining,
+            int longExamRemaining,
+            int boardExamRemaining
     ) {
         public Remaining(
                 int studyPacksRemaining,
@@ -100,9 +112,12 @@ public record MePlanResponse(
                     0,
                     ocrRemaining,
                     noteGenerationsRemaining,
-                    exportsRemaining
+                    exportsRemaining,
+                    0,
+                    0
             );
         }
+
     }
 
     public record Features(

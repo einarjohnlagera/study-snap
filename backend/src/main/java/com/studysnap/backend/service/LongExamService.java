@@ -27,6 +27,7 @@ import com.studysnap.backend.exception.LongExamGenerationFailedException;
 import com.studysnap.backend.exception.LongExamSessionNotFoundException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
+import com.studysnap.backend.exception.MonthlyLongExamLimitReachedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -57,6 +58,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @Transactional
@@ -127,6 +129,7 @@ public class LongExamService {
     private final AnalyticsService analyticsService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final StudySnapProperties properties;
+    private final UserUsageService userUsageService;
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final AsyncTaskExecutor studyPackGenerationTaskExecutor;
@@ -136,11 +139,13 @@ public class LongExamService {
         authService.requireEmailVerified(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.LONG_EXAM_SESSION);
+        assertLongExamQuotaAvailable(userId, planType);
 
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         String difficulty = resolveDifficulty(request);
         int questionCount = resolveQuestionCount(userId);
         List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
+        AtomicBoolean createdSession = new AtomicBoolean(false);
 
         QuickReviewSessionEntity session = studyPackGenerationTransactionOperations.execute(status -> {
             StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
@@ -171,10 +176,14 @@ public class LongExamService {
                     sourceNoteRefs
             ));
             dispatchLongExamGenerationAfterCommit(saved.getId(), difficulty);
+            createdSession.set(true);
             return saved;
         });
         if (session == null) {
             throw new LongExamGenerationFailedException();
+        }
+        if (createdSession.get()) {
+            userUsageService.incrementLongExamGeneration(userId, OffsetDateTime.now(ZoneOffset.UTC));
         }
         return buildStartResponse(session);
     }
@@ -374,11 +383,26 @@ public class LongExamService {
         };
     }
 
+    private int assertLongExamQuotaAvailable(UUID userId, PlanType planType) {
+        long usedThisMonth = countLongExamUsedThisMonth(userId);
+        int monthlyLimit = properties.getPricing().resolveMonthlyLongExamLimit(planType);
+        if (usedThisMonth < monthlyLimit) {
+            return (int) usedThisMonth;
+        }
+        throw new MonthlyLongExamLimitReachedException();
+    }
+
+    private long countLongExamUsedThisMonth(UUID userId) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        return userUsageService.getMonthlyUsage(userId, now).longExamUsedThisMonth();
+    }
+
     private LongExamStartResponse buildStartResponse(QuickReviewSessionEntity session) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         boolean canResume = session.getStatus() == QuickReviewSessionStatus.IN_PROGRESS
                 || session.getStatus() == QuickReviewSessionStatus.PAUSED;
         int totalQuestions = quiz.isEmpty() ? safeTotalQuestions(session) : quiz.size();
+        PlanType planType = subscriptionService.resolvePlan(session.getUserId());
         return new LongExamStartResponse(
                 session.getId(),
                 session.getStatus().name(),
@@ -388,7 +412,9 @@ public class LongExamService {
                 canResume,
                 extractTimeLimitSeconds(session.getSessionState(), totalQuestions),
                 extractTimerStartedAtEpochSeconds(session.getSessionState()),
-                extractSourceNoteRefs(session.getSessionState())
+                extractSourceNoteRefs(session.getSessionState()),
+                (int) countLongExamUsedThisMonth(session.getUserId()),
+                properties.getPricing().resolveMonthlyLongExamLimit(planType)
         );
     }
 

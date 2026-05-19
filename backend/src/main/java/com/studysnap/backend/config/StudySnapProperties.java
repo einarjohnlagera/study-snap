@@ -1,6 +1,7 @@
 package com.studysnap.backend.config;
 
 import com.studysnap.backend.entity.PlanType;
+import java.math.RoundingMode;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -104,6 +105,8 @@ public class StudySnapProperties {
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
         private int proMonthlyInterviewPracticeLimit = 10;
+        private int proMonthlyLongExamLimit = 10;
+        private int proMonthlyBoardExamLimit = 5;
         private int freeMonthlyOcrLimit = 20;
         private int plusMonthlyOcrLimit = 50;
         private int proMonthlyOcrLimit = 100;
@@ -155,6 +158,20 @@ public class StudySnapProperties {
                 return 0;
             }
             return normalizedPlanType == PlanType.PRO ? proMonthlyInterviewPracticeLimit : 0;
+        }
+
+        public int resolveMonthlyLongExamLimit(PlanType planType) {
+            if (!longExamAvailableForPro || normalizePlanType(planType) != PlanType.PRO) {
+                return 0;
+            }
+            return proMonthlyLongExamLimit;
+        }
+
+        public int resolveMonthlyBoardExamLimit(PlanType planType) {
+            if (normalizePlanType(planType) != PlanType.PRO) {
+                return 0;
+            }
+            return proMonthlyBoardExamLimit;
         }
 
         public int resolveMonthlyOcrLimit(PlanType planType) {
@@ -296,7 +313,7 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class BillingCyclePricing {
-        private BigDecimal amount = BigDecimal.ZERO.setScale(2);
+        private BigDecimal amount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         private int durationDays = 30;
         private boolean active = true;
     }

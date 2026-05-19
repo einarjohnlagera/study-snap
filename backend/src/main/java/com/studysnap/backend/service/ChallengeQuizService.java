@@ -31,6 +31,7 @@ import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressExceptio
 import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
+import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
@@ -160,7 +161,7 @@ public class ChallengeQuizService {
         if (existing != null) {
             if (existing.getStatus() == QuickReviewSessionStatus.GENERATING
                     || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
-                int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
+                int usedThisMonth = resolveUsedThisMonthForResponse(userId, existing);
                 return toStartResponse(existing, studyPack, usedThisMonth, planType);
             }
             markSessionForfeited(existing);
@@ -168,6 +169,10 @@ public class ChallengeQuizService {
         }
 
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
+        int boardExamUsedThisMonth = 0;
+        if (MODE_BOARD_EXAM.equals(selectedMode)) {
+            boardExamUsedThisMonth = assertBoardExamQuotaAvailable(userId, planType);
+        }
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
         QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
@@ -211,6 +216,9 @@ public class ChallengeQuizService {
             markSessionReady(session, challengeQuiz, profile.difficulty());
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
             userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
+            if (MODE_BOARD_EXAM.equals(selectedMode)) {
+                userUsageService.incrementBoardExamGeneration(userId, saved.getCreatedAt());
+            }
             try {
                 analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
                         ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
@@ -221,10 +229,16 @@ public class ChallengeQuizService {
             } catch (RuntimeException ignored) {
                 // Analytics must never turn a successfully generated quiz into a failed session.
             }
+            if (MODE_BOARD_EXAM.equals(selectedMode)) {
+                return toStartResponse(saved, studyPack, boardExamUsedThisMonth + 1, planType);
+            }
             return toStartResponse(saved, studyPack, usedThisMonth + 1, planType);
         } catch (Exception ex) {
             markSessionFailed(session);
             QuickReviewSessionEntity failed = quickReviewSessionRepository.save(session);
+            if (MODE_BOARD_EXAM.equals(selectedMode)) {
+                return toStartResponse(failed, studyPack, boardExamUsedThisMonth, planType);
+            }
             return toStartResponse(failed, studyPack, usedThisMonth, planType);
         }
     }
@@ -235,7 +249,6 @@ public class ChallengeQuizService {
         StudyPackEntity studyPack = findOwnedStudyPackOrThrow(studyPackId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
 
-        int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
         return quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId,
@@ -243,8 +256,13 @@ public class ChallengeQuizService {
                         QuickReviewSessionMode.CHALLENGE,
                         OBSERVABLE_STATUSES
                 )
-                .map(session -> toStartResponse(session, studyPack, usedThisMonth, planType))
-                .orElse(buildEmptyStartResponse(studyPack, usedThisMonth, planType));
+                .map(session -> toStartResponse(
+                        session,
+                        studyPack,
+                        resolveUsedThisMonthForResponse(userId, session),
+                        planType
+                ))
+                .orElse(buildEmptyStartResponse(studyPack, (int) countChallengeQuizUsedThisMonth(userId), planType));
     }
 
     @Transactional(readOnly = true)
@@ -317,7 +335,7 @@ public class ChallengeQuizService {
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
 
         StudyPackEntity studyPack = findOwnedStudyPackOrThrow(saved.getStudyPackId(), userId);
-        int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
+        int usedThisMonth = resolveUsedThisMonthForResponse(userId, saved);
         PlanType planType = subscriptionService.resolvePlan(userId);
         return toStartResponse(saved, studyPack, usedThisMonth, planType);
     }
@@ -518,6 +536,29 @@ public class ChallengeQuizService {
         return Math.max(usedFromCountedSessions, usedFromUsage);
     }
 
+    private int assertBoardExamQuotaAvailable(UUID userId, PlanType planType) {
+        long usedThisMonth = countBoardExamUsedThisMonth(userId);
+        int monthlyLimit = properties.getPricing().resolveMonthlyBoardExamLimit(planType);
+        if (usedThisMonth < monthlyLimit) {
+            return (int) usedThisMonth;
+        }
+
+        throw new MonthlyBoardExamLimitReachedException();
+    }
+
+    private long countBoardExamUsedThisMonth(UUID userId) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        return userUsageService.getMonthlyUsage(userId, now).boardExamUsedThisMonth();
+    }
+
+    private int resolveUsedThisMonthForResponse(UUID userId, QuickReviewSessionEntity session) {
+        String mode = extractMode(session.getSessionState());
+        if (MODE_BOARD_EXAM.equals(mode)) {
+            return (int) countBoardExamUsedThisMonth(userId);
+        }
+        return (int) countChallengeQuizUsedThisMonth(userId);
+    }
+
     private ChallengeGenerationProfile resolveGenerationProfile(
             UUID userId,
             UUID studyPackId,
@@ -598,7 +639,10 @@ public class ChallengeQuizService {
             }
         }
         int timeLimitSeconds = extractTimeLimitSeconds(session.getSessionState());
-        int limit = resolveMonthlyChallengeQuizLimit(planType);
+        String mode = extractMode(session.getSessionState());
+        int limit = MODE_BOARD_EXAM.equals(mode)
+                ? properties.getPricing().resolveMonthlyBoardExamLimit(planType)
+                : resolveMonthlyChallengeQuizLimit(planType);
         return new ChallengeQuizStartResponse(
                 session.getId().toString(),
                 session.getStatus(),
@@ -609,7 +653,7 @@ public class ChallengeQuizService {
                 usedThisMonth,
                 limit,
                 isDifficultySelectionAvailable(planType),
-                extractMode(session.getSessionState()),
+                mode,
                 extractDifficulty(session.getSessionState()),
                 quiz,
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),

@@ -22,6 +22,8 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
+import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
+import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -332,7 +334,7 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_acceptsBoardExamModeForFreePlanUsingStandardChallengeQuota() {
+    void startSession_acceptsBoardExamModeForProPlanUsingStandardChallengeQuotaAndBoardCap() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -354,7 +356,7 @@ class ChallengeQuizServiceTest {
         )).thenReturn(0L);
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.FREE,
+                        PlanType.PRO,
                         BillingCycle.MONTHLY,
                         OffsetDateTime.now().minusDays(5),
                         OffsetDateTime.now().plusDays(25),
@@ -362,7 +364,7 @@ class ChallengeQuizServiceTest {
                         3
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
                 LearnerLevel.COLLEGE,
                 "Engineering",
@@ -403,9 +405,111 @@ class ChallengeQuizServiceTest {
         assertThat(response.mode()).isEqualTo("board_exam");
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
         assertThat(response.monthlyLimit()).isEqualTo(5);
+        assertThat(response.usedThisMonth()).isEqualTo(1);
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
-        verify(featureGateService, never()).checkFeatureAccess(PlanType.FREE, Feature.DIFFICULTY_SELECTION);
+        verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(userUsageService).incrementBoardExamGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(featureGateService, never()).checkFeatureAccess(PlanType.PRO, Feature.DIFFICULTY_SELECTION);
+    }
+
+    @Test
+    void startSession_blocksBoardExamWhenBoardExamHardCapReached() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        5
+                ));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "board_exam");
+        String studyPackIdRaw = studyPackId.toString();
+        assertThatThrownBy(() -> challengeQuizService.startSession(studyPackIdRaw, userId, request))
+                .isInstanceOf(MonthlyBoardExamLimitReachedException.class);
+
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementBoardExamGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_blocksBoardExamWhenSharedChallengeQuizBudgetReached() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(50L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "board_exam");
+        String studyPackIdRaw = studyPackId.toString();
+        assertThatThrownBy(() -> challengeQuizService.startSession(studyPackIdRaw, userId, request))
+                .isInstanceOf(MonthlyChallengeQuizLimitReachedException.class);
+
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementBoardExamGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
     @Test
@@ -448,7 +552,7 @@ class ChallengeQuizServiceTest {
         )).thenReturn(0L);
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.FREE,
+                        PlanType.PRO,
                         BillingCycle.MONTHLY,
                         OffsetDateTime.now().minusDays(5),
                         OffsetDateTime.now().plusDays(25),
@@ -456,7 +560,7 @@ class ChallengeQuizServiceTest {
                         3
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Nursing",
