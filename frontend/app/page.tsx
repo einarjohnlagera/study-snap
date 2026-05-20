@@ -119,7 +119,8 @@ const profileShowcase = [
       { label: "Long Exam", pro: true },
     ],
     screenshot: {
-      src: "/landing/profile-student.jpg",
+      src: "/landing/profile-student-light.jpg",
+      darkSrc: "/landing/profile-student-dark.jpg",
       alt: "Long Exam Mastery Report with domain breakdown",
     },
   },
@@ -133,7 +134,8 @@ const profileShowcase = [
       { label: "Board Exam", pro: true },
     ],
     screenshot: {
-      src: "/landing/profile-reviewer.jpg",
+      src: "/landing/profile-reviewer-light.jpg",
+      darkSrc: "/landing/profile-reviewer-dark.jpg",
       alt: "Board Exam Score Report",
     },
   },
@@ -147,7 +149,8 @@ const profileShowcase = [
       { label: "Export DOCX", pro: false },
     ],
     screenshot: {
-      src: "/landing/profile-teacher.jpg",
+      src: "/landing/profile-teacher-light.jpg",
+      darkSrc: "/landing/profile-teacher-dark.jpg",
       alt: "Quiz preview and DOCX export",
     },
   },
@@ -161,7 +164,8 @@ const profileShowcase = [
       { label: "Readiness Report", pro: false },
     ],
     screenshot: {
-      src: "/landing/profile-professional.jpg",
+      src: "/landing/profile-professional-light.jpg",
+      darkSrc: "/landing/profile-professional-dark.jpg",
       alt: "Interview Readiness Report",
     },
   },
@@ -522,6 +526,7 @@ function ProfileShowcaseSection() {
           <Card key={profile.title} className="flex h-full flex-col gap-4 overflow-hidden p-0">
             <ProductScreenshotFrame
               src={profile.screenshot.src}
+              darkSrc={profile.screenshot.darkSrc}
               alt={profile.screenshot.alt}
               className="rounded-none border-0 border-b border-border bg-muted/20"
               imageClassName="max-h-[180px] object-contain object-top"
