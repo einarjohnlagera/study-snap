@@ -81,6 +81,8 @@ class StudyPackServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private ContentModerationService contentModerationService;
+    @Mock
+    private ExamQuestionPoolService examQuestionPoolService;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -110,7 +112,8 @@ class StudyPackServiceTest {
                 generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
-                contentModerationService
+                contentModerationService,
+                examQuestionPoolService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -326,7 +329,8 @@ class StudyPackServiceTest {
                 generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
-                contentModerationService
+                contentModerationService,
+                examQuestionPoolService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -401,7 +405,8 @@ class StudyPackServiceTest {
                 generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
-                contentModerationService
+                contentModerationService,
+                examQuestionPoolService
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));

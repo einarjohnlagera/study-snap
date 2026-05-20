@@ -101,6 +101,7 @@ public class StudyPackService {
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final ContentModerationService contentModerationService;
+    private final ExamQuestionPoolService examQuestionPoolService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -137,6 +138,7 @@ public class StudyPackService {
                 InputType.TEXT,
                 requestedSourceNote != null
         ));
+        examQuestionPoolService.initiatePool(saved, ownerUserId);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -233,6 +235,7 @@ public class StudyPackService {
                 InputType.IMAGE,
                 false
         ));
+        examQuestionPoolService.initiatePool(saved, ownerUserId);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -284,6 +287,7 @@ public class StudyPackService {
                 InputType.IMAGE,
                 false
         ));
+        examQuestionPoolService.initiatePool(saved, ownerUserId);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=confirm_text latencyMs={}", requestId, latency);
@@ -624,6 +628,7 @@ public class StudyPackService {
                     InputType.TEXT,
                     true
             ));
+            examQuestionPoolService.initiatePool(saved, ownerUserId);
             long latency = System.currentTimeMillis() - startedAt;
             log.info("requestId={} action=complete_async_studyPack_generation noteId={} latencyMs={}", requestId, noteId, latency);
         } catch (Exception ex) {

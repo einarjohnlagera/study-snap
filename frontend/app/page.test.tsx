@@ -38,13 +38,14 @@ describe("LandingPage", () => {
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Turn your notes into exam-ready study materials in seconds",
+        name: "Your notes become your study system.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Summaries, key concepts, and quizzes designed to help you understand and retain what matters."),
+      screen.getByText("Quizzes, exams, and interview practice — generated from notes you write, paste, or copy. Built around how you actually study."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Board Exam Mode · Pro")).toBeInTheDocument();
+    expect(screen.getByText("5 study modes")).toBeInTheDocument();
+    expect(screen.getByText("Pro: Long Exam · Board Exam · Interview Practice")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Try Demo" })).toHaveAttribute("href", "/demo");
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
@@ -91,10 +92,20 @@ describe("LandingPage", () => {
     expect(screen.getByText("Designed for active recall")).toBeInTheDocument();
 
     expect(screen.getByText("Who It's For")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Made for learners who need more than passive notes" })).toBeInTheDocument();
-    expect(screen.getByText("Students")).toBeInTheDocument();
-    expect(screen.getByText("Exam Reviewers")).toBeInTheDocument();
-    expect(screen.getByText("Teachers")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built for every kind of learner" })).toBeInTheDocument();
+    expect(screen.getByText("Pick your role and see the flow that's built for you.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Students" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Exam Reviewers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Teachers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Professionals" })).toBeInTheDocument();
+
+    expect(screen.getByText("Study Modes")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Five study modes, one workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Quick Review" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Challenge Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Adaptive Practice" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Long Exam" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
 
     expect(screen.getByText("Pricing section placeholder")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See full pricing" })).toHaveAttribute("href", "/pricing");

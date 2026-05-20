@@ -827,6 +827,12 @@ export default function LongExamPage() {
                                                 </button>
                                             );
                                         })}
+                                        {selectedAdditionalStudyPackIds.length > 0 ? (
+                                            <p className="flex items-center gap-2 text-sm text-foreground/70">
+                                                <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true"/>
+                                                <span>Generating from multiple notes may take up to a minute.</span>
+                                            </p>
+                                        ) : null}
                                     </div>
                                 </div>
                             ) : null}
