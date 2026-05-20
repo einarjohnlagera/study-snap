@@ -113,8 +113,11 @@ const profileShowcase = [
     title: "Students",
     description: "Stay organized across subjects. Run Quick Review, Challenge Quiz, and Long Exam from a single note.",
     icon: BookOpen,
-    modeChips: ["Quick Review", "Challenge Quiz", "Long Exam"],
-    planBadge: null,
+    modeChips: [
+      { label: "Quick Review", pro: false },
+      { label: "Challenge Quiz", pro: false },
+      { label: "Long Exam", pro: true },
+    ],
     screenshot: {
       src: "/landing/profile-student.jpg",
       alt: "Long Exam Mastery Report with domain breakdown",
@@ -124,8 +127,11 @@ const profileShowcase = [
     title: "Exam Reviewers",
     description: "Prepare for board, licensure, and certification exams. Run high-stakes Board Exam simulations from your reviewer notes.",
     icon: Trophy,
-    modeChips: ["Quick Review", "Challenge Quiz", "Board Exam"],
-    planBadge: null,
+    modeChips: [
+      { label: "Quick Review", pro: false },
+      { label: "Challenge Quiz", pro: false },
+      { label: "Board Exam", pro: true },
+    ],
     screenshot: {
       src: "/landing/profile-reviewer.jpg",
       alt: "Board Exam Score Report",
@@ -135,8 +141,11 @@ const profileShowcase = [
     title: "Teachers",
     description: "Generate quiz drafts from lesson notes. Preview, refine, and export as DOCX ready for class.",
     icon: Library,
-    modeChips: ["Generate", "Preview", "Export DOCX"],
-    planBadge: null,
+    modeChips: [
+      { label: "Generate", pro: false },
+      { label: "Preview", pro: false },
+      { label: "Export DOCX", pro: false },
+    ],
     screenshot: {
       src: "/landing/profile-teacher.jpg",
       alt: "Quiz preview and DOCX export",
@@ -146,8 +155,11 @@ const profileShowcase = [
     title: "Professionals",
     description: "Practice for job interviews with scenario-based questions and per-answer AI critique from your domain notes.",
     icon: Briefcase,
-    modeChips: ["Interview Practice", "AI Critique", "Readiness Report"],
-    planBadge: null,
+    modeChips: [
+      { label: "Interview Practice", pro: true },
+      { label: "AI Critique", pro: false },
+      { label: "Readiness Report", pro: false },
+    ],
     screenshot: {
       src: "/landing/profile-professional.jpg",
       alt: "Interview Readiness Report",
@@ -516,25 +528,25 @@ function ProfileShowcaseSection() {
               sizes="(min-width: 1024px) 280px, (min-width: 768px) 45vw, 100vw"
             />
             <div className="flex flex-1 flex-col gap-3 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="inline-flex items-center gap-2">
-                  <profile.icon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                  <CardTitle>{profile.title}</CardTitle>
-                </div>
-                {profile.planBadge ? (
-                  <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                    {profile.planBadge}
-                  </span>
-                ) : null}
+              <div className="inline-flex items-center gap-2">
+                <profile.icon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                <CardTitle>{profile.title}</CardTitle>
               </div>
               <CardDescription className="text-sm">{profile.description}</CardDescription>
               <div className="mt-auto flex flex-wrap gap-1.5">
                 {profile.modeChips.map((chip) => (
                   <span
-                    key={chip}
-                    className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/75"
+                    key={chip.label}
+                    className={
+                      chip.pro
+                        ? "inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300"
+                        : "inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/75"
+                    }
                   >
-                    {chip}
+                    {chip.label}
+                    {chip.pro ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wide">Pro</span>
+                    ) : null}
                   </span>
                 ))}
               </div>
