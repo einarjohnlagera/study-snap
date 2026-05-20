@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 type ProductScreenshotFrameProps = {
   src: string;
+  darkSrc?: string;
   alt: string;
   priority?: boolean;
   sizes?: string;
@@ -12,6 +13,7 @@ type ProductScreenshotFrameProps = {
 
 export function ProductScreenshotFrame({
   src,
+  darkSrc,
   alt,
   priority = false,
   sizes = "(min-width: 1280px) 560px, (min-width: 768px) 50vw, 100vw",
@@ -26,9 +28,20 @@ export function ProductScreenshotFrame({
         width={1440}
         height={960}
         priority={priority}
-        className={cn("h-auto w-full", imageClassName)}
+        className={cn("h-auto w-full", imageClassName, darkSrc && "dark:hidden")}
         sizes={sizes}
       />
+      {darkSrc ? (
+        <Image
+          src={darkSrc}
+          alt={alt}
+          width={1440}
+          height={960}
+          priority={priority}
+          className={cn("hidden h-auto w-full dark:block", imageClassName)}
+          sizes={sizes}
+        />
+      ) : null}
     </div>
   );
 }
