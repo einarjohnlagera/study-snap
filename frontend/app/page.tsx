@@ -119,8 +119,8 @@ const profileShowcase = [
       { label: "Long Exam", pro: true },
     ],
     screenshot: {
-      src: "/landing/profile-student-light.jpg",
-      darkSrc: "/landing/profile-student-dark.jpg",
+      src: "/landing/profile-student-light.png",
+      darkSrc: "/landing/profile-student-dark.png",
       alt: "Long Exam Mastery Report with domain breakdown",
     },
   },
@@ -134,8 +134,8 @@ const profileShowcase = [
       { label: "Board Exam", pro: true },
     ],
     screenshot: {
-      src: "/landing/profile-reviewer-light.jpg",
-      darkSrc: "/landing/profile-reviewer-dark.jpg",
+      src: "/landing/profile-reviewer-light.png",
+      darkSrc: "/landing/profile-reviewer-dark.png",
       alt: "Board Exam Score Report",
     },
   },
@@ -149,8 +149,8 @@ const profileShowcase = [
       { label: "Export DOCX", pro: false },
     ],
     screenshot: {
-      src: "/landing/profile-teacher-light.jpg",
-      darkSrc: "/landing/profile-teacher-dark.jpg",
+      src: "/landing/profile-teacher-light.png",
+      darkSrc: "/landing/profile-teacher-dark.png",
       alt: "Quiz preview and DOCX export",
     },
   },
@@ -164,8 +164,8 @@ const profileShowcase = [
       { label: "Readiness Report", pro: false },
     ],
     screenshot: {
-      src: "/landing/profile-professional-light.jpg",
-      darkSrc: "/landing/profile-professional-dark.jpg",
+      src: "/landing/profile-professional-light.png",
+      darkSrc: "/landing/profile-professional-dark.png",
       alt: "Interview Readiness Report",
     },
   },
