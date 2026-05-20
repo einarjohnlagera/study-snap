@@ -56,6 +56,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -141,6 +142,7 @@ public class ChallengeQuizService {
     private final AiRateLimitService aiRateLimitService;
     private final ActivityTrackingService activityTrackingService;
     private final StudyPackGenerationContextResolver generationContextResolver;
+    private final ExamQuestionPoolService examQuestionPoolService;
 
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
         authService.requireEmailVerified(userId);
@@ -173,8 +175,47 @@ public class ChallengeQuizService {
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             boardExamUsedThisMonth = assertBoardExamQuotaAvailable(userId, planType);
         }
-        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
+        int quizCount = MODE_BOARD_EXAM.equals(selectedMode) ? profile.questionCount() : INITIAL_CHALLENGE_QUIZ_COUNT;
+        StudyPackGenerationContext generationContext = null;
+        if (MODE_BOARD_EXAM.equals(selectedMode)) {
+            generationContext = buildQuizGenerationContext(userId, studyPack);
+            Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
+                    studyPackId,
+                    ExamQuestionPoolService.MODE_BOARD_EXAM,
+                    quizCount,
+                    generationContext.learnerLevel()
+            );
+            if (pooledQuestions.isPresent()) {
+                QuickReviewSessionEntity session = buildGeneratingSession(
+                        userId,
+                        studyPackId,
+                        studyPack,
+                        profile.difficulty(),
+                        selectedMode
+                );
+                markSessionReady(session, pooledQuestions.get(), profile.difficulty());
+                session.setSessionState(QuizSessionStateUtils.withPoolSourced(
+                        session.getSessionState(),
+                        true
+                ));
+                QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+                userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
+                userUsageService.incrementBoardExamGeneration(userId, saved.getCreatedAt());
+                try {
+                    analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
+                            ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                            ANALYTICS_METADATA_QUESTION_COUNT, pooledQuestions.get().size(),
+                            ANALYTICS_METADATA_DIFFICULTY, profile.difficulty(),
+                            ANALYTICS_METADATA_MODE, selectedMode
+                    ));
+                } catch (RuntimeException ignored) {
+                    // Analytics must never turn a successfully started Board Exam into a failed session.
+                }
+                return toStartResponse(saved, studyPack, boardExamUsedThisMonth + 1, planType);
+            }
+        }
+        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
                 userId,
                 studyPackId,
@@ -183,8 +224,9 @@ public class ChallengeQuizService {
                 selectedMode
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
-        StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
-        int quizCount = MODE_BOARD_EXAM.equals(selectedMode) ? profile.questionCount() : INITIAL_CHALLENGE_QUIZ_COUNT;
+        if (generationContext == null) {
+            generationContext = buildQuizGenerationContext(userId, studyPack);
+        }
         try {
             List<QuizItem> generatedQuiz = MODE_BOARD_EXAM.equals(selectedMode)
                     ? quizGenerationService.generateBoardExamQuiz(
@@ -374,6 +416,14 @@ public class ChallengeQuizService {
         session.setSessionMetadata(buildCompletionSessionMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        if (MODE_BOARD_EXAM.equals(extractMode(saved.getSessionState()))
+                && QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
+            examQuestionPoolService.markServed(
+                    saved.getStudyPackId(),
+                    ExamQuestionPoolService.MODE_BOARD_EXAM,
+                    quiz
+            );
+        }
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, saved.getStudyPackId());
         return new ChallengeQuizSessionResponse(
                 saved.getId().toString(),

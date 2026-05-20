@@ -8,7 +8,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +21,11 @@ import java.nio.charset.StandardCharsets;
 public class OpenAiLlmConfig {
     @Bean
     public RestClient openAiRestClient(StudySnapProperties properties) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(10));
+        factory.setReadTimeout(Duration.ofSeconds(180));
         return RestClient.builder()
+                .requestFactory(factory)
                 .baseUrl(properties.getLlm().getApi().getBaseUrl())
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getLlm().getApi().getApiKey())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)

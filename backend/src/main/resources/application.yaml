@@ -101,6 +101,8 @@ studysnap:
     adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:false}
     interview-practice-pro-only: ${INTERVIEW_PRACTICE_PRO_ONLY:true}
     difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
+    long-exam-pool-size: ${LONG_EXAM_POOL_SIZE:48}
+    board-exam-pool-size: ${BOARD_EXAM_POOL_SIZE:24}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}

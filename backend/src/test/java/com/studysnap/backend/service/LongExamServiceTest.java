@@ -84,6 +84,8 @@ class LongExamServiceTest {
     private StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     @Mock
     private UserUsageService userUsageService;
+    @Mock
+    private ExamQuestionPoolService examQuestionPoolService;
 
     private LongExamService longExamService;
     private Runnable dispatchedTask;
@@ -97,6 +99,8 @@ class LongExamServiceTest {
         }).when(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
         lenient().when(userUsageService.getMonthlyUsage(any(UUID.class), any(OffsetDateTime.class)))
                 .thenReturn(UserUsageService.MonthlyUsage.zero());
+        lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
+                .thenReturn(Optional.empty());
         TransactionOperations transactionOperations = new TransactionOperations() {
             @Override
             public <T> T execute(TransactionCallback<T> action) {
@@ -117,7 +121,8 @@ class LongExamServiceTest {
                 userUsageService,
                 studyPackGenerationTaskDispatcher,
                 transactionOperations,
-                new SimpleAsyncTaskExecutor()
+                new SimpleAsyncTaskExecutor(),
+                examQuestionPoolService
         );
     }
 
@@ -188,6 +193,41 @@ class LongExamServiceTest {
         verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.LONG_EXAM_SESSION);
         verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_STARTED), eq(studyPackId), any());
+    }
+
+    @Test
+    void startSession_usesReadyPoolWithoutDispatchingAsyncGeneration() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        List<QuizItem> pooledQuiz = buildQuiz(25);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.LONG_EXAM),
+                any()
+        )).thenReturn(Optional.empty());
+        when(examQuestionPoolService.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                25,
+                LearnerLevel.COLLEGE
+        )).thenReturn(Optional.of(pooledQuiz));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LongExamStartResponse response = longExamService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(response.status()).isEqualTo("IN_PROGRESS");
+        assertThat(response.quiz()).hasSize(25);
+        assertThat(response.canResume()).isTrue();
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(), any(), any());
+        verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
     }
 
     @Test
@@ -337,6 +377,7 @@ class LongExamServiceTest {
         assertThat(response.sourceNoteRefs())
                 .extracting(source -> source.noteTitle() + ":" + source.questionCount())
                 .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
+        verify(examQuestionPoolService, never()).sampleQuestions(any(UUID.class), any(), anyInt(), any());
     }
 
     @Test
