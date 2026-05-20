@@ -124,7 +124,7 @@ const profileShowcase = [
     title: "Exam Reviewers",
     description: "Prepare for board, licensure, and certification exams. Run high-stakes Board Exam simulations from your reviewer notes.",
     icon: Trophy,
-    modeChips: ["Challenge Quiz", "Long Exam", "Board Exam"],
+    modeChips: ["Quick Review", "Challenge Quiz", "Board Exam"],
     planBadge: "Pro for Board Exam",
     screenshot: {
       src: "/landing/profile-reviewer.jpg",
