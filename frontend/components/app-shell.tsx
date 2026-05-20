@@ -88,7 +88,6 @@ function shouldShowFloatingFeedbackWidget(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
     || pathname === "/library"
-    || pathname.startsWith("/public/library")
     || pathname.startsWith("/settings")
   );
 }

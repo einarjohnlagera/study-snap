@@ -3,9 +3,11 @@ import {
   ArrowRight,
   BookOpen,
   Briefcase,
+  ClipboardList,
   FileText,
   Library,
   Sparkles,
+  Target,
   Trophy,
 } from "lucide-react";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
@@ -106,28 +108,85 @@ const differentiationRows = [
   },
 ];
 
-const targetUsers = [
+const profileShowcase = [
   {
     title: "Students",
-    description: "Stay organized and review smarter.",
+    description: "Stay organized across subjects. Run Quick Review, Challenge Quiz, and Long Exam from a single note.",
     icon: BookOpen,
+    modeChips: ["Quick Review", "Challenge Quiz", "Long Exam"],
+    planBadge: null,
+    screenshot: {
+      src: "/landing/profile-student.jpg",
+      alt: "Long Exam Mastery Report with domain breakdown",
+    },
   },
   {
     title: "Exam Reviewers",
-    description: "Practice topics and test your understanding.",
+    description: "Prepare for board, licensure, and certification exams. Run high-stakes Board Exam simulations from your reviewer notes.",
     icon: Trophy,
+    modeChips: ["Challenge Quiz", "Long Exam", "Board Exam"],
+    planBadge: "Pro for Board Exam",
+    screenshot: {
+      src: "/landing/profile-reviewer.jpg",
+      alt: "Board Exam Score Report",
+    },
   },
   {
     title: "Teachers",
-    description: "Turn notes into ready-to-use quizzes and materials.",
+    description: "Generate quiz drafts from lesson notes. Preview, refine, and export as DOCX ready for class.",
     icon: Library,
+    modeChips: ["Generate", "Preview", "Export DOCX"],
+    planBadge: null,
+    screenshot: {
+      src: "/landing/profile-teacher.jpg",
+      alt: "Quiz preview and DOCX export",
+    },
   },
   {
     title: "Professionals",
-    description: "Practice for job interviews with scenario-based questions from your own notes.",
+    description: "Practice for job interviews with scenario-based questions and per-answer AI critique from your domain notes.",
     icon: Briefcase,
+    modeChips: ["Interview Practice", "AI Critique", "Readiness Report"],
+    planBadge: "Pro",
+    screenshot: {
+      src: "/landing/profile-professional.jpg",
+      alt: "Interview Readiness Report",
+    },
   },
-];
+] as const;
+
+const studyModes = [
+  {
+    title: "Quick Review",
+    description: "Lightweight concept check from your study pack.",
+    icon: BookOpen,
+    planChip: "Free",
+  },
+  {
+    title: "Challenge Quiz",
+    description: "Practice with stakes. Progressive question generation and mid-flight controls.",
+    icon: Target,
+    planChip: "All plans",
+  },
+  {
+    title: "Adaptive Practice",
+    description: "Targeted reinforcement on the concepts you keep missing.",
+    icon: Sparkles,
+    planChip: "Plus / Pro",
+  },
+  {
+    title: "Long Exam",
+    description: "Comprehensive mastery test. Spans multiple notes. Fixed-length and timed.",
+    icon: ClipboardList,
+    planChip: "Pro",
+  },
+  {
+    title: "Board Exam",
+    description: "High-stakes simulation. Fullscreen, no feedback mid-exam.",
+    icon: Trophy,
+    planChip: "Pro",
+  },
+] as const;
 
 const landingScreenshots = {
   noteEditor: {
@@ -166,37 +225,37 @@ function HeroSection() {
           <BrandFullLogo width={224} height={48} priority />
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-background/85 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
-              Notes to active recall
+              5 study modes
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Board Exam Mode · Pro
+              Pro: Long Exam · Board Exam · Interview Practice
             </span>
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn your notes into exam-ready study materials in seconds
+              Your notes become your study system.
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Summaries, key concepts, and quizzes designed to help you understand and retain what matters.
+              Quizzes, exams, and interview practice — generated from notes you write, paste, or copy. Built around how you actually study.
             </p>
           </div>
           <div className="space-y-2">
             <div className="flex flex-col gap-3 sm:flex-row">
               <TrackedLink
-                href="/demo"
+                href="/signup"
                 className={buttonVariants({ className: "w-full sm:w-auto" })}
                 eventType="LANDING_CTA_CLICKED"
-                eventMetadata={{ placement: "hero_primary", destination: "/demo" }}
-              >
-                Try Demo
-              </TrackedLink>
-              <TrackedLink
-                href="/signup"
-                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-                eventType="LANDING_CTA_CLICKED"
-                eventMetadata={{ placement: "hero_secondary", destination: "/signup" }}
+                eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
               >
                 Start for Free
+              </TrackedLink>
+              <TrackedLink
+                href="/demo"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                eventType="LANDING_CTA_CLICKED"
+                eventMetadata={{ placement: "hero_secondary", destination: "/demo" }}
+              >
+                Try Demo
               </TrackedLink>
             </div>
             <p className="text-sm text-foreground/65">
@@ -390,20 +449,95 @@ function DifferentiationSection() {
   );
 }
 
-function TargetUsersSection() {
+function ModeShowcaseSection() {
+  return (
+    <section className="space-y-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Study Modes</p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Five study modes, one workspace</h2>
+        <p className="max-w-3xl text-sm text-foreground/75">
+          Every mode runs on your notes. Pick the one that matches the moment.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {studyModes.map((mode) => (
+          <Card key={mode.title} className="flex h-full flex-col gap-4 p-5">
+            <mode.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+            <div className="space-y-2">
+              <CardTitle>{mode.title}</CardTitle>
+              <CardDescription className="text-sm">{mode.description}</CardDescription>
+            </div>
+            <span className="mt-auto inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/70">
+              {mode.planChip}
+            </span>
+          </Card>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4 dark:bg-amber-500/12 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-500/30 bg-background/80 text-amber-700 dark:text-amber-300">
+            <Briefcase className="h-4 w-4" />
+          </span>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">
+              Also: Interview Practice
+              <span className="ml-2 inline-flex items-center rounded-full border border-amber-500/30 bg-background/80 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Pro · Professional profile
+              </span>
+            </p>
+            <p className="text-sm text-foreground/75">
+              Scenario-based MCQ plus per-answer AI critique. Built for professionals preparing for job interviews.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfileShowcaseSection() {
   return (
     <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Who It&apos;s For</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Made for learners who need more than passive notes</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for every kind of learner</h2>
+        <p className="max-w-3xl text-sm text-foreground/75">
+          Pick your role and see the flow that&apos;s built for you.
+        </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {targetUsers.map((user) => (
-          <Card key={user.title} className="space-y-4 p-5">
-            <user.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-            <div className="space-y-2">
-              <CardTitle>{user.title}</CardTitle>
-              <CardDescription className="text-sm">{user.description}</CardDescription>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {profileShowcase.map((profile) => (
+          <Card key={profile.title} className="flex h-full flex-col gap-4 overflow-hidden p-0">
+            <ProductScreenshotFrame
+              src={profile.screenshot.src}
+              alt={profile.screenshot.alt}
+              className="rounded-none border-0 border-b border-border bg-muted/20"
+              imageClassName="max-h-[180px] object-contain object-top"
+              sizes="(min-width: 1024px) 280px, (min-width: 768px) 45vw, 100vw"
+            />
+            <div className="flex flex-1 flex-col gap-3 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex items-center gap-2">
+                  <profile.icon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                  <CardTitle>{profile.title}</CardTitle>
+                </div>
+                {profile.planBadge ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    {profile.planBadge}
+                  </span>
+                ) : null}
+              </div>
+              <CardDescription className="text-sm">{profile.description}</CardDescription>
+              <div className="mt-auto flex flex-wrap gap-1.5">
+                {profile.modeChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/75"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
             </div>
           </Card>
         ))}
@@ -478,11 +612,12 @@ export default function Home() {
       />
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
+      <ModeShowcaseSection />
       <HowItWorksSection />
       <ValueSummarySection />
       <PublicLibrarySection />
       <DifferentiationSection />
-      <TargetUsersSection />
+      <ProfileShowcaseSection />
       <PricingPreviewSection />
       <FinalCtaSection />
       <PublicFooter />
