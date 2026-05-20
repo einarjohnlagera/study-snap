@@ -29,6 +29,7 @@ import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
 import com.studysnap.backend.exception.MonthlyLongExamLimitReachedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -120,6 +121,7 @@ public class LongExamService {
             QuickReviewSessionStatus.FAILED
     );
 
+    private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final UserRepository userRepository;
@@ -669,13 +671,13 @@ public class LongExamService {
     ) {
         List<StudyPackEntity> sources = new ArrayList<>(1 + additionalStudyPackIds.size());
         sources.add(primaryStudyPack);
-        String primarySubject = normalizeSubjectForMatch(primaryStudyPack.getSubject());
+        String primarySubject = resolveNoteSubjectForStudyPack(primaryStudyPack);
         if (!additionalStudyPackIds.isEmpty() && primarySubject.isBlank()) {
             throw new InvalidLongExamSourceException();
         }
         for (UUID additionalStudyPackId : additionalStudyPackIds) {
             StudyPackEntity additionalStudyPack = findOwnedLongExamSourceOrThrow(additionalStudyPackId, userId);
-            if (!primarySubject.equals(normalizeSubjectForMatch(additionalStudyPack.getSubject()))) {
+            if (!primarySubject.equals(resolveNoteSubjectForStudyPack(additionalStudyPack))) {
                 throw new InvalidLongExamSourceException();
             }
             sources.add(additionalStudyPack);
@@ -901,6 +903,12 @@ public class LongExamService {
 
     private String normalizeSubjectForMatch(String subject) {
         return subject == null ? "" : subject.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String resolveNoteSubjectForStudyPack(StudyPackEntity studyPack) {
+        return noteRepository.findById(studyPack.getNoteId())
+                .map(note -> normalizeSubjectForMatch(note.getSubject()))
+                .orElseGet(() -> normalizeSubjectForMatch(studyPack.getSubject()));
     }
 
     private String normalizeDomain(String value) {
