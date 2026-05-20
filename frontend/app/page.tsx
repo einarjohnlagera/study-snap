@@ -125,7 +125,7 @@ const profileShowcase = [
     description: "Prepare for board, licensure, and certification exams. Run high-stakes Board Exam simulations from your reviewer notes.",
     icon: Trophy,
     modeChips: ["Quick Review", "Challenge Quiz", "Board Exam"],
-    planBadge: "Pro for Board Exam",
+    planBadge: null,
     screenshot: {
       src: "/landing/profile-reviewer.jpg",
       alt: "Board Exam Score Report",
@@ -147,7 +147,7 @@ const profileShowcase = [
     description: "Practice for job interviews with scenario-based questions and per-answer AI critique from your domain notes.",
     icon: Briefcase,
     modeChips: ["Interview Practice", "AI Critique", "Readiness Report"],
-    planBadge: "Pro",
+    planBadge: null,
     screenshot: {
       src: "/landing/profile-professional.jpg",
       alt: "Interview Readiness Report",
