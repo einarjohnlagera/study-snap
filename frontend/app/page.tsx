@@ -529,7 +529,7 @@ function ProfileShowcaseSection() {
               darkSrc={profile.screenshot.darkSrc}
               alt={profile.screenshot.alt}
               className="rounded-none border-0 border-b border-border bg-muted/20"
-              imageClassName="max-h-[180px] object-contain object-top"
+              imageClassName="max-h-[240px] object-contain object-top"
               sizes="(min-width: 1024px) 280px, (min-width: 768px) 45vw, 100vw"
             />
             <div className="flex flex-1 flex-col gap-3 p-5">
