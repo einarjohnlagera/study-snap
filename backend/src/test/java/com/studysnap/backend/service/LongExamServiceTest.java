@@ -34,6 +34,7 @@ import com.studysnap.backend.exception.LongExamNotAvailableException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
 import com.studysnap.backend.exception.MonthlyLongExamLimitReachedException;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -57,11 +58,14 @@ import org.springframework.transaction.support.TransactionOperations;
 
 @ExtendWith(MockitoExtension.class)
 class LongExamServiceTest {
+
     private static final String DEFAULT_DIFFICULTY = "mixed";
     private static final String BIOLOGY_SUBJECT = "Biology";
     private static final String PRIMARY_BIOLOGY_TITLE = "Primary Biology";
     private static final String CELL_BIOLOGY_TITLE = "Cell Biology";
 
+    @Mock
+    private NoteRepository noteRepository;
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
@@ -98,9 +102,9 @@ class LongExamServiceTest {
             return null;
         }).when(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
         lenient().when(userUsageService.getMonthlyUsage(any(UUID.class), any(OffsetDateTime.class)))
-                .thenReturn(UserUsageService.MonthlyUsage.zero());
+            .thenReturn(UserUsageService.MonthlyUsage.zero());
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
-                .thenReturn(Optional.empty());
+            .thenReturn(Optional.empty());
         TransactionOperations transactionOperations = new TransactionOperations() {
             @Override
             public <T> T execute(TransactionCallback<T> action) {
@@ -108,21 +112,22 @@ class LongExamServiceTest {
             }
         };
         longExamService = new LongExamService(
-                studyPackRepository,
-                quickReviewSessionRepository,
-                userRepository,
-                subscriptionService,
-                featureGateService,
-                authService,
-                quizGenerationService,
-                analyticsService,
-                generationContextResolver,
-                new StudySnapProperties(),
-                userUsageService,
-                studyPackGenerationTaskDispatcher,
-                transactionOperations,
-                new SimpleAsyncTaskExecutor(),
-                examQuestionPoolService
+            noteRepository,
+            studyPackRepository,
+            quickReviewSessionRepository,
+            userRepository,
+            subscriptionService,
+            featureGateService,
+            authService,
+            quizGenerationService,
+            analyticsService,
+            generationContextResolver,
+            new StudySnapProperties(),
+            userUsageService,
+            studyPackGenerationTaskDispatcher,
+            transactionOperations,
+            new SimpleAsyncTaskExecutor(),
+            examQuestionPoolService
         );
     }
 
@@ -137,37 +142,38 @@ class LongExamServiceTest {
         List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
-        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(
+            Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(studyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(studyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
         when(quizGenerationService.generateLongExamParallel(
-                eq(studyPack.getTitle()),
-                eq(studyPack.getSummary()),
-                eq(studyPack.getKeyConcepts()),
-                eq(List.of("Existing question")),
-                eq(25),
-                eq(DEFAULT_DIFFICULTY),
-                eq(context),
-                any()
+            eq(studyPack.getTitle()),
+            eq(studyPack.getSummary()),
+            eq(studyPack.getKeyConcepts()),
+            eq(List.of("Existing question")),
+            eq(25),
+            eq(DEFAULT_DIFFICULTY),
+            eq(context),
+            any()
         )).thenReturn(generatedQuiz);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> {
-                    QuickReviewSessionEntity session = invocation.getArgument(0);
-                    savedStatuses.add(session.getStatus());
-                    savedSessions.add(session);
-                    return session;
-                });
+            .thenAnswer(invocation -> {
+                QuickReviewSessionEntity session = invocation.getArgument(0);
+                savedStatuses.add(session.getStatus());
+                savedSessions.add(session);
+                return session;
+            });
 
         LongExamStartResponse response = longExamService.startSession(
-                studyPackId.toString(),
-                userId,
-                new LongExamStartRequest(null)
+            studyPackId.toString(),
+            userId,
+            new LongExamStartRequest(null)
         );
 
         assertThat(savedStatuses).containsExactly(QuickReviewSessionStatus.GENERATING);
@@ -187,12 +193,13 @@ class LongExamServiceTest {
         dispatchedTask.run();
 
         assertThat(savedStatuses).containsExactly(
-                QuickReviewSessionStatus.GENERATING,
-                QuickReviewSessionStatus.IN_PROGRESS
+            QuickReviewSessionStatus.GENERATING,
+            QuickReviewSessionStatus.IN_PROGRESS
         );
         verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.LONG_EXAM_SESSION);
         verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
-        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_STARTED), eq(studyPackId), any());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_STARTED), eq(studyPackId),
+            any());
     }
 
     @Test
@@ -204,21 +211,22 @@ class LongExamServiceTest {
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
-        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(
+            Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(studyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(studyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         when(examQuestionPoolService.sampleQuestions(
-                studyPackId,
-                ExamQuestionPoolService.MODE_LONG_EXAM,
-                25,
-                LearnerLevel.COLLEGE
+            studyPackId,
+            ExamQuestionPoolService.MODE_LONG_EXAM,
+            25,
+            LearnerLevel.COLLEGE
         )).thenReturn(Optional.of(pooledQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamStartResponse response = longExamService.startSession(studyPackId.toString(), userId, null);
 
@@ -226,7 +234,8 @@ class LongExamServiceTest {
         assertThat(response.quiz()).hasSize(25);
         assertThat(response.canResume()).isTrue();
         verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
-        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(), any(), any());
+        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(),
+            any(), any());
         verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
     }
 
@@ -236,16 +245,17 @@ class LongExamServiceTest {
         UUID studyPackId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
         doThrow(new LongExamNotAvailableException())
-                .when(featureGateService)
-                .checkFeatureAccess(PlanType.PLUS, Feature.LONG_EXAM_SESSION);
+            .when(featureGateService)
+            .checkFeatureAccess(PlanType.PLUS, Feature.LONG_EXAM_SESSION);
 
         String studyPackIdRaw = studyPackId.toString();
         assertThatThrownBy(() -> longExamService.startSession(studyPackIdRaw, userId, null))
-                .isInstanceOf(LongExamNotAvailableException.class);
+            .isInstanceOf(LongExamNotAvailableException.class);
 
         verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(any(), any());
         verify(quizGenerationService, never()).generateLongExam(any(), any(), any(), any(), anyInt(), any(), any());
-        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(), any(), any());
+        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(),
+            any(), any());
     }
 
     @Test
@@ -253,16 +263,18 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
-        QuickReviewSessionEntity existing = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS, buildQuiz(20));
+        QuickReviewSessionEntity existing = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS,
+            buildQuiz(20));
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
-        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(
+            Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(studyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(studyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.of(existing));
 
         LongExamStartResponse response = longExamService.startSession(studyPackId.toString(), userId, null);
@@ -271,7 +283,8 @@ class LongExamServiceTest {
         assertThat(response.status()).isEqualTo("IN_PROGRESS");
         assertThat(response.quiz()).hasSize(20);
         verify(quizGenerationService, never()).generateLongExam(any(), any(), any(), any(), anyInt(), any(), any());
-        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(), any(), any());
+        verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(),
+            any(), any());
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(userUsageService, never()).incrementLongExamGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
@@ -282,23 +295,23 @@ class LongExamServiceTest {
         UUID studyPackId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new UserUsageService.MonthlyUsage(
-                        OffsetDateTime.now().minusDays(1),
-                        OffsetDateTime.now().plusDays(29),
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        10,
-                        0
-                ));
+            .thenReturn(new UserUsageService.MonthlyUsage(
+                OffsetDateTime.now().minusDays(1),
+                OffsetDateTime.now().plusDays(29),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                10,
+                0
+            ));
 
         String studyPackIdRaw = studyPackId.toString();
         assertThatThrownBy(() -> longExamService.startSession(studyPackIdRaw, userId, null))
-                .isInstanceOf(MonthlyLongExamLimitReachedException.class);
+            .isInstanceOf(MonthlyLongExamLimitReachedException.class);
 
         verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(any(), any());
         verify(userUsageService, never()).incrementLongExamGeneration(any(UUID.class), any(OffsetDateTime.class));
@@ -313,31 +326,33 @@ class LongExamServiceTest {
         List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
-        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(
+            Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(studyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(studyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack))
             .thenReturn(buildGenerationContext(LearnerLevel.COLLEGE));
         when(quizGenerationService.generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(), any(), any()))
-                .thenThrow(new RuntimeException("LLM unavailable"));
+            .thenThrow(new RuntimeException("LLM unavailable"));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> {
-                    QuickReviewSessionEntity session = invocation.getArgument(0);
-                    savedStatuses.add(session.getStatus());
-                    savedSessions.add(session);
-                    return session;
-                });
+            .thenAnswer(invocation -> {
+                QuickReviewSessionEntity session = invocation.getArgument(0);
+                savedStatuses.add(session.getStatus());
+                savedSessions.add(session);
+                return session;
+            });
 
         LongExamStartResponse response = longExamService.startSession(studyPackId.toString(), userId, null);
 
         assertThat(response.status()).isEqualTo("GENERATING");
         assertThat(response.quiz()).isEmpty();
-        when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(Optional.of(savedSessions.getFirst()));
+        when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(
+            Optional.of(savedSessions.getFirst()));
 
         dispatchedTask.run();
 
@@ -349,34 +364,36 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         UUID additionalStudyPackId = UUID.randomUUID();
-        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
-        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, CELL_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, CELL_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
-                .thenReturn(Optional.of(primaryStudyPack));
+            .thenReturn(Optional.of(primaryStudyPack));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
-                .thenReturn(Optional.of(additionalStudyPack));
+            .thenReturn(Optional.of(additionalStudyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(primaryStudyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(primaryStudyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamStartResponse response = longExamService.startSession(
-                primaryStudyPackId.toString(),
-                userId,
-                new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()))
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()))
         );
 
         assertThat(response.totalQuestions()).isEqualTo(25);
         assertThat(response.sourceNoteRefs())
-                .extracting(source -> source.noteTitle() + ":" + source.questionCount())
-                .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
+            .extracting(source -> source.noteTitle() + ":" + source.questionCount())
+            .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
         verify(examQuestionPoolService, never()).sampleQuestions(any(UUID.class), any(), anyInt(), any());
     }
 
@@ -385,48 +402,49 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         List<UUID> additionalStudyPackIds = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
-        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
-                .thenReturn(Optional.of(primaryStudyPack));
+            .thenReturn(Optional.of(primaryStudyPack));
         for (int index = 0; index < additionalStudyPackIds.size(); index++) {
             UUID additionalStudyPackId = additionalStudyPackIds.get(index);
             when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
-                    .thenReturn(Optional.of(buildStudyPack(
-                            additionalStudyPackId,
-                            userId,
-                            "Additional Biology " + index,
-                            BIOLOGY_SUBJECT
-                    )));
+                .thenReturn(Optional.of(buildStudyPack(
+                    additionalStudyPackId,
+                    userId,
+                    "Additional Biology " + index,
+                    BIOLOGY_SUBJECT
+                )));
         }
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(primaryStudyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(primaryStudyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamStartResponse response = longExamService.startSession(
-                primaryStudyPackId.toString(),
-                userId,
-                new LongExamStartRequest(
-                        null,
-                        additionalStudyPackIds.stream().map(UUID::toString).toList()
-                )
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(
+                null,
+                additionalStudyPackIds.stream().map(UUID::toString).toList()
+            )
         );
 
         assertThat(response.sourceNoteRefs())
-                .extracting(source -> source.noteTitle() + ":" + source.questionCount())
-                .containsExactly(
-                        PRIMARY_BIOLOGY_TITLE + ":7",
-                        "Additional Biology 0:6",
-                        "Additional Biology 1:6",
-                        "Additional Biology 2:6"
-                );
+            .extracting(source -> source.noteTitle() + ":" + source.questionCount())
+            .containsExactly(
+                PRIMARY_BIOLOGY_TITLE + ":7",
+                "Additional Biology 0:6",
+                "Additional Biology 1:6",
+                "Additional Biology 2:6"
+            );
     }
 
     @Test
@@ -434,26 +452,28 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         UUID additionalStudyPackId = UUID.randomUUID();
-        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
-        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, "Organic Chemistry", "Chemistry");
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, "Organic Chemistry",
+            "Chemistry");
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
-                .thenReturn(Optional.of(primaryStudyPack));
+            .thenReturn(Optional.of(primaryStudyPack));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
-                .thenReturn(Optional.of(additionalStudyPack));
+            .thenReturn(Optional.of(additionalStudyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(primaryStudyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(primaryStudyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         LongExamStartRequest request = new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()));
 
         String id = primaryStudyPackId.toString();
         assertThatThrownBy(() -> longExamService.startSession(id, userId, request))
-                .isInstanceOf(InvalidLongExamSourceException.class);
+            .isInstanceOf(InvalidLongExamSourceException.class);
     }
 
     @Test
@@ -461,25 +481,26 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         UUID additionalStudyPackId = UUID.randomUUID();
-        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
-                .thenReturn(Optional.of(primaryStudyPack));
+            .thenReturn(Optional.of(primaryStudyPack));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
-                .thenReturn(Optional.empty());
+            .thenReturn(Optional.empty());
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                eq(userId),
-                eq(primaryStudyPackId),
-                eq(QuickReviewSessionMode.LONG_EXAM),
-                any()
+            eq(userId),
+            eq(primaryStudyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
         )).thenReturn(Optional.empty());
         LongExamStartRequest request = new LongExamStartRequest(null, List.of(additionalStudyPackId.toString()));
 
         String id = primaryStudyPackId.toString();
         assertThatThrownBy(() -> longExamService.startSession(id, userId, request))
-                .isInstanceOf(InvalidLongExamSourceException.class);
+            .isInstanceOf(InvalidLongExamSourceException.class);
     }
 
 
@@ -488,10 +509,10 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         List<String> additionalStudyPackIds = List.of(
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString()
+            UUID.randomUUID().toString(),
+            UUID.randomUUID().toString(),
+            UUID.randomUUID().toString(),
+            UUID.randomUUID().toString()
         );
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
@@ -500,19 +521,21 @@ class LongExamServiceTest {
 
         String id = primaryStudyPackId.toString();
         assertThatThrownBy(() -> longExamService.startSession(id, userId, request))
-                .isInstanceOf(InvalidLongExamSourceException.class);
+            .isInstanceOf(InvalidLongExamSourceException.class);
     }
 
     @Test
     void pauseSession_inProgressSessionTransitionsToPaused() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.IN_PROGRESS, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.IN_PROGRESS,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamSessionResponse response = longExamService.pauseSession(sessionId, userId);
 
@@ -524,25 +547,29 @@ class LongExamServiceTest {
     void pauseSession_nonInProgressSessionThrows() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> longExamService.pauseSession(sessionId, userId))
-                .isInstanceOf(LongExamSessionNotPausableException.class);
+            .isInstanceOf(LongExamSessionNotPausableException.class);
     }
 
     @Test
     void resumeSession_pausedSessionTransitionsToInProgress() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamSessionResponse response = longExamService.resumeSession(sessionId, userId);
 
@@ -554,17 +581,19 @@ class LongExamServiceTest {
     void saveProgress_savesSelectedChoiceIntoSessionState() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.IN_PROGRESS, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.IN_PROGRESS,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamSessionResponse response = longExamService.saveProgress(
-                sessionId,
-                userId,
-                new LongExamProgressRequest(2, 1)
+            sessionId,
+            userId,
+            new LongExamProgressRequest(2, 1)
         );
 
         assertThat(response.currentQuestionIndex()).isEqualTo(2);
@@ -575,14 +604,16 @@ class LongExamServiceTest {
     void saveProgress_pausedSessionThrows() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.PAUSED,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
 
         LongExamProgressRequest request = new LongExamProgressRequest(0, 0);
         assertThatThrownBy(() -> longExamService.saveProgress(sessionId, userId, request))
-                .isInstanceOf(LongExamSessionNotInProgressException.class);
+            .isInstanceOf(LongExamSessionNotInProgressException.class);
     }
 
     @Test
@@ -590,25 +621,27 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS, List.of(
+        QuickReviewSessionEntity session = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS,
+            List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Cells", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), 1, "Cells", "Explanation"),
                 new QuizItem("Q3", List.of("A", "B", "C", "D"), 2, "Genetics", "Explanation")
-        ));
+            ));
         session.setId(sessionId);
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 0));
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 1, 0));
         session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 2, 2));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         LongExamMasteryReportResponse response = longExamService.completeSession(
-                sessionId,
-                userId,
-                new LongExamCompleteRequest(900)
+            sessionId,
+            userId,
+            new LongExamCompleteRequest(900)
         );
 
         assertThat(response.totalQuestions()).isEqualTo(3);
@@ -618,31 +651,34 @@ class LongExamServiceTest {
         assertThat(response.suggestedNextStep()).isEqualTo("Review weak domains and retry");
         assertThat(response.weakDomains()).containsExactly("Cells");
         assertThat(response.domainBreakdown())
-                .extracting(stat -> stat.domain() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
-                .containsExactly("Cells:1/2", "Genetics:1/1");
+            .extracting(stat -> stat.domain() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+            .containsExactly("Cells:1/2", "Genetics:1/1");
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
         assertThat(session.getDurationSeconds()).isEqualTo(900);
         assertThat(session.getSessionMetadata()).containsKeys(
-                "domainBreakdown",
-                "weakDomains",
-                "performanceSummary",
-                "suggestedNextStep"
+            "domainBreakdown",
+            "weakDomains",
+            "performanceSummary",
+            "suggestedNextStep"
         );
-        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_COMPLETED), eq(studyPackId), any());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_COMPLETED), eq(studyPackId),
+            any());
     }
 
     @Test
     void completeSession_forfeitedSessionThrows() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.FORFEITED, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, UUID.randomUUID(), QuickReviewSessionStatus.FORFEITED,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
 
         LongExamCompleteRequest request = new LongExamCompleteRequest(1);
         assertThatThrownBy(() -> longExamService.completeSession(sessionId, userId, request))
-                .isInstanceOf(LongExamSessionNotInProgressException.class);
+            .isInstanceOf(LongExamSessionNotInProgressException.class);
     }
 
     @Test
@@ -650,18 +686,21 @@ class LongExamServiceTest {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS, buildQuiz(20));
+        QuickReviewSessionEntity session = buildSession(userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS,
+            buildQuiz(20));
         session.setId(sessionId);
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
-                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId,
+            QuickReviewSessionMode.LONG_EXAM))
+            .thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         longExamService.forfeitSession(sessionId, userId);
 
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(session.getCompletedAt()).isNotNull();
-        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_FORFEITED), eq(studyPackId), any());
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_FORFEITED), eq(studyPackId),
+            any());
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId) {
@@ -678,11 +717,11 @@ class LongExamServiceTest {
         studyPack.setSummary("Summary");
         studyPack.setKeyConcepts(List.of("Cells", "Genetics"));
         studyPack.setQuiz(List.of(new QuizItem(
-                "Existing question",
-                List.of("A", "B", "C", "D"),
-                0,
-                "Cells",
-                "Explanation"
+            "Existing question",
+            List.of("A", "B", "C", "D"),
+            0,
+            "Cells",
+            "Explanation"
         )));
         return studyPack;
     }
@@ -699,10 +738,10 @@ class LongExamServiceTest {
     }
 
     private QuickReviewSessionEntity buildSession(
-            UUID userId,
-            UUID studyPackId,
-            QuickReviewSessionStatus status,
-            List<QuizItem> quiz
+        UUID userId,
+        UUID studyPackId,
+        QuickReviewSessionStatus status,
+        List<QuizItem> quiz
     ) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
@@ -727,11 +766,11 @@ class LongExamServiceTest {
         List<QuizItem> quiz = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
             quiz.add(new QuizItem(
-                    "Question " + index,
-                    List.of("A", "B", "C", "D"),
-                    index % 4,
-                    index % 2 == 0 ? "Cells" : "Genetics",
-                    "Explanation"
+                "Question " + index,
+                List.of("A", "B", "C", "D"),
+                index % 4,
+                index % 2 == 0 ? "Cells" : "Genetics",
+                "Explanation"
             ));
         }
         return quiz;
