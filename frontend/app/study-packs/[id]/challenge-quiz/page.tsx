@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EyeOff, Hourglass, ListChecks, Maximize2 } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
+import { useAppShellTitleOverride } from "@/components/app-shell-title-context";
 import { ExamTopBar } from "@/components/exam-mode/exam-top-bar";
 import { useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
 import { QuestionNavigator } from "@/components/exam-mode/question-navigator";
@@ -672,6 +673,7 @@ export default function ChallengeQuizPage() {
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
+  useAppShellTitleOverride(activeMode === BOARD_EXAM_MODE ? "Board Exam" : null);
 
   useEffect(() => {
     progressRef.current = {

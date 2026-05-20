@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemePreferenceSync } from "@/components/theme-preference-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
+import { AppShellTitleProvider } from "@/components/app-shell-title-context";
 import { ExamFocusProvider } from "@/components/exam-mode/exam-focus-context";
 import { RouteProgressProvider } from "@/components/navigation/route-progress-provider";
 import { DEFAULT_OG_IMAGE_ALT, DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
@@ -81,7 +82,9 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <RouteProgressProvider>
               <ExamFocusProvider>
-                <AppShell>{children}</AppShell>
+                <AppShellTitleProvider>
+                  <AppShell>{children}</AppShell>
+                </AppShellTitleProvider>
               </ExamFocusProvider>
             </RouteProgressProvider>
           </Suspense>
