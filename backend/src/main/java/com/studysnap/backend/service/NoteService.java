@@ -158,6 +158,10 @@ public class NoteService {
 
         NoteEntity saved = noteRepository.save(entity);
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
+        if (linkedStudyPack != null && !Objects.equals(linkedStudyPack.getSubject(), saved.getSubject())) {
+            linkedStudyPack.setSubject(saved.getSubject());
+            studyPackRepository.save(linkedStudyPack);
+        }
         return mapToResponse(saved, linkedStudyPack);
     }
 
