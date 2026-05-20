@@ -19,6 +19,7 @@ import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
+import { useAppShellTitleContext } from "@/components/app-shell-title-context";
 import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 import { cn } from "@/lib/utils";
@@ -123,6 +124,12 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.includes("/challenge-quiz")) {
     return "Challenge Quiz";
+  }
+  if (pathname.includes("/long-exam")) {
+    return "Long Exam";
+  }
+  if (pathname.includes("/interview-practice")) {
+    return "Interview Practice";
   }
   if (pathname === "/notes/new") {
     return "New Note";
@@ -476,7 +483,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }, [user.displayName, user.email, user.firstName]);
 
   const avatarLetter = avatarSeed.charAt(0).toUpperCase();
-  const pageTitle = getPageTitle(pathname || "");
+  const { titleOverride } = useAppShellTitleContext();
+  const pageTitle = titleOverride ?? getPageTitle(pathname || "");
   const showVerificationBanner = shouldUseShell && hasAuthUser && !user.emailVerifiedAt;
 
   const { isExamFocusActive } = useExamFocusContext();
