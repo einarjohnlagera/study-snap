@@ -18,6 +18,7 @@ import {
   type NoteResponse,
   type QuizItem,
 } from "@/lib/api";
+import { BackLink } from "@/components/ui/back-link";
 import { cn } from "@/lib/utils";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
@@ -234,9 +235,7 @@ export default function InterviewPracticePage() {
             Leave Practice
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" onClick={() => router.push(noteHref)}>
-            Back to Note
-          </Button>
+          <BackLink href={noteHref} label="Note" />
         )}
         {phase === "running" ? (
           <div className="text-right">
@@ -436,10 +435,7 @@ export default function InterviewPracticePage() {
             }}>
               Practice Again
             </Button>
-            <Button type="button" variant="outline" onClick={() => router.push(noteHref)}>
-              Back to Note
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => router.push("/dashboard")}>
+            <Button type="button" variant="secondary" onClick={() => router.push("/dashboard")}>
               Back to Dashboard
             </Button>
           </div>
