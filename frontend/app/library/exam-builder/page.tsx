@@ -592,6 +592,20 @@ export default function ExamBuilderPage() {
     () => new Set(flattenExamSectionQuestionRefs(exportableExamSections).map((questionRef) => questionRef.noteId)).size,
     [exportableExamSections],
   );
+  const examSectionQuestionBreakdown = useMemo(() => (
+    examSections.map((section, index) => ({
+      title: section.title.trim() || buildDefaultSectionTitle(index),
+      questionCount: countExamSectionQuestions([{
+        ...section,
+        entries: section.entries
+          .filter((entry) => Boolean(selectedNoteMetaById[entry.noteId]))
+          .map((entry) => ({
+            ...entry,
+            questionRefs: entry.questionRefs.map((questionRef) => ({ ...questionRef })),
+          })),
+      }]),
+    }))
+  ), [examSections, selectedNoteMetaById]);
 
   const questionBalanceMetadataByRefKey = useMemo(() => {
     return Object.fromEntries(
@@ -955,8 +969,8 @@ export default function ExamBuilderPage() {
                     </Button>
                   </div>
                   <div className="mt-3 space-y-1 text-xs text-foreground/65">
-                    <p><span className="font-medium text-foreground/80">Even Balance:</span> balances question counts only.</p>
-                    <p><span className="font-medium text-foreground/80">Smart Balance:</span> balances counts, topics, and section mix.</p>
+                    <p><span className="font-medium text-foreground/80">Even Balance:</span> Spreads questions equally across all sections.</p>
+                    <p><span className="font-medium text-foreground/80">Smart Balance:</span> Balances question counts and spreads topic diversity across sections, using each section&apos;s learning intent as a guide.</p>
                   </div>
                 </div>
               </div>
@@ -1051,6 +1065,13 @@ export default function ExamBuilderPage() {
                   ? "Select notes from your library to start building an exam."
                   : `${builderQuestionCount} question${builderQuestionCount === 1 ? "" : "s"} from ${builderUniqueNoteCount} note${builderUniqueNoteCount === 1 ? "" : "s"} across ${exportableExamSections.length} section${exportableExamSections.length === 1 ? "" : "s"}`}
             </p>
+            {selectedTemplate !== null && builderQuestionCount > 0 ? (
+              <p className="text-xs text-foreground/60">
+                {examSectionQuestionBreakdown
+                  .map((section) => `${section.title}: ${section.questionCount} question${section.questionCount === 1 ? "" : "s"}`)
+                  .join(" | ")}
+              </p>
+            ) : null}
             <p className="text-xs text-foreground/65">Keep editing, then export the combined DOCX when everything is ready.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">

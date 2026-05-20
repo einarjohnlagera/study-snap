@@ -99,6 +99,7 @@ export function RouteProgressProvider({
     if (!visible) {
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     finishProgress();
   }, [finishProgress, routeKey, visible]);
 

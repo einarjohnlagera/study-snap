@@ -42,12 +42,14 @@ Interaction:
   - only notes with a stored `generatedQuiz` can be selected for exam export
   - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
   - selected notes open `Exam Builder`, where teachers can:
+    - start from `Start Blank` with one `Untitled section`, or choose a structured template
     - organize notes into editable sections such as `Section A`, `Section B`, and `Section C`
     - reorder sections with a drag handle
     - drag notes within a section or move notes across sections
     - rebalance pooled quiz questions with either:
-      - `Even Balance` for deterministic equal counts only
-      - `Smart Balance` for deterministic section size, topic, and note-mix balancing with soft template guidance when available
+      - `Even Balance` to spread questions equally across all sections
+      - `Smart Balance` to balance question counts and spread topic diversity across sections, using each section's learning intent as a guide
+    - review a per-section question-count breakdown in the footer before export
     - keep `Move up` / `Move down` note controls as the accessibility fallback
     - remove notes or delete sections before export
     - export one combined DOCX exam that preserves section order and exact question grouping

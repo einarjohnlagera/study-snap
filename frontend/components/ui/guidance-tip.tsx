@@ -16,12 +16,15 @@ type GuidanceTipProps = Readonly<{
  * Fades in on first render, fades out on dismiss.
  */
 export function GuidanceTip({ tipId, message, className }: GuidanceTipProps) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => !hasSeenTip(tipId));
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
     if (!hasSeenTip(tipId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
+    } else {
+      setVisible(false);
     }
   }, [tipId]);
 

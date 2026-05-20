@@ -69,6 +69,7 @@ export function AppModal({
 
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTouchOffsetY(0);
       touchStartYRef.current = null;
       touchStartXRef.current = null;

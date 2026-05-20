@@ -123,9 +123,9 @@ describe("Exam Builder page", () => {
     expect(await screen.findByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Choose a template" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Start from Scratch Begin with one flexible section and build the rest your way." }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Blank Begin with one empty section. Add, rename, and reorder sections as you go." }));
 
-    expect(await screen.findByDisplayValue("Section A")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Untitled section")).toBeInTheDocument();
     expect(screen.getAllByText("10 questions")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Move Dosage Calculations up" }));
@@ -137,7 +137,7 @@ describe("Exam Builder page", () => {
       expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
         sections: [
           {
-            title: "Section A",
+            title: "Untitled section",
             questionRefs: Array.from({ length: 10 }, (_, questionIndex) => ({
               noteId: "note-77",
               questionIndex,
@@ -153,7 +153,7 @@ describe("Exam Builder page", () => {
   it("keeps the section title input focused while typing", async () => {
     render(<ExamBuilderPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start from Scratch Begin with one flexible section and build the rest your way." }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Blank Begin with one empty section. Add, rename, and reorder sections as you go." }));
 
     const input = await screen.findByLabelText("Section title 1");
     input.focus();

@@ -8,7 +8,7 @@ describe("LearnPage", () => {
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Learn How to Turn Notes Into Quizzes",
+        name: "Learn How to Turn Notes Into Quizzes and Interview Prep",
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("For Students")).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe("LearnPage", () => {
     expect(metadata).toMatchObject({
       title: "Study Guides — Turn Notes Into Quizzes | NoteLib",
       description:
-        "Study guides for students, board exam reviewees, and teachers who want to turn notes into reviewers, practice questions, and better exam prep.",
+        "Study guides for students, board exam reviewees, teachers, and professionals who want to turn notes into reviewers, practice questions, and better exam prep.",
       alternates: {
         canonical: "https://notelib.app/learn",
       },

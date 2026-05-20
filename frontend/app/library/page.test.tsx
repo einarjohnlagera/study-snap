@@ -462,6 +462,24 @@ describe("Library page", () => {
     expect(screen.getByRole("link", { name: "Try Demo" })).toBeInTheDocument();
   });
 
+  it("shows teacher-framed empty library copy without the demo action", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+    (listNotes as jest.Mock).mockResolvedValueOnce([]);
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Your note library is empty")).toBeInTheDocument();
+    expect(
+      screen.getByText("Create a note, generate a quiz, then export it as DOCX for your class. Build multi-note exams with Exam Builder."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Try Demo" })).not.toBeInTheDocument();
+  });
+
   it("enables teacher selection mode only for quiz-ready notes", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",

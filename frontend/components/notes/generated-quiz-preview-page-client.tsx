@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FileText, MoreHorizontal, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -9,6 +9,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { QuizExportModal, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -53,6 +54,8 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
+  const [regenerateMenuOpen, setRegenerateMenuOpen] = useState(false);
+  const regenerateMenuRef = useRef<HTMLDivElement | null>(null);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
   const loadPage = useCallback(async () => {
@@ -95,9 +98,36 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     return () => globalThis.clearTimeout(timeoutId);
   }, [toast]);
 
+  useEffect(() => {
+    if (!regenerateMenuOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!regenerateMenuRef.current || regenerateMenuRef.current.contains(event.target as Node)) {
+        return;
+      }
+      setRegenerateMenuOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setRegenerateMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [regenerateMenuOpen]);
+
   const noteTitle = note?.title?.trim() || "Untitled note";
   const authUser = getAuthUser();
   const canExportDocx = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
+  const generatedQuestionCount = generatedQuiz?.questions.length ?? 0;
+  const generatedQuestionCountLabel = `${generatedQuestionCount} question${generatedQuestionCount === 1 ? "" : "s"}`;
   const generatedAtLabel = useMemo(() => {
     if (!generatedQuiz?.generatedAt) {
       return null;
@@ -214,7 +244,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Quiz Preview</p>
-                <h1 className="text-2xl font-semibold sm:text-3xl">Quiz Preview</h1>
+                <h1 className="text-2xl font-semibold sm:text-3xl">{noteTitle}</h1>
                 <p className="text-sm text-foreground/75">
                   Review the generated quiz with answers and explanations before exporting it for class use.
                 </p>
@@ -222,7 +252,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                   <span className="rounded-full border border-blue-500/30 bg-blue-500/5 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
                     Generated Quiz - Ready for export
                   </span>
-                  <span className="text-sm text-foreground/70">{noteTitle}</span>
+                  <span className="text-xs text-foreground/65">{generatedQuestionCountLabel}</span>
                 </div>
                 {generatedAtLabel ? (
                   <p className="text-xs text-foreground/60">Generated {generatedAtLabel}</p>
@@ -241,18 +271,45 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     <span>Export</span>
                   </Button>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 justify-start gap-2 px-2 text-foreground/70 sm:justify-center"
-                  onClick={() => setShowRegenerateConfirm(true)}
-                  loading={regenerating}
-                  loadingText="Regenerating..."
-                >
-                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  <span>Regenerate</span>
-                </Button>
+                <div className="relative" ref={regenerateMenuRef}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-10 p-0"
+                    onClick={() => setRegenerateMenuOpen((previous) => !previous)}
+                    disabled={regenerating}
+                    aria-label="More quiz actions"
+                    aria-haspopup="menu"
+                    aria-expanded={regenerateMenuOpen}
+                  >
+                    {regenerating ? <LoadingSpinner /> : <MoreHorizontal className="h-4 w-4" aria-hidden="true" />}
+                    <span className="sr-only">More</span>
+                  </Button>
+                  {regenerateMenuOpen ? (
+                    <div
+                      role="menu"
+                      aria-label="Quiz actions"
+                      className="fixed inset-x-4 bottom-4 z-50 overflow-hidden rounded-2xl border border-border bg-background shadow-xl sm:absolute sm:bottom-auto sm:inset-x-auto sm:right-0 sm:top-full sm:mt-1 sm:min-w-48 sm:rounded-md sm:shadow-md"
+                    >
+                      <div className="p-2 sm:p-1">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="motion-lift flex w-full items-center gap-2 rounded-lg px-3 py-3 text-left text-sm font-medium transition-colors hover:bg-highlight active:bg-highlight-strong disabled:cursor-not-allowed disabled:opacity-50 sm:rounded sm:py-2"
+                          onClick={() => {
+                            setRegenerateMenuOpen(false);
+                            setShowRegenerateConfirm(true);
+                          }}
+                          disabled={regenerating}
+                        >
+                          {regenerating ? <LoadingSpinner /> : <RotateCcw className="h-4 w-4" aria-hidden="true" />}
+                          <span>{regenerating ? "Regenerating..." : "Regenerate quiz"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </Card>

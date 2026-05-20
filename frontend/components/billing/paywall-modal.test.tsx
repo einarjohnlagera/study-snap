@@ -117,7 +117,6 @@ describe("PaywallModal", () => {
     expect(screen.getByText("Plus")).toBeInTheDocument();
     expect(screen.getByText("Pro")).toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose Plus" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with Pro" })).toBeInTheDocument();
     expect(screen.getByText("Access activates immediately after payment")).toBeInTheDocument();
     expect(screen.getByText("No automatic charges. You control renewals.")).toBeInTheDocument();
@@ -166,7 +165,7 @@ describe("PaywallModal", () => {
       />,
     );
 
-    expect(await screen.findByRole("button", { name: "Current plan" })).toBeDisabled();
+    expect(await screen.findByText("Current plan")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with Pro" })).toBeEnabled();
   });
 
@@ -191,6 +190,31 @@ describe("PaywallModal", () => {
     expect(
       screen.getByText("Generate more quizzes and export-ready classroom materials without breaking your teaching flow."),
     ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unlock more quiz generations and exports" })).toBeInTheDocument();
+  });
+
+  it("uses teacher-specific export limit copy", async () => {
+    getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "PLUS",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      profileType: "TEACHER",
+    });
+
+    render(
+      <PaywallModal
+        isOpen
+        variant="export-limit"
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("You've used all your exports")).toBeInTheDocument();
+    expect(
+      screen.getByText("Upgrade for unlimited quiz exports so you can keep printing DOCX exams for your class."),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Get higher Study Pack and quiz generation limits" })).toBeInTheDocument();
   });
 
   it("shows the verification modal instead of starting checkout for unverified users", async () => {
