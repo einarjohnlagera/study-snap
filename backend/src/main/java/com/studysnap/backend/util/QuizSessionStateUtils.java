@@ -25,6 +25,7 @@ public class QuizSessionStateUtils {
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
     private static final String TIME_SPENT_SECONDS_KEY = "timeSpentSeconds";
+    public static final String SESSION_STATE_POOL_SOURCED = "poolSourced";
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
         List<QuizItem> existing = extractQuiz(sessionState);
@@ -78,6 +79,26 @@ public class QuizSessionStateUtils {
         state.put(SELECTED_CHOICES_KEY, Map.of());
         state.put(TIME_SPENT_SECONDS_KEY, Map.of());
         return state;
+    }
+
+    public Map<String, Object> withPoolSourced(Map<String, Object> sessionState, boolean poolSourced) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        state.put(SESSION_STATE_POOL_SOURCED, poolSourced);
+        return state;
+    }
+
+    public boolean extractPoolSourced(Map<String, Object> sessionState) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return false;
+        }
+        Object raw = sessionState.get(SESSION_STATE_POOL_SOURCED);
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        return raw instanceof String value && Boolean.parseBoolean(value);
     }
 
     public Map<String, Object> withInterviewAnswer(

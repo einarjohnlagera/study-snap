@@ -56,6 +56,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -133,6 +134,7 @@ public class LongExamService {
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final AsyncTaskExecutor studyPackGenerationTaskExecutor;
+    private final ExamQuestionPoolService examQuestionPoolService;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LongExamStartResponse startSession(String studyPackIdRaw, UUID userId, LongExamStartRequest request) {
@@ -146,6 +148,8 @@ public class LongExamService {
         int questionCount = resolveQuestionCount(userId);
         List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
         AtomicBoolean createdSession = new AtomicBoolean(false);
+        AtomicBoolean poolSourcedSession = new AtomicBoolean(false);
+        LearnerLevel learnerLevel = resolveLearnerLevel(userId);
 
         QuickReviewSessionEntity session = studyPackGenerationTransactionOperations.execute(status -> {
             StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
@@ -168,6 +172,37 @@ public class LongExamService {
                     additionalStudyPackIds,
                     questionCount
             );
+            if (additionalStudyPackIds.isEmpty()) {
+                Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
+                        studyPackId,
+                        ExamQuestionPoolService.MODE_LONG_EXAM,
+                        questionCount,
+                        learnerLevel
+                );
+                if (pooledQuestions.isPresent()) {
+                    QuickReviewSessionEntity poolSession = buildGeneratingSession(
+                            userId,
+                            studyPack,
+                            difficulty,
+                            questionCount,
+                            sourceNoteRefs
+                    );
+                    markSessionReady(poolSession, pooledQuestions.get(), difficulty);
+                    poolSession.setSessionState(QuizSessionStateUtils.withPoolSourced(
+                            poolSession.getSessionState(),
+                            true
+                    ));
+                    QuickReviewSessionEntity saved = quickReviewSessionRepository.save(poolSession);
+                    trackAnalytics(userId, AnalyticsEventType.LONG_EXAM_STARTED, saved.getStudyPackId(), Map.of(
+                            ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                            ANALYTICS_METADATA_QUESTION_COUNT, pooledQuestions.get().size(),
+                            ANALYTICS_METADATA_DIFFICULTY, difficulty
+                    ));
+                    createdSession.set(true);
+                    poolSourcedSession.set(true);
+                    return saved;
+                }
+            }
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(buildGeneratingSession(
                     userId,
                     studyPack,
@@ -184,6 +219,10 @@ public class LongExamService {
         }
         if (createdSession.get()) {
             userUsageService.incrementLongExamGeneration(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        }
+        if (createdSession.get() && !poolSourcedSession.get() && additionalStudyPackIds.isEmpty()) {
+            studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                    .ifPresent(studyPack -> examQuestionPoolService.initiatePool(studyPack, userId));
         }
         return buildStartResponse(session);
     }
@@ -339,6 +378,13 @@ public class LongExamService {
         session.setSessionMetadata(buildMasteryReportMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        if (QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
+            examQuestionPoolService.markServed(
+                    saved.getStudyPackId(),
+                    ExamQuestionPoolService.MODE_LONG_EXAM,
+                    quiz
+            );
+        }
         trackAnalytics(userId, AnalyticsEventType.LONG_EXAM_COMPLETED, saved.getStudyPackId(), Map.of(
                 ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                 ANALYTICS_METADATA_QUESTION_COUNT, statistics.totalQuestions(),
@@ -373,14 +419,18 @@ public class LongExamService {
     }
 
     private int resolveQuestionCount(UUID userId) {
-        LearnerLevel learnerLevel = userRepository.findById(userId)
-                .map(UserEntity::getLearnerLevel)
-                .orElse(null);
+        LearnerLevel learnerLevel = resolveLearnerLevel(userId);
         return switch (learnerLevel == null ? LearnerLevel.COLLEGE : learnerLevel) {
             case GRADE_SCHOOL, JUNIOR_HIGH -> properties.getPricing().getLongExamLowTierCount();
             case BOARD_EXAM_REVIEW, PROFESSIONAL -> properties.getPricing().getLongExamHighTierCount();
             case SENIOR_HIGH, COLLEGE, PERSONAL_LEARNING -> properties.getPricing().getLongExamMidTierCount();
         };
+    }
+
+    private LearnerLevel resolveLearnerLevel(UUID userId) {
+        return userRepository.findById(userId)
+                .map(UserEntity::getLearnerLevel)
+                .orElse(null);
     }
 
     private int assertLongExamQuotaAvailable(UUID userId, PlanType planType) {

@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -80,11 +81,15 @@ class ChallengeQuizServiceTest {
     private ActivityTrackingService activityTrackingService;
     @Mock
     private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private ExamQuestionPoolService examQuestionPoolService;
 
     private ChallengeQuizService challengeQuizService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
+                .thenReturn(Optional.empty());
         challengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
                 quickReviewSessionRepository,
@@ -98,7 +103,8 @@ class ChallengeQuizServiceTest {
                 analyticsService,
                 aiRateLimitService,
                 activityTrackingService,
-                generationContextResolver
+                generationContextResolver,
+                examQuestionPoolService
         );
     }
 
@@ -414,6 +420,68 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void startSession_usesReadyPoolForBoardExamWithoutLiveGeneration() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                studyPack.getSubject(),
+                List.of()
+        );
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
+        when(examQuestionPoolService.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_BOARD_EXAM,
+                12,
+                LearnerLevel.COLLEGE
+        )).thenReturn(Optional.of(buildQuiz(12)));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                studyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest(null, "board_exam")
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.mode()).isEqualTo("board_exam");
+        assertThat(response.quiz()).hasSize(12);
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(userUsageService).incrementBoardExamGeneration(eq(userId), any(OffsetDateTime.class));
+    }
+
+    @Test
     void startSession_blocksBoardExamWhenBoardExamHardCapReached() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -533,7 +601,8 @@ class ChallengeQuizServiceTest {
                 analyticsService,
                 aiRateLimitService,
                 activityTrackingService,
-                generationContextResolver
+                generationContextResolver,
+                examQuestionPoolService
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -999,5 +1068,19 @@ class ChallengeQuizServiceTest {
         ))
                 .isInstanceOf(InvalidChallengeQuizModeException.class)
                 .hasMessage("Challenge Quiz mode must be challenge or board_exam.");
+    }
+
+    private List<QuizItem> buildQuiz(int count) {
+        java.util.ArrayList<QuizItem> quiz = new java.util.ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            quiz.add(new QuizItem(
+                    "Question " + index,
+                    List.of("A", "B", "C", "D"),
+                    index % 4,
+                    "Concept",
+                    "Explanation"
+            ));
+        }
+        return quiz;
     }
 }

@@ -41,6 +41,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 @Service
@@ -57,7 +58,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
-    private static final int PARALLEL_BUFFER = 6;
+    private static final int PARALLEL_BUFFER = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
     private static final int MAX_LOG_VALUE_LENGTH = 80;
@@ -1366,7 +1367,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 taskExecutor::execute
         );
         try {
-            CompletableFuture.allOf(firstBatch, secondBatch).join();
+            CompletableFuture.allOf(firstBatch, secondBatch).orTimeout(240, TimeUnit.SECONDS).join();
             List<QuizItem> batch1 = firstBatch.get();
             List<QuizItem> batch2 = secondBatch.get();
             List<QuizItem> uniqueBatch2 = QuizDeduplicationUtils.uniqueQuestions(
