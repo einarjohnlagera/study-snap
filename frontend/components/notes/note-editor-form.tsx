@@ -230,6 +230,7 @@ export function NoteEditorForm({
     }, [autoFocusImport, disableContentEditing, importFileInputKey]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setOptionalDetailsOpen(!collapseOptionalDetailsByDefault);
     }, [collapseOptionalDetailsByDefault]);
 
@@ -237,6 +238,7 @@ export function NoteEditorForm({
         if (revealOptionalDetailsSignal <= 0) {
             return;
         }
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setOptionalDetailsOpen(true);
         const timeoutId = globalThis.setTimeout(() => {
             const optionalDetailsSection = optionalDetailsSectionRef.current;

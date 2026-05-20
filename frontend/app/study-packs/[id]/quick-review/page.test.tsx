@@ -398,7 +398,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 
-  it("uses Practice Again as the primary next step when weak practice is locked", async () => {
+  it("uses Retry Quick Review as the primary next step when weak practice is locked", async () => {
     setupCompleteState({ adaptivePracticeAvailable: false });
     render(<QuickReviewPage />);
 
@@ -407,7 +407,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
 
-    expect(screen.getByRole("button", { name: "Practice Again" })).toHaveClass("bg-primary");
+    expect(screen.getByRole("button", { name: "Retry Quick Review" })).toHaveClass("bg-primary");
     expect(screen.getByRole("button", { name: "Go Pro for Adaptive Practice" })).toHaveClass("border");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });

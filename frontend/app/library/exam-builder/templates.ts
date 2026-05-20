@@ -20,9 +20,9 @@ export type ExamTemplateDefinition = {
 export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
   {
     id: "SCRATCH",
-    title: "Start from Scratch",
-    description: "Begin with one flexible section and build the rest your way.",
-    sectionTitles: ["Section A"],
+    title: "Start Blank",
+    description: "Begin with one empty section. Add, rename, and reorder sections as you go.",
+    sectionTitles: ["Untitled section"],
     sectionIntents: ["FLEXIBLE"],
   },
   {

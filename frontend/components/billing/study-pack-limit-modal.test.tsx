@@ -26,13 +26,12 @@ describe("StudyPackLimitModal", () => {
 
     expect(screen.getByText("You’ve reached your study pack limit")).toBeInTheDocument();
     expect(screen.getByText(/Upgrade for more Study Packs/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upgrade to Plus" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go Pro" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "View My Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get More Study Packs" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Go Pro" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
   });
 
-  it("routes free-plan upgrade CTAs to /settings?section=plans and View My Plan to plan-billing hash", () => {
+  it("routes free-plan upgrade CTA to /settings?section=plans", () => {
     const onClose = jest.fn();
     render(
       <StudyPackLimitModal
@@ -43,12 +42,8 @@ describe("StudyPackLimitModal", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get More Study Packs" }));
     expect(pushMock).toHaveBeenCalledWith("/settings?section=plans");
-
-    pushMock.mockReset();
-    fireEvent.click(screen.getByRole("button", { name: "View My Plan" }));
-    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 
   it("renders the plus-plan limit copy with single Upgrade to Pro CTA", () => {
@@ -62,7 +57,7 @@ describe("StudyPackLimitModal", () => {
     );
 
     expect(screen.getByText("You’ve reached your study pack limit for Plus")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upgrade to Pro" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get More Study Packs" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Go Pro" })).not.toBeInTheDocument();
   });
 
@@ -81,7 +76,6 @@ describe("StudyPackLimitModal", () => {
     expect(screen.queryByRole("button", { name: "Upgrade to Plus" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upgrade to Pro" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Go Pro" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "View My Plan" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Got It" })).toBeInTheDocument();
   });
 });

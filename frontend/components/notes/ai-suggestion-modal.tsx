@@ -177,6 +177,7 @@ export function AiSuggestionModal({
     if (!open) {
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelection(resolveAiSuggestionSelectionDefaults(
       { title: currentTitle, subject: currentSubject, tags: currentTags },
       { title: suggestedTitle, subject: suggestedSubject, tags: suggestedTags },

@@ -722,13 +722,23 @@ export default function DashboardPage() {
                   onOpenPreferences={handleOpenPreferences}
                 />
               ) : null}
+              <TeacherReadyToExportSection items={teacherGeneratedQuizzes} />
+              <TeacherGeneratedQuizSection
+                items={recentTeacherGeneratedQuizzes}
+                emptyActionHref={teacherGeneratedQuizEmptyAction.href}
+                emptyActionLabel={teacherGeneratedQuizEmptyAction.label}
+                emptyActionIcon={teacherGeneratedQuizEmptyAction.icon}
+              />
               {items.length === 0 ? (
                 <Card className="space-y-4 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Start your teaching workspace</h2>
                   <p className="max-w-2xl text-sm text-foreground/75">
-                    Create a note first. Once the Study Pack is ready, generate a quiz and review it in Quiz Preview before export.
+                    Create a note, generate a quiz, then export it as DOCX for your class. Use Exam Builder to combine multiple notes into a single exam.
                   </p>
-                  <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />
+                    <ResponsiveActionLink href="/library" action="library" label="Open Library" variant="outline" className="w-full sm:w-auto" />
+                  </div>
                 </Card>
               ) : (
                 <StudyPackGrid
@@ -742,13 +752,6 @@ export default function DashboardPage() {
                   draftStatusLabel="Draft"
                 />
               )}
-              <TeacherGeneratedQuizSection
-                items={recentTeacherGeneratedQuizzes}
-                emptyActionHref={teacherGeneratedQuizEmptyAction.href}
-                emptyActionLabel={teacherGeneratedQuizEmptyAction.label}
-                emptyActionIcon={teacherGeneratedQuizEmptyAction.icon}
-              />
-              <TeacherReadyToExportSection items={teacherGeneratedQuizzes} />
               <TeacherTipsCard />
             </>
           ) : null}

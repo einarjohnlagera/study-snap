@@ -43,10 +43,9 @@ export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMini
   );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [completed, setCompleted] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAuthUser());
 
   useEffect(() => {
-    setIsAuthenticated(!!getAuthUser());
     const syncAuth = () => setIsAuthenticated(!!getAuthUser());
     globalThis.addEventListener("studysnap-auth-change", syncAuth);
     return () => globalThis.removeEventListener("studysnap-auth-change", syncAuth);

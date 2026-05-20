@@ -229,7 +229,7 @@ describe("DashboardPage profile variants", () => {
       productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
       studyPackCount: 2,
       profileType: "BOARD_EXAM",
-      examDate: "2026-05-15",
+      examDate: "2099-05-15",
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
@@ -429,7 +429,7 @@ describe("DashboardPage profile variants", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("You don't have any Study Packs yet")).toBeInTheDocument();
+    expect(await screen.findByText("Start studying smarter")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
   });
 });

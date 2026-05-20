@@ -15,9 +15,9 @@ Core lifecycle:
 Teacher Dashboard should feed that lifecycle, not replace the shared note product.
 
 - `Create Teaching Material`
-- `Recent Notes`
-- `Recently Generated Quizzes`
 - `Ready to Export`
+- `Recently Generated Quizzes`
+- `Recent Notes`
 - `Teacher Help / Tips`
 
 ## Ownership Model
@@ -57,7 +57,10 @@ Do not mix these models.
   - secondary: `Regenerate`
 - Helper copy: `Already generated a quiz? Regenerate to create a new version (costs 1 credit).`
 - `View Quiz` opens a dedicated Quiz Preview page
-- Quiz Preview is read-only and shows:
+- Quiz Preview is read-only and uses the note title as the page heading under the `Quiz Preview` eyebrow.
+- Quiz Preview shows:
+  - `Generated Quiz - Ready for export`
+  - question count
   - question text
   - choices
   - correct answer clearly highlighted
@@ -67,6 +70,8 @@ Do not mix these models.
 
 - Export belongs only inside Quiz Preview
 - Place Export in the top-right of the Quiz Preview header
+- Export is the only primary action in the Quiz Preview header
+- Regenerate lives in the Quiz Preview overflow menu and still opens the confirmation flow
 - Export uses stored `generatedQuiz` data only and must not call LLMs
 - Export format for Teacher Flow is `DOCX`
 - Export options:
@@ -81,10 +86,18 @@ Do not mix these models.
   - choose multiple quiz-ready notes
   - organize notes into editable sections inside `Exam Builder`
   - reorder sections and move notes across sections using the drag handles
-  - rebalance the pooled questions with either `Even Balance` (counts only) or `Smart Balance` (counts, topic spread, note mix, and soft template guidance) without generating new questions
+  - choose `Start Blank` for one `Untitled section`, or choose a structured preset
+  - rebalance the pooled questions with either `Even Balance` (spreads questions equally across all sections) or `Smart Balance` (balances question counts and spreads topic diversity across sections, using each section's learning intent as a guide) without generating new questions
+  - review the footer breakdown by section before export
   - keep note-level `Move up` / `Move down` controls as the accessibility fallback
   - export one combined DOCX with optional `Answer Key` and `Explanations`
   - combined DOCX export preserves the section titles, section order, and question-level balanced grouping chosen in the builder
+
+## Upgrade Copy
+
+- Teacher quiz-generation and export-limit upgrade CTAs use teacher-specific labels from `getUpgradeCtas`.
+- Teacher export-limit copy frames the upgrade around unlimited DOCX quiz exports for class use.
+- Student, Board Exam, and Professional paywall copy remains profile-specific to those flows.
 
 ## UI Rules
 

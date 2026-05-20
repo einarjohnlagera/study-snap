@@ -11,6 +11,7 @@ import {
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
   type PlanType,
+  type ProfileType,
 } from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { formatBillingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
@@ -27,7 +28,7 @@ import {
 } from "@/lib/paywall-upgrade-context";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
-import { PLANS } from "@/src/config/plans";
+import { getUpgradeCtas, PLANS, type AppPlanType, type UpgradeCtaContext } from "@/src/config/plans";
 
 type PaywallModalProps = {
   isOpen: boolean;
@@ -69,6 +70,22 @@ function resolvePaywallContext(
   return {
     type: resolvePaywallContextTypeFromVariant(variant ?? "adaptive-practice"),
   };
+}
+
+function resolveTeacherUpgradeCtaContext(
+  contextType: PaywallContext["type"],
+  profileType: ProfileType | null | undefined,
+): UpgradeCtaContext | undefined {
+  if (profileType !== "TEACHER") {
+    return undefined;
+  }
+  if (contextType === "QUIZ_GENERATION_LIMIT" || contextType === "QUIZ_LIMIT") {
+    return "teacher-quiz-limit";
+  }
+  if (contextType === "EXPORT_LIMIT") {
+    return "teacher-export-limit";
+  }
+  return undefined;
 }
 
 function PlanCard({
@@ -156,6 +173,7 @@ export function PaywallModal({
   const [selectedPlan, setSelectedPlan] = useState<"PLUS" | "PRO">("PRO");
   const authUser = getAuthUser();
   const currentPlan = authUser?.planType ?? "FREE";
+  const appCurrentPlan: AppPlanType = currentPlan === "PLUS" || currentPlan === "PRO" ? currentPlan : "FREE";
   const normalizedContext = useMemo(
     () => resolvePaywallContext(context, variant),
     [context, variant],
@@ -163,6 +181,14 @@ export function PaywallModal({
   const presentation = useMemo(
     () => resolvePaywallPresentation(normalizedContext.type, currentPlan, authUser?.profileType),
     [authUser?.profileType, currentPlan, normalizedContext.type],
+  );
+  const teacherUpgradeCtaContext = useMemo(
+    () => resolveTeacherUpgradeCtaContext(normalizedContext.type, authUser?.profileType),
+    [authUser?.profileType, normalizedContext.type],
+  );
+  const teacherUpgradeCtas = useMemo(
+    () => teacherUpgradeCtaContext ? getUpgradeCtas(appCurrentPlan, teacherUpgradeCtaContext) : null,
+    [appCurrentPlan, teacherUpgradeCtaContext],
   );
   const { billingPricing } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
@@ -182,6 +208,9 @@ export function PaywallModal({
       setSelectedPlan("PRO");
       return;
     }
+    if (teacherUpgradeCtas?.primary?.targetPlan) {
+      setSelectedPlan(teacherUpgradeCtas.primary.targetPlan);
+    }
     if (hasTrackedOpenRef.current) {
       return;
     }
@@ -197,7 +226,7 @@ export function PaywallModal({
         remaining: normalizedContext.remaining ?? null,
       },
     });
-  }, [currentPlan, isOpen, normalizedContext.remaining, normalizedContext.type, pathname, presentation.feature, source]);
+  }, [currentPlan, isOpen, normalizedContext.remaining, normalizedContext.type, pathname, presentation.feature, source, teacherUpgradeCtas?.primary?.targetPlan]);
 
   const handleDismiss = () => {
     void trackAnalyticsEvent({
@@ -276,6 +305,14 @@ export function PaywallModal({
   };
 
   const isProUser = currentPlan === "PRO";
+  const selectedTeacherCta = teacherUpgradeCtas
+    ? selectedPlan === teacherUpgradeCtas.primary?.targetPlan
+      ? teacherUpgradeCtas.primary
+      : selectedPlan === teacherUpgradeCtas.secondary?.targetPlan
+        ? teacherUpgradeCtas.secondary
+        : null
+    : null;
+  const checkoutCtaLabel = selectedTeacherCta?.label ?? `Continue with ${PLANS[selectedPlan].name}`;
 
   return (
     <>
@@ -308,7 +345,7 @@ export function PaywallModal({
                   loadingText="Redirecting..."
                   disabled={!!startingCheckoutPlan}
                 >
-                  Continue with {PLANS[selectedPlan].name}
+                  {checkoutCtaLabel}
                 </Button>
               )}
             </div>

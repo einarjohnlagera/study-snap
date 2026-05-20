@@ -235,6 +235,7 @@ export default function LibraryPage() {
 
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
+  const isTeacherProfile = authUser?.profileType === "TEACHER";
   const showQuizReadyIndicators = shouldShowQuizReadyIndicator(
     authUser?.profileType,
     "PRIVATE_LIBRARY",
@@ -600,11 +601,15 @@ export default function LibraryPage() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h2 className="text-xl font-semibold">Your note library is empty</h2>
           <p className="text-sm text-foreground/75">
-            Create a note to get started — generate a Study Pack and quiz yourself in minutes.
+            {isTeacherProfile
+              ? "Create a note, generate a quiz, then export it as DOCX for your class. Build multi-note exams with Exam Builder."
+              : "Create a note to get started — generate a Study Pack and quiz yourself in minutes."}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />
-            <ResponsiveActionLink href="/demo" action="open" label="Try Demo" variant="outline" className="w-full sm:w-auto" />
+            {!isTeacherProfile ? (
+              <ResponsiveActionLink href="/demo" action="open" label="Try Demo" variant="outline" className="w-full sm:w-auto" />
+            ) : null}
           </div>
         </Card>
       ) : (

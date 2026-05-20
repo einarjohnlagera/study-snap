@@ -182,10 +182,26 @@ export type UpgradeCtaSet = {
   secondary: UpgradeCta | null;
 };
 
-export type UpgradeCtaContext = "study-pack-limit" | "adaptive-practice" | "interview-practice" | "general";
+export type UpgradeCtaContext =
+  | "study-pack-limit"
+  | "adaptive-practice"
+  | "interview-practice"
+  | "teacher-quiz-limit"
+  | "teacher-export-limit"
+  | "general";
+
+function isTeacherUpgradeContext(context: UpgradeCtaContext | undefined): boolean {
+  return context === "teacher-quiz-limit" || context === "teacher-export-limit";
+}
 
 export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaContext): UpgradeCtaSet {
   if (currentPlan === "FREE") {
+    if (isTeacherUpgradeContext(context)) {
+      return {
+        primary: { label: "Unlock more quiz generations and exports", targetPlan: "PLUS" },
+        secondary: { label: "Go Pro", targetPlan: "PRO" },
+      };
+    }
     if (context === "adaptive-practice") {
       return {
         primary: { label: "Unlock Adaptive Practice", targetPlan: "PLUS" },
@@ -210,6 +226,12 @@ export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaCon
     };
   }
   if (currentPlan === "PLUS") {
+    if (isTeacherUpgradeContext(context)) {
+      return {
+        primary: { label: "Get higher Study Pack and quiz generation limits", targetPlan: "PRO" },
+        secondary: null,
+      };
+    }
     if (context === "interview-practice") {
       return {
         primary: { label: "Unlock Interview Practice", targetPlan: "PRO" },

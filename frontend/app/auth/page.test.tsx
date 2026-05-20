@@ -104,12 +104,10 @@ describe("AuthPage", () => {
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
   });
 
-  it("shows a clear Google configuration error when unavailable", () => {
+  it("disables Google login when it is not configured", () => {
     render(<AuthPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
-
-    expect(screen.getByText("Google login is not configured yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeDisabled();
   });
 
   it("redirects a normal successful login to the dashboard", async () => {

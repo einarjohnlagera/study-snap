@@ -12,6 +12,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNoteBySeoPath: jest.fn(),
+  getServerPublicNotesBySubjectSlug: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock("@/components/notes/public-note-ownership-actions", () => ({

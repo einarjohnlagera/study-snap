@@ -49,8 +49,6 @@ export function ProfileNotePerformance() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError(null);
 
     getUserNotePerformanceSummary(NOTE_PERFORMANCE_LIMIT)
       .then((result) => {

@@ -145,10 +145,11 @@ describe("GeneratedQuizPreviewPageClient", () => {
   it("renders the generated quiz with answers visible", async () => {
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
-    expect(await screen.findByRole("heading", { name: "Quiz Preview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Teacher Note" })).toBeInTheDocument();
     expect(await screen.findByText("What is the nucleus?")).toBeInTheDocument();
-    expect(screen.getByText("Teacher Note")).toBeInTheDocument();
+    expect(screen.getByText("Quiz Preview")).toBeInTheDocument();
     expect(screen.getByText("Generated Quiz - Ready for export")).toBeInTheDocument();
+    expect(screen.getByText("1 question")).toBeInTheDocument();
     expect(screen.getByText("✓ Correct")).toBeInTheDocument();
     expect(screen.getByText("The nucleus controls cell activity.")).toBeInTheDocument();
   });
@@ -182,7 +183,8 @@ describe("GeneratedQuizPreviewPageClient", () => {
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
     await screen.findByText("What is the nucleus?");
-    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    fireEvent.click(screen.getByRole("button", { name: "More quiz actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate quiz" }));
     expect(screen.getByText("Regenerate quiz?")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
 
@@ -227,10 +229,11 @@ describe("GeneratedQuizPreviewPageClient", () => {
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
     await screen.findByText("What is the nucleus?");
-    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    fireEvent.click(screen.getByRole("button", { name: "More quiz actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate quiz" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz generation limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You've reached your quiz generation limit" })).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
   });
 });
