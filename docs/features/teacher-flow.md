@@ -97,10 +97,19 @@ Do not mix these models.
   - export one combined DOCX with optional `Answer Key` and `Explanations`
   - combined DOCX export preserves the section titles, section order, and question-level balanced grouping chosen in the builder
 
+## Plan Accessibility
+
+`docs/product/PLANS.md` is the source of truth for the Teacher Profile DOCX Export Override.
+
+- Teacher Flow DOCX exports are profile-aware: Free Teachers get `10` DOCX exports per month, Plus Teachers get unlimited DOCX exports, and Pro remains unlimited.
+- The override is DOCX-only because DOCX export is the terminal Teacher Flow action and uses stored `generatedQuiz` data without LLM cost.
+- PDF export limits stay on the standard plan quota for every profile.
+- Settings -> Plan & Billing must show resolved DOCX and PDF export limits separately so teachers can see the override without client-side quota recomputation.
+
 ## Upgrade Copy
 
 - Teacher quiz-generation and export-limit upgrade CTAs use teacher-specific labels from `getUpgradeCtas`.
-- Teacher export-limit copy frames the upgrade around unlimited DOCX quiz exports for class use.
+- Teacher export-limit copy frames the upgrade around DOCX quiz export headroom for class use.
 - Student, Board Exam, and Professional paywall copy remains profile-specific to those flows.
 
 ## UI Rules

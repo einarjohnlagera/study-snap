@@ -123,9 +123,9 @@ public class GeneratedQuizService {
 
     public QuizDocxExportService.QuizDocxFile exportDocx(String quizIdRaw, UUID userId, QuizDocxExportMode mode) {
         authService.requireEmailVerified(userId);
-        assertTeacherExportAllowed(userId);
+        UserEntity exportUser = requireTeacherExportUser(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
-        exportUsageProtectionService.assertQuotaAvailable(userId, planType);
+        exportUsageProtectionService.assertDocxQuotaAvailable(userId, planType, exportUser.getProfileType());
         UUID quizId = parseQuizId(quizIdRaw);
         GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)
                 .orElseThrow(GeneratedQuizNotFoundException::new);
@@ -137,7 +137,7 @@ public class GeneratedQuizService {
                 generatedQuiz.getQuestions()
         );
         byte[] content = quizDocxExportService.exportQuizToDocx(exportableQuiz, mode);
-        exportUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        exportUsageProtectionService.recordDocxUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
                 quizDocxExportService.buildFilename(note.getTitle(), mode),
                 content
@@ -151,9 +151,9 @@ public class GeneratedQuizService {
             boolean includeExplanations
     ) {
         authService.requireEmailVerified(userId);
-        assertTeacherExportAllowed(userId);
+        UserEntity exportUser = requireTeacherExportUser(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
-        exportUsageProtectionService.assertQuotaAvailable(userId, planType);
+        exportUsageProtectionService.assertDocxQuotaAvailable(userId, planType, exportUser.getProfileType());
 
         List<ExportSectionRequest> requestedSections = parseSectionRequests(sections);
         List<UUID> noteIds = requestedSections.stream()
@@ -190,7 +190,7 @@ public class GeneratedQuizService {
                 exportableSections,
                 new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations)
         );
-        exportUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        exportUsageProtectionService.recordDocxUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
                 quizDocxExportService.buildCombinedFilename(includeAnswerKey, includeExplanations),
                 content
@@ -305,11 +305,11 @@ public class GeneratedQuizService {
         );
     }
 
-    private void assertTeacherExportAllowed(UUID userId) {
+    private UserEntity requireTeacherExportUser(UUID userId) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(GeneratedQuizExportNotAllowedException::new);
         if (user.getRole() == UserRole.ADMIN || user.getProfileType() == ProfileType.TEACHER) {
-            return;
+            return user;
         }
         throw new GeneratedQuizExportNotAllowedException();
     }

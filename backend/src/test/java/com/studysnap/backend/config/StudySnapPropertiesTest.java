@@ -1,5 +1,7 @@
 package com.studysnap.backend.config;
 
+import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,5 +20,24 @@ class StudySnapPropertiesTest {
         assertThat(properties.getLimits().getTxtUploadMaxSizeBytes()).isEqualTo(1024L * 1024L);
         assertThat(properties.getLimits().getPdfUploadMaxSizeBytes()).isEqualTo(10L * 1024L * 1024L);
         assertThat(properties.getLimits().getDocxUploadMaxSizeBytes()).isEqualTo(5L * 1024L * 1024L);
+    }
+
+    @Test
+    void docxExportLimitsUseTeacherProfileOverride() {
+        StudySnapProperties.Pricing pricing = new StudySnapProperties().getPricing();
+
+        assertThat(pricing.resolveMonthlyDocxExportLimit(PlanType.PLUS, ProfileType.TEACHER)).isNull();
+        assertThat(pricing.resolveMonthlyDocxExportLimit(PlanType.PLUS, ProfileType.STUDENT)).isEqualTo(15);
+        assertThat(pricing.resolveMonthlyDocxExportLimit(PlanType.FREE, ProfileType.TEACHER)).isEqualTo(10);
+        assertThat(pricing.resolveMonthlyDocxExportLimit(PlanType.PRO, ProfileType.STUDENT)).isNull();
+        assertThat(pricing.resolveMonthlyDocxExportLimit(PlanType.PRO, ProfileType.TEACHER)).isNull();
+    }
+
+    @Test
+    void pdfExportLimitsStayPlanBasedForEveryProfile() {
+        StudySnapProperties.Pricing pricing = new StudySnapProperties().getPricing();
+
+        assertThat(pricing.resolveMonthlyPdfExportLimit(PlanType.PLUS)).isEqualTo(15);
+        assertThat(pricing.resolveMonthlyPdfExportLimit(PlanType.PRO)).isNull();
     }
 }

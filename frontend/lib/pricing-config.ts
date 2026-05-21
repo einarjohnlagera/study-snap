@@ -1,17 +1,24 @@
+import type { ProfileType } from "@/lib/api";
+
 export type PricingDisplayRegion = "PH" | "DEFAULT";
+export type PricingExportPlan = "FREE" | "PLUS" | "PRO";
 
 export const pricingConfig = {
   free: {
     studyPacksPerMonth: 10,
     challengeQuizzesPerMonth: 5,
     ocrPerMonth: 20,
-    exportsPerMonth: 2,
+    docxExportsPerMonth: 2,
+    teacherDocxExportsPerMonth: 10,
+    pdfExportsPerMonth: 2,
   },
   plus: {
     studyPacksPerMonth: 50,
     challengeQuizzesPerMonth: 25,
     noteGenerationsPerMonth: 25,
-    exportsPerMonth: 15,
+    docxExportsPerMonth: 15,
+    teacherDocxExportsPerMonth: null,
+    pdfExportsPerMonth: 15,
     adaptivePracticePerMonth: 10,
   },
   pro: {
@@ -23,7 +30,9 @@ export const pricingConfig = {
     boardExamPerMonth: 5,
     ocrPerMonth: 100,
     noteGenerationsPerMonth: 100,
-    exportsPerMonth: null,
+    docxExportsPerMonth: null,
+    teacherDocxExportsPerMonth: null,
+    pdfExportsPerMonth: null,
   },
   price: {
     PH: {
@@ -63,4 +72,18 @@ export const pricingConfig = {
 
 export function resolvePricingDisplayRegion(region: string | null | undefined): PricingDisplayRegion {
   return region === "PH" ? "PH" : "DEFAULT";
+}
+
+export function resolveDocxExportDisplayLimit(
+  plan: PricingExportPlan,
+  profileType: ProfileType | null | undefined,
+): number | null {
+  const planPricing = pricingConfig[plan.toLowerCase() as Lowercase<PricingExportPlan>];
+  return profileType === "TEACHER"
+    ? planPricing.teacherDocxExportsPerMonth
+    : planPricing.docxExportsPerMonth;
+}
+
+export function resolvePdfExportDisplayLimit(plan: PricingExportPlan): number | null {
+  return pricingConfig[plan.toLowerCase() as Lowercase<PricingExportPlan>].pdfExportsPerMonth;
 }

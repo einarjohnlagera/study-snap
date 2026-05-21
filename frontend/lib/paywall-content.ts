@@ -166,7 +166,7 @@ export function resolvePaywallPresentation(
       return {
         headline: currentPlan === "PLUS" ? "You've used all your exports" : "You've reached your export limit",
         body: isTeacherProfile(profileType)
-          ? "Upgrade for unlimited quiz exports so you can keep printing DOCX exams for your class."
+          ? "Move up for more DOCX quiz exports so you can keep printing exams for your class."
           : "Download your quizzes as printable exams for offline study.",
         feature: "export_limit",
         primaryPlanType: "PRO",

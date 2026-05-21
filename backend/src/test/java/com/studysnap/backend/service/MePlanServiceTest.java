@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,8 @@ class MePlanServiceTest {
     private UserUsageService userUsageService;
     @Mock
     private StudyPackUsageService studyPackUsageService;
+    @Mock
+    private UserRepository userRepository;
 
     private MePlanService mePlanService;
 
@@ -43,12 +46,23 @@ class MePlanServiceTest {
         properties.getPricing().setProMonthlyOcrLimit(100);
         properties.getPricing().setFreeMonthlyNoteGenerationLimit(5);
         properties.getPricing().setProMonthlyNoteGenerationLimit(100);
-        properties.getPricing().setFreeMonthlyExportLimit(2);
-        properties.getPricing().setPlusMonthlyExportLimit(15);
-        properties.getPricing().setProMonthlyExportLimit(-1);
+        properties.getPricing().setFreeMonthlyDocxExportLimit(2);
+        properties.getPricing().setPlusMonthlyDocxExportLimit(15);
+        properties.getPricing().setProMonthlyDocxExportLimit(-1);
+        properties.getPricing().setFreeMonthlyPdfExportLimit(2);
+        properties.getPricing().setPlusMonthlyPdfExportLimit(15);
+        properties.getPricing().setProMonthlyPdfExportLimit(-1);
         properties.getPricing().setAdaptivePracticeProOnly(true);
         properties.getPricing().setDifficultySelectionProOnly(true);
-        mePlanService = new MePlanService(subscriptionService, userUsageService, studyPackUsageService, properties);
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, properties);
+        mePlanService = new MePlanService(
+                subscriptionService,
+                userUsageService,
+                studyPackUsageService,
+                userRepository,
+                featureGateService,
+                properties
+        );
     }
 
     @Test
@@ -85,7 +99,8 @@ class MePlanServiceTest {
         assertThat(response.limits().boardExamPerMonth()).isZero();
         assertThat(response.limits().ocrPerMonth()).isEqualTo(20);
         assertThat(response.limits().noteGenerationsPerMonth()).isEqualTo(5);
-        assertThat(response.limits().exportsPerMonth()).isEqualTo(2);
+        assertThat(response.limits().docxExportsPerMonth()).isEqualTo(2);
+        assertThat(response.limits().pdfExportsPerMonth()).isEqualTo(2);
         assertThat(response.usage().studyPacksUsed()).isEqualTo(3);
         assertThat(response.usage().challengeQuizzesUsed()).isEqualTo(2);
         assertThat(response.usage().adaptivePracticeUsed()).isZero();
@@ -93,7 +108,8 @@ class MePlanServiceTest {
         assertThat(response.usage().boardExamUsed()).isZero();
         assertThat(response.usage().ocrUsed()).isEqualTo(5);
         assertThat(response.usage().noteGenerationsUsed()).isEqualTo(2);
-        assertThat(response.usage().exportsUsed()).isEqualTo(1);
+        assertThat(response.usage().docxExportsUsed()).isEqualTo(1);
+        assertThat(response.usage().pdfExportsUsed()).isZero();
         assertThat(response.remaining().studyPacksRemaining()).isEqualTo(7);
         assertThat(response.remaining().challengeQuizzesRemaining()).isEqualTo(3);
         assertThat(response.remaining().adaptivePracticeRemaining()).isZero();
@@ -101,7 +117,8 @@ class MePlanServiceTest {
         assertThat(response.remaining().boardExamRemaining()).isZero();
         assertThat(response.remaining().ocrRemaining()).isEqualTo(15);
         assertThat(response.remaining().noteGenerationsRemaining()).isEqualTo(3);
-        assertThat(response.remaining().exportsRemaining()).isEqualTo(1);
+        assertThat(response.remaining().docxExportsRemaining()).isEqualTo(1);
+        assertThat(response.remaining().pdfExportsRemaining()).isEqualTo(2);
         assertThat(response.features().adaptivePracticeAvailable()).isFalse();
         assertThat(response.features().difficultySelectionAvailable()).isFalse();
         assertThat(response.features().fileUploadAvailable()).isTrue();
@@ -145,7 +162,8 @@ class MePlanServiceTest {
         assertThat(response.limits().boardExamPerMonth()).isEqualTo(5);
         assertThat(response.limits().ocrPerMonth()).isEqualTo(100);
         assertThat(response.limits().noteGenerationsPerMonth()).isEqualTo(100);
-        assertThat(response.limits().exportsPerMonth()).isNull();
+        assertThat(response.limits().docxExportsPerMonth()).isNull();
+        assertThat(response.limits().pdfExportsPerMonth()).isNull();
         assertThat(response.remaining().studyPacksRemaining()).isZero();
         assertThat(response.remaining().challengeQuizzesRemaining()).isZero();
         assertThat(response.remaining().adaptivePracticeRemaining()).isZero();
@@ -155,7 +173,8 @@ class MePlanServiceTest {
         assertThat(response.remaining().boardExamRemaining()).isZero();
         assertThat(response.remaining().ocrRemaining()).isZero();
         assertThat(response.remaining().noteGenerationsRemaining()).isZero();
-        assertThat(response.remaining().exportsRemaining()).isNull();
+        assertThat(response.remaining().docxExportsRemaining()).isNull();
+        assertThat(response.remaining().pdfExportsRemaining()).isNull();
         assertThat(response.features().adaptivePracticeAvailable()).isTrue();
         assertThat(response.features().difficultySelectionAvailable()).isTrue();
         assertThat(response.features().exportAvailable()).isTrue();

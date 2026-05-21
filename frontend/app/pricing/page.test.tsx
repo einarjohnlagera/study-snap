@@ -87,6 +87,7 @@ describe("PricingPage", () => {
     expect(screen.getByText("2 exports / month")).toBeInTheDocument();
     expect(screen.getByText("15 exports / month")).toBeInTheDocument();
     expect(screen.getAllByText("Unlimited exports")).not.toHaveLength(0);
+    expect(screen.getByText("Teachers get unlimited quiz exports on Plus.")).toBeInTheDocument();
     expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
     expect(screen.getAllByText("Higher note generation limits")).not.toHaveLength(0);
     expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);

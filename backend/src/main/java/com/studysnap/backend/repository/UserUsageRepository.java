@@ -31,7 +31,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 board_exam_used_this_month,
                 ocr_extractions,
                 note_generations,
-                exports_count,
+                docx_exports_count,
+                pdf_exports_count,
                 created_at
             )
             VALUES (
@@ -49,7 +50,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 :boardExamDelta,
                 :ocrDelta,
                 :noteGenerationDelta,
-                :exportDelta,
+                :docxExportDelta,
+                :pdfExportDelta,
                 :createdAt
             )
             ON CONFLICT (user_id, period_start)
@@ -63,7 +65,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 board_exam_used_this_month = user_usage.board_exam_used_this_month + EXCLUDED.board_exam_used_this_month,
                 ocr_extractions = user_usage.ocr_extractions + EXCLUDED.ocr_extractions,
                 note_generations = user_usage.note_generations + EXCLUDED.note_generations,
-                exports_count = user_usage.exports_count + EXCLUDED.exports_count
+                docx_exports_count = user_usage.docx_exports_count + EXCLUDED.docx_exports_count,
+                pdf_exports_count = user_usage.pdf_exports_count + EXCLUDED.pdf_exports_count
             """, nativeQuery = true)
     int incrementUsage(
             @Param("userId") UUID userId,
@@ -79,7 +82,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("boardExamDelta") Integer boardExamDelta,
             @Param("ocrDelta") Integer ocrDelta,
             @Param("noteGenerationDelta") Integer noteGenerationDelta,
-            @Param("exportDelta") Integer exportDelta,
+            @Param("docxExportDelta") Integer docxExportDelta,
+            @Param("pdfExportDelta") Integer pdfExportDelta,
             @Param("createdAt") OffsetDateTime createdAt
     );
 }

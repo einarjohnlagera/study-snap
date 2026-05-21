@@ -72,6 +72,7 @@ const baseNote = {
   title: "Draft Note",
   subject: "Biology",
   courseProgram: "Nursing",
+  learnerLevel: "COLLEGE" as const,
   targetProfileType: "STUDENT" as const,
   tags: ["cells"],
   content: "Cell content",
@@ -238,7 +239,7 @@ describe("NoteEditorPageClient", () => {
 
     const titleInput = await screen.findByLabelText("Title (optional)");
     const subjectInput = screen.getByLabelText("Subject (optional)");
-    const courseProgramInput = screen.getByLabelText("Course / Program (optional)");
+    const courseProgramInput = screen.getByLabelText(/Course \/ Program/);
     const contentInput = screen.getByLabelText("Content");
     await waitFor(() => {
       expect(titleInput).toHaveValue("Draft Note");
@@ -281,11 +282,11 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    const addDetailsButton = await screen.findByRole("button", { name: "Add details (optional)" });
+    const addDetailsButton = await screen.findByRole("button", { name: "Add details" });
     expect(addDetailsButton).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("Title (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Subject (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Course / Program (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
   });
 
   it("shows write, generate, and import start options on the new note page", async () => {
@@ -303,12 +304,11 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
 
     expect(await screen.findByLabelText("Title (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Subject (optional)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Course / Program (optional)")).toBeInTheDocument();
-    expect(screen.getByText("Used as domain context for examples, terminology, and quiz questions.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
   });
 
@@ -332,10 +332,10 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    const addDetailsButton = await screen.findByRole("button", { name: "Add details (optional)" });
+    const addDetailsButton = await screen.findByRole("button", { name: "Add details" });
     fireEvent.click(addDetailsButton);
 
-    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    const courseProgramInput = await screen.findByLabelText(/Course \/ Program/);
     await waitFor(() => {
       expect(courseProgramInput).toHaveValue("Nursing");
     });
@@ -383,7 +383,7 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
 
     const subjectInput = await screen.findByLabelText("Subject (optional)");
     const contentInput = screen.getByLabelText("Content");
@@ -483,7 +483,7 @@ describe("NoteEditorPageClient", () => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion", "Nursing");
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     expect(screen.getByRole("button", { name: "Generate Again" })).toBeInTheDocument();
     expect(
@@ -501,8 +501,8 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
-    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    const courseProgramInput = await screen.findByLabelText(/Course \/ Program/);
     await waitFor(() => {
       expect(courseProgramInput).toHaveValue("Software Engineering");
     });
@@ -529,8 +529,8 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
-    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    const courseProgramInput = await screen.findByLabelText(/Course \/ Program/);
     await waitFor(() => {
       expect(courseProgramInput).toHaveValue("Software Engineering");
     });
@@ -558,8 +558,8 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
-    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    const courseProgramInput = await screen.findByLabelText(/Course \/ Program/);
     await waitFor(() => {
       expect(courseProgramInput).toHaveValue("Software Engineering");
     });
@@ -587,9 +587,9 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
     await waitFor(() => {
-      expect(screen.getByLabelText("Course / Program (optional)")).toHaveValue("Software Engineering");
+      expect(screen.getByLabelText(/Course \/ Program/)).toHaveValue("Software Engineering");
     });
 
     fireEvent.click(await screen.findByText("Generate from topic"));
@@ -717,7 +717,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient initialMode="quiz" />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
@@ -734,7 +734,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
     expect(await screen.findByText("Please select an audience")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add details (optional)" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Add details" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
     expect(createNote).not.toHaveBeenCalled();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
@@ -746,7 +746,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
   });
 
@@ -755,7 +755,7 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
   });
 
@@ -1308,7 +1308,7 @@ describe("NoteEditorPageClient", () => {
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));

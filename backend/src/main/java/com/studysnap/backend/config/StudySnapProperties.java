@@ -1,6 +1,7 @@
 package com.studysnap.backend.config;
 
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import java.math.RoundingMode;
 import lombok.Getter;
 import lombok.Setter;
@@ -113,9 +114,15 @@ public class StudySnapProperties {
         private int freeMonthlyNoteGenerationLimit = 5;
         private int plusMonthlyNoteGenerationLimit = 25;
         private int proMonthlyNoteGenerationLimit = 100;
-        private int freeMonthlyExportLimit = 2;
-        private int plusMonthlyExportLimit = 15;
-        private int proMonthlyExportLimit = -1;
+        private int freeMonthlyDocxExportLimit = 2;
+        private int plusMonthlyDocxExportLimit = 15;
+        private int proMonthlyDocxExportLimit = -1;
+        private int freeTeacherMonthlyDocxExportLimit = 10;
+        private int plusTeacherMonthlyDocxExportLimit = -1;
+        private int proTeacherMonthlyDocxExportLimit = -1;
+        private int freeMonthlyPdfExportLimit = 2;
+        private int plusMonthlyPdfExportLimit = 15;
+        private int proMonthlyPdfExportLimit = -1;
         private boolean adaptivePracticeProOnly = false;
         private boolean interviewPracticeProOnly = true;
         private boolean difficultySelectionProOnly = true;
@@ -192,12 +199,23 @@ public class StudySnapProperties {
             };
         }
 
-        public Integer resolveMonthlyExportLimit(PlanType planType) {
-            return switch (normalizePlanType(planType)) {
-                case PLUS -> plusMonthlyExportLimit;
-                case PRO -> proMonthlyExportLimit <= 0 ? null : proMonthlyExportLimit;
-                case FREE -> freeMonthlyExportLimit;
+        public Integer resolveMonthlyDocxExportLimit(PlanType planType, ProfileType profileType) {
+            boolean isTeacher = profileType == ProfileType.TEACHER;
+            int limit = switch (normalizePlanType(planType)) {
+                case PLUS -> isTeacher ? plusTeacherMonthlyDocxExportLimit : plusMonthlyDocxExportLimit;
+                case PRO -> isTeacher ? proTeacherMonthlyDocxExportLimit : proMonthlyDocxExportLimit;
+                case FREE -> isTeacher ? freeTeacherMonthlyDocxExportLimit : freeMonthlyDocxExportLimit;
             };
+            return unlimitedToNull(limit);
+        }
+
+        public Integer resolveMonthlyPdfExportLimit(PlanType planType) {
+            int limit = switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyPdfExportLimit;
+                case PRO -> proMonthlyPdfExportLimit;
+                case FREE -> freeMonthlyPdfExportLimit;
+            };
+            return unlimitedToNull(limit);
         }
 
         public boolean isAdaptivePracticeAvailable(PlanType planType) {
@@ -230,6 +248,10 @@ public class StudySnapProperties {
 
         private PlanType normalizePlanType(PlanType planType) {
             return planType == null ? PlanType.FREE : planType;
+        }
+
+        private Integer unlimitedToNull(int limit) {
+            return limit <= 0 ? null : limit;
         }
     }
 

@@ -190,7 +190,7 @@ describe("PaywallModal", () => {
     expect(
       screen.getByText("Generate more quizzes and export-ready classroom materials without breaking your teaching flow."),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Unlock more quiz generations and exports" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unlock more exports — get Plus" })).toBeInTheDocument();
   });
 
   it("uses teacher-specific export limit copy", async () => {
@@ -212,9 +212,10 @@ describe("PaywallModal", () => {
 
     expect(await screen.findByText("You've used all your exports")).toBeInTheDocument();
     expect(
-      screen.getByText("Upgrade for unlimited quiz exports so you can keep printing DOCX exams for your class."),
+      screen.getByText("Move up for more DOCX quiz exports so you can keep printing exams for your class."),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Get higher Study Pack and quiz generation limits" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Get more Study Packs & quiz generations with Pro" })).toBeInTheDocument();
+    expect(screen.queryByText(/unlimited quiz exports/i)).not.toBeInTheDocument();
   });
 
   it("shows the verification modal instead of starting checkout for unverified users", async () => {

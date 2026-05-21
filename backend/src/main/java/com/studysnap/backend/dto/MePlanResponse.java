@@ -25,7 +25,8 @@ public record MePlanResponse(
             int interviewPracticePerMonth,
             int ocrPerMonth,
             int noteGenerationsPerMonth,
-            Integer exportsPerMonth,
+            Integer docxExportsPerMonth,
+            Integer pdfExportsPerMonth,
             int longExamPerMonth,
             int boardExamPerMonth
     ) {
@@ -45,6 +46,7 @@ public record MePlanResponse(
                     ocrPerMonth,
                     noteGenerationsPerMonth,
                     exportsPerMonth,
+                    exportsPerMonth,
                     0,
                     0
             );
@@ -59,7 +61,8 @@ public record MePlanResponse(
             int interviewPracticeUsed,
             int ocrUsed,
             int noteGenerationsUsed,
-            int exportsUsed,
+            int docxExportsUsed,
+            int pdfExportsUsed,
             int longExamUsed,
             int boardExamUsed
     ) {
@@ -80,6 +83,7 @@ public record MePlanResponse(
                     noteGenerationsUsed,
                     exportsUsed,
                     0,
+                    0,
                     0
             );
         }
@@ -93,7 +97,8 @@ public record MePlanResponse(
             int interviewPracticeRemaining,
             int ocrRemaining,
             int noteGenerationsRemaining,
-            Integer exportsRemaining,
+            Integer docxExportsRemaining,
+            Integer pdfExportsRemaining,
             int longExamRemaining,
             int boardExamRemaining
     ) {
@@ -112,6 +117,7 @@ public record MePlanResponse(
                     0,
                     ocrRemaining,
                     noteGenerationsRemaining,
+                    exportsRemaining,
                     exportsRemaining,
                     0,
                     0

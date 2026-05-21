@@ -1,4 +1,4 @@
-import type { PaidPlanType, PlanType } from "@/lib/api";
+import type { PaidPlanType, PlanType, ProfileType } from "@/lib/api";
 import { pricingConfig } from "@/lib/pricing-config";
 
 export type AppPlanType = Extract<PlanType, "FREE" | "PLUS" | "PRO">;
@@ -16,6 +16,7 @@ export type PlanComparisonRow = {
 };
 
 const EXPORT_HELPER = "PDF/DOCX for offline or classroom use";
+export const TEACHER_PLUS_EXPORT_CALLOUT = "Teachers get unlimited quiz exports on Plus.";
 
 export const PLAN_ORDER: AppPlanType[] = ["FREE", "PLUS", "PRO"];
 
@@ -37,7 +38,7 @@ export const PLANS: Record<AppPlanType, {
     features: [
       { label: `${pricingConfig.free.studyPacksPerMonth} Study Packs / month` },
       { label: `${pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month` },
-      { label: `${pricingConfig.free.exportsPerMonth} exports / month`, helper: EXPORT_HELPER },
+      { label: `${pricingConfig.free.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
       { label: "Summary + Key Concepts" },
     ],
     upgradeHighlights: [
@@ -56,7 +57,7 @@ export const PLANS: Record<AppPlanType, {
     features: [
       { label: `${pricingConfig.plus.studyPacksPerMonth} Study Packs / month` },
       { label: `${pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month` },
-      { label: `${pricingConfig.plus.exportsPerMonth} exports / month`, helper: EXPORT_HELPER },
+      { label: `${pricingConfig.plus.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
       { label: `Adaptive Practice (${pricingConfig.plus.adaptivePracticePerMonth} sessions / month)` },
       { label: "Higher note generation limits" },
     ],
@@ -101,8 +102,8 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
   {
     label: "Exports / month",
     values: {
-      FREE: String(pricingConfig.free.exportsPerMonth),
-      PLUS: String(pricingConfig.plus.exportsPerMonth),
+      FREE: String(pricingConfig.free.docxExportsPerMonth),
+      PLUS: String(pricingConfig.plus.docxExportsPerMonth),
       PRO: "Unlimited",
     },
   },
@@ -190,15 +191,32 @@ export type UpgradeCtaContext =
   | "teacher-export-limit"
   | "general";
 
+export type UpgradeCtaOptions = {
+  context?: UpgradeCtaContext;
+  profileType?: ProfileType | null;
+};
+
 function isTeacherUpgradeContext(context: UpgradeCtaContext | undefined): boolean {
   return context === "teacher-quiz-limit" || context === "teacher-export-limit";
 }
 
-export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaContext): UpgradeCtaSet {
+function resolveUpgradeCtaOptions(contextOrOptions?: UpgradeCtaContext | UpgradeCtaOptions): UpgradeCtaOptions {
+  if (typeof contextOrOptions === "string") {
+    return { context: contextOrOptions };
+  }
+  return contextOrOptions ?? {};
+}
+
+export function getUpgradeCtas(
+  currentPlan: AppPlanType,
+  contextOrOptions?: UpgradeCtaContext | UpgradeCtaOptions,
+): UpgradeCtaSet {
+  const { context, profileType } = resolveUpgradeCtaOptions(contextOrOptions);
+  const isTeacherUpgrade = profileType === "TEACHER" || isTeacherUpgradeContext(context);
   if (currentPlan === "FREE") {
-    if (isTeacherUpgradeContext(context)) {
+    if (isTeacherUpgrade) {
       return {
-        primary: { label: "Unlock more quiz generations and exports", targetPlan: "PLUS" },
+        primary: { label: "Unlock more exports — get Plus", targetPlan: "PLUS" },
         secondary: { label: "Go Pro", targetPlan: "PRO" },
       };
     }
@@ -226,9 +244,9 @@ export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaCon
     };
   }
   if (currentPlan === "PLUS") {
-    if (isTeacherUpgradeContext(context)) {
+    if (isTeacherUpgrade) {
       return {
-        primary: { label: "Get higher Study Pack and quiz generation limits", targetPlan: "PRO" },
+        primary: { label: "Get more Study Packs & quiz generations with Pro", targetPlan: "PRO" },
         secondary: null,
       };
     }
