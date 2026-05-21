@@ -114,6 +114,24 @@ describe("Exam Builder page", () => {
         createdAt: "2026-03-18T10:00:00Z",
         updatedAt: "2026-03-23T10:00:00Z",
       },
+      {
+        id: "note-55",
+        title: "Pathophysiology Cases",
+        courseProgram: "Nursing",
+        learnerLevel: "COLLEGE",
+        subject: "Case Studies",
+        tags: ["cases", "exam"],
+        contentPreview: "Symptoms and differential review...",
+        summaryPreview: "Use the symptoms to identify likely diagnoses.",
+        visibility: "PRIVATE",
+        studyPackId: "pack-55",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        generatedQuizId: "generated-55",
+        generatedQuizQuestionCount: 10,
+        createdAt: "2026-03-17T10:00:00Z",
+        updatedAt: "2026-03-20T10:00:00Z",
+      },
     ]);
   });
 
@@ -164,6 +182,40 @@ describe("Exam Builder page", () => {
 
     expect(input).toHaveFocus();
     expect(input).toHaveValue("Section A - Application");
+  });
+
+  it("adds remaining quiz-ready notes to the default last section and keeps the URL selection current", async () => {
+    render(<ExamBuilderPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Notes" }));
+
+    expect(await screen.findByRole("heading", { name: "Add Notes" })).toBeInTheDocument();
+    expect(screen.getByText("Pathophysiology Cases")).toBeInTheDocument();
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Zygote Review/i })).not.toBeInTheDocument();
+
+    const targetSection = screen.getByLabelText("Target section") as HTMLSelectElement;
+    expect(targetSection.selectedOptions[0]).toHaveTextContent("Section C - Application");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Pathophysiology Cases/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Selected Notes" }));
+
+    expect(await screen.findByText("Pathophysiology Cases")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getGeneratedQuiz).toHaveBeenCalledWith("note-55");
+      expect(pushMock).toHaveBeenCalledWith(expect.stringContaining("notes=note-99%2Cnote-77%2Cnote-55"));
+    });
+  });
+
+  it("shows an Add Notes empty state when every quiz-ready note is already selected", async () => {
+    notesParam = "note-99,note-77,note-55";
+    render(<ExamBuilderPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Blank Begin with one empty section. Add, rename, and reorder sections as you go." }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Notes" }));
+
+    expect(await screen.findByText("All your quiz-ready notes are already in this exam. Create or generate a new note to add more.")).toBeInTheDocument();
   });
 
   it("applies built-in templates and asks before replacing an edited structure", async () => {
@@ -242,6 +294,26 @@ describe("Exam Builder page", () => {
         includeExplanations: true,
       });
     });
+  });
+
+  it("keeps balance guidance compact and renders section composition as chips", async () => {
+    const { container } = render(<ExamBuilderPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
+
+    const evenBalanceButton = screen.getByRole("button", { name: "Even Balance" });
+    const smartBalanceButton = screen.getByRole("button", { name: "Smart Balance" });
+    expect(evenBalanceButton).toHaveAttribute("title", "Spreads questions equally across all sections.");
+    expect(smartBalanceButton).toHaveAttribute(
+      "title",
+      "Balances question counts and spreads topic diversity across sections, using each section's learning intent as a guide.",
+    );
+    expect(evenBalanceButton.querySelector(".lucide-scale")).toBeInTheDocument();
+    expect(smartBalanceButton.querySelector(".lucide-layout-grid")).toBeInTheDocument();
+    expect(screen.getByText("Reorganize existing questions across sections without changing their content.")).toBeInTheDocument();
+    expect(container).not.toHaveTextContent("Note 1");
+    expect(screen.getByText("Section A - Basic Concepts")).toBeInTheDocument();
+    expect(screen.getByText("20 Qs")).toBeInTheDocument();
   });
 
   it("applies Smart Balance deterministically across sections", async () => {
