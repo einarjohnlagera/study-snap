@@ -1,8 +1,24 @@
 # RELEASES.md - NoteLib
 
-## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor
+## v0.15.1 - Teacher Power Features
 
 **Status: In Progress**
+
+Theme: extend the teacher quiz-authoring workflow with concrete controls that turn it into a complete classroom tool, building on the v0.15.0 teacher flow polish and plan accessibility foundation.
+
+### Planned Scope
+
+- **Question count control on Generate Quiz** — let teachers choose 10 / 20 / 30 questions per generated quiz; Plus+ Teacher unlocks 20 and 30
+- **Custom DOCX header** — teacher profile carries an optional school name that appears in every DOCX export; per-export modal adds class/section name and date toggle
+- **Multiple exam versions (A/B/C)** — single-DOCX export with 2 or 3 deterministically shuffled versions for anti-cheating; Plus+ Teacher only
+
+### ✅ Shipped
+
+---
+
+## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor
+
+**Status: Released**
 
 Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywall, and close the unbounded-LLM-cost gap on uncapped modes. This is a margin fix framed as a UX uplift, not a feature add.
 

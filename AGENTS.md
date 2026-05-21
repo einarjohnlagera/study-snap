@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor`
+- `v0.15.1 - Teacher Power Features`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1454,7 +1454,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.15.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.15.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
@@ -1536,4 +1536,4 @@ All v0.14.0 planned scope has shipped. Do not reopen these decisions:
 
 - **Multi-note Long Exam** ships via `LongExamService.resolveAdditionalStudyPackIds` / `resolveSourceNoteRefs` / `generateQuizForSources`. It reuses the existing session lifecycle with no new persistence aggregate and no new `QuickReviewSessionMode` enum value. `LongExamStartRequest` accepts an optional `additionalStudyPackIds` list (max 3). Do not alter the proportional question distribution or subject-match validation without a product decision.
 - **Interview Practice shipped as a sub-mode of Adaptive Practice** (JSONB `subMode: "INTERVIEW"` on the `ADAPTIVE` discriminator). The 5-mode contract is preserved. It uses a dedicated 10/month Pro-only quota, `gpt-4.1-mini` for critique calls, and `gpt-4.1` for generation. Do not revert or alter this cost split.
-- When opening v0.15.0 work, run the release kickoff checklist in `CLAUDE.md` before the first feature commit.
+- When opening v0.15.1 work, run the release kickoff checklist in `CLAUDE.md` before the first feature commit.

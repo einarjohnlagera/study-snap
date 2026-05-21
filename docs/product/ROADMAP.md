@@ -6,15 +6,15 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor` is the current in-progress release.
+`v0.15.1 - Teacher Power Features` is the current in-progress release.
 
-`v0.14.0 - Grow the Surface, Deepen the Practice` is complete and is the previous documentation baseline.
+`v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ## v0.15.1 - Teacher Power Features
 
-**Status: Planned**
+**Status: In Progress**
 
 Theme: extend the teacher quiz-authoring workflow with concrete controls that turn it into a complete classroom tool, building on the v0.15.0 teacher flow polish and plan accessibility foundation. Target audience: Filipino teachers who need a practical, affordable tool for quiz and exam preparation.
 
@@ -54,7 +54,7 @@ Within v0.15.1, the three features can ship in any order or in parallel — they
 
 ## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywall, and close the unbounded-LLM-cost gap on uncapped modes. This is a margin fix framed as a UX uplift, not a feature add.
 
