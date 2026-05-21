@@ -89,6 +89,7 @@ Do not mix these models.
   - enter teacher-only `Select` mode
   - choose multiple quiz-ready notes
   - organize notes into editable sections inside `Exam Builder`
+  - add forgotten quiz-ready notes from inside `Exam Builder` and place them directly into a target section
   - reorder sections and move notes across sections using the drag handles
   - choose `Start Blank` for one `Untitled section`, or choose a structured preset
   - rebalance the pooled questions with either `Even Balance` (spreads questions equally across all sections) or `Smart Balance` (balances question counts and spreads topic diversity across sections, using each section's learning intent as a guide) without generating new questions

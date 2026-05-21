@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   closestCenter,
@@ -23,7 +23,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, GripVertical, Plus, Shuffle, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, LayoutGrid, Plus, Scale, Trash2 } from "lucide-react";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
@@ -46,6 +46,7 @@ import { normalizeSubject } from "@/lib/subjects";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import {
   buildDefaultSectionTitle,
+  buildWholeNoteEntries,
   countExamSectionQuestions,
   createExamSection,
   createExamQuestionRefKey,
@@ -197,10 +198,9 @@ function SortableExamBuilderItem({
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note {index + 1}</p>
+          <p className="truncate text-xs font-semibold uppercase tracking-wide text-foreground/50">{entry.subject}</p>
           <p className="line-clamp-2 block text-sm font-medium leading-5 text-foreground">{entry.title}</p>
           <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
-            <p className="truncate">{entry.subject}</p>
             <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/70">
               {buildQuestionCountLabel(entry.assignedQuestionCount, entry.totalQuestionCount)}
             </span>
@@ -438,7 +438,9 @@ export default function ExamBuilderPage() {
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
   const notesParam = searchParams.get("notes");
-  const selectedNoteIds = useMemo(() => parseSelectedNoteIds(notesParam), [notesParam]);
+  const selectedNoteIdsFromQuery = useMemo(() => parseSelectedNoteIds(notesParam), [notesParam]);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>(selectedNoteIdsFromQuery);
+  const internalNotesQueryRef = useRef<string | null>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [generatedQuizByNoteId, setGeneratedQuizByNoteId] = useState<Record<string, GeneratedQuizResponse>>({});
   const [loading, setLoading] = useState(true);
@@ -457,6 +459,11 @@ export default function ExamBuilderPage() {
   const [nextSectionIndex, setNextSectionIndex] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const [pendingBalanceMode, setPendingBalanceMode] = useState<ExamBalanceMode | null>(null);
+  const [showAddNotesModal, setShowAddNotesModal] = useState(false);
+  const [pendingAddNoteIds, setPendingAddNoteIds] = useState<string[]>([]);
+  const [addNotesTargetSectionId, setAddNotesTargetSectionId] = useState("");
+  const [addingNotes, setAddingNotes] = useState(false);
+  const [addNotesError, setAddNotesError] = useState<string | null>(null);
   const examBuilderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -470,6 +477,15 @@ export default function ExamBuilderPage() {
       router.replace("/library");
       return;
     }
+  }, [isTeacherExamBuilderEnabled, router]);
+
+  useEffect(() => {
+    const selectedNotesQuery = selectedNoteIdsFromQuery.join(",");
+    if (internalNotesQueryRef.current === selectedNotesQuery) {
+      internalNotesQueryRef.current = null;
+      return;
+    }
+    setSelectedNoteIds(selectedNoteIdsFromQuery);
     setExamSections([]);
     setGeneratedQuizByNoteId({});
     setNextSectionIndex(1);
@@ -480,7 +496,10 @@ export default function ExamBuilderPage() {
     setShowTemplateSelector(true);
     setShowExportModal(false);
     setPendingBalanceMode(null);
-  }, [isTeacherExamBuilderEnabled, router, selectedNoteIds]);
+    setShowAddNotesModal(false);
+    setPendingAddNoteIds([]);
+    setAddNotesError(null);
+  }, [selectedNoteIdsFromQuery]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router) || !isTeacherExamBuilderEnabled) {
@@ -531,6 +550,11 @@ export default function ExamBuilderPage() {
   const itemsById = useMemo(
     () => new Map(items.filter((item) => canIncludeInExam(item)).map((item) => [item.id, item])),
     [items],
+  );
+
+  const addableQuizReadyNotes = useMemo(
+    () => items.filter((item) => canIncludeInExam(item) && !selectedNoteIds.includes(item.id)),
+    [items, selectedNoteIds],
   );
 
   const questionCountsByNoteId = useMemo(() => {
@@ -594,6 +618,7 @@ export default function ExamBuilderPage() {
   );
   const examSectionQuestionBreakdown = useMemo(() => (
     examSections.map((section, index) => ({
+      id: section.id,
       title: section.title.trim() || buildDefaultSectionTitle(index),
       questionCount: countExamSectionQuestions([{
         ...section,
@@ -646,6 +671,66 @@ export default function ExamBuilderPage() {
     setPendingBalanceMode(null);
     setNextSectionIndex(template.sectionTitles.length);
   }, [questionCountsByNoteId, selectedReadyNoteIds]);
+
+  const handleOpenAddNotes = useCallback(() => {
+    setPendingAddNoteIds([]);
+    setAddNotesError(null);
+    setAddNotesTargetSectionId(examSections[examSections.length - 1]?.id ?? "");
+    setShowAddNotesModal(true);
+  }, [examSections]);
+
+  const handleAddNotes = useCallback(async () => {
+    const noteIdsToAdd = pendingAddNoteIds.filter((noteId) => (
+      !selectedNoteIds.includes(noteId)
+      && addableQuizReadyNotes.some((item) => item.id === noteId)
+    ));
+    if (!addNotesTargetSectionId || noteIdsToAdd.length === 0 || addingNotes) {
+      return;
+    }
+    setAddingNotes(true);
+    setAddNotesError(null);
+    try {
+      const generatedQuizzes = await Promise.all(
+        noteIdsToAdd.map(async (noteId) => [noteId, await getGeneratedQuiz(noteId)] as const),
+      );
+      const nextGeneratedQuizzes = Object.fromEntries(generatedQuizzes);
+      const addedQuestionCounts = Object.fromEntries(
+        generatedQuizzes.map(([noteId, generatedQuiz]) => [noteId, generatedQuiz.questions.length]),
+      ) as Record<string, number>;
+      const addedEntries = buildWholeNoteEntries(noteIdsToAdd, addedQuestionCounts);
+      const nextSelectedNoteIds = [...selectedNoteIds, ...noteIdsToAdd];
+
+      setGeneratedQuizByNoteId((previous) => ({
+        ...previous,
+        ...nextGeneratedQuizzes,
+      }));
+      updateExamSections(examSections.map((section) => (
+        section.id === addNotesTargetSectionId
+          ? { ...section, entries: [...section.entries, ...addedEntries] }
+          : section
+      )));
+      setSelectedNoteIds(nextSelectedNoteIds);
+      internalNotesQueryRef.current = nextSelectedNoteIds.join(",");
+      const params = new URLSearchParams({ notes: nextSelectedNoteIds.join(",") });
+      router.replace(`/library/exam-builder?${params.toString()}`);
+      setShowAddNotesModal(false);
+      setPendingAddNoteIds([]);
+      setAddNotesTargetSectionId("");
+    } catch (addError) {
+      setAddNotesError(addError instanceof Error ? addError.message : "Could not add selected notes.");
+    } finally {
+      setAddingNotes(false);
+    }
+  }, [
+    addNotesTargetSectionId,
+    addableQuizReadyNotes,
+    addingNotes,
+    examSections,
+    pendingAddNoteIds,
+    router,
+    selectedNoteIds,
+    updateExamSections,
+  ]);
 
   const handleTemplateSelection = useCallback((templateId: ExamTemplateId) => {
     if (selectedTemplateId && templateDirty) {
@@ -941,38 +1026,16 @@ export default function ExamBuilderPage() {
                   <h2 className="text-base font-semibold text-foreground sm:text-lg">Selected Notes</h2>
                   <p className="text-sm text-foreground/70">Drag to reorder sections and move notes across sections.</p>
                 </div>
-                <div className="w-full max-w-md rounded-2xl border border-border bg-background p-3 shadow-sm sm:self-start">
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-foreground">Balance Sections</h3>
-                    <p className="text-xs text-foreground/65">Reorganize existing questions without changing their content.</p>
-                  </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="gap-2"
-                      onClick={() => handleApplyBalance(EVEN_BALANCE_MODE)}
-                      disabled={!canBalanceSections || exportingExam}
-                    >
-                      <Shuffle className="h-4 w-4" aria-hidden="true" />
-                      <span>Even Balance</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="gap-2"
-                      onClick={() => setPendingBalanceMode(SMART_BALANCE_MODE)}
-                      disabled={!canBalanceSections || exportingExam}
-                    >
-                      <Shuffle className="h-4 w-4" aria-hidden="true" />
-                      <span>Smart Balance</span>
-                    </Button>
-                  </div>
-                  <div className="mt-3 space-y-1 text-xs text-foreground/65">
-                    <p><span className="font-medium text-foreground/80">Even Balance:</span> Spreads questions equally across all sections.</p>
-                    <p><span className="font-medium text-foreground/80">Smart Balance:</span> Balances question counts and spreads topic diversity across sections, using each section&apos;s learning intent as a guide.</p>
-                  </div>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2 sm:w-auto"
+                  onClick={handleOpenAddNotes}
+                  disabled={exportingExam}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <span>Add Notes</span>
+                </Button>
               </div>
 
               <DndContext
@@ -1049,6 +1112,39 @@ export default function ExamBuilderPage() {
                   ) : null}
                 </DragOverlay>
               </DndContext>
+
+              <div className="w-full rounded-2xl border border-border bg-background p-3 shadow-sm sm:max-w-2xl">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground">Balance Sections</h3>
+                  <p className="text-xs text-foreground/65">
+                    Reorganize existing questions across sections without changing their content.
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    title="Spreads questions equally across all sections."
+                    onClick={() => handleApplyBalance(EVEN_BALANCE_MODE)}
+                    disabled={!canBalanceSections || exportingExam}
+                  >
+                    <Scale className="h-4 w-4" aria-hidden="true" />
+                    <span>Even Balance</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    title="Balances question counts and spreads topic diversity across sections, using each section's learning intent as a guide."
+                    onClick={() => setPendingBalanceMode(SMART_BALANCE_MODE)}
+                    disabled={!canBalanceSections || exportingExam}
+                  >
+                    <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+                    <span>Smart Balance</span>
+                  </Button>
+                </div>
+              </div>
             </section>
           ) : null}
 
@@ -1066,11 +1162,18 @@ export default function ExamBuilderPage() {
                   : `${builderQuestionCount} question${builderQuestionCount === 1 ? "" : "s"} from ${builderUniqueNoteCount} note${builderUniqueNoteCount === 1 ? "" : "s"} across ${exportableExamSections.length} section${exportableExamSections.length === 1 ? "" : "s"}`}
             </p>
             {selectedTemplate !== null && builderQuestionCount > 0 ? (
-              <p className="text-xs text-foreground/60">
-                {examSectionQuestionBreakdown
-                  .map((section) => `${section.title}: ${section.questionCount} question${section.questionCount === 1 ? "" : "s"}`)
-                  .join(" | ")}
-              </p>
+              <div className="flex flex-wrap gap-1.5 text-xs text-foreground/60">
+                {examSectionQuestionBreakdown.map((section) => (
+                  <span
+                    key={section.id}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/70"
+                  >
+                    <span>{section.title}</span>
+                    <span aria-hidden="true">&middot;</span>
+                    <span>{section.questionCount} Q{section.questionCount === 1 ? "" : "s"}</span>
+                  </span>
+                ))}
+              </div>
             ) : null}
             <p className="text-xs text-foreground/65">Keep editing, then export the combined DOCX when everything is ready.</p>
           </div>
@@ -1091,6 +1194,115 @@ export default function ExamBuilderPage() {
           </div>
         </div>
       </div>
+
+      <AppModal
+        isOpen={showAddNotesModal}
+        title="Add Notes"
+        description="Choose quiz-ready notes and place them in a section without leaving this exam."
+        onClose={() => {
+          if (!addingNotes) {
+            setShowAddNotesModal(false);
+            setPendingAddNoteIds([]);
+            setAddNotesError(null);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowAddNotesModal(false);
+                setPendingAddNoteIds([]);
+                setAddNotesError(null);
+              }}
+              disabled={addingNotes}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleAddNotes()}
+              loading={addingNotes}
+              loadingText="Adding..."
+              disabled={pendingAddNoteIds.length === 0 || !addNotesTargetSectionId}
+            >
+              Add Selected Notes
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="exam-builder-add-notes-section" className="text-sm font-medium text-foreground">
+              Target section
+            </label>
+            <select
+              id="exam-builder-add-notes-section"
+              value={addNotesTargetSectionId}
+              onChange={(event) => setAddNotesTargetSectionId(event.target.value)}
+              disabled={addingNotes || examSections.length === 0}
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+            >
+              {examSections.map((section, index) => (
+                <option key={section.id} value={section.id}>
+                  {section.title.trim() || buildDefaultSectionTitle(index)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {addableQuizReadyNotes.length === 0 ? (
+            <p className="rounded-xl border border-border bg-muted/20 px-3 py-4 text-sm text-foreground/70">
+              All your quiz-ready notes are already in this exam. Create or generate a new note to add more.
+            </p>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+              {addableQuizReadyNotes.map((item) => {
+                const isSelected = pendingAddNoteIds.includes(item.id);
+                const generatedQuestionCount = item.generatedQuizQuestionCount ?? 0;
+                return (
+                  <label
+                    key={item.id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
+                      isSelected
+                        ? "border-blue-300 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-950/25"
+                        : "border-border bg-background hover:bg-muted/30"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(event) => setPendingAddNoteIds((previous) => (
+                        event.target.checked
+                          ? [...previous, item.id]
+                          : previous.filter((noteId) => noteId !== item.id)
+                      ))}
+                      disabled={addingNotes}
+                      className="mt-1 h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-600"
+                    />
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {item.title?.trim() || "Untitled note"}
+                      </span>
+                      <span className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
+                        <span>{getLibrarySubject(item)}</span>
+                        <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/70">
+                          {generatedQuestionCount} question{generatedQuestionCount === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {addNotesError ? (
+            <p className="text-sm text-red-600 dark:text-red-300">{addNotesError}</p>
+          ) : null}
+        </div>
+      </AppModal>
 
       <AppModal
         isOpen={pendingDeleteSection !== null}
