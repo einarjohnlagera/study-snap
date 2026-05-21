@@ -106,6 +106,7 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
     targetProfileType: toSelectableNoteTargetProfile(note.targetProfileType),
     content: note.content,
     tags: note.tags ?? [],
+    learnerLevel: note.learnerLevel ?? "",
   };
 }
 
@@ -151,6 +152,7 @@ export function NoteEditorPageClient({
     targetProfileType: "",
     content: "",
     tags: [],
+    learnerLevel: "",
   });
   const [entryOption, setEntryOption] = useState<NoteEditorEntryOption>(initialSource === "upload" ? "import" : "write");
   const [generateTopic, setGenerateTopic] = useState("");
@@ -262,9 +264,13 @@ export function NoteEditorPageClient({
         setProfileCourseProgram(me.courseProgram ?? "");
         if (!isEditMode) {
           setDraft((previous) => (
-            previous.courseProgram.trim().length > 0
+            previous.courseProgram.trim().length > 0 && previous.learnerLevel
               ? previous
-              : { ...previous, courseProgram: me.courseProgram ?? "" }
+              : {
+                ...previous,
+                courseProgram: previous.courseProgram.trim().length > 0 ? previous.courseProgram : me.courseProgram ?? "",
+                learnerLevel: previous.learnerLevel || me.learnerLevel || "",
+              }
           ));
         }
       })
@@ -294,7 +300,7 @@ export function NoteEditorPageClient({
     if (!snapshot) {
       return;
     }
-    setDraft(snapshot.draft);
+    setDraft({ ...snapshot.draft, learnerLevel: snapshot.draft.learnerLevel ?? "" });
     setEntryOption(snapshot.entryOption);
     setGenerateTopic(snapshot.generateTopic);
     clearNoteUpgradeDraft(authUser.id);
@@ -578,19 +584,25 @@ export function NoteEditorPageClient({
       return null;
     }
     let resolvedCourseProgram = normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram);
-    if (!resolvedCourseProgram && !isEditMode) {
+    let resolvedLearnerLevel = draft.learnerLevel || (!isEditMode ? profileLearnerLevel || null : null);
+    if ((!resolvedCourseProgram || !resolvedLearnerLevel) && !isEditMode) {
       try {
         const me = await getMe();
-        resolvedCourseProgram = normalizeOptional(me.courseProgram ?? "");
+        resolvedCourseProgram = resolvedCourseProgram ?? normalizeOptional(me.courseProgram ?? "");
+        resolvedLearnerLevel = resolvedLearnerLevel || me.learnerLevel || null;
         setProfileCourseProgram(me.courseProgram ?? "");
         setProfileLearnerLevel(me.learnerLevel ?? "");
         setDraft((previous) => (
-          previous.courseProgram.trim().length > 0
+          previous.courseProgram.trim().length > 0 && previous.learnerLevel
             ? previous
-            : { ...previous, courseProgram: me.courseProgram ?? "" }
+            : {
+              ...previous,
+              courseProgram: previous.courseProgram.trim().length > 0 ? previous.courseProgram : me.courseProgram ?? "",
+              learnerLevel: previous.learnerLevel || me.learnerLevel || "",
+            }
         ));
       } catch {
-        resolvedCourseProgram = null;
+        resolvedCourseProgram = resolvedCourseProgram ?? null;
       }
     }
     return {
@@ -600,14 +612,17 @@ export function NoteEditorPageClient({
       tags: draft.tags,
       targetProfileType,
       content: draft.content,
+      learnerLevel: resolvedLearnerLevel as LearnerLevel | null,
     };
   }, [
     draft.content,
     draft.courseProgram,
+    draft.learnerLevel,
     draft.subject,
     draft.tags,
     draft.title,
     profileCourseProgram,
+    profileLearnerLevel,
     isEditMode,
     resolveTargetProfileType,
   ]);
@@ -829,6 +844,7 @@ export function NoteEditorPageClient({
         courseProgram: normalizeOptional(draft.courseProgram),
         tags: nextMetadata.tags,
         targetProfileType,
+        learnerLevel: draft.learnerLevel || null,
         content: draft.content,
       });
       setDraft(toDraft(updated));
@@ -845,6 +861,7 @@ export function NoteEditorPageClient({
     applyingSuggestion,
     draft.content,
     draft.courseProgram,
+    draft.learnerLevel,
     draft.subject,
     draft.tags,
     draft.title,
@@ -1015,6 +1032,9 @@ export function NoteEditorPageClient({
   const autoFocusContent = !isEditMode && (initialMode === "quiz" || initialSource === "paste");
   const autoFocusImport = !isEditMode && initialSource === "upload";
   const showGenerateNoteEntry = !isEditMode;
+  const learnerLevelHelperText = currentProfileType === "TEACHER"
+    ? "Prefilled from your profile. Adjust to match your students' grade level."
+    : "Controls quiz and exam difficulty. Defaults to your profile level if not set.";
 
   const dismissFirstStudyHint = useCallback(async () => {
     const authUser = getAuthUser();
@@ -1086,6 +1106,7 @@ export function NoteEditorPageClient({
         onTargetProfileTypeChange={(value) => {
           setDraft((previous) => ({ ...previous, targetProfileType: value }));
         }}
+        onLearnerLevelChange={(value) => setDraft((previous) => ({ ...previous, learnerLevel: value }))}
         onContentChange={(value) => setDraft((previous) => ({ ...previous, content: value }))}
         onTagsChange={(nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))}
         onSave={() => {
@@ -1134,7 +1155,7 @@ export function NoteEditorPageClient({
         contentAnimationKey={generatedContentRefreshToken}
         contentStatusText={contentStatusText}
         disableContentEditing={contentLocked}
-        contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
+        contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, learner level, subject, and tags."
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}
         firstStudyHintVisible={showFirstStudyHint}
         autoFocusContent={autoFocusContent}
@@ -1149,6 +1170,7 @@ export function NoteEditorPageClient({
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
         learnerLevel={profileLearnerLevel}
+        learnerLevelHelperText={learnerLevelHelperText}
         resolvedCourseProgram={normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
         showTargetProfileTypeField={showTargetProfileTypeField}
         targetProfileTypeHelperText={targetProfileTypeHelperText}

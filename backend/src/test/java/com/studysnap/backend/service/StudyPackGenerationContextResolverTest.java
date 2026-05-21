@@ -50,6 +50,28 @@ class StudyPackGenerationContextResolverTest {
     }
 
     @Test
+    void resolve_prefersNoteLearnerLevelOverProfileLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.PROFESSIONAL);
+        user.setCourseProgram("Education");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        NoteEntity note = new NoteEntity();
+        note.setLearnerLevel(LearnerLevel.JUNIOR_HIGH);
+        note.setCourseProgram("Science");
+        note.setSubject("Biology");
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        assertThat(context.learnerLevel()).isEqualTo(LearnerLevel.JUNIOR_HIGH);
+        assertThat(context.courseProgram()).isEqualTo("Science");
+    }
+
+    @Test
     void resolve_fallsBackToProfileCourseProgramWhenNoteCourseProgramIsMissing() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();

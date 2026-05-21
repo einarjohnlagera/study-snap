@@ -901,6 +901,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         courseProgram: note.courseProgram ?? null,
         tags: nextMetadata.tags,
         targetProfileType: note.targetProfileType,
+        learnerLevel: note.learnerLevel ?? null,
         content: note.content,
       });
       setNote(updated);
@@ -1029,6 +1030,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
         tags: metadataDraft.tags,
         targetProfileType: nextTargetProfileType,
+        learnerLevel: note.learnerLevel ?? null,
         content: note.content,
       });
       setNote(updated);

@@ -73,6 +73,8 @@ class NoteServiceTest {
     private AnalyticsService analyticsService;
     @Mock
     private ContentModerationService contentModerationService;
+    @Mock
+    private ExamQuestionPoolService examQuestionPoolService;
 
     private NoteService noteService;
 
@@ -88,7 +90,8 @@ class NoteServiceTest {
                 subscriptionService,
                 featureGateService,
                 analyticsService,
-                contentModerationService
+                contentModerationService,
+                examQuestionPoolService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -123,6 +126,7 @@ class NoteServiceTest {
                 null,
                 List.of("react", "frontend"),
                 null,
+                "grade_school",
                 "  hooks and state  "
         );
 
@@ -135,6 +139,7 @@ class NoteServiceTest {
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getVisibility()).isEqualTo(NoteVisibility.PRIVATE);
         assertThat(saved.getCourseProgram()).isEqualTo("Computer Science");
+        assertThat(saved.getLearnerLevel()).isEqualTo(LearnerLevel.GRADE_SCHOOL);
         assertThat(saved.getContent()).isEqualTo("hooks and state");
         assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
         assertThat(saved.getCopiedFromUserId()).isNull();
@@ -142,6 +147,7 @@ class NoteServiceTest {
 
         assertThat(created.studyPackStatus()).isEqualTo("DRAFT");
         assertThat(created.courseProgram()).isEqualTo("Computer Science");
+        assertThat(created.learnerLevel()).isEqualTo("GRADE_SCHOOL");
         assertThat(created.targetProfileType()).isEqualTo("STUDENT");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
@@ -282,6 +288,38 @@ class NoteServiceTest {
     }
 
     @Test
+    void update_refreshesExamPoolsWhenLearnerLevelChanges() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        NoteEntity draftNote = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "old content");
+        draftNote.setLearnerLevel(LearnerLevel.GRADE_SCHOOL);
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
+        StudyPackEntity linkedStudyPack = new StudyPackEntity();
+        linkedStudyPack.setId(studyPackId);
+        linkedStudyPack.setNoteId(noteId);
+        linkedStudyPack.setSubject("Biology");
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(draftNote));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(linkedStudyPack));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "New title",
+                "Biology",
+                "Pre-Med",
+                List.of("cells"),
+                null,
+                "JUNIOR_HIGH",
+                "old content"
+        );
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        verify(examQuestionPoolService).refreshPool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM);
+        verify(examQuestionPoolService).refreshPool(studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM);
+    }
+
+    @Test
     void update_generatedNote_rejectsContentChange() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -310,6 +348,7 @@ class NoteServiceTest {
         source.setTitle("Source title");
         source.setSubject("Math");
         source.setCourseProgram("Engineering");
+        source.setLearnerLevel(LearnerLevel.SENIOR_HIGH);
         source.setTags(new String[]{"algebra"});
         source.setTargetProfileType(NoteTargetProfileType.STUDENT);
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
@@ -322,6 +361,7 @@ class NoteServiceTest {
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getSourceNoteId()).isEqualTo(sourceNoteId);
         assertThat(saved.getCourseProgram()).isEqualTo("Engineering");
+        assertThat(saved.getLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH);
         assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();

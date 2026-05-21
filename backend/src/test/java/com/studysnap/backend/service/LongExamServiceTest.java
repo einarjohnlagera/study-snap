@@ -105,6 +105,8 @@ class LongExamServiceTest {
             .thenReturn(UserUsageService.MonthlyUsage.zero());
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
             .thenReturn(Optional.empty());
+        lenient().when(generationContextResolver.resolveForStudyPack(any(UUID.class), any(StudyPackEntity.class)))
+            .thenReturn(buildGenerationContext(LearnerLevel.COLLEGE));
         TransactionOperations transactionOperations = new TransactionOperations() {
             @Override
             public <T> T execute(TransactionCallback<T> action) {

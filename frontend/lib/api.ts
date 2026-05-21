@@ -901,6 +901,7 @@ export type UpsertNoteRequest = {
   courseProgram?: string | null;
   tags?: string[];
   targetProfileType?: NoteTargetProfileType | null;
+  learnerLevel?: LearnerLevel | null;
   content: string;
 };
 
@@ -913,6 +914,7 @@ export type NoteResponse = {
   title: string | null;
   subject: string | null;
   courseProgram?: string | null;
+  learnerLevel: LearnerLevel | null;
   targetProfileType: NoteTargetProfileType;
   tags: string[];
   content: string;

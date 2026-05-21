@@ -632,8 +632,8 @@ class OpenAiLlmStudyPackServiceTest {
     @Test
     void generateLongExamParallel_mergesAndDeduplicatesBatchResults() throws JsonProcessingException {
         stubResponsesCall();
-        ObjectNode batch1 = buildGeneratedQuizPayload("Batch A", 13);
-        ObjectNode batch2 = buildGeneratedQuizPayload("Batch B", 13);
+        ObjectNode batch1 = buildGeneratedQuizPayload("Batch A", 9);
+        ObjectNode batch2 = buildGeneratedQuizPayload("Batch B", 9);
         ((ArrayNode) batch2.get("questions")).set(0, generatedQuizItem(
             "Batch A question 0",
             List.of("Correct 0", "Choice B", "Choice C", "Choice D"),
@@ -673,7 +673,7 @@ class OpenAiLlmStudyPackServiceTest {
     void generateLongExamParallelFallsBackToSequentialWhenBatchFails() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenThrow(new RuntimeException("batch failed"))
-            .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Batch B", 13)))
+            .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Batch B", 9)))
             .thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Sequential", 14)));
 
         List<QuizItem> quizItems = service.generateLongExamParallel(

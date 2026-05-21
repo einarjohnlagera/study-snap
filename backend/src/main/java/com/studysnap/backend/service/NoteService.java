@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
@@ -98,6 +99,7 @@ public class NoteService {
     private final FeatureGateService featureGateService;
     private final AnalyticsService analyticsService;
     private final ContentModerationService contentModerationService;
+    private final ExamQuestionPoolService examQuestionPoolService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         UserEntity owner = getOwnerOrThrow(ownerUserId);
@@ -107,6 +109,7 @@ public class NoteService {
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), owner));
+        entity.setLearnerLevel(resolveLearnerLevel(request.targetLearnerLevel()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
         entity.setStatus(NoteStatus.DRAFT);
@@ -133,6 +136,7 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
+        LearnerLevel prevLearnerLevel = entity.getLearnerLevel();
 
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         NoteStatus currentStatus = resolveStatus(entity);
@@ -152,6 +156,7 @@ public class NoteService {
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
+        entity.setLearnerLevel(resolveLearnerLevel(request.targetLearnerLevel()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setTargetProfileType(resolveTargetProfileType(request.targetProfileType(), owner));
         entity.setUpdatedAt(OffsetDateTime.now());
@@ -161,6 +166,10 @@ public class NoteService {
         if (linkedStudyPack != null && !Objects.equals(linkedStudyPack.getSubject(), saved.getSubject())) {
             linkedStudyPack.setSubject(saved.getSubject());
             studyPackRepository.save(linkedStudyPack);
+        }
+        if (linkedStudyPack != null && !Objects.equals(prevLearnerLevel, saved.getLearnerLevel())) {
+            examQuestionPoolService.refreshPool(linkedStudyPack.getId(), ExamQuestionPoolService.MODE_LONG_EXAM);
+            examQuestionPoolService.refreshPool(linkedStudyPack.getId(), ExamQuestionPoolService.MODE_BOARD_EXAM);
         }
         return mapToResponse(saved, linkedStudyPack);
     }
@@ -210,6 +219,7 @@ public class NoteService {
         copy.setTitle(source.getTitle());
         copy.setSubject(resolveCanonicalSubject(source.getSubject()));
         copy.setCourseProgram(normalizeOptionalCourseProgram(source.getCourseProgram()));
+        copy.setLearnerLevel(source.getLearnerLevel());
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
         copy.setContent(source.getContent());
         copy.setStatus(NoteStatus.DRAFT);
@@ -683,6 +693,17 @@ public class NoteService {
         return note.getTargetProfileType() == null ? NoteTargetProfileType.STUDENT : note.getTargetProfileType();
     }
 
+    private LearnerLevel resolveLearnerLevel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LearnerLevel.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
         List<String> keyConcepts = studyPack == null || studyPack.getKeyConcepts() == null
                 ? List.of()
@@ -699,6 +720,7 @@ public class NoteService {
                 entity.getTitle(),
                 entity.getSubject(),
                 entity.getCourseProgram(),
+                entity.getLearnerLevel() == null ? null : entity.getLearnerLevel().name(),
                 resolveTargetProfileType(entity).name(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
@@ -748,7 +770,7 @@ public class NoteService {
                 includeOwnerUserId && note.getOwnerUserId() != null ? note.getOwnerUserId().toString() : null,
                 note.getTitle(),
                 normalizeOptionalText(note.getCourseProgram()),
-                owner == null || owner.getLearnerLevel() == null ? null : owner.getLearnerLevel().name(),
+                resolveListItemLearnerLevel(note, owner),
                 resolveTargetProfileType(note).name(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -775,6 +797,13 @@ public class NoteService {
                 Boolean.TRUE.equals(note.getCopiedFromPublic()),
                 likedByCurrentUser
         );
+    }
+
+    private String resolveListItemLearnerLevel(NoteEntity note, UserEntity owner) {
+        if (note.getLearnerLevel() != null) {
+            return note.getLearnerLevel().name();
+        }
+        return owner == null || owner.getLearnerLevel() == null ? null : owner.getLearnerLevel().name();
     }
 
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack, UUID viewerUserId) {
