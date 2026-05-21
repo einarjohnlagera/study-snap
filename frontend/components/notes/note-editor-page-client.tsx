@@ -165,7 +165,7 @@ export function NoteEditorPageClient({
   const [isCopying, setIsCopying] = useState(false);
   const [saveStateLabel, setSaveStateLabel] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
+  const [toastTone, setToastTone] = useState<"success" | "error" | "info" | "warning">("info");
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -287,7 +287,7 @@ export function NoteEditorPageClient({
     };
   }, [isEditMode]);
 
-  const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
+  const showToast = useCallback((message: string, tone: "success" | "error" | "info" | "warning" = "info") => {
     setToastTone(tone);
     setToastMessage(message);
   }, []);
@@ -605,6 +605,14 @@ export function NoteEditorPageClient({
         resolvedCourseProgram = resolvedCourseProgram ?? null;
       }
     }
+    const missing: string[] = [];
+    if (!resolvedLearnerLevel) missing.push("Learner Level");
+    if (!resolvedCourseProgram) missing.push("Course / Program");
+    if (missing.length > 0) {
+      setRevealOptionalDetailsSignal((previous) => previous + 1);
+      showToast(`Please complete: ${missing.join(", ")}.`, "warning");
+      return null;
+    }
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
@@ -625,6 +633,8 @@ export function NoteEditorPageClient({
     profileLearnerLevel,
     isEditMode,
     resolveTargetProfileType,
+    setRevealOptionalDetailsSignal,
+    showToast,
   ]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {

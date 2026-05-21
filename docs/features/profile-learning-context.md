@@ -44,7 +44,7 @@ Account identity fields are documented separately in `docs/features/account-prof
 - `users.course_program` (backend, profile default)
 - `notes.course_program` (backend, per-note override)
 - `Profile > Learning Profile` card — required when saving Learning Profile
-- Note Editor — optional per-note field, defaults from the profile value
+- Note Editor — required per-note field; pre-filled from the profile value, validated before save/generate
 
 **Where it is used in generation:**
 - Study Pack and quiz generation context blocks include `courseProgram` alongside `learnerLevel`.
@@ -65,7 +65,7 @@ Account identity fields are documented separately in `docs/features/account-prof
   - College → examples: `BS Computer Science`, `BS Nursing`, `BS Business Administration`
   - Graduate → examples: `MS Computer Science`, `MBA`, `MD`
 - Required when saving `Learning Profile` (alongside `Learner Level`). Shows inline validation: `Please select or enter your course / program.`
-- Optional when creating or editing a Note; shown in the `Add details (optional)` collapsed section.
+- Required when saving or generating a Study Pack from a Note; pre-filled from the profile value so the gate rarely blocks users who completed onboarding.
 
 ---
 
@@ -74,8 +74,8 @@ Account identity fields are documented separately in `docs/features/account-prof
 | | Learner Level | Course / Program |
 |---|---|---|
 | Controls | Difficulty, depth, vocabulary | Domain, examples, scenarios |
-| Required in | Learning Profile save | Learning Profile save |
-| Optional in | — | Note Editor |
+| Required in | Learning Profile save, Note Editor | Learning Profile save, Note Editor |
+| Optional in | — | — |
 | Onboarding | Deferred | Deferred |
 | LLM use | `learnerLevel` field in context block | `courseProgram` field in context block |
 | Merge? | **Never** | **Never** |

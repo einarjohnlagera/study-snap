@@ -171,7 +171,7 @@ export function NoteEditorForm({
                                    subjectSuggestions = [],
                                    courseProgramSuggestions = [],
                                    learnerLevel = null,
-                                   learnerLevelHelperText = "Controls quiz and exam difficulty. Defaults to your profile level if not set.",
+                                   learnerLevelHelperText = "Controls quiz and exam difficulty for this note.",
                                    resolvedCourseProgram = null,
                                    showTargetProfileTypeField = false,
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
@@ -341,39 +341,22 @@ export function NoteEditorForm({
                 />
             </div>
 
+            <div className="space-y-2">
+                <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
+                    (optional)</label>
+                <SubjectCombobox
+                    id="note-subject"
+                    value={note.subject}
+                    suggestions={subjectSuggestions}
+                    onChange={onSubjectChange}
+                    disabled={isCopying}
+                />
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                    <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
-                        (optional)</label>
-                    <SubjectCombobox
-                        id="note-subject"
-                        value={note.subject}
-                        suggestions={subjectSuggestions}
-                        onChange={onSubjectChange}
-                        disabled={isCopying}
-                    />
-                    <p className="text-xs text-foreground/60">Helps organize notes and filter by topic in your
-                        Library.</p>
-                </div>
-                <div className="space-y-2">
-                    <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course /
-                        Program (optional)</label>
-                    <CourseProgramCombobox
-                        id="note-course-program"
-                        value={note.courseProgram}
-                        suggestions={courseProgramSuggestions}
-                        learnerLevel={learnerLevel}
-                        onChange={onCourseProgramChange}
-                        disabled={isCopying}
-                        context="note"
-                    />
-                    <p className="text-xs text-foreground/60">
-                        Used as domain context for examples, terminology, and quiz questions.
-                    </p>
-                </div>
-                <div className="space-y-2">
                     <label htmlFor="note-learner-level" className="text-sm font-medium text-foreground">
-                        Learner Level (optional)
+                        Learner Level <span className="text-red-500" aria-hidden="true">*</span>
                     </label>
                     <select
                         id="note-learner-level"
@@ -390,6 +373,18 @@ export function NoteEditorForm({
                     <p className="text-xs text-foreground/60">
                         {learnerLevelHelperText}
                     </p>
+                </div>
+                <div className="space-y-2">
+                    <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program <span className="text-red-500" aria-hidden="true">*</span></label>
+                    <CourseProgramCombobox
+                        id="note-course-program"
+                        value={note.courseProgram}
+                        suggestions={courseProgramSuggestions}
+                        learnerLevel={effectiveLearnerLevel}
+                        onChange={onCourseProgramChange}
+                        disabled={isCopying}
+                        context="note"
+                    />
                 </div>
 
                 {showTargetProfileTypeField ? (
@@ -622,17 +617,16 @@ export function NoteEditorForm({
         <section ref={optionalDetailsSectionRef} className="rounded-2xl border border-border/80 bg-muted/15">
             <button
                 type="button"
-                aria-label="Add details (optional)"
+                aria-label="Add details"
                 aria-controls="note-optional-details"
                 aria-expanded={optionalDetailsOpen}
                 onClick={() => setOptionalDetailsOpen((previous) => !previous)}
                 className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left sm:px-5"
             >
                 <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">Add details (optional)</p>
+                    <p className="text-sm font-semibold text-foreground">Add details</p>
                     <p className="max-w-2xl text-xs text-foreground/65">
-                        You can organize this note now or later. These details help with search, filtering, and
-                        recommendations.
+                        Learner Level and Course / Program are required. Title, subject, and tags are optional.
                     </p>
                 </div>
                 <ChevronDown

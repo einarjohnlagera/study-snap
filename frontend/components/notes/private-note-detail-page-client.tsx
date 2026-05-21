@@ -73,6 +73,7 @@ import {
 } from "@/lib/first-study-onboarding";
 import {
   COURSE_PROGRAM_SUGGESTIONS,
+  LEARNER_LEVEL_OPTIONS,
   mergeCourseProgramSuggestions,
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
@@ -260,6 +261,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<"default" | "warning">("default");
 
   const [generating, setGenerating] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -309,12 +311,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     subject: string;
     courseProgram: string;
     targetProfileType: NoteTargetProfileType | "";
+    learnerLevel: LearnerLevel | "";
     tags: string[];
   }>({
     title: "",
     subject: "",
     courseProgram: "",
     targetProfileType: "",
+    learnerLevel: "",
     tags: [],
   });
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
@@ -470,7 +474,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!toast) {
       return;
     }
-    const timeout = globalThis.setTimeout(() => setToast(null), 2600);
+    const timeout = globalThis.setTimeout(() => { setToast(null); setToastTone("default"); }, 2600);
     return () => globalThis.clearTimeout(timeout);
   }, [toast]);
 
@@ -583,6 +587,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
       targetProfileType: note.targetProfileType,
+      learnerLevel: note.learnerLevel ?? "",
       tags: [...(note.tags ?? [])],
     });
   }, [isInlineMetadataEditMode, note]);
@@ -866,6 +871,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
       targetProfileType: note.targetProfileType,
+      learnerLevel: note.learnerLevel ?? "",
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -970,6 +976,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: note.subject ?? "",
         courseProgram: note.courseProgram ?? "",
         targetProfileType: note.targetProfileType,
+        learnerLevel: note.learnerLevel ?? "",
         tags: [...(note.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -988,6 +995,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
       targetProfileType: note.targetProfileType,
+      learnerLevel: note.learnerLevel ?? "",
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -1015,6 +1023,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note || savingMetadata) {
       return;
     }
+    const missing: string[] = [];
+    if (!metadataDraft.learnerLevel) missing.push("Learner Level");
+    if (!metadataDraft.courseProgram.trim()) missing.push("Course / Program");
+    if (missing.length > 0) {
+      setToastTone("warning");
+      setToast(`Please complete: ${missing.join(", ")}.`);
+      return;
+    }
     if (canEditTargetProfileType && !metadataDraft.targetProfileType) {
       setError("Please select an audience");
       return;
@@ -1030,7 +1046,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
         tags: metadataDraft.tags,
         targetProfileType: nextTargetProfileType,
-        learnerLevel: note.learnerLevel ?? null,
+        learnerLevel: metadataDraft.learnerLevel || null,
         content: note.content,
       });
       setNote(updated);
@@ -1039,6 +1055,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: updated.subject ?? "",
         courseProgram: updated.courseProgram ?? "",
         targetProfileType: updated.targetProfileType,
+        learnerLevel: updated.learnerLevel ?? "",
         tags: [...(updated.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -1528,18 +1545,40 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     placeholder="Choose or type a subject"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                    Course / Program
-                  </label>
-                  <CourseProgramCombobox
-                    id="note-course-program-inline"
-                    value={metadataDraft.courseProgram}
-                    suggestions={availableCourseProgramSuggestions}
-                    learnerLevel={profileLearnerLevel}
-                    onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
-                    context="note"
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label htmlFor="note-learner-level-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Learner Level <span className="text-red-500" aria-hidden="true">*</span>
+                    </label>
+                    <select
+                      id="note-learner-level-inline"
+                      value={metadataDraft.learnerLevel}
+                      onChange={(event) => setMetadataDraft((previous) => ({
+                        ...previous,
+                        learnerLevel: event.target.value as LearnerLevel | "",
+                      }))}
+                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                    >
+                      <option value="">Select level</option>
+                      {LEARNER_LEVEL_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-foreground/60">Controls quiz and exam difficulty for this note.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Course / Program <span className="text-red-500" aria-hidden="true">*</span>
+                    </label>
+                    <CourseProgramCombobox
+                      id="note-course-program-inline"
+                      value={metadataDraft.courseProgram}
+                      suggestions={availableCourseProgramSuggestions}
+                      learnerLevel={metadataDraft.learnerLevel || profileLearnerLevel}
+                      onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
+                      context="note"
+                    />
+                  </div>
                 </div>
                 {canEditTargetProfileType ? (
                   <div className="space-y-2">
@@ -1875,7 +1914,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       ) : null}
 
       {toast ? (
-        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
+        <div role="status" aria-live="polite" className={`fixed bottom-4 right-4 z-50 rounded-md border px-3 py-2 text-sm shadow-sm ${toastTone === "warning" ? "border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-500 dark:bg-amber-950/60 dark:text-amber-200" : "border-border bg-background"}`}>
           {toast}
         </div>
       ) : null}
