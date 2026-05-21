@@ -26,7 +26,9 @@ public class StudyPackGenerationContextResolver {
 
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
-                        user.getLearnerLevel(),
+                        note != null && note.getLearnerLevel() != null
+                                ? note.getLearnerLevel()
+                                : user.getLearnerLevel(),
                         note == null ? user.getCourseProgram() : firstNonBlank(note.getCourseProgram(), user.getCourseProgram()),
                         note == null ? null : note.getSubject(),
                         tags

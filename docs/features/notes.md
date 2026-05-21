@@ -9,7 +9,8 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 Current note-authoring fields:
 
 - `title` (optional)
-- `courseProgram` (optional, defaults from the user's profile on new notes)
+- `learnerLevel` (required before save/generate; pre-filled from the user's profile)
+- `courseProgram` (required before save/generate; pre-filled from the user's profile)
 - `subject` (optional)
 - `tags` (optional)
 - `content` (required before save/generate)
@@ -40,6 +41,8 @@ Rules:
 - Topic-level specificity belongs in tags and key concepts, not in subject
 - Subject is a reusable library shelf label — it should group many notes, not describe one note
 - The backend strips any subtopic suffix (`Biology – Cell Division` → `Biology`) before saving
+- `learnerLevel` and `courseProgram` are required before saving or generating a Study Pack; the frontend validates and reveals the metadata section with a toast if either is missing.
+- `learnerLevel` and `courseProgram` are pre-filled from the user's profile so the required validation rarely blocks users who completed onboarding.
 - learner level, course/program, current subject, and tags may be passed into Study Pack generation to improve subject suggestion quality without changing the note form flow.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 
@@ -76,12 +79,12 @@ Create mode:
   - optional topic generation panel
   - optional import panel
   - note `Content`
-  - `Add details (optional)` disclosure
+  - `Add details` disclosure
 - actions: `Save`, `Generate Study Pack`
 - optional topic-first helper: `Generate Note`
 - the `Import notes` start option reuses the existing OCR/file-extraction flow and inserts extracted text into the main editor before save or Study Pack generation.
-- note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details (optional)` section by default so first-time note creation stays focused on content.
-- create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details (optional)` without turning the page back into a long form.
+- note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
+- create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
 - `Generate Study Pack` first saves the note, queues Study Pack generation, then redirects immediately to Note Detail with the requested default tab.
 - the editor must not wait for the LLM request to finish before navigation.
 - `Generate Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.

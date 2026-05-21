@@ -1,4 +1,4 @@
-type ToastTone = "success" | "error" | "info";
+type ToastTone = "success" | "error" | "info" | "warning";
 
 type ToastMessageProps = {
   message: string;
@@ -11,6 +11,9 @@ function toneClasses(tone: ToastTone): string {
   }
   if (tone === "error") {
     return "border-red-400/70 bg-red-50 text-red-900 dark:border-red-700/70 dark:bg-red-950/40 dark:text-red-200";
+  }
+  if (tone === "warning") {
+    return "border-amber-400/70 bg-amber-50 text-amber-900 dark:border-amber-500/70 dark:bg-amber-950/50 dark:text-amber-200";
   }
   return "border-blue-400/70 bg-blue-50 text-blue-900 dark:border-blue-700/70 dark:bg-blue-950/40 dark:text-blue-200";
 }

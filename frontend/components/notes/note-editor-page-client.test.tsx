@@ -784,7 +784,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(contentInput).toHaveAttribute("readonly");
     expect(
-      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."),
+      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, learner level, subject, and tags."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Note" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();

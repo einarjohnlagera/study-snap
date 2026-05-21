@@ -151,7 +151,6 @@ public class LongExamService {
         List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
         AtomicBoolean createdSession = new AtomicBoolean(false);
         AtomicBoolean poolSourcedSession = new AtomicBoolean(false);
-        LearnerLevel learnerLevel = resolveLearnerLevel(userId);
 
         QuickReviewSessionEntity session = studyPackGenerationTransactionOperations.execute(status -> {
             StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
@@ -175,11 +174,12 @@ public class LongExamService {
                     questionCount
             );
             if (additionalStudyPackIds.isEmpty()) {
+                StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(userId, studyPack);
                 Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
                         studyPackId,
                         ExamQuestionPoolService.MODE_LONG_EXAM,
                         questionCount,
-                        learnerLevel
+                        generationContext.learnerLevel()
                 );
                 if (pooledQuestions.isPresent()) {
                     QuickReviewSessionEntity poolSession = buildGeneratingSession(

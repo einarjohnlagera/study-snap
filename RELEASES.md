@@ -29,6 +29,8 @@ Theme: make Long Exam and Board Exam feel premium, not just gated behind a paywa
 - **Teacher Quiz Preview polish** — Quiz Preview now uses the note title as the page heading, shows question count beside the export-ready badge, keeps Export as the sole primary action, and moves Regenerate into an overflow menu
 - **Teacher Exam Builder polish** — renamed the scratch preset to `Start Blank`, made it the first template, clarified Even/Smart Balance helper text, and added a footer breakdown of questions per section before export
 - **Teacher paywall copy polish** — quiz-generation and export-limit upgrade paths now use teacher-aware CTA/body copy for classroom quiz generation and DOCX export limits without changing plan gates
+- **Per-note learner level override** — notes now carry an optional learner level so teachers can set the difficulty / grade level per class note independently of their profile default; Study Pack generation plus Long Exam and Board Exam question pools use the note's level when set
+- **Learner Level and Course/Program required on notes** — both fields are now required before saving or generating a Study Pack; pre-filled from the user's profile so the gate rarely blocks users who completed onboarding; Course/Program helper text adapts dynamically to the selected Learner Level in both the creation form and the inline metadata edit; required fields are marked with asterisks, validation shows a single aggregate amber toast listing all missing fields at once, and the "Add details" section header no longer says "(optional)"
 
 ---
 

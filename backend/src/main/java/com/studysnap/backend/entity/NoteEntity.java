@@ -37,6 +37,10 @@ public class NoteEntity {
     @Column(name = "course_program", length = 120)
     private String courseProgram;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learner_level", length = 50)
+    private LearnerLevel learnerLevel;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]", nullable = false)
     private String[] tags;

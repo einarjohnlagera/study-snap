@@ -49,6 +49,10 @@ Do not mix these models.
 - Helper copy: `Generate a quiz from this note with answers and explanations for review and export.`
 - Generation consumes `1` quiz credit
 - Quiz generation is based on the note itself, not on student quiz sessions
+- Notes carry an optional `Learner Level` field so teachers can calibrate each note to the student audience for that class.
+- On new notes, the learner level is prefilled from the teacher's profile but should be adjusted when the note is for a different grade level.
+- Teacher helper text: `Prefilled from your profile. Adjust to match your students' grade level.`
+- Study Pack generation and pre-generated Long Exam / Board Exam pools use the note's learner level when set, falling back to the teacher profile level only when the note has no override.
 
 ### View
 
