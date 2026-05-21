@@ -15,7 +15,8 @@ export type MePlanResponse = {
     boardExamPerMonth?: number;
     ocrPerMonth: number;
     noteGenerationsPerMonth?: number;
-    exportsPerMonth?: number | null;
+    docxExportsPerMonth?: number | null;
+    pdfExportsPerMonth?: number | null;
   };
   usage: {
     studyPacksUsed: number;
@@ -26,7 +27,8 @@ export type MePlanResponse = {
     boardExamUsed?: number;
     ocrUsed: number;
     noteGenerationsUsed?: number;
-    exportsUsed?: number;
+    docxExportsUsed?: number;
+    pdfExportsUsed?: number;
   };
   remaining: {
     studyPacksRemaining: number;
@@ -37,7 +39,8 @@ export type MePlanResponse = {
     boardExamRemaining?: number;
     ocrRemaining: number;
     noteGenerationsRemaining?: number;
-    exportsRemaining?: number | null;
+    docxExportsRemaining?: number | null;
+    pdfExportsRemaining?: number | null;
   };
   features: {
     adaptivePracticeAvailable: boolean;

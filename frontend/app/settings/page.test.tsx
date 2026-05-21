@@ -118,18 +118,24 @@ const proUsageSummary = {
     challengeQuizzesPerMonth: 50,
     adaptivePracticePerMonth: 30,
     ocrPerMonth: 100,
+    docxExportsPerMonth: null,
+    pdfExportsPerMonth: null,
   },
   usage: {
     studyPacksUsed: 2,
     challengeQuizzesUsed: 1,
     adaptivePracticeUsed: 0,
     ocrUsed: 4,
+    docxExportsUsed: 5,
+    pdfExportsUsed: 2,
   },
   remaining: {
     studyPacksRemaining: 98,
     challengeQuizzesRemaining: 49,
     adaptivePracticeRemaining: 30,
     ocrRemaining: 96,
+    docxExportsRemaining: null,
+    pdfExportsRemaining: null,
   },
   features: {
     adaptivePracticeAvailable: true,
@@ -150,18 +156,24 @@ const freeUsageSummary = {
     challengeQuizzesPerMonth: 5,
     adaptivePracticePerMonth: 0,
     ocrPerMonth: 20,
+    docxExportsPerMonth: 2,
+    pdfExportsPerMonth: 2,
   },
   usage: {
     studyPacksUsed: 1,
     challengeQuizzesUsed: 0,
     adaptivePracticeUsed: 0,
     ocrUsed: 0,
+    docxExportsUsed: 1,
+    pdfExportsUsed: 0,
   },
   remaining: {
     studyPacksRemaining: 9,
     challengeQuizzesRemaining: 5,
     adaptivePracticeRemaining: 0,
     ocrRemaining: 20,
+    docxExportsRemaining: 1,
+    pdfExportsRemaining: 2,
   },
   features: {
     adaptivePracticeAvailable: false,
@@ -445,6 +457,10 @@ describe("Settings page cancellation flow", () => {
 
     expect(await screen.findByText("Usage resets on: April 15")).toBeInTheDocument();
     expect(screen.queryByTestId("usage-metric-adaptive-practice")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("usage-metric-docx-exports")).getByText("1 / 2")).toBeInTheDocument();
+    expect(within(screen.getByTestId("usage-metric-pdf-exports")).getByText("0 / 2")).toBeInTheDocument();
+    expect(screen.getByText("1 remaining this cycle.")).toBeInTheDocument();
+    expect(screen.getByText("2 remaining this cycle.")).toBeInTheDocument();
   });
 
   it("shows adaptive practice usage for Pro users", async () => {
@@ -453,6 +469,28 @@ describe("Settings page cancellation flow", () => {
     expect(await screen.findByText("Usage resets on: April 20")).toBeInTheDocument();
     expect(screen.getByTestId("usage-metric-adaptive-practice")).toBeInTheDocument();
     expect(within(screen.getByTestId("usage-metric-adaptive-practice")).getByText("0 / 30")).toBeInTheDocument();
+  });
+
+  it("shows unlimited Teacher DOCX exports and the Teacher Plus callout", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...proProfile,
+      profileType: "TEACHER",
+      planType: "PLUS",
+      subscription: { cancelAtPeriodEnd: false, premiumEndsAt: "2026-04-20T00:00:00Z", cancelledAt: null },
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      ...freeUsageSummary,
+      plan: "PLUS",
+      limits: { ...freeUsageSummary.limits, docxExportsPerMonth: null, pdfExportsPerMonth: 15 },
+      usage: { ...freeUsageSummary.usage, docxExportsUsed: 11, pdfExportsUsed: 3 },
+      remaining: { ...freeUsageSummary.remaining, docxExportsRemaining: null, pdfExportsRemaining: 12 },
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("Teachers get unlimited quiz exports on Plus.")).toBeInTheDocument();
+    expect(within(screen.getByTestId("usage-metric-docx-exports")).getByText("11 used / Unlimited")).toBeInTheDocument();
+    expect(within(screen.getByTestId("usage-metric-pdf-exports")).getByText("3 / 15")).toBeInTheDocument();
   });
 
   it("shows reached-limit message without an upgrade button inside the metric", async () => {

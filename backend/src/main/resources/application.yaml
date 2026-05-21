@@ -95,9 +95,15 @@ studysnap:
     free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:5}
     plus-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PLUS:25}
     pro-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PRO:${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}}
-    free-monthly-export-limit: ${FREE_MONTHLY_EXPORT_LIMIT:2}
-    plus-monthly-export-limit: ${PLUS_MONTHLY_EXPORT_LIMIT:15}
-    pro-monthly-export-limit: ${PRO_MONTHLY_EXPORT_LIMIT:-1}
+    free-monthly-docx-export-limit: ${FREE_MONTHLY_DOCX_EXPORT_LIMIT:2}
+    plus-monthly-docx-export-limit: ${PLUS_MONTHLY_DOCX_EXPORT_LIMIT:15}
+    pro-monthly-docx-export-limit: ${PRO_MONTHLY_DOCX_EXPORT_LIMIT:-1}
+    free-teacher-monthly-docx-export-limit: ${FREE_TEACHER_MONTHLY_DOCX_EXPORT_LIMIT:10}
+    plus-teacher-monthly-docx-export-limit: ${PLUS_TEACHER_MONTHLY_DOCX_EXPORT_LIMIT:-1}
+    pro-teacher-monthly-docx-export-limit: ${PRO_TEACHER_MONTHLY_DOCX_EXPORT_LIMIT:-1}
+    free-monthly-pdf-export-limit: ${FREE_MONTHLY_PDF_EXPORT_LIMIT:2}
+    plus-monthly-pdf-export-limit: ${PLUS_MONTHLY_PDF_EXPORT_LIMIT:15}
+    pro-monthly-pdf-export-limit: ${PRO_MONTHLY_PDF_EXPORT_LIMIT:-1}
     adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:false}
     interview-practice-pro-only: ${INTERVIEW_PRACTICE_PRO_ONLY:true}
     difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}

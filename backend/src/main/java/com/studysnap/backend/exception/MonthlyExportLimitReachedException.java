@@ -10,7 +10,7 @@ public class MonthlyExportLimitReachedException extends AppException {
     private static final String DEFAULT_MESSAGE = "You’ve reached your monthly export limit for this billing cycle.";
 
     private MonthlyExportLimitReachedException(String message) {
-        super(ERROR_CODE, message, HttpStatus.FORBIDDEN);
+        super(ERROR_CODE, message, HttpStatus.PAYMENT_REQUIRED);
     }
 
     public static MonthlyExportLimitReachedException forPlan(PlanType planType) {

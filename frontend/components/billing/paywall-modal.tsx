@@ -187,8 +187,13 @@ export function PaywallModal({
     [authUser?.profileType, normalizedContext.type],
   );
   const teacherUpgradeCtas = useMemo(
-    () => teacherUpgradeCtaContext ? getUpgradeCtas(appCurrentPlan, teacherUpgradeCtaContext) : null,
-    [appCurrentPlan, teacherUpgradeCtaContext],
+    () => teacherUpgradeCtaContext
+      ? getUpgradeCtas(appCurrentPlan, {
+          context: teacherUpgradeCtaContext,
+          profileType: authUser?.profileType,
+        })
+      : null,
+    [appCurrentPlan, authUser?.profileType, teacherUpgradeCtaContext],
   );
   const { billingPricing } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);

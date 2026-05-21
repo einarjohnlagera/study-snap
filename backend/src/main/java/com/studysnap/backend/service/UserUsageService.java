@@ -28,7 +28,8 @@ public class UserUsageService {
                         usage.getInterviewPracticeUsedThisMonth(),
                         usage.getOcrExtractions(),
                         usage.getNoteGenerations(),
-                        usage.getExportsCount(),
+                        usage.getDocxExportsCount(),
+                        usage.getPdfExportsCount(),
                         usage.getLongExamUsedThisMonth(),
                         usage.getBoardExamUsedThisMonth()
                 ))
@@ -44,6 +45,7 @@ public class UserUsageService {
                 usagePeriod.month(),
                 usagePeriod.periodStart(),
                 usagePeriod.periodEnd(),
+                0,
                 0,
                 0,
                 0,
@@ -79,12 +81,12 @@ public class UserUsageService {
 
     @Transactional
     public void incrementLongExamGeneration(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 1, 0, 0, 0, 0);
+        increment(userId, occurredAt, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
     }
 
     @Transactional
     public void incrementBoardExamGeneration(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0);
     }
 
     @Transactional
@@ -98,8 +100,13 @@ public class UserUsageService {
     }
 
     @Transactional
-    public void incrementExport(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+    public void incrementDocxExport(UUID userId, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+    }
+
+    @Transactional
+    public void incrementPdfExport(UUID userId, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
     }
 
     private void increment(
@@ -134,6 +141,7 @@ public class UserUsageService {
                 0,
                 ocrDelta,
                 noteGenerationDelta,
+                0,
                 0
         );
     }
@@ -149,7 +157,8 @@ public class UserUsageService {
             int boardExamDelta,
             int ocrDelta,
             int noteGenerationDelta,
-            int exportDelta
+            int docxExportDelta,
+            int pdfExportDelta
     ) {
         BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt);
         userUsageRepository.incrementUsage(
@@ -166,7 +175,8 @@ public class UserUsageService {
                 boardExamDelta,
                 ocrDelta,
                 noteGenerationDelta,
-                exportDelta,
+                docxExportDelta,
+                pdfExportDelta,
                 OffsetDateTime.now(ZoneOffset.UTC)
         );
     }
@@ -180,7 +190,8 @@ public class UserUsageService {
             int interviewPracticeUsedThisMonth,
             int ocrExtractions,
             int noteGenerations,
-            int exportsCount,
+            int docxExportsCount,
+            int pdfExportsCount,
             int longExamUsedThisMonth,
             int boardExamUsedThisMonth
     ) {
@@ -204,6 +215,7 @@ public class UserUsageService {
                     ocrExtractions,
                     noteGenerations,
                     exportsCount,
+                    0,
                     0,
                     0
             );
@@ -231,17 +243,47 @@ public class UserUsageService {
                     noteGenerations,
                     exportsCount,
                     0,
+                    0,
                     0
+            );
+        }
+
+        public MonthlyUsage(
+                OffsetDateTime periodStart,
+                OffsetDateTime periodEnd,
+                int studyPackGenerations,
+                int challengeQuizGenerations,
+                int adaptiveQuizGenerations,
+                int interviewPracticeUsedThisMonth,
+                int ocrExtractions,
+                int noteGenerations,
+                int exportsCount,
+                int longExamUsedThisMonth,
+                int boardExamUsedThisMonth
+        ) {
+            this(
+                    periodStart,
+                    periodEnd,
+                    studyPackGenerations,
+                    challengeQuizGenerations,
+                    adaptiveQuizGenerations,
+                    interviewPracticeUsedThisMonth,
+                    ocrExtractions,
+                    noteGenerations,
+                    exportsCount,
+                    0,
+                    longExamUsedThisMonth,
+                    boardExamUsedThisMonth
             );
         }
 
         public static MonthlyUsage zero() {
             OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-            return new MonthlyUsage(now, now, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new MonthlyUsage(now, now, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
 
         public static MonthlyUsage zero(OffsetDateTime periodStart, OffsetDateTime periodEnd) {
-            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 }

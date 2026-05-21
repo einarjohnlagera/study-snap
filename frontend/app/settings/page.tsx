@@ -45,7 +45,7 @@ import {
   getUsageProgressPercent,
   isPaidPlanType,
 } from "@/lib/plans";
-import { PLANS, getPaidPlanCtaLabel } from "@/src/config/plans";
+import { PLANS, TEACHER_PLUS_EXPORT_CALLOUT, getPaidPlanCtaLabel } from "@/src/config/plans";
 
 function SettingsLoading() {
   return (
@@ -101,6 +101,37 @@ function UsageMetric({
           You&apos;ve reached your limit for this cycle. Limits reset on: {resetDateLabel}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function ExportUsageMetric({
+  label,
+  used,
+  limit,
+  remaining,
+  resetDateLabel,
+}: Readonly<{
+  label: string;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  resetDateLabel: string;
+}>) {
+  if (limit === null) {
+    return (
+      <div data-testid={`usage-metric-${label.toLowerCase().replaceAll(/\s+/g, "-")}`} className="space-y-1 rounded-md border border-border bg-background p-4">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-sm text-foreground/70">{used} used / Unlimited</p>
+        <p className="text-xs text-foreground/60">Unlimited remaining this cycle.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <UsageMetric label={label} used={used} limit={limit} resetDateLabel={resetDateLabel} />
+      <p className="px-1 text-xs text-foreground/60">{remaining ?? 0} remaining this cycle.</p>
     </div>
   );
 }
@@ -413,8 +444,12 @@ export default function SettingsPage() {
   const longExamLimit = usageSummary?.limits.longExamPerMonth ?? 0;
   const boardExamUsed = usageSummary?.usage.boardExamUsed ?? 0;
   const boardExamLimit = usageSummary?.limits.boardExamPerMonth ?? 0;
-  const exportsUsed = usageSummary?.usage.exportsUsed ?? 0;
-  const exportsLimit = usageSummary?.limits.exportsPerMonth ?? null;
+  const docxExportsUsed = usageSummary?.usage.docxExportsUsed ?? 0;
+  const docxExportsLimit = usageSummary?.limits.docxExportsPerMonth ?? null;
+  const docxExportsRemaining = usageSummary?.remaining.docxExportsRemaining ?? null;
+  const pdfExportsUsed = usageSummary?.usage.pdfExportsUsed ?? 0;
+  const pdfExportsLimit = usageSummary?.limits.pdfExportsPerMonth ?? null;
+  const pdfExportsRemaining = usageSummary?.remaining.pdfExportsRemaining ?? null;
   const plusMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
   const proMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
   const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
@@ -718,14 +753,20 @@ export default function SettingsPage() {
                   limit={challengeQuizLimit}
                   resetDateLabel={usageResetDateLabel}
                 />
-                {exportsLimit !== null && exportsLimit !== undefined ? (
-                  <UsageMetric
-                    label="Exports"
-                    used={exportsUsed}
-                    limit={exportsLimit}
-                    resetDateLabel={usageResetDateLabel}
-                  />
-                ) : null}
+                <ExportUsageMetric
+                  label="DOCX Exports"
+                  used={docxExportsUsed}
+                  limit={docxExportsLimit}
+                  remaining={docxExportsRemaining}
+                  resetDateLabel={usageResetDateLabel}
+                />
+                <ExportUsageMetric
+                  label="PDF Exports"
+                  used={pdfExportsUsed}
+                  limit={pdfExportsLimit}
+                  remaining={pdfExportsRemaining}
+                  resetDateLabel={usageResetDateLabel}
+                />
                 {adaptivePracticeLimit > 0 ? (
                   <UsageMetric
                     label="Adaptive Practice"
@@ -834,6 +875,11 @@ export default function SettingsPage() {
                     ) : null}
                   </div>
                   <PlanFeatureList features={plusPlanConfig.features} />
+                  {profile?.profileType === "TEACHER" ? (
+                    <p className="mb-3 rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300">
+                      {TEACHER_PLUS_EXPORT_CALLOUT}
+                    </p>
+                  ) : null}
                   <p className="mb-5 text-xs text-foreground/55">{plusPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan === "FREE" ? (

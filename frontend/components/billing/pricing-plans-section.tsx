@@ -12,6 +12,7 @@ import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config
 import {
   type ComparisonValue,
   PLAN_COMPARISON_ROWS,
+  TEACHER_PLUS_EXPORT_CALLOUT,
   getPaidPlanCtaLabel,
   getPlanConfig,
 } from "@/src/config/plans";
@@ -89,6 +90,7 @@ function PlanCard({
   highlights,
   ctaLabel,
   planType,
+  callout,
   accent = false,
 }: Readonly<{
   label: string;
@@ -101,6 +103,7 @@ function PlanCard({
   highlights: ReadonlyArray<{ label: string; helper?: string }>;
   ctaLabel: string;
   planType: PaidPlanType;
+  callout?: string;
   accent?: boolean;
 }>) {
   return (
@@ -125,6 +128,11 @@ function PlanCard({
         {introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
       </div>
       <FeatureList features={highlights} />
+      {callout ? (
+        <p className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300">
+          {callout}
+        </p>
+      ) : null}
       <div className="space-y-2">
         <PremiumUpgradeButton
           label={ctaLabel}
@@ -231,6 +239,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           highlights={plusPlan.features}
           ctaLabel={getPaidPlanCtaLabel("PLUS")}
           planType="PLUS"
+          callout={TEACHER_PLUS_EXPORT_CALLOUT}
         />
 
         <PlanCard
@@ -363,6 +372,9 @@ export function SimplePricingSection() {
           <div className="grow">
             <FeatureList features={plusPlan.features} />
           </div>
+          <p className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300">
+            {TEACHER_PLUS_EXPORT_CALLOUT}
+          </p>
           <p className="text-xs text-foreground/55">{plusPlan.adaptivePracticeMessage}</p>
           <Link href="/signup" className={buttonVariants({ variant: "outline", className: "w-full" })}>
             {plusPlan.ctaLabel}

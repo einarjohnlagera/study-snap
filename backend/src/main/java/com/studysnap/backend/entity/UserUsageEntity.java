@@ -59,8 +59,11 @@ public class UserUsageEntity {
     @Column(name = "note_generations", nullable = false)
     private Integer noteGenerations;
 
-    @Column(name = "exports_count", nullable = false)
-    private Integer exportsCount;
+    @Column(name = "docx_exports_count", nullable = false)
+    private Integer docxExportsCount;
+
+    @Column(name = "pdf_exports_count", nullable = false)
+    private Integer pdfExportsCount;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

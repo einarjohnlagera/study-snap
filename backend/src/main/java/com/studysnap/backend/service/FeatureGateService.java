@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.exception.FeatureAccessDeniedException;
 import com.studysnap.backend.exception.LongExamNotAvailableException;
 import lombok.RequiredArgsConstructor;
@@ -49,5 +50,13 @@ public class FeatureGateService {
             case INTERVIEW_PRACTICE -> properties.getPricing().isInterviewPracticeAvailable(planType);
             case WEAK_CONCEPT_DETECTION -> true;
         };
+    }
+
+    public Integer resolveMonthlyDocxExportLimit(PlanType planType, ProfileType profileType) {
+        return properties.getPricing().resolveMonthlyDocxExportLimit(planType, profileType);
+    }
+
+    public Integer resolveMonthlyPdfExportLimit(PlanType planType) {
+        return properties.getPricing().resolveMonthlyPdfExportLimit(planType);
     }
 }

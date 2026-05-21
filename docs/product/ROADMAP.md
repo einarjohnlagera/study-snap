@@ -12,6 +12,46 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
+## v0.15.1 - Teacher Power Features
+
+**Status: Planned**
+
+Theme: extend the teacher quiz-authoring workflow with concrete controls that turn it into a complete classroom tool, building on the v0.15.0 teacher flow polish and plan accessibility foundation. Target audience: Filipino teachers who need a practical, affordable tool for quiz and exam preparation.
+
+Primary focus:
+
+1. **Question count control on Generate Quiz** — let teachers choose 10 / 20 / 30 questions per generated quiz. Plus+ Teacher unlocks 20 and 30; Free Teacher fixed at 10. Honest upsell because higher counts directly increase LLM token cost.
+
+2. **Custom DOCX header** — teacher profile carries an optional `schoolName` field that appears at the top of every DOCX export. Per-export modal can add class/section name and toggle date inclusion. Eliminates the manual edit-in-Word step before printing or filing exam packets.
+
+3. **Multiple exam versions (A/B/C)** — single DOCX export with 2 or 3 deterministically shuffled versions for anti-cheating in classroom settings. Plus+ Teacher only. Choice order also shuffled per version; answer keys reflect shuffled positions. Same exam + same versionCount produces identical bytes (deterministic).
+
+### Implementation stances
+
+- All three features are gated by Teacher profile type; non-Teacher profiles see no UI surface for them
+- All three preserve the `generatedQuiz` ownership model from v0.15.0 — no LLM call at export time for header rendering or version shuffling
+- Plus-gate enforcement for question count happens BEFORE the LLM call to avoid wasted tokens on rejected requests
+- Backend exception classes follow the existing plan-gated-action pattern (e.g., `QuestionCountNotAllowedForPlanException`, `MultipleExamVersionsNotAllowedForPlanException`)
+- Codex prompts for this scope live at `docs/codex-prompts/teacher-flow-upgrades.md` (Prompts 3, 4, 5)
+
+### Anti-drift notes
+
+- Multiple-version shuffle is a deterministic algorithm, not AI — do not market or icon-decorate as "AI-powered"
+- DOCX header limited to one school name line + one class name line + one date line; no multi-line address, no logo, no branding (v1 scope)
+- Question count restricted to the set {10, 20, 30}; no slider, no custom values, no values outside this set
+- Versions limited to {1, 2, 3}; do not extend beyond 3 in v1
+- DOCX export must continue to use stored `generatedQuiz` data only — header and shuffling are local rendering
+
+### Sequencing
+
+v0.15.1 must NOT ship before v0.15.0 because:
+- Question count control's "Plus unlocks 20/30 questions" upsell copy depends on the teacher-aware `getUpgradeCtas` variant introduced in v0.15.0 (Teacher Plan Accessibility)
+- Multiple exam versions reuses the per-export Plus paywall pattern established in v0.15.0
+
+Within v0.15.1, the three features can ship in any order or in parallel — they are mostly orthogonal.
+
+---
+
 ## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor
 
 **Status: In Progress**

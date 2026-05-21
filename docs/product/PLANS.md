@@ -118,7 +118,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 
 ---
 
-## Profile-Aware Plan Rules (v0.15.0+)
+## Profile-Aware Plan Rules (Implemented)
 
 Some plan limits are adjusted based on the user's profile type. These overrides sit on top of the base plan — the user still pays the same price, but their primary workflow gets more headroom where it matters.
 
@@ -147,7 +147,7 @@ This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use
 - The upgrade CTA shown to Teacher-profile Free users should lead with export headroom: *"Unlock more exports — get Plus"* rather than the generic study-focused copy.
 - A Teacher-profile Plus user should **not** see *"Upgrade to Pro for unlimited exports"* — that message is no longer true for them. The upgrade nudge for Teacher Plus should focus on the quiz generation limits, not exports.
 
-**Implementation note:** `FeatureGateService` (backend) must check `profileType == TEACHER` when resolving the export limit, before applying the plan-based default. Frontend export limit display in Settings → Plan & Billing must read the profile-aware resolved limit, not the raw plan limit.
+**Implementation note:** `FeatureGateService` resolves DOCX export limits with `profileType == TEACHER` before applying the plan-based default. The resolved-limit API response exposes separate DOCX and PDF limit / usage fields, and Settings → Plan & Billing must read those profile-aware fields instead of deriving limits from raw plan config.
 
 **Verification:** Profile type is user-declared (honor system). No external verification is required for v0.15.0. If abuse becomes measurable in a future release, a lightweight signal (e.g., checking that the user has generated at least one `generatedQuiz`) can be added without changing the rule structure.
 
@@ -160,7 +160,7 @@ For Teacher-profile users, the upgrade story is about **generation volume**, not
 - **Free → Plus:** more exports (10 → unlimited), more Study Packs (10 → 50), more quiz generation (5 → 25)
 - **Plus → Pro:** highest generation limits (50 Study Packs → 100, 25 quizzes → 50), multi-note Exam Builder without session limits
 
-The standard exam-prep framing ("Board Exam Mode", "Adaptive Practice") does not resonate with teachers. Upgrade CTAs shown to Teacher-profile users must use teacher-framed copy. Use `getUpgradeCtas(currentPlan)` with a `"teacher"` context variant (to be added in v0.15.0).
+The standard exam-prep framing ("Board Exam Mode", "Adaptive Practice") does not resonate with teachers. Upgrade CTAs shown to Teacher-profile users must use teacher-framed copy. Use `getUpgradeCtas(currentPlan, { profileType })` so Teacher Plus nudges focus on generation volume instead of export headroom.
 
 ---
 

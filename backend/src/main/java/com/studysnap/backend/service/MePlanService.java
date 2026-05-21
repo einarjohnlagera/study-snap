@@ -3,6 +3,9 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +21,15 @@ public class MePlanService {
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
     private final StudyPackUsageService studyPackUsageService;
+    private final UserRepository userRepository;
+    private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
 
     public MePlanResponse getPlan(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
+        ProfileType profileType = userRepository.findById(userId)
+                .map(UserEntity::getProfileType)
+                .orElse(null);
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         UserUsageService.MonthlyUsage usage = userUsageService.getMonthlyUsage(userId, now);
         StudyPackUsageService.UsageSnapshot studyPackUsage = studyPackUsageService.resolveUsage(userId, usage);
@@ -34,7 +42,8 @@ public class MePlanService {
         int boardExamLimit = properties.getPricing().resolveMonthlyBoardExamLimit(planType);
         int ocrLimit = properties.getPricing().resolveMonthlyOcrLimit(planType);
         int noteGenerationLimit = properties.getPricing().resolveMonthlyNoteGenerationLimit(planType);
-        Integer exportLimit = properties.getPricing().resolveMonthlyExportLimit(planType);
+        Integer docxExportLimit = featureGateService.resolveMonthlyDocxExportLimit(planType, profileType);
+        Integer pdfExportLimit = featureGateService.resolveMonthlyPdfExportLimit(planType);
 
         int studyPackUsed = studyPackUsage.usedCount();
         int challengeQuizUsed = usage.challengeQuizGenerations();
@@ -44,7 +53,8 @@ public class MePlanService {
         int boardExamUsed = usage.boardExamUsedThisMonth();
         int ocrUsed = usage.ocrExtractions();
         int noteGenerationUsed = usage.noteGenerations();
-        int exportUsed = usage.exportsCount();
+        int docxExportUsed = usage.docxExportsCount();
+        int pdfExportUsed = usage.pdfExportsCount();
 
         return new MePlanResponse(
                 planType,
@@ -59,7 +69,8 @@ public class MePlanService {
                         interviewPracticeLimit,
                         ocrLimit,
                         noteGenerationLimit,
-                        exportLimit,
+                        docxExportLimit,
+                        pdfExportLimit,
                         longExamLimit,
                         boardExamLimit
                 ),
@@ -70,7 +81,8 @@ public class MePlanService {
                         interviewPracticeUsed,
                         ocrUsed,
                         noteGenerationUsed,
-                        exportUsed,
+                        docxExportUsed,
+                        pdfExportUsed,
                         longExamUsed,
                         boardExamUsed
                 ),
@@ -81,7 +93,8 @@ public class MePlanService {
                         remaining(interviewPracticeLimit, interviewPracticeUsed),
                         remaining(ocrLimit, ocrUsed),
                         remaining(noteGenerationLimit, noteGenerationUsed),
-                        remainingNullable(exportLimit, exportUsed),
+                        remainingNullable(docxExportLimit, docxExportUsed),
+                        remainingNullable(pdfExportLimit, pdfExportUsed),
                         remaining(longExamLimit, longExamUsed),
                         remaining(boardExamLimit, boardExamUsed)
                 ),
@@ -91,7 +104,7 @@ public class MePlanService {
                         properties.getPricing().isDifficultySelectionAvailable(planType),
                         true,
                         ocrLimit > 0,
-                        exportLimit == null || exportLimit > 0
+                        isExportAvailable(docxExportLimit) || isExportAvailable(pdfExportLimit)
                 )
         );
     }
@@ -105,5 +118,9 @@ public class MePlanService {
             return null;
         }
         return remaining(limit, used);
+    }
+
+    private boolean isExportAvailable(Integer limit) {
+        return limit == null || limit > 0;
     }
 }
