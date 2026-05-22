@@ -2,7 +2,7 @@
 
 ## v0.15.1 - Teacher Power Features
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: extend the teacher quiz-authoring workflow with concrete controls that turn it into a complete classroom tool, building on the v0.15.0 teacher flow polish and plan accessibility foundation.
 
