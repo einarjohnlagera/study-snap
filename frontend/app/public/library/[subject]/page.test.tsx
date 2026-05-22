@@ -14,7 +14,6 @@ function buildNote(overrides: Partial<TestNote> & Pick<TestNote, "id" | "title" 
   return {
     ownerUserId: "user-1",
     courseProgram: "Biology",
-    learnerLevel: "COLLEGE",
     targetProfileType: "STUDENT",
     subject: "Biology",
     tags: ["cells"],

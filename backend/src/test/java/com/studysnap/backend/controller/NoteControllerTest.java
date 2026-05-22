@@ -259,12 +259,12 @@ class NoteControllerTest {
         );
         com.studysnap.backend.dto.GenerateGeneratedQuizRequest request =
                 new com.studysnap.backend.dto.GenerateGeneratedQuizRequest(20);
-        when(generatedQuizService.generate("note-1", userId, 20)).thenReturn(expected);
+        when(generatedQuizService.generate("note-1", userId, 20, null)).thenReturn(expected);
 
         com.studysnap.backend.dto.GeneratedQuizResponse response = noteController.generateGeneratedQuiz("note-1", request, user);
 
         verify(authService).requireEmailVerified(userId);
-        verify(generatedQuizService).generate("note-1", userId, 20);
+        verify(generatedQuizService).generate("note-1", userId, 20, null);
         assertThat(response).isEqualTo(expected);
     }
 
@@ -332,7 +332,6 @@ class NoteControllerTest {
                         userId.toString(),
                         "My public note",
                         "Nursing",
-                        "COLLEGE",
                         "STUDENT",
                         "Biology",
                         List.of("cells"),

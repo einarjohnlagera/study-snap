@@ -9,7 +9,6 @@ describe("StudyPackGrid", () => {
       ownerUserId: "user-1",
       title: "React Hooks",
       courseProgram: null,
-      learnerLevel: null,
       targetProfileType: "STUDENT",
       subject: "Web Dev",
       tags: ["react", "hooks"],

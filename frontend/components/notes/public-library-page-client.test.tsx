@@ -37,7 +37,6 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
     ownerUserId: "user-2",
     title: "Community Note",
     courseProgram: "Engineering",
-    learnerLevel: "COLLEGE",
     targetProfileType: "STUDENT",
     subject: "Physics",
     tags: ["motion"],
@@ -445,7 +444,6 @@ describe("PublicLibraryPageClient", () => {
         ownerUserId: "user-1",
         title: "Mine",
         courseProgram: "Nursing",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         authorDisplayName: "Me",
         isCurrentUser: true,
@@ -455,7 +453,6 @@ describe("PublicLibraryPageClient", () => {
         ownerUserId: "admin-1",
         title: "Official Example",
         courseProgram: "Chemistry",
-        learnerLevel: "PROFESSIONAL",
         subject: "Chemistry",
         authorDisplayName: "NoteLib",
         isOfficialAuthor: true,
@@ -464,7 +461,6 @@ describe("PublicLibraryPageClient", () => {
         id: "note-3",
         title: "Community Physics",
         courseProgram: "Engineering",
-        learnerLevel: "BOARD_EXAM_REVIEW",
         subject: "Physics",
         tags: ["motion"],
       }),
@@ -477,9 +473,7 @@ describe("PublicLibraryPageClient", () => {
     fireEvent.change(screen.getByLabelText("Course / Program"), {
       target: { value: "Engineering" },
     });
-    fireEvent.change(screen.getByLabelText("Learner Level"), {
-      target: { value: "BOARD_EXAM_REVIEW" },
-    });
+    expect(screen.queryByLabelText("Learner Level")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Community"));
 
     expect(screen.queryByText("Mine")).not.toBeInTheDocument();

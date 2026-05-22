@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.QuizDocxExportHeaderOverrideRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -42,6 +43,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -202,6 +204,65 @@ class GeneratedQuizServiceTest {
 
         assertThat(response.questions()).hasSize(30);
         verify(quizGenerationService).generateTeacherQuiz(any(), any(), any(), eq(30), any(StudyPackGenerationContext.class));
+    }
+
+    @Test
+    void generate_overridesResolvedLearnerLevelForRequestedTargetLevel() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Education", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildQuestions());
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        generatedQuizService.generate(noteId.toString(), userId, 10, "junior_high");
+
+        verify(quizGenerationService).generateTeacherQuiz(
+                any(),
+                any(),
+                any(),
+                eq(10),
+                argThat(context -> context.learnerLevel() == LearnerLevel.JUNIOR_HIGH
+                        && "Education".equals(context.courseProgram()))
+        );
+    }
+
+    @Test
+    void generate_usesResolvedLearnerLevelWhenTargetLevelIsMissing() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.SENIOR_HIGH, "Education", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildQuestions());
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        generatedQuizService.generate(noteId.toString(), userId, 10, null);
+
+        verify(quizGenerationService).generateTeacherQuiz(
+                any(),
+                any(),
+                any(),
+                eq(10),
+                argThat(context -> context.learnerLevel() == LearnerLevel.SENIOR_HIGH)
+        );
     }
 
     @Test

@@ -11,7 +11,6 @@ import {
   getMyPlan,
   getChallengeQuizPerformanceSummary,
   getChallengeQuizSessionReview,
-  getMe,
   getNote,
   getMyStudyPack,
   getQuickReviewPerformanceSummary,
@@ -72,7 +71,6 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
   getChallengeQuizSessionReview: jest.fn(),
-  getMe: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   listCoursePrograms: jest.fn(),
@@ -136,7 +134,6 @@ describe("PrivateNoteDetailPageClient", () => {
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getChallengeQuizSessionReview as jest.Mock).mockReset();
-    (getMe as jest.Mock).mockReset();
     (getMyStudyPack as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewSessionReview as jest.Mock).mockReset();
@@ -207,10 +204,6 @@ describe("PrivateNoteDetailPageClient", () => {
       selectedChoices: {},
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:30:00Z",
-    });
-    (getMe as jest.Mock).mockResolvedValue({
-      learnerLevel: "COLLEGE",
-      courseProgram: "Nursing",
     });
     (getQuickReviewSessionReview as jest.Mock).mockResolvedValue({
       sessionId: "quick-1",
@@ -742,12 +735,36 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Quiz question count" })).toBeInTheDocument();
     expect(screen.getByText("Higher counts cover more material. Plus unlocks 20 and 30 questions.")).toBeInTheDocument();
+    expect(screen.getByText("Target Level")).toBeInTheDocument();
+    expect(screen.getByText("Leave blank to use your profile's learner level.")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement);
 
     await waitFor(() => {
-      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10);
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10, null);
     });
+  });
+
+  it("keeps Target Level out of non-teacher note detail", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByRole("tab", { name: "Summary" });
+    expect(screen.queryByRole("button", { name: "Generate Quiz" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Target Level")).not.toBeInTheDocument();
   });
 
   it("opens the longer teacher quiz paywall when a Free teacher clicks a locked count", async () => {
@@ -825,10 +842,13 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "30" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Target Level" }), {
+      target: { value: "JUNIOR_HIGH" },
+    });
     fireEvent.click(screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement);
 
     await waitFor(() => {
-      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 30);
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 30, "JUNIOR_HIGH");
     });
   });
 
@@ -927,7 +947,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Regenerate Quiz" }));
 
     await waitFor(() => {
-      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10);
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10, null);
     });
   });
 

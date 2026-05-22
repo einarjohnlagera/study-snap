@@ -21,14 +21,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import {
-  type LearnerLevel,
   listNotes,
   listPublicNotes,
   listSubjects,
   type NoteListItemResponse,
 } from "@/lib/api";
 import {
-  formatLearnerLevel,
   mergeCourseProgramSuggestions,
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
@@ -62,7 +60,6 @@ import {
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
-const ALL_LEARNER_LEVELS = "__ALL_LEARNER_LEVELS__";
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
@@ -165,20 +162,17 @@ function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery
 
 function countActivePublicFilterGroups({
   courseProgram,
-  learnerLevel,
   subject,
   tags,
   sourceFilters,
 }: {
   courseProgram: string;
-  learnerLevel: string;
   subject: string;
   tags: string[];
   sourceFilters: PublicLibrarySourceFilter[];
 }) {
   return [
     courseProgram !== ALL_COURSE_PROGRAMS,
-    learnerLevel !== ALL_LEARNER_LEVELS,
     subject !== ALL_SUBJECTS,
     tags.length > 0,
     sourceFilters.length > 0,
@@ -472,7 +466,6 @@ export function PublicLibraryPageClient() {
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
-  const [selectedLearnerLevel, setSelectedLearnerLevel] = useState<string>(ALL_LEARNER_LEVELS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [subjectDraft, setSubjectDraft] = useState<string>(ALL_SUBJECTS);
   const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>("NEWEST");
@@ -631,16 +624,6 @@ export function PublicLibraryPageClient() {
     return mergeCourseProgramSuggestions(items.map((item) => item.courseProgram));
   }, [items]);
 
-  const availableLearnerLevels = useMemo(() => {
-    const learnerLevels = new Set<LearnerLevel>();
-    for (const item of items) {
-      if (item.learnerLevel) {
-        learnerLevels.add(item.learnerLevel);
-      }
-    }
-    return Array.from(learnerLevels).sort((left, right) => formatLearnerLevel(left)?.localeCompare(formatLearnerLevel(right) ?? "") ?? 0);
-  }, [items]);
-
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const item of items) {
@@ -709,12 +692,6 @@ export function PublicLibraryPageClient() {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     }
   }, [availableCoursePrograms, selectedCourseProgram]);
-
-  useEffect(() => {
-    if (selectedLearnerLevel !== ALL_LEARNER_LEVELS && !availableLearnerLevels.includes(selectedLearnerLevel as LearnerLevel)) {
-      setSelectedLearnerLevel(ALL_LEARNER_LEVELS);
-    }
-  }, [availableLearnerLevels, selectedLearnerLevel]);
 
   useEffect(() => {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
@@ -795,7 +772,6 @@ export function PublicLibraryPageClient() {
   const clearFilters = useCallback(() => {
     setSearchQuery("");
     setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
-    setSelectedLearnerLevel(ALL_LEARNER_LEVELS);
     setSelectedSubject(ALL_SUBJECTS);
     setSubjectDraft(ALL_SUBJECTS);
     setSelectedTags([]);
@@ -874,7 +850,6 @@ export function PublicLibraryPageClient() {
 
   const activeFilterCount = countActivePublicFilterGroups({
     courseProgram: selectedCourseProgram,
-    learnerLevel: selectedLearnerLevel,
     subject: selectedSubject,
     tags: selectedTags,
     sourceFilters: selectedSourceFilters,
@@ -882,7 +857,6 @@ export function PublicLibraryPageClient() {
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
-    || selectedLearnerLevel !== ALL_LEARNER_LEVELS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
@@ -939,19 +913,15 @@ export function PublicLibraryPageClient() {
       const tags = normalizeTags(item.tags);
       const courseProgram = normalizeCourseProgram(item.courseProgram);
       const courseProgramLookup = courseProgram?.toLowerCase() ?? null;
-      const learnerLevelLabel = formatLearnerLevel(item.learnerLevel);
       const normalizedSubject = normalizeSubject(item.subject);
       const titleMatch = query.length === 0
         || title.toLowerCase().includes(query)
         || (courseProgram?.toLowerCase().includes(query) ?? false)
-        || (learnerLevelLabel?.toLowerCase().includes(query) ?? false)
         || (normalizedSubject?.toLowerCase().includes(query) ?? false)
         || item.contentPreview.toLowerCase().includes(query)
         || tags.some((tag) => tag.toLowerCase().includes(query));
       const courseProgramMatch = selectedCourseProgramLookup === null
         || courseProgramLookup === selectedCourseProgramLookup;
-      const learnerLevelMatch = selectedLearnerLevel === ALL_LEARNER_LEVELS
-        || item.learnerLevel === selectedLearnerLevel;
       const subjectMatch = selectedSubject === ALL_SUBJECTS
         || normalizedSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0
@@ -965,9 +935,9 @@ export function PublicLibraryPageClient() {
               : !(isViewerAuthor(item, currentUserId, currentUsername) || item.isOfficialAuthor)
         ));
 
-      return titleMatch && courseProgramMatch && learnerLevelMatch && subjectMatch && tagMatch && sourceMatch;
+      return titleMatch && courseProgramMatch && subjectMatch && tagMatch && sourceMatch;
     });
-  }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedLearnerLevel, selectedSourceFilters, selectedSubject, selectedTags]);
+  }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedSourceFilters, selectedSubject, selectedTags]);
 
   const sortedItems = useMemo(() => {
     const byNewest = (left: NoteListItemResponse, right: NoteListItemResponse) => (
@@ -1041,20 +1011,6 @@ export function PublicLibraryPageClient() {
               });
             }}
             aria-label="Clear course program filter"
-          >
-            x
-          </button>
-        </span>
-      ) : null}
-
-      {selectedLearnerLevel !== ALL_LEARNER_LEVELS ? (
-        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
-          Level: {formatLearnerLevel(selectedLearnerLevel)}
-          <button
-            type="button"
-            className="text-foreground/65 hover:text-foreground"
-            onClick={() => setSelectedLearnerLevel(ALL_LEARNER_LEVELS)}
-            aria-label="Clear learner level filter"
           >
             x
           </button>
@@ -1662,25 +1618,6 @@ export function PublicLibraryPageClient() {
             {availableCoursePrograms.map((courseProgram) => (
               <option key={courseProgram} value={courseProgram}>
                 {courseProgram}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="public-library-filter-learner-level" className="text-sm font-medium">
-            Learner Level
-          </label>
-          <select
-            id="public-library-filter-learner-level"
-            value={selectedLearnerLevel}
-            onChange={(event) => setSelectedLearnerLevel(event.target.value)}
-            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
-          >
-            <option value={ALL_LEARNER_LEVELS}>All learner levels</option>
-            {availableLearnerLevels.map((learnerLevel) => (
-              <option key={learnerLevel} value={learnerLevel}>
-                {formatLearnerLevel(learnerLevel)}
               </option>
             ))}
           </select>

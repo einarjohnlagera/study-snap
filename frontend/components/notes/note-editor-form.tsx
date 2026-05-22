@@ -12,8 +12,7 @@ import {
     Tag,
     UploadCloud
 } from "lucide-react";
-import type {LearnerLevel, NoteTargetProfileType} from "@/lib/api";
-import {LEARNER_LEVEL_OPTIONS} from "@/lib/learning-profile";
+import type {NoteTargetProfileType} from "@/lib/api";
 import {CourseProgramCombobox} from "@/components/metadata/course-program-combobox";
 import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
@@ -31,7 +30,6 @@ export type NoteEditorDraft = {
     targetProfileType: NoteTargetProfileType | "";
     content: string;
     tags: string[];
-    learnerLevel: LearnerLevel | "";
 };
 
 export type NoteEditorEntryOption = "write" | "generate" | "import";
@@ -43,7 +41,6 @@ type NoteEditorFormProps = {
     onSubjectChange: (value: string) => void;
     onCourseProgramChange: (value: string) => void;
     onTargetProfileTypeChange?: (value: NoteTargetProfileType | "") => void;
-    onLearnerLevelChange?: (value: LearnerLevel | "") => void;
     onContentChange: (value: string) => void;
     onTagsChange?: (nextTags: string[]) => void;
     onSave: () => void;
@@ -97,8 +94,6 @@ type NoteEditorFormProps = {
     disableAction?: boolean;
     subjectSuggestions?: string[];
     courseProgramSuggestions?: string[];
-    learnerLevel?: LearnerLevel | "" | null;
-    learnerLevelHelperText?: string;
     resolvedCourseProgram?: string | null;
     showTargetProfileTypeField?: boolean;
     targetProfileTypeHelperText?: string;
@@ -118,7 +113,6 @@ export function NoteEditorForm({
                                    onSubjectChange,
                                    onCourseProgramChange,
                                    onTargetProfileTypeChange,
-                                   onLearnerLevelChange,
                                    onContentChange,
                                    onTagsChange,
                                    onSave,
@@ -170,8 +164,6 @@ export function NoteEditorForm({
                                    disableAction = false,
                                    subjectSuggestions = [],
                                    courseProgramSuggestions = [],
-                                   learnerLevel = null,
-                                   learnerLevelHelperText = "Controls quiz and exam difficulty for this note.",
                                    resolvedCourseProgram = null,
                                    showTargetProfileTypeField = false,
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
@@ -200,8 +192,6 @@ export function NoteEditorForm({
         : importFlowState === "success"
             ? "border-emerald-500/40 bg-emerald-50/70 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
             : "border-blue-500/40 bg-blue-50/70 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200";
-    const effectiveLearnerLevel = note.learnerLevel || learnerLevel;
-
     const handleAddTag = () => {
         if (!onTagsChange) {
             return;
@@ -355,32 +345,11 @@ export function NoteEditorForm({
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                    <label htmlFor="note-learner-level" className="text-sm font-medium text-foreground">
-                        Learner Level <span className="text-red-500" aria-hidden="true">*</span>
-                    </label>
-                    <select
-                        id="note-learner-level"
-                        value={note.learnerLevel}
-                        onChange={(event) => onLearnerLevelChange?.(event.target.value as LearnerLevel | "")}
-                        disabled={isCopying}
-                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                    >
-                        <option value="">Select level</option>
-                        {LEARNER_LEVEL_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                    </select>
-                    <p className="text-xs text-foreground/60">
-                        {learnerLevelHelperText}
-                    </p>
-                </div>
-                <div className="space-y-2">
                     <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program <span className="text-red-500" aria-hidden="true">*</span></label>
                     <CourseProgramCombobox
                         id="note-course-program"
                         value={note.courseProgram}
                         suggestions={courseProgramSuggestions}
-                        learnerLevel={effectiveLearnerLevel}
                         onChange={onCourseProgramChange}
                         disabled={isCopying}
                         context="note"
@@ -601,8 +570,7 @@ export function NoteEditorForm({
                 Pack.
             </p>
             <p className="text-xs text-foreground/50">
-                Your Learner Level and Course / Program help tailor the generated note&apos;s depth, terminology, and
-                examples.
+                Your Learning Profile helps tailor the generated note&apos;s depth, terminology, and examples.
             </p>
             {generateNoteFooter}
             {note.content.trim().length > 0 ? (
@@ -626,7 +594,7 @@ export function NoteEditorForm({
                 <div className="space-y-1">
                     <p className="text-sm font-semibold text-foreground">Add details</p>
                     <p className="max-w-2xl text-xs text-foreground/65">
-                        Learner Level and Course / Program are required. Title, subject, and tags are optional.
+                        Course / Program is required. Title, subject, and tags are optional.
                     </p>
                 </div>
                 <ChevronDown
@@ -830,8 +798,7 @@ export function NoteEditorForm({
                     <div className="min-w-0 space-y-0.5">
                         <p className="text-xs font-medium text-foreground/75">{saveStateLabel ?? "Save your note or generate a Study Pack when ready."}</p>
                         {(() => {
-                            const levelLabel = effectiveLearnerLevel ? (LEARNER_LEVEL_OPTIONS.find((o) => o.value === effectiveLearnerLevel)?.label ?? null) : null;
-                            const parts = [levelLabel, resolvedCourseProgram?.trim() || null].filter(Boolean);
+                            const parts = [resolvedCourseProgram?.trim() || null].filter(Boolean);
                             if (parts.length === 0) return null;
                             return (
                                 <p className="text-xs text-foreground/55">
@@ -847,7 +814,7 @@ export function NoteEditorForm({
                                 </p>
                             );
                         })()}
-                        {showGenerateNoteEntry && !effectiveLearnerLevel && !resolvedCourseProgram ? (
+                        {showGenerateNoteEntry && !resolvedCourseProgram ? (
                             <button
                                 type="button"
                                 onClick={handleRevealOptionalDetails}

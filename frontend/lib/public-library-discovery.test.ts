@@ -23,7 +23,6 @@ function makeNote(
     ownerUserId: "user-1",
     title: overrides.id,
     courseProgram: null,
-    learnerLevel: null,
     targetProfileType: "STUDENT",
     subject: null,
     tags: [],
@@ -176,7 +175,7 @@ describe("getFeaturedNotes", () => {
     const fresh = makeNote({
       id: "fresh",
       viewCount: 10,
-      createdAt: new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      createdAt: new Date(NOW.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     });
 
     const result = getFeaturedNotes([stale, fresh], DISCOVERY_SECTION_LIMIT, NOW);

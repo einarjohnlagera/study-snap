@@ -72,7 +72,6 @@ const baseNote = {
   title: "Draft Note",
   subject: "Biology",
   courseProgram: "Nursing",
-  learnerLevel: "COLLEGE" as const,
   targetProfileType: "STUDENT" as const,
   tags: ["cells"],
   content: "Cell content",
@@ -341,7 +340,7 @@ describe("NoteEditorPageClient", () => {
     });
     expect(getMe).toHaveBeenCalled();
     expect(
-      screen.getByText("Enter your degree like Engineering, Nursing, Accountancy, etc. This note can use a different value from your profile."),
+      screen.getByText("Choose or type the course, strand, field, or topic that fits best. This note can use a different value from your profile."),
     ).toBeInTheDocument();
   });
 
@@ -511,7 +510,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(await screen.findByText("Generate from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Bridge Load Distribution" } });
 
-    expect(screen.getByText(/Tailored for: College · Civil Engineering/)).toBeInTheDocument();
+    expect(screen.getByText(/Tailored for: Civil Engineering/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
 
@@ -784,7 +783,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(contentInput).toHaveAttribute("readonly");
     expect(
-      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, learner level, subject, and tags."),
+      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Note" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();

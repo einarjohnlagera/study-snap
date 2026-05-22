@@ -41,7 +41,6 @@ import {
   deleteNote,
   generateGeneratedQuiz,
   getChallengeQuizPerformanceSummary,
-  getMe,
   getMyStudyPack,
   getNote,
   getQuickReviewPerformanceSummary,
@@ -57,7 +56,6 @@ import {
   updateNoteVisibility,
   type ChallengeQuizSessionSummaryResponse,
   type ChallengeQuizPerformanceSummaryResponse,
-  type LearnerLevel,
   type NoteTargetProfileType,
   type NoteResponse,
   type NoteStudyPackStatus,
@@ -75,7 +73,7 @@ import {
 } from "@/lib/first-study-onboarding";
 import {
   COURSE_PROGRAM_SUGGESTIONS,
-  LEARNER_LEVEL_OPTIONS,
+  getGroupedLearnerLevels,
   mergeCourseProgramSuggestions,
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
@@ -292,6 +290,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [generatingTeacherQuiz, setGeneratingTeacherQuiz] = useState(false);
   const [showGenerateQuizModal, setShowGenerateQuizModal] = useState(false);
   const [teacherQuizQuestionCount, setTeacherQuizQuestionCount] = useState<TeacherQuizQuestionCount>(10);
+  const [selectedQuizLearnerLevel, setSelectedQuizLearnerLevel] = useState("");
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -308,8 +307,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   });
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
-  const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
-
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
   const [metadataDraft, setMetadataDraft] = useState<{
@@ -317,14 +314,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     subject: string;
     courseProgram: string;
     targetProfileType: NoteTargetProfileType | "";
-    learnerLevel: LearnerLevel | "";
     tags: string[];
   }>({
     title: "",
     subject: "",
     courseProgram: "",
     targetProfileType: "",
-    learnerLevel: "",
     tags: [],
   });
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
@@ -469,14 +464,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     void Promise.allSettled([
       listSubjects("mine"),
       listCoursePrograms("mine"),
-      getMe(),
-    ]).then(([subjectsResult, courseProgramsResult, meResult]) => {
+    ]).then(([subjectsResult, courseProgramsResult]) => {
       if (!active) {
         return;
       }
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
-      setProfileLearnerLevel(meResult.status === "fulfilled" ? meResult.value.learnerLevel ?? "" : "");
     });
 
     return () => {
@@ -602,7 +595,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
       targetProfileType: note.targetProfileType,
-      learnerLevel: note.learnerLevel ?? "",
       tags: [...(note.tags ?? [])],
     });
   }, [isInlineMetadataEditMode, note]);
@@ -735,11 +727,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const handleTeacherQuizQuestionCountSelect = useCallback((questionCount: TeacherQuizQuestionCount) => {
     if (currentPlan === "FREE" && questionCount !== 10) {
       setShowGenerateQuizModal(false);
+      setSelectedQuizLearnerLevel("");
       openPaywallModal("teacher-quiz-question-count", "private_note_detail_teacher_quiz_question_count");
       return;
     }
     setTeacherQuizQuestionCount(questionCount);
   }, [currentPlan, openPaywallModal]);
+
+  const closeGenerateQuizModal = useCallback(() => {
+    if (generatingTeacherQuiz) {
+      return;
+    }
+    setShowGenerateQuizModal(false);
+    setSelectedQuizLearnerLevel("");
+  }, [generatingTeacherQuiz]);
 
   const openStudyPackLimitModal = useCallback((source: string) => {
     void trackAnalyticsEvent({
@@ -762,6 +763,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     type: resolvePaywallContextTypeFromVariant(activePaywallModal ?? "adaptive-practice"),
     noteId: note?.id ?? null,
   }), [activePaywallModal, note?.id]);
+  const groupedQuizLearnerLevels = useMemo(
+    () => getGroupedLearnerLevels(profileType),
+    [profileType],
+  );
 
   const handleChangeStudyPackTab = useCallback((nextTab: NoteDetailTab) => {
     if (!note || activeStudyPackTab === nextTab) {
@@ -896,7 +901,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
       targetProfileType: note.targetProfileType,
-      learnerLevel: note.learnerLevel ?? "",
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -932,7 +936,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         courseProgram: note.courseProgram ?? null,
         tags: nextMetadata.tags,
         targetProfileType: note.targetProfileType,
-        learnerLevel: note.learnerLevel ?? null,
         content: note.content,
       });
       setNote(updated);
@@ -1001,7 +1004,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: note.subject ?? "",
         courseProgram: note.courseProgram ?? "",
         targetProfileType: note.targetProfileType,
-        learnerLevel: note.learnerLevel ?? "",
         tags: [...(note.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -1020,7 +1022,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
       targetProfileType: note.targetProfileType,
-      learnerLevel: note.learnerLevel ?? "",
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -1049,7 +1050,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     const missing: string[] = [];
-    if (!metadataDraft.learnerLevel) missing.push("Learner Level");
     if (!metadataDraft.courseProgram.trim()) missing.push("Course / Program");
     if (missing.length > 0) {
       setToastTone("warning");
@@ -1071,7 +1071,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
         tags: metadataDraft.tags,
         targetProfileType: nextTargetProfileType,
-        learnerLevel: metadataDraft.learnerLevel || null,
         content: note.content,
       });
       setNote(updated);
@@ -1080,7 +1079,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: updated.subject ?? "",
         courseProgram: updated.courseProgram ?? "",
         targetProfileType: updated.targetProfileType,
-        learnerLevel: updated.learnerLevel ?? "",
         tags: [...(updated.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -1226,12 +1224,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setGeneratingTeacherQuiz(true);
     setError(null);
     try {
-      const generatedQuiz = await generateGeneratedQuiz(note.id, teacherQuizQuestionCount);
+      const generatedQuiz = await generateGeneratedQuiz(
+        note.id,
+        teacherQuizQuestionCount,
+        selectedQuizLearnerLevel || null,
+      );
       setNote((current) => current ? {
         ...current,
         generatedQuiz,
       } : current);
       setShowGenerateQuizModal(false);
+      setSelectedQuizLearnerLevel("");
       setToast(note.generatedQuiz ? "Quiz regenerated." : "Quiz generated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate quiz.";
@@ -1250,7 +1253,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setGeneratingTeacherQuiz(false);
     }
-  }, [currentPlan, generatingTeacherQuiz, note, openPaywallModal, refreshUsageSummary, teacherQuizQuestionCount]);
+  }, [currentPlan, generatingTeacherQuiz, note, openPaywallModal, refreshUsageSummary, selectedQuizLearnerLevel, teacherQuizQuestionCount]);
 
   const handleViewTeacherQuiz = useCallback(() => {
     if (!note?.generatedQuiz) {
@@ -1581,26 +1584,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <label htmlFor="note-learner-level-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                      Learner Level <span className="text-red-500" aria-hidden="true">*</span>
-                    </label>
-                    <select
-                      id="note-learner-level-inline"
-                      value={metadataDraft.learnerLevel}
-                      onChange={(event) => setMetadataDraft((previous) => ({
-                        ...previous,
-                        learnerLevel: event.target.value as LearnerLevel | "",
-                      }))}
-                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                    >
-                      <option value="">Select level</option>
-                      {LEARNER_LEVEL_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-foreground/60">Controls quiz and exam difficulty for this note.</p>
-                  </div>
-                  <div className="space-y-2">
                     <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                       Course / Program <span className="text-red-500" aria-hidden="true">*</span>
                     </label>
@@ -1608,7 +1591,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       id="note-course-program-inline"
                       value={metadataDraft.courseProgram}
                       suggestions={availableCourseProgramSuggestions}
-                      learnerLevel={metadataDraft.learnerLevel || profileLearnerLevel}
                       onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
                       context="note"
                     />
@@ -2052,16 +2034,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           ? "This will replace the existing quiz and counts toward your monthly generation limit."
           : "Choose how many questions to generate."}
         onClose={() => {
-          if (!generatingTeacherQuiz) {
-            setShowGenerateQuizModal(false);
-          }
+          closeGenerateQuizModal();
         }}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowGenerateQuizModal(false)}
+              onClick={closeGenerateQuizModal}
               disabled={generatingTeacherQuiz}
             >
               Cancel
@@ -2113,6 +2093,35 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             Higher counts cover more material.
             {currentPlan === "FREE" ? " Plus unlocks 20 and 30 questions." : null}
           </p>
+          {profileType === "TEACHER" ? (
+            <div className="space-y-2">
+              <label htmlFor="teacher-quiz-target-level" className="block text-sm font-medium text-foreground">
+                Target Level
+              </label>
+              <select
+                id="teacher-quiz-target-level"
+                value={selectedQuizLearnerLevel}
+                onChange={(event) => setSelectedQuizLearnerLevel(event.target.value)}
+                disabled={generatingTeacherQuiz}
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+              >
+                <option value="">Use profile learner level</option>
+                <optgroup label={groupedQuizLearnerLevels.recommendedGroupLabel}>
+                  {groupedQuizLearnerLevels.recommended.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </optgroup>
+                {groupedQuizLearnerLevels.other.length > 0 ? (
+                  <optgroup label="Other levels">
+                    {groupedQuizLearnerLevels.other.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+              <span className="block text-xs text-foreground/60">Leave blank to use your profile&apos;s learner level.</span>
+            </div>
+          ) : null}
         </div>
       </AppModal>
 

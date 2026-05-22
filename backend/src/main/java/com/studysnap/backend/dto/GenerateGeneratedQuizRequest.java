@@ -1,6 +1,10 @@
 package com.studysnap.backend.dto;
 
 public record GenerateGeneratedQuizRequest(
-        Integer questionCount
+        Integer questionCount,
+        String targetLearnerLevel
 ) {
+    public GenerateGeneratedQuizRequest(Integer questionCount) {
+        this(questionCount, null);
+    }
 }
