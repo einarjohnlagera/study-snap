@@ -290,7 +290,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [generatingTeacherQuiz, setGeneratingTeacherQuiz] = useState(false);
-  const [showRegenerateQuizConfirm, setShowRegenerateQuizConfirm] = useState(false);
+  const [showGenerateQuizModal, setShowGenerateQuizModal] = useState(false);
   const [teacherQuizQuestionCount, setTeacherQuizQuestionCount] = useState<TeacherQuizQuestionCount>(10);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
@@ -725,6 +725,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const handleTeacherQuizQuestionCountSelect = useCallback((questionCount: TeacherQuizQuestionCount) => {
     if (currentPlan === "FREE" && questionCount !== 10) {
+      setShowGenerateQuizModal(false);
       openPaywallModal("teacher-quiz-question-count", "private_note_detail_teacher_quiz_question_count");
       return;
     }
@@ -1181,7 +1182,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     navigateTo(`/notes/${note.id}/adaptive-practice`);
   };
 
-  const handleGenerateTeacherQuiz = useCallback(async () => {
+  const openGenerateQuizModal = useCallback(() => {
     if (!note || generatingTeacherQuiz) {
       return;
     }
@@ -1189,13 +1190,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Verify your email before generating quizzes.");
       return;
     }
-    // Study Pack is a prerequisite for quiz generation. Gate on Study Pack first.
     if (!isStudyPackReady) {
       if (isGeneratingStudyPack) {
         setToast("Study Pack is still generating. Please wait before generating a quiz.");
         return;
       }
-      // DRAFT or generation failed — generate the Study Pack first.
       if (hasReachedStudyPackLimit) {
         openStudyPackLimitModal("private_note_detail_teacher_generate_study_pack_prerequisite");
         return;
@@ -1207,7 +1206,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       openPaywallModal("quiz-generation-limit", "private_note_detail_teacher_quiz_generation_limit");
       return;
     }
+    setShowGenerateQuizModal(true);
+  }, [generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal]);
 
+  const handleGenerateTeacherQuiz = useCallback(async () => {
+    if (!note || generatingTeacherQuiz) {
+      return;
+    }
     setGeneratingTeacherQuiz(true);
     setError(null);
     try {
@@ -1216,18 +1221,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         ...current,
         generatedQuiz,
       } : current);
-      setShowRegenerateQuizConfirm(false);
+      setShowGenerateQuizModal(false);
       setToast(note.generatedQuiz ? "Quiz regenerated." : "Quiz generated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate quiz.";
       if (isQuestionCountNotAllowedError(err)) {
-        setShowRegenerateQuizConfirm(false);
+        setShowGenerateQuizModal(false);
         openPaywallModal("teacher-quiz-question-count", "private_note_detail_teacher_quiz_question_count_error");
         return;
       }
       if (currentPlan === "FREE" && isQuizLimitReachedMessage(message)) {
         void refreshUsageSummary();
-        setShowRegenerateQuizConfirm(false);
+        setShowGenerateQuizModal(false);
         openPaywallModal("quiz-generation-limit", "private_note_detail_teacher_quiz_generation_limit_error");
         return;
       }
@@ -1235,7 +1240,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setGeneratingTeacherQuiz(false);
     }
-  }, [currentPlan, generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal, refreshUsageSummary, teacherQuizQuestionCount]);
+  }, [currentPlan, generatingTeacherQuiz, note, openPaywallModal, refreshUsageSummary, teacherQuizQuestionCount]);
 
   const handleViewTeacherQuiz = useCallback(() => {
     if (!note?.generatedQuiz) {
@@ -1742,63 +1747,23 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           type="button"
                           variant="outline"
                           className="gap-2"
-                          onClick={() => setShowRegenerateQuizConfirm(true)}
-                          loading={generatingTeacherQuiz}
-                          loadingText="Regenerating..."
+                          onClick={openGenerateQuizModal}
+                          disabled={generatingTeacherQuiz}
                         >
                           <RotateCcw className="h-4 w-4" aria-hidden="true" />
                           <span>Regenerate</span>
                         </Button>
                       </>
                     ) : (
-                      <>
-                        <div className="space-y-1.5">
-                          <div
-                            className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/30 p-1 sm:w-auto"
-                            role="group"
-                            aria-label="Quiz question count"
-                          >
-                            {TEACHER_QUIZ_QUESTION_COUNTS.map((questionCount) => {
-                              const isLocked = currentPlan === "FREE" && questionCount !== 10;
-                              const isSelected = teacherQuizQuestionCount === questionCount;
-                              return (
-                                <button
-                                  key={questionCount}
-                                  type="button"
-                                  aria-pressed={isSelected}
-                                  onClick={() => handleTeacherQuizQuestionCountSelect(questionCount)}
-                                  className={`inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:flex-none ${
-                                    isSelected
-                                      ? "bg-background text-foreground shadow-sm"
-                                      : "text-foreground/70 hover:bg-background/70 hover:text-foreground"
-                                  }`}
-                                >
-                                  <span>{questionCount}</span>
-                                  {isLocked ? (
-                                    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
-                                      Plus
-                                    </span>
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="text-xs text-foreground/60">
-                            Choose how many questions to generate. Higher counts cover more material.
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          className="gap-2"
-                          onClick={() => void handleGenerateTeacherQuiz()}
-                          disabled={!isEmailVerified}
-                          loading={generatingTeacherQuiz}
-                          loadingText="Generating..."
-                        >
-                          <Sparkles className="h-4 w-4" aria-hidden="true" />
-                          <span>Generate Quiz</span>
-                        </Button>
-                      </>
+                      <Button
+                        type="button"
+                        className="gap-2"
+                        onClick={openGenerateQuizModal}
+                        disabled={!isEmailVerified}
+                      >
+                        <Sparkles className="h-4 w-4" aria-hidden="true" />
+                        <span>Generate Quiz</span>
+                      </Button>
                     )
                   ) : isGeneratingStudyPack ? (
                     <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
@@ -2071,12 +2036,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       </AppModal>
 
       <AppModal
-        isOpen={showRegenerateQuizConfirm}
-        title="Regenerate quiz?"
-        description="This will create a new set of questions and counts toward your monthly quiz generation limit."
+        isOpen={showGenerateQuizModal}
+        title={note?.generatedQuiz ? "Regenerate quiz?" : "Generate quiz"}
+        description={note?.generatedQuiz
+          ? "This will replace the existing quiz and counts toward your monthly generation limit."
+          : "Choose how many questions to generate."}
         onClose={() => {
           if (!generatingTeacherQuiz) {
-            setShowRegenerateQuizConfirm(false);
+            setShowGenerateQuizModal(false);
           }
         }}
         actions={(
@@ -2084,7 +2051,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowRegenerateQuizConfirm(false)}
+              onClick={() => setShowGenerateQuizModal(false)}
               disabled={generatingTeacherQuiz}
             >
               Cancel
@@ -2093,13 +2060,51 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               type="button"
               onClick={() => void handleGenerateTeacherQuiz()}
               loading={generatingTeacherQuiz}
-              loadingText="Regenerating..."
+              loadingText="Generating..."
             >
-              Regenerate Quiz
+              {note?.generatedQuiz ? "Regenerate Quiz" : "Generate Quiz"}
             </Button>
           </div>
         )}
-      />
+      >
+        <div className="space-y-3">
+          <div
+            className="flex w-full gap-1 rounded-lg border border-border bg-muted/30 p-1"
+            role="group"
+            aria-label="Quiz question count"
+          >
+            {TEACHER_QUIZ_QUESTION_COUNTS.map((questionCount) => {
+              const isLocked = currentPlan === "FREE" && questionCount !== 10;
+              const isSelected = teacherQuizQuestionCount === questionCount;
+              return (
+                <button
+                  key={questionCount}
+                  type="button"
+                  aria-pressed={isSelected}
+                  disabled={generatingTeacherQuiz}
+                  onClick={() => handleTeacherQuizQuestionCountSelect(questionCount)}
+                  className={`inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50 ${
+                    isSelected
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-foreground/70 hover:bg-background/70 hover:text-foreground"
+                  }`}
+                >
+                  <span>{questionCount}</span>
+                  {isLocked ? (
+                    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                      Plus
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-foreground/60">
+            Higher counts cover more material.
+            {currentPlan === "FREE" ? " Plus unlocks 20 and 30 questions." : null}
+          </p>
+        </div>
+      </AppModal>
 
       <DeleteConfirmationModal
         isOpen={showDeleteConfirm}
