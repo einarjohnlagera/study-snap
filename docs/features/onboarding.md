@@ -8,7 +8,7 @@ Current onboarding is intentionally low-friction:
 
 - it happens once after first verified entry
 - it ends with a generated Study Pack
-- it defers learner-profile and preference details to Profile and Settings
+- it collects the generation context needed for the first Study Pack, then defers later preference details to Profile and Settings
 
 ## Activation Rule
 
@@ -41,6 +41,13 @@ This is the only identity-like field collected during onboarding.
 ### Step 2 — Study Goal
 
 Goal options are filtered by the selected profile type.
+
+Step 2 also requires:
+
+- `Learner Level`
+- `Course / Program`
+
+Teacher Learner Level helper copy frames the field as the default quiz difficulty for quizzes the teacher generates. Non-teacher helper copy stays focused on the learner's own study material.
 
 Board Taker also gets an inline optional `Exam Date` field on this step.
 
@@ -104,8 +111,6 @@ The completion call persists onboarding completion through the existing backend 
 
 These inputs are **not** collected during onboarding:
 
-- `learnerLevel`
-- `courseProgram`
 - `bio`
 - `engagementMode`
 - reminder preferences
@@ -115,7 +120,7 @@ They are adjusted later through:
 - `/profile` -> `Learning Profile`
 - `/settings` -> `Preferences`
 
-Dashboard follow-up prompt:
+The Dashboard learner-level follow-up prompt remains a refinement path after onboarding:
 
 - title: `Too easy or too hard?`
 - body: `Set your learner level so future quizzes match your study stage.`
@@ -132,13 +137,13 @@ On onboarding completion, backend currently persists:
 - optional `examDate` for `BOARD_EXAM`
 - `onboardingCompletedAt`
 
-The following are **not** persisted by onboarding itself:
+The following are **not** persisted by onboarding completion itself:
 
-- `learnerLevel`
-- `courseProgram`
 - `bio`
 - `engagementMode`
 - reminder preferences
+
+`learnerLevel` and `courseProgram` are saved before the user advances through onboarding via the shared Learning Profile update path.
 
 ## Generation Safety
 

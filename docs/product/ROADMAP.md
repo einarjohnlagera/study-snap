@@ -29,6 +29,7 @@ Primary focus:
 Shipped refactor:
 
 - ~~**Per-note learner-level removal**~~ ✅ — Study Pack generation now resolves learner level from the owner profile, Public Library no longer treats notes as learner-level-filterable artifacts, and Teacher Generate Quiz adds an optional per-generation Target Level override for class-specific quiz difficulty.
+- ~~**Required learner-level teacher reframe**~~ ✅ — onboarding and profile validation guarantee a profile learner level for new and updated profiles, and Teacher Generate Quiz requires and pre-fills its Target Level override from the note's latest generation or profile fallback.
 
 ### Implementation stances
 

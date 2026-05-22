@@ -3,6 +3,7 @@ package com.studysnap.backend.dto;
 import com.studysnap.backend.entity.LearnerLevel;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record UpdateUserProfileRequest(
@@ -22,6 +23,7 @@ public record UpdateUserProfileRequest(
         @Size(max = 200, message = "Bio must be 200 characters or less.")
         String bio,
 
+        @NotNull(message = "Learner level is required.")
         LearnerLevel learnerLevel,
 
         @Size(max = 120, message = "Course / Program must be 120 characters or less.")

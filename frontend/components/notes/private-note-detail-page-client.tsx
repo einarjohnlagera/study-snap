@@ -40,6 +40,7 @@ import {
   createStudyPackFromNote,
   deleteNote,
   generateGeneratedQuiz,
+  getMe,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
@@ -73,6 +74,7 @@ import {
 } from "@/lib/first-study-onboarding";
 import {
   COURSE_PROGRAM_SUGGESTIONS,
+  formatLearnerLevel,
   getGroupedLearnerLevels,
   mergeCourseProgramSuggestions,
   normalizeCourseProgram,
@@ -291,6 +293,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showGenerateQuizModal, setShowGenerateQuizModal] = useState(false);
   const [teacherQuizQuestionCount, setTeacherQuizQuestionCount] = useState<TeacherQuizQuestionCount>(10);
   const [selectedQuizLearnerLevel, setSelectedQuizLearnerLevel] = useState("");
+  const [profileLearnerLevel, setProfileLearnerLevel] = useState("");
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -424,6 +427,24 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    let active = true;
+    void getMe()
+      .then((me) => {
+        if (active) {
+          setProfileLearnerLevel(me.learnerLevel ?? "");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProfileLearnerLevel("");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const recentQuizSessions = useMemo<RecentQuizSessionHistoryItem[]>(
     () => buildRecentQuizSessionHistory(quickRecentSessions, challengeRecentSessions),
@@ -1214,8 +1235,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       openPaywallModal("quiz-generation-limit", "private_note_detail_teacher_quiz_generation_limit");
       return;
     }
+    setSelectedQuizLearnerLevel(note.lastUsedTargetLearnerLevel ?? profileLearnerLevel);
     setShowGenerateQuizModal(true);
-  }, [generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal]);
+  }, [generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal, profileLearnerLevel]);
+
+  useEffect(() => {
+    if (!showGenerateQuizModal || selectedQuizLearnerLevel || !note) {
+      return;
+    }
+    setSelectedQuizLearnerLevel(note.lastUsedTargetLearnerLevel ?? profileLearnerLevel);
+  }, [note, profileLearnerLevel, selectedQuizLearnerLevel, showGenerateQuizModal]);
 
   const handleGenerateTeacherQuiz = useCallback(async () => {
     if (!note || generatingTeacherQuiz) {
@@ -1232,6 +1261,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setNote((current) => current ? {
         ...current,
         generatedQuiz,
+        lastUsedTargetLearnerLevel: selectedQuizLearnerLevel as NoteResponse["lastUsedTargetLearnerLevel"],
       } : current);
       setShowGenerateQuizModal(false);
       setSelectedQuizLearnerLevel("");
@@ -2049,6 +2079,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             <Button
               type="button"
               onClick={() => void handleGenerateTeacherQuiz()}
+              disabled={!selectedQuizLearnerLevel}
               loading={generatingTeacherQuiz}
               loadingText="Generating..."
             >
@@ -2105,7 +2136,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 disabled={generatingTeacherQuiz}
                 className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
               >
-                <option value="">Use profile learner level</option>
                 <optgroup label={groupedQuizLearnerLevels.recommendedGroupLabel}>
                   {groupedQuizLearnerLevels.recommended.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -2119,7 +2149,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </optgroup>
                 ) : null}
               </select>
-              <span className="block text-xs text-foreground/60">Leave blank to use your profile&apos;s learner level.</span>
+              <span className="block text-xs text-foreground/60">
+                {note?.lastUsedTargetLearnerLevel
+                  ? `Last used: ${formatLearnerLevel(note.lastUsedTargetLearnerLevel)}`
+                  : profileLearnerLevel
+                    ? `From your profile: ${formatLearnerLevel(profileLearnerLevel)}`
+                    : "Choose the default quiz difficulty before generating."}
+              </span>
             </div>
           ) : null}
         </div>

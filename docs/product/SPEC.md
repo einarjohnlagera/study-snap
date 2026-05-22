@@ -1062,7 +1062,7 @@ Page responsibilities:
 - Session history persists for progress tracking
 - Quick Review quiz generation rules:
   - exactly 5 questions
-  - learner-level aware, defaulting to `College` when the user has no saved learner level
+  - learner-level aware through the required saved profile learner level
   - optimized for fast concept checks (~30 to 60 seconds per question)
   - focused on definitions, key ideas, and direct understanding rather than exam-style traps
   - quantitative topics may include a simple computation only when clearly supported by the notes
@@ -1095,7 +1095,7 @@ Page responsibilities:
 
 **Generation rules (applies to both modes):**
 
-- learner-level aware, defaulting to `College` when the user has no saved learner level
+- learner-level aware through the required saved profile learner level
 - exam-style and analysis-oriented
 - should not repeat Quick Review questions for the same Study Pack
 - quantitative subjects may include computation, formula-based, and multi-step problem-solving questions
@@ -1114,7 +1114,7 @@ Page responsibilities:
 - Usage limit: 50/month (separate from Study Pack generation quota)
 - Adaptive Practice generation rules:
   - weak-concept reinforcement only; do not drift into unrelated topics
-  - learner-level aware, defaulting to `College` when the user has no saved learner level
+  - learner-level aware through the required saved profile learner level
   - slightly simpler and more targeted than Challenge Quiz
   - quantitative weak concepts may use focused numerical questions when appropriate
   - explanations should reinforce the concept clearly and step through computations when applicable
@@ -1156,7 +1156,7 @@ Rules:
   - `Board Exam Review` -> exam-style, situational, multi-step reasoning
   - `Professional` -> applied, real-world, case-based
   - `Personal Learning` -> practical and accessible, around a college-foundation baseline
-- If learner level is missing, backend prompt construction should default quiz difficulty to `College`.
+- Completed accounts must keep a non-null learner level after onboarding; legacy null-level accounts are gated when Profile is saved or when a teacher picks the required Target Level for Generate Quiz.
 
 ## Plan Usage Display
 

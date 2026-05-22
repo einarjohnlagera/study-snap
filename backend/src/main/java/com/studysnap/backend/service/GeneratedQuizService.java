@@ -134,6 +134,7 @@ public class GeneratedQuizService {
             }
             entity.setOwnerUserId(userId);
             entity.setNoteId(noteId);
+            entity.setTargetLearnerLevel(generationContext.learnerLevel());
             entity.setQuestions(uniqueQuestions);
             entity.setGeneratedAt(now);
             entity.setUpdatedAt(now);

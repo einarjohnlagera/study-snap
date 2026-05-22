@@ -52,15 +52,15 @@ Current learner-level options:
 
 Rules:
 
-- onboarding does **not** collect these fields
-- existing users may still have `null` learner metadata until they update the card
+- onboarding collects required `learnerLevel` and required `courseProgram` before users continue to their first Study Pack
+- users with legacy `null` learner-level data are rejected on the next Learning Profile save until they set one
 - `Save Learning Profile` requires both `learnerLevel` and `courseProgram`
 - `bio` remains optional
 - `Save Learning Profile` must not update identity or profile type
 
 Current helper-copy meaning:
 
-- `Learner Level` -> `Controls difficulty, explanation depth, and quiz complexity.`
+- `Learner Level` -> personal quiz difficulty and explanation depth for non-teachers; default generated-quiz difficulty for teachers
 - `Course / Program` -> `Provides domain context so examples and questions stay relevant to your field.`
 
 Important product rule:

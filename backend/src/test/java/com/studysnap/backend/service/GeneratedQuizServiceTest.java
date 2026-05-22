@@ -234,6 +234,9 @@ class GeneratedQuizServiceTest {
                 argThat(context -> context.learnerLevel() == LearnerLevel.JUNIOR_HIGH
                         && "Education".equals(context.courseProgram()))
         );
+        ArgumentCaptor<GeneratedQuizEntity> quizCaptor = ArgumentCaptor.forClass(GeneratedQuizEntity.class);
+        verify(generatedQuizRepository).save(quizCaptor.capture());
+        assertThat(quizCaptor.getValue().getTargetLearnerLevel()).isEqualTo(LearnerLevel.JUNIOR_HIGH);
     }
 
     @Test

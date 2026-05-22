@@ -185,6 +185,15 @@ describe("OnboardingPage", () => {
     (updateLearningProfileContext as jest.Mock).mockResolvedValue(baseMe);
   });
 
+  function fillLearningProfile(learnerLevel = "COLLEGE", courseProgram = "Nursing") {
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: learnerLevel },
+    });
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: courseProgram },
+    });
+  }
+
   it("redirects users who already completed onboarding", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -206,6 +215,32 @@ describe("OnboardingPage", () => {
       expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
     });
     expect(getMe).not.toHaveBeenCalled();
+  });
+
+  it("keeps step two Continue disabled until learner level is selected", async () => {
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: "Nursing" },
+    });
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(screen.getByText("Please select your learner level.")).toBeInTheDocument();
+  });
+
+  it("reframes learner level as default quiz difficulty for teachers", async () => {
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Teacher"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText(
+      "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz.",
+    )).toBeInTheDocument();
   });
 
   it("completes the generate-note path and opens the first Study Pack", async () => {
@@ -300,6 +335,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(await screen.findByLabelText("Student"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
@@ -348,6 +384,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(await screen.findByLabelText("Student"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
 
@@ -392,6 +429,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByLabelText("When is your exam? (optional)")).toBeInTheDocument();
+    fillLearningProfile("BOARD_EXAM_REVIEW", "Pharmacy");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
@@ -428,6 +466,7 @@ describe("OnboardingPage", () => {
     expect(screen.getByLabelText("Course / Program")).toBeInTheDocument();
     expect(screen.queryByLabelText("When is your exam? (optional)")).not.toBeInTheDocument();
 
+    fillLearningProfile("PROFESSIONAL", "Medicine");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
   });
@@ -438,6 +477,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(await screen.findByLabelText("Teacher"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fillLearningProfile("GRADE_SCHOOL", "Grade 5 Science");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));

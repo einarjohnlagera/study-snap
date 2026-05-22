@@ -206,7 +206,8 @@ Use these skills before writing prompts, before starting new features, and after
   - `Completion`
 - `Exam Date` is optional and shown inline on the Study Goal step for `BOARD_EXAM`.
 - Onboarding persists `profileType`, optional `examDate`, and `onboardingCompletedAt`.
-- `learnerLevel`, `courseProgram`, `bio`, `Learning Style`, and reminder preferences are deferred to `/profile` and `/settings`.
+- Onboarding step 2 collects required `learnerLevel` and required `courseProgram` before the first Study Pack flow can continue.
+- `bio`, `Learning Style`, and reminder preferences are deferred to `/profile` and `/settings`.
 - Profile Type can be edited later in `Profile`.
 - Learning Style can be edited later in `Settings > Preferences`.
 - Study Reminder Frequency can be edited later in `Settings > Preferences`.
@@ -220,7 +221,7 @@ Use these skills before writing prompts, before starting new features, and after
 - **Onboarding Study Pack generation (Step 4) must be idempotent**: `handleStartStudyPack()` must check `draft.noteId` before creating a note; if a note already exists, navigate to Step 4 instead of creating another. This prevents duplicate notes and study packs from back/forward/refresh behavior.
 - **Back button lock during Study Pack generation**: hide the Back button while generation is active (`studyPackGenerating || startingStudyPack`); replace the notice with `Your Study Pack is being created. This step can't be undone.`; restore the Back button on error or completion.
 - **Onboarding-only metadata auto-apply**: onboarding may explicitly opt into backend auto-apply for empty `subject` and `tags` when it starts Study Pack generation from an existing note. Normal note generation must keep AI metadata suggestions transient until the user confirms them in the AI Suggestions modal.
-- **Learner level is deferred from onboarding**: do not add a learner level step to onboarding. The dashboard personalization prompt handles deferred collection. Prompt copy: title `Too easy or too hard?`, body `Set your learner level so future quizzes match your study stage.`, CTA `Adjust level` — navigates to `/profile?from=dashboard#learning-profile`.
+- **Learner level is required from onboarding onward**: every completed account must keep a user/profile-level learner level. Teachers should see copy that frames it as the default quiz difficulty for material they teach, with per-generation Teacher quiz overrides remaining explicit.
 
 ### Profile Rule
 
@@ -1467,7 +1468,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 - `courseProgram` provides **domain context** — examples, scenarios, terminology.
 - Both are passed separately to `buildLearnerContextBlock()`. Do not skip one to simplify.
 - Study Pack, Challenge Quiz, Board Exam, and Adaptive Practice generation must use the shared note-first Course/Program resolver: note `courseProgram` wins, profile `courseProgram` is fallback only.
-- Do not add a learner level step to onboarding. The deferred Dashboard prompt (`Too easy or too hard?`) is the settled pattern. Do not change this without an explicit task.
+- Learner Level is required at the user/profile level — never reintroduce per-note learner level columns or treat the field as nullable in generation context. Teacher quiz modal's `targetLearnerLevel` is the only per-generation override.
 - See `docs/features/profile-learning-context.md` for the full rule set.
 
 ### Upgrade CTA Anti-Drift

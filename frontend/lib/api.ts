@@ -933,6 +933,7 @@ export type NoteResponse = {
   keyConcepts: string[];
   quiz: QuizItem[];
   generatedQuiz: GeneratedQuizResponse | null;
+  lastUsedTargetLearnerLevel: LearnerLevel | null;
   quizCount: number;
   quickReviewAvailable: boolean;
   challengeQuizAvailable: boolean;
