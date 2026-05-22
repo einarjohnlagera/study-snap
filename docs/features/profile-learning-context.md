@@ -23,16 +23,16 @@ Teacher Profile also owns one export-specific default outside the learning conte
 
 **Where it is used in generation:**
 - All LLM quiz prompts (`buildLearnerContextBlock`) receive the resolved learner level.
-- When no learner level is saved, prompts default to college-level complexity.
+- Completed accounts are guaranteed to have a saved profile learner level because onboarding step 2 requires it. Legacy accounts with a null level are gated the next time they save their Profile or, for teachers, the next time they open the Generate Quiz modal — no global backfill prompt exists by design.
 - Learner level is passed through the backend generation context; it is never derived client-side.
 
 **How it is collected:**
-- Deferred from onboarding intentionally. The Dashboard personalization prompt (`Too easy or too hard?` / `Adjust level` CTA) collects learner level after the first Study Pack is generated.
+- Onboarding step 2 requires learner level before the first Study Pack flow can continue.
 - The `Adjust level` CTA navigates to `/profile?from=dashboard#learning-profile`, which auto-scrolls to the Learning Profile card and enables context-aware back navigation to Dashboard.
 - Users can change their learner level at any time in `Profile > Learning Profile`.
 
 **UX rules:**
-- Do not add a learner level step to onboarding — this is the settled pattern.
+- Teacher-facing copy reframes the profile value as the default quiz difficulty for material the teacher generates, while non-teacher copy stays in personal learning terms.
 - The Learning Profile card must carry `id="learning-profile"` so hash navigation works.
 - `/profile` should keep using the shared App Router hash-navigation pattern: native target id plus `HashScrollListener` so direct deep links still scroll after mount.
 - After saving, show a toast: `Learner level updated. Future Study Packs and quizzes will match this level.`
@@ -80,9 +80,9 @@ Teacher Profile also owns one export-specific default outside the learning conte
 | | Learner Level | Course / Program |
 |---|---|---|
 | Controls | Difficulty, depth, vocabulary | Domain, examples, scenarios |
-| Required in | Learning Profile save, Note Editor | Learning Profile save, Note Editor |
+| Required in | Onboarding, Learning Profile save | Onboarding, Learning Profile save, Note Editor |
 | Optional in | — | — |
-| Onboarding | Deferred | Deferred |
+| Onboarding | Required | Required |
 | LLM use | `learnerLevel` field in context block | `courseProgram` field in context block |
 | Merge? | **Never** | **Never** |
 
@@ -97,7 +97,7 @@ All LLM calls that personalise output must use `buildLearnerContextBlock(userId)
 The context block structure (conceptual):
 
 ```
-Learner level: {learnerLevel | "College (default)"}
+Learner level: {learnerLevel}
 Course / Program: {courseProgram | omitted}
 Domain constraint: treat the course/program above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines.
 ```

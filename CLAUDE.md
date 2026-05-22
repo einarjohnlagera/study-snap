@@ -108,6 +108,8 @@ Prompts live in `backend/src/main/resources/prompts/study-pack-v1/`. Each quiz m
 
 **Generation context** (which learner level / course program the AI uses) is resolved in a shared utility: note-level `courseProgram` is always preferred; user profile `courseProgram` is fallback only. Do not bypass this resolver.
 
+Every account is guaranteed to have a non-null `learnerLevel` after onboarding; the teacher Generate Quiz modal's Target Level override pre-fills from the last generation on that note and falls back to the profile level.
+
 ### Quiz session model
 
 All quiz modes (Quick Review, Challenge Quiz, Adaptive Practice, Board Exam) share a single `QuickReviewSessionEntity`. The mode is stored as `QuickReviewSessionMode` enum. Session state (question list, selected choices, timer, difficulty) is stored as a JSONB `sessionState` column. `QuizSessionStateUtils` owns all reads/writes to that JSON — do not manipulate the JSON directly in service code.

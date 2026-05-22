@@ -720,6 +720,9 @@ public class NoteService {
                         generatedQuiz.getQuestions() == null ? List.of() : generatedQuiz.getQuestions(),
                         generatedQuiz.getGeneratedAt()
                 ),
+                generatedQuizRepository.findLatestTargetLearnerLevelByNoteId(entity.getId())
+                        .map(Enum::name)
+                        .orElse(null),
                 quizCount,
                 hasGeneratedQuiz,
                 hasGeneratedQuiz,

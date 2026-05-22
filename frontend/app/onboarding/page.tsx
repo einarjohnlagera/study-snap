@@ -298,7 +298,7 @@ export default function OnboardingPage() {
   const quizPreview = note?.quiz[0] ?? null;
 
   const canContinueFromStepOne = profileType !== null;
-  const canContinueFromStepTwo = true;
+  const canContinueFromStepTwo = draft.learnerLevel !== null && draft.courseProgram.trim() !== "";
   const canGenerateNoteDraft = selectedInputMethod === "generate" && topicLength >= TOPIC_MIN_LENGTH;
   const canStartStudyPack = selectedInputMethod === "generate"
     ? generatedNoteReady && noteLength >= NOTE_CONTENT_MIN_LENGTH
@@ -894,8 +894,12 @@ export default function OnboardingPage() {
           <div className="space-y-5">
             <section className="space-y-2">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Learner Level</p>
-                <p className="text-xs text-foreground/60">Optional. Choose the level that best fits this study material.</p>
+                <p className="text-sm font-medium text-foreground">Learner Level *</p>
+                <p className="text-xs text-foreground/60">
+                  {profileType === "TEACHER"
+                    ? "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz."
+                    : "Required. Choose the level that best fits the material you're studying."}
+                </p>
               </div>
               <select
                 value={draft.learnerLevel ?? ""}
@@ -927,6 +931,9 @@ export default function OnboardingPage() {
                   </optgroup>
                 ) : null}
               </select>
+              {!draft.learnerLevel ? (
+                <p className="text-xs text-red-600 dark:text-red-400">Please select your learner level.</p>
+              ) : null}
             </section>
 
             <section className="space-y-2">

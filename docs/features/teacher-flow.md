@@ -53,9 +53,9 @@ Do not mix these models.
 - Generation consumes `1` quiz credit
 - Quiz generation is based on the note itself, not on student quiz sessions
 - Notes do not store a learner level; Study Pack generation resolves the owner's profile learner level through the shared generation context.
-- Teacher Generate Quiz includes an optional per-invocation `Target Level` picker so one note can produce quizzes for different classes without copying or rewriting the note.
-- Leaving `Target Level` blank uses the teacher's profile learner level for that generation.
-- The selected `Target Level` is generation-only context and is not persisted on the note or generated quiz entity.
+- Teacher Generate Quiz includes a required per-invocation `Target Level` picker so one note can produce quizzes for different classes without copying or rewriting the note.
+- The picker pre-fills from the most recent Target Level used to generate a quiz on that note, falling back to the teacher's profile learner level when the note has no prior target.
+- The selected `Target Level` is generation-only context for that generation. It is not stored on the note; generated quiz history retains the target only so the next Generate Quiz modal can prefill the latest value.
 
 ### View
 

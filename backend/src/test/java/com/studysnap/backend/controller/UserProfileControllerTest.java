@@ -118,6 +118,27 @@ class UserProfileControllerTest {
     }
 
     @Test
+    void updateProfileRequest_rejectsMissingLearnerLevel() {
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                null,
+                null,
+                "Nursing",
+                null,
+                "[email protected]"
+        );
+
+        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(validatorFactory.getValidator().validate(request))
+                    .extracting(ConstraintViolation::getMessage)
+                    .contains("Learner level is required.");
+        }
+    }
+
+    @Test
     void updatePublicProfileVisibility_delegatesToAuthService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);

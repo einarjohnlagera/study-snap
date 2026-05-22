@@ -94,6 +94,7 @@ class NoteServiceTest {
         lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
         lenient().when(generatedQuizRepository.findByNoteId(any())).thenReturn(Optional.empty());
+        lenient().when(generatedQuizRepository.findLatestTargetLearnerLevelByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());

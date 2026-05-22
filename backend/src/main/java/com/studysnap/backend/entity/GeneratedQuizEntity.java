@@ -3,6 +3,8 @@ package com.studysnap.backend.entity;
 import com.studysnap.backend.dto.QuizItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -30,6 +32,10 @@ public class GeneratedQuizEntity {
 
     @Column(name = "note_id", nullable = false)
     private UUID noteId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_learner_level", length = 32)
+    private LearnerLevel targetLearnerLevel;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")

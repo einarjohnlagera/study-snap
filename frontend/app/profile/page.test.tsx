@@ -193,6 +193,19 @@ describe("Profile page", () => {
     expect(await screen.findByText("School name updated.")).toBeInTheDocument();
   });
 
+  it("reframes learner level helper copy for teacher profiles", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "TEACHER",
+    });
+
+    render(<ProfilePage />);
+
+    expect(await screen.findByText(
+      "This sets the default difficulty for quizzes you generate. You can change it per quiz.",
+    )).toBeInTheDocument();
+  });
+
   it("hides Teaching Info from non-teacher profiles", async () => {
     render(<ProfilePage />);
 

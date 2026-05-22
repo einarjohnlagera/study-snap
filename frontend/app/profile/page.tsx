@@ -897,7 +897,7 @@ export default function ProfilePage() {
             <h2 className="text-lg font-semibold sm:text-xl">Learning Profile</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
-                <span className="text-sm font-medium">Learner Level</span>
+                <span className="text-sm font-medium">Learner Level *</span>
                 <SuggestionCombobox
                   id="profile-learner-level"
                   value={learningProfileForm.learnerLevel}
@@ -908,7 +908,9 @@ export default function ProfilePage() {
                     handleLearningProfileFieldChange("learnerLevel", value as LearnerLevel | "")
                   }
                   placeholder="Choose learner level"
-                  helperText="Quiz questions and explanations will better match your learning stage."
+                  helperText={profile?.profileType === "TEACHER"
+                    ? "This sets the default difficulty for quizzes you generate. You can change it per quiz."
+                    : "Quiz questions and explanations will better match your learning stage."}
                   allowCustom={false}
                   toggleLabel="Toggle learner level suggestions"
                 />
