@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.15.2 - UX Cleanup & Bug Fixes
+
+**Status: In Progress**
+
+Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bugs and rough edges across notes, library, profile navigation, help guides, and quiz session surfaces. No new features — just sharper defaults and accurate state.
+
+### Planned Scope
+
+- **Quiz session display correctness** — Recent Sessions chip shows the actual quiz mode (Quick Review / Challenge Quiz / Adaptive Practice / Long Exam / Board Exam / Interview Practice) instead of always "Challenge Quiz"; library card "Not reviewed yet" label updates after any quiz mode completion, not just Quick Review; multi-note Long Exam sessions appear on every participating note with a "spans N notes" sublabel
+- **Copy and navigation polish** — Edit Note drops the Import Notes uploader; app shell Profile sidebar opens Profile Settings (avatar dropdown's "My Profile" remains the public-profile path); Board Exam Guide no longer recommends Long Exam and the footer "Switch Profile" CTA deep-links to the Profile Type section; Student / Teacher / Professional guides show a profile-aware "Switch Profile" footer CTA (hidden on the user's own profile guide); share-note modal auto-copies the URL on open with a "Copied" success pill
+- **Library Draft filter** — add a `Draft` chip alongside All / Quiz Ready / Study Pack Ready so users can quickly find notes parked while waiting for Study Pack quota reset
+- **Target Audience cleanup** — Create Note "Who is this note for?" no longer auto-populates from profile type (fixes Professional silently defaulting to Student); blank default for every profile; adds Professional as a selectable audience option
+
+### ✅ Shipped
+
+(none yet)
+
+---
+
 ## v0.15.1 - Teacher Power Features
 
 **Status: Released**
