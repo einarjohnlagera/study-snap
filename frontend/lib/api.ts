@@ -904,7 +904,6 @@ export type UpsertNoteRequest = {
   courseProgram?: string | null;
   tags?: string[];
   targetProfileType?: NoteTargetProfileType | null;
-  learnerLevel?: LearnerLevel | null;
   content: string;
 };
 
@@ -917,7 +916,6 @@ export type NoteResponse = {
   title: string | null;
   subject: string | null;
   courseProgram?: string | null;
-  learnerLevel: LearnerLevel | null;
   targetProfileType: NoteTargetProfileType;
   tags: string[];
   content: string;
@@ -952,7 +950,6 @@ export type NoteListItemResponse = {
   ownerUserId: string | null;
   title: string | null;
   courseProgram: string | null;
-  learnerLevel: LearnerLevel | null;
   targetProfileType: NoteTargetProfileType;
   subject: string | null;
   tags: string[];
@@ -2716,13 +2713,14 @@ export async function getGeneratedQuiz(noteId: string): Promise<GeneratedQuizRes
 export async function generateGeneratedQuiz(
   noteId: string,
   questionCount: TeacherQuizQuestionCount = 10,
+  targetLearnerLevel?: string | null,
 ): Promise<GeneratedQuizResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/generated-quiz`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ questionCount }),
+      body: JSON.stringify({ questionCount, targetLearnerLevel: targetLearnerLevel ?? null }),
     },
     true,
   );

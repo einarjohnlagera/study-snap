@@ -26,6 +26,10 @@ Primary focus:
 
 3. ~~**Multiple exam versions (A/B/C)**~~ ✅ — single DOCX export with 2 or 3 deterministically shuffled versions for anti-cheating in classroom settings. Plus+ Teacher only. Choice order also shuffled per version; answer keys reflect shuffled positions. Same exam + same versionCount produces identical bytes (deterministic).
 
+Shipped refactor:
+
+- ~~**Per-note learner-level removal**~~ ✅ — Study Pack generation now resolves learner level from the owner profile, Public Library no longer treats notes as learner-level-filterable artifacts, and Teacher Generate Quiz adds an optional per-generation Target Level override for class-specific quiz difficulty.
+
 ### Implementation stances
 
 - All three features are gated by Teacher profile type; non-Teacher profiles see no UI surface for them

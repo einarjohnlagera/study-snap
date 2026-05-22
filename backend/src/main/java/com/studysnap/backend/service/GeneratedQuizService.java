@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.QuizDocxExportHeaderOverrideRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
@@ -83,6 +84,15 @@ public class GeneratedQuizService {
     }
 
     public GeneratedQuizResponse generate(String noteIdRaw, UUID userId, Integer requestedQuestionCount) {
+        return generate(noteIdRaw, userId, requestedQuestionCount, null);
+    }
+
+    public GeneratedQuizResponse generate(
+            String noteIdRaw,
+            UUID userId,
+            Integer requestedQuestionCount,
+            String requestedLearnerLevel
+    ) {
         authService.requireEmailVerified(userId);
         UUID noteId = parseNoteId(noteIdRaw);
         NoteEntity note = findOwnedNoteOrThrow(noteId, userId);
@@ -96,7 +106,10 @@ public class GeneratedQuizService {
         List<String> disallowedQuestions = existing == null
                 ? List.of()
                 : extractQuestionTexts(existing.getQuestions());
-        StudyPackGenerationContext generationContext = generationContextResolver.resolve(userId, note);
+        StudyPackGenerationContext generationContext = withLearnerLevelOverride(
+                generationContextResolver.resolve(userId, note),
+                requestedLearnerLevel
+        );
 
         try {
             List<QuizItem> generatedQuestions = quizGenerationService.generateTeacherQuiz(
@@ -301,6 +314,22 @@ public class GeneratedQuizService {
             return usedThisMonth;
         }
         throw new MonthlyQuizCreditLimitReachedException();
+    }
+
+    private StudyPackGenerationContext withLearnerLevelOverride(
+            StudyPackGenerationContext generationContext,
+            String requestedLearnerLevel
+    ) {
+        LearnerLevel override = LearnerLevel.fromString(requestedLearnerLevel);
+        if (override == null) {
+            return generationContext;
+        }
+        return new StudyPackGenerationContext(
+                override,
+                generationContext.courseProgram(),
+                generationContext.subject(),
+                generationContext.tags()
+        );
     }
 
     private int resolveQuestionCount(UUID userId, PlanType planType, Integer requestedQuestionCount) {

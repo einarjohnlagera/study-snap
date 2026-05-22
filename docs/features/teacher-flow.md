@@ -52,10 +52,10 @@ Do not mix these models.
 - Selector helper copy: `Choose how many questions to generate. Higher counts cover more material.`
 - Generation consumes `1` quiz credit
 - Quiz generation is based on the note itself, not on student quiz sessions
-- Notes carry an optional `Learner Level` field so teachers can calibrate each note to the student audience for that class.
-- On new notes, the learner level is prefilled from the teacher's profile but should be adjusted when the note is for a different grade level.
-- Teacher helper text: `Prefilled from your profile. Adjust to match your students' grade level.`
-- Study Pack generation and pre-generated Long Exam / Board Exam pools use the note's learner level when set, falling back to the teacher profile level only when the note has no override.
+- Notes do not store a learner level; Study Pack generation resolves the owner's profile learner level through the shared generation context.
+- Teacher Generate Quiz includes an optional per-invocation `Target Level` picker so one note can produce quizzes for different classes without copying or rewriting the note.
+- Leaving `Target Level` blank uses the teacher's profile learner level for that generation.
+- The selected `Target Level` is generation-only context and is not persisted on the note or generated quiz entity.
 
 ### View
 

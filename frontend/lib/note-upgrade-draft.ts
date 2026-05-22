@@ -54,7 +54,6 @@ export function loadNoteUpgradeDraft(userId: string): PendingNoteUpgradeDraft | 
         targetProfileType: parsed.draft?.targetProfileType ?? "",
         content: parsed.draft?.content ?? "",
         tags: Array.isArray(parsed.draft?.tags) ? parsed.draft?.tags : [],
-        learnerLevel: parsed.draft?.learnerLevel ?? "",
       },
       entryOption: parsed.entryOption === "generate" || parsed.entryOption === "import" ? parsed.entryOption : "write",
       generateTopic: typeof parsed.generateTopic === "string" ? parsed.generateTopic : "",

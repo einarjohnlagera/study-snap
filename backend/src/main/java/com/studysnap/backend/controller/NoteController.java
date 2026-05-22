@@ -304,7 +304,12 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
-        return generatedQuizService.generate(id, userId, request == null ? null : request.questionCount());
+        return generatedQuizService.generate(
+                id,
+                userId,
+                request == null ? null : request.questionCount(),
+                request == null ? null : request.targetLearnerLevel()
+        );
     }
 
     @PostMapping("/{id}/adaptive-practice/start")
