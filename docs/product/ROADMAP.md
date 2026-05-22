@@ -78,7 +78,6 @@ Shipped refactor:
 - All three preserve the `generatedQuiz` ownership model from v0.15.0 — no LLM call at export time for header rendering or version shuffling
 - Plus-gate enforcement for question count happens BEFORE the LLM call to avoid wasted tokens on rejected requests
 - Backend exception classes follow the existing plan-gated-action pattern (e.g., `QuestionCountNotAllowedForPlanException`, `MultipleExamVersionsNotAllowedForPlanException`)
-- Codex prompts for this scope live at `docs/codex-prompts/teacher-flow-upgrades.md` (Prompts 3, 4, 5)
 
 ### Anti-drift notes
 
