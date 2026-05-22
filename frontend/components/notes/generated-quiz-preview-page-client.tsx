@@ -19,9 +19,11 @@ import {
   exportGeneratedQuizDocx,
   getGeneratedQuiz,
   generateGeneratedQuiz,
+  getMe,
   getNote,
   isExportLimitReachedError,
   type GeneratedQuizResponse,
+  type QuizDocxHeaderOverride,
   type NoteResponse,
   type QuizDocxExportMode,
 } from "@/lib/api";
@@ -46,6 +48,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const startRouteProgress = useRouteProgress();
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuizResponse | null>(null);
+  const [profileSchoolName, setProfileSchoolName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -71,12 +74,14 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     setLoading(true);
     setError(null);
     try {
-      const [loadedNote, loadedQuiz] = await Promise.all([
+      const [loadedNote, loadedQuiz, me] = await Promise.all([
         getNote(noteId),
         getGeneratedQuiz(noteId),
+        getMe().catch(() => null),
       ]);
       setNote(loadedNote);
       setGeneratedQuiz(loadedQuiz);
+      setProfileSchoolName(me?.schoolName ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load quiz preview.";
       setError(message);
@@ -146,7 +151,10 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     && challengeQuizzesRemaining <= 0;
   const quizGenerationPaywallVariant: PaywallModalVariant = "quiz-generation-limit";
 
-  const handleExport = useCallback(async (mode: QuizDocxExportMode | QuizExportModalMode) => {
+  const handleExport = useCallback(async (
+    mode: QuizDocxExportMode | QuizExportModalMode,
+    headerOverride?: QuizDocxHeaderOverride,
+  ) => {
     if (!generatedQuiz?.id || exporting) {
       return;
     }
@@ -154,7 +162,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     setShowExportModal(false);
     setToast("Exporting DOCX...");
     try {
-      await exportGeneratedQuizDocx(generatedQuiz.id, mode);
+      await exportGeneratedQuizDocx(generatedQuiz.id, mode, headerOverride);
       setToast("DOCX ready");
     } catch (err) {
       if (isExportLimitReachedError(err)) {
@@ -384,8 +392,10 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
         title="Export Quiz"
         description="Choose an export format for this quiz."
         exporting={exporting}
+        showTeacherExportDetails={authUser?.profileType === "TEACHER"}
+        schoolName={profileSchoolName}
         onClose={() => setShowExportModal(false)}
-        onSelect={(mode) => void handleExport(mode)}
+        onSelect={(mode, headerOverride) => void handleExport(mode, headerOverride)}
       />
 
       <PaywallModal

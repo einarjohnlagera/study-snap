@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GeneratedQuizPreviewPageClient } from "./generated-quiz-preview-page-client";
-import { exportGeneratedQuizDocx, generateGeneratedQuiz, getGeneratedQuiz, getNote, trackAnalyticsEvent } from "@/lib/api";
+import { exportGeneratedQuizDocx, generateGeneratedQuiz, getGeneratedQuiz, getMe, getNote, trackAnalyticsEvent } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
@@ -23,6 +23,7 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/lib/api", () => ({
   getGeneratedQuiz: jest.fn(),
   generateGeneratedQuiz: jest.fn(),
+  getMe: jest.fn(),
   getNote: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   exportGeneratedQuizDocx: jest.fn(),
@@ -42,6 +43,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     replaceMock.mockReset();
     (getNote as jest.Mock).mockReset();
     (getGeneratedQuiz as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
     (generateGeneratedQuiz as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (exportGeneratedQuizDocx as jest.Mock).mockReset();
@@ -94,6 +96,9 @@ describe("GeneratedQuizPreviewPageClient", () => {
           explanation: "The nucleus controls cell activity.",
         },
       ],
+    });
+    (getMe as jest.Mock).mockResolvedValue({
+      schoolName: "NoteLib Academy",
     });
     (generateGeneratedQuiz as jest.Mock).mockResolvedValue({
       id: "quiz-2",
@@ -159,10 +164,14 @@ describe("GeneratedQuizPreviewPageClient", () => {
 
     await screen.findByText("What is the nucleus?");
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(screen.getByText(/From your profile:/)).toHaveTextContent("NoteLib Academy");
     fireEvent.click(screen.getByRole("button", { name: /Quiz \+ Answers Includes answer key and explanations for teacher review\./i }));
 
     await waitFor(() => {
-      expect(exportGeneratedQuizDocx).toHaveBeenCalledWith("quiz-1", "WITH_ANSWERS");
+      expect(exportGeneratedQuizDocx).toHaveBeenCalledWith("quiz-1", "WITH_ANSWERS", {
+        className: null,
+        includeDate: true,
+      });
     });
   });
 

@@ -55,6 +55,9 @@ public class UserEntity {
     @Column(name = "course_program", length = 120)
     private String courseProgram;
 
+    @Column(name = "school_name", length = 120)
+    private String schoolName;
+
     @Column(name = "public_profile_visible", nullable = false)
     private Boolean publicProfileVisible;
 

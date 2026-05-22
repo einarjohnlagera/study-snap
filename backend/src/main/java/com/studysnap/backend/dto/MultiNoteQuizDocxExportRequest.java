@@ -1,11 +1,14 @@
 package com.studysnap.backend.dto;
 
+import jakarta.validation.Valid;
+
 import java.util.List;
 
 public record MultiNoteQuizDocxExportRequest(
         List<Section> sections,
         boolean includeAnswerKey,
-        boolean includeExplanations
+        boolean includeExplanations,
+        @Valid QuizDocxExportHeaderOverrideRequest headerOverride
 ) {
     public record Section(
             String title,

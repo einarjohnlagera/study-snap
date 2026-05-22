@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
+import com.studysnap.backend.dto.QuizDocxExportHeaderOverrideRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
@@ -31,10 +32,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -131,6 +134,25 @@ public class GeneratedQuizService {
     }
 
     public QuizDocxExportService.QuizDocxFile exportDocx(String quizIdRaw, UUID userId, QuizDocxExportMode mode) {
+        return exportDocx(quizIdRaw, userId, mode, null);
+    }
+
+    public QuizDocxExportService.QuizDocxFile exportDocx(
+            String quizIdRaw,
+            UUID userId,
+            QuizDocxExportMode mode,
+            QuizDocxExportHeaderOverrideRequest headerOverride
+    ) {
+        return exportDocx(quizIdRaw, userId, mode, headerOverride, null);
+    }
+
+    public QuizDocxExportService.QuizDocxFile exportDocx(
+            String quizIdRaw,
+            UUID userId,
+            QuizDocxExportMode mode,
+            QuizDocxExportHeaderOverrideRequest headerOverride,
+            Locale locale
+    ) {
         authService.requireEmailVerified(userId);
         UserEntity exportUser = requireTeacherExportUser(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
@@ -145,7 +167,11 @@ public class GeneratedQuizService {
                 generatedQuiz.getGeneratedAt(),
                 generatedQuiz.getQuestions()
         );
-        byte[] content = quizDocxExportService.exportQuizToDocx(exportableQuiz, mode);
+        byte[] content = quizDocxExportService.exportQuizToDocx(
+                exportableQuiz,
+                mode,
+                buildDocxHeaderOptions(exportUser, headerOverride, locale)
+        );
         exportUsageProtectionService.recordDocxUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
                 quizDocxExportService.buildFilename(note.getTitle(), mode),
@@ -158,6 +184,27 @@ public class GeneratedQuizService {
             UUID userId,
             boolean includeAnswerKey,
             boolean includeExplanations
+    ) {
+        return exportCombinedDocx(sections, userId, includeAnswerKey, includeExplanations, null);
+    }
+
+    public QuizDocxExportService.QuizDocxFile exportCombinedDocx(
+            List<MultiNoteQuizDocxExportRequest.Section> sections,
+            UUID userId,
+            boolean includeAnswerKey,
+            boolean includeExplanations,
+            QuizDocxExportHeaderOverrideRequest headerOverride
+    ) {
+        return exportCombinedDocx(sections, userId, includeAnswerKey, includeExplanations, headerOverride, null);
+    }
+
+    public QuizDocxExportService.QuizDocxFile exportCombinedDocx(
+            List<MultiNoteQuizDocxExportRequest.Section> sections,
+            UUID userId,
+            boolean includeAnswerKey,
+            boolean includeExplanations,
+            QuizDocxExportHeaderOverrideRequest headerOverride,
+            Locale locale
     ) {
         authService.requireEmailVerified(userId);
         UserEntity exportUser = requireTeacherExportUser(userId);
@@ -197,7 +244,8 @@ public class GeneratedQuizService {
 
         byte[] content = quizDocxExportService.exportCombinedQuizToDocx(
                 exportableSections,
-                new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations)
+                new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations),
+                buildDocxHeaderOptions(exportUser, headerOverride, locale)
         );
         exportUsageProtectionService.recordDocxUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
@@ -238,6 +286,29 @@ public class GeneratedQuizService {
             throw new InvalidGeneratedQuizQuestionCountException();
         }
         return requestedQuestionCount;
+    }
+
+    private QuizDocxExportService.DocxHeaderOptions buildDocxHeaderOptions(
+            UserEntity exportUser,
+            QuizDocxExportHeaderOverrideRequest headerOverride,
+            Locale locale
+    ) {
+        String className = headerOverride == null ? null : normalizeOptionalText(headerOverride.className());
+        boolean includeDate = headerOverride == null || !Boolean.FALSE.equals(headerOverride.includeDate());
+        return new QuizDocxExportService.DocxHeaderOptions(
+                normalizeOptionalText(exportUser.getSchoolName()),
+                className,
+                includeDate,
+                locale,
+                LocalDate.now(ZoneOffset.UTC)
+        );
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private UUID parseNoteId(String noteIdRaw) {

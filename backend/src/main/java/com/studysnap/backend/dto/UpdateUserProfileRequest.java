@@ -27,6 +27,9 @@ public record UpdateUserProfileRequest(
         @Size(max = 120, message = "Course / Program must be 120 characters or less.")
         String courseProgram,
 
+        @Size(max = 120, message = "School name must be 120 characters or less.")
+        String schoolName,
+
         @NotBlank(message = "Email is required.")
         @Email(message = "Enter a valid email address.")
         @Size(max = 255, message = "Email must be 255 characters or less.")

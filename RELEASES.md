@@ -16,6 +16,8 @@ Theme: extend the teacher quiz-authoring workflow with concrete controls that tu
 
 - **Question count control on teacher Generate Quiz** — Teacher Note Detail now offers 10 / 20 / 30 question generation controls, keeps Free teachers at 10 with a Plus-specific longer-quiz paywall, and sends the selected count through teacher quiz generation so Plus and Pro teachers get the requested quiz length
 - **Generate Quiz modal** — moved the question count picker out of the note card into a focused modal; both Generate Quiz and Regenerate now open the same modal so teachers can choose count on every generation including regeneration; preflight checks (quiz limit, Study Pack gate) still fire before the modal opens
+- **Custom DOCX header for teacher exports** — Teacher Profile now stores an optional school name used by DOCX quiz and Exam Builder exports, while the export modal lets teachers add a class / section line and toggle the export date without changing stored quiz data
+- **AI suggestion modal survives navigation** — fixed a bug where navigating away from a note while the Study Pack was generating and returning later would silently skip the AI title/subject/tags suggestion modal; the awaiting-suggestion state is now persisted in `sessionStorage` so the modal still fires on return, whether the note was still generating or already ready
 
 ---
 

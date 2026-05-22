@@ -17,7 +17,10 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -47,6 +50,7 @@ public class QuizDocxExportService {
     private static final String QUIZ_WITH_ANSWERS_FILENAME_SUFFIX = "-quiz-with-answers.docx";
     private static final String COMBINED_QUIZ_FILENAME = "combined-exam.docx";
     private static final String COMBINED_QUIZ_WITH_ANSWERS_FILENAME = "combined-exam-with-answers.docx";
+    private static final String HEADER_TITLE_SEPARATOR = " — ";
     private static final String FONT_FAMILY = "Calibri";
     private static final int MARGIN_TWIPS = 1440;
     private static final int TITLE_FONT_SIZE = 16;
@@ -64,10 +68,15 @@ public class QuizDocxExportService {
     private static final int ANSWERS_PER_LINE = 5;
 
     public byte[] exportQuizToDocx(ExportableQuiz quiz, QuizDocxExportMode mode) {
+        return exportQuizToDocx(quiz, mode, DocxHeaderOptions.empty());
+    }
+
+    public byte[] exportQuizToDocx(ExportableQuiz quiz, QuizDocxExportMode mode, DocxHeaderOptions headerOptions) {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             log.info("Applying DOCX v4 exam formatting...");
             setMargins(document);
+            addCustomHeader(document, quiz.title(), headerOptions);
             addHeader(document, quiz);
             addExamTitle(document);
             addSectionIntro(document);
@@ -88,10 +97,19 @@ public class QuizDocxExportService {
     }
 
     public byte[] exportCombinedQuizToDocx(List<ExportableSection> sections, CombinedQuizDocxOptions options) {
+        return exportCombinedQuizToDocx(sections, options, DocxHeaderOptions.empty());
+    }
+
+    public byte[] exportCombinedQuizToDocx(
+            List<ExportableSection> sections,
+            CombinedQuizDocxOptions options,
+            DocxHeaderOptions headerOptions
+    ) {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             log.info("Applying DOCX exam builder formatting...");
             setMargins(document);
+            addCustomHeader(document, COMBINED_TOPIC, headerOptions);
             addCombinedHeader(document, sections);
             addExamTitle(document);
             addSectionIntro(document);
@@ -154,6 +172,34 @@ public class QuizDocxExportService {
         addHeaderLine(document, NAME_LINE, HEADER_SPACING);
         addHeaderLine(document, DATE_LINE, HEADER_SPACING);
         addHeaderLine(document, SCORE_LINE, SECTION_SPACING);
+    }
+
+    private void addCustomHeader(XWPFDocument document, String title, DocxHeaderOptions options) {
+        if (options == null || !options.hasCustomHeader()) {
+            return;
+        }
+        String schoolName = normalizeOptionalText(options.schoolName());
+        if (schoolName != null) {
+            addCenteredHeaderLine(document, schoolName, true, HEADER_SPACING);
+        }
+        addCenteredHeaderLine(document, buildHeaderTitle(title, options.className()), true, HEADER_SPACING);
+        if (options.includeDate()) {
+            addCenteredHeaderLine(document, formatHeaderDate(options), false, SECTION_SPACING);
+        }
+    }
+
+    private String buildHeaderTitle(String title, String className) {
+        String normalizedTitle = normalizeText(title);
+        String normalizedClassName = normalizeOptionalText(className);
+        return normalizedClassName == null
+                ? normalizedTitle
+                : normalizedTitle + HEADER_TITLE_SEPARATOR + normalizedClassName;
+    }
+
+    private String formatHeaderDate(DocxHeaderOptions options) {
+        return DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)
+                .withLocale(options.locale())
+                .format(options.exportDate());
     }
 
     private void addCombinedHeader(XWPFDocument document, List<ExportableSection> sections) {
@@ -219,6 +265,17 @@ public class QuizDocxExportService {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setSpacingAfter(spacingAfter);
         XWPFRun run = paragraph.createRun();
+        run.setFontSize(BODY_FONT_SIZE);
+        run.setFontFamily(FONT_FAMILY);
+        run.setText(text);
+    }
+
+    private void addCenteredHeaderLine(XWPFDocument document, String text, boolean bold, int spacingAfter) {
+        XWPFParagraph paragraph = document.createParagraph();
+        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setSpacingAfter(spacingAfter);
+        XWPFRun run = paragraph.createRun();
+        run.setBold(bold);
         run.setFontSize(BODY_FONT_SIZE);
         run.setFontFamily(FONT_FAMILY);
         run.setText(text);
@@ -377,6 +434,33 @@ public class QuizDocxExportService {
             boolean includeAnswerKey,
             boolean includeExplanations
     ) {
+    }
+
+    public record DocxHeaderOptions(
+            String schoolName,
+            String className,
+            boolean includeDate,
+            Locale locale,
+            LocalDate exportDate
+    ) {
+        private static final Locale DEFAULT_LOCALE = Locale.forLanguageTag("en-PH");
+
+        public DocxHeaderOptions {
+            locale = locale == null ? DEFAULT_LOCALE : locale;
+            exportDate = exportDate == null ? LocalDate.now() : exportDate;
+        }
+
+        public static DocxHeaderOptions empty() {
+            return new DocxHeaderOptions(null, null, false, null, null);
+        }
+
+        public boolean hasCustomHeader() {
+            return includeDate || hasText(schoolName) || hasText(className);
+        }
+
+        private static boolean hasText(String value) {
+            return value != null && !value.isBlank();
+        }
     }
 
     @Getter

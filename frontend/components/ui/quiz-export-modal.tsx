@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
+import { useState } from "react";
 import { FileText } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
+import type { QuizDocxHeaderOverride } from "@/lib/api";
 
 export type QuizExportModalMode = "QUIZ_ONLY" | "WITH_ANSWERS";
 
@@ -12,8 +15,10 @@ type QuizExportModalProps = {
   title?: string;
   description?: string;
   exporting?: boolean;
+  showTeacherExportDetails?: boolean;
+  schoolName?: string | null;
   onClose: () => void;
-  onSelect: (mode: QuizExportModalMode) => void;
+  onSelect: (mode: QuizExportModalMode, headerOverride?: QuizDocxHeaderOverride) => void;
 };
 
 const EXPORT_OPTIONS: Array<{
@@ -38,9 +43,20 @@ export function QuizExportModal({
   title = "Export",
   description = "Choose an export format.",
   exporting = false,
+  showTeacherExportDetails = false,
+  schoolName = null,
   onClose,
   onSelect,
 }: Readonly<QuizExportModalProps>) {
+  const [className, setClassName] = useState("");
+  const [includeDate, setIncludeDate] = useState(true);
+  const headerOverride = showTeacherExportDetails
+    ? {
+      className: className.trim() || null,
+      includeDate,
+    }
+    : undefined;
+
   return (
     <AppModal
       isOpen={isOpen}
@@ -60,6 +76,44 @@ export function QuizExportModal({
       )}
     >
       <div className="space-y-3">
+        {showTeacherExportDetails ? (
+          <details className="rounded-xl border border-border bg-muted/20 px-4 py-3" open>
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">Export details</summary>
+            <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
+              {schoolName?.trim() ? (
+                <p className="text-sm text-foreground/70">
+                  From your profile: <span className="font-medium text-foreground">{schoolName.trim()}</span>{" "}
+                  <Link href="/profile" className="text-blue-600 hover:underline dark:text-blue-400">Edit</Link>
+                </p>
+              ) : (
+                <p className="text-sm text-foreground/65">
+                  Add your school name in Settings → Profile to include it in headers.{" "}
+                  <Link href="/profile" className="text-blue-600 hover:underline dark:text-blue-400">Edit</Link>
+                </p>
+              )}
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-foreground">Class or section (optional)</span>
+                <input
+                  value={className}
+                  onChange={(event) => setClassName(event.target.value.slice(0, 120))}
+                  disabled={exporting}
+                  maxLength={120}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                />
+              </label>
+              <label className="flex items-start gap-2 text-sm text-foreground/75">
+                <input
+                  type="checkbox"
+                  checked={includeDate}
+                  onChange={(event) => setIncludeDate(event.target.checked)}
+                  disabled={exporting}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-600"
+                />
+                <span>Include today&apos;s date in the header</span>
+              </label>
+            </div>
+          </details>
+        ) : null}
         {EXPORT_OPTIONS.map((option) => (
           <button
             key={option.mode}
@@ -68,7 +122,7 @@ export function QuizExportModal({
               disabled: exporting,
               className: "w-full rounded-2xl px-4 py-4",
             })}
-            onClick={() => onSelect(option.mode)}
+            onClick={() => onSelect(option.mode, headerOverride)}
             disabled={exporting}
           >
             <div className="flex items-start gap-3">

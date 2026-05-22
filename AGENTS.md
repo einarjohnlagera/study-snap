@@ -230,6 +230,7 @@ Use these skills before writing prompts, before starting new features, and after
   - `Learning Profile`
   - `Profile Type`
   - `Public Profile Link`
+  - Teacher-only `Teaching Info` for DOCX export defaults
 - Identity uses:
   - `firstName`
   - `lastName`

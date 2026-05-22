@@ -413,6 +413,7 @@ export type MeResponse = {
   bio: string | null;
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
+  schoolName: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
   profileType: ProfileType | null;
@@ -459,6 +460,7 @@ export type UpdateUserProfileRequest = {
   bio: string;
   learnerLevel: LearnerLevel | null;
   courseProgram: string;
+  schoolName: string;
   email: string;
 };
 
@@ -988,6 +990,12 @@ export type MultiNoteQuizDocxExportRequest = {
   }>;
   includeAnswerKey: boolean;
   includeExplanations: boolean;
+  headerOverride?: QuizDocxHeaderOverride | null;
+};
+
+export type QuizDocxHeaderOverride = {
+  className?: string | null;
+  includeDate?: boolean | null;
 };
 
 export type PublicNoteLikeResponse = {
@@ -1371,6 +1379,7 @@ export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<Me
     bio: current.bio ?? "",
     learnerLevel: level,
     courseProgram: current.courseProgram ?? "",
+    schoolName: current.schoolName ?? "",
     email: current.email,
   });
 }
@@ -1388,6 +1397,7 @@ export async function updateLearningProfileContext(
     bio: current.bio ?? "",
     learnerLevel: learnerLevel ?? current.learnerLevel ?? null,
     courseProgram: courseProgram?.trim() || current.courseProgram || "",
+    schoolName: current.schoolName ?? "",
     email: current.email,
   });
 }
@@ -2721,12 +2731,14 @@ export async function generateGeneratedQuiz(
 export async function exportGeneratedQuizDocx(
   quizId: string,
   mode: QuizDocxExportMode,
+  headerOverride?: QuizDocxHeaderOverride | null,
 ): Promise<{ filename: string }> {
   const response = await fetchWithAuth(
     `/quizzes/${quizId}/export-docx?mode=${mode}`,
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ headerOverride: headerOverride ?? null }),
     },
     true,
   );

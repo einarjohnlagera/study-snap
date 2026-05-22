@@ -11,8 +11,10 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBrType;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -96,6 +98,53 @@ class QuizDocxExportServiceTest {
                 .findFirst()
                 .orElseThrow();
             assertThat(pageBreakParagraph.getRuns().stream().anyMatch(this::hasPageBreak)).isTrue();
+        }
+    }
+
+    @Test
+    void exportQuiz_customHeaderIncludesTeacherExportDetails() throws IOException {
+        byte[] content = quizDocxExportService.exportQuizToDocx(
+                buildQuiz(List.of(
+                        new QuizItem("What is the nucleus?", List.of("Control center", "Energy source", "Cell wall", "Waste"), 0, "Cells", "The nucleus controls the cell.")
+                )),
+                QuizDocxExportMode.QUIZ_ONLY,
+                new QuizDocxExportService.DocxHeaderOptions(
+                        "NoteLib Academy",
+                        "Grade 7 - Rizal",
+                        true,
+                        Locale.forLanguageTag("en-PH"),
+                        LocalDate.of(2026, 5, 21)
+                )
+        );
+
+        try (XWPFDocument document = openDocument(content)) {
+            assertThat(document.getParagraphs().subList(0, 3))
+                    .extracting(XWPFParagraph::getText)
+                    .containsExactly(
+                            "NoteLib Academy",
+                            "Biology Quiz — Grade 7 - Rizal",
+                            "May 21, 2026"
+                    );
+            assertThat(document.getParagraphs().get(0).getAlignment()).isEqualTo(ParagraphAlignment.CENTER);
+            assertThat(document.getParagraphs().get(0).getRuns().getFirst().isBold()).isTrue();
+            assertThat(document.getParagraphs().get(1).getRuns().getFirst().isBold()).isTrue();
+            assertThat(document.getParagraphs().get(2).getRuns().getFirst().isBold()).isFalse();
+        }
+    }
+
+    @Test
+    void exportQuiz_customHeaderSkipsBlankSchoolAndDisabledDate() throws IOException {
+        byte[] content = quizDocxExportService.exportQuizToDocx(
+                buildQuiz(List.of(
+                        new QuizItem("What is the nucleus?", List.of("Control center", "Energy source", "Cell wall", "Waste"), 0, "Cells", "The nucleus controls the cell.")
+                )),
+                QuizDocxExportMode.QUIZ_ONLY,
+                new QuizDocxExportService.DocxHeaderOptions(" ", null, false, null, null)
+        );
+
+        try (XWPFDocument document = openDocument(content)) {
+            assertThat(document.getParagraphs().getFirst().getText()).isEqualTo("Subject: Biology");
+            assertThat(extractText(document)).doesNotContain("May 21, 2026");
         }
     }
 

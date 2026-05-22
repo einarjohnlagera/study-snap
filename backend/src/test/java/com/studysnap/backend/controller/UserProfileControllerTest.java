@@ -14,6 +14,9 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +56,7 @@ class UserProfileControllerTest {
                 "Reviewing pathology one note at a time.",
                 LearnerLevel.COLLEGE,
                 "Nursing",
+                "NoteLib Academy",
                 "[email protected]"
         );
         MeResponse expected = new MeResponse(
@@ -66,6 +70,7 @@ class UserProfileControllerTest {
                 "Reviewing pathology one note at a time.",
                 LearnerLevel.COLLEGE,
                 "Nursing",
+                "NoteLib Academy",
                 true,
                 null,
                 ProfileType.STUDENT,
@@ -92,6 +97,27 @@ class UserProfileControllerTest {
     }
 
     @Test
+    void updateProfileRequest_rejectsSchoolNameOverMaxLength() {
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                null,
+                LearnerLevel.COLLEGE,
+                "Nursing",
+                "x".repeat(121),
+                "[email protected]"
+        );
+
+        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(validatorFactory.getValidator().validate(request))
+                    .extracting(ConstraintViolation::getMessage)
+                    .contains("School name must be 120 characters or less.");
+        }
+    }
+
+    @Test
     void updatePublicProfileVisibility_delegatesToAuthService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
@@ -107,6 +133,7 @@ class UserProfileControllerTest {
                 "Reviewing pathology one note at a time.",
                 LearnerLevel.COLLEGE,
                 "Nursing",
+                null,
                 false,
                 null,
                 ProfileType.STUDENT,
@@ -148,6 +175,7 @@ class UserProfileControllerTest {
                 "Reviewing pathology one note at a time.",
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Nursing",
+                null,
                 true,
                 null,
                 ProfileType.BOARD_EXAM,

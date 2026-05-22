@@ -22,7 +22,7 @@ Primary focus:
 
 1. ~~**Question count control on Generate Quiz**~~ ✅ — let teachers choose 10 / 20 / 30 questions per generated quiz. Plus+ Teacher unlocks 20 and 30; Free Teacher fixed at 10. Honest upsell because higher counts directly increase LLM token cost.
 
-2. **Custom DOCX header** — teacher profile carries an optional `schoolName` field that appears at the top of every DOCX export. Per-export modal can add class/section name and toggle date inclusion. Eliminates the manual edit-in-Word step before printing or filing exam packets.
+2. ~~**Custom DOCX header**~~ ✅ — teacher profile carries an optional `schoolName` field that appears at the top of every DOCX export. Per-export modal can add class/section name and toggle date inclusion. Eliminates the manual edit-in-Word step before printing or filing exam packets.
 
 3. **Multiple exam versions (A/B/C)** — single DOCX export with 2 or 3 deterministically shuffled versions for anti-cheating in classroom settings. Plus+ Teacher only. Choice order also shuffled per version; answer keys reflect shuffled positions. Same exam + same versionCount produces identical bytes (deterministic).
 
@@ -514,6 +514,12 @@ Planned for a future release after the mode system matures:
 - filtering UI: optional "Relevant to me" toggle that uses the current user's profile mode for ranking
 - implementation must remain additive — no ranking change without the toggle enabled
 - do not build until there are enough public notes per profile type to make filtering meaningful
+
+## Known UX Fixes (cross-cutting, no version gate)
+
+These are correctness fixes that ship as soon as they are ready and are not held to a version milestone.
+
+- ~~**AI suggestion modal survives navigation**~~ ✅ — fixed in v0.15.1 branch: `awaitingGeneratedMetadataSuggestionRef` was in-memory-only and reset on component remount; navigating away mid-generation and returning silently skipped the AI title/subject/tags modal; replaced with a `sessionStorage` key (`notelib-awaiting-suggestion:{noteId}`) that is set when generation starts and cleared after the modal fires; `loadDetail` re-arms the ref from storage when returning to a still-generating note so the polling effect can still trigger the modal on completion.
 
 ## Product Learning Loop
 
