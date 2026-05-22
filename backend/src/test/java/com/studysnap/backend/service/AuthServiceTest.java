@@ -297,8 +297,9 @@ class AuthServiceTest {
             "Student"
         ));
 
+        GoogleAuthRequest request = new GoogleAuthRequest("google-token", false);
         assertThatThrownBy(() -> authService.loginWithGoogle(
-            new GoogleAuthRequest("google-token", false),
+            request,
             "127.0.0.1",
             "JUnit"
         )).isInstanceOf(AppException.class)
@@ -321,7 +322,8 @@ class AuthServiceTest {
             "Other"
         ));
 
-        assertThatThrownBy(() -> authService.connectGoogle(userId, new GoogleConnectRequest("google-token")))
+        GoogleConnectRequest request = new GoogleConnectRequest("google-token");
+        assertThatThrownBy(() -> authService.connectGoogle(userId, request))
             .isInstanceOf(AppException.class)
             .hasMessage("This Google account uses a different email. Please use the same email as your NoteLib account.");
 
@@ -350,7 +352,8 @@ class AuthServiceTest {
         when(userAuthProviderRepository.findByProviderAndProviderUserId(AuthProvider.GOOGLE, "google-sub-1"))
             .thenReturn(Optional.of(existingProvider));
 
-        assertThatThrownBy(() -> authService.connectGoogle(userId, new GoogleConnectRequest("google-token")))
+        GoogleConnectRequest request = new GoogleConnectRequest("google-token");
+        assertThatThrownBy(() -> authService.connectGoogle(userId, request))
             .isInstanceOf(AppException.class)
             .hasMessage("This Google account is already connected to another NoteLib account.");
 
@@ -651,6 +654,7 @@ class AuthServiceTest {
                 "Focused on anatomy review.",
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Pharmacy",
+                "  NoteLib Academy  ",
                 "current@example.com"
             )
         );
@@ -662,12 +666,14 @@ class AuthServiceTest {
         assertThat(response.bio()).isEqualTo("Focused on anatomy review.");
         assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(response.courseProgram()).isEqualTo("Pharmacy");
+        assertThat(response.schoolName()).isEqualTo("NoteLib Academy");
         assertThat(response.username()).isEqualTo("studybuddy");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getDisplayName()).isEqualTo("Study Buddy");
         assertThat(user.getBio()).isEqualTo("Focused on anatomy review.");
         assertThat(user.getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(user.getCourseProgram()).isEqualTo("Pharmacy");
+        assertThat(user.getSchoolName()).isEqualTo("NoteLib Academy");
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
 
@@ -711,6 +717,7 @@ class AuthServiceTest {
                 "Weak areas: physiology and pharma.",
                 LearnerLevel.PROFESSIONAL,
                 "Medicine",
+                null,
                 "updated@example.com"
             )
         );
@@ -834,6 +841,7 @@ class AuthServiceTest {
             null,
             LearnerLevel.COLLEGE,
             "Biology",
+            null,
             "current@example.com"
         );
         assertThatThrownBy(() -> authService.updateUserProfile(
@@ -869,6 +877,7 @@ class AuthServiceTest {
             null,
             LearnerLevel.COLLEGE,
             "Biology",
+            null,
             "current@example.com"
         );
 
@@ -906,6 +915,7 @@ class AuthServiceTest {
             null,
             LearnerLevel.COLLEGE,
             "Biology",
+            null,
             "current@example.com"
         );
 

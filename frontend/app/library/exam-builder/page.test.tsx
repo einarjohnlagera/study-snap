@@ -3,6 +3,7 @@ import ExamBuilderPage from "./page";
 import {
   exportCombinedGeneratedQuizDocx,
   getGeneratedQuiz,
+  getMe,
   listNotes,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -29,6 +30,7 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/lib/api", () => ({
   exportCombinedGeneratedQuizDocx: jest.fn(),
   getGeneratedQuiz: jest.fn(),
+  getMe: jest.fn(),
   listNotes: jest.fn(),
 }));
 
@@ -48,6 +50,10 @@ describe("Exam Builder page", () => {
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockReset();
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "combined-exam-with-answers.docx" });
     (getGeneratedQuiz as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockResolvedValue({
+      schoolName: "NoteLib Academy",
+    });
     (getGeneratedQuiz as jest.Mock).mockImplementation(async (noteId: string) => ({
       id: `generated-${noteId}`,
       noteId,
@@ -164,6 +170,10 @@ describe("Exam Builder page", () => {
         ],
         includeAnswerKey: true,
         includeExplanations: true,
+        headerOverride: {
+          className: null,
+          includeDate: true,
+        },
       });
     });
   });
@@ -292,6 +302,10 @@ describe("Exam Builder page", () => {
         ],
         includeAnswerKey: true,
         includeExplanations: true,
+        headerOverride: {
+          className: null,
+          includeDate: true,
+        },
       });
     });
   });

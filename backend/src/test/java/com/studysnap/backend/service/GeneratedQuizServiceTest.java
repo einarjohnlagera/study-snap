@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
+import com.studysnap.backend.dto.QuizDocxExportHeaderOverrideRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
@@ -32,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -238,24 +240,42 @@ class GeneratedQuizServiceTest {
         generatedQuiz.setGeneratedAt(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
         generatedQuiz.setUpdatedAt(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
         UserEntity teacher = buildUser(userId, UserRole.USER, ProfileType.TEACHER);
+        teacher.setSchoolName("  NoteLib Academy  ");
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
         when(generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)).thenReturn(Optional.of(generatedQuiz));
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
         when(quizDocxExportService.buildFilename("Cell Structure", QuizDocxExportMode.WITH_ANSWERS))
                 .thenReturn("cell-structure-quiz-with-answers.docx");
-        when(quizDocxExportService.exportQuizToDocx(any(QuizDocxExportService.ExportableQuiz.class), eq(QuizDocxExportMode.WITH_ANSWERS)))
+        when(quizDocxExportService.exportQuizToDocx(
+                any(QuizDocxExportService.ExportableQuiz.class),
+                eq(QuizDocxExportMode.WITH_ANSWERS),
+                any(QuizDocxExportService.DocxHeaderOptions.class)
+        ))
                 .thenReturn("docx".getBytes());
 
         QuizDocxExportService.QuizDocxFile exported = generatedQuizService.exportDocx(
                 quizId.toString(),
                 userId,
-                QuizDocxExportMode.WITH_ANSWERS
+                QuizDocxExportMode.WITH_ANSWERS,
+                new QuizDocxExportHeaderOverrideRequest("  Grade 7 - Rizal  ", false),
+                Locale.CANADA_FRENCH
         );
 
         assertThat(exported.getFilename()).isEqualTo("cell-structure-quiz-with-answers.docx");
         assertThat(exported.getContent()).isEqualTo("docx".getBytes());
-        verify(quizDocxExportService).exportQuizToDocx(any(QuizDocxExportService.ExportableQuiz.class), eq(QuizDocxExportMode.WITH_ANSWERS));
+        ArgumentCaptor<QuizDocxExportService.DocxHeaderOptions> headerOptionsCaptor = ArgumentCaptor.forClass(
+                QuizDocxExportService.DocxHeaderOptions.class
+        );
+        verify(quizDocxExportService).exportQuizToDocx(
+                any(QuizDocxExportService.ExportableQuiz.class),
+                eq(QuizDocxExportMode.WITH_ANSWERS),
+                headerOptionsCaptor.capture()
+        );
+        assertThat(headerOptionsCaptor.getValue().schoolName()).isEqualTo("NoteLib Academy");
+        assertThat(headerOptionsCaptor.getValue().className()).isEqualTo("Grade 7 - Rizal");
+        assertThat(headerOptionsCaptor.getValue().includeDate()).isFalse();
+        assertThat(headerOptionsCaptor.getValue().locale()).isEqualTo(Locale.CANADA_FRENCH);
         verify(quizGenerationService, never()).generateTeacherQuiz(any(), any(), any(), any(Integer.class), any(StudyPackGenerationContext.class));
     }
 
@@ -270,7 +290,7 @@ class GeneratedQuizServiceTest {
                 .isInstanceOf(GeneratedQuizExportNotAllowedException.class);
 
         verify(generatedQuizRepository, never()).findByIdAndOwnerUserId(any(UUID.class), eq(userId));
-        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any());
+        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any(), any());
     }
 
     @Test
@@ -297,7 +317,8 @@ class GeneratedQuizServiceTest {
         when(quizDocxExportService.buildCombinedFilename(true, true)).thenReturn("combined-exam-with-answers.docx");
         when(quizDocxExportService.exportCombinedQuizToDocx(
                 any(List.class),
-                eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true))
+                eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true)),
+                any(QuizDocxExportService.DocxHeaderOptions.class)
         )).thenReturn("combined-docx".getBytes());
 
         QuizDocxExportService.QuizDocxFile exported = generatedQuizService.exportCombinedDocx(
@@ -322,7 +343,8 @@ class GeneratedQuizServiceTest {
         ArgumentCaptor<List<QuizDocxExportService.ExportableSection>> captor = ArgumentCaptor.forClass(List.class);
         verify(quizDocxExportService).exportCombinedQuizToDocx(
                 captor.capture(),
-                eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true))
+                eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true)),
+                any(QuizDocxExportService.DocxHeaderOptions.class)
         );
         assertThat(captor.getValue()).extracting(QuizDocxExportService.ExportableSection::title)
                 .containsExactly("Section A", "Section B");
@@ -353,7 +375,7 @@ class GeneratedQuizServiceTest {
                 false
         )).hasMessage("Only notes with generated quizzes can be included in an exam export.");
 
-        verify(quizDocxExportService, never()).exportCombinedQuizToDocx(any(), any());
+        verify(quizDocxExportService, never()).exportCombinedQuizToDocx(any(), any(), any());
     }
 
     private NoteEntity buildNote(UUID noteId, UUID userId) {

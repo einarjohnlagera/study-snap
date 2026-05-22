@@ -383,6 +383,7 @@ public class AuthService {
         String normalizedBio = normalizeOptionalText(request.bio());
         LearnerLevel normalizedLearnerLevel = request.learnerLevel();
         String normalizedCourseProgram = normalizeOptionalCourseProgram(request.courseProgram());
+        String normalizedSchoolName = normalizeOptionalText(request.schoolName());
         String normalizedEmail = normalizeEmail(request.email());
 
         user.setFirstName(normalizedFirstName);
@@ -395,6 +396,7 @@ public class AuthService {
         user.setBio(normalizedBio);
         user.setLearnerLevel(normalizedLearnerLevel);
         user.setCourseProgram(normalizedCourseProgram);
+        user.setSchoolName(normalizedSchoolName);
 
         if (normalizedEmail.equalsIgnoreCase(user.getEmail())) {
             user.setPendingEmail(null);
@@ -437,6 +439,7 @@ public class AuthService {
                 user.getBio(),
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
+                user.getSchoolName(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
                 user.getProfileType(),

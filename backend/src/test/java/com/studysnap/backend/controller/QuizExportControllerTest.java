@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 
 import java.util.UUID;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -37,12 +38,24 @@ class QuizExportControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         byte[] content = "docx".getBytes();
-        when(generatedQuizService.exportDocx("quiz-1", userId, QuizDocxExportMode.WITH_ANSWERS))
+        when(generatedQuizService.exportDocx("quiz-1", userId, QuizDocxExportMode.WITH_ANSWERS, null, Locale.forLanguageTag("en-PH")))
                 .thenReturn(new QuizDocxExportService.QuizDocxFile("teacher-note-quiz-with-answers.docx", content));
 
-        var response = quizExportController.exportGeneratedQuizDocx("quiz-1", QuizDocxExportMode.WITH_ANSWERS, user);
+        var response = quizExportController.exportGeneratedQuizDocx(
+                "quiz-1",
+                QuizDocxExportMode.WITH_ANSWERS,
+                null,
+                Locale.forLanguageTag("en-PH"),
+                user
+        );
 
-        verify(generatedQuizService).exportDocx("quiz-1", userId, QuizDocxExportMode.WITH_ANSWERS);
+        verify(generatedQuizService).exportDocx(
+                "quiz-1",
+                userId,
+                QuizDocxExportMode.WITH_ANSWERS,
+                null,
+                Locale.forLanguageTag("en-PH")
+        );
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE))
                 .isEqualTo("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
@@ -68,14 +81,33 @@ class QuizExportControllerTest {
                         )
                 ),
                 true,
-                true
+                true,
+                null
         );
-        when(generatedQuizService.exportCombinedDocx(request.sections(), userId, true, true))
+        when(generatedQuizService.exportCombinedDocx(
+                request.sections(),
+                userId,
+                true,
+                true,
+                null,
+                Locale.forLanguageTag("en-PH")
+        ))
                 .thenReturn(new QuizDocxExportService.QuizDocxFile("combined-exam-with-answers.docx", content));
 
-        var response = quizExportController.exportCombinedGeneratedQuizDocx(request, user);
+        var response = quizExportController.exportCombinedGeneratedQuizDocx(
+                request,
+                Locale.forLanguageTag("en-PH"),
+                user
+        );
 
-        verify(generatedQuizService).exportCombinedDocx(request.sections(), userId, true, true);
+        verify(generatedQuizService).exportCombinedDocx(
+                request.sections(),
+                userId,
+                true,
+                true,
+                null,
+                Locale.forLanguageTag("en-PH")
+        );
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE))
                 .isEqualTo("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))

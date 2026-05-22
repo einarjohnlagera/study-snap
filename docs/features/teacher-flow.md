@@ -84,6 +84,11 @@ Do not mix these models.
 - Export options:
   - `Quiz Only`
   - `Quiz + Answers`
+- Teacher DOCX export details can add a local header without changing stored `generatedQuiz` data:
+  - `schoolName` comes from Teacher Profile `Teaching Info` and is the default first header line when set
+  - per-export `Class or section` text is optional and stays local to the open export modal
+  - `Include today's date in the header` defaults on for each export and can be toggled off
+  - the same export-details controls apply to Quiz Preview DOCX export and combined Exam Builder DOCX export
 - `Quiz + Answers` appends:
   - `Answer Key`
   - `Explanations`

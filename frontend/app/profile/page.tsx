@@ -57,6 +57,10 @@ type LearningProfileForm = {
   bio: string;
 };
 
+type TeachingInfoForm = {
+  schoolName: string;
+};
+
 type LearningProfileErrors = {
   learnerLevel?: string;
   courseProgram?: string;
@@ -205,6 +209,9 @@ export default function ProfilePage() {
     courseProgram: "",
     bio: "",
   });
+  const [teachingInfoForm, setTeachingInfoForm] = useState<TeachingInfoForm>({
+    schoolName: "",
+  });
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [identityMessage, setIdentityMessage] = useState<string | null>(null);
   const [savingProfileType, setSavingProfileType] = useState(false);
@@ -217,6 +224,8 @@ export default function ProfilePage() {
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
+  const [savingTeachingInfo, setSavingTeachingInfo] = useState(false);
+  const [teachingInfoMessage, setTeachingInfoMessage] = useState<string | null>(null);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [signInMethods, setSignInMethods] = useState<SignInMethodsResponse | null>(null);
   const [signInMethodsMessage, setSignInMethodsMessage] = useState<string | null>(null);
@@ -252,6 +261,7 @@ export default function ProfilePage() {
     setIdentityMessage(null);
     setProfileTypeMessage(null);
     setLearningProfileMessage(null);
+    setTeachingInfoMessage(null);
     setSignInMethodsMessage(null);
     setLearningProfileErrors({});
     try {
@@ -276,6 +286,9 @@ export default function ProfilePage() {
         learnerLevel: me.learnerLevel ?? "",
         courseProgram: me.courseProgram ?? "",
         bio: me.bio ?? "",
+      });
+      setTeachingInfoForm({
+        schoolName: me.schoolName ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
       setExamDateInput(me.examDate ?? "");
@@ -405,6 +418,7 @@ export default function ProfilePage() {
     bio: learningProfileForm.bio.trim(),
     learnerLevel: learningProfileForm.learnerLevel || null,
     courseProgram: learningProfileForm.courseProgram.trim(),
+    schoolName: teachingInfoForm.schoolName.trim(),
     email: identityForm.email.trim(),
   });
 
@@ -443,6 +457,9 @@ export default function ProfilePage() {
         learnerLevel: updatedIdentity.learnerLevel ?? "",
         courseProgram: updatedIdentity.courseProgram ?? "",
         bio: updatedIdentity.bio ?? "",
+      });
+      setTeachingInfoForm({
+        schoolName: updatedIdentity.schoolName ?? "",
       });
       setSelectedProfileType(updatedIdentity.profileType ?? selectedProfileType);
       setIdentityMessage(
@@ -483,6 +500,9 @@ export default function ProfilePage() {
         courseProgram: updatedProfile.courseProgram ?? "",
         bio: updatedProfile.bio ?? "",
       });
+      setTeachingInfoForm({
+        schoolName: updatedProfile.schoolName ?? "",
+      });
       setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
       setLearningProfileErrors({});
       setLearningProfileMessage("Learning profile updated successfully.");
@@ -491,6 +511,39 @@ export default function ProfilePage() {
       setLearningProfileMessage(message);
     } finally {
       setSavingLearningProfile(false);
+    }
+  };
+
+  const handleSaveTeachingInfo = async () => {
+    if (savingTeachingInfo) {
+      return;
+    }
+    setSavingTeachingInfo(true);
+    setTeachingInfoMessage(null);
+    try {
+      const updatedProfile = await updateUserProfile(buildProfileUpdateRequest());
+      setProfile(updatedProfile);
+      setIdentityForm({
+        firstName: updatedProfile.firstName ?? "",
+        lastName: updatedProfile.lastName ?? "",
+        displayName: updatedProfile.displayName ?? "",
+        username: updatedProfile.username ?? "",
+        email: updatedProfile.pendingEmail ?? updatedProfile.email,
+      });
+      setLearningProfileForm({
+        learnerLevel: updatedProfile.learnerLevel ?? "",
+        courseProgram: updatedProfile.courseProgram ?? "",
+        bio: updatedProfile.bio ?? "",
+      });
+      setTeachingInfoForm({
+        schoolName: updatedProfile.schoolName ?? "",
+      });
+      setTeachingInfoMessage("Teaching info updated successfully.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update teaching info.";
+      setTeachingInfoMessage(message);
+    } finally {
+      setSavingTeachingInfo(false);
     }
   };
 
@@ -834,6 +887,45 @@ export default function ProfilePage() {
               />
             </div>
           </Card>
+
+          {profile.profileType === "TEACHER" ? (
+            <Card className="space-y-4 p-4 sm:p-6">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold sm:text-xl">Teaching Info</h2>
+                <p className="text-sm text-foreground/70">
+                  Configure default details for teacher DOCX exports.
+                </p>
+              </div>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">School Name</span>
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  aria-label="School Name"
+                  value={teachingInfoForm.schoolName}
+                  onChange={(event) => {
+                    setTeachingInfoMessage(null);
+                    setTeachingInfoForm({ schoolName: event.target.value.slice(0, 120) });
+                  }}
+                  maxLength={120}
+                />
+                <p className="text-xs text-foreground/60">
+                  Shown in the header of every exported DOCX.
+                </p>
+              </label>
+              <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                {teachingInfoMessage ? <p className="text-xs text-foreground/60">{teachingInfoMessage}</p> : <div />}
+                <ResponsiveActionButton
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleSaveTeachingInfo()}
+                  loading={savingTeachingInfo}
+                  loadingText="Saving..."
+                  action="save"
+                  label="Save Teaching Info"
+                />
+              </div>
+            </Card>
+          ) : null}
 
           <Card id={PROFILE_LEARNING_PROFILE_SECTION_ID} className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Learning Profile</h2>

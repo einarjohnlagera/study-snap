@@ -50,6 +50,7 @@ const profileResponse = {
   bio: "Reviewing pathology one note at a time.",
   learnerLevel: "COLLEGE",
   courseProgram: "Nursing",
+  schoolName: null,
   publicProfileVisible: true,
   countryCode: null,
   profileType: "STUDENT",
@@ -127,6 +128,7 @@ describe("Profile page", () => {
         bio: "Reviewing pathology one note at a time.",
         learnerLevel: "COLLEGE",
         courseProgram: "Nursing",
+        schoolName: "",
         email: "[email protected]",
       });
     });
@@ -154,6 +156,48 @@ describe("Profile page", () => {
     });
     expect(updateUserProfile).not.toHaveBeenCalled();
     expect(await screen.findByText("You're now in Teacher mode — focused on generate, review, and export.")).toBeInTheDocument();
+  });
+
+  it("shows and saves teacher DOCX school name through Teaching Info", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "TEACHER",
+      schoolName: "Old School",
+    });
+    (updateUserProfile as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "TEACHER",
+      schoolName: "NoteLib Academy",
+    });
+
+    render(<ProfilePage />);
+
+    const schoolNameInput = await screen.findByLabelText("School Name");
+    expect(schoolNameInput).toHaveValue("Old School");
+    fireEvent.change(schoolNameInput, { target: { value: "NoteLib Academy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Teaching Info" }));
+
+    await waitFor(() => {
+      expect(updateUserProfile).toHaveBeenCalledWith({
+        firstName: "Note",
+        lastName: "User",
+        displayName: "Note User",
+        username: "noteuser",
+        bio: "Reviewing pathology one note at a time.",
+        learnerLevel: "COLLEGE",
+        courseProgram: "Nursing",
+        schoolName: "NoteLib Academy",
+        email: "[email protected]",
+      });
+    });
+    expect(await screen.findByText("Teaching info updated successfully.")).toBeInTheDocument();
+  });
+
+  it("hides Teaching Info from non-teacher profiles", async () => {
+    render(<ProfilePage />);
+
+    await screen.findByText("Profile Type");
+    expect(screen.queryByLabelText("School Name")).not.toBeInTheDocument();
   });
 
   it("shows and saves exam date for Exam Reviewer profiles", async () => {
@@ -331,6 +375,7 @@ describe("Profile page", () => {
         bio: "Focused on endocrine board review.",
         learnerLevel: "COLLEGE",
         courseProgram: "Nursing",
+        schoolName: "",
         email: "[email protected]",
       });
     });
@@ -366,6 +411,7 @@ describe("Profile page", () => {
         bio: "Board review focus with pharmacology notes.",
         learnerLevel: "BOARD_EXAM_REVIEW",
         courseProgram: "Pharmacy",
+        schoolName: "",
         email: "[email protected]",
       });
     });

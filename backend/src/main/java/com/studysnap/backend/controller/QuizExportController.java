@@ -2,9 +2,11 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
+import com.studysnap.backend.dto.QuizDocxExportRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.QuizDocxExportService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -37,10 +40,18 @@ public class QuizExportController {
     public ResponseEntity<byte[]> exportGeneratedQuizDocx(
             @PathVariable String quizId,
             @RequestParam QuizDocxExportMode mode,
+            @Valid @RequestBody(required = false) QuizDocxExportRequest request,
+            Locale locale,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        QuizDocxExportService.QuizDocxFile exportedFile = generatedQuizService.exportDocx(quizId, userId, mode);
+        QuizDocxExportService.QuizDocxFile exportedFile = generatedQuizService.exportDocx(
+                quizId,
+                userId,
+                mode,
+                request == null ? null : request.headerOverride(),
+                locale
+        );
         return ResponseEntity.ok()
                 .contentType(DOCX_MEDIA_TYPE)
                 .header(
@@ -55,7 +66,8 @@ public class QuizExportController {
 
     @PostMapping("/export-docx")
     public ResponseEntity<byte[]> exportCombinedGeneratedQuizDocx(
-            @RequestBody MultiNoteQuizDocxExportRequest request,
+            @Valid @RequestBody MultiNoteQuizDocxExportRequest request,
+            Locale locale,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
@@ -63,7 +75,9 @@ public class QuizExportController {
                 request.sections(),
                 userId,
                 request.includeAnswerKey(),
-                request.includeExplanations()
+                request.includeExplanations(),
+                request.headerOverride(),
+                locale
         );
         return ResponseEntity.ok()
                 .contentType(DOCX_MEDIA_TYPE)

@@ -35,10 +35,12 @@ import { getAuthUser } from "@/lib/auth";
 import {
   exportCombinedGeneratedQuizDocx,
   getGeneratedQuiz,
+  getMe,
   isExportLimitReachedError,
   listNotes,
   type GeneratedQuizResponse,
   type NoteListItemResponse,
+  type QuizDocxHeaderOverride,
 } from "@/lib/api";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -443,6 +445,7 @@ export default function ExamBuilderPage() {
   const internalNotesQueryRef = useRef<string | null>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [generatedQuizByNoteId, setGeneratedQuizByNoteId] = useState<Record<string, GeneratedQuizResponse>>({});
+  const [profileSchoolName, setProfileSchoolName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [examSections, setExamSections] = useState<ExamBuilderSection[]>([]);
@@ -511,7 +514,10 @@ export default function ExamBuilderPage() {
       setLoading(true);
       setError(null);
       try {
-        const notes = await listNotes();
+        const [notes, me] = await Promise.all([
+          listNotes(),
+          getMe().catch(() => null),
+        ]);
         const selectedQuizReadyNotes = notes
           .filter((item) => selectedNoteIds.includes(item.id) && canIncludeInExam(item));
         const generatedQuizzes = await Promise.all(
@@ -521,6 +527,7 @@ export default function ExamBuilderPage() {
           return;
         }
         setItems(notes);
+        setProfileSchoolName(me?.schoolName ?? null);
         setGeneratedQuizByNoteId(Object.fromEntries(generatedQuizzes));
       } catch (loadError) {
         if (!cancelled) {
@@ -794,7 +801,7 @@ export default function ExamBuilderPage() {
     );
   }, [canBalanceSections, examSections, questionBalanceMetadataByRefKey, selectedTemplate?.sectionIntents, updateExamSections]);
 
-  const handleExportExam = useCallback(async (mode: QuizExportModalMode) => {
+  const handleExportExam = useCallback(async (mode: QuizExportModalMode, headerOverride?: QuizDocxHeaderOverride) => {
     if (exportableExamSections.length === 0 || exportingExam) {
       return;
     }
@@ -812,6 +819,7 @@ export default function ExamBuilderPage() {
         })),
         includeAnswerKey: mode === "WITH_ANSWERS",
         includeExplanations: mode === "WITH_ANSWERS",
+        headerOverride,
       });
       setToast(EXAM_EXPORT_READY_MESSAGE);
     } catch (exportError) {
@@ -1405,8 +1413,10 @@ export default function ExamBuilderPage() {
         title="Export Exam"
         description="Choose an export format for this exam."
         exporting={exportingExam}
+        showTeacherExportDetails={isTeacherExamBuilderEnabled}
+        schoolName={profileSchoolName}
         onClose={() => setShowExportModal(false)}
-        onSelect={(mode) => void handleExportExam(mode)}
+        onSelect={(mode, headerOverride) => void handleExportExam(mode, headerOverride)}
       />
 
       <PaywallModal

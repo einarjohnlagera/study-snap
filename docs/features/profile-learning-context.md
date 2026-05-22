@@ -4,6 +4,12 @@ NoteLib uses two separate profile fields to personalise the learning experience:
 
 Account identity fields are documented separately in `docs/features/account-profile.md`. `displayName` is presentation-only, while `username` is the stable public identity used for attribution and public creator links.
 
+Teacher Profile also owns one export-specific default outside the learning context fields:
+
+- `users.school_name` is an optional Teacher-facing `Teaching Info` field in Profile.
+- It supplies the school-name line for Teacher DOCX export headers when set.
+- It stays out of onboarding and does not affect learner-level or course/program generation context.
+
 ## Learner Level
 
 **What it controls:** quiz difficulty, explanation depth, vocabulary, and question complexity in all AI-generated outputs (Study Pack quizzes, Quick Review, Challenge Quiz, Adaptive Practice).
