@@ -6,15 +6,56 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.15.1 - Teacher Power Features` is the current in-progress release.
+`v0.15.2 - UX Cleanup & Bug Fixes` is the current in-progress release.
 
-`v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor` is complete and is the previous documentation baseline.
+`v0.15.1 - Teacher Power Features` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
-## v0.15.1 - Teacher Power Features
+## v0.15.2 - UX Cleanup & Bug Fixes
 
 **Status: In Progress**
+
+Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bugs and rough edges across notes, library, profile navigation, help guides, and quiz session surfaces. No new features — sharper defaults and accurate state.
+
+Primary focus:
+
+1. **Quiz session display correctness** — Recent Sessions chip on Note Detail renders the actual quiz mode (Quick Review / Challenge Quiz / Adaptive Practice / Long Exam / Board Exam / Interview Practice) instead of always showing "Challenge Quiz"; library card "Not reviewed yet" timestamp updates after any mode completion, not just Quick Review; multi-note Long Exam sessions surface on every participating note with a "spans N notes" sublabel.
+
+2. **Copy and navigation polish** — Edit Note drops the Import Notes uploader (belongs to Create Note); app shell Profile sidebar redirects to Profile Settings (avatar "My Profile" stays as the public-profile entry); Board Exam Guide no longer recommends Long Exam (Student-only mode) and footer "Switch Profile" CTA deep-links to the Profile Type section; Student / Teacher / Professional guides show profile-aware "Switch Profile" footer CTAs that hide on the user's own profile guide; share-note modal auto-copies the URL on open and shows a "Copied" success pill.
+
+3. **Library Draft filter** — new `Draft` chip in the library Filter row for users parking notes while waiting for monthly Study Pack quota reset.
+
+4. **Target Audience cleanup** — Create Note "Who is this note for?" no longer auto-populates from profile type (Professional was silently defaulting to "Student"); blank default for every profile; adds Professional as a selectable audience.
+
+### Implementation stances
+
+- All v0.15.2 items are polish or bugfix — no new persisted columns beyond minor backend support for `lastSessionCompletedAt` aggregation; no plan-gated features
+- Quiz session display fixes derive `lastSessionCompletedAt` server-side from existing session tables — no new "last activity" column
+- `getQuizSessionModeLabel` becomes the single source of truth for mode → label mapping; do not inline labels anywhere
+- Multi-note Long Exam display is driven by the session's participant set, not the note
+- Target Audience field stays optional and visible; only the defaulting behavior changes
+
+### Anti-drift notes
+
+- Do not touch `QuickReviewSessionEntity` schema or session-state JSONB layout
+- Do not redesign Recent Sessions card visuals — chip text, sublabel text, and inclusion criteria are the only changes
+- Do not change Dashboard / Mastery Report / Score Report aggregation; only the library card label and Recent Sessions list widen
+- Target Audience field stays; only defaults change. Course / Program field and helper are untouched
+- Codex prompts for this scope live at `docs/codex-prompts/v0152-fix-quiz-session-display.md`, `docs/codex-prompts/v0152-polish-copy-and-nav.md`, and `docs/codex-prompts/v0152-library-filter-and-target-audience.md`
+
+### Sequencing
+
+The three prompts are independent and can ship in any order. Recommended order is:
+1. `v0152-polish-copy-and-nav.md` (lowest risk, fastest verification)
+2. `v0152-fix-quiz-session-display.md` (backend + frontend; verify multi-note Long Exam case carefully)
+3. `v0152-library-filter-and-target-audience.md` (small additive enum change)
+
+---
+
+## v0.15.1 - Teacher Power Features
+
+**Status: Released**
 
 Theme: extend the teacher quiz-authoring workflow with concrete controls that turn it into a complete classroom tool, building on the v0.15.0 teacher flow polish and plan accessibility foundation. Target audience: Filipino teachers who need a practical, affordable tool for quiz and exam preparation.
 
