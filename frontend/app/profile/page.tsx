@@ -224,8 +224,6 @@ export default function ProfilePage() {
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
-  const [savingTeachingInfo, setSavingTeachingInfo] = useState(false);
-  const [teachingInfoMessage, setTeachingInfoMessage] = useState<string | null>(null);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [signInMethods, setSignInMethods] = useState<SignInMethodsResponse | null>(null);
   const [signInMethodsMessage, setSignInMethodsMessage] = useState<string | null>(null);
@@ -261,7 +259,6 @@ export default function ProfilePage() {
     setIdentityMessage(null);
     setProfileTypeMessage(null);
     setLearningProfileMessage(null);
-    setTeachingInfoMessage(null);
     setSignInMethodsMessage(null);
     setLearningProfileErrors({});
     try {
@@ -514,38 +511,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveTeachingInfo = async () => {
-    if (savingTeachingInfo) {
-      return;
-    }
-    setSavingTeachingInfo(true);
-    setTeachingInfoMessage(null);
-    try {
-      const updatedProfile = await updateUserProfile(buildProfileUpdateRequest());
-      setProfile(updatedProfile);
-      setIdentityForm({
-        firstName: updatedProfile.firstName ?? "",
-        lastName: updatedProfile.lastName ?? "",
-        displayName: updatedProfile.displayName ?? "",
-        username: updatedProfile.username ?? "",
-        email: updatedProfile.pendingEmail ?? updatedProfile.email,
-      });
-      setLearningProfileForm({
-        learnerLevel: updatedProfile.learnerLevel ?? "",
-        courseProgram: updatedProfile.courseProgram ?? "",
-        bio: updatedProfile.bio ?? "",
-      });
-      setTeachingInfoForm({
-        schoolName: updatedProfile.schoolName ?? "",
-      });
-      setTeachingInfoMessage("Teaching info updated successfully.");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update teaching info.";
-      setTeachingInfoMessage(message);
-    } finally {
-      setSavingTeachingInfo(false);
-    }
-  };
 
   const handleSaveProfileType = async () => {
     if (savingProfileType || !selectedProfileType || !profile) {
@@ -553,7 +518,8 @@ export default function ProfilePage() {
     }
     const profileTypeChanged = selectedProfileType !== profile.profileType;
     const examDateChanged = selectedProfileType === "BOARD_EXAM" && examDateInput !== (profile.examDate ?? "");
-    if (!profileTypeChanged && !examDateChanged) {
+    const schoolNameChanged = selectedProfileType === "TEACHER" && teachingInfoForm.schoolName.trim() !== (profile.schoolName ?? "");
+    if (!profileTypeChanged && !examDateChanged && !schoolNameChanged) {
       setProfileTypeMessage("Profile type is already up to date.");
       return;
     }
@@ -566,17 +532,29 @@ export default function ProfilePage() {
       setProfileTypeMessage(null);
       return;
     }
-    // Only exam date changed (profile type is BOARD_EXAM and unchanged).
+    // Only a secondary field changed (profile type unchanged).
     setSavingProfileType(true);
     setProfileTypeMessage(null);
     try {
-      const updatedProfile = await updateExamDate(examDateInput || null);
-      setProfile(updatedProfile);
-      setExamDateInput(updatedProfile.examDate ?? "");
-      setProfileTypeMessage(updatedProfile.examDate ? "Exam date updated successfully." : "Exam date cleared.");
+      if (examDateChanged) {
+        const updatedProfile = await updateExamDate(examDateInput || null);
+        setProfile(updatedProfile);
+        setExamDateInput(updatedProfile.examDate ?? "");
+        setProfileTypeMessage(updatedProfile.examDate ? "Exam date updated successfully." : "Exam date cleared.");
+      } else {
+        // Only school name changed (TEACHER profile type unchanged).
+        const updatedProfile = await updateUserProfile(buildProfileUpdateRequest());
+        setProfile(updatedProfile);
+        setTeachingInfoForm({ schoolName: updatedProfile.schoolName ?? "" });
+        setProfileTypeMessage(updatedProfile.schoolName?.trim() ? "School name updated." : "School name cleared.");
+      }
     } catch (err) {
-      setExamDateInput(profile.examDate ?? "");
-      setProfileTypeMessage(err instanceof Error ? err.message : "Could not update exam date.");
+      if (examDateChanged) {
+        setExamDateInput(profile.examDate ?? "");
+      } else {
+        setTeachingInfoForm({ schoolName: profile.schoolName ?? "" });
+      }
+      setProfileTypeMessage(err instanceof Error ? err.message : "Could not save.");
     } finally {
       setSavingProfileType(false);
     }
@@ -597,10 +575,15 @@ export default function ProfilePage() {
       if (targetType === "BOARD_EXAM" && examDateInput !== (updatedProfile.examDate ?? "")) {
         finalProfile = await updateExamDate(examDateInput || null);
       }
+      // Also save school name if switching to TEACHER with a pending value.
+      if (targetType === "TEACHER" && teachingInfoForm.schoolName.trim() !== (updatedProfile.schoolName ?? "")) {
+        finalProfile = await updateUserProfile(buildProfileUpdateRequest());
+      }
 
       setProfile(finalProfile);
       setSelectedProfileType(finalProfile.profileType ?? targetType);
       setExamDateInput(finalProfile.examDate ?? "");
+      setTeachingInfoForm({ schoolName: finalProfile.schoolName ?? "" });
 
       // Show a mode-specific success toast.
       const content = getProfileTypeSwitchContent(targetType);
@@ -867,6 +850,27 @@ export default function ProfilePage() {
                 {examCountdown ? <p className="text-xs text-foreground/60">{examCountdown}</p> : null}
               </div>
             ) : null}
+            {selectedProfileType === "TEACHER" ? (
+              <div className="space-y-3 border-t border-border pt-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground">School Name</h3>
+                  <p className="text-xs text-foreground/60">
+                    Shown in the header of every exported DOCX. Optional.
+                  </p>
+                </div>
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  aria-label="School Name"
+                  placeholder="e.g. Mapúa University"
+                  value={teachingInfoForm.schoolName}
+                  maxLength={120}
+                  onChange={(event) => {
+                    setProfileTypeMessage(null);
+                    setTeachingInfoForm({ schoolName: event.target.value.slice(0, 120) });
+                  }}
+                />
+              </div>
+            ) : null}
             <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
               {profileTypeMessage ? (
                 <p className="text-xs text-foreground/60">{profileTypeMessage}</p>
@@ -888,44 +892,6 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          {profile.profileType === "TEACHER" ? (
-            <Card className="space-y-4 p-4 sm:p-6">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold sm:text-xl">Teaching Info</h2>
-                <p className="text-sm text-foreground/70">
-                  Configure default details for teacher DOCX exports.
-                </p>
-              </div>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">School Name</span>
-                <input
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                  aria-label="School Name"
-                  value={teachingInfoForm.schoolName}
-                  onChange={(event) => {
-                    setTeachingInfoMessage(null);
-                    setTeachingInfoForm({ schoolName: event.target.value.slice(0, 120) });
-                  }}
-                  maxLength={120}
-                />
-                <p className="text-xs text-foreground/60">
-                  Shown in the header of every exported DOCX.
-                </p>
-              </label>
-              <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-                {teachingInfoMessage ? <p className="text-xs text-foreground/60">{teachingInfoMessage}</p> : <div />}
-                <ResponsiveActionButton
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleSaveTeachingInfo()}
-                  loading={savingTeachingInfo}
-                  loadingText="Saving..."
-                  action="save"
-                  label="Save Teaching Info"
-                />
-              </div>
-            </Card>
-          ) : null}
 
           <Card id={PROFILE_LEARNING_PROFILE_SECTION_ID} className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Learning Profile</h2>
