@@ -218,6 +218,30 @@ describe("PaywallModal", () => {
     expect(screen.queryByText(/unlimited quiz exports/i)).not.toBeInTheDocument();
   });
 
+  it("explains the longer teacher quiz question-count gate", async () => {
+    getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      profileType: "TEACHER",
+    });
+
+    render(
+      <PaywallModal
+        isOpen
+        variant="teacher-quiz-question-count"
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Unlock longer teacher quizzes")).toBeInTheDocument();
+    expect(
+      screen.getByText("Plus unlocks 20- and 30-question quizzes so you can match chapter quizzes and longer unit assessments."),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unlock 20- and 30-question quizzes" })).toBeInTheDocument();
+  });
+
   it("shows the verification modal instead of starting checkout for unverified users", async () => {
     getAuthUserMock.mockReturnValue({
       id: "user-1",

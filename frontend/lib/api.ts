@@ -161,6 +161,7 @@ export type LearnerLevel =
   | "PROFESSIONAL"
   | "PERSONAL_LEARNING";
 export type PlanType = "FREE" | PaidPlanType;
+export type TeacherQuizQuestionCount = 10 | 20 | 30;
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
 export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
@@ -2701,12 +2702,16 @@ export async function getGeneratedQuiz(noteId: string): Promise<GeneratedQuizRes
   return parseApiResponse<GeneratedQuizResponse>(response, "Could not load generated quiz.");
 }
 
-export async function generateGeneratedQuiz(noteId: string): Promise<GeneratedQuizResponse> {
+export async function generateGeneratedQuiz(
+  noteId: string,
+  questionCount: TeacherQuizQuestionCount = 10,
+): Promise<GeneratedQuizResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/generated-quiz`,
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ questionCount }),
     },
     true,
   );
@@ -2934,6 +2939,10 @@ export function isNoteGenerationLimitReachedError(error: unknown): error is ApiR
 
 export function isExportLimitReachedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "MONTHLY_EXPORT_LIMIT_REACHED";
+}
+
+export function isQuestionCountNotAllowedError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "QUESTION_COUNT_NOT_ALLOWED";
 }
 
 export function isNotEnoughNewQuestionsError(error: unknown): error is ApiRequestError {

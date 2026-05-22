@@ -257,12 +257,14 @@ class NoteControllerTest {
                 List.of(),
                 OffsetDateTime.now()
         );
-        when(generatedQuizService.generate("note-1", userId)).thenReturn(expected);
+        com.studysnap.backend.dto.GenerateGeneratedQuizRequest request =
+                new com.studysnap.backend.dto.GenerateGeneratedQuizRequest(20);
+        when(generatedQuizService.generate("note-1", userId, 20)).thenReturn(expected);
 
-        com.studysnap.backend.dto.GeneratedQuizResponse response = noteController.generateGeneratedQuiz("note-1", user);
+        com.studysnap.backend.dto.GeneratedQuizResponse response = noteController.generateGeneratedQuiz("note-1", request, user);
 
         verify(authService).requireEmailVerified(userId);
-        verify(generatedQuizService).generate("note-1", userId);
+        verify(generatedQuizService).generate("note-1", userId, 20);
         assertThat(response).isEqualTo(expected);
     }
 

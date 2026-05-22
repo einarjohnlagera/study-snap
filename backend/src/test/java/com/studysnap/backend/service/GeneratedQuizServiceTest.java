@@ -14,6 +14,8 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
+import com.studysnap.backend.exception.InvalidGeneratedQuizQuestionCountException;
+import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -22,6 +24,8 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -122,6 +126,78 @@ class GeneratedQuizServiceTest {
         assertThat(captor.getValue().getOwnerUserId()).isEqualTo(userId);
         assertThat(captor.getValue().getNoteId()).isEqualTo(noteId);
         assertThat(captor.getValue().getQuestions()).hasSize(10);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {5, 25})
+    void generate_rejectsInvalidQuestionCount(int questionCount) {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+
+        String id = noteId.toString();
+        assertThatThrownBy(() -> generatedQuizService.generate(id, userId, questionCount))
+                .isInstanceOf(InvalidGeneratedQuizQuestionCountException.class)
+                .extracting(error -> ((InvalidGeneratedQuizQuestionCountException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+
+        verify(quizGenerationService, never()).generateTeacherQuiz(any(), any(), any(), any(Integer.class), any());
+    }
+
+    @Test
+    void generate_blocksLongerTeacherQuizzesOnFreeBeforeLlmGeneration() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.TEACHER)));
+
+        String id = noteId.toString();
+        assertThatThrownBy(() -> generatedQuizService.generate(id, userId, 20))
+                .isInstanceOf(QuestionCountNotAllowedForPlanException.class)
+                .satisfies(error -> {
+                    QuestionCountNotAllowedForPlanException exception = (QuestionCountNotAllowedForPlanException) error;
+                    assertThat(exception.getCode()).isEqualTo("QUESTION_COUNT_NOT_ALLOWED");
+                    assertThat(exception.getAction()).isEqualTo("UPGRADE_TO_PLUS");
+                    assertThat(exception.getStatus()).isEqualTo(org.springframework.http.HttpStatus.PAYMENT_REQUIRED);
+                });
+
+        verify(userUsageService, never()).getMonthlyUsage(eq(userId), any(OffsetDateTime.class));
+        verify(quizGenerationService, never()).generateTeacherQuiz(any(), any(), any(), any(Integer.class), any());
+    }
+
+    @Test
+    void generate_allowsPlusTeacherToRequestThirtyQuestions() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        List<QuizItem> questions = buildQuestions(30);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.TEACHER)));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(
+                eq("Cell Structure"),
+                eq("Cell membrane and nucleus notes"),
+                eq(List.of()),
+                eq(30),
+                any(StudyPackGenerationContext.class)
+        )).thenReturn(questions);
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GeneratedQuizResponse response = generatedQuizService.generate(noteId.toString(), userId, 30);
+
+        assertThat(response.questions()).hasSize(30);
+        verify(quizGenerationService).generateTeacherQuiz(any(), any(), any(), eq(30), any(StudyPackGenerationContext.class));
     }
 
     @Test
@@ -294,7 +370,11 @@ class GeneratedQuizServiceTest {
     }
 
     private List<QuizItem> buildQuestions() {
-        return java.util.stream.IntStream.range(0, 10)
+        return buildQuestions(10);
+    }
+
+    private List<QuizItem> buildQuestions(int questionCount) {
+        return java.util.stream.IntStream.range(0, questionCount)
                 .mapToObj(index -> new QuizItem(
                         "Question " + index + "?",
                         List.of("A", "B", "C", "D"),

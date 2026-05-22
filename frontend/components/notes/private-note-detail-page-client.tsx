@@ -46,6 +46,7 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
+  isQuestionCountNotAllowedError,
   listRecentChallengeQuizSessions,
   listCoursePrograms,
   listRecentQuickReviewSessions,
@@ -63,6 +64,7 @@ import {
   type NoteVisibility,
   type QuickReviewPerformanceSummaryResponse,
   type QuickReviewSessionSummaryResponse,
+  type TeacherQuizQuestionCount,
 } from "@/lib/api";
 import {
   clearFirstStudyOnboardingStep,
@@ -153,6 +155,7 @@ function resolvePaywallFeature(variant: PaywallModalVariant): string {
     case "adaptive-practice": return "adaptive";
     case "challenge-quiz-limit": return "quiz_limit";
     case "quiz-generation-limit": return "quiz_generation_limit";
+    case "teacher-quiz-question-count": return "teacher_quiz_question_count";
     case "study-pack-limit": return "study_pack_limit";
     case "board-exam-mode": return "board_exam";
     case "difficulty-selection": return "difficulty";
@@ -184,6 +187,8 @@ type PendingSuggestion = {
   subject: string | null;
   tags: string[];
 };
+
+const TEACHER_QUIZ_QUESTION_COUNTS: TeacherQuizQuestionCount[] = [10, 20, 30];
 
 function StudyPackGeneratingCard({ message }: Readonly<{ message: string }>) {
   return (
@@ -286,6 +291,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [generatingTeacherQuiz, setGeneratingTeacherQuiz] = useState(false);
   const [showRegenerateQuizConfirm, setShowRegenerateQuizConfirm] = useState(false);
+  const [teacherQuizQuestionCount, setTeacherQuizQuestionCount] = useState<TeacherQuizQuestionCount>(10);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -716,6 +722,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     });
     setActivePaywallModal(variant);
   }, [note?.id, pathname]);
+
+  const handleTeacherQuizQuestionCountSelect = useCallback((questionCount: TeacherQuizQuestionCount) => {
+    if (currentPlan === "FREE" && questionCount !== 10) {
+      openPaywallModal("teacher-quiz-question-count", "private_note_detail_teacher_quiz_question_count");
+      return;
+    }
+    setTeacherQuizQuestionCount(questionCount);
+  }, [currentPlan, openPaywallModal]);
 
   const openStudyPackLimitModal = useCallback((source: string) => {
     void trackAnalyticsEvent({
@@ -1197,7 +1211,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setGeneratingTeacherQuiz(true);
     setError(null);
     try {
-      const generatedQuiz = await generateGeneratedQuiz(note.id);
+      const generatedQuiz = await generateGeneratedQuiz(note.id, teacherQuizQuestionCount);
       setNote((current) => current ? {
         ...current,
         generatedQuiz,
@@ -1206,6 +1220,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast(note.generatedQuiz ? "Quiz regenerated." : "Quiz generated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate quiz.";
+      if (isQuestionCountNotAllowedError(err)) {
+        setShowRegenerateQuizConfirm(false);
+        openPaywallModal("teacher-quiz-question-count", "private_note_detail_teacher_quiz_question_count_error");
+        return;
+      }
       if (currentPlan === "FREE" && isQuizLimitReachedMessage(message)) {
         void refreshUsageSummary();
         setShowRegenerateQuizConfirm(false);
@@ -1216,7 +1235,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setGeneratingTeacherQuiz(false);
     }
-  }, [currentPlan, generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal, refreshUsageSummary]);
+  }, [currentPlan, generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal, refreshUsageSummary, teacherQuizQuestionCount]);
 
   const handleViewTeacherQuiz = useCallback(() => {
     if (!note?.generatedQuiz) {
@@ -1732,17 +1751,54 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        type="button"
-                        className="gap-2"
-                        onClick={() => void handleGenerateTeacherQuiz()}
-                        disabled={!isEmailVerified}
-                        loading={generatingTeacherQuiz}
-                        loadingText="Generating..."
-                      >
-                        <Sparkles className="h-4 w-4" aria-hidden="true" />
-                        <span>Generate Quiz</span>
-                      </Button>
+                      <>
+                        <div className="space-y-1.5">
+                          <div
+                            className="inline-flex w-full flex-wrap gap-1 rounded-lg border border-border bg-muted/30 p-1 sm:w-auto"
+                            role="group"
+                            aria-label="Quiz question count"
+                          >
+                            {TEACHER_QUIZ_QUESTION_COUNTS.map((questionCount) => {
+                              const isLocked = currentPlan === "FREE" && questionCount !== 10;
+                              const isSelected = teacherQuizQuestionCount === questionCount;
+                              return (
+                                <button
+                                  key={questionCount}
+                                  type="button"
+                                  aria-pressed={isSelected}
+                                  onClick={() => handleTeacherQuizQuestionCountSelect(questionCount)}
+                                  className={`inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:flex-none ${
+                                    isSelected
+                                      ? "bg-background text-foreground shadow-sm"
+                                      : "text-foreground/70 hover:bg-background/70 hover:text-foreground"
+                                  }`}
+                                >
+                                  <span>{questionCount}</span>
+                                  {isLocked ? (
+                                    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                                      Plus
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-foreground/60">
+                            Choose how many questions to generate. Higher counts cover more material.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          className="gap-2"
+                          onClick={() => void handleGenerateTeacherQuiz()}
+                          disabled={!isEmailVerified}
+                          loading={generatingTeacherQuiz}
+                          loadingText="Generating..."
+                        >
+                          <Sparkles className="h-4 w-4" aria-hidden="true" />
+                          <span>Generate Quiz</span>
+                        </Button>
+                      </>
                     )
                   ) : isGeneratingStudyPack ? (
                     <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />

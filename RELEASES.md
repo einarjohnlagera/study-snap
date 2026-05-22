@@ -14,6 +14,8 @@ Theme: extend the teacher quiz-authoring workflow with concrete controls that tu
 
 ### ✅ Shipped
 
+- **Question count control on teacher Generate Quiz** — Teacher Note Detail now offers 10 / 20 / 30 question generation controls, keeps Free teachers at 10 with a Plus-specific longer-quiz paywall, and sends the selected count through teacher quiz generation so Plus and Pro teachers get the requested quiz length
+
 ---
 
 ## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor

@@ -16,8 +16,10 @@ import com.studysnap.backend.exception.GeneratedQuizBatchExportValidationExcepti
 import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
 import com.studysnap.backend.exception.GeneratedQuizGenerationFailedException;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
+import com.studysnap.backend.exception.InvalidGeneratedQuizQuestionCountException;
 import com.studysnap.backend.exception.MonthlyQuizCreditLimitReachedException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -35,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -42,7 +45,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GeneratedQuizService {
     private static final String AI_RATE_LIMIT_SCOPE = "generated-quiz";
-    private static final int TEACHER_QUIZ_QUESTION_COUNT = 10;
+    private static final int DEFAULT_GENERATED_QUIZ_QUESTION_COUNT = 10;
+    private static final Set<Integer> ALLOWED_GENERATED_QUIZ_QUESTION_COUNTS = Set.of(10, 20, 30);
 
     private final NoteRepository noteRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
@@ -68,10 +72,15 @@ public class GeneratedQuizService {
     }
 
     public GeneratedQuizResponse generate(String noteIdRaw, UUID userId) {
+        return generate(noteIdRaw, userId, null);
+    }
+
+    public GeneratedQuizResponse generate(String noteIdRaw, UUID userId, Integer requestedQuestionCount) {
         authService.requireEmailVerified(userId);
         UUID noteId = parseNoteId(noteIdRaw);
         NoteEntity note = findOwnedNoteOrThrow(noteId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
+        int questionCount = resolveQuestionCount(userId, planType, requestedQuestionCount);
         assertQuizCreditAvailable(userId, planType);
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
 
@@ -87,14 +96,14 @@ public class GeneratedQuizService {
                     note.getTitle(),
                     note.getContent(),
                     disallowedQuestions,
-                    TEACHER_QUIZ_QUESTION_COUNT,
+                    questionCount,
                     generationContext
             );
             List<QuizItem> uniqueQuestions = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuestions,
                     QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
             );
-            if (uniqueQuestions.size() != TEACHER_QUIZ_QUESTION_COUNT) {
+            if (uniqueQuestions.size() != questionCount) {
                 throw new GeneratedQuizGenerationFailedException();
             }
 
@@ -205,6 +214,30 @@ public class GeneratedQuizService {
             return usedThisMonth;
         }
         throw new MonthlyQuizCreditLimitReachedException();
+    }
+
+    private int resolveQuestionCount(UUID userId, PlanType planType, Integer requestedQuestionCount) {
+        int questionCount = normalizeQuestionCount(requestedQuestionCount);
+        ProfileType profileType = userRepository.findById(userId)
+                .map(UserEntity::getProfileType)
+                .orElse(null);
+        if (profileType != ProfileType.TEACHER) {
+            return DEFAULT_GENERATED_QUIZ_QUESTION_COUNT;
+        }
+        if (planType == PlanType.FREE && questionCount != DEFAULT_GENERATED_QUIZ_QUESTION_COUNT) {
+            throw new QuestionCountNotAllowedForPlanException();
+        }
+        return questionCount;
+    }
+
+    private int normalizeQuestionCount(Integer requestedQuestionCount) {
+        if (requestedQuestionCount == null) {
+            return DEFAULT_GENERATED_QUIZ_QUESTION_COUNT;
+        }
+        if (!ALLOWED_GENERATED_QUIZ_QUESTION_COUNTS.contains(requestedQuestionCount)) {
+            throw new InvalidGeneratedQuizQuestionCountException();
+        }
+        return requestedQuestionCount;
     }
 
     private UUID parseNoteId(String noteIdRaw) {

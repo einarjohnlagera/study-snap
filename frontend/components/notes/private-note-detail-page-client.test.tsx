@@ -735,11 +735,89 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Recent Sessions")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Challenge Quiz" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Quiz question count" })).toBeInTheDocument();
+    expect(screen.getByText("Choose how many questions to generate. Higher counts cover more material.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Quiz" }));
 
     await waitFor(() => {
-      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1");
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10);
+    });
+  });
+
+  it("opens the longer teacher quiz paywall when a Free teacher clicks a locked count", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "20 Plus" }));
+
+    expect(await screen.findByText("Unlock longer teacher quizzes")).toBeInTheDocument();
+    expect(screen.getByText("Plus unlocks 20- and 30-question quizzes so you can match chapter quizzes and longer unit assessments.")).toBeInTheDocument();
+    expect(generateGeneratedQuiz).not.toHaveBeenCalled();
+  });
+
+  it("generates the selected longer quiz count for Plus teachers", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PLUS",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PLUS",
+      limits: {
+        studyPacksPerMonth: 50,
+        challengeQuizzesPerMonth: 25,
+        adaptivePracticePerMonth: 10,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 48,
+        challengeQuizzesRemaining: 25,
+        adaptivePracticeRemaining: 10,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "30" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Quiz" }));
+
+    await waitFor(() => {
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 30);
     });
   });
 
@@ -837,7 +915,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Regenerate Quiz" }));
 
     await waitFor(() => {
-      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1");
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10);
     });
   });
 
@@ -975,6 +1053,7 @@ describe("PrivateNoteDetailPageClient", () => {
       jest.advanceTimersByTime(3000);
     });
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Quiz question count" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
 
     await waitFor(() => {

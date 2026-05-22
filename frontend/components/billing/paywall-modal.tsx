@@ -85,6 +85,9 @@ function resolveTeacherUpgradeCtaContext(
   if (contextType === "EXPORT_LIMIT") {
     return "teacher-export-limit";
   }
+  if (contextType === "TEACHER_QUIZ_QUESTION_COUNT_LOCKED") {
+    return "teacher-quiz-question-count";
+  }
   return undefined;
 }
 
