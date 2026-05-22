@@ -158,7 +158,7 @@ describe("Profile page", () => {
     expect(await screen.findByText("You're now in Teacher mode — focused on generate, review, and export.")).toBeInTheDocument();
   });
 
-  it("shows and saves teacher DOCX school name through Teaching Info", async () => {
+  it("shows and saves school name inside the Profile Type card for teacher profiles", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...profileResponse,
       profileType: "TEACHER",
@@ -175,7 +175,7 @@ describe("Profile page", () => {
     const schoolNameInput = await screen.findByLabelText("School Name");
     expect(schoolNameInput).toHaveValue("Old School");
     fireEvent.change(schoolNameInput, { target: { value: "NoteLib Academy" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Teaching Info" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
 
     await waitFor(() => {
       expect(updateUserProfile).toHaveBeenCalledWith({
@@ -190,7 +190,7 @@ describe("Profile page", () => {
         email: "[email protected]",
       });
     });
-    expect(await screen.findByText("Teaching info updated successfully.")).toBeInTheDocument();
+    expect(await screen.findByText("School name updated.")).toBeInTheDocument();
   });
 
   it("hides Teaching Info from non-teacher profiles", async () => {
