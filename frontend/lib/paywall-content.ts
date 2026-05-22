@@ -12,6 +12,7 @@ export type PaywallContextType =
   | "DIFFICULTY_SELECTION_LOCKED"
   | "OCR_LIMIT"
   | "TEACHER_QUIZ_QUESTION_COUNT_LOCKED"
+  | "TEACHER_EXAM_VERSIONS_LOCKED"
   | "QUIZ_GENERATION_LIMIT";
 
 export type PaywallResumeAction =
@@ -42,7 +43,8 @@ export type PaywallModalVariant =
   | "ocr-limit"
   | "note-generation-limit"
   | "export-limit"
-  | "teacher-quiz-question-count";
+  | "teacher-quiz-question-count"
+  | "teacher-exam-versions";
 
 export type PaywallPresentation = {
   headline: string;
@@ -92,6 +94,8 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "QUIZ_GENERATION_LIMIT";
     case "teacher-quiz-question-count":
       return "TEACHER_QUIZ_QUESTION_COUNT_LOCKED";
+    case "teacher-exam-versions":
+      return "TEACHER_EXAM_VERSIONS_LOCKED";
     default:
       return "GENERATE_STUDY_PACK_LIMIT";
   }
@@ -246,6 +250,17 @@ export function resolvePaywallPresentation(
         primaryCtaLabel: SECONDARY_CTA_LABEL,
         secondaryCtaLabel: SECONDARY_CTA_LABEL,
         lastAction: "QUIZ",
+      };
+    case "TEACHER_EXAM_VERSIONS_LOCKED":
+      return {
+        headline: "Unlock multiple exam versions",
+        body: "Plus unlocks multiple exam versions for anti-cheating.",
+        feature: "teacher_exam_versions",
+        primaryPlanType: "PLUS",
+        secondaryPlanType: "PLUS",
+        primaryCtaLabel: SECONDARY_CTA_LABEL,
+        secondaryCtaLabel: SECONDARY_CTA_LABEL,
+        lastAction: "EXPORT",
       };
     default:
       return {

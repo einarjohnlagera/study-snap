@@ -27,6 +27,7 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   exportGeneratedQuizDocx: jest.fn(),
+  isMultipleExamVersionsNotAllowedError: jest.fn(() => false),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -171,7 +172,51 @@ describe("GeneratedQuizPreviewPageClient", () => {
       expect(exportGeneratedQuizDocx).toHaveBeenCalledWith("quiz-1", "WITH_ANSWERS", {
         className: null,
         includeDate: true,
-      });
+      }, 1);
+    });
+  });
+
+  it("opens the exam versions paywall when a Free teacher clicks a locked version", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      role: "USER",
+      planType: "FREE",
+      emailVerifiedAt: "2026-04-17T09:00:00Z",
+      profileType: "TEACHER",
+    });
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+
+    await screen.findByText("What is the nucleus?");
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    fireEvent.click(screen.getByRole("button", { name: "2 Plus" }));
+
+    expect(await screen.findByRole("heading", { name: "Unlock multiple exam versions" })).toBeInTheDocument();
+    expect(screen.getByText("Plus unlocks multiple exam versions for anti-cheating.")).toBeInTheDocument();
+    expect(exportGeneratedQuizDocx).not.toHaveBeenCalled();
+  });
+
+  it("exports the selected version count for Plus teachers", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      role: "USER",
+      planType: "PLUS",
+      emailVerifiedAt: "2026-04-17T09:00:00Z",
+      profileType: "TEACHER",
+    });
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+
+    await screen.findByText("What is the nucleus?");
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
+    fireEvent.click(screen.getByRole("button", { name: /Quiz Only Questions and choices only/i }));
+
+    await waitFor(() => {
+      expect(exportGeneratedQuizDocx).toHaveBeenCalledWith("quiz-1", "QUIZ_ONLY", {
+        className: null,
+        includeDate: true,
+      }, 3);
     });
   });
 

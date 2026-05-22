@@ -88,6 +88,9 @@ function resolveTeacherUpgradeCtaContext(
   if (contextType === "TEACHER_QUIZ_QUESTION_COUNT_LOCKED") {
     return "teacher-quiz-question-count";
   }
+  if (contextType === "TEACHER_EXAM_VERSIONS_LOCKED") {
+    return "teacher-exam-versions";
+  }
   return undefined;
 }
 

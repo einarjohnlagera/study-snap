@@ -190,6 +190,7 @@ export type UpgradeCtaContext =
   | "teacher-quiz-limit"
   | "teacher-export-limit"
   | "teacher-quiz-question-count"
+  | "teacher-exam-versions"
   | "general";
 
 export type UpgradeCtaOptions = {
@@ -200,7 +201,8 @@ export type UpgradeCtaOptions = {
 function isTeacherUpgradeContext(context: UpgradeCtaContext | undefined): boolean {
   return context === "teacher-quiz-limit"
     || context === "teacher-export-limit"
-    || context === "teacher-quiz-question-count";
+    || context === "teacher-quiz-question-count"
+    || context === "teacher-exam-versions";
 }
 
 function resolveUpgradeCtaOptions(contextOrOptions?: UpgradeCtaContext | UpgradeCtaOptions): UpgradeCtaOptions {
@@ -220,6 +222,12 @@ export function getUpgradeCtas(
     if (context === "teacher-quiz-question-count") {
       return {
         primary: { label: "Unlock 20- and 30-question quizzes", targetPlan: "PLUS" },
+        secondary: { label: "Go Pro", targetPlan: "PRO" },
+      };
+    }
+    if (context === "teacher-exam-versions") {
+      return {
+        primary: { label: "Unlock multiple exam versions", targetPlan: "PLUS" },
         secondary: { label: "Go Pro", targetPlan: "PRO" },
       };
     }

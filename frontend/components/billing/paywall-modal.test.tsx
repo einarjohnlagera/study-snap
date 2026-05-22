@@ -242,6 +242,28 @@ describe("PaywallModal", () => {
     expect(await screen.findByRole("button", { name: "Unlock 20- and 30-question quizzes" })).toBeInTheDocument();
   });
 
+  it("explains the multiple teacher exam versions gate", async () => {
+    getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      profileType: "TEACHER",
+    });
+
+    render(
+      <PaywallModal
+        isOpen
+        variant="teacher-exam-versions"
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Unlock multiple exam versions" })).toBeInTheDocument();
+    expect(screen.getByText("Plus unlocks multiple exam versions for anti-cheating.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unlock multiple exam versions" })).toBeInTheDocument();
+  });
+
   it("shows the verification modal instead of starting checkout for unverified users", async () => {
     getAuthUserMock.mockReturnValue({
       id: "user-1",

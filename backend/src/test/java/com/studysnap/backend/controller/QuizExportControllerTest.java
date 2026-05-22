@@ -38,7 +38,7 @@ class QuizExportControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         byte[] content = "docx".getBytes();
-        when(generatedQuizService.exportDocx("quiz-1", userId, QuizDocxExportMode.WITH_ANSWERS, null, Locale.forLanguageTag("en-PH")))
+        when(generatedQuizService.exportDocx("quiz-1", userId, QuizDocxExportMode.WITH_ANSWERS, null, null, Locale.forLanguageTag("en-PH")))
                 .thenReturn(new QuizDocxExportService.QuizDocxFile("teacher-note-quiz-with-answers.docx", content));
 
         var response = quizExportController.exportGeneratedQuizDocx(
@@ -53,6 +53,7 @@ class QuizExportControllerTest {
                 "quiz-1",
                 userId,
                 QuizDocxExportMode.WITH_ANSWERS,
+                null,
                 null,
                 Locale.forLanguageTag("en-PH")
         );
@@ -82,7 +83,8 @@ class QuizExportControllerTest {
                 ),
                 true,
                 true,
-                null
+                null,
+                2
         );
         when(generatedQuizService.exportCombinedDocx(
                 request.sections(),
@@ -90,6 +92,7 @@ class QuizExportControllerTest {
                 true,
                 true,
                 null,
+                2,
                 Locale.forLanguageTag("en-PH")
         ))
                 .thenReturn(new QuizDocxExportService.QuizDocxFile("combined-exam-with-answers.docx", content));
@@ -106,6 +109,7 @@ class QuizExportControllerTest {
                 true,
                 true,
                 null,
+                2,
                 Locale.forLanguageTag("en-PH")
         );
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE))

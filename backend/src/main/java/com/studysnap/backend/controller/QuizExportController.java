@@ -50,6 +50,7 @@ public class QuizExportController {
                 userId,
                 mode,
                 request == null ? null : request.headerOverride(),
+                request == null ? null : request.versionCount(),
                 locale
         );
         return ResponseEntity.ok()
@@ -77,6 +78,7 @@ public class QuizExportController {
                 request.includeAnswerKey(),
                 request.includeExplanations(),
                 request.headerOverride(),
+                request.versionCount(),
                 locale
         );
         return ResponseEntity.ok()

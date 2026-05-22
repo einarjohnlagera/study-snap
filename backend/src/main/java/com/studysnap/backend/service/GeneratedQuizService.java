@@ -18,7 +18,9 @@ import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
 import com.studysnap.backend.exception.GeneratedQuizGenerationFailedException;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
 import com.studysnap.backend.exception.InvalidGeneratedQuizQuestionCountException;
+import com.studysnap.backend.exception.InvalidQuizDocxVersionCountException;
 import com.studysnap.backend.exception.MonthlyQuizCreditLimitReachedException;
+import com.studysnap.backend.exception.MultipleExamVersionsNotAllowedForPlanException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -50,6 +52,8 @@ public class GeneratedQuizService {
     private static final String AI_RATE_LIMIT_SCOPE = "generated-quiz";
     private static final int DEFAULT_GENERATED_QUIZ_QUESTION_COUNT = 10;
     private static final Set<Integer> ALLOWED_GENERATED_QUIZ_QUESTION_COUNTS = Set.of(10, 20, 30);
+    private static final int DEFAULT_DOCX_VERSION_COUNT = 1;
+    private static final Set<Integer> ALLOWED_DOCX_VERSION_COUNTS = Set.of(1, 2, 3);
 
     private final NoteRepository noteRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
@@ -153,9 +157,21 @@ public class GeneratedQuizService {
             QuizDocxExportHeaderOverrideRequest headerOverride,
             Locale locale
     ) {
+        return exportDocx(quizIdRaw, userId, mode, headerOverride, null, locale);
+    }
+
+    public QuizDocxExportService.QuizDocxFile exportDocx(
+            String quizIdRaw,
+            UUID userId,
+            QuizDocxExportMode mode,
+            QuizDocxExportHeaderOverrideRequest headerOverride,
+            Integer requestedVersionCount,
+            Locale locale
+    ) {
         authService.requireEmailVerified(userId);
         UserEntity exportUser = requireTeacherExportUser(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
+        int versionCount = resolveDocxVersionCount(exportUser, planType, requestedVersionCount);
         exportUsageProtectionService.assertDocxQuotaAvailable(userId, planType, exportUser.getProfileType());
         UUID quizId = parseQuizId(quizIdRaw);
         GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)
@@ -165,12 +181,14 @@ public class GeneratedQuizService {
                 note.getTitle(),
                 note.getSubject(),
                 generatedQuiz.getGeneratedAt(),
-                generatedQuiz.getQuestions()
+                generatedQuiz.getQuestions(),
+                generatedQuiz.getId().toString()
         );
         byte[] content = quizDocxExportService.exportQuizToDocx(
                 exportableQuiz,
                 mode,
-                buildDocxHeaderOptions(exportUser, headerOverride, locale)
+                buildDocxHeaderOptions(exportUser, headerOverride, locale),
+                versionCount
         );
         exportUsageProtectionService.recordDocxUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
@@ -206,9 +224,30 @@ public class GeneratedQuizService {
             QuizDocxExportHeaderOverrideRequest headerOverride,
             Locale locale
     ) {
+        return exportCombinedDocx(
+                sections,
+                userId,
+                includeAnswerKey,
+                includeExplanations,
+                headerOverride,
+                null,
+                locale
+        );
+    }
+
+    public QuizDocxExportService.QuizDocxFile exportCombinedDocx(
+            List<MultiNoteQuizDocxExportRequest.Section> sections,
+            UUID userId,
+            boolean includeAnswerKey,
+            boolean includeExplanations,
+            QuizDocxExportHeaderOverrideRequest headerOverride,
+            Integer requestedVersionCount,
+            Locale locale
+    ) {
         authService.requireEmailVerified(userId);
         UserEntity exportUser = requireTeacherExportUser(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
+        int versionCount = resolveDocxVersionCount(exportUser, planType, requestedVersionCount);
         exportUsageProtectionService.assertDocxQuotaAvailable(userId, planType, exportUser.getProfileType());
 
         List<ExportSectionRequest> requestedSections = parseSectionRequests(sections);
@@ -244,7 +283,7 @@ public class GeneratedQuizService {
 
         byte[] content = quizDocxExportService.exportCombinedQuizToDocx(
                 exportableSections,
-                new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations),
+                new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations, versionCount),
                 buildDocxHeaderOptions(exportUser, headerOverride, locale)
         );
         exportUsageProtectionService.recordDocxUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
@@ -286,6 +325,27 @@ public class GeneratedQuizService {
             throw new InvalidGeneratedQuizQuestionCountException();
         }
         return requestedQuestionCount;
+    }
+
+    private int resolveDocxVersionCount(UserEntity exportUser, PlanType planType, Integer requestedVersionCount) {
+        int versionCount = normalizeDocxVersionCount(requestedVersionCount);
+        if (exportUser.getProfileType() != ProfileType.TEACHER) {
+            return DEFAULT_DOCX_VERSION_COUNT;
+        }
+        if (versionCount > DEFAULT_DOCX_VERSION_COUNT && planType == PlanType.FREE) {
+            throw new MultipleExamVersionsNotAllowedForPlanException();
+        }
+        return versionCount;
+    }
+
+    private int normalizeDocxVersionCount(Integer requestedVersionCount) {
+        if (requestedVersionCount == null) {
+            return DEFAULT_DOCX_VERSION_COUNT;
+        }
+        if (!ALLOWED_DOCX_VERSION_COUNTS.contains(requestedVersionCount)) {
+            throw new InvalidQuizDocxVersionCountException();
+        }
+        return requestedVersionCount;
     }
 
     private QuizDocxExportService.DocxHeaderOptions buildDocxHeaderOptions(
@@ -376,8 +436,25 @@ public class GeneratedQuizService {
         return new QuizDocxExportService.ExportableSection(
                 section.title(),
                 sectionSubjects,
-                sectionQuestions
+                sectionQuestions,
+                buildSectionShuffleSeed(section, generatedQuizByNoteId)
         );
+    }
+
+    private String buildSectionShuffleSeed(
+            ExportSectionRequest section,
+            Map<UUID, GeneratedQuizEntity> generatedQuizByNoteId
+    ) {
+        return section.questionReferences().stream()
+                .map(questionReference -> {
+                    GeneratedQuizEntity generatedQuiz = generatedQuizByNoteId.get(questionReference.noteId());
+                    if (generatedQuiz == null || generatedQuiz.getId() == null) {
+                        throw GeneratedQuizBatchExportValidationException.noteWithoutGeneratedQuiz();
+                    }
+                    return generatedQuiz.getId() + ":" + questionReference.questionIndex();
+                })
+                .toList()
+                .toString();
     }
 
     private QuizItem buildExportableQuestion(NoteEntity note, GeneratedQuizEntity generatedQuiz, int questionIndex) {

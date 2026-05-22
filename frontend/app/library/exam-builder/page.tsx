@@ -29,7 +29,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { QuizExportModal, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
+import { QuizExportModal, type QuizDocxVersionCount, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -37,6 +37,7 @@ import {
   getGeneratedQuiz,
   getMe,
   isExportLimitReachedError,
+  isMultipleExamVersionsNotAllowedError,
   listNotes,
   type GeneratedQuizResponse,
   type NoteListItemResponse,
@@ -801,7 +802,11 @@ export default function ExamBuilderPage() {
     );
   }, [canBalanceSections, examSections, questionBalanceMetadataByRefKey, selectedTemplate?.sectionIntents, updateExamSections]);
 
-  const handleExportExam = useCallback(async (mode: QuizExportModalMode, headerOverride?: QuizDocxHeaderOverride) => {
+  const handleExportExam = useCallback(async (
+    mode: QuizExportModalMode,
+    headerOverride?: QuizDocxHeaderOverride,
+    versionCount?: QuizDocxVersionCount,
+  ) => {
     if (exportableExamSections.length === 0 || exportingExam) {
       return;
     }
@@ -820,12 +825,18 @@ export default function ExamBuilderPage() {
         includeAnswerKey: mode === "WITH_ANSWERS",
         includeExplanations: mode === "WITH_ANSWERS",
         headerOverride,
+        versionCount,
       });
       setToast(EXAM_EXPORT_READY_MESSAGE);
     } catch (exportError) {
       if (isExportLimitReachedError(exportError)) {
         setError(null);
         setActivePaywallModal("export-limit");
+        return;
+      }
+      if (isMultipleExamVersionsNotAllowedError(exportError)) {
+        setError(null);
+        setActivePaywallModal("teacher-exam-versions");
         return;
       }
       setError(exportError instanceof Error ? exportError.message : "Could not export exam.");
@@ -1415,8 +1426,9 @@ export default function ExamBuilderPage() {
         exporting={exportingExam}
         showTeacherExportDetails={isTeacherExamBuilderEnabled}
         schoolName={profileSchoolName}
+        teacherPlan={authUser?.planType}
         onClose={() => setShowExportModal(false)}
-        onSelect={(mode, headerOverride) => void handleExportExam(mode, headerOverride)}
+        onSelect={(mode, headerOverride, versionCount) => void handleExportExam(mode, headerOverride, versionCount)}
       />
 
       <PaywallModal

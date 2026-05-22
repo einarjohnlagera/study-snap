@@ -16,6 +16,8 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
 import com.studysnap.backend.exception.InvalidGeneratedQuizQuestionCountException;
+import com.studysnap.backend.exception.InvalidQuizDocxVersionCountException;
+import com.studysnap.backend.exception.MultipleExamVersionsNotAllowedForPlanException;
 import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -243,6 +245,7 @@ class GeneratedQuizServiceTest {
         teacher.setSchoolName("  NoteLib Academy  ");
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
         when(generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)).thenReturn(Optional.of(generatedQuiz));
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
         when(quizDocxExportService.buildFilename("Cell Structure", QuizDocxExportMode.WITH_ANSWERS))
@@ -250,7 +253,8 @@ class GeneratedQuizServiceTest {
         when(quizDocxExportService.exportQuizToDocx(
                 any(QuizDocxExportService.ExportableQuiz.class),
                 eq(QuizDocxExportMode.WITH_ANSWERS),
-                any(QuizDocxExportService.DocxHeaderOptions.class)
+                any(QuizDocxExportService.DocxHeaderOptions.class),
+                eq(3)
         ))
                 .thenReturn("docx".getBytes());
 
@@ -259,6 +263,7 @@ class GeneratedQuizServiceTest {
                 userId,
                 QuizDocxExportMode.WITH_ANSWERS,
                 new QuizDocxExportHeaderOverrideRequest("  Grade 7 - Rizal  ", false),
+                3,
                 Locale.CANADA_FRENCH
         );
 
@@ -270,7 +275,8 @@ class GeneratedQuizServiceTest {
         verify(quizDocxExportService).exportQuizToDocx(
                 any(QuizDocxExportService.ExportableQuiz.class),
                 eq(QuizDocxExportMode.WITH_ANSWERS),
-                headerOptionsCaptor.capture()
+                headerOptionsCaptor.capture(),
+                eq(3)
         );
         assertThat(headerOptionsCaptor.getValue().schoolName()).isEqualTo("NoteLib Academy");
         assertThat(headerOptionsCaptor.getValue().className()).isEqualTo("Grade 7 - Rizal");
@@ -290,7 +296,55 @@ class GeneratedQuizServiceTest {
                 .isInstanceOf(GeneratedQuizExportNotAllowedException.class);
 
         verify(generatedQuizRepository, never()).findByIdAndOwnerUserId(any(UUID.class), eq(userId));
-        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any(), any());
+        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any(), any(), any(Integer.class));
+    }
+
+    @Test
+    void exportDocx_blocksMultipleVersionsForFreeTeacherBeforeDocxRender() {
+        UUID userId = UUID.randomUUID();
+        UserEntity teacher = buildUser(userId, UserRole.USER, ProfileType.TEACHER);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        String quizId = UUID.randomUUID().toString();
+        assertThatThrownBy(() -> generatedQuizService.exportDocx(
+                quizId,
+                userId,
+                QuizDocxExportMode.QUIZ_ONLY,
+                null,
+                2,
+                Locale.US
+        ))
+                .isInstanceOf(MultipleExamVersionsNotAllowedForPlanException.class)
+                .satisfies(error -> {
+                    MultipleExamVersionsNotAllowedForPlanException exception =
+                            (MultipleExamVersionsNotAllowedForPlanException) error;
+                    assertThat(exception.getStatus()).isEqualTo(org.springframework.http.HttpStatus.PAYMENT_REQUIRED);
+                    assertThat(exception.getAction()).isEqualTo("UPGRADE_TO_PLUS");
+                });
+
+        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any(), any(), any(Integer.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 4})
+    void exportDocx_rejectsInvalidVersionCount(int versionCount) {
+        UUID userId = UUID.randomUUID();
+        UserEntity teacher = buildUser(userId, UserRole.USER, ProfileType.TEACHER);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+
+        String quizId = UUID.randomUUID().toString();
+        assertThatThrownBy(() -> generatedQuizService.exportDocx(
+                quizId,
+                userId,
+                QuizDocxExportMode.QUIZ_ONLY,
+                null,
+                versionCount,
+                Locale.US
+        )).isInstanceOf(InvalidQuizDocxVersionCountException.class);
+
+        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any(), any(), any(Integer.class));
     }
 
     @Test
