@@ -11,6 +11,7 @@ export type PaywallContextType =
   | "LONG_EXAM_MODE_LOCKED"
   | "DIFFICULTY_SELECTION_LOCKED"
   | "OCR_LIMIT"
+  | "TEACHER_QUIZ_QUESTION_COUNT_LOCKED"
   | "QUIZ_GENERATION_LIMIT";
 
 export type PaywallResumeAction =
@@ -40,7 +41,8 @@ export type PaywallModalVariant =
   | "study-pack-limit"
   | "ocr-limit"
   | "note-generation-limit"
-  | "export-limit";
+  | "export-limit"
+  | "teacher-quiz-question-count";
 
 export type PaywallPresentation = {
   headline: string;
@@ -88,6 +90,8 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "OCR_LIMIT";
     case "quiz-generation-limit":
       return "QUIZ_GENERATION_LIMIT";
+    case "teacher-quiz-question-count":
+      return "TEACHER_QUIZ_QUESTION_COUNT_LOCKED";
     default:
       return "GENERATE_STUDY_PACK_LIMIT";
   }
@@ -229,6 +233,17 @@ export function resolvePaywallPresentation(
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
         primaryCtaLabel: PRIMARY_CTA_LABEL,
+        secondaryCtaLabel: SECONDARY_CTA_LABEL,
+        lastAction: "QUIZ",
+      };
+    case "TEACHER_QUIZ_QUESTION_COUNT_LOCKED":
+      return {
+        headline: "Unlock longer teacher quizzes",
+        body: "Plus unlocks 20- and 30-question quizzes so you can match chapter quizzes and longer unit assessments.",
+        feature: "teacher_quiz_question_count",
+        primaryPlanType: "PLUS",
+        secondaryPlanType: "PLUS",
+        primaryCtaLabel: SECONDARY_CTA_LABEL,
         secondaryCtaLabel: SECONDARY_CTA_LABEL,
         lastAction: "QUIZ",
       };

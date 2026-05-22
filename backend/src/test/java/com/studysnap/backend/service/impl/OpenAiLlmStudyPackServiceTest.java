@@ -630,6 +630,28 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateTeacherQuiz_substitutesRequestedQuestionCount() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Teacher", 30)));
+
+        List<QuizItem> quizItems = service.generateTeacherQuiz(
+            "Cell Respiration Review",
+            "Cell respiration notes",
+            List.of(),
+            30,
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of("cells"))
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(quizItems).hasSize(30);
+        assertThat(requestCaptor.getValue())
+            .contains("Teacher quiz system prompt")
+            .contains("Teacher quiz developer prompt for 30")
+            .doesNotContain("{QUESTION_COUNT}");
+    }
+
+    @Test
     void generateLongExamParallel_mergesAndDeduplicatesBatchResults() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode batch1 = buildGeneratedQuizPayload("Batch A", 9);

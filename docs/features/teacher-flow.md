@@ -46,7 +46,10 @@ Do not mix these models.
 
 - Entry point: Teacher mode Note Detail
 - Primary CTA before generation: `Generate Quiz`
+- Question count selector: teachers choose `10`, `20`, or `30` before generation.
+- Free Teacher stays fixed at `10`; Plus and Pro Teacher unlock `20` and `30`, with the paywall explaining that Plus unlocks longer teacher quizzes.
 - Helper copy: `Generate a quiz from this note with answers and explanations for review and export.`
+- Selector helper copy: `Choose how many questions to generate. Higher counts cover more material.`
 - Generation consumes `1` quiz credit
 - Quiz generation is based on the note itself, not on student quiz sessions
 - Notes carry an optional `Learner Level` field so teachers can calibrate each note to the student audience for that class.

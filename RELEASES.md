@@ -14,6 +14,9 @@ Theme: extend the teacher quiz-authoring workflow with concrete controls that tu
 
 ### ✅ Shipped
 
+- **Question count control on teacher Generate Quiz** — Teacher Note Detail now offers 10 / 20 / 30 question generation controls, keeps Free teachers at 10 with a Plus-specific longer-quiz paywall, and sends the selected count through teacher quiz generation so Plus and Pro teachers get the requested quiz length
+- **Generate Quiz modal** — moved the question count picker out of the note card into a focused modal; both Generate Quiz and Regenerate now open the same modal so teachers can choose count on every generation including regeneration; preflight checks (quiz limit, Study Pack gate) still fire before the modal opens
+
 ---
 
 ## v0.15.0 - Premium Mode Uplift + Cost-Control Quota Refactor

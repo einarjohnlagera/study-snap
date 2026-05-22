@@ -2,7 +2,7 @@
 
 > Paste the block below as your **first message** in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.13.0 (in progress) — 2026-05-13
+> Last updated: v0.15.1 (in progress) — 2026-05-21
 
 ---
 
@@ -16,7 +16,7 @@ Here's the full context for our NoteLib product session. Please treat this as th
 
 **Core learning loop:** Capture → Generate → Review → Improve → Copy → Repeat
 
-**Positioning:** "Turn your notes into exam-ready study materials"
+**Positioning:** "Your notes become your study system."
 
 **Versioning model:** Never overwrite generated content. Users make a copy of a note, edit the copy, and generate a new Study Pack from it.
 
@@ -38,104 +38,127 @@ Here's the full context for our NoteLib product session. Please treat this as th
 
 ## Profile Types
 
-| Feature | Student | Board Exam | Teacher |
-|---|---|---|---|
-| Dashboard focus | Learning continuity, weak concepts | Exam countdown, challenge practice | Quiz creation, export readiness |
-| Quiz modes | Challenge, Quick Review, Adaptive Practice | Challenge, Board Exam (Pro), Quick Review | Challenge (preview only), no scoring |
-| Special features | — | Exam date tracking | Exam Builder, DOCX quiz export |
-| Long Exam | Coming soon (v0.13.0) | — | — |
+Four active profiles. `PARENT` enum exists but has zero implementation — do not propose it without flagging the schema blocker.
 
-**PARENT and PROFESSIONAL** are defined as enum values and appear in the UI as "Coming Soon" (disabled). No implementation exists yet for either.
+| Feature | Student | Exam Reviewer | Teacher | Professional |
+|---|---|---|---|---|
+| Dashboard focus | Learning continuity, weak concepts | Exam countdown, challenge practice | Quiz creation, export readiness | Certification / interview prep |
+| Quiz modes | Quick Review, Challenge, Adaptive (Plus+), Long Exam (Pro) | Quick Review, Challenge, Board Exam (Pro) | Challenge preview (no scoring) | Quick Review, Challenge ("Certification Review"), Long Exam ("Full Practice Exam"), Interview Practice (Pro) |
+| Special features | — | Exam date tracking | Exam Builder, DOCX export, per-note learner level | Interview Practice Mode |
+| Plan overrides | — | — | Free: 10 DOCX/mo; Plus: unlimited DOCX | — |
 
 ---
 
 ## Core Architecture
 
 - **Note** is the primary entity. States: `DRAFT → GENERATING → FAILED → STUDY_PACK_READY`. Visibility: `PRIVATE / PUBLIC`.
-- **Study Pack** is AI-generated content attached to a Note (summary, key concepts, quiz).
-- **Quiz sessions** use a shared session entity across all modes (Quick Review, Challenge Quiz, Adaptive Practice, Board Exam).
-- **Plans:** FREE / PLUS / PRO with monthly quotas. Payments via Xendit manual renewal.
+- **Study Pack** is AI-generated content attached to a Note (summary, key concepts, quiz). Notes carry an optional per-note `learnerLevel` override that Study Pack generation and question pools use first, falling back to the profile.
+- **Quiz sessions** use a shared `quick_review_sessions` entity across all modes. Mode stored as `QuickReviewSessionMode` enum; session state (questions, choices, timer) as JSONB.
+- **Pre-generated question pools** — new Study Pack generation asynchronously creates reusable Long Exam (48 questions) and Board Exam (24 questions) pools. Exams start immediately without live LLM generation.
+- **Plans:** FREE / PLUS / PRO with monthly quotas. Payments via Xendit manual renewal. Export quotas are profile-aware: Teacher DOCX exports get higher/unlimited limits vs. the standard plan cap.
 
 ---
 
 ## Quiz Mode Hierarchy (locked contract — exactly 5 modes)
 
 1. **Quick Review** — practice, all plans
-2. **Challenge Quiz** — exam, progressive 5→20 questions, all plans (with quota)
-3. **Adaptive Practice** — practice, targets weak concepts, Plus/Pro only
-4. **Long Exam** — exam, fixed long-form, Pro only (backend comes in v0.13.0)
-5. **Board Exam** — exam, high-stakes simulation, Pro only, Board Exam profile only
+2. **Challenge Quiz** — exam, progressive 5→20 questions, all plans (with quota); labeled "Certification Review" for Professional profile
+3. **Adaptive Practice** — practice, targets weak concepts, Plus/Pro; **Interview Practice is a sub-mode** (JSONB `subMode: "INTERVIEW"` on the `ADAPTIVE` discriminator, Pro only, Professional profile only) — this preserves the 5-mode contract
+4. **Long Exam** — exam, fixed long-form (20–30 Qs), Pro only; up to 3 same-subject notes; labeled "Full Practice Exam" for Professional profile; 10 sessions/mo cap
+5. **Board Exam** — exam, high-stakes simulation, Pro only, Exam Reviewer profile only; 5 sessions/mo cap; pre-generated 24-question pool
 
 Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `ROADMAP.md` together. Do not propose a sixth mode without flagging this.
 
 ---
 
-## v0.12.0 — Released
+## Release History
 
-**Theme:** Learning Experience, Discovery, and Retention
+### v0.15.1 — Current Release (In Progress)
 
-**All shipped:**
-- Progressive Challenge Quiz (5→20 questions with +5 mid-session)
-- Google social login
-- Public Library conversion funnel (multi-question Quick Check, related notes, AppModal auth consolidation)
-- Retention loops (continue studying, focus areas with free-tier fallback)
-- Guidance Foundation System (GuidanceTip engine, library milestone tips)
-- Conversion funnel polish (PaywallModal redesign, PostSuccessUpgradeNudge, context-aware getUpgradeCtas)
-- Public creator attribution with stable @usernames
-- Note metadata fixes: courseProgram source-of-truth, AI subject resilience, quiz context consistency
-- Adaptive Practice tier reconciliation — Plus = 10/mo, Pro = 30/mo aligned across all docs and runtime
-- Profile-aware mode selection + Long Exam coming-soon placeholder (`lib/exam-mode-visibility.ts`)
-- Board Exam premium UX polish — pre-flight checklist, "Score Report" result, learner-level pill removed
-- Learner Level grouped picker on quiz result screens (Recommended / Other Learning Styles by profile)
-
----
-
-## v0.13.0 — Current Release (In Progress)
-
-**Theme:** Complete the Promise, Reach New Audiences
+**Theme:** Teacher Power Features — concrete classroom controls on top of v0.15.0's teacher flow foundation.
 
 | Item | Status |
 |---|---|
-| Long Exam Mode v1 (Pro-only, single note) | Planned |
-| Professional Profile activation | Planned |
-| Interview Practice Mode (PROFESSIONAL profile) | Planned |
-| Faster quiz generation (research → implement) | Planned |
-| Subject landing pages (SEO) | Planned |
-| Proration / recomputation design doc | Planned |
-| Stale docs cleanup | Planned |
+| Question count control on Generate Quiz (10/20/30; Plus+ unlocks 20/30) | Planned |
+| Custom DOCX header (school name, class/section, date — profile + per-export) | Planned |
+| Multiple exam versions A/B/C (single DOCX, deterministic shuffle; Plus+ only) | Planned |
 
 ---
 
-## Future Roadmap
+### v0.15.0 — Released
 
-**v0.14.0+:**
-- Multi-note Long Exam
-- Teacher class management (roster, student assignment, per-student performance view)
-- Board Exam advanced analytics (trend, percentile framing)
-- Public Library trending section (blocked on windowed engagement fields in backend)
-- Cross-profile mode unlock (Student opts into Board Exam without changing profile)
-- Recurring billing / auto-renewal
-- Connected account management (unlink Google, add password for Google-only users)
+**Theme:** Premium Mode Uplift + Cost-Control Quota Refactor
+
+**Key shipped:**
+- Long Exam and Board Exam simulation-grade experience: in-session focus mode (app chrome hides, dedicated top bar + tabular timer), pre-generated question pools (instant exam start), ScoreReveal result screen, Question Navigator added to Long Exam, pre-session redesign
+- Monthly caps: Long Exam 10/mo Pro, Board Exam 5/mo Pro; counters visible in Settings → Plan & Billing
+- Teacher plan accessibility: Free Teacher 10 DOCX/mo, Plus Teacher unlimited DOCX; PDF limits unchanged; billing page shows resolved DOCX/PDF quotas separately
+- Exam Builder UX: add notes without leaving the builder (target-section picker), balance controls relocated below section list with distinct icons, section summary as chips
+- Per-note learner level override: teachers set difficulty per class note independently of their profile default
+- Learner Level and Course/Program required on notes (asterisks, aggregate amber toast)
+- Landing page repositioned: workspace-first hero, profile showcase, "Five study modes" section
+- Fix: Long Exam/Board Exam generation timeout + multi-note INVALID_LONG_EXAM_SOURCE false positive
+
+---
+
+### v0.14.0 — Released
+
+**Theme:** Grow the Surface, Deepen the Practice
+
+**Key shipped:** Interview Practice Mode (Pro, Professional profile, sub-mode of Adaptive); Multi-note Long Exam (Pro, up to 3 same-subject notes); "Board Taker" renamed to "Exam Reviewer"; Subject landing pages (SEO); faster quiz generation (parallel LLM calls + async Long Exam start).
+
+---
+
+### v0.13.0 — Released
+
+**Theme:** Complete the Promise, Reach New Audiences
+
+**Key shipped:** Long Exam Mode v1 (Pro, single note); Professional Profile activated; Pro plan / quota infrastructure; Proration design doc.
+
+---
+
+### v0.12.0 — Released
+
+**Theme:** Learning Experience, Discovery, and Retention
+
+**Key shipped:** Progressive Challenge Quiz (5→20); Google social login; Public Library conversion funnel; Retention loops; Guidance Foundation System; conversion funnel polish (PaywallModal, PostSuccessUpgradeNudge, getUpgradeCtas); Public creator attribution (@usernames); Adaptive Practice tier reconciliation (Plus=10/mo, Pro=30/mo).
+
+---
+
+## Future Roadmap (post v0.15.1)
+
+- **Multi-note Board Exam** — Pro users span Board Exam across up to 3 same-subject notes; blocked on single-note Board Exam usage data
+- **Premium mode quota surfacing** — per-mode caps shown more prominently in Settings; honest framing as "monthly plan inclusions"
+- **Board Exam advanced result analytics** — domain trend, percentile framing
+- **Long Exam tier promotion to Plus** — only if usage data justifies LLM cost
+- **Authenticated redirect on marketing pages** — signed-in users go to `/dashboard` from `/`, `/pricing`, `/learn`
+- **Public Library trending section** — blocked on windowed engagement fields in backend
+- **Cross-profile mode unlock** — Student opts into Board Exam without changing profile
+- **Recurring billing / auto-renewal**
+- **Connected account management** (unlink Google, add password for Google-only users)
 
 ---
 
 ## Profile Type Notes
 
-**Professional Profile** (`PROFESSIONAL` enum + LLM prompt hints already exist — activating in v0.13.0):
-- Use case: interview preparation (technical + situational questions)
-- Quiz style: definition + situational mix, real-world decision points
-- No exam date field; Interview Practice = Challenge Quiz engine with profile-gated label and interview-style prompts
-- Decided: prompt-level framing only (not a new session type); dedicated interview-simulation mode is v0.14.0+ if usage warrants it
+**Professional Profile (active since v0.13.0):**
+- Use case: interview and certification prep
+- Interview Practice = sub-mode of Adaptive Practice (`subMode: "INTERVIEW"` in session JSONB); preserves 5-mode contract
+- Pro only, 10 sessions/mo; `gpt-4.1` generation + `gpt-4.1-mini` critique split for margin control
+- Challenge Quiz = "Certification Review"; Long Exam = "Full Practice Exam" — display labels only, engine discriminators unchanged
 
-**Parent Profile** (`PARENT` enum exists, zero implementation):
+**Teacher Profile:**
+- Core workflow: Generate → View → Export (DOCX); all teacher data uses `generatedQuiz`, never `quizSession`
+- Plan override: Free=10 DOCX/mo, Plus=unlimited DOCX, PDF stays standard
+- Exam Builder: multi-note combined DOCX with editable sections, Even/Smart Balance, in-builder Add Notes
+- Per-note learner level: teachers calibrate difficulty per class note for Study Pack and question pool generation
+- v0.15.1 adds: question count control (10/20/30), custom DOCX header, multiple exam versions (A/B/C)
+- Do NOT mix teacher preview with student session logic; teacher flow uses `generatedQuiz` only
+
+**Parent Profile (`PARENT` enum exists, zero implementation):**
 - Use case: read-only oversight of a linked child's notes, scores, and weak areas
 - Architectural blocker: needs a parent↔child relationship model — invite/link model, child confirmation, data visibility scope all need design first
 - Do not propose implementation until the schema design is agreed
-
-**Teacher Profile — strengthening ideas:**
-- Current: quiz generation + DOCX export
-- Gaps: no class management, no per-student performance view, no quiz assignment
-- Questions to resolve: is class management v0.14.0 or later? How does teacher attribution interact with Public Library ranking?
 
 ---
 
@@ -211,9 +234,10 @@ Use the following docs as the source of truth:
 - `docs/product/ROADMAP.md` — sequencing and planned scope
 - `docs/product/SPEC.md` — canonical product behavior
 - `docs/product/EXAM_MODES.md` — quiz mode hierarchy (locked contract)
-- `docs/product/PLANS.md` — plan tiers and quotas
-- `docs/features/` — 48 feature-specific docs
+- `docs/product/PLANS.md` — plan tiers and quotas (including Teacher profile override)
+- `docs/features/` — per-feature behavior rules
 - `RELEASES.md` — release history and in-progress scope
+- `docs/codex-prompts/` — ready-to-run Codex prompts for active work
 - `docs/skills/codex-prompt-generator.md` — how to write Codex prompts
 - `docs/skills/README.md` — model/effort philosophy
 

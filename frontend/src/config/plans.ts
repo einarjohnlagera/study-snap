@@ -189,6 +189,7 @@ export type UpgradeCtaContext =
   | "interview-practice"
   | "teacher-quiz-limit"
   | "teacher-export-limit"
+  | "teacher-quiz-question-count"
   | "general";
 
 export type UpgradeCtaOptions = {
@@ -197,7 +198,9 @@ export type UpgradeCtaOptions = {
 };
 
 function isTeacherUpgradeContext(context: UpgradeCtaContext | undefined): boolean {
-  return context === "teacher-quiz-limit" || context === "teacher-export-limit";
+  return context === "teacher-quiz-limit"
+    || context === "teacher-export-limit"
+    || context === "teacher-quiz-question-count";
 }
 
 function resolveUpgradeCtaOptions(contextOrOptions?: UpgradeCtaContext | UpgradeCtaOptions): UpgradeCtaOptions {
@@ -214,6 +217,12 @@ export function getUpgradeCtas(
   const { context, profileType } = resolveUpgradeCtaOptions(contextOrOptions);
   const isTeacherUpgrade = profileType === "TEACHER" || isTeacherUpgradeContext(context);
   if (currentPlan === "FREE") {
+    if (context === "teacher-quiz-question-count") {
+      return {
+        primary: { label: "Unlock 20- and 30-question quizzes", targetPlan: "PLUS" },
+        secondary: { label: "Go Pro", targetPlan: "PRO" },
+      };
+    }
     if (isTeacherUpgrade) {
       return {
         primary: { label: "Unlock more exports — get Plus", targetPlan: "PLUS" },

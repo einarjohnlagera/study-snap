@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
+import com.studysnap.backend.dto.GenerateGeneratedQuizRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
@@ -298,11 +299,12 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public GeneratedQuizResponse generateGeneratedQuiz(
             @PathVariable String id,
+            @RequestBody(required = false) GenerateGeneratedQuizRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
-        return generatedQuizService.generate(id, userId);
+        return generatedQuizService.generate(id, userId, request == null ? null : request.questionCount());
     }
 
     @PostMapping("/{id}/adaptive-practice/start")
