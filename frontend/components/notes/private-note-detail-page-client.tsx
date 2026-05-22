@@ -336,7 +336,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [router, startRouteProgress]);
 
   const maybeShowGeneratedMetadataSuggestion = useCallback(async (loadedNote: NoteResponse) => {
-    if (!awaitingGeneratedMetadataSuggestionRef.current || loadedNote.studyPackStatus !== "STUDY_PACK_READY" || !loadedNote.studyPackId) {
+    const sessionKey = `notelib-awaiting-suggestion:${loadedNote.id}`;
+    const isAwaiting = awaitingGeneratedMetadataSuggestionRef.current || globalThis.sessionStorage?.getItem(sessionKey) === "1";
+    if (!isAwaiting || loadedNote.studyPackStatus !== "STUDY_PACK_READY" || !loadedNote.studyPackId) {
       return;
     }
     if (suggestedStudyPackIdRef.current === loadedNote.studyPackId) {
@@ -345,6 +347,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
     suggestedStudyPackIdRef.current = loadedNote.studyPackId;
     awaitingGeneratedMetadataSuggestionRef.current = false;
+    globalThis.sessionStorage?.removeItem(sessionKey);
     try {
       const generated = await getMyStudyPack(loadedNote.studyPackId);
       setPendingSuggestion({
@@ -377,6 +380,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     try {
       const loadedNote = await getNote(normalizedRouteId);
       setNote(loadedNote);
+      // Re-arm the ref when returning to a still-generating note so the polling effect
+      // can trigger the suggestion modal once the Study Pack completes.
+      if (loadedNote.studyPackStatus === "GENERATING" && globalThis.sessionStorage?.getItem(`notelib-awaiting-suggestion:${loadedNote.id}`) === "1") {
+        awaitingGeneratedMetadataSuggestionRef.current = true;
+      }
       void maybeShowGeneratedMetadataSuggestion(loadedNote);
 
       if (profileType === "TEACHER" || !loadedNote.quickReviewAvailable) {
@@ -563,6 +571,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const generationQueued = searchParams.get("generating") === "1";
     if (generationQueued) {
       awaitingGeneratedMetadataSuggestionRef.current = true;
+      globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${normalizedRouteId}`, "1");
     }
     if (!created && !copied && !saved && !generationQueued) {
       return;
@@ -820,6 +829,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setGenerating(true);
     try {
       awaitingGeneratedMetadataSuggestionRef.current = true;
+      globalThis.sessionStorage?.setItem(`notelib-awaiting-suggestion:${note.id}`, "1");
       const queued = await createStudyPackFromNote(note.id);
       setNote(queued);
       setToast("Study Pack generation started.");

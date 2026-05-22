@@ -515,6 +515,12 @@ Planned for a future release after the mode system matures:
 - implementation must remain additive — no ranking change without the toggle enabled
 - do not build until there are enough public notes per profile type to make filtering meaningful
 
+## Known UX Fixes (cross-cutting, no version gate)
+
+These are correctness fixes that ship as soon as they are ready and are not held to a version milestone.
+
+- ~~**AI suggestion modal survives navigation**~~ ✅ — fixed in v0.15.1 branch: `awaitingGeneratedMetadataSuggestionRef` was in-memory-only and reset on component remount; navigating away mid-generation and returning silently skipped the AI title/subject/tags modal; replaced with a `sessionStorage` key (`notelib-awaiting-suggestion:{noteId}`) that is set when generation starts and cleared after the modal fires; `loadDetail` re-arms the ref from storage when returning to a still-generating note so the polling effect can still trigger the modal on completion.
+
 ## Product Learning Loop
 
 Capture -> Generate -> Review -> Improve -> Copy -> Repeat
