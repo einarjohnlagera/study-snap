@@ -62,6 +62,7 @@ class ExamQuestionPoolServiceTest {
                 new StudySnapProperties(),
                 studyPackGenerationTaskDispatcher,
                 transactionOperations,
+                new SimpleAsyncTaskExecutor(),
                 new SimpleAsyncTaskExecutor()
         );
         lenient().when(examQuestionPoolRepository.save(any(ExamQuestionPoolEntity.class)))

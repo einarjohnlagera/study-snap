@@ -53,6 +53,7 @@ public class ExamQuestionPoolService {
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final AsyncTaskExecutor studyPackGenerationTaskExecutor;
+    private final AsyncTaskExecutor llmParallelTaskExecutor;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void initiatePool(StudyPackEntity studyPack, UUID ownerUserId) {
@@ -230,7 +231,7 @@ public class ExamQuestionPoolService {
                             expectedPoolSize,
                             DIFFICULTY_MIXED,
                             target.context(),
-                            studyPackGenerationTaskExecutor
+                            llmParallelTaskExecutor
                     ),
                     Set.of()
             );

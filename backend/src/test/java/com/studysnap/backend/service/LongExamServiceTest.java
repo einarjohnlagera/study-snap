@@ -129,6 +129,7 @@ class LongExamServiceTest {
             studyPackGenerationTaskDispatcher,
             transactionOperations,
             new SimpleAsyncTaskExecutor(),
+            new SimpleAsyncTaskExecutor(),
             examQuestionPoolService
         );
     }
