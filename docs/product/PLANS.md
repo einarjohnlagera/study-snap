@@ -157,7 +157,7 @@ This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use
 
 For Teacher-profile users, the upgrade story is about **generation volume**, not quiz modes:
 
-- **Free → Plus:** more exports (10 → unlimited), more Study Packs (10 → 50), more quiz generation (5 → 25), and longer teacher quizzes (20 or 30 questions instead of the Free 10-question format)
+- **Free → Plus:** more exports (10 → unlimited), more Study Packs (10 → 50), more quiz generation (5 → 25), longer teacher quizzes (20 or 30 questions instead of the Free 10-question format), and multiple deterministic exam versions for anti-cheating DOCX exports
 - **Plus → Pro:** highest generation limits (50 Study Packs → 100, 25 quizzes → 50), multi-note Exam Builder without session limits
 
 The standard exam-prep framing ("Board Exam Mode", "Adaptive Practice") does not resonate with teachers. Upgrade CTAs shown to Teacher-profile users must use teacher-framed copy. Use `getUpgradeCtas(currentPlan, { profileType })` so Teacher Plus nudges focus on generation volume instead of export headroom.

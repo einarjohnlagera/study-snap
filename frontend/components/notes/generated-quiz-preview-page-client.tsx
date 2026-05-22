@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { QuizExportModal, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
+import { QuizExportModal, type QuizDocxVersionCount, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -22,6 +22,7 @@ import {
   getMe,
   getNote,
   isExportLimitReachedError,
+  isMultipleExamVersionsNotAllowedError,
   type GeneratedQuizResponse,
   type QuizDocxHeaderOverride,
   type NoteResponse,
@@ -154,6 +155,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const handleExport = useCallback(async (
     mode: QuizDocxExportMode | QuizExportModalMode,
     headerOverride?: QuizDocxHeaderOverride,
+    versionCount?: QuizDocxVersionCount,
   ) => {
     if (!generatedQuiz?.id || exporting) {
       return;
@@ -162,13 +164,19 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     setShowExportModal(false);
     setToast("Exporting DOCX...");
     try {
-      await exportGeneratedQuizDocx(generatedQuiz.id, mode, headerOverride);
+      await exportGeneratedQuizDocx(generatedQuiz.id, mode, headerOverride, versionCount);
       setToast("DOCX ready");
     } catch (err) {
       if (isExportLimitReachedError(err)) {
         setError(null);
         setToast(null);
         setActivePaywallModal("export-limit");
+        return;
+      }
+      if (isMultipleExamVersionsNotAllowedError(err)) {
+        setError(null);
+        setToast(null);
+        setActivePaywallModal("teacher-exam-versions");
         return;
       }
       const message = err instanceof Error ? err.message : "Could not export quiz.";
@@ -394,8 +402,9 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
         exporting={exporting}
         showTeacherExportDetails={authUser?.profileType === "TEACHER"}
         schoolName={profileSchoolName}
+        teacherPlan={authUser?.planType}
         onClose={() => setShowExportModal(false)}
-        onSelect={(mode, headerOverride) => void handleExport(mode, headerOverride)}
+        onSelect={(mode, headerOverride, versionCount) => void handleExport(mode, headerOverride, versionCount)}
       />
 
       <PaywallModal

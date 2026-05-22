@@ -102,6 +102,45 @@ class QuizDocxExportServiceTest {
     }
 
     @Test
+    void exportMultipleVersions_withAnswersKeepsEachAnswerSetAfterItsVersion() throws IOException {
+        List<QuizItem> questions = IntStream.rangeClosed(1, 6)
+                .mapToObj(index -> new QuizItem(
+                        "Question " + index,
+                        List.of("Correct " + index, "Distractor A " + index, "Distractor B " + index, "Distractor C " + index),
+                        0,
+                        "Topic " + index,
+                        "Explanation " + index
+                ))
+                .toList();
+
+        byte[] content = quizDocxExportService.exportQuizToDocx(
+                buildQuiz(questions),
+                QuizDocxExportMode.WITH_ANSWERS,
+                QuizDocxExportService.DocxHeaderOptions.empty(),
+                2
+        );
+
+        try (XWPFDocument document = openDocument(content)) {
+            List<String> paragraphs = document.getParagraphs().stream()
+                    .map(XWPFParagraph::getText)
+                    .toList();
+
+            assertThat(paragraphs).containsSubsequence(
+                    "Version A",
+                    "Answer Key",
+                    "Explanations",
+                    "Version B",
+                    "Answer Key",
+                    "Explanations"
+            );
+            assertThat(document.getParagraphs().stream()
+                    .flatMap(paragraph -> paragraph.getRuns().stream())
+                    .filter(this::hasPageBreak))
+                    .hasSizeGreaterThanOrEqualTo(5);
+        }
+    }
+
+    @Test
     void exportQuiz_customHeaderIncludesTeacherExportDetails() throws IOException {
         byte[] content = quizDocxExportService.exportQuizToDocx(
                 buildQuiz(List.of(
@@ -230,6 +269,43 @@ class QuizDocxExportServiceTest {
                     .contains("Explanations")
                     .contains("1. Cells are the basic unit of life.")
                     .contains("2. A mole is a measure of amount of substance.");
+        }
+    }
+
+    @Test
+    void exportCombinedQuiz_rendersThreeDeterministicVersionSections() throws IOException {
+        List<QuizDocxExportService.ExportableSection> sections = List.of(
+                new QuizDocxExportService.ExportableSection(
+                        "SECTION A - Multiple Choice",
+                        List.of("Biology"),
+                        IntStream.rangeClosed(1, 6)
+                                .mapToObj(index -> new QuizItem(
+                                        "Combined question " + index,
+                                        List.of("Correct " + index, "Choice B " + index, "Choice C " + index, "Choice D " + index),
+                                        0,
+                                        "Cells",
+                                        "Explanation " + index
+                                ))
+                                .toList(),
+                        "combined-section-seed"
+                )
+        );
+
+        byte[] firstExport = quizDocxExportService.exportCombinedQuizToDocx(
+                sections,
+                new QuizDocxExportService.CombinedQuizDocxOptions(false, false, 3)
+        );
+        byte[] secondExport = quizDocxExportService.exportCombinedQuizToDocx(
+                sections,
+                new QuizDocxExportService.CombinedQuizDocxOptions(false, false, 3)
+        );
+
+        try (XWPFDocument firstDocument = openDocument(firstExport);
+             XWPFDocument secondDocument = openDocument(secondExport)) {
+            assertThat(extractText(firstDocument)).contains("Version A")
+                    .contains("Version B")
+                    .contains("Version C");
+            assertThat(extractText(secondDocument)).isEqualTo(extractText(firstDocument));
         }
     }
 

@@ -31,6 +31,7 @@ jest.mock("@/lib/api", () => ({
   exportCombinedGeneratedQuizDocx: jest.fn(),
   getGeneratedQuiz: jest.fn(),
   getMe: jest.fn(),
+  isMultipleExamVersionsNotAllowedError: jest.fn(() => false),
   listNotes: jest.fn(),
 }));
 
@@ -45,6 +46,7 @@ describe("Exam Builder page", () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
       role: "USER",
+      planType: "PLUS",
       profileType: "TEACHER",
     });
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockReset();
@@ -155,6 +157,7 @@ describe("Exam Builder page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Move Dosage Calculations up" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Zygote Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
     fireEvent.click(await screen.findByRole("button", { name: /Quiz \+ Answers/i }));
 
     await waitFor(() => {
@@ -174,6 +177,7 @@ describe("Exam Builder page", () => {
           className: null,
           includeDate: true,
         },
+        versionCount: 2,
       });
     });
   });
@@ -306,6 +310,7 @@ describe("Exam Builder page", () => {
           className: null,
           includeDate: true,
         },
+        versionCount: 1,
       });
     });
   });

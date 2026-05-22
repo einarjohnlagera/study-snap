@@ -84,6 +84,11 @@ Do not mix these models.
 - Export options:
   - `Quiz Only`
   - `Quiz + Answers`
+- The shared teacher DOCX export modal includes a `Versions` selector for `1`, `2`, or `3` printable versions:
+  - Free Teachers stay on `1`; selecting `2` or `3` opens the Plus paywall for multiple anti-cheating versions
+  - Plus and Pro Teachers may export `2` or `3` versions from Quiz Preview and combined Exam Builder export
+  - multi-version exports keep the same stored `generatedQuiz` content, deterministically shuffle question order and choice order per `Version A`, `Version B`, and `Version C`, and keep each shuffled answer key aligned to its rendered choices
+  - Exam Builder preserves its selected sections while shuffling questions inside each section for each version
 - Teacher DOCX export details can add a local header without changing stored `generatedQuiz` data:
   - `schoolName` comes from Teacher Profile `Teaching Info` and is the default first header line when set
   - per-export `Class or section` text is optional and stays local to the open export modal
@@ -92,6 +97,7 @@ Do not mix these models.
 - `Quiz + Answers` appends:
   - `Answer Key`
   - `Explanations`
+- In a multi-version `Quiz + Answers` export, the answer key and explanations follow the matching version before the next version begins on a page break.
 - DOCX export is shown only for `Teacher` and `Admin`
 - Teachers can also build one combined exam from `Library`:
   - enter teacher-only `Select` mode

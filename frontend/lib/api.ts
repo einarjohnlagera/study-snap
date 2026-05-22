@@ -991,6 +991,7 @@ export type MultiNoteQuizDocxExportRequest = {
   includeAnswerKey: boolean;
   includeExplanations: boolean;
   headerOverride?: QuizDocxHeaderOverride | null;
+  versionCount?: number | null;
 };
 
 export type QuizDocxHeaderOverride = {
@@ -2732,13 +2733,17 @@ export async function exportGeneratedQuizDocx(
   quizId: string,
   mode: QuizDocxExportMode,
   headerOverride?: QuizDocxHeaderOverride | null,
+  versionCount?: number | null,
 ): Promise<{ filename: string }> {
   const response = await fetchWithAuth(
     `/quizzes/${quizId}/export-docx?mode=${mode}`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ headerOverride: headerOverride ?? null }),
+      body: JSON.stringify({
+        headerOverride: headerOverride ?? null,
+        versionCount: versionCount ?? null,
+      }),
     },
     true,
   );
@@ -2955,6 +2960,10 @@ export function isExportLimitReachedError(error: unknown): error is ApiRequestEr
 
 export function isQuestionCountNotAllowedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "QUESTION_COUNT_NOT_ALLOWED";
+}
+
+export function isMultipleExamVersionsNotAllowedError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "MULTIPLE_EXAM_VERSIONS_NOT_ALLOWED";
 }
 
 export function isNotEnoughNewQuestionsError(error: unknown): error is ApiRequestError {

@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.util.QuizVersionShuffleUtils;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class QuizDocxExportService {
     private static final String COMBINED_QUIZ_FILENAME = "combined-exam.docx";
     private static final String COMBINED_QUIZ_WITH_ANSWERS_FILENAME = "combined-exam-with-answers.docx";
     private static final String HEADER_TITLE_SEPARATOR = " — ";
+    private static final String VERSION_TITLE_PREFIX = "Version ";
     private static final String FONT_FAMILY = "Calibri";
     private static final int MARGIN_TWIPS = 1440;
     private static final int TITLE_FONT_SIZE = 16;
@@ -66,28 +68,42 @@ public class QuizDocxExportService {
     private static final int NOTE_SECTION_SPACING = 120;
     private static final int CHOICE_INDENT = 400;
     private static final int ANSWERS_PER_LINE = 5;
+    private static final int DEFAULT_VERSION_COUNT = 1;
+    private static final List<String> VERSION_LETTERS = List.of("A", "B", "C");
 
     public byte[] exportQuizToDocx(ExportableQuiz quiz, QuizDocxExportMode mode) {
         return exportQuizToDocx(quiz, mode, DocxHeaderOptions.empty());
     }
 
     public byte[] exportQuizToDocx(ExportableQuiz quiz, QuizDocxExportMode mode, DocxHeaderOptions headerOptions) {
+        return exportQuizToDocx(quiz, mode, headerOptions, DEFAULT_VERSION_COUNT);
+    }
+
+    public byte[] exportQuizToDocx(
+            ExportableQuiz quiz,
+            QuizDocxExportMode mode,
+            DocxHeaderOptions headerOptions,
+            int versionCount
+    ) {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             log.info("Applying DOCX v4 exam formatting...");
             setMargins(document);
-            addCustomHeader(document, quiz.title(), headerOptions);
-            addHeader(document, quiz);
-            addExamTitle(document);
-            addSectionIntro(document);
-            addQuestions(document, quiz.questions(), 1);
-            if (mode == QuizDocxExportMode.WITH_ANSWERS) {
-                addPageBreak(document);
-                addSectionHeading(document, ANSWER_KEY_HEADING);
-                addAnswerKeyEntries(document, quiz.questions());
-                addPageBreak(document);
-                addSectionHeading(document, EXPLANATIONS_HEADING);
-                addExplanationEntries(document, quiz.questions());
+            if (versionCount <= DEFAULT_VERSION_COUNT) {
+                addQuizVersion(document, quiz, mode, headerOptions, null, quiz.questions());
+            } else {
+                for (int versionIndex = 0; versionIndex < versionCount; versionIndex++) {
+                    if (versionIndex > 0) {
+                        addPageBreak(document);
+                    }
+                    String versionLetter = versionLetter(versionIndex);
+                    List<QuizItem> questions = QuizVersionShuffleUtils.shuffleQuestionsAndChoices(
+                            quiz.questions(),
+                            versionLetter,
+                            quiz.quizIdSeed()
+                    );
+                    addQuizVersion(document, quiz, mode, headerOptions, versionLetter, questions);
+                }
             }
             document.write(outputStream);
             return outputStream.toByteArray();
@@ -106,32 +122,26 @@ public class QuizDocxExportService {
             DocxHeaderOptions headerOptions
     ) {
         try (XWPFDocument document = new XWPFDocument();
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             log.info("Applying DOCX exam builder formatting...");
             setMargins(document);
-            addCustomHeader(document, COMBINED_TOPIC, headerOptions);
-            addCombinedHeader(document, sections);
-            addExamTitle(document);
-            addSectionIntro(document);
 
-            List<QuizItem> orderedQuestions = new ArrayList<>();
-            int nextQuestionNumber = 1;
-            for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
-                ExportableSection section = sections.get(sectionIndex);
-                addNoteSectionHeading(document, sectionIndex, section.title());
-                nextQuestionNumber = addQuestions(document, section.questions(), nextQuestionNumber);
-                orderedQuestions.addAll(section.questions());
-            }
-
-            if (options.includeAnswerKey()) {
-                addPageBreak(document);
-                addSectionHeading(document, ANSWER_KEY_HEADING);
-                addAnswerKeyEntries(document, orderedQuestions);
-            }
-            if (options.includeExplanations()) {
-                addPageBreak(document);
-                addSectionHeading(document, EXPLANATIONS_HEADING);
-                addExplanationEntries(document, orderedQuestions);
+            if (options.versionCount() <= DEFAULT_VERSION_COUNT) {
+                addCombinedQuizVersion(document, sections, options, headerOptions, null);
+            } else {
+                for (int versionIndex = 0; versionIndex < options.versionCount(); versionIndex++) {
+                    if (versionIndex > 0) {
+                        addPageBreak(document);
+                    }
+                    String versionLetter = versionLetter(versionIndex);
+                    addCombinedQuizVersion(
+                            document,
+                            shuffleSections(sections, versionLetter),
+                            options,
+                            headerOptions,
+                            versionLetter
+                    );
+                }
             }
 
             document.write(outputStream);
@@ -152,6 +162,89 @@ public class QuizDocxExportService {
         return includeAnswerKey || includeExplanations
                 ? COMBINED_QUIZ_WITH_ANSWERS_FILENAME
                 : COMBINED_QUIZ_FILENAME;
+    }
+
+    private void addQuizVersion(
+            XWPFDocument document,
+            ExportableQuiz quiz,
+            QuizDocxExportMode mode,
+            DocxHeaderOptions headerOptions,
+            String versionLetter,
+            List<QuizItem> questions
+    ) {
+        addVersionHeading(document, versionLetter);
+        addCustomHeader(document, quiz.title(), headerOptions);
+        addHeader(document, quiz);
+        addExamTitle(document);
+        addSectionIntro(document);
+        addQuestions(document, questions, 1);
+        if (mode == QuizDocxExportMode.WITH_ANSWERS) {
+            addPageBreak(document);
+            addSectionHeading(document, ANSWER_KEY_HEADING);
+            addAnswerKeyEntries(document, questions);
+            addPageBreak(document);
+            addSectionHeading(document, EXPLANATIONS_HEADING);
+            addExplanationEntries(document, questions);
+        }
+    }
+
+    private void addCombinedQuizVersion(
+            XWPFDocument document,
+            List<ExportableSection> sections,
+            CombinedQuizDocxOptions options,
+            DocxHeaderOptions headerOptions,
+            String versionLetter
+    ) {
+        addVersionHeading(document, versionLetter);
+        addCustomHeader(document, COMBINED_TOPIC, headerOptions);
+        addCombinedHeader(document, sections);
+        addExamTitle(document);
+        addSectionIntro(document);
+
+        List<QuizItem> orderedQuestions = new ArrayList<>();
+        int nextQuestionNumber = 1;
+        for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
+            ExportableSection section = sections.get(sectionIndex);
+            addNoteSectionHeading(document, sectionIndex, section.title());
+            nextQuestionNumber = addQuestions(document, section.questions(), nextQuestionNumber);
+            orderedQuestions.addAll(section.questions());
+        }
+
+        if (options.includeAnswerKey()) {
+            addPageBreak(document);
+            addSectionHeading(document, ANSWER_KEY_HEADING);
+            addAnswerKeyEntries(document, orderedQuestions);
+        }
+        if (options.includeExplanations()) {
+            addPageBreak(document);
+            addSectionHeading(document, EXPLANATIONS_HEADING);
+            addExplanationEntries(document, orderedQuestions);
+        }
+    }
+
+    private List<ExportableSection> shuffleSections(List<ExportableSection> sections, String versionLetter) {
+        return sections.stream()
+                .map(section -> new ExportableSection(
+                        section.title(),
+                        section.subjects(),
+                        QuizVersionShuffleUtils.shuffleQuestionsAndChoices(
+                                section.questions(),
+                                versionLetter,
+                                section.quizIdSeed()
+                        ),
+                        section.quizIdSeed()
+                ))
+                .toList();
+    }
+
+    private void addVersionHeading(XWPFDocument document, String versionLetter) {
+        if (versionLetter != null) {
+            addSectionHeading(document, VERSION_TITLE_PREFIX + versionLetter);
+        }
+    }
+
+    private String versionLetter(int versionIndex) {
+        return VERSION_LETTERS.get(versionIndex);
     }
 
     private void setMargins(XWPFDocument document) {
@@ -412,28 +505,44 @@ public class QuizDocxExportService {
             String title,
             String subject,
             OffsetDateTime generatedAt,
-            List<QuizItem> questions
+            List<QuizItem> questions,
+            String quizIdSeed
     ) {
+        public ExportableQuiz(String title, String subject, OffsetDateTime generatedAt, List<QuizItem> questions) {
+            this(title, subject, generatedAt, questions, title);
+        }
+
         public ExportableQuiz {
             questions = questions == null ? List.of() : List.copyOf(questions);
+            quizIdSeed = quizIdSeed == null ? "" : quizIdSeed;
         }
     }
 
     public record ExportableSection(
             String title,
             List<String> subjects,
-            List<QuizItem> questions
+            List<QuizItem> questions,
+            String quizIdSeed
     ) {
+        public ExportableSection(String title, List<String> subjects, List<QuizItem> questions) {
+            this(title, subjects, questions, title);
+        }
+
         public ExportableSection {
             subjects = subjects == null ? List.of() : List.copyOf(subjects);
             questions = questions == null ? List.of() : List.copyOf(questions);
+            quizIdSeed = quizIdSeed == null ? "" : quizIdSeed;
         }
     }
 
     public record CombinedQuizDocxOptions(
             boolean includeAnswerKey,
-            boolean includeExplanations
+            boolean includeExplanations,
+            int versionCount
     ) {
+        public CombinedQuizDocxOptions(boolean includeAnswerKey, boolean includeExplanations) {
+            this(includeAnswerKey, includeExplanations, DEFAULT_VERSION_COUNT);
+        }
     }
 
     public record DocxHeaderOptions(
