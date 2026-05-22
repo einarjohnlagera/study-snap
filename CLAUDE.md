@@ -108,6 +108,8 @@ Prompts live in `backend/src/main/resources/prompts/study-pack-v1/`. Each quiz m
 
 **Generation context** (which learner level / course program the AI uses) is resolved in a shared utility: note-level `courseProgram` is always preferred; user profile `courseProgram` is fallback only. Do not bypass this resolver.
 
+LLM fan-out batches run on a dedicated `llmParallelTaskExecutor`; the main `studyPackGenerationTaskExecutor` must not be passed to `generateLongExamParallel`.
+
 Every account is guaranteed to have a non-null `learnerLevel` after onboarding; the teacher Generate Quiz modal's Target Level override pre-fills from the last generation on that note and falls back to the profile level.
 
 ### Quiz session model

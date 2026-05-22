@@ -136,6 +136,7 @@ public class LongExamService {
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final AsyncTaskExecutor studyPackGenerationTaskExecutor;
+    private final AsyncTaskExecutor llmParallelTaskExecutor;
     private final ExamQuestionPoolService examQuestionPoolService;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -734,7 +735,7 @@ public class LongExamService {
                     sourceNoteRef.questionCount(),
                     difficulty,
                     generationContext,
-                    studyPackGenerationTaskExecutor
+                    llmParallelTaskExecutor
             );
             List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuiz,

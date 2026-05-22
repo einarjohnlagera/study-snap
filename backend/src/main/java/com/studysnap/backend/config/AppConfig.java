@@ -38,9 +38,20 @@ public class AppConfig {
     public AsyncTaskExecutor studyPackGenerationTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("study-pack-generation-");
-        executor.setCorePoolSize(1);
-        executor.setMaxPoolSize(3);
+        executor.setCorePoolSize(3);
+        executor.setMaxPoolSize(6);
         executor.setQueueCapacity(100);
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
+    public AsyncTaskExecutor llmParallelTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("llm-parallel-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(50);
         executor.initialize();
         return executor;
     }

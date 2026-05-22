@@ -1461,6 +1461,10 @@ These rules exist to prevent the most common forms of context drift across AI co
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
 
+### LLM Fan-Out Anti-Drift
+
+- When introducing new LLM fan-out (`CompletableFuture.supplyAsync` patterns), use `llmParallelTaskExecutor`, never reuse the executor that dispatched the parent task — see `OpenAiLlmStudyPackService.generateLongExamParallel` for the canonical shape.
+
 ### Learner Level vs Course/Program Anti-Drift
 
 - **Learner Level** and **Course/Program** are separate concerns. Never merge them into a single field, a single UI input, or a single LLM prompt variable.
