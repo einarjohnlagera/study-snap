@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, Download, FileText, Search, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { PROFILE_TYPE_SECTION_ID } from "@/lib/profile-sections";
 
 type Step = {
   number: number;
@@ -132,7 +133,7 @@ export function TeacherGuide({ showSwitchProfileCta = true }: Readonly<TeacherGu
         </Link>
         {showSwitchProfileCta ? (
           <Link
-            href="/profile#profile-type"
+            href={`/profile#${PROFILE_TYPE_SECTION_ID}`}
             className={
               buttonVariants({ variant: "outline", size: "sm" }) +
               " inline-flex w-full items-center gap-1.5 sm:w-auto"
