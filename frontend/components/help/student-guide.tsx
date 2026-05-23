@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Brain, FileText, Globe, RotateCcw, Target, Zap } from "lucide-react";
+import { ArrowRight, BookOpen, Brain, FileText, RotateCcw, Settings, Target, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { PROFILE_TYPE_SECTION_ID } from "@/lib/profile-sections";
 
 type Step = {
   number: number;
@@ -57,7 +58,11 @@ const TIPS = [
   "Preparing for boards? Switch your profile type in Settings to unlock Board Exam Mode.",
 ];
 
-export function StudentGuide() {
+type StudentGuideProps = {
+  showSwitchProfileCta?: boolean;
+};
+
+export function StudentGuide({ showSwitchProfileCta = true }: Readonly<StudentGuideProps>) {
   return (
     <div className="space-y-6">
       {/* Study System */}
@@ -144,13 +149,15 @@ export function StudentGuide() {
         >
           Create Note
         </Link>
-        <Link
-          href="/public/library"
-          className={buttonVariants({ variant: "outline", size: "sm" }) + " inline-flex w-full items-center gap-1.5 sm:w-auto"}
-        >
-          <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-          Browse Public Library
-        </Link>
+        {showSwitchProfileCta ? (
+          <Link
+            href={`/profile#${PROFILE_TYPE_SECTION_ID}`}
+            className={buttonVariants({ variant: "outline", size: "sm" }) + " inline-flex w-full items-center gap-1.5 sm:w-auto"}
+          >
+            <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+            Switch Profile
+          </Link>
+        ) : null}
       </section>
     </div>
   );

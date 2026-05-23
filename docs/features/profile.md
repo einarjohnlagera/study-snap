@@ -88,6 +88,12 @@ The Dashboard learner-level prompt links here using:
 
 The Learning Profile card must remain reachable through that hash target.
 
+## Navigation
+
+- App shell sidebar `Profile` opens `/profile` so users land on the private profile-editing surface.
+- Avatar dropdown `My Profile` remains the public-profile entry point.
+- Guide footer `Switch Profile` CTAs deep-link to `/profile#profile-type`; the Profile Type card owns the `profile-type` hash target and scrolls/focuses into view on load.
+
 ## Public Profile Link
 
 `View Public Page` is navigation only.

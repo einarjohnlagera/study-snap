@@ -294,6 +294,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
+  const shareModalInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingPublicCopyGenerate, setPendingPublicCopyGenerate] = useState(false);
 
   const [isPaidPlan, setIsPaidPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") !== "FREE");
@@ -500,12 +501,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [toast]);
 
   useEffect(() => {
-    if (!shareModalCopied) {
+    if (!showShareLinkModal || !shareModalUrl) {
       return;
     }
-    const timeout = globalThis.setTimeout(() => setShareModalCopied(false), 2000);
-    return () => globalThis.clearTimeout(timeout);
-  }, [shareModalCopied]);
+    shareModalInputRef.current?.select();
+    void handleCopyShareLinkFromModal({ showFailureToast: true });
+  }, [showShareLinkModal, shareModalUrl]);
 
   useEffect(() => {
     if (!note) {
@@ -1326,16 +1327,25 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   };
 
-  const handleCopyShareLinkFromModal = async () => {
+  const handleCopyShareLinkFromModal = async (options: { showFailureToast?: boolean } = {}) => {
     if (!shareModalUrl) {
       return;
     }
     try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard access is unavailable.");
+      }
       await navigator.clipboard.writeText(shareModalUrl);
       setShareModalCopied(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy share link.";
-      setError(message);
+      setShareModalCopied(false);
+      if (options.showFailureToast) {
+        setToastTone("warning");
+        setToast("Could not auto-copy the link. Use Copy Link or copy the field manually.");
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -2033,20 +2043,38 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             >
               Close
             </Button>
-            <Button type="button" onClick={() => void handleCopyShareLinkFromModal()}>
-              {shareModalCopied ? "Copied" : "Copy Link"}
-            </Button>
+            {shareModalCopied ? (
+              <span className="inline-flex min-h-10 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                Copied ✓
+              </span>
+            ) : (
+              <Button type="button" onClick={() => void handleCopyShareLinkFromModal()}>
+                Copy Link
+              </Button>
+            )}
           </div>
         )}
       >
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-foreground/60">Shareable URL</p>
-          <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85">
-            {truncateShareUrl(shareModalUrl)}
+          <label htmlFor="share-note-url" className="text-xs uppercase tracking-wide text-foreground/60">
+            Shareable URL
+          </label>
+          <input
+            ref={shareModalInputRef}
+            id="share-note-url"
+            readOnly
+            value={shareModalUrl}
+            onFocus={(event) => event.currentTarget.select()}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85"
+          />
+          <p aria-live="polite" className="sr-only">
+            {shareModalCopied ? "Link copied to clipboard" : ""}
           </p>
           {shareModalCopied ? (
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">Link copied</p>
-          ) : null}
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">Link copied to clipboard</p>
+          ) : (
+            <p className="text-xs text-foreground/60">{truncateShareUrl(shareModalUrl)}</p>
+          )}
         </div>
       </AppModal>
 

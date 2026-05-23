@@ -16,6 +16,11 @@ Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bu
 ### ✅ Shipped
 
 - **Quiz session display correctness** — library card review labels and Note Detail Recent Sessions now aggregate every quiz mode: Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice completions update the library reviewed timestamp, Recent Sessions chips show the actual mode, and multi-note Long Exam sessions surface on every participating note with a spans-N-notes sublabel
+- polish: Edit Note no longer shows the Import Notes uploader — that flow belongs to Create Note only.
+- polish: app shell Profile sidebar opens Profile Settings; public profile remains accessible via the avatar dropdown's "My Profile".
+- fix: Board Exam Guide no longer recommends Long Exam and the footer "Switch Profile" CTA deep-links to the Profile Type section.
+- polish: Student / Teacher / Professional guides now show a profile-aware "Switch Profile" footer CTA — hidden when the user is already on the matching guide.
+- polish: share-note modal auto-copies the shareable URL on open and shows a Copied success pill.
 
 ---
 

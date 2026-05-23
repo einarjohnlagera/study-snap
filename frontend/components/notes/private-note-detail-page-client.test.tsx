@@ -31,6 +31,7 @@ jest.mock("@/lib/checkout-redirect", () => ({
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
+const clipboardWriteText = jest.fn();
 const routerMock = {
   push: pushMock,
   replace: replaceMock,
@@ -124,6 +125,12 @@ describe("PrivateNoteDetailPageClient", () => {
     searchParamsMock = createSearchParamsMock();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    clipboardWriteText.mockReset();
+    clipboardWriteText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: clipboardWriteText },
+      configurable: true,
+    });
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
@@ -547,7 +554,12 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
     expect(await screen.findByText("Share this note")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy Link" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalled();
+      expect(screen.getByText("Copied ✓")).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("Link copied to clipboard").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Copy Link" })).not.toBeInTheDocument();
   });
 
   it("supports Make a Copy and Delete from the note actions menu", async () => {

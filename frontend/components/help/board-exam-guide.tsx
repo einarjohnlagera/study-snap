@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, FileText, Settings, Shield, Target, Timer } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { PROFILE_TYPE_SECTION_ID } from "@/lib/profile-sections";
 
 type Step = {
   number: number;
@@ -24,10 +25,9 @@ const STEPS: Step[] = [
   {
     number: 2,
     icon: Timer,
-    title: "Practice with Long Exam",
+    title: "Practice with Challenge Quiz",
     description:
-      "Run a Long Exam to test yourself across a full topic under timed conditions. Set aside uninterrupted time — leaving the session forfeits your score.",
-    badge: "Pro",
+      "Use Challenge Quiz for focused board-style practice before you commit to a full simulation.",
     cta: { label: "Open Library", href: "/library" },
   },
   {
@@ -35,7 +35,7 @@ const STEPS: Step[] = [
     icon: Target,
     title: "Review Your Mastery Report",
     description:
-      "After each Long Exam, review weak domains and low-accuracy concepts. Use Adaptive Practice to drill the concepts you keep getting wrong.",
+      "After each quiz or simulation, review weak domains and low-accuracy concepts so your next session targets the right gaps.",
     cta: { label: "See Dashboard", href: "/dashboard" },
   },
   {
@@ -50,14 +50,18 @@ const STEPS: Step[] = [
 ];
 
 const TIPS = [
-  "Long Exam is practice. Board Exam Mode is the simulation. Use Long Exam first to find gaps.",
-  "Both Long Exam and Board Exam have a strict timer — leaving the session forfeits your score.",
-  "The timer keeps running if you close the tab. Stay in the browser during both modes.",
-  "Use Adaptive Practice between long sessions to reinforce weak concepts before your next exam.",
-  "Preparing for boards? Switch your profile type in Settings to unlock Long Exam and Board Exam Mode.",
+  "Challenge Quiz is focused practice. Board Exam Mode is the simulation.",
+  "Board Exam Mode has a strict timer — leaving the session forfeits your score.",
+  "The timer keeps running if you close the tab. Stay in the browser during simulations.",
+  "Use your weak concepts after each session to decide what to study next.",
+  "Preparing for boards? Switch your profile type to unlock Board Exam Mode.",
 ];
 
-export function BoardExamGuide() {
+type BoardExamGuideProps = {
+  showSwitchProfileCta?: boolean;
+};
+
+export function BoardExamGuide({ showSwitchProfileCta = true }: Readonly<BoardExamGuideProps>) {
   return (
     <div className="space-y-6">
       <section className="space-y-3">
@@ -122,16 +126,18 @@ export function BoardExamGuide() {
         >
           Create Note
         </Link>
-        <Link
-          href="/settings"
-          className={
-            buttonVariants({ variant: "outline", size: "sm" }) +
-            " inline-flex w-full items-center gap-1.5 sm:w-auto"
-          }
-        >
-          <Settings className="h-3.5 w-3.5" aria-hidden="true" />
-          Switch Profile in Settings
-        </Link>
+        {showSwitchProfileCta ? (
+          <Link
+            href={`/profile#${PROFILE_TYPE_SECTION_ID}`}
+            className={
+              buttonVariants({ variant: "outline", size: "sm" }) +
+              " inline-flex w-full items-center gap-1.5 sm:w-auto"
+            }
+          >
+            <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+            Switch Profile
+          </Link>
+        ) : null}
       </section>
     </div>
   );

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "./public-note-ownership-actions";
 
 let currentAuthUser: { id: string } | null = null;
@@ -56,12 +56,14 @@ describe("PublicNoteOwnershipActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Share this note" }));
     expect(screen.getByRole("heading", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.getByText("Shareable URL")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
-    expect(clipboardWriteText).toHaveBeenCalledWith(
-      `${window.location.origin}/public/library/biology/cell-structure`,
-    );
-    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
-    expect(screen.getByText("Link copied")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith(
+        `${window.location.origin}/public/library/biology/cell-structure`,
+      );
+      expect(screen.getByText("Copied ✓")).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("Link copied to clipboard").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Copy Link" })).not.toBeInTheDocument();
   });
 
   it("shows By You for the current user's public note author line", () => {

@@ -95,7 +95,15 @@ Current guide cards:
 3. `Study Packs & Quizzes`
 4. `Export & Sharing`
 5. `Student Guide`
-6. `Teacher Guide`
+6. `Board Exam Guide`
+7. `Teacher Guide`
+8. `Professional Guide`
+
+Profile-specific guide footers use a shared convention:
+
+- primary CTA stays workflow-specific, usually `Create Note`
+- secondary CTA is `Switch Profile` and deep-links to `/profile#profile-type`
+- hide `Switch Profile` when the viewer's current profile type already matches the guide
 
 ## Maintenance rule
 
