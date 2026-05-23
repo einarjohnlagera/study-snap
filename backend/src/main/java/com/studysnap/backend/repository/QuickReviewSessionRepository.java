@@ -60,6 +60,11 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             Collection<QuickReviewSessionMode> sessionModes
     );
 
+    List<QuickReviewSessionEntity> findByUserIdAndStatusAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+            UUID userId,
+            QuickReviewSessionStatus status
+    );
+
     @Deprecated
     List<QuickReviewSessionEntity> findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
             UUID userId,

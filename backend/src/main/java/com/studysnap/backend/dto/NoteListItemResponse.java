@@ -27,6 +27,7 @@ public record NoteListItemResponse(
         boolean isCurrentUser,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
+        OffsetDateTime lastSessionCompletedAt,
         String generatedQuizId,
         OffsetDateTime generatedQuizGeneratedAt,
         Integer generatedQuizQuestionCount,

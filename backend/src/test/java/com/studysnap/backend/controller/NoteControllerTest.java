@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
+import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
@@ -21,6 +22,7 @@ import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
+import com.studysnap.backend.service.QuizSessionHistoryService;
 import com.studysnap.backend.service.StudyPackService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,6 +66,8 @@ class NoteControllerTest {
     private QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
     @Mock
     private GeneratedQuizService generatedQuizService;
+    @Mock
+    private QuizSessionHistoryService quizSessionHistoryService;
 
     private NoteController noteController;
 
@@ -79,7 +83,8 @@ class NoteControllerTest {
                 quickReviewStudyTipService,
                 challengeQuizService,
                 quickReviewAdaptivePracticeService,
-                generatedQuizService
+                generatedQuizService,
+                quizSessionHistoryService
         );
     }
 
@@ -355,6 +360,7 @@ class NoteControllerTest {
                         null,
                         null,
                         null,
+                        null,
                         false,
                         false
                 )
@@ -365,6 +371,33 @@ class NoteControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(noteService).listPublic(userId, null, null, null, null, null, null);
+    }
+
+    @Test
+    void listRecentQuizSessions_delegatesAfterValidatingOwnedStudyPack() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        List<RecentQuizSessionHistoryResponse> expected = List.of(new RecentQuizSessionHistoryResponse(
+                "session-1",
+                "LONG_EXAM",
+                20,
+                16,
+                java.math.BigDecimal.valueOf(80),
+                0,
+                null,
+                List.of(),
+                2,
+                OffsetDateTime.now().minusMinutes(20),
+                OffsetDateTime.now()
+        ));
+        when(noteService.getOwnedStudyPackIdOrThrow("note-1", userId)).thenReturn("study-pack-1");
+        when(quizSessionHistoryService.listRecentSessions("note-1", userId, 5)).thenReturn(expected);
+
+        List<RecentQuizSessionHistoryResponse> response = noteController.listRecentQuizSessions("note-1", 5, user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteService).getOwnedStudyPackIdOrThrow("note-1", userId);
+        verify(quizSessionHistoryService).listRecentSessions("note-1", userId, 5);
     }
 
     @Test

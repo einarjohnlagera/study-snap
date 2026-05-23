@@ -12,6 +12,7 @@ const historyItems: RecentQuizSessionHistoryItem[] = [
     retryCount: 1,
     performanceLevel: null,
     weakConcepts: ["Cells"],
+    participatingNoteCount: 1,
     createdAt: "2026-04-11T10:00:00Z",
     completedAt: "2026-04-11T10:05:00Z",
   },
@@ -24,6 +25,7 @@ const historyItems: RecentQuizSessionHistoryItem[] = [
     retryCount: 0,
     performanceLevel: "Fair",
     weakConcepts: ["Photosynthesis"],
+    participatingNoteCount: 1,
     createdAt: "2026-04-10T10:00:00Z",
     completedAt: "2026-04-10T10:12:00Z",
   },
@@ -72,5 +74,22 @@ describe("QuizSessionHistory", () => {
     expect(screen.queryByText("Loading session review...")).not.toBeInTheDocument();
     expect(screen.queryByText("Select a session to review answers and concept performance.")).not.toBeInTheDocument();
     expect(screen.getAllByText("Review session")).toHaveLength(2);
+  });
+
+  it("shows the note span for multi-note Long Exam history", () => {
+    render(
+      <QuizSessionHistory
+        sessions={[{
+          ...historyItems[0],
+          sessionId: "long-exam-1",
+          sessionMode: "LONG_EXAM",
+          participatingNoteCount: 3,
+        }]}
+        onSelectSession={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Long Exam")).toBeInTheDocument();
+    expect(screen.getByText("Multi-note Long Exam · spans 3 notes")).toBeInTheDocument();
   });
 });

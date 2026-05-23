@@ -32,7 +32,7 @@ function formatCompletedAt(value: string | null): string {
 export function QuizSessionHistory({
   sessions,
   onSelectSession,
-}: QuizSessionHistoryProps) {
+}: Readonly<QuizSessionHistoryProps>) {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
       <div className="space-y-1">
@@ -84,6 +84,11 @@ export function QuizSessionHistory({
                         ? `${session.weakConcepts.length} weak concept${session.weakConcepts.length === 1 ? "" : "s"} flagged`
                         : "No weak concepts flagged"}
                   </p>
+                  {session.sessionMode === "LONG_EXAM" && session.participatingNoteCount > 1 ? (
+                    <p className="text-xs text-foreground/65">
+                      Multi-note Long Exam · spans {session.participatingNoteCount} notes
+                    </p>
+                  ) : null}
                 </div>
                 <span className="self-start rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
                   Review session

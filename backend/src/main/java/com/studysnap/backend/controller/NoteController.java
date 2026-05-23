@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
+import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.GenerateGeneratedQuizRequest;
@@ -33,6 +34,7 @@ import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
+import com.studysnap.backend.service.QuizSessionHistoryService;
 import com.studysnap.backend.service.StudyPackService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +72,7 @@ public class NoteController {
     private final ChallengeQuizService challengeQuizService;
     private final QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
     private final GeneratedQuizService generatedQuizService;
+    private final QuizSessionHistoryService quizSessionHistoryService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
@@ -260,6 +263,18 @@ public class NoteController {
         UUID userId = user.userId();
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return challengeQuizService.listRecentSessions(studyPackId, userId, limit);
+    }
+
+    @GetMapping("/{id}/quiz-sessions/recent")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<RecentQuizSessionHistoryResponse> listRecentQuizSessions(
+            @PathVariable String id,
+            @RequestParam(value = "limit", defaultValue = "5") int limit,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        noteService.getOwnedStudyPackIdOrThrow(id, userId);
+        return quizSessionHistoryService.listRecentSessions(id, userId, limit);
     }
 
     @GetMapping("/{id}/challenge-quiz/performance-summary")

@@ -18,7 +18,6 @@ import {NoteStateBadge} from "@/components/notes/note-state-badge";
 import {ResponsiveActionButton, ResponsiveActionLink} from "@/components/ui/action-button";
 import {getAuthUser} from "@/lib/auth";
 import {
-  getQuickReviewPerformanceSummary,
   listNotes,
   listSubjects,
   type NoteListItemResponse,
@@ -40,10 +39,6 @@ type LibrarySortOption =
   | "OLDEST";
 
 type LibraryReadinessFilter = "ALL" | "QUIZ_READY" | "STUDY_PACK_READY";
-
-type ReviewSummaryMeta = {
-  lastReviewedAt: string | null;
-};
 
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -216,7 +211,6 @@ export default function LibraryPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_UPDATED");
-  const [reviewSummaryByNoteId, setReviewSummaryByNoteId] = useState<Record<string, ReviewSummaryMeta>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
@@ -247,29 +241,6 @@ export default function LibraryPage() {
       .filter((filterKey) => showQuizReadyIndicators || filterKey !== "QUIZ_READY")
   ), [showQuizReadyIndicators]);
 
-  const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
-    if (notes.length === 0) {
-      setReviewSummaryByNoteId({});
-      return;
-    }
-
-    const entries = await Promise.all(
-      notes.map(async (note) => {
-        if (!note.studyPackId) {
-          return [note.id, { lastReviewedAt: null }] as const;
-        }
-        try {
-          const summary = await getQuickReviewPerformanceSummary(note.id);
-          return [note.id, { lastReviewedAt: summary.lastReviewedAt }] as const;
-        } catch {
-          return [note.id, { lastReviewedAt: null }] as const;
-        }
-      }),
-    );
-
-    setReviewSummaryByNoteId(Object.fromEntries(entries));
-  }, []);
-
   const loadLibrary = useCallback(async () => {
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
@@ -289,14 +260,13 @@ export default function LibraryPage() {
       setItems(notes);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setVisibleCount(LIBRARY_PAGE_SIZE);
-      void hydrateLastReviewed(notes);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load your notes.";
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [hydrateLastReviewed, router]);
+  }, [router]);
 
   useEffect(() => {
     if (initialLoadStartedRef.current) {
@@ -511,8 +481,8 @@ export default function LibraryPage() {
           return byDateDesc(left.createdAt, right.createdAt);
         case "RECENTLY_REVIEWED": {
           const reviewedDiff = byDateDesc(
-            reviewSummaryByNoteId[left.id]?.lastReviewedAt,
-            reviewSummaryByNoteId[right.id]?.lastReviewedAt,
+            left.lastSessionCompletedAt,
+            right.lastSessionCompletedAt,
           );
           if (reviewedDiff !== 0) {
             return reviewedDiff;
@@ -524,7 +494,7 @@ export default function LibraryPage() {
           return byDateDesc(left.updatedAt, right.updatedAt);
       }
     });
-  }, [items, readinessFilter, reviewSummaryByNoteId, searchQuery, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
+  }, [items, readinessFilter, searchQuery, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
 
   const visibleItems = useMemo(
     () => sortedFilteredItems.slice(0, visibleCount),
@@ -845,7 +815,6 @@ export default function LibraryPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {visibleItems.map((item) => {
-                const reviewSummary = reviewSummaryByNoteId[item.id] ?? { lastReviewedAt: null };
                 const itemTags = normalizeTags(item.tags);
                 const examReady = canIncludeInExam(item);
                 const isSelected = selectedNoteIds.includes(item.id);
@@ -921,8 +890,8 @@ export default function LibraryPage() {
                             Updated {new Date(item.updatedAt).toLocaleString()}
                           </p>
                           <p className="text-xs text-foreground/65">
-                            {reviewSummary.lastReviewedAt
-                              ? `Last reviewed ${formatRelativeReviewTime(reviewSummary.lastReviewedAt)}`
+                            {item.lastSessionCompletedAt
+                              ? `Last reviewed ${formatRelativeReviewTime(item.lastSessionCompletedAt)}`
                               : "Not reviewed yet"}
                           </p>
                         </div>

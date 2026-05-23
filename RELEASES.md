@@ -15,7 +15,7 @@ Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bu
 
 ### ✅ Shipped
 
-(none yet)
+- **Quiz session display correctness** — library card review labels and Note Detail Recent Sessions now aggregate every quiz mode: Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice completions update the library reviewed timestamp, Recent Sessions chips show the actual mode, and multi-note Long Exam sessions surface on every participating note with a spans-N-notes sublabel
 
 ---
 

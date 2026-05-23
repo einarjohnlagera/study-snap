@@ -66,6 +66,8 @@ class NoteServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private QuizSessionHistoryService quizSessionHistoryService;
+    @Mock
     private SubscriptionService subscriptionService;
     @Mock
     private FeatureGateService featureGateService;
@@ -84,6 +86,7 @@ class NoteServiceTest {
                 studyPackRepository,
                 generatedQuizRepository,
                 userRepository,
+                quizSessionHistoryService,
                 subscriptionService,
                 featureGateService,
                 analyticsService,
@@ -99,6 +102,7 @@ class NoteServiceTest {
         lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());
         lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any())).thenReturn(List.of());
+        lenient().when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(any(), any())).thenReturn(java.util.Map.of());
         lenient().when(userRepository.findById(any())).thenAnswer(invocation -> {
             UUID userId = invocation.getArgument(0);
             UserEntity user = buildUser(userId, "user@example.com");

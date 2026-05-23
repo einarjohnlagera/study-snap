@@ -94,6 +94,7 @@ public class NoteService {
     private final StudyPackRepository studyPackRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
     private final UserRepository userRepository;
+    private final QuizSessionHistoryService quizSessionHistoryService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final AnalyticsService analyticsService;
@@ -515,6 +516,8 @@ public class NoteService {
                 }
             }
         }
+        Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = quizSessionHistoryService
+                .findLatestSessionCompletedAtByNoteIds(viewerUserId, noteIds);
         Map<UUID, UserEntity> ownerById = new HashMap<>();
         for (UserEntity owner : userRepository.findAllById(ownerIds)) {
             ownerById.put(owner.getId(), owner);
@@ -532,6 +535,7 @@ public class NoteService {
                         viewerUserId,
                         likedNoteIds.contains(note.getId()),
                         generatedQuizByNoteId.get(note.getId()),
+                        lastSessionCompletedAtByNoteId.get(note.getId()),
                         includeOwnerUserId
                 ))
                 .toList();
@@ -742,6 +746,7 @@ public class NoteService {
             UUID viewerUserId,
             boolean likedByCurrentUser,
             GeneratedQuizEntity generatedQuiz,
+            OffsetDateTime lastSessionCompletedAt,
             boolean includeOwnerUserId
     ) {
         boolean isOfficialAuthor = isOfficialAuthor(owner);
@@ -769,6 +774,7 @@ public class NoteService {
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getCreatedAt(),
                 note.getUpdatedAt(),
+                lastSessionCompletedAt,
                 generatedQuiz == null ? null : generatedQuiz.getId().toString(),
                 generatedQuiz == null ? null : generatedQuiz.getGeneratedAt(),
                 generatedQuiz == null || generatedQuiz.getQuestions() == null ? null : generatedQuiz.getQuestions().size(),

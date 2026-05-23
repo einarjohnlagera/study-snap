@@ -1,4 +1,4 @@
-import type { QuizSessionMode } from "@/lib/api";
+import type { QuizSessionHistoryMode } from "@/lib/api";
 import {
   buildNoteDetailPathWithTab,
   type NoteDetailTab,
@@ -8,11 +8,12 @@ export const NOTE_SESSION_REVIEW_QUERY_PARAMS = {
   routeMode: "mode",
 } as const;
 
-export type NoteSessionReviewMode = Extract<QuizSessionMode, "QUICK_REVIEW" | "CHALLENGE">;
+export type NoteSessionReviewMode = Extract<QuizSessionHistoryMode, "QUICK_REVIEW" | "CHALLENGE" | "BOARD_EXAM">;
 
 const NOTE_SESSION_REVIEW_ROUTE_MODE_BY_SESSION_MODE: Record<NoteSessionReviewMode, string> = {
   QUICK_REVIEW: "quick-review",
   CHALLENGE: "challenge",
+  BOARD_EXAM: "board-exam",
 };
 
 function normalizeSingleValue(value: string | string[] | null | undefined): string | null {
@@ -23,7 +24,7 @@ function normalizeSingleValue(value: string | string[] | null | undefined): stri
 }
 
 export function isNoteSessionReviewMode(value: string | null | undefined): value is NoteSessionReviewMode {
-  return value === "QUICK_REVIEW" || value === "CHALLENGE";
+  return value === "QUICK_REVIEW" || value === "CHALLENGE" || value === "BOARD_EXAM";
 }
 
 export function normalizeNoteSessionReviewMode(
@@ -46,6 +47,9 @@ export function fromNoteSessionReviewRouteMode(
   }
   if (normalized === "challenge") {
     return "CHALLENGE";
+  }
+  if (normalized === "board-exam") {
+    return "BOARD_EXAM";
   }
   return null;
 }

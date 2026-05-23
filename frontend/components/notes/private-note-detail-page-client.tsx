@@ -47,22 +47,19 @@ import {
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
   isQuestionCountNotAllowedError,
-  listRecentChallengeQuizSessions,
   listCoursePrograms,
-  listRecentQuickReviewSessions,
+  listRecentQuizSessions,
   listSubjects,
   trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
-  type ChallengeQuizSessionSummaryResponse,
   type ChallengeQuizPerformanceSummaryResponse,
   type NoteTargetProfileType,
   type NoteResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
   type QuickReviewPerformanceSummaryResponse,
-  type QuickReviewSessionSummaryResponse,
   type TeacherQuizQuestionCount,
 } from "@/lib/api";
 import {
@@ -100,6 +97,7 @@ import {
 } from "@/lib/quiz-session-history";
 import {
   buildNoteSessionReviewPath,
+  isNoteSessionReviewMode,
 } from "@/lib/note-session-review";
 import {
   STUDY_PACK_GENERATION_MESSAGE_ROTATION_MS,
@@ -260,8 +258,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
-  const [quickRecentSessions, setQuickRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
-  const [challengeRecentSessions, setChallengeRecentSessions] = useState<ChallengeQuizSessionSummaryResponse[]>([]);
+  const [recentSessionHistory, setRecentSessionHistory] = useState<RecentQuizSessionHistoryItem[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -388,21 +385,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       if (profileType === "TEACHER" || !loadedNote.quickReviewAvailable) {
         setQuickSummary(null);
         setChallengeSummary(null);
-        setQuickRecentSessions([]);
-        setChallengeRecentSessions([]);
+        setRecentSessionHistory([]);
         return;
       }
 
-      const [quick, challenge, quickRecent, challengeRecent] = await Promise.allSettled([
+      const [quick, challenge, recentSessions] = await Promise.allSettled([
         getQuickReviewPerformanceSummary(loadedNote.id),
         getChallengeQuizPerformanceSummary(loadedNote.id),
-        listRecentQuickReviewSessions(loadedNote.id),
-        listRecentChallengeQuizSessions(loadedNote.id),
+        listRecentQuizSessions(loadedNote.id),
       ]);
       setQuickSummary(quick.status === "fulfilled" ? quick.value : null);
       setChallengeSummary(challenge.status === "fulfilled" ? challenge.value : null);
-      setQuickRecentSessions(quickRecent.status === "fulfilled" ? quickRecent.value : []);
-      setChallengeRecentSessions(challengeRecent.status === "fulfilled" ? challengeRecent.value : []);
+      setRecentSessionHistory(recentSessions.status === "fulfilled" ? recentSessions.value : []);
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(normalizedRouteId).catch(() => null);
@@ -417,8 +411,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setNote(null);
       setQuickSummary(null);
       setChallengeSummary(null);
-      setQuickRecentSessions([]);
-      setChallengeRecentSessions([]);
+      setRecentSessionHistory([]);
     } finally {
       setLoading(false);
     }
@@ -447,13 +440,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, []);
 
   const recentQuizSessions = useMemo<RecentQuizSessionHistoryItem[]>(
-    () => buildRecentQuizSessionHistory(quickRecentSessions, challengeRecentSessions),
-    [challengeRecentSessions, quickRecentSessions],
+    () => buildRecentQuizSessionHistory(recentSessionHistory),
+    [recentSessionHistory],
   );
 
   const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
   const handleSelectSessionReview = useCallback((session: RecentQuizSessionHistoryItem) => {
-    if (!note) {
+    if (!note || !isNoteSessionReviewMode(session.sessionMode)) {
       return;
     }
     navigateTo(buildNoteSessionReviewPath(note.id, session.sessionId, session.sessionMode, activeStudyPackTab));

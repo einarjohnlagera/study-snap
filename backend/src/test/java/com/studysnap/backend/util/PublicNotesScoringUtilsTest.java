@@ -186,6 +186,7 @@ class PublicNotesScoringUtilsTest {
                 null,
                 null,
                 null,
+                null,
                 false,
                 false
         );

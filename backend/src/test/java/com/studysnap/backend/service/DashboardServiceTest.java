@@ -105,7 +105,7 @@ class DashboardServiceTest {
     @Test
     void getStudyEngagement_returnsConsistencyMetricsForConsistencyMode() {
         UUID userId = UUID.randomUUID();
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.parse("2026-05-23T12:00:00Z");
         UserEntity user = UserEntityBuilder.aUser()
                 .withId(userId)
                 .withEngagementMode(EngagementMode.CONSISTENCY)
