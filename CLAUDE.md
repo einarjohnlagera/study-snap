@@ -168,6 +168,8 @@ type: concise subject
 - bullet of high-signal change
 ```
 
+**Never commit automatically.** Always present changes and wait for an explicit "commit" instruction from the user before running `git commit`. Do not stage, commit, or push as a side effect of implementing or updating docs.
+
 Always update `RELEASES.md` with a bullet under the current version section when shipping any change.
 
 **Release kickoff checklist** (do this when opening a new version, before the first feature commit):

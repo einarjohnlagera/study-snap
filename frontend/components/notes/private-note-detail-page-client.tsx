@@ -2132,7 +2132,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   onClick={() => handleTeacherQuizQuestionCountSelect(questionCount)}
                   className={`inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50 ${
                     isSelected
-                      ? "bg-background text-foreground shadow-sm"
+                      ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
                       : "text-foreground/70 hover:bg-background/70 hover:text-foreground"
                   }`}
                 >
