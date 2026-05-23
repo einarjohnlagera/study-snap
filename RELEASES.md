@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.16.0 - Conversion & Growth
+
+**Status: In Progress**
+
+Theme: close the gap between social traffic and signed-up users; make teachers a distribution channel through student-facing shareable quiz links; tighten the post-signup onboarding so new users land in their first quiz session, not an empty library; PWA installability for mobile social traffic.
+
+### ✅ Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.15.2 - UX Cleanup & Bug Fixes
 
 **Status: Released**

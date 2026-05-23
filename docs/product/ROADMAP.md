@@ -6,15 +6,97 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.15.2 - UX Cleanup & Bug Fixes` is the current in-progress release.
+`v0.16.0 - Conversion & Growth` is the current in-progress release.
 
-`v0.15.1 - Teacher Power Features` is complete and is the previous documentation baseline.
+`v0.15.2 - UX Cleanup & Bug Fixes` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
-## v0.15.2 - UX Cleanup & Bug Fixes
+---
+
+## v0.16.0 - Conversion & Growth
 
 **Status: In Progress**
+
+Theme: close the gap between social traffic and signed-up users; make teachers a natural distribution channel through student-facing quiz sharing; ensure the mobile web experience doesn't lose social visitors before they reach value.
+
+### Why this release
+
+NoteLib has a healthy feature set but weak top-of-funnel conversion. The primary distribution channel is Facebook — posts in student and board exam groups linking to public notes. Three problems block that funnel today:
+
+1. Social traffic is almost entirely mobile; the web app isn't installable and some flows feel cramped on small screens.
+2. New users who sign up from a public note land in an empty library with nothing to do — the note they came from isn't there, and the quiz flow they started doesn't continue.
+3. Teachers have no way to share a quiz with students digitally. Every teacher who generates a quiz is a potential distribution channel for 30–50 student signups — but only if sharing exists.
+
+This release addresses all three, in order of impact.
+
+### Primary focus
+
+1. **Shareable Student Quiz Links (Teacher feature)**
+
+   Teachers generate a quiz → receive a shareable `/quiz/[token]` link → students open it in-browser → take the quiz without needing an account first → prompted to sign up at the end to save their score and access their own notes. Teacher sees a basic response summary (score distribution, who answered among authenticated users).
+
+   - This is the highest-leverage conversion feature: each teacher who adopts it drives 30–50 new signups per class
+   - Anonymous session — no score persistence until the student signs up; no anonymous session state stored beyond the current browser session
+   - Quiz link is tied to a specific `generatedQuiz`; the teacher controls whether sharing is on or off
+   - Teacher-profile only; student-profile users cannot generate shareable quiz links
+   - Free teachers: limited shareable links per month (TBD based on cost math); Plus/Pro: higher or unlimited
+
+2. **Post-signup copy-note → instant quiz flow**
+
+   When a new user signs up from a public note page, route them directly into a quiz session on the note they came from — the copied note is already in their library, Study Pack is already generating, and the first Quick Review starts immediately. Remove the "empty library" drop-off entirely.
+
+   - Requires a `copyIntent` param surviving the OAuth / email signup redirect
+   - On successful signup, backend copies the public note to the new user's library and triggers Study Pack generation
+   - Frontend routes directly to the quiz session, not the library
+   - No change to the existing copy flow for already-authenticated users
+
+3. **PWA / Mobile Web Polish**
+
+   Make the web app installable from mobile browsers and ensure the core conversion funnel (public note → Quick Check → signup → first quiz) is thumb-friendly.
+
+   - Add PWA manifest and service worker with an offline shell for the app routes
+   - Add an "Add to Home Screen" nudge for returning mobile visitors who haven't installed
+   - Audit and fix touch targets, modal scroll behavior, and text sizing on the public note, Quick Check, signup, and dashboard flows
+   - No full native app — PWA covers the gap without the 2–3 month rebuild cost
+
+4. **Social proof on landing**
+
+   Add real-time (or cached) aggregate counts and one or two genuine student/teacher testimonials to the landing page. Students and teachers trust peer validation; a note count and a real quote move the needle more than a feature list.
+
+   - Cached backend aggregate: note count, user count, completed quiz session count
+   - "Join X students already studying on NoteLib" stat line in the hero or beneath the CTA
+   - 1–2 short testimonial quotes sourced from real users (manual, not generated)
+   - No fabricated numbers or aspirational counts — use real figures only
+
+### Implementation stances
+
+- Shareable quiz links must not persist anonymous session state — no new session rows until the student authenticates; the quiz UI is client-side-only during the anonymous play
+- `copyIntent` redirect must survive both Google OAuth and email/password signup flows; implement as a short-lived server-side token or a signed cookie, not a plain query param that gets dropped on OAuth redirect
+- PWA service worker must not cache API responses or auth state — static assets only; do not cache quiz or note data
+- Social proof counts must be cached (5-minute TTL acceptable) — do not query live on every landing page load
+- Shareable quiz link quota for Free teachers is a plan rules change; update `docs/product/PLANS.md` before implementing the gate
+
+### Anti-drift notes
+
+- Shareable quiz links are a teacher-only feature — do not expose link generation on student note detail
+- Anonymous quiz sessions must not create `QuickReviewSessionEntity` rows — no backend session until the student signs up
+- PWA scope is limited to the conversion funnel; do not invest in offline-capable quiz sessions or background sync in v1
+- Testimonials must be real; do not generate or invent them
+
+### Sequencing
+
+Recommend shipping in this order:
+1. Post-signup copy-note → instant quiz (smallest scope, highest funnel impact, unblocks real data on whether social traffic converts)
+2. Shareable Student Quiz Links (teacher-side only; student side is light if anonymous session is client-only)
+3. Social proof on landing (fastest to ship once real numbers are confirmed)
+4. PWA / Mobile Polish (broadest scope; run in parallel with the above or ship last)
+
+---
+
+## v0.15.2 - UX Cleanup & Bug Fixes
+
+**Status: Released**
 
 Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bugs and rough edges across notes, library, profile navigation, help guides, and quiz session surfaces. No new features — sharper defaults and accurate state.
 
