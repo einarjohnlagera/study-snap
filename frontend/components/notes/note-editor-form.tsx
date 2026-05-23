@@ -18,7 +18,7 @@ import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
-import {getNoteTargetProfileLabel} from "@/lib/note-target-profile";
+import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
 const IMPORT_ACCEPT_VALUE = "image/png,image/jpeg,image/webp,.txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -359,18 +359,22 @@ export function NoteEditorForm({
                 {showTargetProfileTypeField ? (
                     <div className="space-y-2 sm:col-span-2">
                         <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
-                            Who is this note for?
+                            Who is this note for? <span className="text-red-500" aria-hidden="true">*</span>
                         </label>
                         <select
                             id="note-target-profile-type"
+                            aria-label="Who is this note for?"
                             value={note.targetProfileType}
                             onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
                             disabled={isCopying}
                             className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                         >
                             <option value="">Select an audience</option>
-                            <option value="STUDENT">{getNoteTargetProfileLabel("STUDENT")}</option>
-                            <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
+                            {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
+                                <option key={targetProfileType} value={targetProfileType}>
+                                    {getNoteTargetProfileLabel(targetProfileType)}
+                                </option>
+                            ))}
                         </select>
                         <p className="text-xs text-foreground/60">
                             {targetProfileTypeHelperText}

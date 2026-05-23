@@ -64,14 +64,16 @@ Private Library filters:
 - `Course / Program`
 - `Subject`
 - `Tags`
+- `Draft`
 - `Study Pack Ready`
 - `Quiz Ready` only for Teacher profile browsing and exam-export preparation
-- `Draft`
 - `Public`
 - `Private`
 
 Readiness visibility:
 
+- The library Filter readiness row is ordered `All`, `Draft`, `Quiz Ready`, `Study Pack Ready`; `Quiz Ready` appears only for Teacher/Admin contexts.
+- `Draft` matches notes with `studyPackStatus = DRAFT` so users can find saved notes that have not generated a Study Pack yet.
 - `Study Pack Ready` is the learner-facing readiness signal and remains visible for Student, Board Taker, and Teacher profiles.
 - `Quiz Ready` is a Teacher/exam-export workflow signal. Hide the `Quiz Ready` badge and filter for Student and Board Taker Library browsing.
 - If the active profile changes while `Quiz Ready` is selected, reset the hidden filter instead of leaving users with an invisible active filter.

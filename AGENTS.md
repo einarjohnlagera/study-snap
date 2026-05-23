@@ -124,6 +124,15 @@ Use these skills before writing prompts, before starting new features, and after
 - Saving a note, opening generation surfaces, failed generations, and failed retries must not consume Study Pack quota.
 - Frontend warning/blocking surfaces should use `GET /api/me/plan` remaining values and must not recalculate quota from local note lists.
 
+### Note Target Audience Rule
+
+- Target Audience is required on every note.
+- Student profiles must not see the Target Audience field; backend saves `STUDENT`.
+- Board Exam profiles must not see the Target Audience field; backend saves `BOARD_TAKER`.
+- Professional profiles must not see the Target Audience field; backend saves `PROFESSIONAL`.
+- Teacher and Admin profiles must see the Target Audience field in Create/Edit Note, with a required indicator and all audience values selectable.
+- Do not make Target Audience optional or replace hidden profile-based defaulting with a visible picker for Student, Board Exam, or Professional profiles.
+
 ### Async Study Pack Generation Rule
 
 - Note-owned Study Pack generation must save the note first, mark it `GENERATING`, and redirect the user to Note Detail immediately.

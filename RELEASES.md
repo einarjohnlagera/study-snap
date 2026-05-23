@@ -11,7 +11,7 @@ Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bu
 - **Quiz session display correctness** — Recent Sessions chip shows the actual quiz mode (Quick Review / Challenge Quiz / Adaptive Practice / Long Exam / Board Exam / Interview Practice) instead of always "Challenge Quiz"; library card "Not reviewed yet" label updates after any quiz mode completion, not just Quick Review; multi-note Long Exam sessions appear on every participating note with a "spans N notes" sublabel
 - **Copy and navigation polish** — Edit Note drops the Import Notes uploader; app shell Profile sidebar opens Profile Settings (avatar dropdown's "My Profile" remains the public-profile path); Board Exam Guide no longer recommends Long Exam and the footer "Switch Profile" CTA deep-links to the Profile Type section; Student / Teacher / Professional guides show a profile-aware "Switch Profile" footer CTA (hidden on the user's own profile guide); share-note modal auto-copies the URL on open with a "Copied" success pill
 - **Library Draft filter** — add a `Draft` chip alongside All / Quiz Ready / Study Pack Ready so users can quickly find notes parked while waiting for Study Pack quota reset
-- **Target Audience cleanup** — Create Note "Who is this note for?" no longer auto-populates from profile type (fixes Professional silently defaulting to Student); blank default for every profile; adds Professional as a selectable audience option
+- **Target Audience cleanup** — Create Note "Who is this note for?" keeps hidden auto-prefill for Student / Board Exam / Professional profiles and fixes Professional notes so they save with the Professional audience instead of Student; Teacher/Admin keeps a visible required picker with Professional as a selectable audience
 
 ### ✅ Shipped
 
@@ -21,6 +21,8 @@ Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bu
 - fix: Board Exam Guide no longer recommends Long Exam and the footer "Switch Profile" CTA deep-links to the Profile Type section.
 - polish: Student / Teacher / Professional guides now show a profile-aware "Switch Profile" footer CTA — hidden when the user is already on the matching guide.
 - polish: share-note modal auto-copies the shareable URL on open and shows a Copied success pill.
+- polish: library Filter now includes a Draft chip so users can quickly find notes they haven't generated a Study Pack for — useful when Study Pack quota is exhausted and you're parking ideas before the monthly reset.
+- fix: Create Note Target Audience no longer mis-tags Professional users as "Student" — Professional profile now saves the correct PROFESSIONAL audience, and Teachers/Admins can also tag notes as Professional from the dropdown. Field remains hidden + auto-prefilled for Student / Board Exam / Professional, and visible + required for Teacher / Admin.
 
 ---
 

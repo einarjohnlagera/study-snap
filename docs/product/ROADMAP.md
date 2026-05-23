@@ -26,7 +26,7 @@ Primary focus:
 
 3. **Library Draft filter** — new `Draft` chip in the library Filter row for users parking notes while waiting for monthly Study Pack quota reset.
 
-4. **Target Audience cleanup** — Create Note "Who is this note for?" no longer auto-populates from profile type (Professional was silently defaulting to "Student"); blank default for every profile; adds Professional as a selectable audience.
+4. **Target Audience cleanup** — Create Note "Who is this note for?" keeps hidden auto-prefill for Student / Board Exam / Professional profiles and fixes Professional notes so they save with the Professional audience instead of Student; Teacher/Admin keeps a visible required picker with Professional as a selectable audience.
 
 ### Implementation stances
 
@@ -34,14 +34,14 @@ Primary focus:
 - Quiz session display fixes derive `lastSessionCompletedAt` server-side from existing session tables — no new "last activity" column
 - `getQuizSessionModeLabel` becomes the single source of truth for mode → label mapping; do not inline labels anywhere
 - Multi-note Long Exam display is driven by the session's participant set, not the note
-- Target Audience field stays optional and visible; only the defaulting behavior changes
+- Target Audience stays required. Student / Board Exam / Professional keep hidden profile-based auto-prefill; Teacher/Admin keep a visible required picker.
 
 ### Anti-drift notes
 
 - Do not touch `QuickReviewSessionEntity` schema or session-state JSONB layout
 - Do not redesign Recent Sessions card visuals — chip text, sublabel text, and inclusion criteria are the only changes
 - Do not change Dashboard / Mastery Report / Score Report aggregation; only the library card label and Recent Sessions list widen
-- Target Audience field stays; only defaults change. Course / Program field and helper are untouched
+- Target Audience visibility stays profile-aware; only the Professional default and Teacher/Admin selectable audience list change. Course / Program field and helper are untouched
 - Codex prompts for this scope live at `docs/codex-prompts/v0152-fix-quiz-session-display.md`, `docs/codex-prompts/v0152-polish-copy-and-nav.md`, and `docs/codex-prompts/v0152-library-filter-and-target-audience.md`
 
 ### Sequencing

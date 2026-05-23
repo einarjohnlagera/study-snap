@@ -38,7 +38,7 @@ type LibrarySortOption =
   | "TITLE_DESC"
   | "OLDEST";
 
-type LibraryReadinessFilter = "ALL" | "QUIZ_READY" | "STUDY_PACK_READY";
+type LibraryReadinessFilter = "ALL" | "DRAFT" | "QUIZ_READY" | "STUDY_PACK_READY";
 
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -58,6 +58,7 @@ const SORT_LABELS: Record<LibrarySortOption, string> = {
 };
 const READINESS_FILTER_LABELS: Record<LibraryReadinessFilter, string> = {
   ALL: "All",
+  DRAFT: "Draft",
   QUIZ_READY: "Quiz Ready",
   STUDY_PACK_READY: "Study Pack Ready",
 };
@@ -449,6 +450,7 @@ export default function LibraryPage() {
         ? "ALL"
         : readinessFilter;
       const readinessMatch = effectiveReadinessFilter === "ALL"
+        || (effectiveReadinessFilter === "DRAFT" && item.studyPackStatus === "DRAFT")
         || (effectiveReadinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
         || (effectiveReadinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
       const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
@@ -804,8 +806,14 @@ export default function LibraryPage() {
 
           {visibleItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-base font-semibold sm:text-lg">No notes match these filters</h2>
-              <p className="text-sm text-foreground/75">Try adjusting your filters</p>
+              <h2 className="text-base font-semibold sm:text-lg">
+                {readinessFilter === "DRAFT" ? "No draft notes" : "No notes match these filters"}
+              </h2>
+              <p className="text-sm text-foreground/75">
+                {readinessFilter === "DRAFT"
+                  ? "No draft notes — you've generated Study Packs for everything in your library."
+                  : "Try adjusting your filters"}
+              </p>
               <div className="flex justify-start">
                 <Button type="button" variant="outline" onClick={clearFilters}>
                   Clear filters

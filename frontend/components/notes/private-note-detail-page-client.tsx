@@ -90,6 +90,7 @@ import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/no
 import {
   getNoteTargetProfileLabel,
   isTeacherSelectableNoteTarget,
+  SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
 } from "@/lib/note-target-profile";
 import {
   buildRecentQuizSessionHistory,
@@ -1632,10 +1633,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 {canEditTargetProfileType ? (
                   <div className="space-y-2">
                     <label htmlFor="note-target-profile-type-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                      Who is this note for?
+                      Who is this note for? <span className="text-red-500" aria-hidden="true">*</span>
                     </label>
                     <select
                       id="note-target-profile-type-inline"
+                      aria-label="Who is this note for?"
                       value={metadataDraft.targetProfileType}
                       onChange={(event) => setMetadataDraft((previous) => ({
                         ...previous,
@@ -1644,8 +1646,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                     >
                       <option value="">Select an audience</option>
-                      <option value="STUDENT">{getNoteTargetProfileLabel("STUDENT")}</option>
-                      <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
+                      {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
+                        <option key={targetProfileType} value={targetProfileType}>
+                          {getNoteTargetProfileLabel(targetProfileType)}
+                        </option>
+                      ))}
                     </select>
                     <p className="text-xs text-foreground/60">
                       Changing audience will affect future quiz generation.

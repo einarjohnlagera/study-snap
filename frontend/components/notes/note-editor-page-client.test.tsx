@@ -715,12 +715,15 @@ describe("NoteEditorPageClient", () => {
   it("uses the teacher generate label and helper text for teacher note creation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
 
-    render(<NoteEditorPageClient initialMode="quiz" />);
+    const { container } = render(<NoteEditorPageClient initialMode="quiz" />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add details" }));
+    const audienceLabel = container.querySelector('label[for="note-target-profile-type"]');
+    expect(audienceLabel).toHaveTextContent("Who is this note for? *");
     expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Professional" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
   });
 
@@ -751,13 +754,26 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
   });
 
-  it("shows target audience inside Add details for admin note creation", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", role: "ADMIN" });
+  it("keeps target audience hidden for professional note creation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "PROFESSIONAL" });
 
     render(<NoteEditorPageClient />);
 
+    expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
+    expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
+  });
+
+  it("shows target audience inside Add details for admin note creation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", role: "ADMIN" });
+
+    const { container } = render(<NoteEditorPageClient />);
+
     fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    const audienceLabel = container.querySelector('label[for="note-target-profile-type"]');
+    expect(audienceLabel).toHaveTextContent("Who is this note for? *");
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Professional" })).toBeInTheDocument();
   });
 
   it("locks content editing for generated notes but keeps metadata fields editable", async () => {
