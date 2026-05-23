@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -61,6 +61,7 @@ import {
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+const PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD = 10;
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
@@ -490,7 +491,23 @@ export function PublicLibraryPageClient() {
   const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
   const [shareToastMessage, setShareToastMessage] = useState<string | null>(null);
   const [shareToastTone, setShareToastTone] = useState<"success" | "error">("success");
-  const hasAutoAppliedAudienceRef = useRef(false);
+  // Tracks whether the user has explicitly dismissed the profile-based audience default
+  const [audienceLockedToAll, setAudienceLockedToAll] = useState(false);
+
+  // Computed once on mount — the profile-based audience default for this user
+  const profileDefaultAudience = useMemo(
+    () => resolvePublicLibraryTargetProfileFilter(getAuthUser()?.profileType),
+    [],
+  );
+
+  // URL audience takes priority; profile default applies only on fresh visit (not after user clears)
+  const effectiveAudience = useMemo<NoteTargetProfileFilter>(() => {
+    if (parsedUrlFilters.audience) return parsedUrlFilters.audience;
+    if (audienceLockedToAll || profileDefaultAudience === NOTE_TARGET_PROFILE_ALL) {
+      return NOTE_TARGET_PROFILE_ALL;
+    }
+    return profileDefaultAudience;
+  }, [audienceLockedToAll, parsedUrlFilters.audience, profileDefaultAudience]);
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -498,7 +515,7 @@ export function PublicLibraryPageClient() {
     try {
       const [notesResult, subjectsResult] = await Promise.allSettled([
         listPublicNotes({
-          audience: parsedUrlFilters.audience ?? undefined,
+          audience: effectiveAudience !== NOTE_TARGET_PROFILE_ALL ? effectiveAudience : undefined,
           courseProgram: parsedUrlFilters.courseProgram ?? undefined,
           search: parsedUrlFilters.search ?? undefined,
           sort: parsedUrlFilters.sort ?? undefined,
@@ -518,7 +535,7 @@ export function PublicLibraryPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [parsedUrlFilters.audience, parsedUrlFilters.courseProgram, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
+  }, [effectiveAudience, parsedUrlFilters.courseProgram, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
 
   useEffect(() => {
     void loadNotes();
@@ -609,18 +626,6 @@ export function PublicLibraryPageClient() {
     }
   }, [parsedUrlFilters, router, searchParamsKey]);
 
-  useEffect(() => {
-    if (hasAutoAppliedAudienceRef.current || parsedUrlFilters.audience !== null) {
-      return;
-    }
-    const profileDefault = resolvePublicLibraryTargetProfileFilter(getAuthUser()?.profileType);
-    if (profileDefault === NOTE_TARGET_PROFILE_ALL) {
-      return;
-    }
-    hasAutoAppliedAudienceRef.current = true;
-    replacePublicLibraryFilters({ ...parsedUrlFilters, audience: profileDefault, view: null });
-  }, [parsedUrlFilters, replacePublicLibraryFilters]);
-
   const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     for (const item of items) {
@@ -650,7 +655,7 @@ export function PublicLibraryPageClient() {
 
   useEffect(() => {
     setSearchQuery(parsedUrlFilters.search ?? "");
-    setSelectedTargetProfile(parsedUrlFilters.audience ?? NOTE_TARGET_PROFILE_ALL);
+    setSelectedTargetProfile(effectiveAudience);
     setSelectedSort(resolveSortOption(parsedUrlFilters.sort));
 
     const resolvedCourseProgram = parsedUrlFilters.courseProgram
@@ -672,7 +677,7 @@ export function PublicLibraryPageClient() {
     availableCoursePrograms,
     availableSubjects,
     availableTags,
-    parsedUrlFilters.audience,
+    effectiveAudience,
     parsedUrlFilters.courseProgram,
     parsedUrlFilters.search,
     parsedUrlFilters.sort,
@@ -791,6 +796,7 @@ export function PublicLibraryPageClient() {
     setSelectedTags([]);
     setTagDraft([]);
     setSelectedSourceFilters([]);
+    setAudienceLockedToAll(false);
     setSubjectSearchQuery("");
     setTagSearchQuery("");
     replacePublicLibraryFilters({
@@ -996,6 +1002,7 @@ export function PublicLibraryPageClient() {
             type="button"
             className="text-foreground/65 hover:text-foreground"
             onClick={() => {
+              setAudienceLockedToAll(true);
               setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
               replacePublicLibraryFilters({
                 ...parsedUrlFilters,
@@ -1249,6 +1256,7 @@ export function PublicLibraryPageClient() {
                   type="button"
                   className={getFilterChipClassName(selectedTargetProfile === NOTE_TARGET_PROFILE_ALL)}
                   onClick={() => {
+                    setAudienceLockedToAll(true);
                     setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                     replacePublicLibraryFilters({
                       ...parsedUrlFilters,
@@ -1416,6 +1424,29 @@ export function PublicLibraryPageClient() {
             </div>
           </Card>
 
+          {!loading && selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
+            <Card className="flex flex-col gap-3 border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <p className="text-sm text-foreground/75">
+                Only a few{" "}
+                <span className="font-medium">{getNoteTargetProfileLabel(selectedTargetProfile)}</span>
+                {" "}notes are available right now. Browse all notes to find more study material.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setAudienceLockedToAll(true);
+                  setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: null, view: null });
+                }}
+              >
+                View all notes
+              </Button>
+            </Card>
+          ) : null}
+
           {isSectionView && activeSectionCopy ? (
             <div className="space-y-6">
               <Card className="space-y-3 border-blue-500/20 bg-blue-500/5 p-4 sm:p-6">
@@ -1470,6 +1501,7 @@ export function PublicLibraryPageClient() {
                       type="button"
                       variant="outline"
                       onClick={() => {
+                        setAudienceLockedToAll(true);
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
@@ -1549,6 +1581,7 @@ export function PublicLibraryPageClient() {
                       type="button"
                       variant="outline"
                       onClick={() => {
+                        setAudienceLockedToAll(true);
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
