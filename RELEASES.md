@@ -2,7 +2,7 @@
 
 ## v0.15.2 - UX Cleanup & Bug Fixes
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bugs and rough edges across notes, library, profile navigation, help guides, and quiz session surfaces. No new features — just sharper defaults and accurate state.
 
