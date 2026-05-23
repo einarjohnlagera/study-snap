@@ -25,6 +25,9 @@ Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bu
 - fix: Create Note Target Audience no longer mis-tags Professional users as "Student" — Professional profile now saves the correct PROFESSIONAL audience, and Teachers/Admins can also tag notes as Professional from the dropdown. Field remains hidden + auto-prefilled for Student / Board Exam / Professional, and visible + required for Teacher / Admin.
 - fix: Public Library now shows a "Professional" filter chip in the "For" rail and auto-selects it on first visit for Professional profile users — previously `PUBLIC_NOTE_TARGET_PROFILE_TYPES` excluded PROFESSIONAL, `parsePublicLibraryAudienceQueryValue` didn't map the value, and `resolvePublicLibraryTargetProfileFilter` was never called; profile default is now resolved inline via `effectiveAudience` so the first API call uses the correct audience with no redirect and no race condition.
 - polish: Public Library shows a sparse-audience helper card when a non-All audience filter (Student, Exam Reviewer, Professional) returns fewer than 10 notes — copy names the audience and offers a "View all notes" escape hatch; card disappears automatically as the audience library grows past the threshold.
+- fix: Export Quiz modal Versions selector (1 / 2 / 3) now highlights the selected version in blue — was using `bg-background` which blended into the dark container and made the active selection invisible.
+- fix: Regenerate Quiz modal question-count selector (10 / 20 / 30) now highlights the selected count in blue — same dark-on-dark issue as the Versions selector.
+- fix: Settings → Plan & Billing Monthly / Annual billing cycle toggle now highlights the active cycle in blue — was using `bg-background text-foreground` which produced a dark-on-dark selected state in dark mode.
 
 ---
 

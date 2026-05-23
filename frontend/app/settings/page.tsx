@@ -813,7 +813,7 @@ export default function SettingsPage() {
                       onClick={() => setSelectedCycle("MONTHLY")}
                       className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                         selectedCycle === "MONTHLY"
-                          ? "bg-background text-foreground shadow-sm"
+                          ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
                           : "text-foreground/60 hover:text-foreground"
                       }`}
                     >
@@ -824,7 +824,7 @@ export default function SettingsPage() {
                       onClick={() => setSelectedCycle("YEARLY")}
                       className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                         selectedCycle === "YEARLY"
-                          ? "bg-background text-foreground shadow-sm"
+                          ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
                           : "text-foreground/60 hover:text-foreground"
                       }`}
                     >
