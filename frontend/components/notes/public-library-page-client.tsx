@@ -61,6 +61,7 @@ import {
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+const PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD = 10;
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
@@ -1415,6 +1416,28 @@ export function PublicLibraryPageClient() {
               {activeFilterSummary}
             </div>
           </Card>
+
+          {!loading && selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
+            <Card className="flex flex-col gap-3 border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <p className="text-sm text-foreground/75">
+                Only a few{" "}
+                <span className="font-medium">{getNoteTargetProfileLabel(selectedTargetProfile)}</span>
+                {" "}notes are available right now. Browse all notes to find more study material.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: null, view: null });
+                }}
+              >
+                View all notes
+              </Button>
+            </Card>
+          ) : null}
 
           {isSectionView && activeSectionCopy ? (
             <div className="space-y-6">
