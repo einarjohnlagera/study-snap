@@ -334,8 +334,40 @@ describe("Profile page", () => {
       "href",
       "/public/creator/noteuser",
     );
+    expect(screen.queryByRole("link", { name: "Profile" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share Public Profile" })).not.toBeInTheDocument();
     expect(screen.queryByText("Public Profile On")).not.toBeInTheDocument();
+  });
+
+  it("scrolls the Profile Type section into view from the profile-type hash", async () => {
+    const scrollIntoView = jest.fn();
+    const focus = jest.fn();
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+    const originalFocus = window.HTMLElement.prototype.focus;
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    window.HTMLElement.prototype.focus = focus;
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof globalThis.requestAnimationFrame;
+    window.history.replaceState({}, "", "/profile#profile-type");
+
+    render(<ProfilePage />);
+
+    await screen.findByText("Profile Type");
+    const profileTypeSection = document.getElementById("profile-type");
+    expect(profileTypeSection).not.toBeNull();
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    });
+
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    window.HTMLElement.prototype.focus = originalFocus;
+    window.history.replaceState({}, "", "/profile");
   });
 
   it("shows connected sign-in methods and Google connect entry point", async () => {

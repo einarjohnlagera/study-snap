@@ -775,8 +775,6 @@ export function NoteEditorForm({
                     )}
                 </section>
 
-                {!showGenerateNoteEntry ? renderImportPanel() : null}
-
                 {showGenerateNoteEntry ? renderOptionalDetailsSection() : null}
             </Card>
 

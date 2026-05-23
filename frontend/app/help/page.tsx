@@ -17,6 +17,8 @@ import { StudentGuide } from "@/components/help/student-guide";
 import { TeacherGuide } from "@/components/help/teacher-guide";
 import { ProfessionalGuide } from "@/components/help/professional-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { getAuthUser } from "@/lib/auth";
+import type { ProfileType } from "@/lib/api";
 import type { LucideIcon } from "lucide-react";
 
 type HelpCard = {
@@ -69,7 +71,7 @@ const HELP_CARDS: HelpCard[] = [
     id: "board-exam-guide",
     icon: Award,
     title: "Board Exam Guide",
-    description: "Long Exam, Board Exam Mode, and a study workflow for high-stakes exam preparation.",
+    description: "Challenge Quiz, Board Exam Mode, and a study workflow for high-stakes exam preparation.",
     modalDescription: "Study smarter for licensure and board exams.",
   },
   {
@@ -88,7 +90,28 @@ const HELP_CARDS: HelpCard[] = [
   },
 ];
 
-function GuideContent({ cardId }: { cardId: string }) {
+const GUIDE_PROFILE_TYPES: Partial<Record<string, ProfileType>> = {
+  "student-guide": "STUDENT",
+  "board-exam-guide": "BOARD_EXAM",
+  "teacher-guide": "TEACHER",
+  "professional-guide": "PROFESSIONAL",
+};
+
+function shouldShowSwitchProfileCta(
+  currentProfileType: ProfileType | null | undefined,
+  guideProfileType: ProfileType | null | undefined,
+) {
+  return Boolean(guideProfileType && currentProfileType !== guideProfileType);
+}
+
+function GuideContent({
+  cardId,
+  currentProfileType,
+}: {
+  cardId: string;
+  currentProfileType: ProfileType | null;
+}) {
+  const showSwitchProfileCta = shouldShowSwitchProfileCta(currentProfileType, GUIDE_PROFILE_TYPES[cardId]);
   switch (cardId) {
     case "getting-started":
       return <GettingStartedGuide />;
@@ -101,13 +124,13 @@ function GuideContent({ cardId }: { cardId: string }) {
     case "export-sharing":
       return <ExportSharingGuide />;
     case "board-exam-guide":
-      return <BoardExamGuide />;
+      return <BoardExamGuide showSwitchProfileCta={showSwitchProfileCta} />;
     case "student-guide":
-      return <StudentGuide />;
+      return <StudentGuide showSwitchProfileCta={showSwitchProfileCta} />;
     case "teacher-guide":
-      return <TeacherGuide />;
+      return <TeacherGuide showSwitchProfileCta={showSwitchProfileCta} />;
     case "professional-guide":
-      return <ProfessionalGuide />;
+      return <ProfessionalGuide showSwitchProfileCta={showSwitchProfileCta} />;
     default:
       return null;
   }
@@ -116,12 +139,24 @@ function GuideContent({ cardId }: { cardId: string }) {
 export default function HelpPage() {
   const router = useRouter();
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [currentProfileType, setCurrentProfileType] = useState<ProfileType | null>(() => getAuthUser()?.profileType ?? null);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
   }, [router]);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      setCurrentProfileType(getAuthUser()?.profileType ?? null);
+    };
+    syncAuth();
+    globalThis.addEventListener("studysnap-auth-change", syncAuth);
+    return () => {
+      globalThis.removeEventListener("studysnap-auth-change", syncAuth);
+    };
+  }, []);
 
   const openCard = HELP_CARDS.find((c) => c.id === openCardId) ?? null;
 
@@ -190,7 +225,7 @@ export default function HelpPage() {
           onClose={() => setOpenCardId(null)}
           panelClassName="sm:max-w-lg"
         >
-          <GuideContent cardId={openCard.id} />
+          <GuideContent cardId={openCard.id} currentProfileType={currentProfileType} />
         </AppModal>
       ) : null}
     </main>

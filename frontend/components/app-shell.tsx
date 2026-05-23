@@ -392,9 +392,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }, [shouldUseShell, pathname]);
 
   const secondaryNav = useMemo<NavLinkItem[]>(() => {
-    const profileHref = user.id ? buildPublicCreatorOrProfilePath({ userId: user.id, username: user.username }) : "/public/profile";
     const nav: NavLinkItem[] = [
-      { href: profileHref, label: "Profile", action: "profile" },
+      { href: "/profile", label: "Profile", action: "profile" },
       { href: "/settings", label: "Settings", action: "settings" },
       { href: "/help", label: "Help", action: "help" },
     ];
@@ -402,7 +401,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       nav.push({ href: "/admin", label: "Admin", action: "admin" as const });
     }
     return nav;
-  }, [user.id, user.role, user.username]);
+  }, [user.role]);
 
   useEffect(() => {
     setDrawerOpen(false);

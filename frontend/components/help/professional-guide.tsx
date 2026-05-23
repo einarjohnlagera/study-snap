@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, Briefcase, FileText, MessageSquareText, Target } from "lucide-react";
+import { ArrowRight, BarChart3, Briefcase, FileText, MessageSquareText, Settings, Target } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -59,7 +59,11 @@ const REPORT_NOTES = [
   "Use weak areas to guide your next note and next practice session before the real interview.",
 ];
 
-export function ProfessionalGuide() {
+type ProfessionalGuideProps = {
+  showSwitchProfileCta?: boolean;
+};
+
+export function ProfessionalGuide({ showSwitchProfileCta = true }: Readonly<ProfessionalGuideProps>) {
   return (
     <div className="space-y-6">
       {/* Overview */}
@@ -160,15 +164,18 @@ export function ProfessionalGuide() {
         >
           Create Note
         </Link>
-        <Link
-          href="/library"
-          className={
-            buttonVariants({ variant: "outline", size: "sm" }) +
-            " inline-flex w-full items-center gap-1.5 sm:w-auto"
-          }
-        >
-          Open Library
-        </Link>
+        {showSwitchProfileCta ? (
+          <Link
+            href="/profile#profile-type"
+            className={
+              buttonVariants({ variant: "outline", size: "sm" }) +
+              " inline-flex w-full items-center gap-1.5 sm:w-auto"
+            }
+          >
+            <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+            Switch Profile
+          </Link>
+        ) : null}
       </section>
     </div>
   );

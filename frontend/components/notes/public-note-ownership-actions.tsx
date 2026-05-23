@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
@@ -104,6 +104,7 @@ export function PublicNoteOwnershipActions({
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [shareState, setShareState] = useState<"idle" | "copied" | "error">("idle");
   const [showShareModal, setShowShareModal] = useState(false);
+  const shareUrlInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const syncAuth = () => {
@@ -118,14 +119,6 @@ export function PublicNoteOwnershipActions({
 
   const isOwner = isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId });
   const openNoteHref = `/notes/${noteId}`;
-
-  useEffect(() => {
-    if (shareState !== "copied") {
-      return;
-    }
-    const timeout = globalThis.setTimeout(() => setShareState("idle"), 2000);
-    return () => globalThis.clearTimeout(timeout);
-  }, [shareState]);
 
   const resolvedShareUrl = useMemo(() => {
     const path = buildPublicLibraryNotePath({ subject, title });
@@ -144,6 +137,9 @@ export function PublicNoteOwnershipActions({
 
   const handleCopyShareLink = async () => {
     try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard access is unavailable.");
+      }
       await navigator.clipboard.writeText(resolvedShareUrl);
       void trackAnalyticsEvent({
         eventType: "PUBLIC_NOTE_SHARED",
@@ -157,6 +153,14 @@ export function PublicNoteOwnershipActions({
       setShareState("error");
     }
   };
+
+  useEffect(() => {
+    if (!showShareModal) {
+      return;
+    }
+    shareUrlInputRef.current?.select();
+    void handleCopyShareLink();
+  }, [showShareModal]);
 
   return (
     <div className="space-y-4">
@@ -204,18 +208,36 @@ export function PublicNoteOwnershipActions({
               label="Close"
               showTextOnMobile
             />
-            <ResponsiveActionButton type="button" onClick={() => void handleCopyShareLink()} action="share" label={shareState === "copied" ? "Copied" : "Copy Link"} />
+            {shareState === "copied" ? (
+              <span className="inline-flex min-h-10 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                Copied ✓
+              </span>
+            ) : (
+              <ResponsiveActionButton type="button" onClick={() => void handleCopyShareLink()} action="share" label="Copy Link" />
+            )}
           </div>
         )}
       >
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-foreground/60">Shareable URL</p>
-          <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85">
-            {truncatedShareUrl}
+          <label htmlFor="public-share-note-url" className="text-xs uppercase tracking-wide text-foreground/60">
+            Shareable URL
+          </label>
+          <input
+            ref={shareUrlInputRef}
+            id="public-share-note-url"
+            readOnly
+            value={resolvedShareUrl}
+            onFocus={(event) => event.currentTarget.select()}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85"
+          />
+          <p aria-live="polite" className="sr-only">
+            {shareState === "copied" ? "Link copied to clipboard" : ""}
           </p>
           {shareState === "copied" ? (
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">Link copied</p>
-          ) : null}
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">Link copied to clipboard</p>
+          ) : (
+            <p className="text-xs text-foreground/60">{truncatedShareUrl}</p>
+          )}
           {shareState === "error" ? (
             <p className="text-xs text-red-600 dark:text-red-400">Could not copy the note link.</p>
           ) : null}

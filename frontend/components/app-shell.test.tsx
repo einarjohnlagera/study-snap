@@ -189,6 +189,12 @@ describe("AppShell", () => {
     expect(myProfile).toBeInTheDocument();
     expect(myProfile).toHaveAttribute("href", "/public/profile/user-1");
 
+    const profileLinks = screen.getAllByRole("link", { name: "Profile" });
+    expect(profileLinks.length).toBeGreaterThan(0);
+    profileLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/profile");
+    });
+
     const settingsLinks = screen.getAllByRole("link", { name: "Settings" });
     expect(settingsLinks.length).toBeGreaterThan(0);
     settingsLinks.forEach((link) => {

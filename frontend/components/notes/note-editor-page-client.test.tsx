@@ -274,6 +274,8 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(screen.queryByText("Create or import your notes first, then generate a Study Pack when you are ready.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Import notes")).not.toBeInTheDocument();
+    expect(document.getElementById("note-import-file")).toBeNull();
   });
 
   it("keeps Add details collapsed by default on the new note page", async () => {

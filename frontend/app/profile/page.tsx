@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
@@ -36,9 +36,12 @@ import {
   getProfileTypeSwitchContent,
   isActiveProfileTypeForSwitch,
 } from "@/lib/profile-mode";
-import { BackLink } from "@/components/ui/back-link";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
-import { PROFILE_LEARNING_PROFILE_SECTION_ID, PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
+import {
+  PROFILE_LEARNING_PROFILE_SECTION_ID,
+  PROFILE_TOP_PERFORMANCE_SECTION_ID,
+  PROFILE_TYPE_SECTION_ID,
+} from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { ProfileNotePerformance } from "@/components/profile/profile-note-performance";
@@ -192,8 +195,6 @@ function ProfileTypeSwitchModal({
 
 export default function ProfilePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const fromDashboard = searchParams.get("from") === "dashboard";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
@@ -228,12 +229,17 @@ export default function ProfilePage() {
   const [signInMethods, setSignInMethods] = useState<SignInMethodsResponse | null>(null);
   const [signInMethodsMessage, setSignInMethodsMessage] = useState<string | null>(null);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
 
   const scrollToRequestedSection = useCallback(() => {
     if (globalThis.window === undefined) {
       return;
     }
-    const knownSectionIds = [PROFILE_TOP_PERFORMANCE_SECTION_ID, PROFILE_LEARNING_PROFILE_SECTION_ID];
+    const knownSectionIds = [
+      PROFILE_TOP_PERFORMANCE_SECTION_ID,
+      PROFILE_LEARNING_PROFILE_SECTION_ID,
+      PROFILE_TYPE_SECTION_ID,
+    ];
     const hash = globalThis.location.hash.slice(1);
     if (!knownSectionIds.includes(hash)) {
       return;
@@ -244,6 +250,10 @@ export default function ProfilePage() {
     }
     globalThis.requestAnimationFrame(() => {
       section.scrollIntoView({ behavior: "smooth", block: "start" });
+      section.setAttribute("tabindex", "-1");
+      section.focus({ preventScroll: true });
+      setHighlightedSectionId(hash);
+      globalThis.setTimeout(() => setHighlightedSectionId((current) => (current === hash ? null : current)), 1600);
     });
   }, []);
 
@@ -632,10 +642,6 @@ export default function ProfilePage() {
         </Card>
       ) : profile ? (
         <div className="space-y-6">
-          <BackLink
-            href={fromDashboard ? "/dashboard" : buildPublicCreatorOrProfilePath({ userId: profile.id, username: profile.username })}
-            label={fromDashboard ? "Dashboard" : "Profile"}
-          />
           <PageHeader
             eyebrow="PROFILE"
             title="Profile"
@@ -776,7 +782,12 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          <Card className="space-y-4 p-4 sm:p-6">
+          <Card
+            id={PROFILE_TYPE_SECTION_ID}
+            className={`space-y-4 p-4 sm:p-6 outline-none transition-shadow ${
+              highlightedSectionId === PROFILE_TYPE_SECTION_ID ? "ring-2 ring-blue-500/40" : ""
+            }`}
+          >
             <h2 className="text-lg font-semibold sm:text-xl">Profile Type</h2>
             <div className="space-y-2">
               {PROFILE_TYPE_OPTIONS.map((option) => {

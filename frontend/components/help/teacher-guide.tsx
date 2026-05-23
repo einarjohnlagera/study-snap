@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Download, FileText, Search } from "lucide-react";
+import { ArrowRight, BookOpen, Download, FileText, Search, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -53,7 +53,11 @@ const TIPS = [
   "Use Make a Copy on any note to refine material without losing the original Study Pack.",
 ];
 
-export function TeacherGuide() {
+type TeacherGuideProps = {
+  showSwitchProfileCta?: boolean;
+};
+
+export function TeacherGuide({ showSwitchProfileCta = true }: Readonly<TeacherGuideProps>) {
   return (
     <div className="space-y-6">
       {/* Study System */}
@@ -126,15 +130,18 @@ export function TeacherGuide() {
         >
           Create Note
         </Link>
-        <Link
-          href="/public/library"
-          className={
-            buttonVariants({ variant: "outline", size: "sm" }) +
-            " inline-flex w-full items-center gap-1.5 sm:w-auto"
-          }
-        >
-          Browse Public Library
-        </Link>
+        {showSwitchProfileCta ? (
+          <Link
+            href="/profile#profile-type"
+            className={
+              buttonVariants({ variant: "outline", size: "sm" }) +
+              " inline-flex w-full items-center gap-1.5 sm:w-auto"
+            }
+          >
+            <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+            Switch Profile
+          </Link>
+        ) : null}
       </section>
     </div>
   );
