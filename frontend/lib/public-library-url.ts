@@ -130,6 +130,9 @@ export function parsePublicLibraryAudienceQueryValue(value: string | null | unde
   if (normalized === "board-taker") {
     return "BOARD_TAKER";
   }
+  if (normalized === "professional") {
+    return "PROFESSIONAL";
+  }
   return null;
 }
 

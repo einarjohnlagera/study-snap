@@ -23,6 +23,7 @@ Theme: post-Teacher-Power-Features polish pass focused on long-standing UI/UX bu
 - polish: share-note modal auto-copies the shareable URL on open and shows a Copied success pill.
 - polish: library Filter now includes a Draft chip so users can quickly find notes they haven't generated a Study Pack for — useful when Study Pack quota is exhausted and you're parking ideas before the monthly reset.
 - fix: Create Note Target Audience no longer mis-tags Professional users as "Student" — Professional profile now saves the correct PROFESSIONAL audience, and Teachers/Admins can also tag notes as Professional from the dropdown. Field remains hidden + auto-prefilled for Student / Board Exam / Professional, and visible + required for Teacher / Admin.
+- fix: Public Library now shows a "Professional" filter chip in the "For" rail and auto-selects it on first visit for Professional profile users — previously `PUBLIC_NOTE_TARGET_PROFILE_TYPES` excluded PROFESSIONAL, `parsePublicLibraryAudienceQueryValue` didn't map the value, and `resolvePublicLibraryTargetProfileFilter` was never called; all three gaps closed with a ref-guarded mount effect for the auto-default.
 
 ---
 

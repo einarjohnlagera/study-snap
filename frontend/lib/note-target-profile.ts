@@ -7,7 +7,7 @@ export const NOTE_TARGET_PROFILE_ALL = "ALL";
 export type NoteTargetProfileFilter = NoteTargetProfileType | typeof NOTE_TARGET_PROFILE_ALL;
 
 export const SELECTABLE_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER", "PROFESSIONAL"];
-export const PUBLIC_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER"];
+export const PUBLIC_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER", "PROFESSIONAL"];
 
 export function getNoteTargetProfileLabel(value: NoteTargetProfileType): string {
   switch (value) {
@@ -40,6 +40,9 @@ export function resolvePublicLibraryTargetProfileFilter(
   if (profileType === "STUDENT") {
     return "STUDENT";
   }
+  if (profileType === "PROFESSIONAL") {
+    return "PROFESSIONAL";
+  }
   return NOTE_TARGET_PROFILE_ALL;
 }
 
@@ -64,5 +67,6 @@ export function isPublicNoteTargetProfileFilter(
 ): value is NoteTargetProfileFilter {
   return value === NOTE_TARGET_PROFILE_ALL
     || value === "STUDENT"
-    || value === "BOARD_TAKER";
+    || value === "BOARD_TAKER"
+    || value === "PROFESSIONAL";
 }
