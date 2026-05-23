@@ -52,6 +52,12 @@ Study Pack Ready actions:
   - `Make a Copy`
   - `Share`
 
+Recent Sessions:
+
+- Note Detail shows the actual completed quiz mode label for Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice.
+- multi-note Long Exam sessions appear on every participating note in the session source-note set.
+- when a Long Exam spans more than one note, show `Multi-note Long Exam · spans N notes` under its score line while preserving existing weak-concept context.
+
 ## Note Detail Tabs
 
 `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` are view tabs, not action buttons.

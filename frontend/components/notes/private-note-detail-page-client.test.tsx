@@ -16,9 +16,8 @@ import {
   getMyStudyPack,
   getQuickReviewPerformanceSummary,
   getQuickReviewSessionReview,
-  listRecentChallengeQuizSessions,
   listCoursePrograms,
-  listRecentQuickReviewSessions,
+  listRecentQuizSessions,
   listSubjects,
   startQuickReviewSession,
   updateNote,
@@ -76,8 +75,7 @@ jest.mock("@/lib/api", () => ({
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   listCoursePrograms: jest.fn(),
-  listRecentChallengeQuizSessions: jest.fn(),
-  listRecentQuickReviewSessions: jest.fn(),
+  listRecentQuizSessions: jest.fn(),
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: () => false,
   trackAnalyticsEvent: jest.fn(),
@@ -141,9 +139,8 @@ describe("PrivateNoteDetailPageClient", () => {
     (getMyStudyPack as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewSessionReview as jest.Mock).mockReset();
-    (listRecentChallengeQuizSessions as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
-    (listRecentQuickReviewSessions as jest.Mock).mockReset();
+    (listRecentQuizSessions as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
@@ -229,7 +226,7 @@ describe("PrivateNoteDetailPageClient", () => {
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:30:00Z",
     });
-    (listRecentChallengeQuizSessions as jest.Mock).mockResolvedValue([]);
+    (listRecentQuizSessions as jest.Mock).mockResolvedValue([]);
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
       currency: "PHP",
@@ -299,7 +296,7 @@ describe("PrivateNoteDetailPageClient", () => {
       subject: "Biology",
       tags: ["cells"],
     });
-    (listRecentQuickReviewSessions as jest.Mock).mockResolvedValue([]);
+    (listRecentQuizSessions as jest.Mock).mockResolvedValue([]);
     (copyNote as jest.Mock).mockResolvedValue({ id: "note-copy-1" });
     (deleteNote as jest.Mock).mockResolvedValue(undefined);
   });
@@ -417,29 +414,30 @@ describe("PrivateNoteDetailPageClient", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
     });
-    (listRecentQuickReviewSessions as jest.Mock).mockResolvedValue([
+    (listRecentQuizSessions as jest.Mock).mockResolvedValue([
       {
-        id: "quick-1",
-        studyPackId: "sp-1",
+        sessionId: "quick-1",
+        sessionMode: "QUICK_REVIEW",
         totalQuestions: 10,
         correctAnswers: 8,
         scorePercentage: 80,
         retryCount: 1,
-        durationSeconds: 120,
+        performanceLevel: null,
         weakConcepts: ["Cells"],
+        participatingNoteCount: 1,
         createdAt: "2026-04-11T10:00:00Z",
         completedAt: "2026-04-11T10:05:00Z",
       },
-    ]);
-    (listRecentChallengeQuizSessions as jest.Mock).mockResolvedValue([
       {
         sessionId: "challenge-1",
+        sessionMode: "CHALLENGE",
         totalQuestions: 12,
         correctAnswers: 9,
         scorePercentage: 75,
+        retryCount: 0,
         performanceLevel: "Good",
-        conceptBreakdown: [],
         weakConcepts: ["Genetics"],
+        participatingNoteCount: 1,
         createdAt: "2026-04-10T10:00:00Z",
         completedAt: "2026-04-10T10:12:00Z",
       },
@@ -502,16 +500,17 @@ describe("PrivateNoteDetailPageClient", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
     });
-    (listRecentQuickReviewSessions as jest.Mock).mockResolvedValue([
+    (listRecentQuizSessions as jest.Mock).mockResolvedValue([
       {
-        id: "quick-1",
-        studyPackId: "sp-1",
+        sessionId: "quick-1",
+        sessionMode: "QUICK_REVIEW",
         totalQuestions: 10,
         correctAnswers: 8,
         scorePercentage: 80,
         retryCount: 1,
-        durationSeconds: 120,
+        performanceLevel: null,
         weakConcepts: ["Cells"],
+        participatingNoteCount: 1,
         createdAt: "2026-04-11T10:00:00Z",
         completedAt: "2026-04-11T10:05:00Z",
       },

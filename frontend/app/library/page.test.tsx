@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
 import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
-  getQuickReviewPerformanceSummary,
   listNotes,
   listSubjects,
 } from "@/lib/api";
@@ -25,7 +24,6 @@ jest.mock("@/lib/api", () => ({
   exportCombinedGeneratedQuizDocx: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
-  getQuickReviewPerformanceSummary: jest.fn(),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -90,10 +88,6 @@ describe("Library page", () => {
         updatedAt: "2026-03-23T10:00:00Z",
       },
     ]);
-    (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
-    (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue({
-      lastReviewedAt: null,
-    });
   });
 
   it("opens note detail when a card is clicked and does not render card action menus", async () => {
@@ -114,6 +108,35 @@ describe("Library page", () => {
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library");
     });
+  });
+
+  it("uses the all-mode session timestamp from the note list for the reviewed label", async () => {
+    (listNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "challenge-only-note",
+        title: "Challenge Only Review",
+        courseProgram: "Nursing",
+        subject: "Biology",
+        tags: [],
+        contentPreview: "Challenge content",
+        summaryPreview: "Challenge summary",
+        visibility: "PRIVATE",
+        studyPackId: "pack-challenge",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 4,
+        generatedQuizId: null,
+        generatedQuizQuestionCount: null,
+        createdAt: "2026-03-20T10:00:00Z",
+        updatedAt: "2026-03-21T10:00:00Z",
+        lastSessionCompletedAt: new Date().toISOString(),
+      },
+    ]);
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Challenge Only Review");
+    expect(screen.getByText("Last reviewed today")).toBeInTheDocument();
+    expect(screen.queryByText("Not reviewed yet")).not.toBeInTheDocument();
   });
 
   it("reorders selected notes by drag target order", () => {

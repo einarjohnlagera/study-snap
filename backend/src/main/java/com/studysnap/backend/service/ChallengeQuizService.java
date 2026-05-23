@@ -98,6 +98,7 @@ public class ChallengeQuizService {
     private static final String CHALLENGE_QUIZ_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Challenge Quiz session review is only available after completion.";
     private static final String MODE_CHALLENGE = "challenge";
     private static final String MODE_BOARD_EXAM = "board_exam";
+    private static final String HISTORY_MODE_BOARD_EXAM = "BOARD_EXAM";
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
             QuickReviewSessionStatus.IN_PROGRESS
@@ -546,7 +547,7 @@ public class ChallengeQuizService {
         return new QuizSessionReviewResponse(
                 session.getId().toString(),
                 session.getStudyPackId().toString(),
-                session.getSessionMode().name(),
+                resolveReviewSessionMode(session),
                 session.getStatus(),
                 session.getTotalQuestions() == null ? 0 : session.getTotalQuestions(),
                 session.getCorrectAnswers() == null ? 0 : session.getCorrectAnswers(),
@@ -560,6 +561,12 @@ public class ChallengeQuizService {
                 session.getCreatedAt(),
                 session.getCompletedAt()
         );
+    }
+
+    private String resolveReviewSessionMode(QuickReviewSessionEntity session) {
+        return MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))
+                ? HISTORY_MODE_BOARD_EXAM
+                : session.getSessionMode().name();
     }
 
     private int assertChallengeQuizQuotaAvailable(UUID userId, PlanType planType) {

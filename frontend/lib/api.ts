@@ -604,6 +604,11 @@ export type AdaptivePracticeCompleteRequest = {
 export type ChallengeQuizMode = "challenge" | "board_exam";
 export type QuizSessionMode = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
 
+export type QuizSessionHistoryMode =
+  | QuizSessionMode
+  | "BOARD_EXAM"
+  | "INTERVIEW_PRACTICE";
+
 export type NotePerformanceSummaryResponse = {
   noteId: string;
   noteTitle: string | null;
@@ -702,10 +707,24 @@ export type ChallengeQuizSessionSummaryResponse = {
   completedAt: string | null;
 };
 
+export type RecentQuizSessionHistoryResponse = {
+  sessionId: string;
+  sessionMode: QuizSessionHistoryMode;
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  retryCount: number;
+  performanceLevel: string | null;
+  weakConcepts: string[];
+  participatingNoteCount: number;
+  createdAt: string;
+  completedAt: string | null;
+};
+
 export type QuizSessionReviewResponse = {
   sessionId: string;
   studyPackId: string;
-  sessionMode: QuizSessionMode;
+  sessionMode: QuizSessionHistoryMode;
   status: QuizSessionStatus;
   totalQuestions: number;
   correctAnswers: number;
@@ -970,6 +989,7 @@ export type NoteListItemResponse = {
   isCurrentUser?: boolean;
   createdAt: string;
   updatedAt: string;
+  lastSessionCompletedAt?: string | null;
   generatedQuizId?: string | null;
   generatedQuizGeneratedAt?: string | null;
   generatedQuizQuestionCount?: number | null;
@@ -2282,6 +2302,24 @@ export async function listRecentChallengeQuizSessions(
   return parseApiResponse<ChallengeQuizSessionSummaryResponse[]>(
     response,
     "Could not load recent Challenge Quiz sessions.",
+  );
+}
+
+export async function listRecentQuizSessions(
+  noteId: string,
+  limit = 5,
+): Promise<RecentQuizSessionHistoryResponse[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/quiz-sessions/recent?limit=${limit}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<RecentQuizSessionHistoryResponse[]>(
+    response,
+    "Could not load recent quiz sessions.",
   );
 }
 

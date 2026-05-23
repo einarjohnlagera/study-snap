@@ -18,6 +18,7 @@ import { normalizeNoteDetailTab } from "@/lib/note-entry";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { exportQuizSessionReviewDocument, hasExportableContent } from "@/lib/quiz-session-export";
 import { getAuthUser } from "@/lib/auth";
+import { getQuizSessionModeLabel } from "@/lib/quiz-session-history";
 import {
   buildNoteSessionReviewBackLabel,
   buildNoteSessionReviewBackPath,
@@ -59,7 +60,7 @@ export function NoteSessionReviewPageClient({
   );
   const backHref = useMemo(() => buildNoteSessionReviewBackPath(noteId, noteTab, source), [noteId, noteTab, source]);
   const backLabel = useMemo(() => buildNoteSessionReviewBackLabel(source), [source]);
-  const quizTypeLabel = sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review";
+  const quizTypeLabel = sessionMode ? getQuizSessionModeLabel(sessionMode) : "Quiz";
 
   useEffect(() => {
     if (!toastMessage) {
@@ -92,7 +93,7 @@ export function NoteSessionReviewPageClient({
     const loadReview = async () => {
       try {
         const [nextReview, nextNote] = await Promise.all([
-          sessionMode === "CHALLENGE"
+          sessionMode === "CHALLENGE" || sessionMode === "BOARD_EXAM"
             ? getChallengeQuizSessionReview(noteId, sessionId)
             : getQuickReviewSessionReview(noteId, sessionId),
           getNote(noteId),

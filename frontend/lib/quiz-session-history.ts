@@ -1,56 +1,17 @@
-import type {
-  ChallengeQuizSessionSummaryResponse,
-  QuickReviewSessionSummaryResponse,
-  QuizSessionMode,
-} from "@/lib/api";
+import type { QuizSessionHistoryMode, RecentQuizSessionHistoryResponse } from "@/lib/api";
 
-export type RecentQuizSessionHistoryItem = {
-  sessionId: string;
-  sessionMode: Extract<QuizSessionMode, "QUICK_REVIEW" | "CHALLENGE">;
-  totalQuestions: number;
-  correctAnswers: number;
-  scorePercentage: number;
-  retryCount: number;
-  performanceLevel: string | null;
-  weakConcepts: string[];
-  createdAt: string;
-  completedAt: string | null;
-};
+export type QuizSessionModeForHistory = QuizSessionHistoryMode;
+
+export type RecentQuizSessionHistoryItem = RecentQuizSessionHistoryResponse;
 
 function compareCompletedAtDesc(left: string | null, right: string | null): number {
   return new Date(right ?? 0).getTime() - new Date(left ?? 0).getTime();
 }
 
 export function buildRecentQuizSessionHistory(
-  quickReviewSessions: QuickReviewSessionSummaryResponse[],
-  challengeSessions: ChallengeQuizSessionSummaryResponse[],
+  sessions: RecentQuizSessionHistoryResponse[],
 ): RecentQuizSessionHistoryItem[] {
-  const quickSessions = quickReviewSessions.map((session) => ({
-    sessionId: session.id,
-    sessionMode: "QUICK_REVIEW" as const,
-    totalQuestions: session.totalQuestions,
-    correctAnswers: session.correctAnswers,
-    scorePercentage: session.scorePercentage,
-    retryCount: session.retryCount,
-    performanceLevel: null,
-    weakConcepts: session.weakConcepts ?? [],
-    createdAt: session.createdAt,
-    completedAt: session.completedAt,
-  }));
-  const challengeQuizItems = challengeSessions.map((session) => ({
-    sessionId: session.sessionId,
-    sessionMode: "CHALLENGE" as const,
-    totalQuestions: session.totalQuestions,
-    correctAnswers: session.correctAnswers,
-    scorePercentage: session.scorePercentage,
-    retryCount: 0,
-    performanceLevel: session.performanceLevel,
-    weakConcepts: session.weakConcepts,
-    createdAt: session.createdAt,
-    completedAt: session.completedAt,
-  }));
-
-  return [...quickSessions, ...challengeQuizItems].sort((left, right) => {
+  return [...sessions].sort((left, right) => {
     const completedAtDiff = compareCompletedAtDesc(left.completedAt, right.completedAt);
     if (completedAtDiff !== 0) {
       return completedAtDiff;
@@ -59,6 +20,19 @@ export function buildRecentQuizSessionHistory(
   });
 }
 
-export function getQuizSessionModeLabel(sessionMode: RecentQuizSessionHistoryItem["sessionMode"]): string {
-  return sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review";
+export function getQuizSessionModeLabel(sessionMode: QuizSessionModeForHistory): string {
+  switch (sessionMode) {
+    case "QUICK_REVIEW":
+      return "Quick Review";
+    case "CHALLENGE":
+      return "Challenge Quiz";
+    case "ADAPTIVE":
+      return "Adaptive Practice";
+    case "LONG_EXAM":
+      return "Long Exam";
+    case "BOARD_EXAM":
+      return "Board Exam";
+    case "INTERVIEW_PRACTICE":
+      return "Interview Practice";
+  }
 }
