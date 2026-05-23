@@ -72,7 +72,7 @@ public class NoteService {
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE = "NOTE_TARGET_PROFILE_TYPE_REQUIRED";
     private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_CODE = "NOTE_TARGET_PROFILE_TYPE_INVALID";
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE = "Please choose who this note is for.";
-    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student or Exam Reviewer for this note.";
+    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student, Exam Reviewer, or Professional for this note.";
     private static final String PUBLIC_SORT_FEATURED = "featured";
     private static final String PUBLIC_SORT_POPULAR = "popular";
     private static final String PUBLIC_SORT_RECENT = "recent";
@@ -665,7 +665,9 @@ public class NoteService {
                     HttpStatus.BAD_REQUEST
             );
         }
-        if (targetProfileType == NoteTargetProfileType.STUDENT || targetProfileType == NoteTargetProfileType.BOARD_TAKER) {
+        if (targetProfileType == NoteTargetProfileType.STUDENT
+                || targetProfileType == NoteTargetProfileType.BOARD_TAKER
+                || targetProfileType == NoteTargetProfileType.PROFESSIONAL) {
             return targetProfileType;
         }
         throw new AppException(
@@ -678,6 +680,9 @@ public class NoteService {
     private NoteTargetProfileType mapOwnerProfileTypeToNoteTarget(ProfileType profileType) {
         if (profileType == ProfileType.BOARD_EXAM) {
             return NoteTargetProfileType.BOARD_TAKER;
+        }
+        if (profileType == ProfileType.PROFESSIONAL) {
+            return NoteTargetProfileType.PROFESSIONAL;
         }
         return NoteTargetProfileType.STUDENT;
     }

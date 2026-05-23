@@ -219,6 +219,14 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
+    expect(screen.getByRole("button", { name: "Draft" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft" }));
+
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
@@ -230,6 +238,37 @@ describe("Library page", () => {
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
+  it("shows draft empty state copy when no draft notes match", async () => {
+    (listNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-ready",
+        title: "Ready Note",
+        courseProgram: "Nursing",
+        subject: "Biology",
+        tags: ["review"],
+        contentPreview: "Ready content",
+        summaryPreview: "Ready summary",
+        visibility: "PRIVATE",
+        studyPackId: "pack-ready",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        generatedQuizId: null,
+        generatedQuizQuestionCount: null,
+        createdAt: "2026-03-20T10:00:00Z",
+        updatedAt: "2026-03-21T10:00:00Z",
+      },
+    ]);
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Ready Note");
+    fireEvent.click(screen.getByRole("button", { name: "Draft" }));
+
+    expect(screen.queryByText("Ready Note")).not.toBeInTheDocument();
+    expect(screen.getByText("No draft notes")).toBeInTheDocument();
+    expect(screen.getByText("No draft notes — you've generated Study Packs for everything in your library.")).toBeInTheDocument();
   });
 
   it("shows Quiz Ready filter and badges for teacher profiles", async () => {

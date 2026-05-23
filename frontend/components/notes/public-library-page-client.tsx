@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -55,6 +55,7 @@ import {
   getNoteTargetProfileLabel,
   NOTE_TARGET_PROFILE_ALL,
   PUBLIC_NOTE_TARGET_PROFILE_TYPES,
+  resolvePublicLibraryTargetProfileFilter,
   type NoteTargetProfileFilter,
 } from "@/lib/note-target-profile";
 
@@ -489,6 +490,7 @@ export function PublicLibraryPageClient() {
   const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
   const [shareToastMessage, setShareToastMessage] = useState<string | null>(null);
   const [shareToastTone, setShareToastTone] = useState<"success" | "error">("success");
+  const hasAutoAppliedAudienceRef = useRef(false);
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -606,6 +608,18 @@ export function PublicLibraryPageClient() {
       router.replace(nextUrl, { scroll: false });
     }
   }, [parsedUrlFilters, router, searchParamsKey]);
+
+  useEffect(() => {
+    if (hasAutoAppliedAudienceRef.current || parsedUrlFilters.audience !== null) {
+      return;
+    }
+    const profileDefault = resolvePublicLibraryTargetProfileFilter(getAuthUser()?.profileType);
+    if (profileDefault === NOTE_TARGET_PROFILE_ALL) {
+      return;
+    }
+    hasAutoAppliedAudienceRef.current = true;
+    replacePublicLibraryFilters({ ...parsedUrlFilters, audience: profileDefault, view: null });
+  }, [parsedUrlFilters, replacePublicLibraryFilters]);
 
   const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();

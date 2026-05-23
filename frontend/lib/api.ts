@@ -150,7 +150,7 @@ export type DashboardOverviewResponse = {
 };
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
-export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER";
+export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER" | "PROFESSIONAL";
 export type PaidPlanType = "PLUS" | "PRO";
 export type LearnerLevel =
   | "GRADE_SCHOOL"

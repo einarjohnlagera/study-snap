@@ -174,6 +174,27 @@ class NoteServiceTest {
     }
 
     @Test
+    void create_professionalAutoAssignsProfessionalTargetProfileType() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = buildUser(ownerUserId, "professional@example.com");
+        owner.setProfileType(ProfileType.PROFESSIONAL);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Professional note",
+                "Subject",
+                null,
+                List.of(),
+                null,
+                "content"
+        );
+
+        noteService.create(request, ownerUserId);
+
+        verify(noteRepository).save(argThat(note -> note.getTargetProfileType() == NoteTargetProfileType.PROFESSIONAL));
+    }
+
+    @Test
     void create_teacherRequiresExplicitTargetProfileType() {
         UUID ownerUserId = UUID.randomUUID();
         UserEntity owner = buildUser(ownerUserId, "teacher@example.com");
