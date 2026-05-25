@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 type AppModalProps = {
   isOpen: boolean;
   title: ReactNode;
+  variant?: "default" | "sheet";
   description?: string;
   onClose: () => void;
   children?: ReactNode;
@@ -42,6 +43,7 @@ function getFocusableElements(container: HTMLDivElement | null): HTMLElement[] {
 export function AppModal({
   isOpen,
   title,
+  variant = "default",
   description,
   onClose,
   children,
@@ -153,9 +155,17 @@ export function AppModal({
     return null;
   }
 
+  const isSheet = variant === "sheet";
+  const backdropClassName = isSheet
+    ? "motion-fade-enter fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/55 px-0 sm:px-4"
+    : "motion-fade-enter fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4";
+  const panelBaseClassName = isSheet
+    ? "motion-modal-enter flex w-full max-w-full flex-col overflow-hidden max-h-[85dvh] rounded-t-2xl rounded-b-none border border-border bg-background p-4 shadow-xl transition-transform duration-200 dark:bg-zinc-900 sm:max-h-[90dvh] sm:w-[90%] sm:max-w-[420px] sm:rounded-xl sm:p-5"
+    : "motion-modal-enter flex w-[90%] max-w-[420px] flex-col overflow-hidden max-h-[90dvh] rounded-xl border border-border bg-background p-4 shadow-xl transition-transform duration-200 dark:bg-zinc-900 sm:p-5";
+
   return createPortal(
     <div
-      className="motion-fade-enter fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4"
+      className={backdropClassName}
       onMouseDown={(event) => {
         event.stopPropagation();
         if (event.target === event.currentTarget) {
@@ -173,7 +183,7 @@ export function AppModal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`motion-modal-enter flex w-[90%] max-w-[420px] flex-col overflow-hidden max-h-[90dvh] rounded-xl border border-border bg-background p-4 shadow-xl transition-transform duration-200 dark:bg-zinc-900 sm:p-5 ${panelClassName ?? ""}`}
+        className={`${panelBaseClassName} ${panelClassName ?? ""}`}
         style={touchOffsetY > 0 ? { transform: `translateY(${touchOffsetY}px)` } : undefined}
         onMouseDown={(event) => {
           event.stopPropagation();
