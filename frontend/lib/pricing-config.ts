@@ -11,6 +11,7 @@ export const pricingConfig = {
     docxExportsPerMonth: 2,
     teacherDocxExportsPerMonth: 10,
     pdfExportsPerMonth: 2,
+    quizShareLinksPerMonth: 3,
   },
   plus: {
     studyPacksPerMonth: 50,
@@ -20,6 +21,7 @@ export const pricingConfig = {
     teacherDocxExportsPerMonth: null,
     pdfExportsPerMonth: 15,
     adaptivePracticePerMonth: 10,
+    quizShareLinksPerMonth: 10,
   },
   pro: {
     studyPacksPerMonth: 100,
@@ -33,6 +35,7 @@ export const pricingConfig = {
     docxExportsPerMonth: null,
     teacherDocxExportsPerMonth: null,
     pdfExportsPerMonth: null,
+    quizShareLinksPerMonth: null,
   },
   price: {
     PH: {

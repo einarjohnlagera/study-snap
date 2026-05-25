@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/notes/public/**").permitAll()
                         .requestMatchers("/share/**").permitAll()
                         .requestMatchers("/p/**").permitAll()
+                        .requestMatchers("/quiz/share/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .anyRequest().authenticated()
                 )

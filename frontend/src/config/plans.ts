@@ -39,6 +39,7 @@ export const PLANS: Record<AppPlanType, {
       { label: `${pricingConfig.free.studyPacksPerMonth} Study Packs / month` },
       { label: `${pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month` },
       { label: `${pricingConfig.free.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
+      { label: `${pricingConfig.free.quizShareLinksPerMonth} shareable quiz links / month` },
       { label: "Summary + Key Concepts" },
     ],
     upgradeHighlights: [
@@ -58,6 +59,7 @@ export const PLANS: Record<AppPlanType, {
       { label: `${pricingConfig.plus.studyPacksPerMonth} Study Packs / month` },
       { label: `${pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month` },
       { label: `${pricingConfig.plus.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
+      { label: `${pricingConfig.plus.quizShareLinksPerMonth} shareable quiz links / month` },
       { label: `Adaptive Practice (${pricingConfig.plus.adaptivePracticePerMonth} sessions / month)` },
       { label: "Higher note generation limits" },
     ],
@@ -73,6 +75,7 @@ export const PLANS: Record<AppPlanType, {
       { label: `${pricingConfig.pro.studyPacksPerMonth} Study Packs / month` },
       { label: `${pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month` },
       { label: "Unlimited exports", helper: EXPORT_HELPER },
+      { label: "Unlimited shareable quiz links" },
       { label: `Adaptive Practice (${pricingConfig.pro.adaptivePracticePerMonth} sessions / month)` },
       { label: `Interview Practice (${pricingConfig.pro.interviewPracticePerMonth} sessions / month)` },
       { label: `Long Exam (${pricingConfig.pro.longExamPerMonth} sessions / month)` },
@@ -104,6 +107,14 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       FREE: String(pricingConfig.free.docxExportsPerMonth),
       PLUS: String(pricingConfig.plus.docxExportsPerMonth),
+      PRO: "Unlimited",
+    },
+  },
+  {
+    label: "Shareable quiz links / month",
+    values: {
+      FREE: String(pricingConfig.free.quizShareLinksPerMonth),
+      PLUS: String(pricingConfig.plus.quizShareLinksPerMonth),
       PRO: "Unlimited",
     },
   },

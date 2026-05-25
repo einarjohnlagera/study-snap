@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, MoreHorizontal, RotateCcw } from "lucide-react";
+import { Copy, FileText, Link2, MoreHorizontal, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -16,22 +16,29 @@ import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
 import {
+  createQuizShareLink,
   exportGeneratedQuizDocx,
   getGeneratedQuiz,
   generateGeneratedQuiz,
   getMe,
   getNote,
+  getQuizShareLinkByQuizId,
   isExportLimitReachedError,
   isMultipleExamVersionsNotAllowedError,
+  isQuizShareLinkLimitExceededError,
+  toggleQuizShareLink,
+  trackAnalyticsEvent,
   type GeneratedQuizResponse,
   type QuizDocxHeaderOverride,
   type NoteResponse,
   type QuizDocxExportMode,
+  type QuizShareLinkResponse,
 } from "@/lib/api";
 import { isQuizLimitReachedMessage, resolveRemainingUsageCredits } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type GeneratedQuizPreviewPageClientProps = {
   noteId: string;
@@ -45,6 +52,10 @@ const GENERATED_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
+function normalizePlan(plan: string | null | undefined): AppPlanType {
+  return plan === "PLUS" || plan === "PRO" ? plan : "FREE";
+}
+
 export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQuizPreviewPageClientProps>) {
   const router = useRouter();
   const startRouteProgress = useRouteProgress();
@@ -56,6 +67,10 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const [toast, setToast] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [shareLink, setShareLink] = useState<QuizShareLinkResponse | null>(null);
+  const [creatingShareLink, setCreatingShareLink] = useState(false);
+  const [togglingShareLink, setTogglingShareLink] = useState(false);
+  const [shareLimitReached, setShareLimitReached] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
@@ -133,6 +148,18 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const noteTitle = note?.title?.trim() || "Untitled note";
   const authUser = getAuthUser();
   const canExportDocx = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
+
+  useEffect(() => {
+    if (!generatedQuiz?.id || !canExportDocx) {
+      return;
+    }
+    void getQuizShareLinkByQuizId(generatedQuiz.id).then((link) => {
+      if (link) {
+        setShareLink(link);
+      }
+    });
+  }, [canExportDocx, generatedQuiz?.id]);
+
   const generatedQuestionCount = generatedQuiz?.questions.length ?? 0;
   const generatedQuestionCountLabel = `${generatedQuestionCount} question${generatedQuestionCount === 1 ? "" : "s"}`;
   const generatedAtLabel = useMemo(() => {
@@ -152,6 +179,13 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     && challengeQuizzesRemaining !== null
     && challengeQuizzesRemaining <= 0;
   const quizGenerationPaywallVariant: PaywallModalVariant = "quiz-generation-limit";
+  const currentPlan = normalizePlan(authUser?.planType ?? usageSummary?.plan);
+  const shareUpgradeCtas = useMemo(
+    () => getUpgradeCtas(currentPlan, { profileType: "TEACHER" }),
+    [currentPlan],
+  );
+  const primaryShareUpgradeCta = shareUpgradeCtas.primary;
+  const secondaryShareUpgradeCta = shareUpgradeCtas.secondary;
 
   const handleExport = useCallback(async (
     mode: QuizDocxExportMode | QuizExportModalMode,
@@ -217,6 +251,78 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       setRegenerating(false);
     }
   }, [hasReachedChallengeQuizLimit, noteId, quizGenerationPaywallVariant, refreshUsageSummary, regenerating, usageSummary?.plan]);
+
+  const handleCreateShareLink = useCallback(async () => {
+    if (!generatedQuiz?.id || creatingShareLink) {
+      return;
+    }
+    setCreatingShareLink(true);
+    setShareLimitReached(false);
+    setError(null);
+    try {
+      const created = await createQuizShareLink(generatedQuiz.id);
+      setShareLink(created);
+      void navigator.clipboard.writeText(created.shareUrl).catch(() => null);
+      setToast("Link created and copied.");
+      void refreshUsageSummary();
+      void trackAnalyticsEvent({
+        eventType: "QUIZ_SHARE_LINK_CREATED",
+        entityId: generatedQuiz.id,
+        metadata: { token: created.token },
+      });
+    } catch (err) {
+      if (isQuizShareLinkLimitExceededError(err)) {
+        setShareLimitReached(true);
+        setToast(null);
+        void refreshUsageSummary();
+        return;
+      }
+      const message = err instanceof Error ? err.message : "Could not create share link.";
+      setError(message);
+    } finally {
+      setCreatingShareLink(false);
+    }
+  }, [creatingShareLink, generatedQuiz?.id, refreshUsageSummary]);
+
+  const handleToggleShareLink = useCallback(async () => {
+    if (!shareLink || togglingShareLink) {
+      return;
+    }
+    setTogglingShareLink(true);
+    setError(null);
+    try {
+      const updated = await toggleQuizShareLink(shareLink.token);
+      setShareLink(updated);
+      setToast(updated.isActive ? "Sharing turned on." : "Sharing turned off.");
+      void trackAnalyticsEvent({
+        eventType: "QUIZ_SHARE_LINK_TOGGLED",
+        entityId: generatedQuiz?.id ?? null,
+        metadata: { token: updated.token, isActive: updated.isActive },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update share link.";
+      setError(message);
+    } finally {
+      setTogglingShareLink(false);
+    }
+  }, [generatedQuiz?.id, shareLink, togglingShareLink]);
+
+  const handleCopyShareUrl = useCallback(async () => {
+    if (!shareLink?.shareUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareLink.shareUrl);
+      setToast("Link copied.");
+    } catch {
+      setToast("Copy failed.");
+    }
+  }, [shareLink?.shareUrl]);
+
+  const handleUpgradeClick = useCallback((targetPlan: string) => {
+    startRouteProgress();
+    router.push(`/settings?section=plans&plan=${targetPlan}`);
+  }, [router, startRouteProgress]);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -336,6 +442,102 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
               tipId="teacher-docx-export"
               message="Download as DOCX and open in Word or Google Docs — format it your way before distributing to students."
             />
+          ) : null}
+
+          {canExportDocx ? (
+            <Card className="space-y-4 p-4 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                    Share Quiz
+                  </p>
+                  <h2 className="text-lg font-semibold text-foreground">Share with Students</h2>
+                  <p className="max-w-2xl text-sm leading-6 text-foreground/75">
+                    Create a public quiz link students can open without an account. They answer in-browser and see their score before signing up.
+                  </p>
+                </div>
+                {!shareLink ? (
+                  <Button
+                    type="button"
+                    className="gap-2 sm:self-start"
+                    onClick={() => void handleCreateShareLink()}
+                    loading={creatingShareLink}
+                    loadingText="Creating..."
+                    disabled={!generatedQuiz.id}
+                  >
+                    <Link2 className="h-4 w-4" aria-hidden="true" />
+                    <span>Share with Students</span>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant={shareLink.isActive ? "outline" : "default"}
+                    className="sm:self-start"
+                    onClick={() => void handleToggleShareLink()}
+                    loading={togglingShareLink}
+                    loadingText="Updating..."
+                  >
+                    {shareLink.isActive ? "Turn Sharing Off" : "Turn Sharing On"}
+                  </Button>
+                )}
+              </div>
+
+              {shareLimitReached ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-foreground">Monthly share link limit reached</p>
+                  <p className="mt-1 text-sm leading-6 text-foreground/75">
+                    Shareable quiz links help distribute quizzes to a whole class. Upgrade for more monthly links.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    {primaryShareUpgradeCta ? (
+                      <Button type="button" size="sm" onClick={() => handleUpgradeClick(primaryShareUpgradeCta.targetPlan)}>
+                        {primaryShareUpgradeCta.label}
+                      </Button>
+                    ) : null}
+                    {secondaryShareUpgradeCta ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleUpgradeClick(secondaryShareUpgradeCta.targetPlan)}
+                      >
+                        {secondaryShareUpgradeCta.label}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {shareLink ? (
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-2 rounded-xl border border-border bg-highlight/40 p-3 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
+                        {shareLink.isActive ? "Sharing on" : "Sharing off"}
+                      </p>
+                      <p className={`truncate text-sm font-medium ${shareLink.isActive ? "text-foreground" : "text-foreground/45"}`}>
+                        {shareLink.shareUrl}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => void handleCopyShareUrl()}
+                    >
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                      <span>Copy</span>
+                    </Button>
+                  </div>
+                  {!shareLink.isActive ? (
+                    <p className="text-xs text-foreground/60">
+                      Students who open this link will see that the quiz is no longer active.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </Card>
           ) : null}
 
           <div className="space-y-4">

@@ -33,6 +33,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 note_generations,
                 docx_exports_count,
                 pdf_exports_count,
+                quiz_share_links_created,
                 created_at
             )
             VALUES (
@@ -52,6 +53,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 :noteGenerationDelta,
                 :docxExportDelta,
                 :pdfExportDelta,
+                :quizShareLinkDelta,
                 :createdAt
             )
             ON CONFLICT (user_id, period_start)
@@ -66,7 +68,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 ocr_extractions = user_usage.ocr_extractions + EXCLUDED.ocr_extractions,
                 note_generations = user_usage.note_generations + EXCLUDED.note_generations,
                 docx_exports_count = user_usage.docx_exports_count + EXCLUDED.docx_exports_count,
-                pdf_exports_count = user_usage.pdf_exports_count + EXCLUDED.pdf_exports_count
+                pdf_exports_count = user_usage.pdf_exports_count + EXCLUDED.pdf_exports_count,
+                quiz_share_links_created = user_usage.quiz_share_links_created + EXCLUDED.quiz_share_links_created
             """, nativeQuery = true)
     int incrementUsage(
             @Param("userId") UUID userId,
@@ -84,6 +87,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("noteGenerationDelta") Integer noteGenerationDelta,
             @Param("docxExportDelta") Integer docxExportDelta,
             @Param("pdfExportDelta") Integer pdfExportDelta,
+            @Param("quizShareLinkDelta") Integer quizShareLinkDelta,
             @Param("createdAt") OffsetDateTime createdAt
     );
 }

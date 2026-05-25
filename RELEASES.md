@@ -15,6 +15,7 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 - **Send Feedback consistency fix** — removed the floating "Send Feedback" button (was inconsistently shown on Dashboard/Library/Settings only); header icon now renders on all authenticated pages; fixed modal positioning bug where `backdrop-filter` on the sticky header created a CSS containing block for `position: fixed` children — resolved by wrapping `AppModal` in `ReactDOM.createPortal(..., document.body)`, which benefits all modals app-wide.
 - **Profile-aware learning loop on landing** — replaced generic HowItWorks + ProfileShowcase sections with a single interactive ProfileLearningSection; four-tab layout (Students / Exam Reviewers / Teachers / Professionals) each showing learning loop steps, mode chips, and a screenshot
 - **Post-signup copy-note → instant quiz** — new users who sign up via a public note copy CTA have the note automatically copied and Study Pack generation started; they land directly on a Quick Review session, bypassing onboarding; copy intent survives Google One Tap and email verification via a short-lived cookie
+- **Shareable Student Quiz Links** — teachers generate a /quiz/[token] link from the quiz preview page; students take the quiz anonymously in-browser; results screen prompts signup; quota gated (Free: 3/month, Plus: 10/month, Pro: unlimited)
 
 ---
 
