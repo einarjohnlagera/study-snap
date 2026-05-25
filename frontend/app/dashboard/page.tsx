@@ -53,6 +53,7 @@ import {
   hasDismissedDashboardPersonalizationPrompt,
 } from "@/lib/dashboard-personalization-prompt";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 
 type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL";
 type TeacherGeneratedQuizSummary = {
@@ -706,6 +707,10 @@ export default function DashboardPage() {
 
           {dashboardProfileType === "TEACHER" ? (
             <>
+              <GuidanceTip
+                tipId="teacher-dashboard-intro"
+                message="NoteLib turns your lesson notes into ready-to-use quiz drafts. Start by creating a note with your lesson content."
+              />
               <DashboardActionCard
                 title="Create Teaching Material"
                 description="Create a note, generate a Study Pack, then review the generated quiz before exporting it for class use."

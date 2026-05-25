@@ -598,6 +598,12 @@ export default function LibraryPage() {
               message="You're building a solid library. Try filtering by subject to find related notes quickly."
             />
           ) : null}
+          {isTeacherProfile && !selectionMode && items.length >= 1 ? (
+            <GuidanceTip
+              tipId="teacher-library-multi-note-select"
+              message="Select multiple notes with the checkboxes, then use 'Generate Quiz' from the toolbar."
+            />
+          ) : null}
           {selectionMode ? (
             <Card className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

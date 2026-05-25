@@ -1162,6 +1162,7 @@ export function NoteEditorPageClient({
         targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}
+        isTeacherCreateMode={!isEditMode && currentProfileType === "TEACHER"}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}
