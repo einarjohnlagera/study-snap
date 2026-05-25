@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 type AppModalProps = {
@@ -152,7 +153,7 @@ export function AppModal({
     return null;
   }
 
-  return (
+  return createPortal(
     <div
       className="motion-fade-enter fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4"
       onMouseDown={(event) => {
@@ -249,6 +250,7 @@ export function AppModal({
         {children ? <div className={`mt-4 flex-1 overflow-y-auto min-h-0 ${contentClassName ?? ""}`}>{children}</div> : null}
         {actions ? <div className={`mt-5 shrink-0 ${actionsClassName ?? ""}`}>{actions}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
