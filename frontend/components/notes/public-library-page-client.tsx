@@ -26,10 +26,7 @@ import {
   listSubjects,
   type NoteListItemResponse,
 } from "@/lib/api";
-import {
-  mergeCourseProgramSuggestions,
-  normalizeCourseProgram,
-} from "@/lib/learning-profile";
+import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
@@ -69,7 +66,7 @@ const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
 const POPULAR_SUBJECT_LIMIT_MOBILE = 4;
 const POPULAR_SUBJECT_LIMIT_DESKTOP = 6;
-const MORE_SUBJECTS_LABEL = "+ More";
+const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const SUBJECT_SELECTOR_TITLE = "Select subject";
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
@@ -82,6 +79,8 @@ const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
 const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
 const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 400;
+const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
+const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
 
 type PublicLibrarySortOption =
   | "NEWEST"
@@ -162,25 +161,6 @@ function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery
   }
 }
 
-function countActivePublicFilterGroups({
-  courseProgram,
-  subject,
-  tags,
-  sourceFilters,
-}: {
-  courseProgram: string;
-  subject: string;
-  tags: string[];
-  sourceFilters: PublicLibrarySourceFilter[];
-}) {
-  return [
-    courseProgram !== ALL_COURSE_PROGRAMS,
-    subject !== ALL_SUBJECTS,
-    tags.length > 0,
-    sourceFilters.length > 0,
-  ].filter(Boolean).length;
-}
-
 function getFilterChipClassName(isSelected: boolean) {
   return `motion-pressable motion-lift shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
     isSelected
@@ -191,6 +171,10 @@ function getFilterChipClassName(isSelected: boolean) {
 
 function getScrollRailClassName() {
   return "flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+}
+
+function getFadedScrollRailClassName() {
+  return `${getScrollRailClassName()} ${SCROLL_RAIL_FADE_CLASS_NAME}`;
 }
 
 function updateRecentValues(previous: string[], values: string[]) {
@@ -468,6 +452,7 @@ export function PublicLibraryPageClient() {
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
+  const [courseProgramDraft, setCourseProgramDraft] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [subjectDraft, setSubjectDraft] = useState<string>(ALL_SUBJECTS);
   const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>("NEWEST");
@@ -476,6 +461,7 @@ export function PublicLibraryPageClient() {
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<PublicLibrarySourceFilter[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
+  const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
@@ -485,6 +471,7 @@ export function PublicLibraryPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
+  const [recentCoursePrograms, setRecentCoursePrograms] = useState<string[]>([]);
   const [copySuccessState, setCopySuccessState] = useState<{
     copiedNoteId: string;
   } | null>(null);
@@ -639,9 +626,23 @@ export function PublicLibraryPageClient() {
 
   const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
-  const availableCoursePrograms = useMemo(() => {
-    return mergeCourseProgramSuggestions(items.map((item) => item.courseProgram));
+  const courseProgramCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const courseProgram = normalizeCourseProgram(item.courseProgram);
+      if (courseProgram) {
+        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + 1);
+      }
+    }
+    return counts;
   }, [items]);
+
+  const availableCoursePrograms = useMemo(() => {
+    return Array.from(courseProgramCounts.keys()).sort((left, right) => {
+      const countDiff = (courseProgramCounts.get(right) ?? 0) - (courseProgramCounts.get(left) ?? 0);
+      return countDiff !== 0 ? countDiff : left.localeCompare(right);
+    });
+  }, [courseProgramCounts]);
 
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -661,7 +662,9 @@ export function PublicLibraryPageClient() {
     const resolvedCourseProgram = parsedUrlFilters.courseProgram
       ? resolvePublicLibraryValueBySlug(availableCoursePrograms, parsedUrlFilters.courseProgram)
       : null;
-    setSelectedCourseProgram(resolvedCourseProgram ?? ALL_COURSE_PROGRAMS);
+    const nextSelectedCourseProgram = resolvedCourseProgram ?? ALL_COURSE_PROGRAMS;
+    setSelectedCourseProgram(nextSelectedCourseProgram);
+    setCourseProgramDraft(nextSelectedCourseProgram);
 
     const resolvedSubject = parsedUrlFilters.subject
       ? resolvePublicLibraryValueBySlug(availableSubjects, parsedUrlFilters.subject)
@@ -710,7 +713,10 @@ export function PublicLibraryPageClient() {
     if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     }
-  }, [availableCoursePrograms, selectedCourseProgram]);
+    if (courseProgramDraft !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(courseProgramDraft)) {
+      setCourseProgramDraft(ALL_COURSE_PROGRAMS);
+    }
+  }, [availableCoursePrograms, courseProgramDraft, selectedCourseProgram]);
 
   useEffect(() => {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
@@ -739,6 +745,13 @@ export function PublicLibraryPageClient() {
       setSubjectSearchQuery("");
     }
   }, [selectedSubject, subjectSelectorOpen]);
+
+  useEffect(() => {
+    if (filterSheetOpen) {
+      setCourseProgramDraft(selectedCourseProgram);
+      setCourseProgramSearchQuery("");
+    }
+  }, [filterSheetOpen, selectedCourseProgram]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -791,12 +804,14 @@ export function PublicLibraryPageClient() {
   const clearFilters = useCallback(() => {
     setSearchQuery("");
     setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+    setCourseProgramDraft(ALL_COURSE_PROGRAMS);
     setSelectedSubject(ALL_SUBJECTS);
     setSubjectDraft(ALL_SUBJECTS);
     setSelectedTags([]);
     setTagDraft([]);
     setSelectedSourceFilters([]);
     setAudienceLockedToAll(false);
+    setCourseProgramSearchQuery("");
     setSubjectSearchQuery("");
     setTagSearchQuery("");
     replacePublicLibraryFilters({
@@ -814,6 +829,10 @@ export function PublicLibraryPageClient() {
     () => buildPriorityComparator(recentSubjects, subjectCounts),
     [recentSubjects, subjectCounts],
   );
+  const courseProgramPriorityComparator = useMemo(
+    () => buildPriorityComparator(recentCoursePrograms, courseProgramCounts),
+    [courseProgramCounts, recentCoursePrograms],
+  );
   const tagPriorityComparator = useMemo(
     () => buildPriorityComparator(recentTags, tagCounts),
     [recentTags, tagCounts],
@@ -829,6 +848,17 @@ export function PublicLibraryPageClient() {
       query.length === 0 || subject.toLowerCase().includes(query)
     ));
   }, [displayedSubjects, subjectSearchQuery]);
+
+  const displayedCoursePrograms = useMemo(() => {
+    return [...availableCoursePrograms].sort(courseProgramPriorityComparator);
+  }, [availableCoursePrograms, courseProgramPriorityComparator]);
+
+  const filteredModalCoursePrograms = useMemo(() => {
+    const query = courseProgramSearchQuery.trim().toLowerCase();
+    return displayedCoursePrograms.filter((courseProgram) => (
+      query.length === 0 || courseProgram.toLowerCase().includes(query)
+    ));
+  }, [courseProgramSearchQuery, displayedCoursePrograms]);
 
   const displayedTags = useMemo(() => {
     return [...availableTags].sort(tagPriorityComparator);
@@ -855,11 +885,6 @@ export function PublicLibraryPageClient() {
     return Array.from(new Set(ordered)).slice(0, visibleSubjectLimit);
   }, [displayedSubjects, selectedSubject, visibleSubjectLimit]);
 
-  const remainingSubjectCount = useMemo(() => {
-    const visible = new Set(visibleSubjectChips);
-    return displayedSubjects.filter((subject) => !visible.has(subject)).length;
-  }, [displayedSubjects, visibleSubjectChips]);
-
   const visiblePopularTags = useMemo(() => {
     const ordered = [
       ...selectedTags,
@@ -868,12 +893,7 @@ export function PublicLibraryPageClient() {
     return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, selectedTags.length));
   }, [displayedTags, selectedTags, visibleTagLimit]);
 
-  const activeFilterCount = countActivePublicFilterGroups({
-    courseProgram: selectedCourseProgram,
-    subject: selectedSubject,
-    tags: selectedTags,
-    sourceFilters: selectedSourceFilters,
-  });
+  const hasActiveSourceFilters = selectedSourceFilters.length > 0;
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
@@ -1201,17 +1221,15 @@ export function PublicLibraryPageClient() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full sm:min-w-30"
+                  className="relative w-full sm:min-w-30"
                   onClick={() => setFilterSheetOpen(true)}
                   aria-label="Open filters"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Filter className="h-4 w-4" aria-hidden="true" />
-                    <span>Filter</span>
-                    {activeFilterCount > 0 ? (
-                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-[11px] font-semibold text-white dark:bg-blue-500">
-                        {activeFilterCount}
-                      </span>
+                    <span>More Filters</span>
+                    {(hasActiveSourceFilters || selectedCourseProgram !== ALL_COURSE_PROGRAMS) ? (
+                      <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" aria-hidden="true" />
                     ) : null}
                   </span>
                 </Button>
@@ -1251,7 +1269,8 @@ export function PublicLibraryPageClient() {
                   </button>
                 ) : null}
               </div>
-              <div className={getScrollRailClassName()}>
+              <div className="relative">
+              <div className={getFadedScrollRailClassName()}>
                 <button
                   type="button"
                   className={getFilterChipClassName(selectedTargetProfile === NOTE_TARGET_PROFILE_ALL)}
@@ -1287,29 +1306,48 @@ export function PublicLibraryPageClient() {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">Subjects</p>
                 {selectedSubject !== ALL_SUBJECTS ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                      onClick={() => {
+                        setSelectedSubject(ALL_SUBJECTS);
+                        replacePublicLibraryFilters({
+                          ...parsedUrlFilters,
+                          subject: null,
+                          view: null,
+                        });
+                      }}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      className={TEXT_LINK_CLASS_NAME}
+                      onClick={() => setSubjectSelectorOpen(true)}
+                    >
+                      {BROWSE_ALL_LABEL}
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                    onClick={() => {
-                      setSelectedSubject(ALL_SUBJECTS);
-                      replacePublicLibraryFilters({
-                        ...parsedUrlFilters,
-                        subject: null,
-                        view: null,
-                      });
-                    }}
+                    className={TEXT_LINK_CLASS_NAME}
+                    onClick={() => setSubjectSelectorOpen(true)}
                   >
-                    Reset
+                    {BROWSE_ALL_LABEL}
                   </button>
-                ) : null}
+                )}
               </div>
-              <div className={getScrollRailClassName()}>
+              <div className="relative">
+              <div className={getFadedScrollRailClassName()}>
                 <button
                   type="button"
                   className={getFilterChipClassName(selectedSubject === ALL_SUBJECTS)}
@@ -1344,15 +1382,7 @@ export function PublicLibraryPageClient() {
                     {subject}
                   </button>
                 ))}
-                {remainingSubjectCount > 0 ? (
-                  <button
-                    type="button"
-                    className={getFilterChipClassName(false)}
-                    onClick={() => setSubjectSelectorOpen(true)}
-                  >
-                    {MORE_SUBJECTS_LABEL}
-                  </button>
-                ) : null}
+              </div>
               </div>
             </div>
 
@@ -1380,14 +1410,15 @@ export function PublicLibraryPageClient() {
                   ) : null}
                     <button
                       type="button"
-                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                      className={TEXT_LINK_CLASS_NAME}
                       onClick={() => setTagSelectorOpen(true)}
                     >
-                      Browse all
+                      {BROWSE_ALL_LABEL}
                     </button>
                   </div>
                 </div>
-                <div className={getScrollRailClassName()}>
+                <div className="relative">
+                <div className={getFadedScrollRailClassName()}>
                   {visiblePopularTags.map((tag) => (
                     <button
                       key={tag}
@@ -1414,6 +1445,7 @@ export function PublicLibraryPageClient() {
                       {tag}
                     </button>
                   ))}
+                </div>
                 </div>
               </div>
             ) : null}
@@ -1628,7 +1660,7 @@ export function PublicLibraryPageClient() {
 
       <LibrarySheetModal
         isOpen={filterSheetOpen}
-        title="Filter public notes"
+        title="More Filters"
         onClose={() => setFilterSheetOpen(false)}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -1641,34 +1673,88 @@ export function PublicLibraryPageClient() {
           </div>
         )}
       >
-        <div className="space-y-2">
-          <label htmlFor="public-library-filter-course-program" className="text-sm font-medium">
-            Course / Program
-          </label>
-          <select
-            id="public-library-filter-course-program"
-            value={selectedCourseProgram}
-            onChange={(event) => {
-              const nextCourseProgram = event.target.value;
-              setSelectedCourseProgram(nextCourseProgram);
-              replacePublicLibraryFilters({
-                ...parsedUrlFilters,
-                courseProgram: nextCourseProgram === ALL_COURSE_PROGRAMS
-                  ? null
-                  : slugifyPublicLibraryFilterValue(nextCourseProgram),
-                view: null,
-              });
-            }}
-            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
-          >
-            <option value={ALL_COURSE_PROGRAMS}>All course/programs</option>
-            {availableCoursePrograms.map((courseProgram) => (
-              <option key={courseProgram} value={courseProgram}>
-                {courseProgram}
-              </option>
-            ))}
-          </select>
-        </div>
+        {availableCoursePrograms.length > 0 ? (
+          <div className="space-y-4">
+            <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
+              <label htmlFor="public-library-course-program-search" className="text-sm font-medium">
+                Course / Program
+              </label>
+              <input
+                id="public-library-course-program-search"
+                type="search"
+                value={courseProgramSearchQuery}
+                onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                placeholder="Search course or program..."
+                data-autofocus="true"
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+              />
+              {courseProgramDraft !== ALL_COURSE_PROGRAMS ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected course/program</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={getFilterChipClassName(true)}
+                      onClick={() => {
+                        setCourseProgramDraft(ALL_COURSE_PROGRAMS);
+                        setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+                        replacePublicLibraryFilters({
+                          ...parsedUrlFilters,
+                          courseProgram: null,
+                          view: null,
+                        });
+                      }}
+                    >
+                      {courseProgramDraft}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            {filteredModalCoursePrograms.length === 0 ? (
+              <p className="text-sm text-foreground/65">No course/programs match your search.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={getFilterChipClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
+                  onClick={() => {
+                    setCourseProgramDraft(ALL_COURSE_PROGRAMS);
+                    setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+                    replacePublicLibraryFilters({
+                      ...parsedUrlFilters,
+                      courseProgram: null,
+                      view: null,
+                    });
+                  }}
+                  aria-pressed={courseProgramDraft === ALL_COURSE_PROGRAMS}
+                >
+                  All
+                </button>
+                {filteredModalCoursePrograms.map((courseProgram) => (
+                  <button
+                    key={courseProgram}
+                    type="button"
+                    className={getFilterChipClassName(courseProgramDraft === courseProgram)}
+                    onClick={() => {
+                      setCourseProgramDraft(courseProgram);
+                      setSelectedCourseProgram(courseProgram);
+                      setRecentCoursePrograms((previous) => updateRecentValues(previous, [courseProgram]));
+                      replacePublicLibraryFilters({
+                        ...parsedUrlFilters,
+                        courseProgram: slugifyPublicLibraryFilterValue(courseProgram),
+                        view: null,
+                      });
+                    }}
+                    aria-pressed={courseProgramDraft === courseProgram}
+                  >
+                    {courseProgram}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         <div className="space-y-2">
           <p className="text-sm font-medium">Source</p>
@@ -1822,7 +1908,8 @@ export function PublicLibraryPageClient() {
                   Clear all
                 </button>
               </div>
-              <div className={getScrollRailClassName()}>
+              <div className="relative">
+              <div className={getFadedScrollRailClassName()}>
                 {tagDraft.map((tag) => (
                   <button
                     key={`selected-${tag}`}
@@ -1833,6 +1920,7 @@ export function PublicLibraryPageClient() {
                     {tag} ×
                   </button>
                 ))}
+              </div>
               </div>
             </div>
           ) : null}

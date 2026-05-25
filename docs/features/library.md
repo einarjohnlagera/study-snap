@@ -70,6 +70,13 @@ Private Library filters:
 - `Public`
 - `Private`
 
+Private Library filter presentation:
+
+- `Subject`, `Tags`, and readiness filters use horizontal scroll rails with a right-edge fade affordance.
+- overflow actions use `Browse all` text links instead of chip-styled `+ More` controls.
+- `Course / Program` is available from the `More Filters` sheet as a single-select filter with search.
+- selecting a course/program shows an active dot on `More Filters` and an active summary badge.
+
 Readiness visibility:
 
 - The library Filter readiness row is ordered `All`, `Draft`, `Quiz Ready`, `Study Pack Ready`; `Quiz Ready` appears only for Teacher/Admin contexts.
@@ -116,6 +123,12 @@ Public Library filters:
 - `By You`
 - `Official`
 - `Community`
+
+Public Library filter presentation:
+
+- `Course / Program` is an inline chip row between `Subject` and `Tags`; it uses the same URL-synced `courseProgram` query param as the public library filter state.
+- public filter rails use a right-edge fade affordance and `Browse all` text links for overflow.
+- `More Filters` is reserved for source filters (`By You`, `Official`, `Community`).
 
 Growth behavior:
 

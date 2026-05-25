@@ -16,6 +16,8 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 - **Profile-aware learning loop on landing** — replaced generic HowItWorks + ProfileShowcase sections with a single interactive ProfileLearningSection; four-tab layout (Students / Exam Reviewers / Teachers / Professionals) each showing learning loop steps, mode chips, and a screenshot
 - **Post-signup copy-note → instant quiz** — new users who sign up via a public note copy CTA have the note automatically copied and Study Pack generation started; they land directly on a Quick Review session, bypassing onboarding; copy intent survives Google One Tap and email verification via a short-lived cookie
 - **Shareable Student Quiz Links** — teachers generate a /quiz/[token] link from the quiz preview page; students take the quiz anonymously in-browser; results screen prompts signup; quota gated (Free: 3/month, Plus: 10/month, Pro: unlimited)
+- **Library filter discoverability** — replaced chip-styled `+ More` overflow controls with `Browse all` text links, added Course / Program filtering to private and public libraries, and added faded scroll-rail affordances so horizontal filter rows read as scrollable.
+- **Library UX polish** — moved `Browse all` to section headers, fixed bottom-sheet modal behavior on mobile, and moved the public library Course / Program control into More Filters.
 
 ---
 

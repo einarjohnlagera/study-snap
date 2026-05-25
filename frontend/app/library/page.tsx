@@ -5,6 +5,7 @@ import {useRouter} from "next/navigation";
 import {
   ArrowUpDown,
   CheckSquare,
+  Filter,
   Globe,
   Lock,
   Square,
@@ -42,12 +43,16 @@ type LibraryReadinessFilter = "ALL" | "DRAFT" | "QUIZ_READY" | "STUDY_PACK_READY
 
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const SUBJECT_FALLBACK = "General";
 const POPULAR_TAG_LIMIT = 5;
-const MORE_TAGS_LABEL = "+ More";
-const MORE_SUBJECTS_LABEL = "+ More";
+const COURSE_PROGRAM_LIMIT = 10;
+const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const SUBJECT_SELECTOR_TITLE = "Select subject";
+const MORE_FILTERS_TITLE = "More Filters";
+const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
+const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
   RECENTLY_REVIEWED: "Recently Reviewed",
@@ -138,6 +143,10 @@ function getScrollRailClassName() {
   return "flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 }
 
+function getFadedScrollRailClassName() {
+  return `${getScrollRailClassName()} ${SCROLL_RAIL_FADE_CLASS_NAME}`;
+}
+
 function updateRecentValues(previous: string[], values: string[]) {
   const next = [...previous];
   for (const value of values) {
@@ -209,6 +218,8 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [subjectDraft, setSubjectDraft] = useState<string>(ALL_SUBJECTS);
+  const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
+  const [courseProgramDraft, setCourseProgramDraft] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_UPDATED");
@@ -217,10 +228,12 @@ export default function LibraryPage() {
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
   const [subjectSelectorOpen, setSubjectSelectorOpen] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
+  const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [readinessFilter, setReadinessFilter] = useState<LibraryReadinessFilter>("ALL");
@@ -325,6 +338,24 @@ export default function LibraryPage() {
     return counts;
   }, [items]);
 
+  const courseProgramCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const courseProgram = normalizeCourseProgram(item.courseProgram);
+      if (courseProgram) {
+        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [items]);
+
+  const availableCoursePrograms = useMemo(() => {
+    return Array.from(courseProgramCounts.keys()).sort((left, right) => {
+      const countDiff = (courseProgramCounts.get(right) ?? 0) - (courseProgramCounts.get(left) ?? 0);
+      return countDiff !== 0 ? countDiff : left.localeCompare(right);
+    });
+  }, [courseProgramCounts]);
+
   const availableTags = useMemo(() => {
     return Array.from(tagCounts.keys());
   }, [tagCounts]);
@@ -337,6 +368,15 @@ export default function LibraryPage() {
       setSubjectDraft(ALL_SUBJECTS);
     }
   }, [availableSubjects, selectedSubject, subjectDraft]);
+
+  useEffect(() => {
+    if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
+      setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+    }
+    if (courseProgramDraft !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(courseProgramDraft)) {
+      setCourseProgramDraft(ALL_COURSE_PROGRAMS);
+    }
+  }, [availableCoursePrograms, courseProgramDraft, selectedCourseProgram]);
 
   useEffect(() => {
     setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
@@ -358,8 +398,15 @@ export default function LibraryPage() {
   }, [selectedSubject, subjectSelectorOpen]);
 
   useEffect(() => {
+    if (moreFiltersOpen) {
+      setCourseProgramDraft(selectedCourseProgram);
+      setCourseProgramSearchQuery("");
+    }
+  }, [moreFiltersOpen, selectedCourseProgram]);
+
+  useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
-  }, [readinessFilter, searchQuery, selectedSubject, selectedTags, sortBy]);
+  }, [readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   useEffect(() => {
     if (!showQuizReadyIndicators && readinessFilter === "QUIZ_READY") {
@@ -371,9 +418,12 @@ export default function LibraryPage() {
     setSearchQuery("");
     setSelectedSubject(ALL_SUBJECTS);
     setSubjectDraft(ALL_SUBJECTS);
+    setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+    setCourseProgramDraft(ALL_COURSE_PROGRAMS);
     setSelectedTags([]);
     setTagDraft([]);
     setSubjectSearchQuery("");
+    setCourseProgramSearchQuery("");
     setTagSearchQuery("");
     setReadinessFilter("ALL");
   }, []);
@@ -417,6 +467,16 @@ export default function LibraryPage() {
     ));
   }, [displayedTags, tagSearchQuery]);
 
+  const filteredModalCoursePrograms = useMemo(() => {
+    const query = courseProgramSearchQuery.trim().toLowerCase();
+    const source = query.length === 0
+      ? availableCoursePrograms.slice(0, COURSE_PROGRAM_LIMIT)
+      : availableCoursePrograms;
+    return source.filter((courseProgram) => (
+      query.length === 0 || courseProgram.toLowerCase().includes(query)
+    ));
+  }, [availableCoursePrograms, courseProgramSearchQuery]);
+
   const visiblePopularTags = useMemo(() => {
     const ordered = [
       ...selectedTags,
@@ -426,13 +486,9 @@ export default function LibraryPage() {
     return deduped.slice(0, Math.max(POPULAR_TAG_LIMIT, selectedTags.length));
   }, [displayedTags, selectedTags]);
 
-  const remainingTagCount = useMemo(() => {
-    const visible = new Set(visiblePopularTags);
-    return displayedTags.filter((tag) => !visible.has(tag)).length;
-  }, [displayedTags, visiblePopularTags]);
-
   const hasActiveFilters = searchQuery.trim().length > 0
     || readinessFilter !== "ALL"
+    || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0;
 
@@ -442,6 +498,7 @@ export default function LibraryPage() {
       const itemTitle = item.title?.trim() || "Untitled note";
       const itemTags = normalizeTags(item.tags);
       const itemSubject = getLibrarySubject(item);
+      const itemCourseProgram = normalizeCourseProgram(item.courseProgram);
 
       const searchMatch = query.length === 0
         || itemTitle.toLowerCase().includes(query)
@@ -453,10 +510,12 @@ export default function LibraryPage() {
         || (effectiveReadinessFilter === "DRAFT" && item.studyPackStatus === "DRAFT")
         || (effectiveReadinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
         || (effectiveReadinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
+      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
+        || itemCourseProgram === selectedCourseProgram;
       const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
 
-      return searchMatch && readinessMatch && subjectMatch && tagMatch;
+      return searchMatch && readinessMatch && courseProgramMatch && subjectMatch && tagMatch;
     });
 
     const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
@@ -496,7 +555,7 @@ export default function LibraryPage() {
           return byDateDesc(left.updatedAt, right.updatedAt);
       }
     });
-  }, [items, readinessFilter, searchQuery, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
+  }, [items, readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
 
   const visibleItems = useMemo(
     () => sortedFilteredItems.slice(0, visibleCount),
@@ -645,18 +704,35 @@ export default function LibraryPage() {
                 />
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => setSortSheetOpen(true)}
-                aria-label="Open sorting"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                  <span>Sort</span>
-                </span>
-              </Button>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="relative w-full sm:w-auto"
+                  onClick={() => setMoreFiltersOpen(true)}
+                  aria-label="Open more filters"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Filter className="h-4 w-4" aria-hidden="true" />
+                    <span>More Filters</span>
+                    {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
+                      <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" aria-hidden="true" />
+                    ) : null}
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setSortSheetOpen(true)}
+                  aria-label="Open sorting"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                    <span>Sort</span>
+                  </span>
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -672,7 +748,8 @@ export default function LibraryPage() {
                   </button>
                 ) : null}
               </div>
-              <div className={getScrollRailClassName()}>
+              <div className="relative">
+              <div className={getFadedScrollRailClassName()}>
                 {visibleReadinessFilters.map((filterKey) => (
                   <button
                     key={filterKey}
@@ -685,22 +762,41 @@ export default function LibraryPage() {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">Subjects</p>
                 {selectedSubject !== ALL_SUBJECTS ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                      onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      className={TEXT_LINK_CLASS_NAME}
+                      onClick={() => setSubjectSelectorOpen(true)}
+                    >
+                      {BROWSE_ALL_LABEL}
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                    onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+                    className={TEXT_LINK_CLASS_NAME}
+                    onClick={() => setSubjectSelectorOpen(true)}
                   >
-                    Reset
+                    {BROWSE_ALL_LABEL}
                   </button>
-                ) : null}
+                )}
               </div>
-              <div className={getScrollRailClassName()}>
+              <div className="relative">
+              <div className={getFadedScrollRailClassName()}>
                 <button
                   type="button"
                   className={getFilterChipClassName(selectedSubject === ALL_SUBJECTS)}
@@ -723,13 +819,7 @@ export default function LibraryPage() {
                     {subject}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  className={getFilterChipClassName(false)}
-                  onClick={() => setSubjectSelectorOpen(true)}
-                >
-                  {MORE_SUBJECTS_LABEL}
-                </button>
+              </div>
               </div>
             </div>
 
@@ -737,20 +827,30 @@ export default function LibraryPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">Popular Tags</p>
-                  {selectedTags.length > 0 ? (
+                  <div className="flex items-center gap-3">
+                    {selectedTags.length > 0 ? (
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                        onClick={() => {
+                          setSelectedTags([]);
+                          setTagDraft([]);
+                        }}
+                      >
+                        Clear tags
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                      onClick={() => {
-                        setSelectedTags([]);
-                        setTagDraft([]);
-                      }}
+                      className={TEXT_LINK_CLASS_NAME}
+                      onClick={() => setTagSelectorOpen(true)}
                     >
-                      Clear tags
+                      {BROWSE_ALL_LABEL}
                     </button>
-                  ) : null}
+                  </div>
                 </div>
-                <div className={getScrollRailClassName()}>
+                <div className="relative">
+                <div className={getFadedScrollRailClassName()}>
                   {visiblePopularTags.map((tag) => (
                     <button
                       key={tag}
@@ -772,15 +872,7 @@ export default function LibraryPage() {
                       {tag}
                     </button>
                   ))}
-                  {remainingTagCount > 0 ? (
-                    <button
-                      type="button"
-                      className={getFilterChipClassName(false)}
-                      onClick={() => setTagSelectorOpen(true)}
-                    >
-                      {MORE_TAGS_LABEL}
-                    </button>
-                  ) : null}
+                </div>
                 </div>
               </div>
             ) : null}
@@ -790,6 +882,11 @@ export default function LibraryPage() {
               {selectedSubject !== ALL_SUBJECTS ? (
                 <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
                   Subject: {selectedSubject}
+                </span>
+              ) : null}
+              {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
+                <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
+                  Course: {selectedCourseProgram}
                 </span>
               ) : null}
               {readinessFilter !== "ALL" ? (
@@ -931,6 +1028,85 @@ export default function LibraryPage() {
           ) : null}
         </div>
       )}
+
+      <LibrarySheetModal
+        isOpen={moreFiltersOpen}
+        title={MORE_FILTERS_TITLE}
+        onClose={() => setMoreFiltersOpen(false)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setCourseProgramDraft(ALL_COURSE_PROGRAMS)}>
+              Clear
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setSelectedCourseProgram(courseProgramDraft);
+                setMoreFiltersOpen(false);
+              }}
+            >
+              Apply
+            </Button>
+          </div>
+        )}
+      >
+        {availableCoursePrograms.length > 0 ? (
+          <div className="space-y-4">
+            <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
+              <label htmlFor="library-course-program-search" className="text-sm font-medium">
+                Course / Program
+              </label>
+              <input
+                id="library-course-program-search"
+                type="search"
+                value={courseProgramSearchQuery}
+                onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                placeholder="Search course or program..."
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+              />
+              {courseProgramDraft !== ALL_COURSE_PROGRAMS ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected course/program</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={getFilterChipClassName(true)}
+                      onClick={() => setCourseProgramDraft(ALL_COURSE_PROGRAMS)}
+                    >
+                      {courseProgramDraft}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            {filteredModalCoursePrograms.length === 0 ? (
+              <p className="text-sm text-foreground/65">No course/programs match your search.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={getFilterChipClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
+                  onClick={() => setCourseProgramDraft(ALL_COURSE_PROGRAMS)}
+                  aria-pressed={courseProgramDraft === ALL_COURSE_PROGRAMS}
+                >
+                  All
+                </button>
+                {filteredModalCoursePrograms.map((courseProgram) => (
+                  <button
+                    key={courseProgram}
+                    type="button"
+                    className={getFilterChipClassName(courseProgramDraft === courseProgram)}
+                    onClick={() => setCourseProgramDraft(courseProgram)}
+                    aria-pressed={courseProgramDraft === courseProgram}
+                  >
+                    {courseProgram}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </LibrarySheetModal>
 
       <LibrarySheetModal
         isOpen={subjectSelectorOpen}
