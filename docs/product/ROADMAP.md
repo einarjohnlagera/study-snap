@@ -22,13 +22,14 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 
 ### Why this release
 
-NoteLib has a healthy feature set but weak top-of-funnel conversion. The primary distribution channel is Facebook — posts in student and board exam groups linking to public notes. Three problems block that funnel today:
+NoteLib has a healthy feature set but weak top-of-funnel conversion. The primary distribution channel is Facebook — posts in student and board exam groups linking to public notes. Four problems block that funnel today:
 
 1. Social traffic is almost entirely mobile; the web app isn't installable and some flows feel cramped on small screens.
 2. New users who sign up from a public note land in an empty library with nothing to do — the note they came from isn't there, and the quiz flow they started doesn't continue.
 3. Teachers have no way to share a quiz with students digitally. Every teacher who generates a quiz is a potential distribution channel for 30–50 student signups — but only if sharing exists.
+4. The landing page shows a generic "How it works" loop that doesn't speak to teachers or board exam reviewers specifically — visitors can't immediately see their own workflow.
 
-This release addresses all three, in order of impact.
+This release addresses all four, in order of impact.
 
 ### Primary focus
 
@@ -50,17 +51,63 @@ This release addresses all three, in order of impact.
    - On successful signup, backend copies the public note to the new user's library and triggers Study Pack generation
    - Frontend routes directly to the quiz session, not the library
    - No change to the existing copy flow for already-authenticated users
+   - Users who sign up directly (not from a public note) see onboarding first, then library; users coming from a public note skip onboarding and go straight to the quiz
 
-3. **PWA / Mobile Web Polish**
+3. **Profile-Aware Learning Loop (Landing page)**
+
+   Replace the current static "How it works" + "Who It's For" sections with a single interactive section. Visitors click their profile type (Students / Exam Reviewers / Teachers / Professionals) and see the exact learning loop for that role — screenshot, description, mode chips, and step-by-step workflow.
+
+   - Replaces `HowItWorksSection` (generic 5-step loop) and `ProfileShowcaseSection` (static cards) with one merged `ProfileLearningSection` client component
+   - Profile tabs at top; selected tab drives screenshot, description, mode chips, and learning loop steps below
+   - Default selection: Students
+   - Per-profile step data and tagline (e.g., "Create - Generate - Preview - Export - Share" for Teachers)
+   - Teacher step 5 is "Share" — intentionally previews the Shareable Quiz Links feature shipping in this release
+   - A simplified 3-step overview ("Capture → Generate → Practice") replaces the generic loop in the hero area so the top of the page still has a quick pitch
+
+   Per-profile learning loops:
+
+   | Profile | Tagline | Steps |
+   |---|---|---|
+   | Students | Create - Understand - Practice - Challenge - Improve | Create, Understand, Practice (Quick Review), Challenge (Challenge Quiz / Long Exam), Improve (Adaptive Practice) |
+   | Exam Reviewers | Create - Understand - Practice - Simulate - Improve | Create, Understand, Practice (Quick Review / Challenge Quiz), Simulate (Board Exam), Improve (Adaptive Practice) |
+   | Teachers | Create - Generate - Preview - Export - Share | Create lesson note, Generate quiz, Preview & refine questions, Export DOCX, Share quiz link to students |
+   | Professionals | Create - Understand - Practice - Critique - Report | Create, Understand, Practice (scenario MCQ), Critique (AI feedback per answer), Interview Readiness Report |
+
+4. **Teacher In-App Guided Tips**
+
+   Add five one-time contextual guidance tips for teachers at the moments where the Teacher workflow is most confusing. Uses the existing `GuidanceTip` component + `hasSeenTip()` localStorage system — no new infrastructure.
+
+   | Moment | Message |
+   |---|---|
+   | First Teacher dashboard visit | "NoteLib turns your lesson notes into ready-to-use quiz drafts. Start by creating a note with your lesson content." |
+   | First note creation (teacher) | "The more detail in your notes, the better the quiz questions. Paste a full lesson outline, not just bullet headers." |
+   | Generate Quiz modal (teacher, first time) | "You can select multiple notes to build a quiz from a full unit — use the note checkboxes in your library first." |
+   | Multi-note checkboxes (library, teacher, first time) | "Select multiple notes with the checkboxes, then use 'Generate Quiz' from the toolbar." |
+   | First DOCX export button encounter | "Download as DOCX and open in Word or Google Docs — format it your way before distributing to students." |
+
+   - All tips gated by `user.profileType === 'TEACHER'`
+   - Each tip has a unique `tipId`; once dismissed, never shown again (localStorage)
+   - Do not add new tips without going through `pickActiveGuidance()` on pages that already use priority-ranked rules; inline `GuidanceTip` is acceptable for one-off contextual placements
+
+5. **PWA / Mobile Web Polish**
 
    Make the web app installable from mobile browsers and ensure the core conversion funnel (public note → Quick Check → signup → first quiz) is thumb-friendly.
 
    - Add PWA manifest and service worker with an offline shell for the app routes
    - Add an "Add to Home Screen" nudge for returning mobile visitors who haven't installed
+   - Fix iOS Safari viewport zoom on input focus: all inputs and textareas must have `font-size: 16px` minimum — iOS zooms when font-size < 16px, hiding modal action buttons in some flows
    - Audit and fix touch targets, modal scroll behavior, and text sizing on the public note, Quick Check, signup, and dashboard flows
    - No full native app — PWA covers the gap without the 2–3 month rebuild cost
 
-4. **Social proof on landing**
+6. **Consistent Paywall UI**
+
+   Unify the look of all quota-limit messages across the app. Currently the study pack generation limit and the note creation limit surface as visually inconsistent banners. Define a single paywall template (icon, title, reset date, upgrade CTA) and apply it to all quota surfaces.
+
+   - All quota-limit states (study pack, note creation, quiz generation) must render the same component/layout
+   - Upgrade CTA always routes through `getUpgradeCtas(currentPlan)` — no hardcoded copy
+   - Reset date must be accurate and formatted consistently
+
+7. **Social proof on landing**
 
    Add real-time (or cached) aggregate counts and one or two genuine student/teacher testimonials to the landing page. Students and teachers trust peer validation; a note count and a real quote move the needle more than a feature list.
 
@@ -76,6 +123,8 @@ This release addresses all three, in order of impact.
 - PWA service worker must not cache API responses or auth state — static assets only; do not cache quiz or note data
 - Social proof counts must be cached (5-minute TTL acceptable) — do not query live on every landing page load
 - Shareable quiz link quota for Free teachers is a plan rules change; update `docs/product/PLANS.md` before implementing the gate
+- Profile-aware learning loop is a pure frontend change — `"use client"` component with local tab state; no backend involvement
+- iOS zoom fix is a CSS-only change; do not add `user-scalable=no` to the viewport meta tag (accessibility regression)
 
 ### Anti-drift notes
 
@@ -83,14 +132,19 @@ This release addresses all three, in order of impact.
 - Anonymous quiz sessions must not create `QuickReviewSessionEntity` rows — no backend session until the student signs up
 - PWA scope is limited to the conversion funnel; do not invest in offline-capable quiz sessions or background sync in v1
 - Testimonials must be real; do not generate or invent them
+- Profile-aware landing section merges two existing sections — do not keep both the old `HowItWorksSection` and the new merged section; remove the old one
+- Teacher guided tips use existing `GuidanceTip` component — do not build a new tips framework
 
 ### Sequencing
 
 Recommend shipping in this order:
-1. Post-signup copy-note → instant quiz (smallest scope, highest funnel impact, unblocks real data on whether social traffic converts)
-2. Shareable Student Quiz Links (teacher-side only; student side is light if anonymous session is client-only)
-3. Social proof on landing (fastest to ship once real numbers are confirmed)
-4. PWA / Mobile Polish (broadest scope; run in parallel with the above or ship last)
+1. Mobile viewport zoom fix + consistent paywall UI (CSS + component fix, fastest wins, unblocks mobile users immediately)
+2. Teacher in-app guided tips (low scope, unblocks active teacher sales)
+3. Profile-aware learning loop on landing (frontend-only landing redesign)
+4. Post-signup copy-note → instant quiz + onboarding flow redesign (full-stack, highest funnel impact)
+5. Shareable Student Quiz Links (full-stack; teacher-side first, student anonymous play second)
+6. Social proof on landing (fastest to ship once real numbers are confirmed)
+7. PWA / Mobile Polish (broadest scope; run in parallel with the above or ship last)
 
 ---
 
