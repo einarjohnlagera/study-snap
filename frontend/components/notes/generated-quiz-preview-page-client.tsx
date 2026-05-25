@@ -262,7 +262,8 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     try {
       const created = await createQuizShareLink(generatedQuiz.id);
       setShareLink(created);
-      setToast("Share link ready.");
+      void navigator.clipboard.writeText(created.shareUrl).catch(() => null);
+      setToast("Link created and copied.");
       void refreshUsageSummary();
       void trackAnalyticsEvent({
         eventType: "QUIZ_SHARE_LINK_CREATED",
