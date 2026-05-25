@@ -107,6 +107,14 @@ This release addresses all four, in order of impact.
    - Upgrade CTA always routes through `getUpgradeCtas(currentPlan)` — no hardcoded copy
    - Reset date must be accurate and formatted consistently
 
+8. **Send Feedback button consistency fix** ✅
+
+   The "Send Feedback" button appeared as a floating bottom-right button on some pages (Dashboard, Library, Settings) and as a navbar icon on others — inconsistent and the navbar-triggered modal was rendering clipped to the header area due to `backdrop-filter` creating a CSS containing block for `position: fixed` children.
+
+   - `AppModal` now wraps its overlay in `ReactDOM.createPortal(..., document.body)` so it always escapes any containing block ancestor, regardless of where it is mounted
+   - Floating `SendFeedbackWidget` removed; header icon renders consistently on all authenticated pages
+   - Removed `shouldShowFloatingFeedbackWidget` / `shouldShowHeaderFeedbackWidget` routing functions from `app-shell.tsx`
+
 7. **Social proof on landing**
 
    Add real-time (or cached) aggregate counts and one or two genuine student/teacher testimonials to the landing page. Students and teachers trust peer validation; a note count and a real quote move the needle more than a feature list.
