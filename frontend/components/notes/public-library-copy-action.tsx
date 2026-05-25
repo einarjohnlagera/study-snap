@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent } from "@/lib/api";
-import { buildPublicCopyIntentQuery } from "@/lib/public-note-copy";
+import { buildPublicCopyIntentQuery, setCopyIntentCookie } from "@/lib/public-note-copy";
 
 const SAVE_BUTTON_LABEL = "Save";
 const SAVE_LOADING_LABEL = "Saving...";
@@ -152,6 +152,7 @@ export function PublicLibraryCopyAction({
               type="button"
               onClick={() => {
                 setAuthModalOpen(false);
+                setCopyIntentCookie(noteId);
                 startRouteProgress();
                 router.push(`/signup?redirect=${encodeURIComponent(authRedirectTarget)}`);
               }}

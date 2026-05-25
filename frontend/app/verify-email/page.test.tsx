@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import VerifyEmailPage from "./page";
-import { getMe, getMyPlan, verifyEmailToken } from "@/lib/api";
+import { copyNoteOnSignup, getMe, getMyPlan, verifyEmailToken } from "@/lib/api";
 
 const routerMock = {
   replace: jest.fn(),
@@ -28,9 +28,11 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   ApiRequestError: class ApiRequestError extends Error {},
+  copyNoteOnSignup: jest.fn(),
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   requestEmailVerification: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
   verifyEmailToken: jest.fn(),
 }));
 
@@ -38,6 +40,7 @@ describe("VerifyEmailPage", () => {
   beforeEach(() => {
     routerMock.replace.mockReset();
     setAuthUserMock.mockClear();
+    document.cookie = "notelib-copy-intent=; path=/; max-age=0; SameSite=Strict";
     currentToken = "verify-token";
     currentAuthUser = {
       id: "user-1",
@@ -50,9 +53,11 @@ describe("VerifyEmailPage", () => {
       planType: "FREE",
     };
     (verifyEmailToken as jest.Mock).mockReset();
+    (copyNoteOnSignup as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (verifyEmailToken as jest.Mock).mockResolvedValue({ message: "Email verified successfully." });
+    (copyNoteOnSignup as jest.Mock).mockResolvedValue({ noteId: "copied-note-1" });
     (getMyPlan as jest.Mock).mockResolvedValue(null);
   });
 
@@ -88,5 +93,39 @@ describe("VerifyEmailPage", () => {
     await waitFor(() => {
       expect(setAuthUserMock).toHaveBeenCalled();
     });
+  });
+
+  it("copies the intended public note after verification and routes into quick review", async () => {
+    document.cookie = "notelib-copy-intent=public-note-1; path=/; max-age=1800; SameSite=Strict";
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      email: "note@example.com",
+      pendingEmail: null,
+      firstName: "Note",
+      lastName: "Lib",
+      displayName: "Note",
+      countryCode: "PH",
+      profileType: "STUDENT",
+      examDate: null,
+      engagementMode: "BALANCED",
+      inactivityRemindersEnabled: true,
+      weakConceptRemindersEnabled: true,
+      emailVerifiedAt: "2026-03-31T08:00:00Z",
+      onboardingCompletedAt: null,
+      productOnboardingCompletedAt: null,
+      studyPackCount: 0,
+      role: "USER",
+      status: "ACTIVE",
+      planType: "FREE",
+      subscription: null,
+    });
+
+    render(<VerifyEmailPage />);
+
+    await waitFor(() => {
+      expect(copyNoteOnSignup).toHaveBeenCalledWith("public-note-1");
+      expect(routerMock.replace).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1&startQuickReview=1");
+    });
+    expect(document.cookie).not.toContain("notelib-copy-intent=");
   });
 });

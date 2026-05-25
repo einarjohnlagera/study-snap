@@ -18,6 +18,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
@@ -418,6 +419,19 @@ class NoteServiceTest {
         assertThat(copied.summary()).isEqualTo("Existing summary");
         verify(noteRepository, never()).save(any(NoteEntity.class));
         verify(analyticsService, never()).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
+    }
+
+    @Test
+    void copyPublicNoteForSignup_rejectsPrivateNotes() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        when(noteRepository.findByIdAndVisibility(sourceNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.empty());
+
+        String id = sourceNoteId.toString();
+        assertThatThrownBy(() -> noteService.copyPublicNoteForSignup(id, ownerUserId))
+                .isInstanceOf(NoteNotFoundException.class);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
     }
 
     @Test

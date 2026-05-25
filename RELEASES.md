@@ -14,6 +14,7 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 - **Teacher in-app guided tips** — added 5 one-time dismissible `GuidanceTip` placements gated by `profileType === "TEACHER"`: (1) first dashboard visit, (2) note content area on create, (3) inside the Generate Quiz modal, (4) library list when multi-note selection is available, (5) quiz preview page near the DOCX Export button; each tip is dismissed to localStorage and never re-shown.
 - **Send Feedback consistency fix** — removed the floating "Send Feedback" button (was inconsistently shown on Dashboard/Library/Settings only); header icon now renders on all authenticated pages; fixed modal positioning bug where `backdrop-filter` on the sticky header created a CSS containing block for `position: fixed` children — resolved by wrapping `AppModal` in `ReactDOM.createPortal(..., document.body)`, which benefits all modals app-wide.
 - **Profile-aware learning loop on landing** — replaced generic HowItWorks + ProfileShowcase sections with a single interactive ProfileLearningSection; four-tab layout (Students / Exam Reviewers / Teachers / Professionals) each showing learning loop steps, mode chips, and a screenshot
+- **Post-signup copy-note → instant quiz** — new users who sign up via a public note copy CTA have the note automatically copied and Study Pack generation started; they land directly on a Quick Review session, bypassing onboarding; copy intent survives Google One Tap and email verification via a short-lived cookie
 
 ---
 

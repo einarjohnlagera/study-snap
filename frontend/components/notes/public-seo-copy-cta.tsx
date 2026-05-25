@@ -10,6 +10,7 @@ import { copyNote, trackAnalyticsEvent } from "@/lib/api";
 import {
   buildCopiedNotePath,
   buildPublicCopyIntentQuery,
+  setCopyIntentCookie,
   type PublicCopyRedirectTarget,
 } from "@/lib/public-note-copy";
 
@@ -140,6 +141,7 @@ export function PublicSeoCopyCta({
               type="button"
               onClick={() => {
                 setAuthModalOpen(false);
+                setCopyIntentCookie(noteId);
                 router.push(`/signup?redirect=${encodeURIComponent(authRedirectTarget)}`);
               }}
             >

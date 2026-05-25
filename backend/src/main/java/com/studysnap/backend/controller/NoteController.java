@@ -20,6 +20,8 @@ import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.CopyOnSignupRequest;
+import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
@@ -61,6 +63,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NoteController {
     private static final String AUTO_APPLY_METADATA_REQUEST_PARAM = "autoApplyMetadata";
+    private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
 
     private final AuthService authService;
     private final NoteService noteService;
@@ -157,6 +160,21 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteService.copyNote(id, userId);
+    }
+
+    @PostMapping("/copy-on-signup")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public CopyOnSignupResponse copyNoteOnSignup(
+            @Valid @RequestBody CopyOnSignupRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        NoteResponse copied = noteService.copyPublicNoteForSignup(request.publicNoteId(), userId);
+        if (STUDY_PACK_STATUS_DRAFT.equals(copied.studyPackStatus())) {
+            studyPackService.startAsyncGenerationFromNote(copied.id(), userId);
+        }
+        return new CopyOnSignupResponse(copied.id());
     }
 
     @PostMapping("/{id}/quick-review/start")

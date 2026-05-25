@@ -242,6 +242,17 @@ public class NoteService {
         return mapToResponse(saved, null);
     }
 
+    public NoteResponse copyPublicNoteForSignup(String id, UUID ownerUserId) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
+        NoteEntity source = noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
+                .orElseThrow(NoteNotFoundException::new);
+        if (isCurrentUser(source.getOwnerUserId(), ownerUserId)) {
+            StudyPackEntity linkedStudyPack = findLinkedStudyPack(source.getId());
+            return mapToResponse(source, linkedStudyPack);
+        }
+        return copyNote(id, ownerUserId);
+    }
+
     public PublicNoteLikeResponse togglePublicNoteLike(String id, UUID userId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
