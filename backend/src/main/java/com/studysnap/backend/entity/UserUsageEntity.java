@@ -65,6 +65,9 @@ public class UserUsageEntity {
     @Column(name = "pdf_exports_count", nullable = false)
     private Integer pdfExportsCount;
 
+    @Column(name = "quiz_share_links_created", nullable = false)
+    private Integer quizShareLinksCreated;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

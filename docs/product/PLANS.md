@@ -13,6 +13,7 @@ Create notes, generate Study Packs, and review basic concepts.
 - `10` Study Packs / month
 - `5` Quizzes / month
 - `2` exports / month (PDF / DOCX)
+- `3` shareable quiz links / month
 
 **Features**
 
@@ -37,6 +38,7 @@ Perfect for students who want consistent review and better retention.
 - `25` Quizzes / month
 - `15` exports / month
 - `10` Adaptive Practice sessions / month
+- `10` shareable quiz links / month
 
 **Features**
 
@@ -64,6 +66,7 @@ Designed for serious learners preparing for board and entrance exams.
 - `10` Long Exam sessions / month
 - `5` Board Exam sessions / month
 - Unlimited exports
+- Unlimited shareable quiz links
 
 **Features**
 
@@ -108,6 +111,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Study Packs / month | 10 | 50 | 100 |
 | Quizzes / month | 5 | 25 | 50 |
 | Exports / month | 2 | 15 | Unlimited |
+| Shareable quiz links / month | 3 | 10 | Unlimited |
 | Topic note generation | Limited | Higher | Highest |
 | Adaptive Practice | — | 10 sessions | 30 sessions |
 | Interview Practice | — | — | 10 sessions |

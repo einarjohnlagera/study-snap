@@ -88,6 +88,18 @@ Use the following docs as the source of truth:
 
 [Keep changes scoped. List files or modules only when it helps Codex stay on track, not to micromanage.]
 
+## ERROR STATES
+
+[Every new endpoint, user action, or async flow must account for its failure modes. List them explicitly — Codex will only implement what's named here.]
+
+Examples:
+- Network/transient error on load → show retry state, not a misleading "no longer active" screen
+- API error on form submit → show inline error, preserve user's entered data
+- 404 on a resource → dedicated "not found" message, not a crash
+- Quota exceeded on create → show upgrade prompt, not a generic error
+- `@Transactional` required if quota check + write are in the same flow
+- Idempotency: if an existing record is returned instead of creating a new one, specify which state qualifies (e.g., active only, not any)
+
 ## TESTING
 
 - [What must be tested]
@@ -197,6 +209,12 @@ Specific, checkable. Not "works correctly" — name the behavior. Acceptance cri
 
 **Missing anti-drift context.** If the task touches upgrade CTAs, analytics events, learner level, quiz generation, onboarding, or public library — copy the relevant AGENTS.md anti-drift rule into the CONTEXT section. Codex does not remember previous sessions.
 
+**Happy-path-only acceptance criteria.** Codex implements exactly what the ACs describe. If the ACs only cover success flows, error states are omitted or handled incorrectly. Every feature with user-facing errors (network failures, 404s, quota limits, concurrent writes) needs explicit ACs for those paths. Use the ERROR STATES section to enumerate them, then mirror them in ACCEPTANCE CRITERIA. A good signal: if removing the error branch would make all your ACs pass, the ACs are incomplete.
+
+**Missing transactions and idempotency spec.** Any flow that does a quota check followed by a write, or that should be idempotent on retry, must say so explicitly. Codex will not add `@Transactional` or an active-state guard unless the prompt requires it.
+
+**No "existing state on refresh" AC.** If the feature creates a persistent record (share link, draft, session), include an AC that verifies the existing record is loaded on page refresh — not just that creating it works. Codex will build the create flow and skip the load flow unless you name both.
+
 **Skipping DOCUMENTATION.** Every prompt that changes behavior should update RELEASES.md at minimum. Make it a required section, not an afterthought.
 
 **Over-specifying implementation.** Listing every file path and function call turns a Codex prompt into a code review. Specify outcomes and constraints; let Codex handle structure.
@@ -211,6 +229,21 @@ Specific, checkable. Not "works correctly" — name the behavior. Acceptance cri
 - [ ] Source docs listed at the top
 - [ ] Scope is explicit (what's in, what's out)
 - [ ] Relevant AGENTS.md anti-drift rules included in CONTEXT
+- [ ] ERROR STATES section covers every failure mode (network error, 404, quota, concurrent write)
+- [ ] ACCEPTANCE CRITERIA include at least one error-path check per user-facing action
+- [ ] If the feature writes a persistent record, there's an AC for loading it on page refresh
+- [ ] If the feature has a quota-check + write, `@Transactional` is called out explicitly
 - [ ] DOCUMENTATION section names specific files to update
-- [ ] ACCEPTANCE CRITERIA are checkable, not vague
 - [ ] If architecture is unclear, ran `roadmap-feature-audit` first
+
+---
+
+## After Codex Delivers
+
+Before committing Codex output, ask Claude to audit:
+
+> "Codex implemented [feature name]. Can you audit the diff for correctness — check error states, transactions, idempotency, and any missing load-on-refresh behavior?"
+
+This is not optional for Long prompts. Codex is reliable on happy-path implementation and unreliable on the edges. The audit step is cheap; the bug fix after shipping is not.
+
+Run `/code-review` or ask directly — either works. The pattern from v0.16.0 shareable quiz links: a 6-bug audit caught missing `@Transactional`, a wrong idempotency guard, a missing GET endpoint, and two frontend catch blocks that destroyed user state on transient errors.

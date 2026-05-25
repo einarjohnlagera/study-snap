@@ -32,6 +32,38 @@ export type GeneratedQuizResponse = {
   generatedAt: string;
 };
 
+export type QuizShareLinkResponse = {
+  id: string;
+  token: string;
+  shareUrl: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type PublicQuizItem = {
+  question: string;
+  choices: string[];
+  concept?: string | null;
+};
+
+export type PublicSharedQuizResponse = {
+  quizId: string;
+  noteTitle: string;
+  questions: PublicQuizItem[];
+};
+
+export type SharedQuizResultItem = {
+  correct: boolean;
+  correctIndex: number;
+  explanation?: string | null;
+};
+
+export type SharedQuizResultsResponse = {
+  score: number;
+  total: number;
+  items: SharedQuizResultItem[];
+};
+
 export type QuizDocxExportMode = "QUIZ_ONLY" | "WITH_ANSWERS";
 
 export type StudyPackResponse = {
@@ -227,6 +259,9 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_COPY_CLICKED"
   | "PUBLIC_NOTE_SHARED"
   | "COPY_ON_SIGNUP_COMPLETED"
+  | "QUIZ_SHARE_LINK_CREATED"
+  | "QUIZ_SHARE_LINK_TOGGLED"
+  | "QUIZ_SHARE_LINK_OPENED"
   | "LOGIN"
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"
@@ -2790,6 +2825,64 @@ export async function generateGeneratedQuiz(
   return parseApiResponse<GeneratedQuizResponse>(response, "Could not generate quiz.");
 }
 
+export async function createQuizShareLink(generatedQuizId: string): Promise<QuizShareLinkResponse> {
+  const response = await fetchWithAuth(
+    "/quiz-share",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ generatedQuizId }),
+    },
+    true,
+  );
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not create share link.");
+}
+
+export async function getQuizShareLinkByQuizId(generatedQuizId: string): Promise<QuizShareLinkResponse | null> {
+  const response = await fetchWithAuth(
+    `/quiz-share/${generatedQuizId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not load share link.");
+}
+
+export async function toggleQuizShareLink(token: string): Promise<QuizShareLinkResponse> {
+  const response = await fetchWithAuth(
+    `/quiz-share/${token}/toggle`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders("application/json"),
+    },
+    true,
+  );
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not update share link.");
+}
+
+export async function getPublicSharedQuiz(token: string): Promise<PublicSharedQuizResponse> {
+  const response = await fetch(buildUrl(`/quiz/share/${token}`), {
+    method: "GET",
+  });
+  return parseApiResponse<PublicSharedQuizResponse>(response, "Could not load shared quiz.");
+}
+
+export async function getSharedQuizResults(
+  token: string,
+  answers: number[],
+): Promise<SharedQuizResultsResponse> {
+  const response = await fetch(buildUrl(`/quiz/share/${token}/results`), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ answers }),
+  });
+  return parseApiResponse<SharedQuizResultsResponse>(response, "Could not check quiz results.");
+}
+
 export async function exportGeneratedQuizDocx(
   quizId: string,
   mode: QuizDocxExportMode,
@@ -3025,6 +3118,10 @@ export function isQuestionCountNotAllowedError(error: unknown): error is ApiRequ
 
 export function isMultipleExamVersionsNotAllowedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "MULTIPLE_EXAM_VERSIONS_NOT_ALLOWED";
+}
+
+export function isQuizShareLinkLimitExceededError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "QUIZ_SHARE_LINK_LIMIT_EXCEEDED";
 }
 
 export function isNotEnoughNewQuestionsError(error: unknown): error is ApiRequestError {

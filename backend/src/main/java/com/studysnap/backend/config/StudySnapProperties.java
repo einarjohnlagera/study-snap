@@ -120,6 +120,9 @@ public class StudySnapProperties {
         private int freeTeacherMonthlyDocxExportLimit = 10;
         private int plusTeacherMonthlyDocxExportLimit = -1;
         private int proTeacherMonthlyDocxExportLimit = -1;
+        private int freeMonthlyQuizShareLinkLimit = 3;
+        private int plusMonthlyQuizShareLinkLimit = 10;
+        private int proMonthlyQuizShareLinkLimit = 0;
         private int freeMonthlyPdfExportLimit = 2;
         private int plusMonthlyPdfExportLimit = 15;
         private int proMonthlyPdfExportLimit = -1;
@@ -214,6 +217,15 @@ public class StudySnapProperties {
                 case PLUS -> plusMonthlyPdfExportLimit;
                 case PRO -> proMonthlyPdfExportLimit;
                 case FREE -> freeMonthlyPdfExportLimit;
+            };
+            return unlimitedToNull(limit);
+        }
+
+        public Integer resolveMonthlyQuizShareLinkLimit(PlanType planType) {
+            int limit = switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyQuizShareLinkLimit;
+                case PRO -> proMonthlyQuizShareLinkLimit;
+                case FREE -> freeMonthlyQuizShareLinkLimit;
             };
             return unlimitedToNull(limit);
         }

@@ -35,6 +35,7 @@ Current version: **v0.16.0** — see `RELEASES.md` for in-progress scope, `docs/
 - Always use `docs/skills/codex-prompt-generator.md` when writing a Codex prompt
 - Never blur the line: if the user wants a Codex prompt, write one — don't start implementing instead
 - Never implement automatically when the user asks for a prompt
+- **After Codex delivers:** always ask Claude to audit the diff before committing — error states, transactions, idempotency, and load-on-refresh are the most common gaps
 
 ---
 

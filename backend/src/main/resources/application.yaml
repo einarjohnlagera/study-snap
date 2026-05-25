@@ -101,6 +101,9 @@ studysnap:
     free-teacher-monthly-docx-export-limit: ${FREE_TEACHER_MONTHLY_DOCX_EXPORT_LIMIT:10}
     plus-teacher-monthly-docx-export-limit: ${PLUS_TEACHER_MONTHLY_DOCX_EXPORT_LIMIT:-1}
     pro-teacher-monthly-docx-export-limit: ${PRO_TEACHER_MONTHLY_DOCX_EXPORT_LIMIT:-1}
+    free-monthly-quiz-share-link-limit: ${FREE_MONTHLY_QUIZ_SHARE_LINK_LIMIT:3}
+    plus-monthly-quiz-share-link-limit: ${PLUS_MONTHLY_QUIZ_SHARE_LINK_LIMIT:10}
+    pro-monthly-quiz-share-link-limit: ${PRO_MONTHLY_QUIZ_SHARE_LINK_LIMIT:0}
     free-monthly-pdf-export-limit: ${FREE_MONTHLY_PDF_EXPORT_LIMIT:2}
     plus-monthly-pdf-export-limit: ${PLUS_MONTHLY_PDF_EXPORT_LIMIT:15}
     pro-monthly-pdf-export-limit: ${PRO_MONTHLY_PDF_EXPORT_LIMIT:-1}
