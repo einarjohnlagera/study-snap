@@ -4,7 +4,6 @@ import {
   BookOpen,
   Briefcase,
   ClipboardList,
-  FileText,
   Library,
   Sparkles,
   Target,
@@ -14,6 +13,7 @@ import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-track
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { SimplePricingSection } from "@/components/billing/pricing-plans-section";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
+import { ProfileLearningSection } from "@/components/landing/profile-learning-section";
 import { ProductScreenshotFrame } from "@/components/public/product-screenshot-frame";
 import { PublicFooter } from "@/components/public/public-footer";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
@@ -57,34 +57,6 @@ export const metadata: Metadata = {
   },
 };
 
-const howItWorksSteps = [
-  {
-    title: "Create",
-    description: "Write your own notes or generate them instantly.",
-    icon: FileText,
-  },
-  {
-    title: "Understand",
-    description: "Break them into summaries and key concepts.",
-    icon: BookOpen,
-  },
-  {
-    title: "Practice",
-    description: "Test yourself with quizzes.",
-    icon: Sparkles,
-  },
-  {
-    title: "Challenge",
-    description: "Simulate real exam scenarios.",
-    icon: Trophy,
-  },
-  {
-    title: "Improve",
-    description: "Focus on weak areas and reinforce learning.",
-    icon: ArrowRight,
-  },
-];
-
 const differentiationRows = [
   {
     label: "Built around your own notes",
@@ -107,69 +79,6 @@ const differentiationRows = [
     noteLib: "Notes stay reusable and ready for the next review cycle.",
   },
 ];
-
-const profileShowcase = [
-  {
-    title: "Students",
-    description: "Stay organized across subjects. Run Quick Review, Challenge Quiz, and Long Exam from a single note.",
-    icon: BookOpen,
-    modeChips: [
-      { label: "Quick Review", pro: false },
-      { label: "Challenge Quiz", pro: false },
-      { label: "Long Exam", pro: true },
-    ],
-    screenshot: {
-      src: "/landing/profile-student-light.png",
-      darkSrc: "/landing/profile-student-dark.png",
-      alt: "Long Exam Mastery Report with domain breakdown",
-    },
-  },
-  {
-    title: "Exam Reviewers",
-    description: "Prepare for board, licensure, and certification exams. Run high-stakes Board Exam simulations from your reviewer notes.",
-    icon: Trophy,
-    modeChips: [
-      { label: "Quick Review", pro: false },
-      { label: "Challenge Quiz", pro: false },
-      { label: "Board Exam", pro: true },
-    ],
-    screenshot: {
-      src: "/landing/profile-reviewer-light.png",
-      darkSrc: "/landing/profile-reviewer-dark.png",
-      alt: "Board Exam Score Report",
-    },
-  },
-  {
-    title: "Teachers",
-    description: "Generate quiz drafts from lesson notes. Preview, refine, and export as DOCX ready for class.",
-    icon: Library,
-    modeChips: [
-      { label: "Generate", pro: false },
-      { label: "Preview", pro: false },
-      { label: "Export DOCX", pro: false },
-    ],
-    screenshot: {
-      src: "/landing/profile-teacher-light.png",
-      darkSrc: "/landing/profile-teacher-dark.png",
-      alt: "Quiz preview and DOCX export",
-    },
-  },
-  {
-    title: "Professionals",
-    description: "Practice for job interviews with scenario-based questions and per-answer AI critique from your domain notes.",
-    icon: Briefcase,
-    modeChips: [
-      { label: "Interview Practice", pro: true },
-      { label: "AI Critique", pro: false },
-      { label: "Readiness Report", pro: false },
-    ],
-    screenshot: {
-      src: "/landing/profile-professional-light.png",
-      darkSrc: "/landing/profile-professional-dark.png",
-      alt: "Interview Readiness Report",
-    },
-  },
-] as const;
 
 const studyModes = [
   {
@@ -350,58 +259,6 @@ function PublicLibrarySection() {
   );
 }
 
-function HowItWorksSection() {
-  return (
-    <section className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Learning Loop</p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">How NoteLib helps you study</h2>
-          <p className="text-sm leading-relaxed text-foreground/70">
-            Create - Understand - Practice - Challenge - Improve
-          </p>
-        </div>
-        <TrackedLink
-          href="/how-it-works"
-          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-          eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "how_it_works_section", destination: "/how-it-works" }}
-        >
-          View the full walkthrough
-          <ArrowRight className="h-4 w-4" />
-        </TrackedLink>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {howItWorksSteps.map((step, index) => (
-          <Card key={step.title} className="space-y-4 p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-                Step {index + 1}
-              </span>
-              <step.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-            </div>
-            <div className="space-y-2">
-              <CardTitle>{step.title}</CardTitle>
-              <CardDescription className="text-sm">{step.description}</CardDescription>
-            </div>
-          </Card>
-        ))}
-      </div>
-      <p className="text-sm text-foreground/65">
-        Not ready to sign up?{" "}
-        <TrackedLink
-          href="/demo"
-          className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-          eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "how_it_works_demo", destination: "/demo" }}
-        >
-          Try the demo first — no account needed.
-        </TrackedLink>
-      </p>
-    </section>
-  );
-}
-
 function ValueSummarySection() {
   return (
     <section className="space-y-5">
@@ -511,58 +368,6 @@ function ModeShowcaseSection() {
   );
 }
 
-function ProfileShowcaseSection() {
-  return (
-    <section className="space-y-5">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Who It&apos;s For</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Built for every kind of learner</h2>
-        <p className="max-w-3xl text-sm text-foreground/75">
-          Pick your role and see the flow that&apos;s built for you.
-        </p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {profileShowcase.map((profile) => (
-          <Card key={profile.title} className="flex h-full flex-col gap-4 overflow-hidden p-0">
-            <ProductScreenshotFrame
-              src={profile.screenshot.src}
-              darkSrc={profile.screenshot.darkSrc}
-              alt={profile.screenshot.alt}
-              className="rounded-none border-0 border-b border-border bg-muted/20"
-              imageClassName="max-h-[240px] object-contain object-top"
-              sizes="(min-width: 1024px) 280px, (min-width: 768px) 45vw, 100vw"
-            />
-            <div className="flex flex-1 flex-col gap-3 p-5">
-              <div className="inline-flex items-center gap-2">
-                <profile.icon className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                <CardTitle>{profile.title}</CardTitle>
-              </div>
-              <CardDescription className="text-sm">{profile.description}</CardDescription>
-              <div className="mt-auto flex flex-wrap gap-1.5">
-                {profile.modeChips.map((chip) => (
-                  <span
-                    key={chip.label}
-                    className={
-                      chip.pro
-                        ? "inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300"
-                        : "inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/75"
-                    }
-                  >
-                    {chip.label}
-                    {chip.pro ? (
-                      <span className="text-[10px] font-bold uppercase tracking-wide">Pro</span>
-                    ) : null}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function PricingPreviewSection() {
   return (
     <section className="space-y-5">
@@ -630,11 +435,10 @@ export default function Home() {
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
       <ModeShowcaseSection />
-      <HowItWorksSection />
+      <ProfileLearningSection />
       <ValueSummarySection />
       <PublicLibrarySection />
       <DifferentiationSection />
-      <ProfileShowcaseSection />
       <PricingPreviewSection />
       <FinalCtaSection />
       <PublicFooter />

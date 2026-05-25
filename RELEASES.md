@@ -13,6 +13,7 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 - **Cancellation UX fixes** — Settings cancellation now shows the specific access end date, keeps the modal open with a support-oriented error message when cancellation fails, and replaces vague post-cancellation plan-card text with `Access ends [date]`.
 - **Teacher in-app guided tips** — added 5 one-time dismissible `GuidanceTip` placements gated by `profileType === "TEACHER"`: (1) first dashboard visit, (2) note content area on create, (3) inside the Generate Quiz modal, (4) library list when multi-note selection is available, (5) quiz preview page near the DOCX Export button; each tip is dismissed to localStorage and never re-shown.
 - **Send Feedback consistency fix** — removed the floating "Send Feedback" button (was inconsistently shown on Dashboard/Library/Settings only); header icon now renders on all authenticated pages; fixed modal positioning bug where `backdrop-filter` on the sticky header created a CSS containing block for `position: fixed` children — resolved by wrapping `AppModal` in `ReactDOM.createPortal(..., document.body)`, which benefits all modals app-wide.
+- **Profile-aware learning loop on landing** — replaced generic HowItWorks + ProfileShowcase sections with a single interactive ProfileLearningSection; four-tab layout (Students / Exam Reviewers / Teachers / Professionals) each showing learning loop steps, mode chips, and a screenshot
 
 ---
 
