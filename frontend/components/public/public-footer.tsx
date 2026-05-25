@@ -23,6 +23,9 @@ export function PublicFooter({ className }: Readonly<PublicFooterProps>) {
           <Link href="/terms" className="transition hover:text-foreground">
             Terms of Service
           </Link>
+          <Link href="/refund" className="transition hover:text-foreground">
+            Refund Policy
+          </Link>
           <a href="mailto:support@mail.notelib.app" className="transition hover:text-foreground">
             Contact
           </a>

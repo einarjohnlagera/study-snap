@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -193,6 +194,7 @@ export default function SettingsPage() {
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
+  const [cancellationError, setCancellationError] = useState<string | null>(null);
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
   const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -377,6 +379,7 @@ export default function SettingsPage() {
   const handleOpenCancellationModal = () => {
     setSelectedCancellationReason(null);
     setCancellationFeedback("");
+    setCancellationError(null);
     setIsCancellationModalOpen(true);
   };
 
@@ -389,6 +392,7 @@ export default function SettingsPage() {
 
   const handleConfirmCancellation = async () => {
     setCancellingSubscription(true);
+    setCancellationError(null);
     try {
       const request: CancelPremiumSubscriptionRequest = {
         reason: selectedCancellationReason,
@@ -423,6 +427,8 @@ export default function SettingsPage() {
         };
       });
       setIsCancellationModalOpen(false);
+    } catch {
+      setCancellationError("Something went wrong. Please try again or contact support@mail.notelib.app.");
     } finally {
       setCancellingSubscription(false);
     }
@@ -565,6 +571,10 @@ export default function SettingsPage() {
     ? `${billingHistory?.billingType === "YEARLY" ? "Yearly" : "Monthly"} · Manual renewal`
     : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
+  const cancellationAccessEndsAt = billingHistory?.cancellationEffectiveAt ?? billingHistory?.currentPeriodEnd ?? null;
+  const cancellationScheduledLabel = cancellationAccessEndsAt
+    ? `Access ends ${formatBillingDate(cancellationAccessEndsAt)}`
+    : "Cancellation scheduled";
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -904,7 +914,7 @@ export default function SettingsPage() {
                             Cancel plan
                           </button>
                         ) : (
-                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">Cancellation scheduled</p>
+                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">{cancellationScheduledLabel}</p>
                         )}
                       </>
                     ) : null}
@@ -958,7 +968,7 @@ export default function SettingsPage() {
                             Cancel plan
                           </button>
                         ) : (
-                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">Cancellation scheduled</p>
+                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">{cancellationScheduledLabel}</p>
                         )}
                       </>
                     )}
@@ -967,7 +977,10 @@ export default function SettingsPage() {
               </div>
 
               <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground/60">
-                Hosted checkout via Xendit. Access activates after payment confirmation. Manual renewal.
+                Hosted checkout via Xendit. Access activates after payment confirmation. Manual renewal. ·{" "}
+                <Link href="/refund" className="underline underline-offset-2">
+                  Refund Policy
+                </Link>
                 {billingPricing ? <span> · {billingPricing.region} · {billingPricing.currency}</span> : null}
               </div>
               {checkoutError ? (
@@ -1117,7 +1130,7 @@ export default function SettingsPage() {
       <AppModal
         isOpen={isCancellationModalOpen}
         title={`Cancel ${getPlanDisplayName(currentPlan)}?`}
-        description={`Your ${getPlanDisplayName(currentPlan)} access will remain active until the end of your current billing period. After that, your account will return to the Free plan. Your notes and Study Packs will remain in your library.`}
+        description={`Your ${getPlanDisplayName(currentPlan)} access will remain active until ${formatBillingDate(billingHistory?.currentPeriodEnd ?? null)}. After that, your account returns to the Free plan. Your notes and Study Packs will remain in your library.`}
         onClose={handleCloseCancellationModal}
         panelClassName="max-w-[560px]"
         actions={(
@@ -1176,6 +1189,9 @@ export default function SettingsPage() {
               placeholder="Optional feedback"
             />
           </label>
+          {cancellationError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{cancellationError}</p>
+          ) : null}
         </div>
       </AppModal>
       <VerifyEmailRequiredModal

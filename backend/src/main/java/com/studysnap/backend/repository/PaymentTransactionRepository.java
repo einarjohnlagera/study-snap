@@ -37,6 +37,10 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             Collection<UUID> userIds,
             PaymentTransactionStatus status
     );
+    List<PaymentTransactionEntity> findBySubscription_IdInAndStatusOrderByCreatedAtDesc(
+            Collection<UUID> subscriptionIds,
+            PaymentTransactionStatus status
+    );
     List<PaymentTransactionEntity> findByStatusOrderByCreatedAtDesc(PaymentTransactionStatus status, Pageable pageable);
     long countByStatus(PaymentTransactionStatus status);
 }

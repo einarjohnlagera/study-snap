@@ -324,7 +324,10 @@ export type AdminRecentUpgradeItemResponse = {
   subscriptionId: string;
   userEmail: string;
   billingCycle: "MONTHLY" | "YEARLY";
-  provider: "NONE" | "XENDIT";
+  provider: "NONE" | "INTERNAL_MIGRATION" | "XENDIT";
+  transactionId: string | null;
+  amount: number | null;
+  currency: string | null;
   cancelAtPeriodEnd: boolean;
   startedAt: string;
 };
@@ -334,8 +337,15 @@ export type AdminRecentFailedPaymentItemResponse = {
   userEmail: string;
   amount: number;
   currency: string;
-  provider: "NONE" | "XENDIT";
+  provider: "NONE" | "INTERNAL_MIGRATION" | "XENDIT";
   createdAt: string;
+};
+
+export type AdminIssueRefundResponse = {
+  transactionId: string;
+  userEmail: string;
+  amount: number;
+  currency: string;
 };
 
 export type AdminRecentFeedbackItemResponse = {
@@ -1487,6 +1497,19 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
     true,
   );
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
+}
+
+export async function issueAdminRefund(transactionId: string): Promise<AdminIssueRefundResponse> {
+  const response = await fetchWithAuth(
+    "/admin/billing/refund",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ transactionId }),
+    },
+    true,
+  );
+  return parseApiResponse<AdminIssueRefundResponse>(response, "Could not issue refund.");
 }
 
 export async function submitFeedback(

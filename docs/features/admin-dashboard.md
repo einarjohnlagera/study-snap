@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide an internal, read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth.
+Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. The only v1 operational action is admin-initiated billing refunds for exceptional payment issues.
 
 ## Access
 
@@ -12,6 +12,7 @@ Provide an internal, read-only Admin Dashboard for monitoring product usage, bil
   - `GET /api/admin/dashboard/top-content`
   - `GET /api/admin/dashboard/recent-events`
   - `POST /api/admin/jobs/subscription-expiry/{subscriptionId}` — expire a specific subscription and downgrade to Free (dev/ops use; subscription `end_at` must already be in the past)
+  - `POST /api/admin/billing/refund` — issue a one-off Xendit refund for an eligible paid transaction
 - Access is restricted to users with the `ADMIN` role.
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.
@@ -24,7 +25,7 @@ Keep Admin v1 simple and internal:
 - billing summary cards
 - engagement summary cards
 - basic tables
-- no editing actions
+- no editing actions beyond the narrow Xendit refund operation
 - no complex filters or charts
 
 ## Summary Metrics
@@ -73,6 +74,15 @@ Admin v1 tables should include:
 - recent premium upgrades
 - recent failed payments
 - recent feedback
+- one-click refund actions on Xendit recent premium upgrade rows that have a linked transaction
+
+## Refund Action
+
+- Refund buttons appear only for Recent Paid Upgrades rows where `provider=XENDIT` and a linked `transactionId` exists.
+- Clicking Refund opens a confirmation modal with the user email, amount, and currency before submitting.
+- Backend eligibility is authoritative: only successful Xendit payment transactions may be refunded, already-refunded transactions return a conflict, and missing transactions return not found.
+- Successful refunds mark the transaction `REFUNDED` and send the user a refund confirmation email.
+- Refunds are operational actions only; they are not included in dashboard summary metrics or charts.
 
 ## Data Sources
 

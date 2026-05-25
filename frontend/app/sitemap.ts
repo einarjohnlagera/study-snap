@@ -50,6 +50,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.3,
     },
     {
+      url: absoluteUrl("/refund"),
+      changeFrequency: "monthly" as const,
+      priority: 0.3,
+    },
+    {
       url: absoluteUrl("/public/library"),
       changeFrequency: "daily" as const,
       priority: 0.9,

@@ -8,12 +8,13 @@ Provide public legal pages required for launch readiness, payment integration, a
 
 - `GET /privacy`
 - `GET /terms`
+- `GET /refund`
 
 These routes must remain publicly accessible without login.
 
 ## SEO Indexing
 
-- `/privacy` and `/terms` should appear in the public XML sitemap.
+- `/privacy`, `/terms`, and `/refund` should appear in the public XML sitemap.
 - Legal pages are crawlable public routes and should not be gated behind auth, onboarding, or app-shell access rules.
 
 ## Privacy Policy
@@ -42,6 +43,18 @@ The Terms page should cover:
 - service availability and feature changes
 - contact at `support@mail.notelib.app`
 
+## Refund & Cancellation Policy
+
+The refund policy page should cover:
+
+- manual-renewal cancellation behavior
+- paid access remaining active until the current billing period ends
+- notes and Study Packs not being deleted after cancellation
+- no prorated refunds for partial billing periods
+- refund eligibility limited to duplicate charges and technical payment failures
+- step-by-step refund request instructions through `support@mail.notelib.app`
+- expected Xendit refund timing of 5-10 business days after approval
+
 ## Footer Links
 
 Public footer links should appear on:
@@ -54,6 +67,7 @@ Footer links should include:
 
 - `Privacy Policy`
 - `Terms of Service`
+- `Refund Policy`
 - `Contact`
 
 ## UX Notes
