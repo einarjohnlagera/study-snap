@@ -226,6 +226,7 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_COPIED"
   | "PUBLIC_NOTE_COPY_CLICKED"
   | "PUBLIC_NOTE_SHARED"
+  | "COPY_ON_SIGNUP_COMPLETED"
   | "LOGIN"
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"
@@ -3053,4 +3054,17 @@ export async function copyNote(noteId: string): Promise<NoteResponse> {
     true,
   );
   return parseApiResponse<NoteResponse>(response, "Could not copy note.");
+}
+
+export async function copyNoteOnSignup(publicNoteId: string): Promise<{ noteId: string }> {
+  const response = await fetchWithAuth(
+    "/notes/copy-on-signup",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ publicNoteId }),
+    },
+    true,
+  );
+  return parseApiResponse<{ noteId: string }>(response, "Could not copy note.");
 }

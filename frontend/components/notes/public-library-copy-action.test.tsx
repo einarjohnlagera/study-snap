@@ -28,6 +28,7 @@ describe("PublicLibraryCopyAction", () => {
     pushMock.mockReset();
     pathnameMock = "/public/library";
     window.history.replaceState({}, "", "/public/library");
+    document.cookie = "notelib-copy-intent=; path=/; max-age=0; SameSite=Strict";
     (buildLoginPath as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (copyNote as jest.Mock).mockReset();
@@ -132,5 +133,6 @@ describe("PublicLibraryCopyAction", () => {
     expect(pushMock).toHaveBeenCalledWith(
       "/signup?redirect=%2Fpublic%2Flibrary%3Fcopy%3D1%26intent%3Dlibrary",
     );
+    expect(document.cookie).toContain("notelib-copy-intent=note-5");
   });
 });

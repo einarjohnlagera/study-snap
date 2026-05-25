@@ -8,7 +8,7 @@ import { useRouteProgress } from "@/components/navigation/route-progress-provide
 import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { getMyPlan, login, loginWithGoogle, signup, trackAnalyticsEvent } from "@/lib/api";
+import { copyNoteOnSignup, getMyPlan, login, loginWithGoogle, signup, trackAnalyticsEvent } from "@/lib/api";
 import {
   getAuthUser,
   LOGIN_REASON_AUTH_REQUIRED,
@@ -19,6 +19,11 @@ import {
   resolvePostLoginDestination,
   setAuthUser,
 } from "@/lib/auth";
+import {
+  buildCopiedNotePath,
+  clearCopyIntentCookie,
+  getCopyIntentCookie,
+} from "@/lib/public-note-copy";
 
 type Mode = "login" | "signup";
 
@@ -44,6 +49,7 @@ function AuthPageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasTrackedSignupStartRef = useRef(false);
+  const suppressAuthenticatedRedirectRef = useRef(false);
   const searchKey = searchParams.toString();
   const searchMode = searchParams.get("mode");
   const loginReason = searchParams.get(LOGIN_REASON_QUERY_KEY);
@@ -74,6 +80,9 @@ function AuthPageContent() {
 
   useEffect(() => {
     const syncAuthenticatedUser = () => {
+      if (suppressAuthenticatedRedirectRef.current) {
+        return;
+      }
       setAuthenticatedUser(getAuthUser());
     };
 
@@ -87,6 +96,9 @@ function AuthPageContent() {
 
   useEffect(() => {
     if (!authenticatedUser) {
+      return;
+    }
+    if (suppressAuthenticatedRedirectRef.current) {
       return;
     }
 
@@ -114,18 +126,26 @@ function AuthPageContent() {
     return email.trim().length > 0 && password.trim().length > 0;
   }, [email, firstName, mode, password]);
 
-  const completeAuth = useCallback(async (authUser: AuthUser) => {
+  const hydrateAuthUser = useCallback(async (authUser: AuthUser) => {
     setAuthUser(authUser);
     const nextAuthUser = {
       ...authUser,
       planSummary: await getMyPlan().catch(() => null),
     };
     setAuthUser(nextAuthUser);
+    return nextAuthUser;
+  }, []);
+
+  const completeAuth = useCallback(async (authUser: AuthUser, options?: { clearCopyIntent?: boolean }) => {
+    const nextAuthUser = await hydrateAuthUser(authUser);
+    if (options?.clearCopyIntent) {
+      clearCopyIntentCookie();
+    }
     setAuthenticatedUser(nextAuthUser);
     startRouteProgress();
     router.replace(resolvePostLoginDestination(nextAuthUser));
     router.refresh();
-  }, [router, startRouteProgress]);
+  }, [hydrateAuthUser, router, startRouteProgress]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -145,7 +165,7 @@ function AuthPageContent() {
               displayName: displayName.trim().length > 0 ? displayName : undefined,
             })
           : await login({ email, password, keepSignedIn });
-      await completeAuth(authUser);
+      await completeAuth(authUser, { clearCopyIntent: mode === "login" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not continue. Please try again.");
     } finally {
@@ -160,14 +180,45 @@ function AuthPageContent() {
     setLoading(true);
     setError(null);
     try {
+      suppressAuthenticatedRedirectRef.current = true;
       const authUser = await loginWithGoogle({ code, keepSignedIn });
-      await completeAuth(authUser);
+      const nextAuthUser = await hydrateAuthUser(authUser);
+      const copyIntentNoteId = getCopyIntentCookie();
+      const isNewGoogleSignup = nextAuthUser.onboardingCompletedAt === null;
+      if (isNewGoogleSignup && copyIntentNoteId) {
+        try {
+          const copied = await copyNoteOnSignup(copyIntentNoteId);
+          clearCopyIntentCookie();
+          void trackAnalyticsEvent({
+            eventType: "COPY_ON_SIGNUP_COMPLETED",
+            entityId: copied.noteId,
+            metadata: {
+              source: "google_signup",
+              publicNoteId: copyIntentNoteId,
+            },
+          });
+          startRouteProgress();
+          router.replace(buildCopiedNotePath(copied.noteId, "quick-review"));
+          router.refresh();
+          return;
+        } catch {
+          clearCopyIntentCookie();
+        }
+      } else if (!isNewGoogleSignup) {
+        clearCopyIntentCookie();
+      }
+      suppressAuthenticatedRedirectRef.current = false;
+      setAuthenticatedUser(nextAuthUser);
+      startRouteProgress();
+      router.replace(resolvePostLoginDestination(nextAuthUser));
+      router.refresh();
     } catch (err) {
+      suppressAuthenticatedRedirectRef.current = false;
       setError(err instanceof Error ? err.message : "Could not continue with Google. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [completeAuth, keepSignedIn, loading]);
+  }, [hydrateAuthUser, keepSignedIn, loading, router, startRouteProgress]);
 
   if (authenticatedUser) {
     return null;

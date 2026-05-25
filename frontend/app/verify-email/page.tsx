@@ -1,12 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { ApiRequestError, getMe, getMyPlan, requestEmailVerification, verifyEmailToken } from "@/lib/api";
+import {
+  ApiRequestError,
+  copyNoteOnSignup,
+  getMe,
+  getMyPlan,
+  requestEmailVerification,
+  trackAnalyticsEvent,
+  verifyEmailToken,
+} from "@/lib/api";
 import { buildLoginPath, getAuthUser, resolveAuthenticatedHome, setAuthUser, type AuthUser } from "@/lib/auth";
+import {
+  buildCopiedNotePath,
+  clearCopyIntentCookie,
+  getCopyIntentCookie,
+} from "@/lib/public-note-copy";
 import { ToastMessage } from "@/components/ui/toast-message";
 
 function VerifyEmailPageContent() {
@@ -38,6 +51,32 @@ function VerifyEmailPageContent() {
       globalThis.clearTimeout(timeout);
     };
   }, [toastMessage]);
+
+  const handleVerifiedCopyIntent = useCallback(async (verifiedAuthUser: AuthUser): Promise<boolean> => {
+    const copyIntentNoteId = getCopyIntentCookie();
+    if (!copyIntentNoteId) {
+      return false;
+    }
+
+    try {
+      const copied = await copyNoteOnSignup(copyIntentNoteId);
+      clearCopyIntentCookie();
+      void trackAnalyticsEvent({
+        eventType: "COPY_ON_SIGNUP_COMPLETED",
+        entityId: copied.noteId,
+        metadata: {
+          source: "email_verification",
+          publicNoteId: copyIntentNoteId,
+        },
+      });
+      router.replace(buildCopiedNotePath(copied.noteId, "quick-review"));
+      return true;
+    } catch {
+      clearCopyIntentCookie();
+      router.replace(resolveAuthenticatedHome(verifiedAuthUser));
+      return true;
+    }
+  }, [router]);
 
   useEffect(() => {
     const existingAuthUser = getAuthUser();
@@ -86,6 +125,7 @@ function VerifyEmailPageContent() {
           };
           setAuthUser(nextAuthUser);
           setAuthUserState(nextAuthUser);
+          await handleVerifiedCopyIntent(nextAuthUser);
         } catch {
           setVerifiedMe(null);
           const fallbackAuthUser: AuthUser = {
@@ -94,6 +134,7 @@ function VerifyEmailPageContent() {
           };
           setAuthUser(fallbackAuthUser);
           setAuthUserState(fallbackAuthUser);
+          await handleVerifiedCopyIntent(fallbackAuthUser);
         }
       })
       .catch((verificationError) => {
@@ -115,7 +156,7 @@ function VerifyEmailPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [router, token]);
+  }, [handleVerifiedCopyIntent, router, token]);
 
   const handleResend = async () => {
     if (!authUser || authUser.emailVerifiedAt || loading) {

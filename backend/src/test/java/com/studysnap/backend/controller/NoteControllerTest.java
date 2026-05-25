@@ -12,6 +12,9 @@ import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.dto.CopyOnSignupRequest;
+import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
@@ -253,6 +256,61 @@ class NoteControllerTest {
     }
 
     @Test
+    void copyNoteOnSignup_copiesPublicNoteAndStartsGeneration() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        String publicNoteId = "public-note-1";
+        String copiedNoteId = "copied-note-1";
+        NoteResponse copied = buildNoteResponse(copiedNoteId, "DRAFT");
+        when(noteService.copyPublicNoteForSignup(publicNoteId, userId)).thenReturn(copied);
+
+        CopyOnSignupResponse response = noteController.copyNoteOnSignup(
+                new CopyOnSignupRequest(publicNoteId),
+                user
+        );
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteService).copyPublicNoteForSignup(publicNoteId, userId);
+        verify(studyPackService).startAsyncGenerationFromNote(copiedNoteId, userId);
+        assertThat(response.noteId()).isEqualTo(copiedNoteId);
+    }
+
+    @Test
+    void copyNoteOnSignup_rethrowsNoteNotFound() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        String missingNoteId = "missing-note";
+        NoteNotFoundException notFound = new NoteNotFoundException();
+        when(noteService.copyPublicNoteForSignup(missingNoteId, userId)).thenThrow(notFound);
+
+        assertThatThrownBy(() -> noteController.copyNoteOnSignup(new CopyOnSignupRequest(missingNoteId), user))
+                .isSameAs(notFound);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(studyPackService, never()).startAsyncGenerationFromNote(missingNoteId, userId);
+    }
+
+    @Test
+    void copyNoteOnSignup_returnsExistingCopyWithoutStartingDuplicateGeneration() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        String publicNoteId = "public-note-1";
+        String existingNoteId = "existing-note-1";
+        NoteResponse existingCopy = buildNoteResponse(existingNoteId, "GENERATING");
+        when(noteService.copyPublicNoteForSignup(publicNoteId, userId)).thenReturn(existingCopy);
+
+        CopyOnSignupResponse response = noteController.copyNoteOnSignup(
+                new CopyOnSignupRequest(publicNoteId),
+                user
+        );
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteService).copyPublicNoteForSignup(publicNoteId, userId);
+        verify(studyPackService, never()).startAsyncGenerationFromNote(existingNoteId, userId);
+        assertThat(response.noteId()).isEqualTo(existingNoteId);
+    }
+
+    @Test
     void generateGeneratedQuiz_callsEmailVerificationBeforeGeneration() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
@@ -411,5 +469,36 @@ class NoteControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(noteService).togglePublicNoteLike("note-1", userId);
+    }
+
+    private static NoteResponse buildNoteResponse(String id, String studyPackStatus) {
+        return new NoteResponse(
+                id,
+                "Copied note",
+                "Biology",
+                "Nursing",
+                "STUDENT",
+                List.of("tag"),
+                "content",
+                "PRIVATE",
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                studyPackStatus,
+                null,
+                List.of(),
+                List.of(),
+                null,
+                0,
+                false,
+                false,
+                false,
+                false
+        );
     }
 }

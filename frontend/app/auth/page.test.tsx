@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
-import { getMyPlan, login, loginWithGoogle } from "@/lib/api";
+import { copyNoteOnSignup, getMyPlan, login, loginWithGoogle } from "@/lib/api";
 
 const routerMock = {
   push: jest.fn(),
@@ -34,6 +34,7 @@ jest.mock("@/lib/auth", () => {
 });
 
 jest.mock("@/lib/api", () => ({
+  copyNoteOnSignup: jest.fn(),
   getMyPlan: jest.fn(),
   login: jest.fn(),
   loginWithGoogle: jest.fn(),
@@ -68,12 +69,14 @@ describe("AuthPage", () => {
   beforeEach(() => {
     currentAuthUser = null;
     window.localStorage.clear();
+    document.cookie = "notelib-copy-intent=; path=/; max-age=0; SameSite=Strict";
     setAuthUserMock.mockClear();
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     routerMock.refresh.mockReset();
     (login as jest.Mock).mockReset();
     (loginWithGoogle as jest.Mock).mockReset();
+    (copyNoteOnSignup as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockResolvedValue(null);
     window.history.replaceState({}, "", "/login");
@@ -111,6 +114,7 @@ describe("AuthPage", () => {
   });
 
   it("redirects a normal successful login to the dashboard", async () => {
+    document.cookie = "notelib-copy-intent=stale-note; path=/; max-age=1800; SameSite=Strict";
     (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
 
     const { container } = render(<AuthPage />);
@@ -126,6 +130,7 @@ describe("AuthPage", () => {
     await waitFor(() => {
       expect(setAuthUserMock).toHaveBeenCalled();
       expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
+      expect(document.cookie).not.toContain("notelib-copy-intent=");
     });
     await waitFor(() => {
       expect(screen.queryByRole("heading", { name: "Log in to NoteLib" })).not.toBeInTheDocument();
