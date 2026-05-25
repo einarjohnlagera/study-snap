@@ -31,6 +31,7 @@ import {
 import { isQuizLimitReachedMessage, resolveRemainingUsageCredits } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 
 type GeneratedQuizPreviewPageClientProps = {
   noteId: string;
@@ -329,6 +330,13 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
               </div>
             </div>
           </Card>
+
+          {canExportDocx ? (
+            <GuidanceTip
+              tipId="teacher-docx-export"
+              message="Download as DOCX and open in Word or Google Docs — format it your way before distributing to students."
+            />
+          ) : null}
 
           <div className="space-y-4">
             {generatedQuiz.questions.map((question, index) => (

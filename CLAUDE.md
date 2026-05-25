@@ -20,9 +20,21 @@ Current version: **v0.16.0** — see `RELEASES.md` for in-progress scope, `docs/
 
 ## Task routing
 
-- **UX decisions, product questions, architecture tradeoffs, doc writing** → handle directly
-- **Feature implementation, refactors, tests** → produce a structured Codex prompt using `docs/skills/codex-prompt-generator.md`, then the user submits it to Codex
+| Task type | Agent | Rule |
+|---|---|---|
+| UX decisions, product questions, architecture tradeoffs, doc writing | **Claude Code** — handle directly | Core Claude Code responsibility |
+| Frontend-only additions ≤ ~50 LOC, no new infrastructure (e.g. add a `GuidanceTip`, fix a prop, add a CSS class) | **Claude Code** — implement directly | Too small to justify a Codex prompt; cheaper to do inline |
+| Isolated bug fixes in 1–3 files with a clear root cause | **Claude Code** — implement directly | Same — prompt overhead exceeds the fix cost |
+| New features touching backend (new endpoint, migration, service logic) | **Codex** — write prompt first | Anti-drift rules in `AGENTS.md` must be enforced across files |
+| Multi-system changes (frontend + backend together) | **Codex** — write prompt first | Scope requires full codebase context |
+| Refactors or additions touching > 5 files or > ~100 LOC | **Codex** — write prompt first | Too large for reliable inline work |
+| Tests for agreed behavior | **Codex** — write prompt first | Already the rule |
+
+**Tiebreaker:** if the change requires reading `AGENTS.md` anti-drift rules and applying them across many files, use Codex. If it's dropping a known component in a known slot with no logic changes, Claude Code does it directly.
+
+- Always use `docs/skills/codex-prompt-generator.md` when writing a Codex prompt
 - Never blur the line: if the user wants a Codex prompt, write one — don't start implementing instead
+- Never implement automatically when the user asks for a prompt
 
 ---
 

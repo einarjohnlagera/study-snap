@@ -2115,6 +2115,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         )}
       >
         <div className="space-y-3">
+          <GuidanceTip
+            tipId="teacher-generate-quiz-multi-note"
+            message="You can select multiple notes to build a quiz from a full unit — use the note checkboxes in your library first."
+          />
           <div
             className="flex w-full gap-1 rounded-lg border border-border bg-muted/30 p-1"
             role="group"

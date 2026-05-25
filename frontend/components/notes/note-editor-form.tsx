@@ -19,6 +19,7 @@ import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
 const IMPORT_ACCEPT_VALUE = "image/png,image/jpeg,image/webp,.txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -99,6 +100,7 @@ type NoteEditorFormProps = {
     targetProfileTypeHelperText?: string;
     backHref?: string;
     backLabel?: string;
+    isTeacherCreateMode?: boolean;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -169,6 +171,7 @@ export function NoteEditorForm({
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
                                    backHref,
                                    backLabel,
+                                   isTeacherCreateMode = false,
                                }: Readonly<NoteEditorFormProps>) {
     const [tagDraft, setTagDraft] = useState("");
     const [addingTag, setAddingTag] = useState(false);
@@ -739,6 +742,12 @@ export function NoteEditorForm({
                     }`}
                 >
                     <label htmlFor="note-content" className="text-sm font-medium text-foreground">Content</label>
+                    {isTeacherCreateMode ? (
+                      <GuidanceTip
+                        tipId="teacher-note-content-quality"
+                        message="The more detail in your notes, the better the quiz questions. Paste a full lesson outline, not just bullet headers."
+                      />
+                    ) : null}
                     <textarea
                         ref={contentRef}
                         id="note-content"
