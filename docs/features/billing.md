@@ -102,9 +102,17 @@ The Settings page (`/settings#plan-billing`) surfaces plan selection and billing
   - Pro card shows a "Most popular" badge when the user is not already on Pro.
   - Plus Annual is not yet available; when Annual tab is selected, Plus card shows monthly price with a "Monthly billing only" note and the CTA still sends a MONTHLY checkout.
   - Pro card sends YEARLY checkout when Annual tab is active and Pro annual is available.
-  - Active Plus or Pro users see a "Cancel plan" text link below the "Current Plan" button. The link opens the cancellation confirmation modal. The link is hidden once cancellation is already scheduled; a "Cancellation scheduled" note appears instead.
-- **Checkout footer** — single-line note with provider, confirmation model, and detected region/currency.
+  - Active Plus or Pro users see a "Cancel plan" text link below the "Current Plan" button. The link opens the cancellation confirmation modal, which states the specific current-period end date when available. The link is hidden once cancellation is already scheduled; an "Access ends [date]" note appears instead, falling back to "Cancellation scheduled" only when no date is available.
+- **Checkout footer** — single-line note with provider, confirmation model, detected region/currency, and a link to `/refund` for cancellation and refund eligibility.
 - **Billing History** — subscription summary grid (plan, status, valid-until, billing cycle) and payment transaction table, unchanged from v0.11.0.
+
+### Refunds
+
+- Refunds are admin-initiated only for exceptional billing errors such as duplicate charges or technical payment failures.
+- User-facing refund requests happen through `support@mail.notelib.app`; there is no self-serve refund request flow in the app.
+- Xendit invoice refunds use the stored `payment_transactions.provider_reference_id` as the Xendit `invoice_id`.
+- A successful admin refund marks the transaction `REFUNDED` and sends the user a confirmation email explaining that the refund was submitted to Xendit and may take 5-10 business days to appear on the original payment method.
+- Refunds do not immediately remove paid access; paid access continues until the current billing period ends under the manual-renewal cancellation model.
 
 ### Post-Success Upgrade Nudge
 

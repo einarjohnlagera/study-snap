@@ -1,0 +1,16 @@
+Hi {{userName}},
+
+Your refund of {{currency}} {{amount}} for your NoteLib {{planName}} plan has been processed.
+
+What happens next:
+1. The refund has been submitted to Xendit.
+2. It will be returned to your original payment method.
+3. Depending on your bank or e-wallet, this may take {{businessDays}} to appear.
+
+Your NoteLib account remains active. You can continue using all features until your current billing period ends.
+
+If you have questions, reply to this email or contact support@mail.notelib.app.
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

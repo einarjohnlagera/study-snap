@@ -1,13 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { AppModal } from "@/components/ui/app-modal";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ToastMessage } from "@/components/ui/toast-message";
 import {
   ApiRequestError,
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
+  issueAdminRefund,
+  type AdminRecentUpgradeItemResponse,
   type AdminDashboardRecentEventsResponse,
   type AdminDashboardSummaryResponse,
   type AdminDashboardTopContentResponse,
@@ -71,7 +76,7 @@ type SimpleTableProps = {
   title: string;
   columns: string[];
   emptyMessage: string;
-  rows: string[][];
+  rows: ReactNode[][];
 };
 
 function SimpleTable({ title, columns, emptyMessage, rows }: Readonly<SimpleTableProps>) {
@@ -119,6 +124,10 @@ export default function AdminPage() {
   const [recentEvents, setRecentEvents] = useState<AdminDashboardRecentEventsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refundTarget, setRefundTarget] = useState<AdminRecentUpgradeItemResponse | null>(null);
+  const [refundError, setRefundError] = useState<string | null>(null);
+  const [refundSuccessMessage, setRefundSuccessMessage] = useState<string | null>(null);
+  const [issuingRefund, setIssuingRefund] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     if (!requireAdminUser(router)) {
@@ -150,6 +159,59 @@ export default function AdminPage() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    if (!refundSuccessMessage) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => setRefundSuccessMessage(null), 4000);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [refundSuccessMessage]);
+
+  const handleOpenRefundModal = (item: AdminRecentUpgradeItemResponse) => {
+    setRefundTarget(item);
+    setRefundError(null);
+  };
+
+  const handleCloseRefundModal = () => {
+    if (issuingRefund) {
+      return;
+    }
+    setRefundTarget(null);
+    setRefundError(null);
+  };
+
+  const handleConfirmRefund = async () => {
+    if (!refundTarget?.transactionId) {
+      return;
+    }
+    setIssuingRefund(true);
+    setRefundError(null);
+    try {
+      const response = await issueAdminRefund(refundTarget.transactionId);
+      setRefundSuccessMessage(`Refund issued for ${response.userEmail}`);
+      setRecentEvents((current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          recentPremiumUpgrades: current.recentPremiumUpgrades.map((item) => (
+            item.transactionId === response.transactionId
+              ? { ...item, transactionId: null }
+              : item
+          )),
+        };
+      });
+      setRefundTarget(null);
+    } catch (err) {
+      setRefundError(err instanceof Error ? err.message : "Could not issue refund.");
+    } finally {
+      setIssuingRefund(false);
+    }
+  };
 
   const overviewCards = useMemo(() => {
     if (!summary) {
@@ -208,12 +270,17 @@ export default function AdminPage() {
     ] satisfies MetricCardProps[];
   }, [summary]);
 
+  const refundAmountLabel = refundTarget?.currency && refundTarget.amount !== null
+    ? `${refundTarget.currency} ${formatAmount(refundTarget.amount)}`
+    : "the selected payment";
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
+      {refundSuccessMessage ? <ToastMessage message={refundSuccessMessage} tone="success" /> : null}
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-foreground">Admin Dashboard</h1>
         <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
-          Internal read-only view of product usage, billing health, upgrade activity, and Public Library growth.
+          Internal view of product usage, billing health, upgrade activity, and Public Library growth.
         </p>
       </header>
 
@@ -287,13 +354,26 @@ export default function AdminPage() {
           <section className="grid gap-6 xl:grid-cols-2">
             <SimpleTable
               title="Recent Paid Upgrades"
-              columns={["User", "Cycle", "Provider", "Started"]}
+              columns={["User", "Cycle", "Amount", "Provider", "Started", "Action"]}
               emptyMessage="No paid upgrades recorded yet."
               rows={recentEvents.recentPremiumUpgrades.map((item) => [
                 item.userEmail,
                 item.billingCycle === "YEARLY" ? "Yearly" : "Monthly",
+                item.currency && item.amount !== null ? `${item.currency} ${formatAmount(item.amount)}` : "Not linked",
                 item.provider,
                 formatDate(item.startedAt),
+                item.provider === "XENDIT" && item.transactionId ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenRefundModal(item)}
+                  >
+                    Refund
+                  </Button>
+                ) : (
+                  <span className="text-foreground/50">—</span>
+                ),
               ])}
             />
             <SimpleTable
@@ -325,6 +405,41 @@ export default function AdminPage() {
           </section>
         </>
       ) : null}
+      <AppModal
+        isOpen={Boolean(refundTarget)}
+        title="Issue Refund"
+        description={refundTarget ? `This will submit a refund of ${refundAmountLabel} to Xendit for ${refundTarget.userEmail}. The user will receive a confirmation email. This cannot be undone.` : undefined}
+        onClose={handleCloseRefundModal}
+        panelClassName="max-w-[520px]"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleCloseRefundModal}
+              disabled={issuingRefund}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="w-full bg-red-600 text-white hover:bg-red-700 active:bg-red-800 sm:w-auto"
+              onClick={() => void handleConfirmRefund()}
+              loading={issuingRefund}
+              loadingText="Issuing..."
+            >
+              Confirm Refund
+            </Button>
+          </div>
+        )}
+      >
+        {refundError ? (
+          <p className="rounded-md border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-300">
+            {refundError}
+          </p>
+        ) : null}
+      </AppModal>
     </div>
   );
 }

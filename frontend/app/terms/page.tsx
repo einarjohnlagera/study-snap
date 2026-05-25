@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LegalPageLayout } from "@/components/public/legal-page-layout";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -61,6 +62,13 @@ export default function TermsPage() {
               <p>NoteLib offers manual-renewal paid plans.</p>
               <p>Users can cancel anytime, and paid access remains active until the end of the billing period.</p>
               <p>No refunds are provided for partial billing periods unless required by law.</p>
+              <p>
+                See our{" "}
+                <Link href="/refund" className="text-blue-600 underline underline-offset-4 dark:text-blue-400">
+                  Refund &amp; Cancellation Policy
+                </Link>{" "}
+                for details on cancellations and refund eligibility.
+              </p>
             </>
           ),
         },

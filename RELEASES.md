@@ -8,7 +8,9 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 
 ### ✅ Shipped
 
-_(nothing yet)_
+- **Refund & Cancellation Policy** — added the public `/refund` policy page with step-by-step refund request and cancellation instructions, linked it from the public footer, Settings billing note, and Terms of Service, and documented the manual-renewal/no-proration refund model for payment review readiness.
+- **Admin refund action** — added an admin-only Xendit invoice refund endpoint and Recent Paid Upgrades refund button; eligible Xendit paid transactions can be marked `REFUNDED` after Xendit accepts the refund, and users receive a refund confirmation email with the expected 5–10 business-day timeline.
+- **Cancellation UX fixes** — Settings cancellation now shows the specific access end date, keeps the modal open with a support-oriented error message when cancellation fails, and replaces vague post-cancellation plan-card text with `Access ends [date]`.
 
 ---
 

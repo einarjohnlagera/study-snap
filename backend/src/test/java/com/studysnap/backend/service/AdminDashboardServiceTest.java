@@ -186,6 +186,13 @@ class AdminDashboardServiceTest {
                 PaymentTransactionStatus.FAILED
         );
         failedPayment.setCreatedAt(OffsetDateTime.parse("2026-03-21T00:00:00Z"));
+        PaymentTransactionEntity paidPayment = buildTransaction(
+                user,
+                new BigDecimal("249.00"),
+                "PHP",
+                PaymentTransactionStatus.SUCCESS
+        );
+        paidPayment.setSubscription(subscription);
         FeedbackEntity feedback = new FeedbackEntity();
         feedback.setId(UUID.randomUUID());
         feedback.setUserId(user.getId());
@@ -198,6 +205,8 @@ class AdminDashboardServiceTest {
         when(analyticsEventRepository.findByEventTypeOrderByCreatedAtDesc(eq(AnalyticsEventType.SUBSCRIPTION_STARTED), any(Pageable.class)))
                 .thenReturn(List.of(event));
         when(subscriptionRepository.findAllById(any())).thenReturn(List.of(subscription));
+        when(paymentTransactionRepository.findBySubscription_IdInAndStatusOrderByCreatedAtDesc(any(), eq(PaymentTransactionStatus.SUCCESS)))
+                .thenReturn(List.of(paidPayment));
         when(paymentTransactionRepository.findByStatusOrderByCreatedAtDesc(eq(PaymentTransactionStatus.FAILED), any(Pageable.class)))
                 .thenReturn(List.of(failedPayment));
         when(feedbackRepository.findAllByOrderByCreatedAtDesc(any(Pageable.class)))
@@ -207,6 +216,9 @@ class AdminDashboardServiceTest {
 
         assertThat(response.recentPremiumUpgrades()).hasSize(1);
         assertThat(response.recentPremiumUpgrades().getFirst().userEmail()).isEqualTo("[email protected]");
+        assertThat(response.recentPremiumUpgrades().getFirst().transactionId()).isEqualTo(paidPayment.getId().toString());
+        assertThat(response.recentPremiumUpgrades().getFirst().amount()).isEqualByComparingTo("249.00");
+        assertThat(response.recentPremiumUpgrades().getFirst().currency()).isEqualTo("PHP");
         assertThat(response.recentFailedPayments()).hasSize(1);
         assertThat(response.recentFailedPayments().getFirst().currency()).isEqualTo("PHP");
         assertThat(response.recentFeedback()).hasSize(1);

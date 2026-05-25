@@ -147,6 +147,19 @@ public class AdminDashboardService {
                                 .collect(Collectors.toCollection(LinkedHashSet::new))
                 ).stream()
                 .collect(Collectors.toMap(SubscriptionEntity::getId, Function.identity()));
+        Map<UUID, PaymentTransactionEntity> latestSuccessfulTransactionBySubscriptionId = new LinkedHashMap<>();
+        List<UUID> subscriptionIds = subscriptionsById.keySet().stream().toList();
+        if (!subscriptionIds.isEmpty()) {
+            for (PaymentTransactionEntity transaction : paymentTransactionRepository.findBySubscription_IdInAndStatusOrderByCreatedAtDesc(
+                    subscriptionIds,
+                    PaymentTransactionStatus.SUCCESS
+            )) {
+                if (transaction.getSubscription() == null) {
+                    continue;
+                }
+                latestSuccessfulTransactionBySubscriptionId.putIfAbsent(transaction.getSubscription().getId(), transaction);
+            }
+        }
 
         List<AdminRecentUpgradeItemResponse> recentPremiumUpgrades = recentUpgradeEvents.stream()
                 .map(event -> {
@@ -154,11 +167,15 @@ public class AdminDashboardService {
                     if (subscription == null || subscription.getUser() == null) {
                         return null;
                     }
+                    PaymentTransactionEntity transaction = latestSuccessfulTransactionBySubscriptionId.get(subscription.getId());
                     return new AdminRecentUpgradeItemResponse(
                             subscription.getId(),
                             subscription.getUser().getEmail(),
                             inferBillingCycle(subscription).name(),
                             subscription.getProvider(),
+                            transaction == null ? null : transaction.getId().toString(),
+                            transaction == null ? null : transaction.getAmount(),
+                            transaction == null ? null : transaction.getCurrency(),
                             subscription.isCancelAtPeriodEnd(),
                             event.getCreatedAt()
                     );
