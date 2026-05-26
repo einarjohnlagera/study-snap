@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { NearLimitBanner, resolveAppPlan } from "@/components/billing/near-limit-banner";
+import { QuotaLimitBanner } from "@/components/billing/quota-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import {
@@ -34,7 +35,6 @@ import {
   shouldShowNearStudyPackLimitBanner,
 } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -970,24 +970,13 @@ export function NoteEditorPageClient({
   ]);
 
   const generateNoteFooter = hasReachedNoteGenerationLimit ? (
-    currentPlan === "FREE" ? (
-      <div className="flex flex-col gap-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-3 text-xs text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
-        <p>You&apos;ve reached your topic note generation limit for this month.</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full sm:w-fit"
-          onClick={() => openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit")}
-        >
-          {getPaidPlanCtaLabel("PLUS")}
-        </Button>
-      </div>
-    ) : (
-      <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs text-foreground/70">
-        You&apos;ve reached your topic note generation limit for this billing cycle. Your limit resets on your next billing date.
-      </div>
-    )
+    <QuotaLimitBanner
+      title="You've reached your note generation limit for this month."
+      resetDateLabel={usageResetDateLabel}
+      plan={resolveAppPlan(currentPlan)}
+      ctaContext="note-generation-limit"
+      onUpgrade={() => openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit")}
+    />
   ) : noteGenerationRemainingLabel ? (
     <p className="text-xs text-foreground/60">
       {noteGenerationRemainingLabel}
@@ -1082,6 +1071,7 @@ export function NoteEditorPageClient({
             planType={currentPlan}
             remainingCredits={studyPacksRemaining}
             resetDateLabel={usageResetDateLabel}
+            onUpgrade={() => openLockedFeaturePaywall("study-pack-limit", "note_editor_study_pack_limit")}
           />
         </div>
       ) : null}

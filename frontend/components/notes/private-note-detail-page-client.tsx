@@ -1388,6 +1388,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               planType={currentPlan}
               remainingCredits={studyPacksRemaining}
               resetDateLabel={usageResetDateLabel}
+              onUpgrade={() => openStudyPackLimitModal("private_note_detail_study_pack_limit")}
             />
           ) : null}
           {showFirstStudyPackSuccessBanner ? (
