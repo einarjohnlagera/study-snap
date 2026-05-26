@@ -13,6 +13,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { QuizExportModal, type QuizDocxVersionCount, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -572,6 +573,9 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                   <p className="text-sm leading-7 text-foreground/80">
                     {question.explanation}
                   </p>
+                  {hasComputationalWorkingSolution(question) ? (
+                    <QuizWorkingSolution workingSolution={question.workingSolution} alwaysShow />
+                  ) : null}
                 </div>
               </Card>
             ))}

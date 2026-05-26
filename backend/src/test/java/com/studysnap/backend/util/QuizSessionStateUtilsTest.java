@@ -16,9 +16,12 @@ class QuizSessionStateUtilsTest {
                 new QuizItem(
                         "What is chlorophyll?",
                         List.of("Pigment", "Protein", "Sugar", "Lipid"),
-                        "Pigment",
+                        null,
                         "Photosynthesis",
-                        "Review the Photosynthesis concept in your notes."
+                        "Review the Photosynthesis concept in your notes.",
+                        "Pigment",
+                        "COMPUTATIONAL",
+                        "P = IV = 5 × 2 = 10 W"
                 )
         );
 
@@ -34,6 +37,8 @@ class QuizSessionStateUtilsTest {
         assertThat(restored.getFirst().choices()).containsExactly("Pigment", "Protein", "Sugar", "Lipid");
         assertThat(restored.getFirst().answer()).isEqualTo("Pigment");
         assertThat(restored.getFirst().concept()).isEqualTo("Photosynthesis");
+        assertThat(restored.getFirst().questionType()).isEqualTo("COMPUTATIONAL");
+        assertThat(restored.getFirst().workingSolution()).isEqualTo("P = IV = 5 × 2 = 10 W");
     }
 
     @Test

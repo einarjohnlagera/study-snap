@@ -23,6 +23,8 @@ export type QuizItem = {
   answer?: string;
   concept?: string;
   explanation: string;
+  questionType?: "CONCEPTUAL" | "COMPUTATIONAL" | null;
+  workingSolution?: string | null;
 };
 
 export type GeneratedQuizResponse = {

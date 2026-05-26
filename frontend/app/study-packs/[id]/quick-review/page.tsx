@@ -13,6 +13,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { getPaidPlanCtaLabel } from "@/src/config/plans";
@@ -173,6 +174,7 @@ export default function QuickReviewPage() {
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [viewerProfileType, setViewerProfileType] = useState<string | null>(() => getAuthUser()?.profileType ?? null);
+  const [viewerPlanType, setViewerPlanType] = useState<string | null>(() => getAuthUser()?.planType ?? null);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
@@ -377,7 +379,6 @@ export default function QuickReviewPage() {
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
     [viewerProfileType],
   );
-  const showPracticeAgainPrimary = !isPerfectScore && (!showAdaptiveGuidedCta || !note?.adaptivePracticeAvailable);
   const quickReviewProgressLabel = phase === "retry"
     ? `Retry ${Math.min(currentRoundIndex + 1, Math.max(activeQuestionIndexes.length, 1))} / ${Math.max(activeQuestionIndexes.length, 1)}`
     : `${Math.min(currentRoundIndex + 1, Math.max(totalQuestions, 1))} / ${Math.max(totalQuestions, 1)}`;
@@ -387,6 +388,7 @@ export default function QuickReviewPage() {
       const authUser = getAuthUser();
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       setViewerProfileType(authUser?.profileType ?? null);
+      setViewerPlanType(authUser?.planType ?? null);
     };
     syncAuthState();
     globalThis.addEventListener("studysnap-auth-change", syncAuthState);
@@ -957,7 +959,7 @@ export default function QuickReviewPage() {
           </div>
 
           {showAnswerReview ? (
-            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" planType={viewerPlanType} />
           ) : null}
 
           {/* Upgrade nudge for non-Pro users */}
@@ -1106,11 +1108,17 @@ export default function QuickReviewPage() {
             />
 
             {hasAnsweredCurrent ? (
-              <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
+              <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
                   {currentQuestion.explanation}
                 </p>
+                {hasComputationalWorkingSolution(currentQuestion) ? (
+                  <QuizWorkingSolution
+                    workingSolution={currentQuestion.workingSolution}
+                    planType={viewerPlanType}
+                  />
+                ) : null}
               </div>
             ) : null}
           </Card>

@@ -71,7 +71,9 @@ public final class QuizVersionShuffleUtils {
                 shuffledCorrectIndex,
                 question.concept(),
                 question.explanation(),
-                null
+                null,
+                question.questionType(),
+                question.workingSolution()
         );
     }
 

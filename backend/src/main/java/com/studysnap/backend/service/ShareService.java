@@ -213,15 +213,21 @@ public class ShareService {
                     copiedChoices,
                     item.correctIndex(),
                     item.concept(),
-                    item.explanation()
+                    item.explanation(),
+                    null,
+                    item.questionType(),
+                    item.workingSolution()
             );
         }
         return new QuizItem(
                 item.question(),
                 copiedChoices,
-                item.answer(),
+                null,
                 item.concept(),
-                item.explanation()
+                item.explanation(),
+                item.answer(),
+                item.questionType(),
+                item.workingSolution()
         );
     }
 
