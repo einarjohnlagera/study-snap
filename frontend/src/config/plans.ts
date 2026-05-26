@@ -196,6 +196,7 @@ export type UpgradeCtaSet = {
 
 export type UpgradeCtaContext =
   | "study-pack-limit"
+  | "note-generation-limit"
   | "adaptive-practice"
   | "interview-practice"
   | "teacher-quiz-limit"
@@ -286,7 +287,13 @@ export function getUpgradeCtas(
     }
     if (context === "study-pack-limit") {
       return {
-        primary: { label: "Get More Study Packs", targetPlan: "PRO" },
+        primary: { label: "Upgrade to Pro", targetPlan: "PRO" },
+        secondary: null,
+      };
+    }
+    if (context === "note-generation-limit") {
+      return {
+        primary: null,
         secondary: null,
       };
     }
