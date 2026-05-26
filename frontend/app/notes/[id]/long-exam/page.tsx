@@ -835,6 +835,14 @@ export default function LongExamPage() {
                                         ) : null}
                                     </div>
                                 </div>
+                            ) : note?.subject ? (
+                                <p className="text-sm text-foreground/55">
+                                    Want a multi-note exam?{" "}
+                                    <a href="/notes/new" className="underline underline-offset-2 hover:text-foreground/80">
+                                        Create another note
+                                    </a>{" "}
+                                    with the subject <span className="font-medium text-foreground/75">{note.subject}</span> and it will appear here.
+                                </p>
                             ) : null}
 
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
