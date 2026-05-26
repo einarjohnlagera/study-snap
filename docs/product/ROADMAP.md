@@ -6,11 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.16.0 - Conversion & Growth` is the current in-progress release.
+`v0.17.0 - Quiz Quality & Depth` is the current in-progress release.
 
-`v0.17.0 - Quiz Quality & Depth` is the next planned release.
-
-`v0.15.2 - UX Cleanup & Bug Fixes` is complete and is the previous documentation baseline.
+`v0.16.0 - Conversion & Growth` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -18,7 +16,7 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.16.0 - Conversion & Growth
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close the gap between social traffic and signed-up users; make teachers a natural distribution channel through student-facing quiz sharing; ensure the mobile web experience doesn't lose social visitors before they reach value.
 
