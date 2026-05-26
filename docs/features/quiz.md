@@ -133,3 +133,22 @@ Challenge Quiz and Adaptive Practice:
 - Note Detail is the history entry surface
 - detailed answer review lives on the dedicated session-review route
 - review/export uses stored session data only
+
+## Known generation quality gaps (targeted in v0.17.0)
+
+These are prompt-level defects confirmed in live quizzes. They do not require schema changes and can be deployed as standalone prompt hotfixes before the full v0.17.0 scope ships.
+
+- **Choices in explanation text** — the LLM occasionally includes answer choice letters or full choice text inside the `explanation` field. Triggered most often when the source note itself contains answer choices (e.g., a copied reviewer). Fix: add a generation prompt instruction to explain WHY the correct answer is right without restating or listing the choices.
+- **Repeating distractors across questions** — related questions in a quiz can share the same four choices (e.g., four Board Exam questions all using the same four engineering terms). This never occurs in real Philippine licensure MCQ sections. Fix: add a prompt constraint requiring each question to have a fully independent set of distractors.
+- **Monotone question framing** — all generated questions default to "Which of the following...?" framing. Real licensure exams vary framing ("All of the following are true EXCEPT...", "Which is NOT correct?"). Fix (v0.17.0 prompt improvement): instruct the LLM to distribute question framing types across the set.
+
+## Planned question format additions (v0.17.0)
+
+Currently all quiz questions use a fixed format: 4 choices, 1 correct index. Planned additions in v0.17.0 require schema and UI changes:
+
+- **Framing variety** (prompt only, no schema change) — NOT/EXCEPT/TRUE framing within the existing 4-choice MCQ
+- **Computational questions** — numerical answer choices with step-by-step worked solutions; requires `questionType` field and KaTeX/fixed-width rendering; engineering/sciences notes only
+- **True/False 2-choice** — requires variable-length `choices` array or a `questionFormat` discriminator
+- **Multi-select** — requires `correctIndices: number[]` replacing `correctIndex: number`; scoring contract change
+
+Do not implement format additions without a `EXAM_MODES.md` review — they affect scoring logic across all five quiz modes.

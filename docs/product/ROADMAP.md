@@ -8,6 +8,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.16.0 - Conversion & Growth` is the current in-progress release.
 
+`v0.17.0 - Quiz Quality & Depth` is the next planned release.
+
 `v0.15.2 - UX Cleanup & Bug Fixes` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
@@ -153,6 +155,80 @@ Recommend shipping in this order:
 5. Shareable Student Quiz Links (full-stack; teacher-side first, student anonymous play second)
 6. Social proof on landing (fastest to ship once real numbers are confirmed)
 7. PWA / Mobile Polish (broadest scope; run in parallel with the above or ship last)
+
+---
+
+## v0.17.0 - Quiz Quality & Depth
+
+**Status: Planned**
+
+Theme: close the gap between NoteLib-generated quizzes and what students encounter in actual Philippine board and licensure exams — fix known generation quality bugs, add realistic question framing variety, and lay the groundwork for computational questions in engineering and sciences.
+
+### Why this release
+
+Three quality gaps surfaced in v0.16.0 user testing:
+
+1. **Choices appearing in explanation text** — the LLM occasionally echoes the answer choices inside the `explanation` field (e.g., "The correct answer is A. Civil Engineering Fundamentals. (A) Civil Engineering... (B) Mathematics..."). Happens most on notes that contain answer choices in the source text (copied from reviewers). Prompt fix.
+2. **Board exam and challenge quiz questions sharing identical distractors** — a cluster of related questions can end up with the exact same four choices, which never happens in real Philippine board exams outside of deliberate matching-type blocks. Prompt constraint fix.
+3. **All questions use the same framing** — every question starts with "Which of the following..." — real licensure exams vary framing extensively: "All of the following are true EXCEPT...", "Which is NOT correct?", "Which best describes...?" etc. Prompt improvement.
+
+Additionally, engineering users need computational questions with worked solutions and formula-based distractors — a larger feature requiring math rendering (KaTeX/MathJax) and schema changes.
+
+### Primary focus
+
+1. **Quiz Generation Quality Fixes** — prompt-only changes, no schema or UI changes
+
+   - **Fix: choices in explanation text** — add prompt instruction: "In the explanation field, explain WHY the answer is correct. Do not repeat, list, or reference the answer choices by letter or text."
+   - **Fix: repeating distractors across questions** — add prompt constraint: "Each question must have a fully independent set of four distractors. No two questions in this quiz may share the same set of answer choices."
+   - **Improvement: plausible numerical distractors for formula-heavy notes** — when a note contains formulas or unit-based quantities, generate distractor choices that are plausible numerical values (wrong by a predictable error — wrong formula applied, wrong unit conversion) rather than conceptually unrelated terms.
+
+   These three are deployable as standalone prompt hotfixes and do not need to wait for the full v0.17.0 feature scope.
+
+2. **Question Framing Variety** — prompt improvement only; no schema changes; 4-choice MCQ format is preserved
+
+   Instruct the LLM to vary question framing across a quiz set instead of defaulting to "Which of the following...?" every time. Target mix (not enforced per-question, just as a distribution instruction):
+   - "Which of the following is TRUE?" (standard, ~40%)
+   - "Which of the following is NOT correct?" or "All of the following are true EXCEPT..." (~25%)
+   - "Which best describes X?" or "What is the primary purpose of X?" (~20%)
+   - Assertion-style: "Statement 1: ... Statement 2: ... Which is correct?" (~15%)
+
+   Applies to Challenge Quiz, Quick Review, Board Exam, and Long Exam generation prompts.
+
+   Out of scope: true/false 2-choice and multi-select formats — those require schema changes (see item 4).
+
+3. **Computational Quiz Mode** — new feature requiring schema + frontend changes; Pro-only at launch
+
+   Math-based questions with numerical answer choices and step-by-step worked solutions in the explanation. Designed for engineering, sciences, and finance notes.
+
+   - **Schema**: add optional `questionType: "CONCEPTUAL" | "COMPUTATIONAL"` to `QuizItem`; `COMPUTATIONAL` questions include a `workingSolution` string in the explanation (displayed in a distinct block)
+   - **LLM**: engineering/math prompt persona asks for computation-based questions when the note contains formulas, quantities, or unit conversions; answer choices are plausible numerical values with different units or rounding errors; explanation shows step-by-step derivation
+   - **Frontend**: render `workingSolution` in a code-block-style panel below the explanation; integrate KaTeX or render plain-text math in a fixed-width font as a v1 approximation (full LaTeX rendering is v2)
+   - **Verification note**: LLM arithmetic is unreliable; v1 does not validate correctness — a disclaimer ("AI-generated — verify calculations") appears on computational questions; active verification (running math through a solver) is post-v1
+   - Gated by: engineering/math note detection (heuristic: subject or tags contain engineering/math signals, or note content contains `=` and units)
+
+4. **Additional Question Format Types** — requires schema + UI changes
+
+   - **True/False standalone** — 2-choice questions (`["True", "False"]`); requires `choices` to be variable-length or a separate `questionFormat` field; scoring unchanged
+   - **Multi-select** — "Select all that apply"; requires `correctIndices: number[]` replacing `correctIndex: number`; scoring: all-or-nothing v1 (partial credit v2)
+   - **Matching type** — deliberate shared-choice block (multiple questions, same labeled option set); needs new `questionGroup` association in session state
+   - Implementation order: True/False first (simplest schema delta), then multi-select, then matching
+
+### Implementation stances
+
+- Quality fixes (items 1–2) are prompt changes in `backend/src/main/resources/prompts/` — no DB migration, no entity change; deployable as hotfixes
+- Computational quiz is gated to subjects where it adds value — do not generate computation questions for history, law, or social-science notes
+- Do not add KaTeX as a full dependency for v1 computational questions; a fixed-width text block for the working solution is an acceptable v1 approximation
+- Question framing variety must not change the `QuizItem` schema — it is purely a generation instruction
+- Additional format types (True/False, multi-select) require `EXAM_MODES.md` review before implementation — they affect scoring logic in all five quiz modes
+- Exactly five quiz modes remain in v0.17.0; question types and question formats are orthogonal to the mode hierarchy
+
+### Anti-drift notes
+
+- Do not add computational questions to Board Exam Mode until the Philippine board exam format is confirmed to include them (most PH licensure MCQ sections are conceptual)
+- Do not add `user-scalable=no` to viewport meta tag when fixing iOS zoom — accessibility regression
+- True/False standalone questions change the choice-count assumption in all quiz UIs; audit every surface that renders `choices.map(...)` before shipping
+- Multi-select changes the scoring contract; `correctIndex` callers must be audited before `correctIndices` is introduced
+- Matching type is the most complex format addition; do not bundle with True/False in the same prompt
 
 ---
 
