@@ -50,6 +50,28 @@ class QuizItemDeserializationTest {
 
         assertThat(item.questionType()).isNull();
         assertThat(item.workingSolution()).isNull();
+        assertThat(item.questionFormat()).isNull();
+    }
+
+    @Test
+    void deserializesTrueFalseFormatAndLetterAnswer() throws Exception {
+        QuizItem item = objectMapper.readValue(
+                """
+                {
+                  "question": "Ohm's Law states that voltage is directly proportional to current.",
+                  "choices": ["True", "False"],
+                  "answer": "B",
+                  "concept": "Ohm's Law",
+                  "explanation": "Ohm's Law relates voltage, current, and resistance.",
+                  "questionFormat": "TRUE_FALSE"
+                }
+                """,
+                QuizItem.class
+        );
+
+        assertThat(item.questionFormat()).isEqualTo("TRUE_FALSE");
+        assertThat(item.correctIndex()).isEqualTo(1);
+        assertThat(item.answer()).isEqualTo("False");
     }
 
     @Test
@@ -87,5 +109,34 @@ class QuizItemDeserializationTest {
 
         assertThat(first).isEqualTo(same);
         assertThat(first).isNotEqualTo(differentWorkingSolution);
+    }
+
+    @Test
+    void equalityIncludesQuestionFormat() {
+        QuizItem mcq = new QuizItem(
+                "Ohm's Law states that voltage is directly proportional to current.",
+                List.of("True", "False"),
+                null,
+                "Ohm's Law",
+                "Ohm's Law relates voltage, current, and resistance.",
+                "A",
+                "MCQ",
+                null,
+                null
+        );
+        QuizItem trueFalse = new QuizItem(
+                "Ohm's Law states that voltage is directly proportional to current.",
+                List.of("True", "False"),
+                null,
+                "Ohm's Law",
+                "Ohm's Law relates voltage, current, and resistance.",
+                "A",
+                "TRUE_FALSE",
+                null,
+                null
+        );
+
+        assertThat(mcq).isNotEqualTo(trueFalse);
+        assertThat(mcq.hashCode()).isNotEqualTo(trueFalse.hashCode());
     }
 }

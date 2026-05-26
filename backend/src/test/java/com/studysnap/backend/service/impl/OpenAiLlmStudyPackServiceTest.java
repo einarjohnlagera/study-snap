@@ -67,24 +67,24 @@ class OpenAiLlmStudyPackServiceTest {
             restClient,
             new OpenAiPromptResources(
                 "System prompt",
-                "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 objectMapper.createObjectNode(),
                 "Note generation system prompt",
                 "Note generation developer prompt for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} Built for studying, not just exploring information. Max {MAX_WORDS} words.",
                 "Challenge quiz system prompt",
-                "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Board exam system prompt",
                 "Board exam developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Teacher quiz system prompt",
-                "Teacher quiz developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE}",
+                "Teacher quiz developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE}",
                 "Adaptive practice system prompt",
-                "Adaptive practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Adaptive practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Interview practice system prompt",
                 "Interview practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE}",
                 "Interview critique system prompt",
                 "Interview critique developer prompt {QUESTION} {CHOICES} {SELECTED_CHOICE} {CORRECT_CHOICE} {CONCEPT} {EXPLANATION}",
                 "Long exam system prompt",
-                "Long exam developer prompt for {QUESTION_COUNT}. {BATCH_HINT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
+                "Long exam developer prompt for {QUESTION_COUNT}. {BATCH_HINT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
             )
         );
 
@@ -118,6 +118,24 @@ class OpenAiLlmStudyPackServiceTest {
                 .contains("\"CONCEPTUAL\"");
     }
 
+    @Test
+    void buildTrueFalseGuidance_returnsEmptyWhenNotAllowed() throws Exception {
+        String guidance = invokeBuildTrueFalseGuidance(false);
+
+        assertThat(guidance).isEmpty();
+    }
+
+    @Test
+    void buildTrueFalseGuidance_includesTrueFalseSchemaInstructionWhenAllowed() throws Exception {
+        String guidance = invokeBuildTrueFalseGuidance(true);
+
+        assertThat(guidance)
+                .contains("questionFormat")
+                .contains("\"TRUE_FALSE\"")
+                .contains("[\"True\", \"False\"]")
+                .contains("at most 25% True/False");
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private String invokeBuildComputationGuidance(boolean quantitativeContext, String quizModeName) throws Exception {
         Class<?> quizModeClass = Class.forName(
@@ -131,6 +149,15 @@ class OpenAiLlmStudyPackServiceTest {
         );
         method.setAccessible(true);
         return (String) method.invoke(service, quantitativeContext, quizMode);
+    }
+
+    private String invokeBuildTrueFalseGuidance(boolean allowTrueFalse) throws Exception {
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
+                "buildTrueFalseGuidance",
+                boolean.class
+        );
+        method.setAccessible(true);
+        return (String) method.invoke(service, allowTrueFalse);
     }
 
     @Test
@@ -647,6 +674,45 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(quizItems.getFirst().concept()).isEqualTo("ATP production");
         assertThat(quizItems.getFirst().explanation()).isEqualTo(
             "The electron transport chain produces most ATP during aerobic respiration.");
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("questionFormat")
+                .contains("\"TRUE_FALSE\"")
+                .contains("[\\\"True\\\", \\\"False\\\"]");
+    }
+
+    @Test
+    void generateChallengeQuiz_acceptsTrueFalseQuestionFormat() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        ObjectNode trueFalseQuestion = generatedQuizItem(
+                "Ohm's Law states that voltage is directly proportional to current.",
+                List.of("True", "False"),
+                "A",
+                "Ohm's Law relates voltage, current, and resistance.",
+                "Ohm's Law"
+        );
+        trueFalseQuestion.put("questionFormat", "TRUE_FALSE");
+        questions.add(trueFalseQuestion);
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        List<QuizItem> quizItems = service.generateChallengeQuiz(
+                "Ohm's Law Review",
+                "Ohm's Law summary",
+                List.of("Ohm's Law"),
+                List.of(),
+                1,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Electrical Engineering", "Physics", List.of())
+        );
+
+        assertThat(quizItems).hasSize(1);
+        assertThat(quizItems.getFirst().questionFormat()).isEqualTo("TRUE_FALSE");
+        assertThat(quizItems.getFirst().correctIndex()).isZero();
+        assertThat(quizItems.getFirst().choices()).containsExactly("True", "False");
     }
 
     @Test
@@ -669,6 +735,8 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(requestCaptor.getValue())
             .contains("Board exam system prompt")
             .contains("Board exam developer prompt")
+            .doesNotContain("questionFormat")
+            .doesNotContain("TRUE_FALSE")
             .doesNotContain("Challenge quiz system prompt")
             .doesNotContain("Challenge quiz developer prompt");
     }

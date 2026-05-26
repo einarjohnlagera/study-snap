@@ -20,6 +20,7 @@ public class QuizSessionStateUtils {
     private static final String ANSWER_KEY = "answer";
     private static final String CONCEPT_KEY = "concept";
     private static final String EXPLANATION_KEY = "explanation";
+    private static final String QUESTION_FORMAT_KEY = "questionFormat";
     private static final String QUESTION_TYPE_KEY = "questionType";
     private static final String WORKING_SOLUTION_KEY = "workingSolution";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
@@ -159,6 +160,7 @@ public class QuizSessionStateUtils {
             Object answerRaw = rawMap.get(ANSWER_KEY);
             Object conceptRaw = rawMap.get(CONCEPT_KEY);
             Object explanationRaw = rawMap.get(EXPLANATION_KEY);
+            Object questionFormatRaw = rawMap.get(QUESTION_FORMAT_KEY);
             Object questionTypeRaw = rawMap.get(QUESTION_TYPE_KEY);
             Object workingSolutionRaw = rawMap.get(WORKING_SOLUTION_KEY);
             Object choicesRaw = rawMap.get(CHOICES_KEY);
@@ -182,9 +184,10 @@ public class QuizSessionStateUtils {
             String explanation = explanationRaw instanceof String value ? value : null;
             Integer correctIndex = parseCorrectIndex(choices.size(), correctIndexRaw, answerIndexRaw, correctAnswerIndexRaw);
             String answer = answerRaw instanceof String value ? value : null;
+            String questionFormat = questionFormatRaw instanceof String value ? value : null;
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionType, workingSolution));
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution));
         }
 
         return quiz;
@@ -271,6 +274,7 @@ public class QuizSessionStateUtils {
             quizItem.put(CORRECT_INDEX_KEY, item.correctIndex());
             quizItem.put(CONCEPT_KEY, item.concept());
             quizItem.put(EXPLANATION_KEY, item.explanation());
+            quizItem.put(QUESTION_FORMAT_KEY, item.questionFormat());
             quizItem.put(QUESTION_TYPE_KEY, item.questionType());
             quizItem.put(WORKING_SOLUTION_KEY, item.workingSolution());
             serialized.add(quizItem);

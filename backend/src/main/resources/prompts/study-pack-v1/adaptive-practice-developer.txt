@@ -8,11 +8,12 @@ RULES:
 - Questions must reinforce understanding.
 - Learner level target: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
+- {TRUE_FALSE_GUIDANCE}
 - {COMPUTATION_GUIDANCE}
 - {TIME_EXPECTATION}
-- Each question must have 4 choices.
-- Each question must have a fully independent set of 4 answer choices. No two questions in this set may share the same set of choices.
-- Answer must be exactly one of: A, B, C, D.
+- Standard MCQ questions must have 4 choices.
+- Standard MCQ questions must have a fully independent set of 4 answer choices. No two MCQ questions in this set may share the same set of choices.
+- Standard MCQ answers must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.

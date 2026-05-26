@@ -54,7 +54,7 @@
           },
           "choices": {
             "type": "array",
-            "minItems": 4,
+            "minItems": 2,
             "maxItems": 4,
             "items": {
               "type": "string"
@@ -67,6 +67,17 @@
           "explanation": {
             "type": "string",
             "minLength": 1
+          },
+          "questionFormat": {
+            "type": ["string", "null"],
+            "enum": ["MCQ", "TRUE_FALSE", null]
+          },
+          "questionType": {
+            "type": ["string", "null"],
+            "enum": ["CONCEPTUAL", "COMPUTATIONAL", null]
+          },
+          "workingSolution": {
+            "type": ["string", "null"]
           },
           "concept": {
             "type": "string",

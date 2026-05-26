@@ -20,6 +20,7 @@ class QuizSessionStateUtilsTest {
                         "Photosynthesis",
                         "Review the Photosynthesis concept in your notes.",
                         "Pigment",
+                        "MCQ",
                         "COMPUTATIONAL",
                         "P = IV = 5 × 2 = 10 W"
                 )
@@ -37,6 +38,7 @@ class QuizSessionStateUtilsTest {
         assertThat(restored.getFirst().choices()).containsExactly("Pigment", "Protein", "Sugar", "Lipid");
         assertThat(restored.getFirst().answer()).isEqualTo("Pigment");
         assertThat(restored.getFirst().concept()).isEqualTo("Photosynthesis");
+        assertThat(restored.getFirst().questionFormat()).isEqualTo("MCQ");
         assertThat(restored.getFirst().questionType()).isEqualTo("COMPUTATIONAL");
         assertThat(restored.getFirst().workingSolution()).isEqualTo("P = IV = 5 × 2 = 10 W");
     }

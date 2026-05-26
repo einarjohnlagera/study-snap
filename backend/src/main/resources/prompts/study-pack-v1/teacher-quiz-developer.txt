@@ -5,15 +5,16 @@ RULES:
 - Base ONLY on the provided note content.
 - Learner level target: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
+- {TRUE_FALSE_GUIDANCE}
 - {COMPUTATION_GUIDANCE}
 - Questions must be clear, classroom-ready, and answerable from the notes.
 - Questions must test understanding, not trivial wording tricks.
 - Questions must be unique.
 - Do NOT repeat or rephrase existing questions.
 - Avoid similar wording.
-- Each question must have 4 choices.
-- Each question must have a fully independent set of 4 answer choices. No two questions in this quiz may share the same set of choices.
-- Answer must be exactly one of: A, B, C, D.
+- Standard MCQ questions must have 4 choices.
+- Standard MCQ questions must have a fully independent set of 4 answer choices. No two MCQ questions in this quiz may share the same set of choices.
+- Standard MCQ answers must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.
 - Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%).
 - Explanation is required for every question.
