@@ -18,6 +18,7 @@ public final class QuizVersionShuffleUtils {
     private static final String SEED_SEPARATOR = "|";
     private static final String QUESTION_SEED_SCOPE = "questions";
     private static final String CHOICE_SEED_SCOPE = "choices";
+    private static final String TRUE_FALSE_FORMAT = "TRUE_FALSE";
 
     private QuizVersionShuffleUtils() {
     }
@@ -48,6 +49,19 @@ public final class QuizVersionShuffleUtils {
             String quizIdSeed
     ) {
         List<String> choices = question.choices() == null ? List.of() : question.choices();
+        if (TRUE_FALSE_FORMAT.equals(question.questionFormat())) {
+            return new QuizItem(
+                    question.question(),
+                    choices,
+                    question.correctIndex(),
+                    question.concept(),
+                    question.explanation(),
+                    null,
+                    question.questionFormat(),
+                    question.questionType(),
+                    question.workingSolution()
+            );
+        }
         List<Integer> choiceOrder = IntStream.range(0, choices.size())
                 .boxed()
                 .collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
@@ -72,6 +86,7 @@ public final class QuizVersionShuffleUtils {
                 question.concept(),
                 question.explanation(),
                 null,
+                question.questionFormat(),
                 question.questionType(),
                 question.workingSolution()
         );

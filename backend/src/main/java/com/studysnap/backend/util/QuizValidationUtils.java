@@ -12,10 +12,16 @@ import java.util.regex.Pattern;
 
 @UtilityClass
 public class QuizValidationUtils {
+    private static final int MCQ_CHOICE_COUNT = 4;
+    private static final int TRUE_FALSE_CHOICE_COUNT = 2;
+    private static final String TRUE_FALSE_FORMAT = "TRUE_FALSE";
     private static final Pattern LEADING_CHOICE_LABEL_PATTERN = Pattern.compile("^\\s*[A-Da-d]\\s*[.)]\\s*");
 
-    public boolean hasInvalidChoices(List<String> choices) {
-        if (choices == null || choices.size() != 4) {
+    public boolean hasInvalidChoices(List<String> choices, String questionFormat) {
+        int expectedChoiceCount = TRUE_FALSE_FORMAT.equals(questionFormat)
+                ? TRUE_FALSE_CHOICE_COUNT
+                : MCQ_CHOICE_COUNT;
+        if (choices == null || choices.size() != expectedChoiceCount) {
             return true;
         }
         Set<String> normalizedChoices = new HashSet<>();

@@ -215,6 +215,7 @@ public class ShareService {
                     item.concept(),
                     item.explanation(),
                     null,
+                    item.questionFormat(),
                     item.questionType(),
                     item.workingSolution()
             );
@@ -226,6 +227,7 @@ public class ShareService {
                 item.concept(),
                 item.explanation(),
                 item.answer(),
+                item.questionFormat(),
                 item.questionType(),
                 item.workingSolution()
         );

@@ -18,6 +18,7 @@ public final class QuizItem {
     private final Integer correctIndex;
     private final String concept;
     private final String explanation;
+    private final String questionFormat;
     private final String questionType;
     private final String workingSolution;
 
@@ -28,7 +29,7 @@ public final class QuizItem {
             String concept,
             String explanation
     ) {
-        this(question, choices, correctIndex, concept, explanation, null, null, null);
+        this(question, choices, correctIndex, concept, explanation, null, null, null, null);
     }
 
     public QuizItem(
@@ -38,7 +39,7 @@ public final class QuizItem {
             String concept,
             String explanation
     ) {
-        this(question, choices, null, concept, explanation, answer, null, null);
+        this(question, choices, null, concept, explanation, answer, null, null, null);
     }
 
     public QuizItem(
@@ -49,7 +50,7 @@ public final class QuizItem {
             String explanation,
             String legacyAnswer
     ) {
-        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, null);
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, null, null);
     }
 
     public QuizItem(
@@ -62,11 +63,26 @@ public final class QuizItem {
             String questionType,
             String workingSolution
     ) {
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, questionType, workingSolution);
+    }
+
+    public QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer);
         this.concept = concept;
         this.explanation = explanation;
+        this.questionFormat = questionFormat;
         this.questionType = questionType;
         this.workingSolution = workingSolution;
     }
@@ -81,6 +97,7 @@ public final class QuizItem {
             @JsonProperty("answer") String legacyAnswer,
             @JsonProperty("answerIndex") Integer legacyAnswerIndex,
             @JsonProperty("correctAnswerIndex") Integer legacyCorrectAnswerIndex,
+            @JsonProperty("questionFormat") String questionFormat,
             @JsonProperty("questionType") String questionType,
             @JsonProperty("workingSolution") String workingSolution
     ) {
@@ -91,6 +108,7 @@ public final class QuizItem {
                 concept,
                 explanation,
                 legacyAnswer,
+                questionFormat,
                 questionType,
                 workingSolution
         );
@@ -122,6 +140,10 @@ public final class QuizItem {
 
     public String explanation() {
         return explanation;
+    }
+
+    public String questionFormat() {
+        return questionFormat;
     }
 
     public String questionType() {
@@ -196,13 +218,14 @@ public final class QuizItem {
                 && Objects.equals(correctIndex, quizItem.correctIndex)
                 && Objects.equals(concept, quizItem.concept)
                 && Objects.equals(explanation, quizItem.explanation)
+                && Objects.equals(questionFormat, quizItem.questionFormat)
                 && Objects.equals(questionType, quizItem.questionType)
                 && Objects.equals(workingSolution, quizItem.workingSolution);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, concept, explanation, questionType, workingSolution);
+        return Objects.hash(question, choices, correctIndex, concept, explanation, questionFormat, questionType, workingSolution);
     }
 
     @Override
@@ -213,6 +236,7 @@ public final class QuizItem {
                 + ", correctIndex=" + correctIndex
                 + ", concept='" + concept + '\''
                 + ", explanation='" + explanation + '\''
+                + ", questionFormat='" + questionFormat + '\''
                 + ", questionType='" + questionType + '\''
                 + ", workingSolution='" + workingSolution + '\''
                 + '}';

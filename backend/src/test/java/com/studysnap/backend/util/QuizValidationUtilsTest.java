@@ -10,8 +10,8 @@ class QuizValidationUtilsTest {
 
     @Test
     void hasInvalidChoices_detectsExactDuplicatesAndExtraWhitespace() {
-        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "A", "B", "C"))).isTrue();
-        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("Derivative", "Derivative ", "Integral", "Limit"))).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "A", "B", "C"), null)).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("Derivative", "Derivative ", "Integral", "Limit"), null)).isTrue();
     }
 
     @Test
@@ -21,7 +21,7 @@ class QuizValidationUtilsTest {
                 "Encapsulation",
                 "B) Abstraction",
                 "Polymorphism"
-        ))).isTrue();
+        ), null)).isTrue();
     }
 
     @Test
@@ -41,14 +41,22 @@ class QuizValidationUtilsTest {
                 "u'v - uv'",
                 "(u/v)^2",
                 "uv' - u'v"
-        ))).isFalse();
+        ), null)).isFalse();
     }
 
     @Test
     void hasInvalidChoices_detectsBlankChoicesAndWrongChoiceCount() {
-        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "", "C", "D"))).isTrue();
-        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "B", "C"))).isTrue();
-        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "B", "C", "D"))).isFalse();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "", "C", "D"), null)).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "B", "C"), null)).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "B", "C", "D"), null)).isFalse();
+    }
+
+    @Test
+    void hasInvalidChoices_allowsTwoChoiceTrueFalseOnlyWhenMarked() {
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("True", "False"), "TRUE_FALSE")).isFalse();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("True", "False"), null)).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("True", "False", "Maybe"), "TRUE_FALSE")).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("True", "True"), "TRUE_FALSE")).isTrue();
     }
 
     @Test

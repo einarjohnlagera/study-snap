@@ -85,6 +85,15 @@ export function serializeSelectedChoiceIndexRecord(value: Record<number, number>
 }
 
 export function getDisplayedQuizChoices(item: QuizItem): QuizDisplayChoice[] {
+  if (item.questionFormat === "TRUE_FALSE") {
+    return item.choices.map((choice, index) => ({
+      displayIndex: index,
+      canonicalIndex: index,
+      label: CHOICE_LABELS[index] ?? String.fromCharCode(65 + index),
+      text: sanitizeQuizChoiceText(choice),
+    }));
+  }
+
   const order = buildDeterministicChoiceOrder(item.question, item.choices);
   return order.map((canonicalIndex, displayIndex) => ({
     displayIndex,

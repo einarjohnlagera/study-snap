@@ -100,6 +100,33 @@ describe("quiz helpers", () => {
     expect(getDisplayedQuizChoices(quizItem)).toEqual(getDisplayedQuizChoices(quizItem));
   });
 
+  it("keeps True/False choices in original order", () => {
+    const displayedChoices = getDisplayedQuizChoices({
+      question: "Ohm's Law states that voltage is directly proportional to current.",
+      choices: ["True", "False"],
+      correctIndex: 0,
+      questionFormat: "TRUE_FALSE",
+      explanation: "Ohm's Law relates voltage, current, and resistance.",
+    });
+
+    expect(displayedChoices).toEqual([
+      { displayIndex: 0, canonicalIndex: 0, label: "A", text: "True" },
+      { displayIndex: 1, canonicalIndex: 1, label: "B", text: "False" },
+    ]);
+  });
+
+  it("keeps standard MCQ deterministic shuffle unchanged", () => {
+    const displayedChoices = getDisplayedQuizChoices({
+      question: "What is the derivative of sin(x)?",
+      choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+      correctIndex: 0,
+      explanation: "The derivative of sin(x) is cos(x).",
+    });
+
+    expect(displayedChoices.map((choice) => choice.canonicalIndex)).toEqual([0, 2, 3, 1]);
+    expect(displayedChoices.map((choice) => choice.text)).toEqual(["cos(x)", "-sin(x)", "tan(x)", "-cos(x)"]);
+  });
+
   it("sanitizes choice text without changing non-prefixed answers", () => {
     expect(sanitizeQuizChoiceText("A. Encapsulation")).toBe("Encapsulation");
     expect(sanitizeQuizChoiceText("B) Abstraction")).toBe("Abstraction");

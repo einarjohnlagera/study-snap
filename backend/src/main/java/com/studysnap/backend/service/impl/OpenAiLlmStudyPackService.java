@@ -69,6 +69,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String CRITIQUE_VERDICT_STRONG = "STRONG";
     private static final String CRITIQUE_VERDICT_WORKABLE = "WORKABLE";
     private static final String CRITIQUE_VERDICT_RECONSIDER = "RECONSIDER";
+    private static final String TRUE_FALSE_GUIDANCE = """
+            Mix in True/False questions where appropriate. True/False questions suit simple factual recall, definitions, or classification (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, or best-answer judgment.
+
+            For True/False questions:
+            - Set `questionFormat` to "TRUE_FALSE"
+            - Use exactly ["True", "False"] as the choices (in that order)
+            - Set `answer` to "A" when True is correct, "B" when False is correct
+
+            For standard MCQ questions, set `questionFormat` to "MCQ" or omit it.
+
+            Aim for at most 25% True/False in any quiz set. Do not force True/False — only use it when the concept genuinely suits a binary statement.
+            """;
     private static final List<String> DISALLOWED_NOTE_GENERATION_PHRASES = List.of(
             "important study topic",
             "important topic",
@@ -161,6 +173,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{QUIZ_COUNT}", String.valueOf(STUDY_PACK_QUIZ_QUESTION_COUNT))
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
                 .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.QUICK_REVIEW))
+                .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(isQuantitativeContext(context, List.of(), null), QuizMode.QUICK_REVIEW))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.QUICK_REVIEW));
     }
@@ -338,6 +351,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     normalizedConcept,
                     normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again."),
                     null,
+                    item.questionFormat(),
                     item.questionType(),
                     item.workingSolution()
             ));
@@ -356,7 +370,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
         normalizeAndValidateConcept(item.concept(), quizIndex);
         normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.");
-        if (QuizValidationUtils.hasInvalidChoices(item.choices())) {
+        if (QuizValidationUtils.hasInvalidChoices(item.choices(), item.questionFormat())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
         resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
@@ -441,6 +455,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
                 .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.ADAPTIVE_PRACTICE))
+                .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.ADAPTIVE_PRACTICE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.ADAPTIVE_PRACTICE));
         input.add(buildTextMessage("developer", adaptivePracticeDeveloperPrompt));
@@ -514,6 +529,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{DIFFICULTY}", difficulty)
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
                 .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.CHALLENGE))
+                .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.CHALLENGE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.CHALLENGE));
         input.add(buildTextMessage("developer", challengeQuizDeveloperPrompt));
@@ -596,6 +612,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{DIFFICULTY}", difficulty)
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
                 .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.LONG_EXAM))
+                .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.LONG_EXAM))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.LONG_EXAM));
         input.add(buildTextMessage("developer", longExamDeveloperPrompt));
@@ -622,6 +639,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
                 .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.TEACHER_PREVIEW))
+                .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.TEACHER_PREVIEW));
         input.add(buildTextMessage("developer", teacherQuizDeveloperPrompt));
         input.add(buildTextMessage(
@@ -633,7 +651,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
-    private JsonNode buildGeneratedQuizSchema(int questionCount) {
+    private JsonNode buildGeneratedQuizSchema(int questionCount, boolean allowTrueFalse) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "object");
         root.put("additionalProperties", false);
@@ -666,10 +684,32 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         answerEnum.add("D");
         itemProps.putObject("explanation").put("type", "string").put("minLength", 1);
         itemProps.putObject("concept").put("type", "string").put("minLength", 1);
+        if (allowTrueFalse) {
+            ObjectNode questionFormat = itemProps.putObject("questionFormat");
+            ArrayNode questionFormatTypes = questionFormat.putArray("type");
+            questionFormatTypes.add("string");
+            questionFormatTypes.add("null");
+            ArrayNode questionFormatEnum = questionFormat.putArray("enum");
+            questionFormatEnum.add("MCQ");
+            questionFormatEnum.add("TRUE_FALSE");
+            questionFormatEnum.addNull();
+        }
+        ObjectNode questionType = itemProps.putObject("questionType");
+        ArrayNode questionTypeTypes = questionType.putArray("type");
+        questionTypeTypes.add("string");
+        questionTypeTypes.add("null");
+        ArrayNode questionTypeEnum = questionType.putArray("enum");
+        questionTypeEnum.add("CONCEPTUAL");
+        questionTypeEnum.add("COMPUTATIONAL");
+        questionTypeEnum.addNull();
+        ObjectNode workingSolution = itemProps.putObject("workingSolution");
+        ArrayNode workingSolutionTypes = workingSolution.putArray("type");
+        workingSolutionTypes.add("string");
+        workingSolutionTypes.add("null");
 
         ObjectNode choices = itemProps.putObject("choices");
         choices.put("type", "array");
-        choices.put("minItems", 4);
+        choices.put("minItems", allowTrueFalse ? 2 : 4);
         choices.put("maxItems", 4);
         choices.putObject("items").put("type", "string");
 
@@ -951,7 +991,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private int resolveAnswerIndex(String answer, int choiceCount, String invalidMessage) {
-        if (choiceCount != 4) {
+        if (choiceCount != 2 && choiceCount != 4) {
             throw invalidOutput(invalidMessage);
         }
         String normalizedAnswer = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(answer);
@@ -961,8 +1001,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return switch (normalizedAnswer.toUpperCase()) {
             case "A" -> 0;
             case "B" -> 1;
-            case "C" -> 2;
-            case "D" -> 3;
+            case "C" -> {
+                if (choiceCount != 4) {
+                    throw invalidOutput(invalidMessage);
+                }
+                yield 2;
+            }
+            case "D" -> {
+                if (choiceCount != 4) {
+                    throw invalidOutput(invalidMessage);
+                }
+                yield 3;
+            }
             default -> throw invalidOutput(invalidMessage);
         };
     }
@@ -1031,6 +1081,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             return guidance;
         }
         return guidance + " For each question, set questionType to \"COMPUTATIONAL\" for computation or formula-based questions, or \"CONCEPTUAL\" for all others. For COMPUTATIONAL questions, include a workingSolution field with a concise step-by-step derivation (show formula, substitution, and final result). For CONCEPTUAL questions, omit workingSolution or set it to null.";
+    }
+
+    private String buildTrueFalseGuidance(boolean allowTrueFalse) {
+        return allowTrueFalse ? TRUE_FALSE_GUIDANCE : "";
     }
 
     private String buildTimeExpectation(QuizMode quizMode) {
@@ -1218,7 +1272,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_interview_practice",
                 "Interview practice generation",
-                normalizedKeyConcepts
+                normalizedKeyConcepts,
+                false
         );
     }
 
@@ -1323,7 +1378,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_board_exam",
                 "Board exam quiz generation",
-                normalizedKeyConcepts
+                normalizedKeyConcepts,
+                false
         );
     }
 
@@ -1487,6 +1543,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String operationLabel,
             List<String> conceptFallbackPool
     ) {
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, true);
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            boolean allowTrueFalse
+    ) {
         String model = requireConfiguredModel();
         return generateQuizWithSchema(
                 model,
@@ -1494,7 +1561,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 schemaName,
                 operationLabel,
-                conceptFallbackPool
+                conceptFallbackPool,
+                allowTrueFalse
         );
     }
 
@@ -1506,13 +1574,34 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String operationLabel,
             List<String> conceptFallbackPool
     ) {
+        return generateQuizWithSchema(
+                model,
+                inputMessages,
+                questionCount,
+                schemaName,
+                operationLabel,
+                conceptFallbackPool,
+                true
+        );
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            String model,
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            boolean allowTrueFalse
+    ) {
         return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
                 model,
                 inputMessages,
                 questionCount,
                 schemaName,
                 operationLabel,
-                conceptFallbackPool
+                conceptFallbackPool,
+                allowTrueFalse
         ));
     }
 
@@ -1522,13 +1611,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             int questionCount,
             String schemaName,
             String operationLabel,
-            List<String> conceptFallbackPool
+            List<String> conceptFallbackPool,
+            boolean allowTrueFalse
     ) {
         JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
                 model,
                 inputMessages,
                 quizOperation(schemaName, operationLabel),
-                buildGeneratedQuizSchema(questionCount),
+                buildGeneratedQuizSchema(questionCount, allowTrueFalse),
                 PromptGeneratedQuiz.class
         );
         PromptGeneratedQuiz promptGeneratedQuiz = response.payload();
@@ -1553,6 +1643,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
                     normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again."),
                     null,
+                    item.questionFormat(),
                     item.questionType(),
                     item.workingSolution()
             ));
@@ -1570,7 +1661,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (StringNormalizationUtils.isBlank(item.concept())) {
             throw invalidOutput(operationLabel + " returned an invalid concept. Please try again.");
         }
-        if (QuizValidationUtils.hasInvalidChoices(item.choices())) {
+        if (QuizValidationUtils.hasInvalidChoices(item.choices(), item.questionFormat())) {
             throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
         }
         resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
@@ -1824,6 +1915,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String answer,
             String concept,
             String explanation,
+            String questionFormat,
             String questionType,
             String workingSolution
     ) {
@@ -1840,6 +1932,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String answer,
             String explanation,
             String concept,
+            String questionFormat,
             String questionType,
             String workingSolution
     ) {

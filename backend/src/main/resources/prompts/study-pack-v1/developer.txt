@@ -11,7 +11,7 @@ Output JSON schema:
   "quiz": [
     {
       "question": string,
-      "choices": string[4],
+      "choices": string[4] for MCQ or ["True", "False"] for TRUE_FALSE,
       "answer": "A" | "B" | "C" | "D",
       "explanation": string,
       "concept": string
@@ -58,8 +58,8 @@ Key Concepts
 Quiz
 - exactly {QUIZ_COUNT} questions
 - these questions are for Quick Review, so they should be fast to answer and focused on core understanding
-- each question must have 4 choices
-- answer must be exactly one of: A, B, C, D
+- standard MCQ questions must have 4 choices
+- standard MCQ answers must be exactly one of: A, B, C, D
 - exactly one choice must be correct
 - each question should target a distinct concept when possible
 - vary question framing — do not start every question with "Which of the following"; distribute across positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%)
@@ -71,6 +71,7 @@ Quiz
 - for computation questions, explanation must show a short step-by-step solution
 - learner level target: {LEARNER_LEVEL}
 - {LEARNER_LEVEL_GUIDANCE}
+- {TRUE_FALSE_GUIDANCE}
 - {COMPUTATION_GUIDANCE}
 - {TIME_EXPECTATION}
 
@@ -79,7 +80,7 @@ Quiz quality
 - do not use "all of the above" or "none of the above"
 - keep wording clear and exam-style
 - keep distractors plausible and same-topic
-- each question must have a fully independent set of 4 answer choices; no two questions in this quiz may share the same set of choices
+- each standard MCQ question must have a fully independent set of 4 answer choices; no two MCQ questions in this quiz may share the same set of choices
 - return ONLY valid JSON
 - do not include markdown, comments, or extra text before or after the JSON
 

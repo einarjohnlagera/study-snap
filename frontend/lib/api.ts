@@ -23,6 +23,7 @@ export type QuizItem = {
   answer?: string;
   concept?: string;
   explanation: string;
+  questionFormat?: "MCQ" | "TRUE_FALSE" | null;
   questionType?: "CONCEPTUAL" | "COMPUTATIONAL" | null;
   workingSolution?: string | null;
 };
