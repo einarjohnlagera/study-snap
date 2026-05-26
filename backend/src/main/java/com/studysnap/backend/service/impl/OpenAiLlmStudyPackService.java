@@ -1086,7 +1086,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         lines.add("Topic-level specificity belongs in tags and key concepts, not in subject.");
         if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
             lines.add("Course / Program context is: " + context.courseProgram().trim() + ".");
-            lines.add("If the course/program is a specific professional discipline (e.g. Civil Engineering, Nursing, Accountancy, Pharmacy), use that as the subject — do not collapse it to a broader term (e.g. 'Engineering', 'Medicine', 'Business').");
+            lines.add("Do not echo the course/program name as the subject. Derive the subject from the note title and content — it should be the specific sub-field this note covers. Examples: a note in 'Mechanical Engineering Licensure' about fluid machinery → 'Fluid Machinery'; a note in 'BS Nursing' covering pharmacology → 'Pharmacology'; a note in 'CPA Licensure' on auditing theory → 'Auditing Theory'.");
             lines.add("If the course/program is a K-12 strand or track (e.g. STEM, ABM, HUMSS, GAS, General Education, Senior High – STEM), derive the subject from the note content instead (e.g. Biology, Physics, Economics, English).");
         }
         return String.join("\n", lines);

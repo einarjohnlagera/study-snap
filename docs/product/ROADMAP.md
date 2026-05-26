@@ -211,16 +211,6 @@ Additionally, engineering users need computational questions with worked solutio
    - **Matching type** — deliberate shared-choice block (multiple questions, same labeled option set); needs new `questionGroup` association in session state
    - Implementation order: True/False first (simplest schema delta), then multi-select, then matching
 
-5. **Background Quiz Pre-Generation** — scheduled batch pre-generation of Challenge Quiz sessions for STUDY_PACK_READY notes; goal is zero-wait first quiz play for Plus and Pro users
-
-   - A scheduled job scans for STUDY_PACK_READY notes owned by Plus/Pro users that have no existing Challenge Quiz session in GENERATING, IN_PROGRESS, COMPLETED, or POOLED state; generates a default 5-question Challenge Quiz in the background
-   - Pre-generated sessions are held in a new `POOLED` lifecycle state; the quiz-start flow claims a POOLED session instead of triggering fresh generation when one is available; on-demand generation is the fallback when the pool is empty
-   - **Quota at claim time, not pre-generation time** — quota is checked and consumed when the user claims the session (first interaction), not when the batch job generates it; this prevents silent quota deduction for sessions the user never opens
-   - Free users: on-demand generation only (unchanged); Plus/Pro: served from pool when available
-   - Batch job is throttled (configurable max sessions per run) and skips notes belonging to users already at their monthly Challenge Quiz quota
-   - Pre-generation depth: one session per note (first 5 questions only); additional questions continue to be generated on demand via the existing generate-more endpoint
-   - POOLED sessions must not appear in Note Detail Recent Sessions or quota counters until claimed
-
 ### Known Generation Reliability Issues (lower priority, v0.17.0)
 
 - **Invalid key concepts schema mismatch** — intermittent generation failure surfaced as "The study pack service returned invalid key concepts"; occurs when the LLM returns the key concepts array with an unexpected field shape (wrong field name, missing required field, extra fields, or partial JSON); current behavior is a hard failure requiring the user to retry; confirmed intermittent in production (3 retries before success in one known case); fix approach: defensive JSON parsing with field coercion or a single automatic backend retry before surfacing the error; prompt schema reinforcement likely sufficient; no schema changes required; lower priority than the quiz quality prompt fixes but should ship within v0.17.0
@@ -233,8 +223,6 @@ Additionally, engineering users need computational questions with worked solutio
 - Question framing variety must not change the `QuizItem` schema — it is purely a generation instruction
 - Additional format types (True/False, multi-select) require `EXAM_MODES.md` review before implementation — they affect scoring logic in all five quiz modes
 - Exactly five quiz modes remain in v0.17.0; question types and question formats are orthogonal to the mode hierarchy
-- Background Quiz Pre-Generation requires a `POOLED` session state addition to `QuickReviewSessionStatus`; update the session lifecycle diagram in `docs/features/quiz.md` before implementing
-- Background pre-generation batch job must not run during peak hours if LLM capacity is shared with foreground generation; configuration should allow a scheduled window (e.g., off-peak nightly run)
 
 ### Anti-drift notes
 
@@ -243,7 +231,6 @@ Additionally, engineering users need computational questions with worked solutio
 - True/False standalone questions change the choice-count assumption in all quiz UIs; audit every surface that renders `choices.map(...)` before shipping
 - Multi-select changes the scoring contract; `correctIndex` callers must be audited before `correctIndices` is introduced
 - Matching type is the most complex format addition; do not bundle with True/False in the same prompt
-- POOLED sessions must not be visible in any user-facing session history or count toward quota until claimed — they are infrastructure state, not user activity
 - Invalid key concepts fix must not silently discard key concepts; coerce or retry, do not hide partial data loss
 
 ---
@@ -710,6 +697,12 @@ Current session-review UX:
 - Note Detail stays the entry point for history, while the dedicated review page owns focused answer review
 
 ## Future Directions
+
+### Background Quiz Pre-Generation (de-scoped from v0.17.0)
+
+Challenge Quiz was the original pooling candidate but was de-scoped: its progressive generation model (5 → 10 → 15 → 20 questions on demand) already limits the initial wait to a single 5-question LLM call, so pre-generation adds LLM cost without a meaningful UX benefit. Additionally, pre-generating the initial batch and then generating extensions on demand would introduce concurrency waste (pool generation and on-demand generation could race for the same note).
+
+Revisit for a different mode if a cold-start bottleneck is confirmed by usage data — e.g., a mode with a fixed long question set where the full generation is the bottleneck (Long Exam already uses the `ExamQuestionPoolService` pool mechanism for this). Do not pre-generate Challenge Quiz.
 
 ### Exam-mode work (planned)
 
