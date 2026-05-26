@@ -62,10 +62,12 @@ Quiz
 - answer must be exactly one of: A, B, C, D
 - exactly one choice must be correct
 - each question should target a distinct concept when possible
+- vary question framing — do not start every question with "Which of the following"; distribute across positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%)
 - concept must be 1 to 3 words — never a sentence, never more than 3 words, never null
   - correct examples: Ohm's Law, Electrical Power, Resistance, Current Flow, Power Formula, ATP Production, Glycolysis
   - incorrect examples: "Relationship between voltage and current", "Using the power formula", "How to calculate resistance"
 - explanation is required and should sound like a tutor
+- explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text
 - for computation questions, explanation must show a short step-by-step solution
 - learner level target: {LEARNER_LEVEL}
 - {LEARNER_LEVEL_GUIDANCE}
@@ -77,6 +79,7 @@ Quiz quality
 - do not use "all of the above" or "none of the above"
 - keep wording clear and exam-style
 - keep distractors plausible and same-topic
+- each question must have a fully independent set of 4 answer choices; no two questions in this quiz may share the same set of choices
 - return ONLY valid JSON
 - do not include markdown, comments, or extra text before or after the JSON
 

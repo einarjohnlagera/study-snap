@@ -844,17 +844,32 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return normalizedTags;
     }
 
+    private static final int MIN_VALID_KEY_CONCEPTS = 5;
+
     private List<String> normalizeAndValidateKeyConcepts(List<String> keyConcepts) {
-        if (keyConcepts == null || keyConcepts.size() < 8 || keyConcepts.size() > 10) {
+        if (keyConcepts == null || keyConcepts.isEmpty()) {
             throw invalidOutput("The study pack service returned invalid key concepts. Please try again.");
+        }
+
+        List<String> input = keyConcepts;
+        if (keyConcepts.size() > 10) {
+            // LLM over-generated; trim silently rather than failing the whole study pack.
+            log.warn("requestId={} field=keyConcepts count={} reason='over-generated; trimming to 10'",
+                    MDC.get("requestId"), keyConcepts.size());
+            input = keyConcepts.subList(0, 10);
+        } else if (keyConcepts.size() < 8) {
+            log.warn("requestId={} field=keyConcepts count={} reason='fewer than expected 8; accepting if >= {}'",
+                    MDC.get("requestId"), keyConcepts.size(), MIN_VALID_KEY_CONCEPTS);
         }
 
         Set<String> normalizedSeen = new HashSet<>();
         List<String> normalizedConcepts = new ArrayList<>();
-        for (String keyConcept : keyConcepts) {
+        for (String keyConcept : input) {
             String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(keyConcept);
             if (!StringNormalizationUtils.containsAlphaNumeric(normalized)) {
-                throw invalidOutput("The study pack service returned invalid key concepts. Please try again.");
+                log.warn("requestId={} field=keyConcepts value='{}' reason='no alphanumeric content; skipping'",
+                        MDC.get("requestId"), truncateForLog(keyConcept));
+                continue;
             }
 
             // Trim overlong key concepts rather than rejecting outright — always safe to trim.
@@ -875,9 +890,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
             String duplicateKey = StringNormalizationUtils.normalizeForDuplicateCheck(normalized);
             if (duplicateKey.isBlank() || !normalizedSeen.add(duplicateKey)) {
-                throw invalidOutput("The study pack service returned repetitive key concepts. Please try again.");
+                log.warn("requestId={} field=keyConcepts value='{}' reason='duplicate; skipping'",
+                        MDC.get("requestId"), truncateForLog(normalized));
+                continue;
             }
             normalizedConcepts.add(normalized);
+        }
+
+        if (normalizedConcepts.size() < MIN_VALID_KEY_CONCEPTS) {
+            throw invalidOutput("The study pack service returned too few valid key concepts. Please try again.");
         }
 
         return normalizedConcepts;
