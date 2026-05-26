@@ -139,7 +139,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 promptResources.responseSchema(),
                 PromptStudyPack.class
         );
-        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model, context);
+        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model);
     }
 
     private ArrayNode buildInputMessages(String normalizedNotesText, StudyPackGenerationContext context) {
@@ -280,8 +280,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private GeneratedStudyPackContent toGeneratedStudyPackContent(
             PromptStudyPack promptStudyPack,
             JsonNode responseJson,
-            String fallbackModel,
-            StudyPackGenerationContext context
+            String fallbackModel
     ) {
         validatePromptStudyPack(promptStudyPack);
         String normalizedSubject = normalizeGeneratedSubject(promptStudyPack.subject());
@@ -337,7 +336,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.choices(),
                     answerIndex,
                     normalizedConcept,
-                    normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.")
+                    normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again."),
+                    null,
+                    item.questionType(),
+                    item.workingSolution()
             ));
         }
         return quizItems;
@@ -1014,9 +1016,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String buildComputationGuidance(boolean quantitativeContext, QuizMode quizMode) {
         if (!quantitativeContext) {
-            return "Prefer concept understanding, interpretation, and scenario reasoning over forced numerical questions unless the notes clearly support a computation.";
+            return "";
         }
-        return switch (quizMode) {
+        String guidance = switch (quizMode) {
             case QUICK_REVIEW -> "The material appears quantitative. Include at most one simple numerical or formula-based question if it is clearly supported by the notes, and keep the rest fast concept checks.";
             case CHALLENGE -> "The material appears quantitative. Include computation, formula-based, or problem-solving multiple-choice questions when appropriate. Use numbers, word problems, or applied calculations when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
             case BOARD_EXAM -> "The material appears quantitative. Include exam-relevant computations, formula-based judgment, and applied interpretation when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
@@ -1025,6 +1027,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             case INTERVIEW_PRACTICE -> "The material appears quantitative. Frame computations as interview scenarios about choosing, explaining, or validating an approach. Explanations must show the reasoning a strong candidate would articulate.";
             case TEACHER_PREVIEW -> "The material appears quantitative. Include computation or formula-based questions only when the notes clearly support them. Explanations should show the reasoning or steps a teacher would want to review before export.";
         };
+        if (quizMode == QuizMode.BOARD_EXAM) {
+            return guidance;
+        }
+        return guidance + " For each question, set questionType to \"COMPUTATIONAL\" for computation or formula-based questions, or \"CONCEPTUAL\" for all others. For COMPUTATIONAL questions, include a workingSolution field with a concise step-by-step derivation (show formula, substitution, and final result). For CONCEPTUAL questions, omit workingSolution or set it to null.";
     }
 
     private String buildTimeExpectation(QuizMode quizMode) {
@@ -1363,8 +1369,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         int batchSize = (int) Math.ceil(totalQuestions / 2.0) + PARALLEL_BUFFER;
         CompletableFuture<List<QuizItem>> firstBatch = CompletableFuture.supplyAsync(
                 () -> generateLongExamBatch(
-                        studyPackTitle,
-                        studyPackSummary,
+                    studyPackSummary,
                         keyConcepts,
                         disallowedQuestions,
                         batchSize,
@@ -1372,12 +1377,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         context,
                         LONG_EXAM_FIRST_HALF_HINT
                 ),
-                taskExecutor::execute
+            taskExecutor
         );
         CompletableFuture<List<QuizItem>> secondBatch = CompletableFuture.supplyAsync(
                 () -> generateLongExamBatch(
-                        studyPackTitle,
-                        studyPackSummary,
+                    studyPackSummary,
                         keyConcepts,
                         disallowedQuestions,
                         batchSize,
@@ -1385,7 +1389,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         context,
                         LONG_EXAM_SECOND_HALF_HINT
                 ),
-                taskExecutor::execute
+            taskExecutor
         );
         try {
             CompletableFuture.allOf(firstBatch, secondBatch).orTimeout(240, TimeUnit.SECONDS).join();
@@ -1425,7 +1429,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private List<QuizItem> generateLongExamBatch(
-            String studyPackTitle,
             String studyPackSummary,
             List<String> keyConcepts,
             List<String> disallowedQuestions,
@@ -1548,7 +1551,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.choices().stream().map(String::trim).toList(),
                     answerIndex,
                     normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
-                    normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again.")
+                    normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again."),
+                    null,
+                    item.questionType(),
+                    item.workingSolution()
             ));
         }
         return quizItems;
@@ -1817,7 +1823,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> choices,
             String answer,
             String concept,
-            String explanation
+            String explanation,
+            String questionType,
+            String workingSolution
     ) {
     }
 
@@ -1831,7 +1839,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> choices,
             String answer,
             String explanation,
-            String concept
+            String concept,
+            String questionType,
+            String workingSolution
     ) {
     }
 

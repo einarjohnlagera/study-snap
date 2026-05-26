@@ -1826,6 +1826,7 @@ export default function ChallengeQuizPage() {
               quiz={quiz}
               selectedChoices={selectedChoices}
               className="mt-2"
+              planType={viewerPlanType}
               footer={(
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? (
@@ -2023,6 +2024,7 @@ export default function ChallengeQuizPage() {
               quiz={quiz}
               selectedChoices={selectedChoices}
               className="mt-2"
+              planType={viewerPlanType}
               footer={(
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? (

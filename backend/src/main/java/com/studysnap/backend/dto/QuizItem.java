@@ -18,6 +18,8 @@ public final class QuizItem {
     private final Integer correctIndex;
     private final String concept;
     private final String explanation;
+    private final String questionType;
+    private final String workingSolution;
 
     public QuizItem(
             String question,
@@ -26,7 +28,7 @@ public final class QuizItem {
             String concept,
             String explanation
     ) {
-        this(question, choices, correctIndex, concept, explanation, null);
+        this(question, choices, correctIndex, concept, explanation, null, null, null);
     }
 
     public QuizItem(
@@ -36,7 +38,7 @@ public final class QuizItem {
             String concept,
             String explanation
     ) {
-        this(question, choices, null, concept, explanation, answer);
+        this(question, choices, null, concept, explanation, answer, null, null);
     }
 
     public QuizItem(
@@ -47,11 +49,26 @@ public final class QuizItem {
             String explanation,
             String legacyAnswer
     ) {
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, null);
+    }
+
+    public QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionType,
+            String workingSolution
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer);
         this.concept = concept;
         this.explanation = explanation;
+        this.questionType = questionType;
+        this.workingSolution = workingSolution;
     }
 
     @JsonCreator
@@ -63,7 +80,9 @@ public final class QuizItem {
             @JsonProperty("explanation") String explanation,
             @JsonProperty("answer") String legacyAnswer,
             @JsonProperty("answerIndex") Integer legacyAnswerIndex,
-            @JsonProperty("correctAnswerIndex") Integer legacyCorrectAnswerIndex
+            @JsonProperty("correctAnswerIndex") Integer legacyCorrectAnswerIndex,
+            @JsonProperty("questionType") String questionType,
+            @JsonProperty("workingSolution") String workingSolution
     ) {
         this(
                 question,
@@ -71,7 +90,9 @@ public final class QuizItem {
                 resolveCorrectIndex(choices == null ? List.of() : List.copyOf(choices), correctIndex, legacyAnswerIndex, legacyCorrectAnswerIndex, legacyAnswer),
                 concept,
                 explanation,
-                legacyAnswer
+                legacyAnswer,
+                questionType,
+                workingSolution
         );
     }
 
@@ -101,6 +122,14 @@ public final class QuizItem {
 
     public String explanation() {
         return explanation;
+    }
+
+    public String questionType() {
+        return questionType;
+    }
+
+    public String workingSolution() {
+        return workingSolution;
     }
 
     private static Integer resolveCorrectIndex(
@@ -166,12 +195,14 @@ public final class QuizItem {
                 && Objects.equals(choices, quizItem.choices)
                 && Objects.equals(correctIndex, quizItem.correctIndex)
                 && Objects.equals(concept, quizItem.concept)
-                && Objects.equals(explanation, quizItem.explanation);
+                && Objects.equals(explanation, quizItem.explanation)
+                && Objects.equals(questionType, quizItem.questionType)
+                && Objects.equals(workingSolution, quizItem.workingSolution);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, concept, explanation);
+        return Objects.hash(question, choices, correctIndex, concept, explanation, questionType, workingSolution);
     }
 
     @Override
@@ -182,6 +213,8 @@ public final class QuizItem {
                 + ", correctIndex=" + correctIndex
                 + ", concept='" + concept + '\''
                 + ", explanation='" + explanation + '\''
+                + ", questionType='" + questionType + '\''
+                + ", workingSolution='" + workingSolution + '\''
                 + '}';
     }
 }

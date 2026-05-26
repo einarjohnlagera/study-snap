@@ -23,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -87,6 +88,49 @@ class OpenAiLlmStudyPackServiceTest {
             )
         );
 
+    }
+
+    @Test
+    void buildComputationGuidance_returnsEmptyForNonQuantitativeContext() throws Exception {
+        String guidance = invokeBuildComputationGuidance(false, "CHALLENGE");
+
+        assertThat(guidance).isEmpty();
+    }
+
+    @Test
+    void buildComputationGuidance_excludesSchemaExtensionForBoardExam() throws Exception {
+        String guidance = invokeBuildComputationGuidance(true, "BOARD_EXAM");
+
+        assertThat(guidance)
+                .contains("The material appears quantitative.")
+                .doesNotContain("questionType")
+                .doesNotContain("workingSolution");
+    }
+
+    @Test
+    void buildComputationGuidance_includesSchemaExtensionForChallengeQuiz() throws Exception {
+        String guidance = invokeBuildComputationGuidance(true, "CHALLENGE");
+
+        assertThat(guidance)
+                .contains("questionType")
+                .contains("workingSolution")
+                .contains("\"COMPUTATIONAL\"")
+                .contains("\"CONCEPTUAL\"");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private String invokeBuildComputationGuidance(boolean quantitativeContext, String quizModeName) throws Exception {
+        Class<?> quizModeClass = Class.forName(
+                "com.studysnap.backend.service.impl.OpenAiLlmStudyPackService$QuizMode"
+        );
+        Object quizMode = Enum.valueOf((Class<? extends Enum>) quizModeClass.asSubclass(Enum.class), quizModeName);
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
+                "buildComputationGuidance",
+                boolean.class,
+                quizModeClass
+        );
+        method.setAccessible(true);
+        return (String) method.invoke(service, quantitativeContext, quizMode);
     }
 
     @Test

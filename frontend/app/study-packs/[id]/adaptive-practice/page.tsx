@@ -13,6 +13,7 @@ import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
 import { resolveRemainingUsageCredits } from "@/lib/plans";
@@ -572,7 +573,7 @@ export default function AdaptivePracticePage() {
             <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
           {showAnswerReview ? (
-            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" planType={currentPlan} />
           ) : null}
           <QuizFeedbackPanel
             quizLabel="Adaptive Practice"
@@ -616,11 +617,17 @@ export default function AdaptivePracticePage() {
             ) : null}
 
             {hasAnsweredCurrent && currentQuestion ? (
-              <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
+              <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
                   {currentQuestion.explanation}
                 </p>
+                {hasComputationalWorkingSolution(currentQuestion) ? (
+                  <QuizWorkingSolution
+                    workingSolution={currentQuestion.workingSolution}
+                    planType={currentPlan}
+                  />
+                ) : null}
               </div>
             ) : null}
 

@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import type { QuizSessionReviewResponse } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { getQuizSessionModeLabel, type RecentQuizSessionHistoryItem } from "@/lib/quiz-session-history";
 import { toSelectedChoiceIndexRecord } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ export function QuizSessionReviewContent({
           title={title}
           quiz={review.quiz}
           selectedChoices={toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz)}
+          planType={getAuthUser()?.planType ?? null}
           stickyNav
         />
       ) : (

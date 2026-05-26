@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
+import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import type { QuizItem } from "@/lib/api";
 import {
   computeConceptBreakdown,
@@ -25,6 +26,7 @@ type QuizAnswerReviewProps = {
   className?: string;
   footer?: ReactNode;
   stickyNav?: boolean;
+  planType?: string | null;
 };
 
 export function QuizAnswerReview({
@@ -35,7 +37,8 @@ export function QuizAnswerReview({
   className,
   footer,
   stickyNav = false,
-}: QuizAnswerReviewProps) {
+  planType = null,
+}: Readonly<QuizAnswerReviewProps>) {
   const [mode, setMode] = useState<ReviewMode>(initialMode);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [expandedExplanations, setExpandedExplanations] = useState<Record<number, boolean>>(() =>
@@ -93,7 +96,7 @@ export function QuizAnswerReview({
     setCurrentReviewIndex(0);
   };
 
-  const isExplanationExpanded = (questionIndex: number) => expandedExplanations[questionIndex] !== false;
+  const isExplanationExpanded = (questionIndex: number) => expandedExplanations[questionIndex];
   const anyExplanationCollapsed = reviewItems.some((item) => !isExplanationExpanded(item.originalIndex));
   const anyExplanationExpanded = reviewItems.some((item) => isExplanationExpanded(item.originalIndex));
 
@@ -239,7 +242,7 @@ export function QuizAnswerReview({
                   {currentItem.isCorrect ? "Correct" : "Incorrect"}
                 </span>
               </div>
-              <h3 className="break-words text-base font-semibold leading-relaxed sm:text-lg">
+              <h3 className="wrap-break-word text-base font-semibold leading-relaxed sm:text-lg">
                 {currentItem.item.question}
               </h3>
             </div>
@@ -258,11 +261,11 @@ export function QuizAnswerReview({
             </div>
             <div className="space-y-1">
               <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Your Answer</p>
-              <p className="break-words text-sm text-foreground">{selectedAnswerSummary}</p>
+              <p className="wrap-break-word text-sm text-foreground">{selectedAnswerSummary}</p>
             </div>
             <div className="space-y-1">
               <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Correct Answer</p>
-              <p className="break-words text-sm text-foreground">{correctAnswerSummary}</p>
+              <p className="wrap-break-word text-sm text-foreground">{correctAnswerSummary}</p>
             </div>
           </div>
 
@@ -285,7 +288,7 @@ export function QuizAnswerReview({
                   )}
                 >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <p className="whitespace-normal break-words">
+                    <p className="whitespace-normal wrap-break-word">
                       <span className="mr-2 font-semibold text-foreground">{choice.label}.</span>
                       <span>{choice.text}</span>
                     </p>
@@ -346,9 +349,15 @@ export function QuizAnswerReview({
               <div className="motion-collapse-inner">
                 <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground/80">
                   <p className="font-medium text-foreground">Explanation</p>
-                  <p className="break-words leading-relaxed">
+                  <p className="wrap-break-word leading-relaxed">
                     {currentItem.item.explanation?.trim() || "No explanation available for this question."}
                   </p>
+                  {hasComputationalWorkingSolution(currentItem.item) ? (
+                    <QuizWorkingSolution
+                      workingSolution={currentItem.item.workingSolution}
+                      planType={planType}
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>
