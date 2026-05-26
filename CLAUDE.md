@@ -173,6 +173,7 @@ NoteLib does not overwrite generated content. The "Make a Copy" model is enforce
 - Upgrade CTAs always go through `getUpgradeCtas(currentPlan)` from `src/config/plans.ts`. Never hardcode upgrade copy.
 - Analytics events use the `AnalyticsEventType` Java enum (and matching frontend constant). Add to the enum before firing new events.
 - Public note pages must not persist anonymous session state. No session is created until the user is authenticated.
+- Use `globalThis` instead of `window`, `self`, or `global` for browser globals (`globalThis.localStorage`, `globalThis.setTimeout`, `globalThis.addEventListener`, etc.). ESLint enforces this rule; `window` references will fail the lint check.
 
 **Commits:**
 ```

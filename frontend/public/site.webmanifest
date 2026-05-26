@@ -2,19 +2,24 @@
   "name": "NoteLib",
   "short_name": "NoteLib",
   "description": "Build your notes library and turn notes into summaries and quizzes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#4F8CFF",
+  "background_color": "#0F172A",
   "icons": [
     {
       "src": "/favicon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/favicon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ],
-  "theme_color": "#4F8CFF",
-  "background_color": "#0F172A",
-  "display": "standalone"
+  ]
 }

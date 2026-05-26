@@ -8,6 +8,8 @@ import { AppShell } from "@/components/app-shell";
 import { AppShellTitleProvider } from "@/components/app-shell-title-context";
 import { ExamFocusProvider } from "@/components/exam-mode/exam-focus-context";
 import { RouteProgressProvider } from "@/components/navigation/route-progress-provider";
+import { AddToHomeScreenNudge } from "@/components/pwa/add-to-home-screen-nudge";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { DEFAULT_OG_IMAGE_ALT, DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
 import { THEME_CLASS_NAME_BY_MODE } from "@/lib/theme-preferences";
 
@@ -70,6 +72,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >
+        <ServiceWorkerRegistration />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -88,6 +91,7 @@ export default function RootLayout({
               </ExamFocusProvider>
             </RouteProgressProvider>
           </Suspense>
+          <AddToHomeScreenNudge />
         </ThemeProvider>
       </body>
     </html>
