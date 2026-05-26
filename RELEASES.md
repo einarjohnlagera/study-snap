@@ -8,6 +8,9 @@ Theme: fix prompt-level defects in generated quizzes (choice bleed into explanat
 
 ### ✅ Shipped
 
+- **Quiz generation quality fixes** — across all quiz modes (Quick Review, Challenge Quiz, Board Exam, Long Exam, Adaptive Practice, Teacher Quiz): added prompt instruction to keep answer choices out of explanation text; added distractor-independence constraint so no two questions share the same choice set; added question framing variety instruction to distribute across positive, negative ("NOT/EXCEPT"), best-describes, and assertion-style framings (Quick Review, Challenge Quiz, Board Exam, Long Exam, Teacher Quiz only — Adaptive Practice excluded as targeted practice).
+- **Study Pack key concepts reliability fix** — widened key concept count tolerance from the hard 8–10 range to a soft 5–10 range: lists over 10 are trimmed to 10 with a warning; lists of 5–7 are accepted with a warning; null/blank/non-alphanumeric individual concepts are now skipped instead of failing the whole generation; duplicates are skipped instead of failing; the generation only hard-fails if fewer than 5 valid concepts survive filtering. Reduces the rate of "invalid key concepts" generation failures that required manual retry.
+
 ---
 
 ## v0.16.0 - Conversion & Growth
