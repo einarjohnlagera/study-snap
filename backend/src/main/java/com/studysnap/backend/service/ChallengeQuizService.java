@@ -68,6 +68,7 @@ public class ChallengeQuizService {
     private static final String SESSION_STATE_TIME_LIMIT_SECONDS = "timeLimitSeconds";
     private static final String SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
     private static final String SESSION_STATE_SELECTED_CHOICES = "selectedChoices";
+    private static final String SESSION_STATE_SELECTED_MULTI_CHOICES = "selectedMultiChoices";
     private static final String SESSION_STATE_COMPLETED = "completed";
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
     private static final String SESSION_STATE_MODE = "mode";
@@ -393,9 +394,11 @@ public class ChallengeQuizService {
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
         ChallengeStatistics statistics = computeStatistics(
                 quiz,
                 selectedChoices,
+                selectedMultiChoices,
                 request.correctAnswers(),
                 totalQuestions
         );
@@ -535,9 +538,10 @@ public class ChallengeQuizService {
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
         List<ChallengeQuizConceptStatResponse> conceptBreakdown = extractConceptBreakdown(session);
         if (conceptBreakdown.isEmpty()) {
-            conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices);
+            conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices);
         }
         List<String> weakConcepts = extractWeakConcepts(session);
         if (weakConcepts.isEmpty()) {
@@ -558,6 +562,7 @@ public class ChallengeQuizService {
                 conceptBreakdown,
                 quiz,
                 selectedChoices,
+                selectedMultiChoices,
                 session.getCreatedAt(),
                 session.getCompletedAt()
         );
@@ -834,9 +839,16 @@ public class ChallengeQuizService {
             if (selectedChoices instanceof Map<?, ?>) {
                 merged.put(SESSION_STATE_SELECTED_CHOICES, selectedChoices);
             }
+            Object selectedMultiChoices = incomingState.get(SESSION_STATE_SELECTED_MULTI_CHOICES);
+            if (selectedMultiChoices instanceof Map<?, ?>) {
+                merged.put(SESSION_STATE_SELECTED_MULTI_CHOICES, selectedMultiChoices);
+            }
         }
         if (!merged.containsKey(SESSION_STATE_SELECTED_CHOICES)) {
             merged.put(SESSION_STATE_SELECTED_CHOICES, Map.of());
+        }
+        if (!merged.containsKey(SESSION_STATE_SELECTED_MULTI_CHOICES)) {
+            merged.put(SESSION_STATE_SELECTED_MULTI_CHOICES, Map.of());
         }
         if (!merged.containsKey(SESSION_STATE_TIME_LIMIT_SECONDS)) {
             merged.put(SESSION_STATE_TIME_LIMIT_SECONDS, INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE);
@@ -942,6 +954,7 @@ public class ChallengeQuizService {
     private ChallengeStatistics computeStatistics(
             List<QuizItem> quiz,
             Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices,
             int fallbackCorrectAnswers,
             int fallbackTotalQuestions
     ) {
@@ -971,14 +984,15 @@ public class ChallengeQuizService {
             ConceptCounter counter = conceptCounters.computeIfAbsent(concept, unused -> new ConceptCounter());
             counter.totalQuestions += 1;
 
-            Integer selectedChoiceIndex = selectedChoices.get(index);
-            if (selectedChoiceIndex != null && selectedChoiceIndex.equals(item.correctIndex())) {
+            if (QuizSessionReviewUtils.isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices)) {
                 counter.correctAnswers += 1;
                 correctAnswers += 1;
             }
         }
 
-        int totalQuestions = selectedChoices.isEmpty() ? quiz.size() : selectedChoices.size();
+        int totalQuestions = selectedChoices.isEmpty() && (selectedMultiChoices == null || selectedMultiChoices.isEmpty())
+                ? quiz.size()
+                : countAnsweredQuestions(selectedChoices, selectedMultiChoices);
         BigDecimal percentage = BigDecimal.valueOf(correctAnswers)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(Math.max(1, totalQuestions)), 2, RoundingMode.HALF_UP);
@@ -1008,6 +1022,23 @@ public class ChallengeQuizService {
                 conceptBreakdown,
                 weakConcepts
         );
+    }
+
+    private int countAnsweredQuestions(
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        Set<Integer> answeredQuestionIndexes = new LinkedHashSet<>();
+        if (selectedChoices != null) {
+            answeredQuestionIndexes.addAll(selectedChoices.keySet());
+        }
+        if (selectedMultiChoices != null) {
+            selectedMultiChoices.entrySet().stream()
+                    .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
+                    .map(Map.Entry::getKey)
+                    .forEach(answeredQuestionIndexes::add);
+        }
+        return answeredQuestionIndexes.size();
     }
 
     private String normalizeConcept(String value) {

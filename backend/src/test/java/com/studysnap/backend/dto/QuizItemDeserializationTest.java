@@ -75,6 +75,28 @@ class QuizItemDeserializationTest {
     }
 
     @Test
+    void deserializesMultiSelectWithCorrectIndexFallback() throws Exception {
+        QuizItem item = objectMapper.readValue(
+                """
+                {
+                  "question": "Which properties describe acids?",
+                  "choices": ["Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"],
+                  "correctIndices": [0, 2],
+                  "concept": "Acids",
+                  "explanation": "Acids donate protons and turn blue litmus red.",
+                  "questionFormat": "MULTI_SELECT"
+                }
+                """,
+                QuizItem.class
+        );
+
+        assertThat(item.questionFormat()).isEqualTo("MULTI_SELECT");
+        assertThat(item.correctIndices()).containsExactly(0, 2);
+        assertThat(item.correctIndex()).isZero();
+        assertThat(item.answer()).isEqualTo("Donate protons");
+    }
+
+    @Test
     void equalityIncludesWorkingSolution() {
         QuizItem first = new QuizItem(
                 "What is the power?",
@@ -138,5 +160,36 @@ class QuizItemDeserializationTest {
 
         assertThat(mcq).isNotEqualTo(trueFalse);
         assertThat(mcq.hashCode()).isNotEqualTo(trueFalse.hashCode());
+    }
+
+    @Test
+    void equalityIncludesCorrectIndices() {
+        QuizItem first = new QuizItem(
+                "Which properties describe acids?",
+                List.of("Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"),
+                null,
+                "Acids",
+                "Acids donate protons and turn blue litmus red.",
+                null,
+                "MULTI_SELECT",
+                null,
+                null,
+                List.of(0, 2)
+        );
+        QuizItem differentCorrectIndices = new QuizItem(
+                "Which properties describe acids?",
+                List.of("Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"),
+                null,
+                "Acids",
+                "Acids donate protons and turn blue litmus red.",
+                null,
+                "MULTI_SELECT",
+                null,
+                null,
+                List.of(0, 3)
+        );
+
+        assertThat(first).isNotEqualTo(differentCorrectIndices);
+        assertThat(first.hashCode()).isNotEqualTo(differentCorrectIndices.hashCode());
     }
 }

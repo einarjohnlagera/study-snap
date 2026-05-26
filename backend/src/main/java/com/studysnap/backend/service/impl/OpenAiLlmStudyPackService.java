@@ -2,6 +2,7 @@ package com.studysnap.backend.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.OpenAiPromptResources;
@@ -347,13 +348,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             quizItems.add(new QuizItem(
                     item.question(),
                     item.choices(),
-                    answerIndex,
+                    "MULTI_SELECT".equals(item.questionFormat()) ? null : answerIndex,
                     normalizedConcept,
                     normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again."),
                     null,
                     item.questionFormat(),
                     item.questionType(),
-                    item.workingSolution()
+                    item.workingSolution(),
+                    item.correctIndices()
             ));
         }
         return quizItems;
@@ -372,6 +374,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.");
         if (QuizValidationUtils.hasInvalidChoices(item.choices(), item.questionFormat())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
+        }
+        if (QuizValidationUtils.hasInvalidCorrectIndices(item.correctIndices(), item.choices(), item.questionFormat())) {
+            throw invalidOutput("The study pack service returned an invalid multi-select answer. Please try again.");
         }
         resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
         String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
@@ -692,7 +697,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             ArrayNode questionFormatEnum = questionFormat.putArray("enum");
             questionFormatEnum.add("MCQ");
             questionFormatEnum.add("TRUE_FALSE");
+            questionFormatEnum.add("MULTI_SELECT");
             questionFormatEnum.addNull();
+        }
+        if (allowTrueFalse) {
+            ObjectNode correctIndices = itemProps.putObject("correctIndices");
+            ArrayNode correctIndicesTypes = correctIndices.putArray("type");
+            correctIndicesTypes.add("array");
+            correctIndicesTypes.add("null");
+            correctIndices.put("minItems", 2);
+            correctIndices.put("maxItems", 3);
+            correctIndices.putObject("items")
+                    .put("type", "integer")
+                    .put("minimum", 0)
+                    .put("maximum", 3);
         }
         ObjectNode questionType = itemProps.putObject("questionType");
         ArrayNode questionTypeTypes = questionType.putArray("type");
@@ -1639,13 +1657,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             quizItems.add(new QuizItem(
                     item.question().trim(),
                     item.choices().stream().map(String::trim).toList(),
-                    answerIndex,
+                    "MULTI_SELECT".equals(item.questionFormat()) ? null : answerIndex,
                     normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
                     normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again."),
                     null,
                     item.questionFormat(),
                     item.questionType(),
-                    item.workingSolution()
+                    item.workingSolution(),
+                    item.correctIndices()
             ));
         }
         return quizItems;
@@ -1663,6 +1682,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
         if (QuizValidationUtils.hasInvalidChoices(item.choices(), item.questionFormat())) {
             throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
+        }
+        if (QuizValidationUtils.hasInvalidCorrectIndices(item.correctIndices(), item.choices(), item.questionFormat())) {
+            throw invalidOutput(operationLabel + " returned invalid multi-select answers. Please try again.");
         }
         resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
     }
@@ -1897,7 +1919,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String summary,
             String subject,
             List<String> tags,
-            List<String> keyConcepts,
+            @JsonAlias("key_concepts") List<String> keyConcepts,
             List<PromptQuizItem> quiz
     ) {
         PromptStudyPack {
@@ -1917,7 +1939,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String explanation,
             String questionFormat,
             String questionType,
-            String workingSolution
+            String workingSolution,
+            List<Integer> correctIndices
     ) {
     }
 
@@ -1934,7 +1957,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String concept,
             String questionFormat,
             String questionType,
-            String workingSolution
+            String workingSolution,
+            List<Integer> correctIndices
     ) {
     }
 

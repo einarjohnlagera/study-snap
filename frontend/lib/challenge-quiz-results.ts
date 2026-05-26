@@ -57,10 +57,14 @@ export function mapPerformanceLevel(scorePercentage: number): PerformanceLevel {
 export function computeScore(
   quiz: QuizItem[],
   selectedChoices: Record<number, number>,
+  selectedMultiChoices: Record<number, number[]> = {},
 ): QuizScore {
   const totalQuestions = quiz.length;
   const correctAnswers = quiz.reduce((count, item, index) => {
-    return isQuizSelectionCorrect(item, selectedChoices[index]) ? count + 1 : count;
+    const selected = item.questionFormat === "MULTI_SELECT"
+      ? selectedMultiChoices[index]
+      : selectedChoices[index];
+    return isQuizSelectionCorrect(item, selected) ? count + 1 : count;
   }, 0);
   const scorePercentage =
     totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
@@ -77,13 +81,17 @@ export function computeScore(
 export function computeConceptBreakdown(
   quiz: QuizItem[],
   selectedChoices: Record<number, number>,
+  selectedMultiChoices: Record<number, number[]> = {},
 ): ConceptStat[] {
   const accumulator = new Map<string, { correct: number; total: number }>();
 
   for (let index = 0; index < quiz.length; index++) {
     const item = quiz[index];
     const concept = item.concept?.trim() || "Unknown";
-    const isCorrect = isQuizSelectionCorrect(item, selectedChoices[index]);
+    const selected = item.questionFormat === "MULTI_SELECT"
+      ? selectedMultiChoices[index]
+      : selectedChoices[index];
+    const isCorrect = isQuizSelectionCorrect(item, selected);
 
     const existing = accumulator.get(concept) ?? { correct: 0, total: 0 };
     accumulator.set(concept, {

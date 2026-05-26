@@ -50,16 +50,20 @@ import {
   resolveQuizCorrectAnswer,
   resolveQuizCorrectIndex,
   serializeSelectedChoiceIndexRecord,
+  serializeSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
+  toSelectedMultiChoiceIndicesRecord,
 } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 type SessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
+  selectedMultiChoices?: Record<string, number[]>;
   retryQuestionIndexes?: number[];
   activeQuestionIndexes?: number[];
   roundSelections?: Record<string, number> | Record<string, string>;
+  roundMultiSelections?: Record<string, number[]>;
 };
 
 function getMotivationalFeedback(scorePercentage: number) {
@@ -159,7 +163,9 @@ export default function QuickReviewPage() {
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [retryQuestionIndexes, setRetryQuestionIndexes] = useState<number[]>([]);
   const [roundSelections, setRoundSelections] = useState<Record<number, number>>({});
+  const [roundMultiSelections, setRoundMultiSelections] = useState<Record<number, number[]>>({});
   const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
+  const [selectedMultiChoices, setSelectedMultiChoices] = useState<Record<number, number[]>>({});
   const [retryCount, setRetryCount] = useState(0);
   const [completionTracked, setCompletionTracked] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -210,7 +216,9 @@ export default function QuickReviewPage() {
     setCurrentRoundIndex(0);
     setRetryQuestionIndexes([]);
     setRoundSelections({});
+    setRoundMultiSelections({});
     setSelectedChoices({});
+    setSelectedMultiChoices({});
     setRetryCount(0);
     setCompletionTracked(false);
     setPersistedResult(null);
@@ -294,14 +302,17 @@ export default function QuickReviewPage() {
     ? activeQuestionIndexes[currentRoundIndex]
     : null;
   const currentQuestion = currentQuestionIndex !== null ? quiz[currentQuestionIndex] : null;
+  const currentQuestionIsMultiSelect = currentQuestion?.questionFormat === "MULTI_SELECT";
   const selectedChoiceIndex = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
-  const hasAnsweredCurrent = selectedChoiceIndex !== null;
+  const selectedMultiChoiceIndices = currentQuestionIndex !== null ? roundMultiSelections[currentQuestionIndex] ?? [] : [];
+  const hasAnsweredCurrent = currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
   const score = useMemo(
     () =>
       quiz.reduce((count, item, index) => {
-        return isQuizSelectionCorrect(item, selectedChoices[index]) ? count + 1 : count;
+        const selected = item.questionFormat === "MULTI_SELECT" ? selectedMultiChoices[index] : selectedChoices[index];
+        return isQuizSelectionCorrect(item, selected) ? count + 1 : count;
       }, 0),
-    [quiz, selectedChoices],
+    [quiz, selectedChoices, selectedMultiChoices],
   );
   const scorePercentage = useMemo(() => {
     if (totalQuestions === 0) {
@@ -329,7 +340,8 @@ export default function QuickReviewPage() {
   const incorrectQuestionsForStudyTip = useMemo<QuickReviewStudyTipRequest["incorrectQuestions"]>(() => {
     return quiz
       .map((item, index) => {
-        if (isQuizSelectionCorrect(item, selectedChoices[index])) {
+        const selected = item.questionFormat === "MULTI_SELECT" ? selectedMultiChoices[index] : selectedChoices[index];
+        if (isQuizSelectionCorrect(item, selected)) {
           return null;
         }
         const correctAnswer = resolveQuizCorrectAnswer(item);
@@ -343,11 +355,12 @@ export default function QuickReviewPage() {
         };
       })
       .filter((item): item is QuickReviewStudyTipRequest["incorrectQuestions"][number] => item !== null);
-  }, [quiz, selectedChoices]);
+  }, [quiz, selectedChoices, selectedMultiChoices]);
   const weakConcepts = useMemo(() => {
     const concepts = quiz
       .map((item, index) => {
-        if (isQuizSelectionCorrect(item, selectedChoices[index])) {
+        const selected = item.questionFormat === "MULTI_SELECT" ? selectedMultiChoices[index] : selectedChoices[index];
+        if (isQuizSelectionCorrect(item, selected)) {
           return null;
         }
         const concept = item.concept?.trim();
@@ -355,7 +368,7 @@ export default function QuickReviewPage() {
       })
       .filter((concept): concept is string => concept !== null);
     return Array.from(new Set(concepts));
-  }, [quiz, selectedChoices]);
+  }, [quiz, selectedChoices, selectedMultiChoices]);
   const displayedWeakConcepts = useMemo(() => {
     const persistedWeakConcepts = persistedResult?.weakConcepts?.filter((concept) => concept.trim().length > 0) ?? [];
     if (persistedWeakConcepts.length > 0) {
@@ -451,18 +464,22 @@ export default function QuickReviewPage() {
     currentRound: "INITIAL" | "RETRY";
     retryCount: number;
     selectedChoices: Record<number, number>;
+    selectedMultiChoices: Record<number, number[]>;
     retryQuestionIndexes: number[];
     activeQuestionIndexes: number[];
     roundSelections: Record<number, number>;
+    roundMultiSelections: Record<number, number[]>;
   }) => {
     if (!currentSessionId) {
       return;
     }
     const sessionState: SessionStatePayload = {
       selectedChoices: serializeSelectedChoiceIndexRecord(next.selectedChoices),
+      selectedMultiChoices: serializeSelectedMultiChoiceIndicesRecord(next.selectedMultiChoices),
       retryQuestionIndexes: next.retryQuestionIndexes,
       activeQuestionIndexes: next.activeQuestionIndexes,
       roundSelections: serializeSelectedChoiceIndexRecord(next.roundSelections),
+      roundMultiSelections: serializeSelectedMultiChoiceIndicesRecord(next.roundMultiSelections),
     };
     updateQuickReviewSessionProgress(currentSessionId, {
       currentQuestionIndex: next.currentQuestionIndex,
@@ -483,9 +500,11 @@ export default function QuickReviewPage() {
       currentRound: currentRoundType,
       retryCount,
       selectedChoices,
+      selectedMultiChoices,
       retryQuestionIndexes,
       activeQuestionIndexes,
       roundSelections,
+      roundMultiSelections,
     });
   }, [
     activeQuestionIndexes,
@@ -496,7 +515,9 @@ export default function QuickReviewPage() {
     retryCount,
     retryQuestionIndexes,
     roundSelections,
+    roundMultiSelections,
     selectedChoices,
+    selectedMultiChoices,
   ]);
 
   useEffect(() => {
@@ -514,8 +535,10 @@ export default function QuickReviewPage() {
 
         const state = (started.sessionState ?? {}) as SessionStatePayload;
         const restoredSelectedChoices = toSelectedChoiceIndexRecord(state.selectedChoices, quiz);
+        const restoredSelectedMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, quiz);
         const restoredRetryQuestionIndexes = toNumberArray(state.retryQuestionIndexes);
         const restoredRoundSelections = toSelectedChoiceIndexRecord(state.roundSelections, quiz);
+        const restoredRoundMultiSelections = toSelectedMultiChoiceIndicesRecord(state.roundMultiSelections, quiz);
         const allIndexes = quiz.map((_, index) => index);
         const round = started.currentRound ?? "INITIAL";
         const retryIndexes = restoredRetryQuestionIndexes;
@@ -532,9 +555,11 @@ export default function QuickReviewPage() {
         setCurrentSessionId(started.sessionId);
         setSessionStartedAt(Date.now());
         setSelectedChoices(restoredSelectedChoices);
+        setSelectedMultiChoices(restoredSelectedMultiChoices);
         setRetryQuestionIndexes(retryIndexes);
         setActiveQuestionIndexes(activeIndexes.length > 0 ? activeIndexes : allIndexes);
         setRoundSelections(restoredRoundSelections);
+        setRoundMultiSelections(restoredRoundMultiSelections);
         setRetryCount(started.retryCount ?? 0);
         setCurrentRoundIndex(restoredRoundIndex);
         setPhase(isRetryTransition ? "retry-transition" : (round === "RETRY" ? "retry" : "initial"));
@@ -642,9 +667,38 @@ export default function QuickReviewPage() {
       currentRound: currentRoundType,
       retryCount,
       selectedChoices: nextSelectedChoices,
+      selectedMultiChoices,
       retryQuestionIndexes,
       activeQuestionIndexes,
       roundSelections: nextRoundSelections,
+      roundMultiSelections,
+    });
+  };
+
+  const handleSelectMultiChoices = (choiceIndices: number[]) => {
+    if (!currentQuestion || currentQuestionIndex === null || !currentQuestionIsMultiSelect) {
+      return;
+    }
+    const nextRoundMultiSelections = {
+      ...roundMultiSelections,
+      [currentQuestionIndex]: choiceIndices,
+    };
+    const nextSelectedMultiChoices = {
+      ...selectedMultiChoices,
+      [currentQuestionIndex]: choiceIndices,
+    };
+    setRoundMultiSelections(nextRoundMultiSelections);
+    setSelectedMultiChoices(nextSelectedMultiChoices);
+    persistProgress({
+      currentQuestionIndex: currentRoundIndex,
+      currentRound: currentRoundType,
+      retryCount,
+      selectedChoices,
+      selectedMultiChoices: nextSelectedMultiChoices,
+      retryQuestionIndexes,
+      activeQuestionIndexes,
+      roundSelections,
+      roundMultiSelections: nextRoundMultiSelections,
     });
   };
 
@@ -661,15 +715,20 @@ export default function QuickReviewPage() {
         currentRound: currentRoundType,
         retryCount,
         selectedChoices,
+        selectedMultiChoices,
         retryQuestionIndexes,
         activeQuestionIndexes,
         roundSelections,
+        roundMultiSelections,
       });
       return;
     }
 
     if (phase === "initial") {
-      const incorrectIndexes = activeQuestionIndexes.filter((index) => !isQuizSelectionCorrect(quiz[index], selectedChoices[index]));
+      const incorrectIndexes = activeQuestionIndexes.filter((index) => {
+        const selected = quiz[index]?.questionFormat === "MULTI_SELECT" ? selectedMultiChoices[index] : selectedChoices[index];
+        return !isQuizSelectionCorrect(quiz[index], selected);
+      });
       if (incorrectIndexes.length === 0) {
         setPhase("complete");
         void completeSessionIfNeeded(0);
@@ -683,9 +742,11 @@ export default function QuickReviewPage() {
         currentRound: "INITIAL",
         retryCount: 1,
         selectedChoices,
+        selectedMultiChoices,
         retryQuestionIndexes: incorrectIndexes,
         activeQuestionIndexes,
         roundSelections,
+        roundMultiSelections,
       });
       return;
     }
@@ -705,14 +766,17 @@ export default function QuickReviewPage() {
     setActiveQuestionIndexes(retryQuestionIndexes);
     setCurrentRoundIndex(0);
     setRoundSelections({});
+    setRoundMultiSelections({});
     persistProgress({
       currentQuestionIndex: 0,
       currentRound: "RETRY",
       retryCount,
       selectedChoices,
+      selectedMultiChoices,
       retryQuestionIndexes,
       activeQuestionIndexes: retryQuestionIndexes,
       roundSelections: {},
+      roundMultiSelections: {},
     });
   };
 
@@ -959,7 +1023,13 @@ export default function QuickReviewPage() {
           </div>
 
           {showAnswerReview ? (
-            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" planType={viewerPlanType} />
+            <QuizAnswerReview
+              quiz={quiz}
+              selectedChoices={selectedChoices}
+              selectedMultiChoices={selectedMultiChoices}
+              className="mt-2"
+              planType={viewerPlanType}
+            />
           ) : null}
 
           {/* Upgrade nudge for non-Pro users */}
@@ -1102,12 +1172,16 @@ export default function QuickReviewPage() {
               questionKey={currentQuestion.question}
               choices={currentQuestion.choices}
               correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+              correctIndices={currentQuestion.correctIndices}
+              questionFormat={currentQuestion.questionFormat}
               selectedChoiceIndex={selectedChoiceIndex}
-              revealAnswer={hasAnsweredCurrent}
+              selectedMultiChoiceIndices={selectedMultiChoiceIndices}
+              revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
               onSelectChoice={handleSelectChoice}
+              onSelectMultiChoices={handleSelectMultiChoices}
             />
 
-            {hasAnsweredCurrent ? (
+            {hasAnsweredCurrent && !currentQuestionIsMultiSelect ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}

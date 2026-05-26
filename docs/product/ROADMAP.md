@@ -207,9 +207,9 @@ Additionally, engineering users need computational questions with worked solutio
 4. **Additional Question Format Types** — requires schema + UI changes
 
    - **True/False standalone** — 2-choice questions (`["True", "False"]`); requires `choices` to be variable-length or a separate `questionFormat` field; scoring unchanged
-   - **Multi-select** — "Select all that apply"; requires `correctIndices: number[]` replacing `correctIndex: number`; scoring: all-or-nothing v1 (partial credit v2)
+   - ~~**Multi-select**~~ ✅ — "Select all that apply" shipped as `MULTI_SELECT` with `correctIndices`, all-or-nothing v1 scoring, and `correctIndex` preserved as a legacy fallback; available on all plans in every quiz mode except Board Exam
    - **Matching type** — deliberate shared-choice block (multiple questions, same labeled option set); needs new `questionGroup` association in session state
-   - Implementation order: True/False first (simplest schema delta), then multi-select, then matching
+   - Remaining implementation order: True/False polish / audit as needed, then matching
 
 ### Known Generation Reliability Issues (lower priority, v0.17.0)
 

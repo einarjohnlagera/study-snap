@@ -61,7 +61,9 @@ import {
 import {
   resolveQuizCorrectIndex,
   serializeSelectedChoiceIndexRecord,
+  serializeSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
+  toSelectedMultiChoiceIndicesRecord,
 } from "@/lib/quiz";
 import {
   CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
@@ -75,6 +77,7 @@ type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limi
 type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup";
 type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
+  selectedMultiChoices?: Record<string, number[]>;
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
@@ -245,9 +248,14 @@ export default function ChallengeQuizPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
-  const progressRef = useRef<{ currentIndex: number; selectedChoices: Record<number, number> }>({
+  const progressRef = useRef<{
+    currentIndex: number;
+    selectedChoices: Record<number, number>;
+    selectedMultiChoices: Record<number, number[]>;
+  }>({
     currentIndex: 0,
     selectedChoices: {},
+    selectedMultiChoices: {},
   });
   const remainingSecondsRef = useRef(0);
   const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
@@ -271,6 +279,7 @@ export default function ChallengeQuizPage() {
   const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
+  const [selectedMultiChoices, setSelectedMultiChoices] = useState<Record<number, number[]>>({});
   const [timedOut, setTimedOut] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showFirstQuizCompletionBanner, setShowFirstQuizCompletionBanner] = useState(false);
@@ -309,10 +318,15 @@ export default function ChallengeQuizPage() {
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
     [viewerProfileType],
   );
-  const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
+  const syncProgressRef = useCallback((
+    nextIndex: number,
+    nextSelectedChoices: Record<number, number>,
+    nextSelectedMultiChoices: Record<number, number[]> = progressRef.current.selectedMultiChoices,
+  ) => {
     progressRef.current = {
       currentIndex: nextIndex,
       selectedChoices: nextSelectedChoices,
+      selectedMultiChoices: nextSelectedMultiChoices,
     };
   }, []);
   const openLockedFeaturePaywall = useCallback(
@@ -453,11 +467,12 @@ export default function ChallengeQuizPage() {
     setSelectedDifficulty(normalizePracticeDifficulty(started.selectedDifficulty));
 
     if (started.status === "GENERATING") {
-      syncProgressRef(0, {});
+      syncProgressRef(0, {}, {});
       setChallengeSession(started);
       setResult(null);
       setError(null);
       setSelectedChoices({});
+      setSelectedMultiChoices({});
       setCurrentIndex(0);
       setDeadlineEpochSeconds(null);
       setRemainingSeconds(0);
@@ -469,10 +484,11 @@ export default function ChallengeQuizPage() {
     }
 
     if (started.status === "FAILED") {
-      syncProgressRef(0, {});
+      syncProgressRef(0, {}, {});
       setChallengeSession(started);
       setResult(null);
       setSelectedChoices({});
+      setSelectedMultiChoices({});
       setCurrentIndex(0);
       setDeadlineEpochSeconds(null);
       setRemainingSeconds(0);
@@ -487,11 +503,12 @@ export default function ChallengeQuizPage() {
     }
 
     if (!started.sessionId || started.quiz.length === 0) {
-      syncProgressRef(0, {});
+      syncProgressRef(0, {}, {});
       setChallengeSession(started);
       setResult(null);
       setError(null);
       setSelectedChoices({});
+      setSelectedMultiChoices({});
       setCurrentIndex(0);
       setDeadlineEpochSeconds(null);
       setRemainingSeconds(0);
@@ -504,18 +521,20 @@ export default function ChallengeQuizPage() {
 
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
     const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
+    const restoredMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, started.quiz);
     const normalizedIndex = Math.max(0, Math.min(started.currentQuestionIndex ?? 0, Math.max(0, started.quiz.length - 1)));
     const nextDeadlineEpochSeconds = resolveDeadlineEpochSeconds(
       started.timeLimitSeconds,
       state,
       getNowEpochSeconds(),
     );
-    syncProgressRef(normalizedIndex, restoredChoices);
+    syncProgressRef(normalizedIndex, restoredChoices, restoredMultiChoices);
 
     setChallengeSession(started);
     setResult(null);
     setError(null);
     setSelectedChoices(restoredChoices);
+    setSelectedMultiChoices(restoredMultiChoices);
     setCurrentIndex(normalizedIndex);
     setDeadlineEpochSeconds(nextDeadlineEpochSeconds);
     setRemainingSeconds(resolveRemainingSecondsFromDeadline(nextDeadlineEpochSeconds, getNowEpochSeconds()));
@@ -525,13 +544,19 @@ export default function ChallengeQuizPage() {
   }, [syncProgressRef]);
 
   const persistProgress = useCallback(
-    (nextIndex: number, nextSelectedChoices: Record<number, number>, keepalive = false) => {
+    (
+      nextIndex: number,
+      nextSelectedChoices: Record<number, number>,
+      nextSelectedMultiChoices: Record<number, number[]> = progressRef.current.selectedMultiChoices,
+      keepalive = false,
+    ) => {
       if (!challengeSession?.sessionId) {
         return;
       }
 
       const sessionState = {
         selectedChoices: serializeSelectedChoiceIndexRecord(nextSelectedChoices),
+        selectedMultiChoices: serializeSelectedMultiChoiceIndicesRecord(nextSelectedMultiChoices),
       };
 
       void updateChallengeQuizSessionProgress(
@@ -579,10 +604,11 @@ export default function ChallengeQuizPage() {
       setViewerPlanType(resolvedViewerPlanType);
       setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
       if (!authUser?.emailVerifiedAt) {
-        syncProgressRef(0, {});
+        syncProgressRef(0, {}, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
+        setSelectedMultiChoices({});
         setCurrentIndex(0);
         setDeadlineEpochSeconds(null);
         setRemainingSeconds(0);
@@ -598,10 +624,11 @@ export default function ChallengeQuizPage() {
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
       if (sharedModeSelectionEntryRequested) {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
-        syncProgressRef(0, {});
+        syncProgressRef(0, {}, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
+        setSelectedMultiChoices({});
         setCurrentIndex(0);
         setDeadlineEpochSeconds(null);
         setRemainingSeconds(0);
@@ -622,10 +649,11 @@ export default function ChallengeQuizPage() {
         applyStartedSession(inProgress, true);
       } else {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
-        syncProgressRef(0, {});
+        syncProgressRef(0, {}, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
+        setSelectedMultiChoices({});
         setCurrentIndex(0);
         setDeadlineEpochSeconds(null);
         setRemainingSeconds(0);
@@ -668,9 +696,15 @@ export default function ChallengeQuizPage() {
 
   const quiz = useMemo(() => challengeSession?.quiz ?? [], [challengeSession]);
   const totalQuestions = quiz.length;
-  const answeredCount = useMemo(() => Object.keys(selectedChoices).length, [selectedChoices]);
+  const answeredCount = useMemo(() => new Set([
+    ...Object.keys(selectedChoices),
+    ...Object.entries(selectedMultiChoices)
+      .filter(([, value]) => value.length > 0)
+      .map(([key]) => key),
+  ]).size, [selectedChoices, selectedMultiChoices]);
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
+  const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   useAppShellTitleOverride(activeMode === BOARD_EXAM_MODE ? "Board Exam" : null);
@@ -679,8 +713,9 @@ export default function ChallengeQuizPage() {
     progressRef.current = {
       currentIndex,
       selectedChoices,
+      selectedMultiChoices,
     };
-  }, [currentIndex, selectedChoices]);
+  }, [currentIndex, selectedChoices, selectedMultiChoices]);
 
   useEffect(() => {
     remainingSecondsRef.current = remainingSeconds;
@@ -688,7 +723,7 @@ export default function ChallengeQuizPage() {
 
   const persistLatestProgress = useCallback((keepalive = false) => {
     const latest = progressRef.current;
-    persistProgress(latest.currentIndex, latest.selectedChoices, keepalive);
+    persistProgress(latest.currentIndex, latest.selectedChoices, latest.selectedMultiChoices, keepalive);
   }, [persistProgress]);
 
   const finalizeChallengeSession = useCallback(async ({
@@ -708,7 +743,8 @@ export default function ChallengeQuizPage() {
     }
 
     const latestSelectedChoices = progressRef.current.selectedChoices;
-    const { correctAnswers, totalQuestions: total } = computeScore(activeSession.quiz, latestSelectedChoices);
+    const latestSelectedMultiChoices = progressRef.current.selectedMultiChoices;
+    const { correctAnswers, totalQuestions: total } = computeScore(activeSession.quiz, latestSelectedChoices, latestSelectedMultiChoices);
     const durationSeconds = Math.max(0, activeSession.timeLimitSeconds - remainingSecondsRef.current);
 
     submitInFlightRef.current = true;
@@ -911,10 +947,11 @@ export default function ChallengeQuizPage() {
 
   const handleRetry = () => {
     timeoutAutoSubmitRequestedRef.current = false;
-    syncProgressRef(0, {});
+    syncProgressRef(0, {}, {});
     setChallengeSession(null);
     setResult(null);
     setSelectedChoices({});
+    setSelectedMultiChoices({});
     setCurrentIndex(0);
     setDeadlineEpochSeconds(null);
     setRemainingSeconds(0);
@@ -957,7 +994,7 @@ export default function ChallengeQuizPage() {
       setRemainingSeconds(nextRemainingSeconds);
       remainingSecondsRef.current = nextRemainingSeconds;
       const nextIndex = challengeSession.quiz.length;
-      syncProgressRef(nextIndex, progressRef.current.selectedChoices);
+      syncProgressRef(nextIndex, progressRef.current.selectedChoices, progressRef.current.selectedMultiChoices);
       setCurrentIndex(nextIndex);
       setGenerateMoreToast(
         response.totalQuestions >= MAX_SESSION_QUESTIONS
@@ -1607,15 +1644,29 @@ export default function ChallengeQuizPage() {
                   questionKey={currentQuestion.question}
                   choices={currentQuestion.choices}
                   correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                  correctIndices={currentQuestion.correctIndices}
+                  questionFormat={isBoardExamMode ? currentQuestion.questionFormat === "TRUE_FALSE" ? "TRUE_FALSE" : "MCQ" : currentQuestion.questionFormat}
                   selectedChoiceIndex={selectedChoiceIndex}
+                  selectedMultiChoiceIndices={selectedMultiChoiceIndices}
                   revealAnswer={false}
                   disabled={quizInteractionDisabled}
                   selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
                   onSelectChoice={(choiceIndex) => {
                     setSelectedChoices((previous) => {
                       const next = { ...previous, [currentIndex]: choiceIndex };
-                      syncProgressRef(currentIndex, next);
-                      persistProgress(currentIndex, next);
+                      syncProgressRef(currentIndex, next, selectedMultiChoices);
+                      persistProgress(currentIndex, next, selectedMultiChoices);
+                      return next;
+                    });
+                  }}
+                  onSelectMultiChoices={(choiceIndices) => {
+                    if (isBoardExamMode) {
+                      return;
+                    }
+                    setSelectedMultiChoices((previous) => {
+                      const next = { ...previous, [currentIndex]: choiceIndices };
+                      syncProgressRef(currentIndex, selectedChoices, next);
+                      persistProgress(currentIndex, selectedChoices, next);
                       return next;
                     });
                   }}
@@ -1627,11 +1678,11 @@ export default function ChallengeQuizPage() {
                 <QuestionNavigator
                   total={totalQuestions}
                   currentIndex={currentIndex}
-                  isAnswered={(index) => selectedChoices[index] != null}
+                  isAnswered={(index) => selectedChoices[index] != null || (selectedMultiChoices[index]?.length ?? 0) > 0}
                   onSelect={(index) => {
-                    syncProgressRef(index, selectedChoices);
+                    syncProgressRef(index, selectedChoices, selectedMultiChoices);
                     setCurrentIndex(index);
-                    persistProgress(index, selectedChoices);
+                    persistProgress(index, selectedChoices, selectedMultiChoices);
                   }}
                   summary={questionNavigatorSummary}
                   disabled={quizInteractionDisabled}
@@ -1671,9 +1722,9 @@ export default function ChallengeQuizPage() {
                 className="w-28 shrink-0 sm:w-auto"
                 onClick={() => {
                   const nextIndex = Math.max(0, currentIndex - 1);
-                  syncProgressRef(nextIndex, selectedChoices);
+                  syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices);
                   setCurrentIndex(nextIndex);
-                  persistProgress(nextIndex, selectedChoices);
+                  persistProgress(nextIndex, selectedChoices, selectedMultiChoices);
                 }}
                 disabled={currentIndex <= 0 || quizInteractionDisabled}
               >
@@ -1686,9 +1737,9 @@ export default function ChallengeQuizPage() {
                     className="flex-1 sm:w-auto sm:flex-none"
                     onClick={() => {
                       const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
-                      syncProgressRef(nextIndex, selectedChoices);
+                      syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices);
                       setCurrentIndex(nextIndex);
-                      persistProgress(nextIndex, selectedChoices);
+                      persistProgress(nextIndex, selectedChoices, selectedMultiChoices);
                     }}
                     disabled={quizInteractionDisabled}
                   >
@@ -1825,6 +1876,7 @@ export default function ChallengeQuizPage() {
             <QuizAnswerReview
               quiz={quiz}
               selectedChoices={selectedChoices}
+              selectedMultiChoices={selectedMultiChoices}
               className="mt-2"
               planType={viewerPlanType}
               footer={(
@@ -2023,6 +2075,7 @@ export default function ChallengeQuizPage() {
             <QuizAnswerReview
               quiz={quiz}
               selectedChoices={selectedChoices}
+              selectedMultiChoices={selectedMultiChoices}
               className="mt-2"
               planType={viewerPlanType}
               footer={(

@@ -18,12 +18,13 @@ export type QuizItem = {
   question: string;
   choices: string[];
   correctIndex: number;
+  correctIndices?: number[] | null;
   answerIndex?: number;
   correctAnswerIndex?: number;
   answer?: string;
   concept?: string;
   explanation: string;
-  questionFormat?: "MCQ" | "TRUE_FALSE" | null;
+  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | null;
   questionType?: "CONCEPTUAL" | "COMPUTATIONAL" | null;
   workingSolution?: string | null;
 };
@@ -789,6 +790,7 @@ export type QuizSessionReviewResponse = {
   }[];
   quiz: QuizItem[];
   selectedChoices: Record<string, number>;
+  selectedMultiChoices?: Record<string, number[]>;
   createdAt: string;
   completedAt: string | null;
 };
@@ -812,6 +814,7 @@ export type LongExamSessionResponse = {
   status: QuizSessionStatus;
   quiz: QuizItem[];
   selectedChoices: Record<string, number>;
+  selectedMultiChoices?: Record<string, number[]>;
   currentQuestionIndex: number;
   totalQuestions: number;
   difficulty: string | null;
@@ -2473,7 +2476,7 @@ export async function getLongExamSession(
 
 export async function saveLongExamProgress(
   sessionId: string,
-  body: { questionIndex: number; selectedChoiceIndex: number },
+  body: { questionIndex: number; selectedChoiceIndex: number; selectedMultiChoiceIndices?: number[] },
 ): Promise<LongExamSessionResponse> {
   const response = await fetchWithAuth(
     `/long-exam/sessions/${sessionId}/progress`,

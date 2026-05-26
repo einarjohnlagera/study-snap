@@ -22,7 +22,8 @@ class QuizSessionStateUtilsTest {
                         "Pigment",
                         "MCQ",
                         "COMPUTATIONAL",
-                        "P = IV = 5 × 2 = 10 W"
+                        "P = IV = 5 × 2 = 10 W",
+                        List.of(0, 2)
                 )
         );
 
@@ -41,6 +42,31 @@ class QuizSessionStateUtilsTest {
         assertThat(restored.getFirst().questionFormat()).isEqualTo("MCQ");
         assertThat(restored.getFirst().questionType()).isEqualTo("COMPUTATIONAL");
         assertThat(restored.getFirst().workingSolution()).isEqualTo("P = IV = 5 × 2 = 10 W");
+        assertThat(restored.getFirst().correctIndices()).containsExactly(0, 2);
+    }
+
+    @Test
+    void writeSelectedMultiChoice_andReadSelectedMultiChoices_roundTripWithoutChangingSelectedChoices() {
+        List<QuizItem> quiz = List.of(
+                new QuizItem(
+                        "Which properties describe acids?",
+                        List.of("Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"),
+                        null,
+                        "Acids",
+                        "Acids donate protons and turn blue litmus red.",
+                        null,
+                        "MULTI_SELECT",
+                        null,
+                        null,
+                        List.of(0, 2)
+                )
+        );
+        Map<String, Object> state = QuizSessionStateUtils.withSelectedChoice(Map.of(), 0, 1);
+
+        Map<String, Object> updated = QuizSessionStateUtils.writeSelectedMultiChoice(state, 0, List.of(0, 2));
+
+        assertThat(QuizSessionStateUtils.extractSelectedChoiceIndexes(updated, quiz)).containsEntry(0, 1);
+        assertThat(QuizSessionStateUtils.readSelectedMultiChoices(updated, quiz)).containsEntry(0, List.of(0, 2));
     }
 
     @Test

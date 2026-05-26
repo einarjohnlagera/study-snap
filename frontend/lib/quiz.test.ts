@@ -1,8 +1,11 @@
 import {
   getDisplayedQuizChoices,
+  isMultiSelectSelectionCorrect,
   resolveQuizCorrectIndex,
+  resolveMultiSelectCorrectIndices,
   sanitizeQuizChoiceText,
   serializeSelectedChoiceIndexRecord,
+  toSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
 } from "./quiz";
 
@@ -113,6 +116,51 @@ describe("quiz helpers", () => {
       { displayIndex: 0, canonicalIndex: 0, label: "A", text: "True" },
       { displayIndex: 1, canonicalIndex: 1, label: "B", text: "False" },
     ]);
+  });
+
+  it("resolves multi-select fallback correct index from correctIndices", () => {
+    const item = {
+      question: "Which properties describe acids?",
+      choices: ["Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"],
+      correctIndex: -1,
+      correctIndices: [0, 2],
+      questionFormat: "MULTI_SELECT" as const,
+      explanation: "Acids donate protons and turn blue litmus red.",
+    };
+
+    expect(resolveQuizCorrectIndex(item)).toBe(0);
+    expect(resolveMultiSelectCorrectIndices(item)).toEqual([0, 2]);
+  });
+
+  it("checks multi-select answers as all-or-nothing exact sets", () => {
+    const item = {
+      question: "Which properties describe acids?",
+      choices: ["Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"],
+      correctIndex: 0,
+      correctIndices: [0, 2],
+      questionFormat: "MULTI_SELECT" as const,
+      explanation: "Acids donate protons and turn blue litmus red.",
+    };
+
+    expect(isMultiSelectSelectionCorrect(item, [2, 0])).toBe(true);
+    expect(isMultiSelectSelectionCorrect(item, [0, 1, 2])).toBe(false);
+    expect(isMultiSelectSelectionCorrect(item, [0])).toBe(false);
+    expect(isMultiSelectSelectionCorrect(item, [])).toBe(false);
+  });
+
+  it("normalizes multi-select session selections into canonical choice index arrays", () => {
+    const quiz = [
+      {
+        question: "Which properties describe acids?",
+        choices: ["A. Donate protons", "B) Taste bitter", "C. Turn blue litmus red", "D) Release hydroxide ions"],
+        correctIndex: 0,
+        correctIndices: [0, 2],
+        questionFormat: "MULTI_SELECT" as const,
+        explanation: "Acids donate protons and turn blue litmus red.",
+      },
+    ];
+
+    expect(toSelectedMultiChoiceIndicesRecord({ 0: ["C. Turn blue litmus red", "A"] }, quiz)).toEqual({ 0: [0, 2] });
   });
 
   it("keeps standard MCQ deterministic shuffle unchanged", () => {

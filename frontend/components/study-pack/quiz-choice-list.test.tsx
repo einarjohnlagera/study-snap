@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { QuizChoiceList } from "./quiz-choice-list";
 
 describe("QuizChoiceList", () => {
@@ -75,5 +76,50 @@ describe("QuizChoiceList", () => {
 
     expect(encapsulationChoice?.textContent).toMatch(/^[A-D]\.\s*Encapsulation$/);
     expect(encapsulationChoice?.textContent).not.toContain("A. A.");
+  });
+
+  it("renders multi-select mode and reports the full toggled selection", () => {
+    function MultiSelectHarness() {
+      const [selected, setSelected] = useState<number[]>([]);
+      return (
+        <QuizChoiceList
+          questionKey="Which properties describe acids?"
+          choices={["Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"]}
+          correctIndex={0}
+          correctIndices={[0, 2]}
+          questionFormat="MULTI_SELECT"
+          selectedMultiChoiceIndices={selected}
+          revealAnswer={false}
+          onSelectMultiChoices={setSelected}
+        />
+      );
+    }
+
+    render(<MultiSelectHarness />);
+
+    expect(screen.getByText("Select all that apply")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Donate protons/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Turn blue litmus red/i }));
+
+    expect(screen.getByRole("button", { name: /Donate protons/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Turn blue litmus red/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("highlights all correct and incorrect selected choices when multi-select is revealed", () => {
+    render(
+      <QuizChoiceList
+        questionKey="Which properties describe acids?"
+        choices={["Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"]}
+        correctIndex={0}
+        correctIndices={[0, 2]}
+        questionFormat="MULTI_SELECT"
+        selectedMultiChoiceIndices={[0, 1]}
+        revealAnswer
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Donate protons.*Correct/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Turn blue litmus red.*Correct/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Taste bitter.*Incorrect/i })).toBeInTheDocument();
   });
 });

@@ -107,6 +107,24 @@ Feedback rules:
 - result screens may show inline helpfulness / feedback actions
 - floating feedback launchers should stay off focused quiz flows
 
+## Question formats
+
+Shared quiz items support these active formats:
+
+- `MCQ` — 4 choices, exactly 1 correct index
+- `TRUE_FALSE` — `["True", "False"]`, exactly 1 correct index
+- `MULTI_SELECT` — 4 choices, `correctIndices` contains 2–3 correct indexes
+
+Multi-select rules:
+
+- available on all plans
+- allowed in Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, and Teacher Quiz
+- not allowed in Board Exam Mode; Board Exam remains single-correct MCQ
+- generated at most 1–2 times per quiz batch when a concept has multiple defining attributes, clauses, properties, or category members
+- scored all-or-nothing in v1: the selected set must exactly match `correctIndices`; subsets and supersets are incorrect
+- v1 does not support 4-of-4 correct or "all of the above"
+- `correctIndex` remains populated with the first correct index as a legacy fallback for sharing, export, and review utilities that expect a single answer
+
 ## Generation lock and idempotency
 
 Quick Review:
@@ -149,6 +167,6 @@ Currently all quiz questions use a fixed format: 4 choices, 1 correct index. Pla
 - **Framing variety** (prompt only, no schema change) — NOT/EXCEPT/TRUE framing within the existing 4-choice MCQ
 - **Computational questions** — numerical answer choices with step-by-step worked solutions; requires `questionType` field and KaTeX/fixed-width rendering; engineering/sciences notes only
 - **True/False 2-choice** — requires variable-length `choices` array or a `questionFormat` discriminator
-- **Multi-select** — requires `correctIndices: number[]` replacing `correctIndex: number`; scoring contract change
+- **Multi-select** — shipped as `MULTI_SELECT` with `correctIndices` while preserving `correctIndex` as a legacy fallback; all-or-nothing v1 scoring
 
 Do not implement format additions without a `EXAM_MODES.md` review — they affect scoring logic across all five quiz modes.

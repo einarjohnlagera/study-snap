@@ -9,6 +9,7 @@ public record LongExamSessionResponse(
         String status,
         List<QuizItem> quiz,
         Map<Integer, Integer> selectedChoices,
+        Map<Integer, List<Integer>> selectedMultiChoices,
         int currentQuestionIndex,
         int totalQuestions,
         String difficulty,

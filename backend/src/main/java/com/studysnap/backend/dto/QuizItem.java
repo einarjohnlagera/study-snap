@@ -13,9 +13,12 @@ import lombok.Getter;
 @Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class QuizItem {
+    private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
+
     private final String question;
     private final List<String> choices;
     private final Integer correctIndex;
+    private final List<Integer> correctIndices;
     private final String concept;
     private final String explanation;
     private final String questionFormat;
@@ -29,7 +32,7 @@ public final class QuizItem {
             String concept,
             String explanation
     ) {
-        this(question, choices, correctIndex, concept, explanation, null, null, null, null);
+        this(question, choices, correctIndex, concept, explanation, null, null, null, null, null);
     }
 
     public QuizItem(
@@ -39,7 +42,7 @@ public final class QuizItem {
             String concept,
             String explanation
     ) {
-        this(question, choices, null, concept, explanation, answer, null, null, null);
+        this(question, choices, null, concept, explanation, answer, null, null, null, null);
     }
 
     public QuizItem(
@@ -50,7 +53,7 @@ public final class QuizItem {
             String explanation,
             String legacyAnswer
     ) {
-        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, null, null);
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, null, null, null);
     }
 
     public QuizItem(
@@ -63,7 +66,7 @@ public final class QuizItem {
             String questionType,
             String workingSolution
     ) {
-        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, questionType, workingSolution);
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, null, questionType, workingSolution, null);
     }
 
     public QuizItem(
@@ -77,9 +80,25 @@ public final class QuizItem {
             String questionType,
             String workingSolution
     ) {
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, questionFormat, questionType, workingSolution, null);
+    }
+
+    public QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
-        this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer);
+        this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
+        this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer, questionFormat, this.correctIndices);
         this.concept = concept;
         this.explanation = explanation;
         this.questionFormat = questionFormat;
@@ -99,18 +118,20 @@ public final class QuizItem {
             @JsonProperty("correctAnswerIndex") Integer legacyCorrectAnswerIndex,
             @JsonProperty("questionFormat") String questionFormat,
             @JsonProperty("questionType") String questionType,
-            @JsonProperty("workingSolution") String workingSolution
+            @JsonProperty("workingSolution") String workingSolution,
+            @JsonProperty("correctIndices") List<Integer> correctIndices
     ) {
         this(
                 question,
                 choices,
-                resolveCorrectIndex(choices == null ? List.of() : List.copyOf(choices), correctIndex, legacyAnswerIndex, legacyCorrectAnswerIndex, legacyAnswer),
+                resolveCorrectIndex(choices == null ? List.of() : List.copyOf(choices), correctIndex, legacyAnswerIndex, legacyCorrectAnswerIndex, legacyAnswer, questionFormat, correctIndices),
                 concept,
                 explanation,
                 legacyAnswer,
                 questionFormat,
                 questionType,
-                workingSolution
+                workingSolution,
+                correctIndices
         );
     }
 
@@ -124,6 +145,10 @@ public final class QuizItem {
 
     public Integer correctIndex() {
         return correctIndex;
+    }
+
+    public List<Integer> correctIndices() {
+        return correctIndices;
     }
 
     @JsonIgnore
@@ -159,11 +184,17 @@ public final class QuizItem {
             Integer correctIndex,
             Integer legacyAnswerIndex,
             Integer legacyCorrectAnswerIndex,
-            String legacyAnswer
+            String legacyAnswer,
+            String questionFormat,
+            List<Integer> correctIndices
     ) {
         Integer indexedAnswer = firstValidIndex(choices, correctIndex, legacyAnswerIndex, legacyCorrectAnswerIndex);
         if (indexedAnswer != null) {
             return indexedAnswer;
+        }
+        Integer multiSelectFallback = firstValidCorrectIndex(choices, questionFormat, correctIndices);
+        if (multiSelectFallback != null) {
+            return multiSelectFallback;
         }
         if (legacyAnswer == null || choices == null || choices.isEmpty()) {
             return null;
@@ -178,6 +209,26 @@ public final class QuizItem {
             }
         }
         return answerLetterIndex(normalizedLegacyAnswer, choices.size());
+    }
+
+    private static List<Integer> sanitizeCorrectIndices(List<Integer> correctIndices, int choiceCount) {
+        if (correctIndices == null || correctIndices.isEmpty() || choiceCount <= 0) {
+            return List.of();
+        }
+        return correctIndices.stream()
+                .filter(Objects::nonNull)
+                .filter(index -> index >= 0 && index < choiceCount)
+                .distinct()
+                .toList();
+    }
+
+    private static Integer firstValidCorrectIndex(List<String> choices, String questionFormat, List<Integer> correctIndices) {
+        if (!MULTI_SELECT_FORMAT.equals(questionFormat) || correctIndices == null || correctIndices.isEmpty()) {
+            return null;
+        }
+        int choiceCount = choices == null ? 0 : choices.size();
+        Integer first = correctIndices.getFirst();
+        return first >= 0 && first < choiceCount ? first : null;
     }
 
     private static Integer answerLetterIndex(String answer, int choiceCount) {
@@ -216,6 +267,7 @@ public final class QuizItem {
         return Objects.equals(question, quizItem.question)
                 && Objects.equals(choices, quizItem.choices)
                 && Objects.equals(correctIndex, quizItem.correctIndex)
+                && Objects.equals(correctIndices, quizItem.correctIndices)
                 && Objects.equals(concept, quizItem.concept)
                 && Objects.equals(explanation, quizItem.explanation)
                 && Objects.equals(questionFormat, quizItem.questionFormat)
@@ -225,7 +277,7 @@ public final class QuizItem {
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, concept, explanation, questionFormat, questionType, workingSolution);
+        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution);
     }
 
     @Override
@@ -234,6 +286,7 @@ public final class QuizItem {
                 + "question='" + question + '\''
                 + ", choices=" + choices
                 + ", correctIndex=" + correctIndex
+                + ", correctIndices=" + correctIndices
                 + ", concept='" + concept + '\''
                 + ", explanation='" + explanation + '\''
                 + ", questionFormat='" + questionFormat + '\''

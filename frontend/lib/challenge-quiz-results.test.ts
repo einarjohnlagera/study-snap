@@ -112,6 +112,28 @@ describe("computeScore", () => {
       scorePercentage: 0,
     });
   });
+
+  it("scores multi-select questions using exact all-or-nothing matching", () => {
+    const quiz: QuizItem[] = [
+      {
+        question: "Which properties describe acids?",
+        choices: ["Donate protons", "Taste bitter", "Turn blue litmus red", "Release hydroxide ions"],
+        correctIndex: 0,
+        correctIndices: [0, 2],
+        questionFormat: "MULTI_SELECT",
+        concept: "Acids",
+        explanation: "Acids donate protons and turn blue litmus red.",
+      },
+      makeItem("Single answer", 1, "MCQ"),
+    ];
+
+    expect(computeScore(quiz, { 1: 1 }, { 0: [2, 0] })).toEqual({
+      correctAnswers: 2,
+      totalQuestions: 2,
+      scorePercentage: 100,
+    });
+    expect(computeScore(quiz, { 1: 1 }, { 0: [0] }).correctAnswers).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

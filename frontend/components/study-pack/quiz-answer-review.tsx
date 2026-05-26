@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
+import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import type { QuizItem } from "@/lib/api";
 import {
@@ -13,7 +14,12 @@ import {
   computeWeakConcepts,
   mapPerformanceLevel,
 } from "@/lib/challenge-quiz-results";
-import { getDisplayedQuizChoices, isQuizSelectionCorrect, resolveQuizCorrectIndex } from "@/lib/quiz";
+import {
+  getDisplayedQuizChoices,
+  isQuizSelectionCorrect,
+  resolveMultiSelectCorrectIndices,
+  resolveQuizCorrectIndex,
+} from "@/lib/quiz";
 import { cn } from "@/lib/utils";
 
 type ReviewMode = "all" | "incorrect";
@@ -21,6 +27,7 @@ type ReviewMode = "all" | "incorrect";
 type QuizAnswerReviewProps = {
   quiz: QuizItem[];
   selectedChoices: Record<number, number>;
+  selectedMultiChoices?: Record<number, number[]>;
   initialMode?: ReviewMode;
   title?: string;
   className?: string;
@@ -32,6 +39,7 @@ type QuizAnswerReviewProps = {
 export function QuizAnswerReview({
   quiz,
   selectedChoices,
+  selectedMultiChoices = {},
   initialMode = "all",
   title = "Review Answers",
   className,
@@ -49,31 +57,40 @@ export function QuizAnswerReview({
     return quiz.map((item, originalIndex) => {
       const displayedChoices = getDisplayedQuizChoices(item);
       const selectedChoiceIndex = selectedChoices[originalIndex] ?? null;
+      const selectedMultiChoiceIndices = selectedMultiChoices[originalIndex] ?? [];
       const correctIndex = resolveQuizCorrectIndex(item);
+      const correctIndices = resolveMultiSelectCorrectIndices(item);
       const selectedChoice = displayedChoices.find((choice) => choice.canonicalIndex === selectedChoiceIndex) ?? null;
       const correctChoice = displayedChoices.find((choice) => choice.canonicalIndex === correctIndex) ?? null;
+      const selectedMultiChoicesForSummary = displayedChoices.filter((choice) => selectedMultiChoiceIndices.includes(choice.canonicalIndex));
+      const correctMultiChoicesForSummary = displayedChoices.filter((choice) => correctIndices.includes(choice.canonicalIndex));
+      const selectedForScoring = item.questionFormat === "MULTI_SELECT" ? selectedMultiChoiceIndices : selectedChoiceIndex;
       return {
         item,
         originalIndex,
         conceptLabel: item.concept?.trim() || "Unknown concept",
         displayedChoices,
         selectedChoiceIndex,
+        selectedMultiChoiceIndices,
         correctIndex,
+        correctIndices,
         selectedChoice,
         correctChoice,
-        isCorrect: isQuizSelectionCorrect(item, selectedChoiceIndex),
+        selectedMultiChoicesForSummary,
+        correctMultiChoicesForSummary,
+        isCorrect: isQuizSelectionCorrect(item, selectedForScoring),
       };
     });
-  }, [quiz, selectedChoices]);
+  }, [quiz, selectedChoices, selectedMultiChoices]);
 
-  const score = useMemo(() => computeScore(quiz, selectedChoices), [quiz, selectedChoices]);
+  const score = useMemo(() => computeScore(quiz, selectedChoices, selectedMultiChoices), [quiz, selectedChoices, selectedMultiChoices]);
   const performanceLevel = useMemo(
     () => mapPerformanceLevel(score.scorePercentage),
     [score.scorePercentage],
   );
   const conceptBreakdown = useMemo(
-    () => computeConceptBreakdown(quiz, selectedChoices),
-    [quiz, selectedChoices],
+    () => computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices),
+    [quiz, selectedChoices, selectedMultiChoices],
   );
   const weakConcepts = useMemo(
     () => computeWeakConcepts(conceptBreakdown),
@@ -111,12 +128,26 @@ export function QuizAnswerReview({
   };
 
   const currentExplanationExpanded = currentItem ? isExplanationExpanded(currentItem.originalIndex) : false;
-  const selectedAnswerSummary = currentItem?.selectedChoice
-    ? `${currentItem.selectedChoice.label}. ${currentItem.selectedChoice.text}`
-    : "No answer selected";
-  const correctAnswerSummary = currentItem?.correctChoice
-    ? `${currentItem.correctChoice.label}. ${currentItem.correctChoice.text}`
-    : "Correct answer unavailable";
+  const isCurrentMultiSelect = currentItem?.item.questionFormat === "MULTI_SELECT";
+  const selectedAnswerSummary = isCurrentMultiSelect
+    ? currentItem?.selectedMultiChoicesForSummary.length
+      ? currentItem.selectedMultiChoicesForSummary.map((choice) => `${choice.label}. ${choice.text}`).join("; ")
+      : "No answer selected"
+    : currentItem?.selectedChoice
+      ? `${currentItem.selectedChoice.label}. ${currentItem.selectedChoice.text}`
+      : "No answer selected";
+  const correctAnswerSummary = isCurrentMultiSelect
+    ? currentItem?.correctMultiChoicesForSummary.length
+      ? currentItem.correctMultiChoicesForSummary.map((choice) => `${choice.label}. ${choice.text}`).join("; ")
+      : "Answer unavailable"
+    : currentItem?.correctChoice
+      ? `${currentItem.correctChoice.label}. ${currentItem.correctChoice.text}`
+      : "Correct answer unavailable";
+  const currentHasSelectedAnswer = currentItem
+    ? isCurrentMultiSelect
+      ? currentItem.selectedMultiChoiceIndices.length > 0
+      : currentItem.selectedChoiceIndex !== null
+    : false;
 
   return (
     <>
@@ -269,48 +300,18 @@ export function QuizAnswerReview({
             </div>
           </div>
 
-          <ul className="space-y-2 text-sm">
-            {currentItem.displayedChoices.map((choice) => {
-              const isCorrectChoice = choice.canonicalIndex === currentItem.correctIndex;
-              const isSelectedChoice = choice.canonicalIndex === currentItem.selectedChoiceIndex;
-              const isIncorrectSelection = isSelectedChoice && !isCorrectChoice;
+          <QuizChoiceList
+            questionKey={`${currentItem.item.question}-${currentItem.originalIndex}`}
+            choices={currentItem.item.choices}
+            correctIndex={currentItem.correctIndex}
+            correctIndices={currentItem.correctIndices}
+            questionFormat={currentItem.item.questionFormat}
+            selectedChoiceIndex={currentItem.selectedChoiceIndex}
+            selectedMultiChoiceIndices={currentItem.selectedMultiChoiceIndices}
+            revealAnswer
+          />
 
-              return (
-                <li
-                  key={`${currentItem.originalIndex}-${choice.label}-${choice.canonicalIndex}`}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-sm leading-relaxed transition-colors",
-                    isCorrectChoice
-                      ? "border-emerald-500/60 bg-emerald-500/10 text-foreground"
-                      : isIncorrectSelection
-                        ? "border-red-500/60 bg-red-500/10 text-foreground"
-                        : "border-border bg-muted/20 text-foreground/75",
-                  )}
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <p className="whitespace-normal break-words">
-                      <span className="mr-2 font-semibold text-foreground">{choice.label}.</span>
-                      <span>{choice.text}</span>
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {isSelectedChoice ? (
-                        <span className="rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
-                          Your answer
-                        </span>
-                      ) : null}
-                      {isCorrectChoice ? (
-                        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                          Correct answer
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          {currentItem.selectedChoiceIndex === null ? (
+          {!currentHasSelectedAnswer ? (
             <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground/80">
               No answer selected for this question.
             </p>

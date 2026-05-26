@@ -268,8 +268,9 @@ public class QuickReviewSessionService {
 
         List<QuizItem> quiz = studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz();
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
         List<com.studysnap.backend.dto.ChallengeQuizConceptStatResponse> conceptBreakdown =
-                QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices);
+                QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices);
         List<String> weakConcepts = extractWeakConcepts(session);
         if (weakConcepts.isEmpty()) {
             weakConcepts = QuizSessionReviewUtils.computeWeakConcepts(conceptBreakdown);
@@ -289,6 +290,7 @@ public class QuickReviewSessionService {
                 conceptBreakdown,
                 quiz,
                 selectedChoices,
+                selectedMultiChoices,
                 session.getCreatedAt(),
                 session.getCompletedAt()
         );
