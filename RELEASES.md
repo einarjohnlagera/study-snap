@@ -1,5 +1,15 @@
 # RELEASES.md - NoteLib
 
+## v0.17.0 - Quiz Quality & Depth
+
+**Status: In Progress**
+
+Theme: fix prompt-level defects in generated quizzes (choice bleed into explanations, repeating distractors, monotone framing) and add question format variety — NOT/EXCEPT/TRUE framing, computational questions (engineering/sciences, KaTeX), True/False, and multi-select. Pro-only for premium formats; all quality fixes are plan-agnostic.
+
+### ✅ Shipped
+
+---
+
 ## v0.16.0 - Conversion & Growth
 
 **Status: Released**

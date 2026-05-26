@@ -158,7 +158,7 @@ Recommend shipping in this order:
 
 ## v0.17.0 - Quiz Quality & Depth
 
-**Status: Planned**
+**Status: In Progress**
 
 Theme: close the gap between NoteLib-generated quizzes and what students encounter in actual Philippine board and licensure exams — fix known generation quality bugs, add realistic question framing variety, and lay the groundwork for computational questions in engineering and sciences.
 
