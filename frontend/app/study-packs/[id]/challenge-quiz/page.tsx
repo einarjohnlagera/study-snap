@@ -1665,8 +1665,8 @@ export default function ChallengeQuizPage() {
                     }
                     setSelectedMultiChoices((previous) => {
                       const next = { ...previous, [currentIndex]: choiceIndices };
-                      syncProgressRef(currentIndex, selectedChoices, next);
-                      persistProgress(currentIndex, selectedChoices, next);
+                      syncProgressRef(currentIndex, progressRef.current.selectedChoices, next);
+                      persistProgress(currentIndex, progressRef.current.selectedChoices, next);
                       return next;
                     });
                   }}

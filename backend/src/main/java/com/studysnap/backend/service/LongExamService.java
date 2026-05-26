@@ -326,7 +326,7 @@ public class LongExamService {
                 request.questionIndex(),
                 request.selectedChoiceIndex()
         );
-        if (request.selectedMultiChoiceIndices() != null && !request.selectedMultiChoiceIndices().isEmpty()) {
+        if (request.selectedMultiChoiceIndices() != null) {
             nextSessionState = QuizSessionStateUtils.withSelectedMultiChoice(
                     nextSessionState,
                     request.questionIndex(),

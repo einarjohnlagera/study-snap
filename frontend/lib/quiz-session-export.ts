@@ -200,7 +200,9 @@ function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQu
       choices: displayedChoices.map((choice) => ({
         choice,
         isCorrect: choice.canonicalIndex === correctIndex,
-        isSelected: choice.canonicalIndex === selectedChoiceIndex,
+        isSelected: item.questionFormat === "MULTI_SELECT"
+          ? (selectedMultiChoices[index] ?? []).includes(choice.canonicalIndex)
+          : choice.canonicalIndex === selectedChoiceIndex,
       })),
     };
   });
