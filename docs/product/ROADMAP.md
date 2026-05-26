@@ -211,6 +211,20 @@ Additionally, engineering users need computational questions with worked solutio
    - **Matching type** — deliberate shared-choice block (multiple questions, same labeled option set); needs new `questionGroup` association in session state
    - Implementation order: True/False first (simplest schema delta), then multi-select, then matching
 
+5. **Background Quiz Pre-Generation** — scheduled batch pre-generation of Challenge Quiz sessions for STUDY_PACK_READY notes; goal is zero-wait first quiz play for Plus and Pro users
+
+   - A scheduled job scans for STUDY_PACK_READY notes owned by Plus/Pro users that have no existing Challenge Quiz session in GENERATING, IN_PROGRESS, COMPLETED, or POOLED state; generates a default 5-question Challenge Quiz in the background
+   - Pre-generated sessions are held in a new `POOLED` lifecycle state; the quiz-start flow claims a POOLED session instead of triggering fresh generation when one is available; on-demand generation is the fallback when the pool is empty
+   - **Quota at claim time, not pre-generation time** — quota is checked and consumed when the user claims the session (first interaction), not when the batch job generates it; this prevents silent quota deduction for sessions the user never opens
+   - Free users: on-demand generation only (unchanged); Plus/Pro: served from pool when available
+   - Batch job is throttled (configurable max sessions per run) and skips notes belonging to users already at their monthly Challenge Quiz quota
+   - Pre-generation depth: one session per note (first 5 questions only); additional questions continue to be generated on demand via the existing generate-more endpoint
+   - POOLED sessions must not appear in Note Detail Recent Sessions or quota counters until claimed
+
+### Known Generation Reliability Issues (lower priority, v0.17.0)
+
+- **Invalid key concepts schema mismatch** — intermittent generation failure surfaced as "The study pack service returned invalid key concepts"; occurs when the LLM returns the key concepts array with an unexpected field shape (wrong field name, missing required field, extra fields, or partial JSON); current behavior is a hard failure requiring the user to retry; confirmed intermittent in production (3 retries before success in one known case); fix approach: defensive JSON parsing with field coercion or a single automatic backend retry before surfacing the error; prompt schema reinforcement likely sufficient; no schema changes required; lower priority than the quiz quality prompt fixes but should ship within v0.17.0
+
 ### Implementation stances
 
 - Quality fixes (items 1–2) are prompt changes in `backend/src/main/resources/prompts/` — no DB migration, no entity change; deployable as hotfixes
@@ -219,6 +233,8 @@ Additionally, engineering users need computational questions with worked solutio
 - Question framing variety must not change the `QuizItem` schema — it is purely a generation instruction
 - Additional format types (True/False, multi-select) require `EXAM_MODES.md` review before implementation — they affect scoring logic in all five quiz modes
 - Exactly five quiz modes remain in v0.17.0; question types and question formats are orthogonal to the mode hierarchy
+- Background Quiz Pre-Generation requires a `POOLED` session state addition to `QuickReviewSessionStatus`; update the session lifecycle diagram in `docs/features/quiz.md` before implementing
+- Background pre-generation batch job must not run during peak hours if LLM capacity is shared with foreground generation; configuration should allow a scheduled window (e.g., off-peak nightly run)
 
 ### Anti-drift notes
 
@@ -227,6 +243,8 @@ Additionally, engineering users need computational questions with worked solutio
 - True/False standalone questions change the choice-count assumption in all quiz UIs; audit every surface that renders `choices.map(...)` before shipping
 - Multi-select changes the scoring contract; `correctIndex` callers must be audited before `correctIndices` is introduced
 - Matching type is the most complex format addition; do not bundle with True/False in the same prompt
+- POOLED sessions must not be visible in any user-facing session history or count toward quota until claimed — they are infrastructure state, not user activity
+- Invalid key concepts fix must not silently discard key concepts; coerce or retry, do not hide partial data loss
 
 ---
 
@@ -714,6 +732,30 @@ Initial evaluation is promoted to the active v0.15.0 section. The following rema
 - **Open-ended / conversational evaluation** — replace MC structure with free-text answers and AI rubric scoring; architecturally heavy (new session schema, new evaluation pipeline, new result model); only consider if MC + critique format hits its ceiling and Pro users explicitly ask for it
 - **Profile / role enrichment** — capture target role explicitly on the user profile (instead of inferring from notes) to drive better generation context; bigger architectural decision; do not bundle with any of the above — design separately
 - **Interview Practice tier promotion to Plus** — only if v0.14.0 usage data justifies the LLM cost; current model split (gpt-4.1 generation + gpt-4.1-mini critique) is what makes Pro-only economically viable, and lowering the tier requires re-running that math
+
+### Lesson Plan for Teachers (future, unsequenced)
+
+A lightweight collection entity grouping an ordered set of notes into a lesson plan for teacher-profile users. No AI synthesis at the plan level — a lesson plan is a playlist, not a synthesized document.
+
+- New `LessonPlan` entity: title, description, ordered list of note references with optional week/topic labels per item
+- No new AI generation at plan creation; Study Pack and Quiz generation still happen per-note using existing quotas — no new quota category
+- Teacher dashboard gains a "Lesson Plans" section alongside the library; notes remain individually owned and independently editable
+- DOCX export from a lesson plan produces a multi-section packet: one quiz section per note in lesson-plan order
+- "Generate Quiz for Lesson Plan" toolbar action generates quizzes for each note in sequence, consuming the teacher's existing quiz quota per note
+- Requires backend: new `LessonPlan` entity + ordering join table; frontend: lesson plan creation UI + DOCX multi-section export
+- Do not implement Option B (multi-note AI synthesis across all notes in the plan) in v1 — risk of lower-quality synthesis and significantly higher LLM cost per plan; Option A (collection model) delivers the organization and sequencing value teachers need without new AI spend
+
+### Study Pack Section Improvements (future, unsequenced)
+
+The current Study Pack format (Overview / Key Idea / Core Details / Why It Matters / Quick Recall) is consistent but template-locked — every note produces the same five sections regardless of subject or content type. Planned improvements in order of effort:
+
+- **Common Misconceptions section** — names what students typically get wrong about the topic; high quiz-prep value; prompt-only, no schema change; hotfix-deployable
+- **Richer Quick Recall** — expand term-definition pairs to include a memory hook (analogy, mnemonic, or visual cue); prompt-only; hotfix-deployable
+- **Comparison tables** — when the note contrasts two or more concepts, generate a structured markdown table instead of parallel bullet lists; prompt-only; hotfix-deployable
+- **Concept relationships** — prerequisite chains ("Understand X before this") and contrast pointers ("Different from Y because..."); prompt-only; hotfix-deployable
+- **Subject-adaptive section templates** — STEM notes get an Equations + Variables block and a Worked Example; humanities notes get a Timeline or Key Arguments section; may require a `sectionType` field addition to the key concept schema if the current JSONB storage cannot accommodate variable section shapes; requires a design pass before implementation
+
+The first four improvements are prompt-only and can ship as hotfixes without schema changes. Subject-adaptive templates require a design review on the key concept schema before implementation and should not be bundled with the prompt-only items.
 
 ### Public Library Discovery — Future Items
 
