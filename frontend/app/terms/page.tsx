@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LegalPageLayout } from "@/components/public/legal-page-layout";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
-const lastUpdated = "March 25, 2026";
+const lastUpdated = "May 26, 2026";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Terms of Service",
@@ -24,7 +24,20 @@ export default function TermsPage() {
       )}
       sections={[
         {
-          title: "1. Use of Service",
+          title: "1. About NoteLib",
+          content: (
+            <p>
+              NoteLib is a study platform operated by Einar Lagera, Philippines. NoteLib helps students and exam
+              reviewees turn notes into study packs, summaries, and quizzes. For support, contact{" "}
+              <a href="mailto:support@mail.notelib.app" className="text-blue-600 underline underline-offset-4 dark:text-blue-400">
+                support@mail.notelib.app
+              </a>
+              .
+            </p>
+          ),
+        },
+        {
+          title: "2. Use of Service",
           content: (
             <>
               <p>NoteLib is a study tool.</p>
@@ -33,7 +46,7 @@ export default function TermsPage() {
           ),
         },
         {
-          title: "2. Accounts",
+          title: "3. Accounts",
           content: (
             <>
               <p>Users are responsible for keeping their account secure.</p>
@@ -42,7 +55,7 @@ export default function TermsPage() {
           ),
         },
         {
-          title: "3. Acceptable Use",
+          title: "4. Acceptable Use",
           content: (
             <>
               <p>Users must not:</p>
@@ -56,7 +69,7 @@ export default function TermsPage() {
           ),
         },
         {
-          title: "4. Subscription",
+          title: "5. Subscription",
           content: (
             <>
               <p>NoteLib offers manual-renewal paid plans.</p>
@@ -73,19 +86,19 @@ export default function TermsPage() {
           ),
         },
         {
-          title: "5. Service Availability",
+          title: "6. Service Availability",
           content: (
             <p>We try to keep NoteLib available, but we do not guarantee uninterrupted service.</p>
           ),
         },
         {
-          title: "6. Changes to Service",
+          title: "7. Changes to Service",
           content: (
             <p>Features, pricing, and limits may change over time as the service evolves.</p>
           ),
         },
         {
-          title: "7. Contact",
+          title: "8. Contact",
           content: (
             <p>
               For questions about these terms, contact{" "}

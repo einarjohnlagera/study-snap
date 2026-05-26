@@ -13,6 +13,7 @@ Theme: fix prompt-level defects in generated quizzes (choice bleed into explanat
 - **AI subject suggestion specificity fix** — changed the course/program-to-subject guidance in the AI metadata suggestion prompt: the LLM no longer echoes the course/program name as the subject; instead it derives the specific academic sub-field from the note title and content (e.g. a note in "Mechanical Engineering Licensure" about fluid machinery now suggests "Fluid Machinery" rather than "Mechanical Engineering").
 - **Long Exam pre-screen multi-note hint** — when a student has only one note for the current subject (no additional notes available to span the exam), the Long Exam prestart screen now shows a contextual hint prompting them to create another note with the same subject to unlock multi-note exam mode.
 - **Computational quiz working solutions** — computational questions generated for engineering and sciences notes now include a `workingSolution` field with a step-by-step derivation; Pro users see a distinct working-solution panel below the explanation after answering; teachers see it unconditionally in the quiz preview for pre-export review.
+- **Xendit compliance — legal identity and social presence** — added operator identity section to Terms of Service (section 1: "About NoteLib", operated by Einar Lagera, Philippines); added Facebook page link to public footer; updated `README.md` with social and contact links. Required for GCash payment mode activation.
 
 ---
 

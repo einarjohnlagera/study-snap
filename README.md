@@ -26,6 +26,12 @@ It is built for:
 
 Turn your notes into exam-ready study materials in seconds.
 
+## Social
+
+- Facebook: https://www.facebook.com/people/NoteLib/61575455371892/
+- Contact: support@mail.notelib.app
+- Website: https://www.notelib.app
+
 ## Public Positioning
 
 - Exam-focused study tool, not a generic AI utility

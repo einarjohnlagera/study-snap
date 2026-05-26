@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PublicFooter } from "@/components/public/public-footer";
 
 type LegalSection = {
   title: string;
@@ -35,6 +36,7 @@ export function LegalPageLayout({
           </section>
         ))}
       </div>
+      <PublicFooter className="mt-8" />
     </main>
   );
 }

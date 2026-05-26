@@ -351,7 +351,7 @@ function AuthPageContent() {
           </Button>
         </form>
       </Card>
-      <PublicFooter className="mt-6" />
+      <PublicFooter variant="compact" className="mt-6" />
     </div>
   );
 }

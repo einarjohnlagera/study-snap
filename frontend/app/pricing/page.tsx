@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
+import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -63,6 +64,7 @@ export default function PricingPage() {
         </div>
         <PricingPlansSection showHeading={false} />
       </section>
+      <PublicFooter />
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
         <Link href="/signup" className="block">
           <Button type="button" className="w-full">
