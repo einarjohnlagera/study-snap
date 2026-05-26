@@ -19,6 +19,8 @@ Theme: close the gap between social traffic and signed-up users; make teachers a
 - **Library filter discoverability** — replaced chip-styled `+ More` overflow controls with `Browse all` text links, added Course / Program filtering to private and public libraries, and added faded scroll-rail affordances so horizontal filter rows read as scrollable.
 - **Library UX polish** — moved `Browse all` to section headers, fixed bottom-sheet modal behavior on mobile, and moved the public library Course / Program control into More Filters.
 - **Consistent quota-limit UI** — unified in-page at-limit banners (Study Pack, note generation) into a single `QuotaLimitBanner` component with icon, title, reset date, and plan-aware upgrade CTA.
+- **PWA installability** — added `start_url`, `scope`, and icon `purpose` to the manifest; service worker caches static assets and shows an offline page when navigating without a connection.
+- **Mobile UX** — fixed iOS Safari input zoom (font-size >= 16px globally); added an "Add to Home Screen" nudge for returning mobile visitors.
 
 ---
 
