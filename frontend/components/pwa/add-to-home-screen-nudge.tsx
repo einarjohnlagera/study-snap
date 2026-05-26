@@ -78,7 +78,7 @@ export function AddToHomeScreenNudge() {
 
   useEffect(() => {
     const visitCount = incrementVisitCountOncePerSession();
-    let iosPromptTimer: number | null = null;
+    let iosPromptTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
     if (
       visitCount >= 2
       && shouldAllowNudge()
