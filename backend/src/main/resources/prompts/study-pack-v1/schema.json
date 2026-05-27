@@ -77,14 +77,13 @@
             "maxLength": 32
           },
           "correctIndices": {
-            "type": ["array", "null"],
-            "minItems": 2,
-            "maxItems": 3,
-            "items": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 3
-            }
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {"type": "integer"}
+              },
+              {"type": "null"}
+            ]
           },
           "questionType": {
             "type": ["string", "null"],

@@ -795,15 +795,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             questionGroup.put("maxLength", 32);
 
             ObjectNode correctIndices = itemProps.putObject("correctIndices");
-            ArrayNode correctIndicesTypes = correctIndices.putArray("type");
-            correctIndicesTypes.add("array");
-            correctIndicesTypes.add("null");
-            correctIndices.put("minItems", 2);
-            correctIndices.put("maxItems", 3);
-            correctIndices.putObject("items")
-                    .put("type", "integer")
-                    .put("minimum", 0)
-                    .put("maximum", 3);
+            ArrayNode correctIndicesAnyOf = correctIndices.putArray("anyOf");
+            correctIndicesAnyOf.addObject()
+                    .put("type", "array")
+                    .putObject("items")
+                    .put("type", "integer");
+            correctIndicesAnyOf.addObject().put("type", "null");
         }
         ObjectNode questionType = itemProps.putObject("questionType");
         ArrayNode questionTypeTypes = questionType.putArray("type");
