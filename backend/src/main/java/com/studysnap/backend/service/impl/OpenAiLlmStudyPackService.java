@@ -763,6 +763,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         required.add("answer");
         required.add("explanation");
         required.add("concept");
+        required.add("questionType");
+        required.add("workingSolution");
+        if (allowTrueFalse) {
+            required.add("questionFormat");
+            required.add("questionGroup");
+            required.add("correctIndices");
+        }
 
         ObjectNode itemProps = item.putObject("properties");
         itemProps.putObject("question").put("type", "string");
