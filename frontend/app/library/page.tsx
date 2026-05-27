@@ -5,6 +5,7 @@ import {useRouter} from "next/navigation";
 import {
   ArrowUpDown,
   CheckSquare,
+  ChevronDown,
   Filter,
   Globe,
   Lock,
@@ -49,10 +50,8 @@ const POPULAR_TAG_LIMIT = 5;
 const COURSE_PROGRAM_LIMIT = 10;
 const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
-const SUBJECT_SELECTOR_TITLE = "Select subject";
 const MORE_FILTERS_TITLE = "More Filters";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
-const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
   RECENTLY_REVIEWED: "Recently Reviewed",
@@ -131,6 +130,14 @@ function getLibrarySubject(item: Pick<NoteListItemResponse, "subject" | "courseP
     ?? SUBJECT_FALLBACK;
 }
 
+function getComboboxItemClassName(isSelected: boolean) {
+  return `w-full px-3 py-2.5 text-left text-sm transition-colors ${
+    isSelected
+      ? "bg-blue-500/10 font-medium text-blue-700 dark:text-blue-300"
+      : "text-foreground hover:bg-highlight"
+  }`;
+}
+
 function getFilterChipClassName(isSelected: boolean) {
   return `shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
     isSelected
@@ -139,13 +146,7 @@ function getFilterChipClassName(isSelected: boolean) {
   }`;
 }
 
-function getScrollRailClassName() {
-  return "flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-}
 
-function getFadedScrollRailClassName() {
-  return `${getScrollRailClassName()} ${SCROLL_RAIL_FADE_CLASS_NAME}`;
-}
 
 function updateRecentValues(previous: string[], values: string[]) {
   const next = [...previous];
@@ -217,9 +218,7 @@ export default function LibraryPage() {
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
-  const [subjectDraft, setSubjectDraft] = useState<string>(ALL_SUBJECTS);
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
-  const [courseProgramDraft, setCourseProgramDraft] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_UPDATED");
@@ -230,7 +229,8 @@ export default function LibraryPage() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
-  const [subjectSelectorOpen, setSubjectSelectorOpen] = useState(false);
+  const [subjectComboOpen, setSubjectComboOpen] = useState(false);
+  const [courseProgramComboOpen, setCourseProgramComboOpen] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
   const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
@@ -364,19 +364,13 @@ export default function LibraryPage() {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
       setSelectedSubject(ALL_SUBJECTS);
     }
-    if (subjectDraft !== ALL_SUBJECTS && !availableSubjects.includes(subjectDraft)) {
-      setSubjectDraft(ALL_SUBJECTS);
-    }
-  }, [availableSubjects, selectedSubject, subjectDraft]);
+  }, [availableSubjects, selectedSubject]);
 
   useEffect(() => {
     if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     }
-    if (courseProgramDraft !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(courseProgramDraft)) {
-      setCourseProgramDraft(ALL_COURSE_PROGRAMS);
-    }
-  }, [availableCoursePrograms, courseProgramDraft, selectedCourseProgram]);
+  }, [availableCoursePrograms, selectedCourseProgram]);
 
   useEffect(() => {
     setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
@@ -391,18 +385,13 @@ export default function LibraryPage() {
   }, [selectedTags, tagSelectorOpen]);
 
   useEffect(() => {
-    if (subjectSelectorOpen) {
-      setSubjectDraft(selectedSubject);
-      setSubjectSearchQuery("");
-    }
-  }, [selectedSubject, subjectSelectorOpen]);
-
-  useEffect(() => {
     if (moreFiltersOpen) {
-      setCourseProgramDraft(selectedCourseProgram);
+      setSubjectSearchQuery("");
       setCourseProgramSearchQuery("");
+      setSubjectComboOpen(false);
+      setCourseProgramComboOpen(false);
     }
-  }, [moreFiltersOpen, selectedCourseProgram]);
+  }, [moreFiltersOpen]);
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
@@ -417,9 +406,7 @@ export default function LibraryPage() {
   const clearFilters = useCallback(() => {
     setSearchQuery("");
     setSelectedSubject(ALL_SUBJECTS);
-    setSubjectDraft(ALL_SUBJECTS);
     setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
-    setCourseProgramDraft(ALL_COURSE_PROGRAMS);
     setSelectedTags([]);
     setTagDraft([]);
     setSubjectSearchQuery("");
@@ -715,7 +702,7 @@ export default function LibraryPage() {
                   <span className="inline-flex items-center gap-2">
                     <Filter className="h-4 w-4" aria-hidden="true" />
                     <span>More Filters</span>
-                    {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
+                    {(readinessFilter !== "ALL" || selectedCourseProgram !== ALL_COURSE_PROGRAMS || selectedSubject !== ALL_SUBJECTS || selectedTags.length > 0) ? (
                       <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" aria-hidden="true" />
                     ) : null}
                   </span>
@@ -735,176 +722,59 @@ export default function LibraryPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Filter</p>
+            {hasActiveFilters ? (
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                <p className="text-xs text-foreground/60">Active filters:</p>
                 {readinessFilter !== "ALL" ? (
                   <button
                     type="button"
-                    className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
                     onClick={() => setReadinessFilter("ALL")}
                   >
-                    Reset
+                    {READINESS_FILTER_LABELS[readinessFilter]}
+                    <span aria-hidden="true">×</span>
                   </button>
                 ) : null}
-              </div>
-              <div className="relative">
-              <div className={getFadedScrollRailClassName()}>
-                {visibleReadinessFilters.map((filterKey) => (
-                  <button
-                    key={filterKey}
-                    type="button"
-                    className={getFilterChipClassName(readinessFilter === filterKey)}
-                    onClick={() => setReadinessFilter(filterKey)}
-                    aria-pressed={readinessFilter === filterKey}
-                  >
-                    {READINESS_FILTER_LABELS[filterKey]}
-                  </button>
-                ))}
-              </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Subjects</p>
                 {selectedSubject !== ALL_SUBJECTS ? (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                      onClick={() => setSelectedSubject(ALL_SUBJECTS)}
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      className={TEXT_LINK_CLASS_NAME}
-                      onClick={() => setSubjectSelectorOpen(true)}
-                    >
-                      {BROWSE_ALL_LABEL}
-                    </button>
-                  </div>
-                ) : (
                   <button
                     type="button"
-                    className={TEXT_LINK_CLASS_NAME}
-                    onClick={() => setSubjectSelectorOpen(true)}
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
+                    onClick={() => setSelectedSubject(ALL_SUBJECTS)}
                   >
-                    {BROWSE_ALL_LABEL}
+                    {selectedSubject}
+                    <span aria-hidden="true">×</span>
                   </button>
-                )}
-              </div>
-              <div className="relative">
-              <div className={getFadedScrollRailClassName()}>
-                <button
-                  type="button"
-                  className={getFilterChipClassName(selectedSubject === ALL_SUBJECTS)}
-                  onClick={() => setSelectedSubject(ALL_SUBJECTS)}
-                  aria-pressed={selectedSubject === ALL_SUBJECTS}
-                >
-                  All
-                </button>
-                {displayedSubjects.map((subject) => (
+                ) : null}
+                {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
                   <button
-                    key={subject}
                     type="button"
-                    className={getFilterChipClassName(selectedSubject === subject)}
-                    onClick={() => {
-                      setSelectedSubject(subject);
-                      setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
-                    }}
-                    aria-pressed={selectedSubject === subject}
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
+                    onClick={() => setSelectedCourseProgram(ALL_COURSE_PROGRAMS)}
                   >
-                    {subject}
+                    {selectedCourseProgram}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ) : null}
+                {selectedTags.map((tag) => (
+                  <button
+                    key={`chip-${tag}`}
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
+                    onClick={() => setSelectedTags((previous) => previous.filter((t) => t !== tag))}
+                  >
+                    {tag}
+                    <span aria-hidden="true">×</span>
                   </button>
                 ))}
-              </div>
-              </div>
-            </div>
-
-            {availableTags.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium">Popular Tags</p>
-                  <div className="flex items-center gap-3">
-                    {selectedTags.length > 0 ? (
-                      <button
-                        type="button"
-                        className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                        onClick={() => {
-                          setSelectedTags([]);
-                          setTagDraft([]);
-                        }}
-                      >
-                        Clear tags
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={TEXT_LINK_CLASS_NAME}
-                      onClick={() => setTagSelectorOpen(true)}
-                    >
-                      {BROWSE_ALL_LABEL}
-                    </button>
-                  </div>
-                </div>
-                <div className="relative">
-                <div className={getFadedScrollRailClassName()}>
-                  {visiblePopularTags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className={getFilterChipClassName(selectedTags.includes(tag))}
-                      onClick={() => {
-                        setSelectedTags((previous) => {
-                          const next = previous.includes(tag)
-                            ? previous.filter((selectedTag) => selectedTag !== tag)
-                            : [...previous, tag];
-                          if (!previous.includes(tag)) {
-                            setRecentTags((recentPrevious) => updateRecentValues(recentPrevious, [tag]));
-                          }
-                          return next;
-                        });
-                      }}
-                      aria-pressed={selectedTags.includes(tag)}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-              <p className="text-xs text-foreground/60">Sorted by {SORT_LABELS[sortBy]}</p>
-              {selectedSubject !== ALL_SUBJECTS ? (
-                <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
-                  Subject: {selectedSubject}
-                </span>
-              ) : null}
-              {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
-                <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
-                  Course: {selectedCourseProgram}
-                </span>
-              ) : null}
-              {readinessFilter !== "ALL" ? (
-                <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
-                  {READINESS_FILTER_LABELS[readinessFilter]}
-                </span>
-              ) : null}
-              {selectedTags.length > 0 ? (
-                <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
-                  {selectedTags.length} tag{selectedTags.length === 1 ? "" : "s"} selected
-                </span>
-              ) : null}
-              {hasActiveFilters ? (
-                <Button type="button" variant="outline" size="sm" className="h-8" onClick={clearFilters}>
-                  Clear filters
+                <Button type="button" variant="outline" size="sm" className="h-7" onClick={clearFilters}>
+                  Clear all
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <p className="border-t border-border pt-3 text-xs text-foreground/50">
+                Sorted by {SORT_LABELS[sortBy]}
+              </p>
+            )}
           </Card>
 
           {visibleItems.length === 0 ? (
@@ -1035,151 +905,174 @@ export default function LibraryPage() {
         onClose={() => setMoreFiltersOpen(false)}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setCourseProgramDraft(ALL_COURSE_PROGRAMS)}>
-              Clear
+            <Button type="button" variant="outline" onClick={clearFilters}>
+              Clear all
             </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setSelectedCourseProgram(courseProgramDraft);
-                setMoreFiltersOpen(false);
-              }}
-            >
-              Apply
+            <Button type="button" onClick={() => setMoreFiltersOpen(false)}>
+              Done
             </Button>
           </div>
         )}
       >
-        {availableCoursePrograms.length > 0 ? (
-          <div className="space-y-4">
-            <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
-              <label htmlFor="library-course-program-search" className="text-sm font-medium">
-                Course / Program
-              </label>
-              <input
-                id="library-course-program-search"
-                type="search"
-                value={courseProgramSearchQuery}
-                onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
-                placeholder="Search course or program..."
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
-              />
-              {courseProgramDraft !== ALL_COURSE_PROGRAMS ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected course/program</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className={getFilterChipClassName(true)}
-                      onClick={() => setCourseProgramDraft(ALL_COURSE_PROGRAMS)}
-                    >
-                      {courseProgramDraft}
-                    </button>
-                  </div>
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Filter</p>
+            <div className="flex flex-wrap gap-2">
+              {visibleReadinessFilters.map((filterKey) => (
+                <button
+                  key={filterKey}
+                  type="button"
+                  className={getFilterChipClassName(readinessFilter === filterKey)}
+                  onClick={() => setReadinessFilter(filterKey)}
+                  aria-pressed={readinessFilter === filterKey}
+                >
+                  {READINESS_FILTER_LABELS[filterKey]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {availableSubjects.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Subjects</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={subjectComboOpen ? subjectSearchQuery : (selectedSubject !== ALL_SUBJECTS ? selectedSubject : "")}
+                  onChange={(event) => setSubjectSearchQuery(event.target.value)}
+                  placeholder={subjectComboOpen ? "Search subjects..." : "All"}
+                  onFocus={() => { setSubjectComboOpen(true); setSubjectSearchQuery(""); }}
+                  onBlur={() => globalThis.setTimeout(() => setSubjectComboOpen(false), 150)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                />
+                <ChevronDown
+                  className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${subjectComboOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </div>
+              {subjectComboOpen ? (
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                  <button
+                    type="button"
+                    className={getComboboxItemClassName(selectedSubject === ALL_SUBJECTS)}
+                    onMouseDown={(event) => { event.preventDefault(); setSelectedSubject(ALL_SUBJECTS); setSubjectSearchQuery(""); setSubjectComboOpen(false); }}
+                  >
+                    All
+                  </button>
+                  {filteredModalSubjects.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-foreground/65">No subjects match your search.</p>
+                  ) : (
+                    filteredModalSubjects.map((subject) => (
+                      <button
+                        key={subject}
+                        type="button"
+                        className={getComboboxItemClassName(selectedSubject === subject)}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setSelectedSubject(subject);
+                          setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
+                          setSubjectSearchQuery("");
+                          setSubjectComboOpen(false);
+                        }}
+                      >
+                        {subject}
+                      </button>
+                    ))
+                  )}
                 </div>
               ) : null}
             </div>
-            {filteredModalCoursePrograms.length === 0 ? (
-              <p className="text-sm text-foreground/65">No course/programs match your search.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
+          ) : null}
+
+          {availableTags.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Popular Tags</p>
                 <button
                   type="button"
-                  className={getFilterChipClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
-                  onClick={() => setCourseProgramDraft(ALL_COURSE_PROGRAMS)}
-                  aria-pressed={courseProgramDraft === ALL_COURSE_PROGRAMS}
+                  className={TEXT_LINK_CLASS_NAME}
+                  onClick={() => setTagSelectorOpen(true)}
                 >
-                  All
+                  {BROWSE_ALL_LABEL}
                 </button>
-                {filteredModalCoursePrograms.map((courseProgram) => (
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {visiblePopularTags.map((tag) => (
                   <button
-                    key={courseProgram}
+                    key={tag}
                     type="button"
-                    className={getFilterChipClassName(courseProgramDraft === courseProgram)}
-                    onClick={() => setCourseProgramDraft(courseProgram)}
-                    aria-pressed={courseProgramDraft === courseProgram}
+                    className={getFilterChipClassName(selectedTags.includes(tag))}
+                    onClick={() => {
+                      setSelectedTags((previous) => {
+                        const next = previous.includes(tag)
+                          ? previous.filter((selectedTag) => selectedTag !== tag)
+                          : [...previous, tag];
+                        if (!previous.includes(tag)) {
+                          setRecentTags((recentPrevious) => updateRecentValues(recentPrevious, [tag]));
+                        }
+                        return next;
+                      });
+                    }}
+                    aria-pressed={selectedTags.includes(tag)}
                   >
-                    {courseProgram}
+                    {tag}
                   </button>
                 ))}
               </div>
-            )}
-          </div>
-        ) : null}
-      </LibrarySheetModal>
+            </div>
+          ) : null}
 
-      <LibrarySheetModal
-        isOpen={subjectSelectorOpen}
-        title={SUBJECT_SELECTOR_TITLE}
-        onClose={() => setSubjectSelectorOpen(false)}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setSubjectDraft(ALL_SUBJECTS)}>
-              Clear
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setSelectedSubject(subjectDraft);
-                if (subjectDraft !== ALL_SUBJECTS) {
-                  setRecentSubjects((previous) => updateRecentValues(previous, [subjectDraft]));
-                }
-                setSubjectSelectorOpen(false);
-              }}
-            >
-              Apply
-            </Button>
-          </div>
-        )}
-      >
-        <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
-          <input
-            type="search"
-            value={subjectSearchQuery}
-            onChange={(event) => setSubjectSearchQuery(event.target.value)}
-            placeholder="Search subjects..."
-            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
-          />
-          {subjectDraft !== ALL_SUBJECTS ? (
+          {availableCoursePrograms.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected subject</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={getFilterChipClassName(true)}
-                  onClick={() => setSubjectDraft(ALL_SUBJECTS)}
-                >
-                  {subjectDraft}
-                </button>
+              <p className="text-sm font-medium">Course / Program</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={courseProgramComboOpen ? courseProgramSearchQuery : (selectedCourseProgram !== ALL_COURSE_PROGRAMS ? selectedCourseProgram : "")}
+                  onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                  placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}
+                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramSearchQuery(""); }}
+                  onBlur={() => globalThis.setTimeout(() => setCourseProgramComboOpen(false), 150)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                />
+                <ChevronDown
+                  className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${courseProgramComboOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
               </div>
+              {courseProgramComboOpen ? (
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                  <button
+                    type="button"
+                    className={getComboboxItemClassName(selectedCourseProgram === ALL_COURSE_PROGRAMS)}
+                    onMouseDown={(event) => { event.preventDefault(); setSelectedCourseProgram(ALL_COURSE_PROGRAMS); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
+                  >
+                    All
+                  </button>
+                  {filteredModalCoursePrograms.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-foreground/65">No course/programs match your search.</p>
+                  ) : (
+                    filteredModalCoursePrograms.map((courseProgram) => (
+                      <button
+                        key={courseProgram}
+                        type="button"
+                        className={getComboboxItemClassName(selectedCourseProgram === courseProgram)}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setSelectedCourseProgram(courseProgram);
+                          setCourseProgramSearchQuery("");
+                          setCourseProgramComboOpen(false);
+                        }}
+                      >
+                        {courseProgram}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
-        {filteredModalSubjects.length === 0 ? (
-          <p className="text-sm text-foreground/65">No subjects match your search.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={getFilterChipClassName(subjectDraft === ALL_SUBJECTS)}
-              onClick={() => setSubjectDraft(ALL_SUBJECTS)}
-              aria-pressed={subjectDraft === ALL_SUBJECTS}
-            >
-              All
-            </button>
-            {filteredModalSubjects.map((subject) => (
-              <button
-                key={subject}
-                type="button"
-                className={getFilterChipClassName(subjectDraft === subject)}
-                onClick={() => setSubjectDraft(subject)}
-                aria-pressed={subjectDraft === subject}
-              >
-                {subject}
-              </button>
-            ))}
-          </div>
-        )}
       </LibrarySheetModal>
 
       <LibrarySheetModal
