@@ -1,5 +1,15 @@
 # RELEASES.md - NoteLib
 
+## v0.18.0 - Profile Completeness & Communication
+
+**Status: In Progress**
+
+Theme: complete the Professional profile experience, fix subscription expiry and email communication gaps, add KaTeX math rendering for computational working solutions, and introduce concept-level spaced repetition signals in Adaptive Practice.
+
+### ✅ Shipped
+
+---
+
 ## v0.17.0 - Quiz Quality & Depth
 
 **Status: Released**

@@ -6,11 +6,64 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.17.0 - Quiz Quality & Depth` is the current in-progress release.
+`v0.18.0 - Profile Completeness & Communication` is the current in-progress release.
 
-`v0.16.0 - Conversion & Growth` is complete and is the previous documentation baseline.
+`v0.17.0 - Quiz Quality & Depth` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.18.0 - Profile Completeness & Communication
+
+**Status: In Progress**
+
+Theme: complete the Professional profile experience, fix communication gaps (subscription expiry notifications, outdated email templates, spam folder guidance), add KaTeX math rendering for computational working solutions, and introduce concept-level spaced repetition signals in Adaptive Practice.
+
+### Why this release
+
+Three things create friction or trust gaps for existing users:
+
+1. **Professional users discover Interview Practice by accident** — it's accessible but not prominently surfaced from the dashboard or as a primary CTA after Professional profile selection. The profile type exists and the mode works, but the flow doesn't connect them.
+2. **Subscription expiry is silent** — users lose access without warning, assume the product is broken, and churn instead of renewing. A single pre-expiry email is the highest-leverage retention touch we haven't shipped yet.
+3. **Emails are stale** — templates haven't been updated in multiple releases. Outdated copy erodes trust; missing spam-folder guidance causes verification failures that block new users before they ever log in.
+
+Additionally, engineering and sciences users see plain-text working solutions when their notes deserve proper formula rendering, and the Adaptive Practice loop lacks a temporal signal to bring users back to concepts they haven't reviewed recently.
+
+### Primary focus
+
+1. **Professional profile dashboard polish** — make Interview Practice the primary CTA on the Professional dashboard; update onboarding step after Professional profile selection to introduce Interview Practice by name; ensure the note detail view surfaces Interview Practice prominently for Professional users.
+
+2. **Subscription expiry notification email** — send an automated email 7 days before a user's plan expires with clear renewal CTA; send a second reminder 1 day before; send a post-expiry "your access has ended" email with a re-subscribe link. No auto-renewal — manual renewal model stays.
+
+3. **Email template audit and polish** — audit every transactional email (welcome, verification, study pack generated, password reset, subscription confirmation, expiry notices); update stale copy to reflect current product naming (NoteLib, not StudySnap); add spam folder guidance to the verification email ("Can't find this email? Check your Spam or Promotions folder").
+
+4. **KaTeX math rendering (Pro)** — replace the plain-text working solution panel with proper LaTeX rendering for `COMPUTATIONAL`-type questions; add KaTeX as a frontend dependency; update LLM prompts for engineering/sciences modes to generate LaTeX-formatted working solutions; keep plain-text fallback for non-LaTeX content.
+
+5. **Concept-level spaced repetition signals** — track the last time each key concept was answered correctly per user per study pack; surface a "Due for review" signal on concepts not seen in 3+ days; Adaptive Practice mode surfaces these due concepts preferentially; visible in a lightweight "Concept health" view on the study pack detail page.
+
+6. **Parent profile** — needs product definition before implementation. Placeholder: understand what parents do in NoteLib (monitor child's study activity? create notes on behalf of children?). Defer implementation until the use case is defined; remove PARENT from visible onboarding options for now to avoid confusion.
+
+### Implementation stances
+
+- KaTeX: add as a scoped dependency (`react-katex` or `katex` direct); render only in the working solution panel, not in question or choice text
+- Spaced repetition: lightweight SM-2-inspired signal only — no full algorithm; a simple "last correct answer date per concept" is sufficient for v1
+- Subscription expiry emails: backend scheduled job (Spring `@Scheduled`); no new email service — use existing Mailgun/SendGrid integration
+- Parent profile: do NOT implement until the user flow is defined; remove from profile type selection if it shows a blank experience
+- Professional dashboard: UI-only change — no new backend endpoints; Interview Practice is already accessible, just needs better surfacing
+
+### Anti-drift notes
+
+- Do not change the subscription billing model (no auto-charge); expiry emails are notification-only
+- KaTeX rendering must not affect non-computational question text — scope it only to `workingSolution` display
+- Spaced repetition data must be per-user per-study-pack — do not mix concept health across different notes
+- The five quiz modes remain unchanged; spaced repetition is a signal layer on top of Adaptive Practice, not a new mode
+
+---
+
+## v0.17.0 - Quiz Quality & Depth
+
+**Status: Released**
 
 ---
 
