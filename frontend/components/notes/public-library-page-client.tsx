@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpDown, CheckCircle2, Filter, X } from "lucide-react";
+import { ArrowUpDown, CheckCircle2, ChevronDown, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -64,11 +64,8 @@ const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
 const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
-const POPULAR_SUBJECT_LIMIT_MOBILE = 4;
-const POPULAR_SUBJECT_LIMIT_DESKTOP = 6;
 const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
-const SUBJECT_SELECTOR_TITLE = "Select subject";
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
 const COPY_SUCCESS_BODY_LINE_ONE = "You can start reviewing now or come back later from your library.";
 const MODAL_VIEW_NOTE_LABEL = "View Note";
@@ -159,6 +156,14 @@ function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery
     default:
       return null;
   }
+}
+
+function getComboboxItemClassName(isSelected: boolean) {
+  return `w-full px-3 py-2.5 text-left text-sm transition-colors ${
+    isSelected
+      ? "bg-blue-500/10 font-medium text-blue-700 dark:text-blue-300"
+      : "text-foreground hover:bg-highlight"
+  }`;
 }
 
 function getFilterChipClassName(isSelected: boolean) {
@@ -454,7 +459,6 @@ export function PublicLibraryPageClient() {
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
   const [courseProgramDraft, setCourseProgramDraft] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
-  const [subjectDraft, setSubjectDraft] = useState<string>(ALL_SUBJECTS);
   const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>("NEWEST");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
@@ -466,7 +470,6 @@ export function PublicLibraryPageClient() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
-  const [subjectSelectorOpen, setSubjectSelectorOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recentTags, setRecentTags] = useState<string[]>([]);
@@ -480,6 +483,12 @@ export function PublicLibraryPageClient() {
   const [shareToastTone, setShareToastTone] = useState<"success" | "error">("success");
   // Tracks whether the user has explicitly dismissed the profile-based audience default
   const [audienceLockedToAll, setAudienceLockedToAll] = useState(false);
+  // Modal draft state — staged until "Apply" is clicked
+  const [audienceDraft, setAudienceDraft] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
+  const [subjectFilterDraft, setSubjectFilterDraft] = useState<string>(ALL_SUBJECTS);
+  const [tagsFilterDraft, setTagsFilterDraft] = useState<string[]>([]);
+  const [subjectComboOpen, setSubjectComboOpen] = useState(false);
+  const [courseProgramComboOpen, setCourseProgramComboOpen] = useState(false);
 
   // Computed once on mount — the profile-based audience default for this user
   const profileDefaultAudience = useMemo(
@@ -671,7 +680,6 @@ export function PublicLibraryPageClient() {
       : null;
     const nextSelectedSubject = resolvedSubject ?? ALL_SUBJECTS;
     setSelectedSubject(nextSelectedSubject);
-    setSubjectDraft(nextSelectedSubject);
 
     const resolvedTags = resolvePublicLibraryValuesBySlug(availableTags, parsedUrlFilters.tags);
     setSelectedTags(resolvedTags);
@@ -722,10 +730,7 @@ export function PublicLibraryPageClient() {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
       setSelectedSubject(ALL_SUBJECTS);
     }
-    if (subjectDraft !== ALL_SUBJECTS && !availableSubjects.includes(subjectDraft)) {
-      setSubjectDraft(ALL_SUBJECTS);
-    }
-  }, [availableSubjects, selectedSubject, subjectDraft]);
+  }, [availableSubjects, selectedSubject]);
 
   useEffect(() => {
     setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
@@ -740,18 +745,17 @@ export function PublicLibraryPageClient() {
   }, [selectedTags, tagSelectorOpen]);
 
   useEffect(() => {
-    if (subjectSelectorOpen) {
-      setSubjectDraft(selectedSubject);
-      setSubjectSearchQuery("");
-    }
-  }, [selectedSubject, subjectSelectorOpen]);
-
-  useEffect(() => {
     if (filterSheetOpen) {
+      setAudienceDraft(selectedTargetProfile);
+      setSubjectFilterDraft(selectedSubject);
+      setTagsFilterDraft(selectedTags);
       setCourseProgramDraft(selectedCourseProgram);
+      setSubjectSearchQuery("");
       setCourseProgramSearchQuery("");
+      setSubjectComboOpen(false);
+      setCourseProgramComboOpen(false);
     }
-  }, [filterSheetOpen, selectedCourseProgram]);
+  }, [filterSheetOpen, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -806,11 +810,13 @@ export function PublicLibraryPageClient() {
     setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     setCourseProgramDraft(ALL_COURSE_PROGRAMS);
     setSelectedSubject(ALL_SUBJECTS);
-    setSubjectDraft(ALL_SUBJECTS);
+    setSubjectFilterDraft(ALL_SUBJECTS);
     setSelectedTags([]);
     setTagDraft([]);
+    setTagsFilterDraft([]);
     setSelectedSourceFilters([]);
     setAudienceLockedToAll(false);
+    setAudienceDraft(NOTE_TARGET_PROFILE_ALL);
     setCourseProgramSearchQuery("");
     setSubjectSearchQuery("");
     setTagSearchQuery("");
@@ -824,6 +830,36 @@ export function PublicLibraryPageClient() {
       view: null,
     });
   }, [replacePublicLibraryFilters]);
+
+  const applyModalFilters = useCallback(() => {
+    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : null;
+    const nextSubject = subjectFilterDraft !== ALL_SUBJECTS ? slugifyPublicLibraryFilterValue(subjectFilterDraft) : null;
+    const nextTags = tagsFilterDraft.map((tag) => slugifyPublicLibraryFilterValue(tag));
+    const nextCourseProgram = courseProgramDraft !== ALL_COURSE_PROGRAMS ? slugifyPublicLibraryFilterValue(courseProgramDraft) : null;
+
+    if (audienceDraft !== selectedTargetProfile) {
+      setAudienceLockedToAll(audienceDraft === NOTE_TARGET_PROFILE_ALL);
+    }
+    if (subjectFilterDraft !== ALL_SUBJECTS) {
+      setRecentSubjects((previous) => updateRecentValues(previous, [subjectFilterDraft]));
+    }
+    if (tagsFilterDraft.length > 0) {
+      setRecentTags((previous) => updateRecentValues(previous, [...tagsFilterDraft].reverse()));
+    }
+    if (courseProgramDraft !== ALL_COURSE_PROGRAMS) {
+      setRecentCoursePrograms((previous) => updateRecentValues(previous, [courseProgramDraft]));
+    }
+
+    replacePublicLibraryFilters({
+      ...parsedUrlFilters,
+      audience: nextAudience,
+      subject: nextSubject,
+      tags: nextTags,
+      courseProgram: nextCourseProgram,
+      view: null,
+    });
+    setFilterSheetOpen(false);
+  }, [audienceDraft, courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, selectedTargetProfile, subjectFilterDraft, tagsFilterDraft]);
 
   const subjectPriorityComparator = useMemo(
     () => buildPriorityComparator(recentSubjects, subjectCounts),
@@ -871,19 +907,9 @@ export function PublicLibraryPageClient() {
     ));
   }, [displayedTags, tagSearchQuery]);
 
-  const visibleSubjectLimit = isMobileSuccessSheet
-    ? POPULAR_SUBJECT_LIMIT_MOBILE
-    : POPULAR_SUBJECT_LIMIT_DESKTOP;
   const visibleTagLimit = isMobileSuccessSheet
     ? POPULAR_TAG_LIMIT_MOBILE
     : POPULAR_TAG_LIMIT_DESKTOP;
-
-  const visibleSubjectChips = useMemo(() => {
-    const ordered = selectedSubject !== ALL_SUBJECTS
-      ? [selectedSubject, ...displayedSubjects.filter((subject) => subject !== selectedSubject)]
-      : displayedSubjects;
-    return Array.from(new Set(ordered)).slice(0, visibleSubjectLimit);
-  }, [displayedSubjects, selectedSubject, visibleSubjectLimit]);
 
   const visiblePopularTags = useMemo(() => {
     const ordered = [
@@ -893,9 +919,8 @@ export function PublicLibraryPageClient() {
     return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, selectedTags.length));
   }, [displayedTags, selectedTags, visibleTagLimit]);
 
-  const hasActiveSourceFilters = selectedSourceFilters.length > 0;
-
   const hasActiveFilters = searchQuery.trim().length > 0
+    || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
@@ -1228,7 +1253,7 @@ export function PublicLibraryPageClient() {
                   <span className="inline-flex items-center gap-2">
                     <Filter className="h-4 w-4" aria-hidden="true" />
                     <span>More Filters</span>
-                    {(hasActiveSourceFilters || selectedCourseProgram !== ALL_COURSE_PROGRAMS) ? (
+                    {hasActiveFilters ? (
                       <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" aria-hidden="true" />
                     ) : null}
                   </span>
@@ -1249,211 +1274,15 @@ export function PublicLibraryPageClient() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">For</p>
-                {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
-                  <button
-                    type="button"
-                    className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                    onClick={() => {
-                      setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
-                      replacePublicLibraryFilters({
-                        ...parsedUrlFilters,
-                        audience: null,
-                        view: null,
-                      });
-                    }}
-                  >
-                    View all notes
-                  </button>
-                ) : null}
+            {hasActiveFilters ? (
+              <div className="border-t border-border pt-3">
+                {activeFilterSummary}
               </div>
-              <div className="relative">
-              <div className={getFadedScrollRailClassName()}>
-                <button
-                  type="button"
-                  className={getFilterChipClassName(selectedTargetProfile === NOTE_TARGET_PROFILE_ALL)}
-                  onClick={() => {
-                    setAudienceLockedToAll(true);
-                    setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
-                    replacePublicLibraryFilters({
-                      ...parsedUrlFilters,
-                      audience: null,
-                      view: null,
-                    });
-                  }}
-                  aria-pressed={selectedTargetProfile === NOTE_TARGET_PROFILE_ALL}
-                >
-                  All
-                </button>
-                {PUBLIC_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
-                  <button
-                    key={targetProfileType}
-                    type="button"
-                    className={getFilterChipClassName(selectedTargetProfile === targetProfileType)}
-                    onClick={() => {
-                      setSelectedTargetProfile(targetProfileType);
-                      replacePublicLibraryFilters({
-                        ...parsedUrlFilters,
-                        audience: targetProfileType,
-                        view: null,
-                      });
-                    }}
-                    aria-pressed={selectedTargetProfile === targetProfileType}
-                  >
-                    {getNoteTargetProfileLabel(targetProfileType)}
-                  </button>
-                ))}
-              </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Subjects</p>
-                {selectedSubject !== ALL_SUBJECTS ? (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                      onClick={() => {
-                        setSelectedSubject(ALL_SUBJECTS);
-                        replacePublicLibraryFilters({
-                          ...parsedUrlFilters,
-                          subject: null,
-                          view: null,
-                        });
-                      }}
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      className={TEXT_LINK_CLASS_NAME}
-                      onClick={() => setSubjectSelectorOpen(true)}
-                    >
-                      {BROWSE_ALL_LABEL}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className={TEXT_LINK_CLASS_NAME}
-                    onClick={() => setSubjectSelectorOpen(true)}
-                  >
-                    {BROWSE_ALL_LABEL}
-                  </button>
-                )}
-              </div>
-              <div className="relative">
-              <div className={getFadedScrollRailClassName()}>
-                <button
-                  type="button"
-                  className={getFilterChipClassName(selectedSubject === ALL_SUBJECTS)}
-                  onClick={() => {
-                    setSelectedSubject(ALL_SUBJECTS);
-                    replacePublicLibraryFilters({
-                      ...parsedUrlFilters,
-                      subject: null,
-                      view: null,
-                    });
-                  }}
-                  aria-pressed={selectedSubject === ALL_SUBJECTS}
-                >
-                  All
-                </button>
-                {visibleSubjectChips.map((subject) => (
-                  <button
-                    key={subject}
-                    type="button"
-                    className={getFilterChipClassName(selectedSubject === subject)}
-                    onClick={() => {
-                      setSelectedSubject(subject);
-                      setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
-                      replacePublicLibraryFilters({
-                        ...parsedUrlFilters,
-                        subject: slugifyPublicLibraryFilterValue(subject),
-                        view: null,
-                      });
-                    }}
-                    aria-pressed={selectedSubject === subject}
-                  >
-                    {subject}
-                  </button>
-                ))}
-              </div>
-              </div>
-            </div>
-
-            {availableTags.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium">Popular Tags</p>
-                  <div className="flex items-center gap-3">
-                  {selectedTags.length > 0 ? (
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                      onClick={() => {
-                        setSelectedTags([]);
-                        setTagDraft([]);
-                        replacePublicLibraryFilters({
-                          ...parsedUrlFilters,
-                          tags: [],
-                          view: null,
-                        });
-                      }}
-                    >
-                      Clear tags
-                    </button>
-                  ) : null}
-                    <button
-                      type="button"
-                      className={TEXT_LINK_CLASS_NAME}
-                      onClick={() => setTagSelectorOpen(true)}
-                    >
-                      {BROWSE_ALL_LABEL}
-                    </button>
-                  </div>
-                </div>
-                <div className="relative">
-                <div className={getFadedScrollRailClassName()}>
-                  {visiblePopularTags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                    className={getFilterChipClassName(selectedTags.includes(tag))}
-                    onClick={() => {
-                      setSelectedTags((previous) => {
-                        const next = previous.includes(tag)
-                          ? previous.filter((selectedTag) => selectedTag !== tag)
-                          : [...previous, tag];
-                        if (!previous.includes(tag)) {
-                          setRecentTags((recentPrevious) => updateRecentValues(recentPrevious, [tag]));
-                        }
-                        replacePublicLibraryFilters({
-                          ...parsedUrlFilters,
-                          tags: next.map((selectedTag) => slugifyPublicLibraryFilterValue(selectedTag)),
-                          view: null,
-                        });
-                        return next;
-                      });
-                    }}
-                      aria-pressed={selectedTags.includes(tag)}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-3 border-t border-border pt-3">
-              <p className="text-xs text-foreground/60">Sorted by {PUBLIC_SORT_LABELS[selectedSort]}</p>
-              {activeFilterSummary}
-            </div>
+            ) : (
+              <p className="border-t border-border pt-3 text-xs text-foreground/50">
+                Sorted by {PUBLIC_SORT_LABELS[selectedSort]}
+              </p>
+            )}
           </Card>
 
           {!loading && selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
@@ -1665,197 +1494,185 @@ export function PublicLibraryPageClient() {
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={clearFilters}>
-              Clear filters
+              Clear all
             </Button>
-            <Button type="button" onClick={() => setFilterSheetOpen(false)}>
-              Done
-            </Button>
-          </div>
-        )}
-      >
-        {availableCoursePrograms.length > 0 ? (
-          <div className="space-y-4">
-            <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
-              <label htmlFor="public-library-course-program-search" className="text-sm font-medium">
-                Course / Program
-              </label>
-              <input
-                id="public-library-course-program-search"
-                type="search"
-                value={courseProgramSearchQuery}
-                onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
-                placeholder="Search course or program..."
-                data-autofocus="true"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
-              />
-              {courseProgramDraft !== ALL_COURSE_PROGRAMS ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected course/program</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className={getFilterChipClassName(true)}
-                      onClick={() => {
-                        setCourseProgramDraft(ALL_COURSE_PROGRAMS);
-                        setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
-                        replacePublicLibraryFilters({
-                          ...parsedUrlFilters,
-                          courseProgram: null,
-                          view: null,
-                        });
-                      }}
-                    >
-                      {courseProgramDraft}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            {filteredModalCoursePrograms.length === 0 ? (
-              <p className="text-sm text-foreground/65">No course/programs match your search.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={getFilterChipClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
-                  onClick={() => {
-                    setCourseProgramDraft(ALL_COURSE_PROGRAMS);
-                    setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
-                    replacePublicLibraryFilters({
-                      ...parsedUrlFilters,
-                      courseProgram: null,
-                      view: null,
-                    });
-                  }}
-                  aria-pressed={courseProgramDraft === ALL_COURSE_PROGRAMS}
-                >
-                  All
-                </button>
-                {filteredModalCoursePrograms.map((courseProgram) => (
-                  <button
-                    key={courseProgram}
-                    type="button"
-                    className={getFilterChipClassName(courseProgramDraft === courseProgram)}
-                    onClick={() => {
-                      setCourseProgramDraft(courseProgram);
-                      setSelectedCourseProgram(courseProgram);
-                      setRecentCoursePrograms((previous) => updateRecentValues(previous, [courseProgram]));
-                      replacePublicLibraryFilters({
-                        ...parsedUrlFilters,
-                        courseProgram: slugifyPublicLibraryFilterValue(courseProgram),
-                        view: null,
-                      });
-                    }}
-                    aria-pressed={courseProgramDraft === courseProgram}
-                  >
-                    {courseProgram}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Source</p>
-          <div className="space-y-1 rounded-lg border border-border p-2">
-            {([
-              { value: "BY_YOU" as const, label: "By You" },
-              { value: "OFFICIAL" as const, label: "Official" },
-              { value: "COMMUNITY" as const, label: "Community" },
-            ]).map((option) => (
-              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm transition-colors hover:bg-highlight active:bg-highlight-strong">
-                <input
-                  type="checkbox"
-                  checked={selectedSourceFilters.includes(option.value)}
-                  onChange={() => toggleSourceFilter(option.value)}
-                  className="h-4 w-4 rounded border-border"
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </LibrarySheetModal>
-
-      <LibrarySheetModal
-        isOpen={subjectSelectorOpen}
-        title={SUBJECT_SELECTOR_TITLE}
-        onClose={() => setSubjectSelectorOpen(false)}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setSubjectDraft(ALL_SUBJECTS)}>
-              Clear
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setSelectedSubject(subjectDraft);
-                if (subjectDraft !== ALL_SUBJECTS) {
-                  setRecentSubjects((previous) => updateRecentValues(previous, [subjectDraft]));
-                }
-                replacePublicLibraryFilters({
-                  ...parsedUrlFilters,
-                  subject: subjectDraft === ALL_SUBJECTS ? null : slugifyPublicLibraryFilterValue(subjectDraft),
-                  view: null,
-                });
-                setSubjectSelectorOpen(false);
-              }}
-            >
+            <Button type="button" onClick={applyModalFilters}>
               Apply
             </Button>
           </div>
         )}
       >
-        <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
-          <input
-            type="search"
-            value={subjectSearchQuery}
-            onChange={(event) => setSubjectSearchQuery(event.target.value)}
-            placeholder="Search subjects..."
-            data-autofocus="true"
-            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
-          />
-          {subjectDraft !== ALL_SUBJECTS ? (
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <p className="text-sm font-medium">For</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={getFilterChipClassName(audienceDraft === NOTE_TARGET_PROFILE_ALL)}
+                onClick={() => setAudienceDraft(NOTE_TARGET_PROFILE_ALL)}
+                aria-pressed={audienceDraft === NOTE_TARGET_PROFILE_ALL}
+              >
+                All
+              </button>
+              {PUBLIC_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
+                <button
+                  key={targetProfileType}
+                  type="button"
+                  className={getFilterChipClassName(audienceDraft === targetProfileType)}
+                  onClick={() => setAudienceDraft(targetProfileType)}
+                  aria-pressed={audienceDraft === targetProfileType}
+                >
+                  {getNoteTargetProfileLabel(targetProfileType)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {availableSubjects.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected subject</p>
-              <div className="flex flex-wrap gap-2">
+              <p className="text-sm font-medium">Subjects</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={subjectComboOpen ? subjectSearchQuery : (subjectFilterDraft !== ALL_SUBJECTS ? subjectFilterDraft : "")}
+                  onChange={(event) => setSubjectSearchQuery(event.target.value)}
+                  placeholder={subjectComboOpen ? "Search subjects..." : "All"}
+                  onFocus={() => { setSubjectComboOpen(true); setSubjectSearchQuery(""); }}
+                  onBlur={() => globalThis.setTimeout(() => setSubjectComboOpen(false), 150)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                />
+                <ChevronDown
+                  className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${subjectComboOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </div>
+              {subjectComboOpen ? (
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                  <button
+                    type="button"
+                    className={getComboboxItemClassName(subjectFilterDraft === ALL_SUBJECTS)}
+                    onMouseDown={(event) => { event.preventDefault(); setSubjectFilterDraft(ALL_SUBJECTS); setSubjectSearchQuery(""); setSubjectComboOpen(false); }}
+                  >
+                    All
+                  </button>
+                  {filteredModalSubjects.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-foreground/65">No subjects match your search.</p>
+                  ) : (
+                    filteredModalSubjects.map((subject) => (
+                      <button
+                        key={subject}
+                        type="button"
+                        className={getComboboxItemClassName(subjectFilterDraft === subject)}
+                        onMouseDown={(event) => { event.preventDefault(); setSubjectFilterDraft(subject); setSubjectSearchQuery(""); setSubjectComboOpen(false); }}
+                      >
+                        {subject}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {availableTags.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Popular Tags</p>
                 <button
                   type="button"
-                  className={getFilterChipClassName(true)}
-                  onClick={() => setSubjectDraft(ALL_SUBJECTS)}
+                  className={TEXT_LINK_CLASS_NAME}
+                  onClick={() => setTagSelectorOpen(true)}
                 >
-                  {subjectDraft}
+                  {BROWSE_ALL_LABEL}
                 </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {visiblePopularTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={getFilterChipClassName(tagsFilterDraft.includes(tag))}
+                    onClick={() => setTagsFilterDraft((previous) => (
+                      previous.includes(tag)
+                        ? previous.filter((t) => t !== tag)
+                        : [...previous, tag]
+                    ))}
+                    aria-pressed={tagsFilterDraft.includes(tag)}
+                  >
+                    {tag}
+                  </button>
+                ))}
               </div>
             </div>
           ) : null}
-        </div>
-        {filteredModalSubjects.length === 0 ? (
-          <p className="text-sm text-foreground/65">No subjects match your search.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={getFilterChipClassName(subjectDraft === ALL_SUBJECTS)}
-              onClick={() => setSubjectDraft(ALL_SUBJECTS)}
-              aria-pressed={subjectDraft === ALL_SUBJECTS}
-            >
-              All
-            </button>
-            {filteredModalSubjects.map((subject) => (
-              <button
-                key={subject}
-                type="button"
-                className={getFilterChipClassName(subjectDraft === subject)}
-                onClick={() => setSubjectDraft(subject)}
-                aria-pressed={subjectDraft === subject}
-              >
-                {subject}
-              </button>
-            ))}
+
+          {availableCoursePrograms.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Course / Program</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={courseProgramComboOpen ? courseProgramSearchQuery : (courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : "")}
+                  onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                  placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}
+                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramSearchQuery(""); }}
+                  onBlur={() => globalThis.setTimeout(() => setCourseProgramComboOpen(false), 150)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                />
+                <ChevronDown
+                  className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${courseProgramComboOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </div>
+              {courseProgramComboOpen ? (
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                  <button
+                    type="button"
+                    className={getComboboxItemClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
+                    onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(ALL_COURSE_PROGRAMS); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
+                  >
+                    All
+                  </button>
+                  {filteredModalCoursePrograms.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-foreground/65">No course/programs match your search.</p>
+                  ) : (
+                    filteredModalCoursePrograms.map((courseProgram) => (
+                      <button
+                        key={courseProgram}
+                        type="button"
+                        className={getComboboxItemClassName(courseProgramDraft === courseProgram)}
+                        onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(courseProgram); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
+                      >
+                        {courseProgram}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Source</p>
+            <div className="space-y-1 rounded-lg border border-border p-2">
+              {([
+                { value: "BY_YOU" as const, label: "By You" },
+                { value: "OFFICIAL" as const, label: "Official" },
+                { value: "COMMUNITY" as const, label: "Community" },
+              ]).map((option) => (
+                <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm transition-colors hover:bg-highlight active:bg-highlight-strong">
+                  <input
+                    type="checkbox"
+                    checked={selectedSourceFilters.includes(option.value)}
+                    onChange={() => toggleSourceFilter(option.value)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
-        )}
+        </div>
       </LibrarySheetModal>
 
       <LibrarySheetModal
@@ -1871,6 +1688,7 @@ export function PublicLibraryPageClient() {
               type="button"
               onClick={() => {
                 setSelectedTags(tagDraft);
+                setTagsFilterDraft(tagDraft);
                 if (tagDraft.length > 0) {
                   setRecentTags((previous) => updateRecentValues(previous, [...tagDraft].reverse()));
                 }
