@@ -46,7 +46,12 @@
           "choices",
           "answer",
           "explanation",
-          "concept"
+          "concept",
+          "questionFormat",
+          "questionGroup",
+          "correctIndices",
+          "questionType",
+          "workingSolution"
         ],
         "properties": {
           "question": {
