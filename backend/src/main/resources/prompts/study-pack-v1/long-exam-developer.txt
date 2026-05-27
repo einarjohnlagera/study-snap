@@ -27,7 +27,7 @@ RULES:
 - For MULTI_SELECT questions, set "questionFormat" to "MULTI_SELECT", keep exactly 4 choices, set "correctIndices" to 2 or 3 zero-based correct choice indexes, and set "answer" to the letter for the first correct index as a legacy fallback.
 - Do not use MULTI_SELECT when all 4 choices are correct.
 - You may include 1 MATCHING block when the notes contain named items that can be matched to distinct labels, laws, descriptions, steps, or categories.
-- A MATCHING block must be 2 to 4 consecutive questions with the same 4 choices in the same order; each item must have a distinct correct answer.
+- A MATCHING block must be exactly 2 to 4 consecutive questions. All items in the block must share the exact same 4 choices in the same order; each item must map to a distinct correct answer. If you cannot identify at least 2 items that share the same option set, omit the MATCHING block entirely and use standard MCQ instead. Do NOT create a MATCHING group with only 1 item.
 - For MATCHING questions, set "questionFormat" to "MATCHING", set the same short "questionGroup" id such as "group-1" on each item in the block, set "correctIndices" to null, and set "answer" to that item's single correct letter.
 - Do not use MATCHING unless all items in the block can share the same option set.
 - Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%).
