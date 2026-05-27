@@ -12,6 +12,7 @@ import {useExamFocusMode} from "@/components/exam-mode/exam-focus-context";
 import {QuestionNavigator} from "@/components/exam-mode/question-navigator";
 import {ScoreReveal} from "@/components/exam-mode/score-reveal";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
+import {QuizMatchingGroup} from "@/components/study-pack/quiz-matching-group";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
 import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
@@ -43,7 +44,7 @@ import {
     resolveDeadlineEpochSeconds,
     resolveRemainingSecondsFromDeadline,
 } from "@/lib/challenge-quiz-timer";
-import {resolveQuizCorrectIndex} from "@/lib/quiz";
+import {resolveQuizCorrectIndex, resolveQuizItemGroupAt} from "@/lib/quiz";
 import {cn} from "@/lib/utils";
 
 type LongExamPhase = "prestart" | "generating" | "paused-recovery" | "running" | "complete";
@@ -196,12 +197,13 @@ export default function LongExamPage() {
     const expectedQuestionCount = resolveExpectedLongExamQuestionCount(profileLearnerLevel);
     const selectedSourceCount = 1 + selectedAdditionalStudyPackIds.length;
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
+    const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentQuestionIndex);
     const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
     const progressPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const hasActiveInProgressPrompt = activeStartResponse?.status === "IN_PROGRESS" && activeStartResponse.canResume;
     const timerState = resolveBoardExamTimerState(remainingSeconds);
     const longExamActive = phase === "running" && Boolean(sessionId);
-    const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
+    const isLastQuestion = (currentMatchingGroup?.endIndex ?? currentQuestionIndex) === totalQuestions - 1;
     useExamFocusMode(phase === "running");
 
     const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
@@ -576,13 +578,38 @@ export default function LongExamPage() {
         }
     }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
 
+    const handleSelectMatchingChoice = useCallback(async (questionIndex: number, choiceIndex: number) => {
+        if (!sessionId || savingProgress || !currentMatchingGroup) {
+            return;
+        }
+        const choiceKey = String(questionIndex);
+        setSelectedChoices((current) => ({
+            ...current,
+            [choiceKey]: choiceIndex,
+        }));
+        setSavingProgress(true);
+        try {
+            const response = await saveLongExamProgress(sessionId, {
+                questionIndex,
+                selectedChoiceIndex: choiceIndex,
+            });
+            setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
+            setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
+            setCurrentQuestionIndex(currentMatchingGroup.startIndex);
+        } catch {
+            showToast("Could not save that answer. Your selection is still visible.", "error");
+        } finally {
+            setSavingProgress(false);
+        }
+    }, [currentMatchingGroup, savingProgress, sessionId, showToast]);
+
     const handlePrevious = useCallback(() => {
-        setCurrentQuestionIndex((index) => Math.max(index - 1, 0));
-    }, []);
+        setCurrentQuestionIndex((index) => Math.max((currentMatchingGroup?.startIndex ?? index) - 1, 0));
+    }, [currentMatchingGroup]);
 
     const handleNext = useCallback(() => {
-        setCurrentQuestionIndex((index) => Math.min(index + 1, totalQuestions - 1));
-    }, [totalQuestions]);
+        setCurrentQuestionIndex((index) => Math.min(currentMatchingGroup ? currentMatchingGroup.endIndex + 1 : index + 1, totalQuestions - 1));
+    }, [currentMatchingGroup, totalQuestions]);
 
     const handleComplete = useCallback(async (timeoutTriggered = false) => {
         if (!sessionId || submitting) {
@@ -967,21 +994,37 @@ export default function LongExamPage() {
                     </div>
 
                     <Card className="space-y-5 border-foreground/15 bg-card p-5 sm:p-6">
-                        <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl">{currentQuestion.question}</h1>
-                        <QuizChoiceList
-                            questionKey={`${currentQuestion.question}-${currentQuestionIndex}`}
-                            choices={currentQuestion.choices}
-                            correctIndex={resolveQuizCorrectIndex(currentQuestion)}
-                            correctIndices={currentQuestion.correctIndices}
-                            questionFormat={currentQuestion.questionFormat}
-                            selectedChoiceIndex={getSelectedChoice(selectedChoices, currentQuestionIndex)}
-                            selectedMultiChoiceIndices={getSelectedMultiChoices(selectedMultiChoices, currentQuestionIndex)}
-                            revealAnswer={false}
-                            selectionStyle="board-exam"
-                            disabled={submitting}
-                            onSelectChoice={(choiceIndex) => void handleSelectChoice(choiceIndex)}
-                            onSelectMultiChoices={(choiceIndices) => void handleSelectMultiChoices(choiceIndices)}
-                        />
+                        {currentMatchingGroup ? (
+                            <QuizMatchingGroup
+                                items={currentMatchingGroup.items}
+                                groupStartIndex={currentMatchingGroup.startIndex}
+                                selectedChoices={Object.fromEntries(
+                                    Object.entries(selectedChoices).map(([key, value]) => [Number(key), value]),
+                                )}
+                                revealAnswer={false}
+                                selectionStyle="board-exam"
+                                disabled={submitting}
+                                onSelectChoice={(questionIndex, choiceIndex) => void handleSelectMatchingChoice(questionIndex, choiceIndex)}
+                            />
+                        ) : (
+                            <>
+                                <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl">{currentQuestion.question}</h1>
+                                <QuizChoiceList
+                                    questionKey={`${currentQuestion.question}-${currentQuestionIndex}`}
+                                    choices={currentQuestion.choices}
+                                    correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                                    correctIndices={currentQuestion.correctIndices}
+                                    questionFormat={currentQuestion.questionFormat}
+                                    selectedChoiceIndex={getSelectedChoice(selectedChoices, currentQuestionIndex)}
+                                    selectedMultiChoiceIndices={getSelectedMultiChoices(selectedMultiChoices, currentQuestionIndex)}
+                                    revealAnswer={false}
+                                    selectionStyle="board-exam"
+                                    disabled={submitting}
+                                    onSelectChoice={(choiceIndex) => void handleSelectChoice(choiceIndex)}
+                                    onSelectMultiChoices={(choiceIndices) => void handleSelectMultiChoices(choiceIndices)}
+                                />
+                            </>
+                        )}
                         {savingProgress ? (
                             <p className="text-xs text-foreground/55">Saving answer...</p>
                         ) : null}

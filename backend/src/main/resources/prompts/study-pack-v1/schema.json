@@ -70,7 +70,11 @@
           },
           "questionFormat": {
             "type": ["string", "null"],
-            "enum": ["MCQ", "TRUE_FALSE", "MULTI_SELECT", null]
+            "enum": ["MCQ", "TRUE_FALSE", "MULTI_SELECT", "MATCHING", null]
+          },
+          "questionGroup": {
+            "type": ["string", "null"],
+            "maxLength": 32
           },
           "correctIndices": {
             "type": ["array", "null"],

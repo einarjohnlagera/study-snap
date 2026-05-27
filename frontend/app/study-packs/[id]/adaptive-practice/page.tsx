@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -30,7 +31,7 @@ import {
   type NoteResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
-import { isQuizSelectionCorrect, resolveQuizCorrectIndex } from "@/lib/quiz";
+import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
 import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
 
 function AdaptivePracticeLoading() {
@@ -232,10 +233,13 @@ export default function AdaptivePracticePage() {
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
   const currentQuestion = hasQuestions ? quiz[currentIndex] : null;
+  const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentIndex);
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
   const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
   const currentQuestionIsMultiSelect = currentQuestion?.questionFormat === "MULTI_SELECT";
-  const hasAnsweredCurrent = currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
+  const hasAnsweredCurrent = currentMatchingGroup
+    ? currentMatchingGroup.items.every((_, offset) => selectedChoices[currentMatchingGroup.startIndex + offset] != null)
+    : currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
   const isComplete = hasQuestions && currentIndex >= quiz.length;
   const score = useMemo(() => {
     return quiz.reduce((count, question, index) => {
@@ -374,6 +378,16 @@ export default function AdaptivePracticePage() {
     }));
   };
 
+  const handleSelectMatchingChoice = (questionIndex: number, choiceIndex: number) => {
+    if (!currentMatchingGroup || hasAnsweredCurrent) {
+      return;
+    }
+    setSelectedChoices((prev) => ({
+      ...prev,
+      [questionIndex]: choiceIndex,
+    }));
+  };
+
   const handleSelectMultiChoices = (choiceIndices: number[]) => {
     if (!currentQuestion || !currentQuestionIsMultiSelect) {
       return;
@@ -388,7 +402,7 @@ export default function AdaptivePracticePage() {
     if (!hasAnsweredCurrent) {
       return;
     }
-    const nextIndex = currentIndex + 1;
+    const nextIndex = currentMatchingGroup ? currentMatchingGroup.endIndex + 1 : currentIndex + 1;
     if (nextIndex >= quiz.length && !completionTracked && noteId) {
       setCompletionTracked(true);
       void trackAnalyticsEvent({
@@ -623,25 +637,35 @@ export default function AdaptivePracticePage() {
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold">
-              {currentIndex + 1}. {currentQuestion?.question}
-            </h2>
-            {currentQuestion ? (
-              <QuizChoiceList
-                questionKey={currentQuestion.question}
-                choices={currentQuestion.choices}
-                correctIndex={resolveQuizCorrectIndex(currentQuestion)}
-                correctIndices={currentQuestion.correctIndices}
-                questionFormat={currentQuestion.questionFormat}
-                selectedChoiceIndex={selectedChoiceIndex}
-                selectedMultiChoiceIndices={selectedMultiChoiceIndices}
-                revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
-                onSelectChoice={handleSelectChoice}
-                onSelectMultiChoices={handleSelectMultiChoices}
+            {currentMatchingGroup ? (
+              <QuizMatchingGroup
+                items={currentMatchingGroup.items}
+                groupStartIndex={currentMatchingGroup.startIndex}
+                selectedChoices={selectedChoices}
+                revealAnswer={hasAnsweredCurrent}
+                onSelectChoice={handleSelectMatchingChoice}
               />
+            ) : currentQuestion ? (
+              <>
+                <h2 className="text-lg font-semibold">
+                  {currentIndex + 1}. {currentQuestion.question}
+                </h2>
+                <QuizChoiceList
+                  questionKey={currentQuestion.question}
+                  choices={currentQuestion.choices}
+                  correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                  correctIndices={currentQuestion.correctIndices}
+                  questionFormat={currentQuestion.questionFormat}
+                  selectedChoiceIndex={selectedChoiceIndex}
+                  selectedMultiChoiceIndices={selectedMultiChoiceIndices}
+                  revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
+                  onSelectChoice={handleSelectChoice}
+                  onSelectMultiChoices={handleSelectMultiChoices}
+                />
+              </>
             ) : null}
 
-            {hasAnsweredCurrent && currentQuestion && !currentQuestionIsMultiSelect ? (
+            {hasAnsweredCurrent && currentQuestion && !currentQuestionIsMultiSelect && !currentMatchingGroup ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}

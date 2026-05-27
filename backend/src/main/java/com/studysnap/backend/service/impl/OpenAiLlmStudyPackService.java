@@ -37,8 +37,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -70,6 +72,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String CRITIQUE_VERDICT_STRONG = "STRONG";
     private static final String CRITIQUE_VERDICT_WORKABLE = "WORKABLE";
     private static final String CRITIQUE_VERDICT_RECONSIDER = "RECONSIDER";
+    private static final String MCQ_FORMAT = "MCQ";
+    private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
+    private static final String MATCHING_FORMAT = "MATCHING";
     private static final String TRUE_FALSE_GUIDANCE = """
             Mix in True/False questions where appropriate. True/False questions suit simple factual recall, definitions, or classification (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, or best-answer judgment.
 
@@ -348,17 +353,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             quizItems.add(new QuizItem(
                     item.question(),
                     item.choices(),
-                    "MULTI_SELECT".equals(item.questionFormat()) ? null : answerIndex,
+                    MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
                     normalizedConcept,
                     normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again."),
                     null,
                     item.questionFormat(),
                     item.questionType(),
                     item.workingSolution(),
-                    item.correctIndices()
+                    item.correctIndices(),
+                    item.questionGroup()
             ));
         }
-        return quizItems;
+        return normalizeMatchingGroups(quizItems, "study_pack_quiz");
     }
 
     private void validatePromptQuizItem(
@@ -389,6 +395,86 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (normalizedConcepts.contains(normalizedConceptKey)) {
             throw invalidOutput("The study pack service returned repetitive quiz concepts. Please try again.");
         }
+    }
+
+    private List<QuizItem> normalizeMatchingGroups(List<QuizItem> quizItems, String operationLabel) {
+        if (quizItems == null || quizItems.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<Integer>> groupedIndexes = new LinkedHashMap<>();
+        for (int index = 0; index < quizItems.size(); index++) {
+            String questionGroup = quizItems.get(index).questionGroup();
+            if (questionGroup != null && !questionGroup.isBlank()) {
+                groupedIndexes.computeIfAbsent(questionGroup, ignored -> new ArrayList<>()).add(index);
+            }
+        }
+        if (groupedIndexes.isEmpty()) {
+            return quizItems;
+        }
+
+        Set<Integer> demotedIndexes = new HashSet<>();
+        groupedIndexes.forEach((questionGroup, indexes) -> {
+            String reason = resolveInvalidMatchingGroupReason(indexes.stream().map(quizItems::get).toList());
+            if (reason != null) {
+                log.warn(
+                        "{} matching group demoted to MCQ: group={} reason={}",
+                        operationLabel,
+                        questionGroup,
+                        reason
+                );
+                demotedIndexes.addAll(indexes);
+            }
+        });
+
+        if (demotedIndexes.isEmpty()) {
+            return quizItems;
+        }
+        List<QuizItem> normalized = new ArrayList<>(quizItems.size());
+        for (int index = 0; index < quizItems.size(); index++) {
+            QuizItem item = quizItems.get(index);
+            normalized.add(demotedIndexes.contains(index) ? copyQuizItemWithQuestionGroup(item, null, MCQ_FORMAT) : item);
+        }
+        return normalized;
+    }
+
+    private String resolveInvalidMatchingGroupReason(List<QuizItem> groupItems) {
+        if (groupItems.size() < 2 || groupItems.size() > 4) {
+            return "invalid_size";
+        }
+        List<String> sharedChoices = groupItems.getFirst().choices();
+        Set<Integer> correctIndexes = new HashSet<>();
+        for (QuizItem item : groupItems) {
+            if (!MATCHING_FORMAT.equals(item.questionFormat())) {
+                return "invalid_format";
+            }
+            if (!Objects.equals(sharedChoices, item.choices())) {
+                return "different_choices";
+            }
+            Integer correctIndex = item.correctIndex();
+            if (correctIndex == null || correctIndex < 0 || correctIndex >= item.choices().size()) {
+                return "invalid_correct_index";
+            }
+            if (!correctIndexes.add(correctIndex)) {
+                return "duplicate_correct_index";
+            }
+        }
+        return null;
+    }
+
+    private QuizItem copyQuizItemWithQuestionGroup(QuizItem item, String questionGroup, String questionFormat) {
+        return new QuizItem(
+                item.question(),
+                item.choices(),
+                item.correctIndex(),
+                item.concept(),
+                item.explanation(),
+                null,
+                questionFormat,
+                item.questionType(),
+                item.workingSolution(),
+                item.correctIndices(),
+                questionGroup
+        );
     }
 
     private UsageMetadata extractUsageMetadata(JsonNode responseJson, String fallbackModel) {
@@ -695,12 +781,19 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             questionFormatTypes.add("string");
             questionFormatTypes.add("null");
             ArrayNode questionFormatEnum = questionFormat.putArray("enum");
-            questionFormatEnum.add("MCQ");
+            questionFormatEnum.add(MCQ_FORMAT);
             questionFormatEnum.add("TRUE_FALSE");
-            questionFormatEnum.add("MULTI_SELECT");
+            questionFormatEnum.add(MULTI_SELECT_FORMAT);
+            questionFormatEnum.add(MATCHING_FORMAT);
             questionFormatEnum.addNull();
         }
         if (allowTrueFalse) {
+            ObjectNode questionGroup = itemProps.putObject("questionGroup");
+            ArrayNode questionGroupTypes = questionGroup.putArray("type");
+            questionGroupTypes.add("string");
+            questionGroupTypes.add("null");
+            questionGroup.put("maxLength", 32);
+
             ObjectNode correctIndices = itemProps.putObject("correctIndices");
             ArrayNode correctIndicesTypes = correctIndices.putArray("type");
             correctIndicesTypes.add("array");
@@ -1657,17 +1750,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             quizItems.add(new QuizItem(
                     item.question().trim(),
                     item.choices().stream().map(String::trim).toList(),
-                    "MULTI_SELECT".equals(item.questionFormat()) ? null : answerIndex,
+                    MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
                     normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
                     normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again."),
                     null,
                     item.questionFormat(),
                     item.questionType(),
                     item.workingSolution(),
-                    item.correctIndices()
+                    item.correctIndices(),
+                    item.questionGroup()
             ));
         }
-        return quizItems;
+        return normalizeMatchingGroups(quizItems, operationLabel);
     }
 
     private void validateGeneratedQuizItem(PromptGeneratedQuizItem item, String operationLabel) {
@@ -1940,7 +2034,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String questionFormat,
             String questionType,
             String workingSolution,
-            List<Integer> correctIndices
+            List<Integer> correctIndices,
+            String questionGroup
     ) {
     }
 
@@ -1958,7 +2053,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String questionFormat,
             String questionType,
             String workingSolution,
-            List<Integer> correctIndices
+            List<Integer> correctIndices,
+            String questionGroup
     ) {
     }
 

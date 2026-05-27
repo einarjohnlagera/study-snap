@@ -12,6 +12,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -49,6 +50,7 @@ import {
   isQuizSelectionCorrect,
   resolveQuizCorrectAnswer,
   resolveQuizCorrectIndex,
+  resolveQuizItemGroupAt,
   serializeSelectedChoiceIndexRecord,
   serializeSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
@@ -302,10 +304,18 @@ export default function QuickReviewPage() {
     ? activeQuestionIndexes[currentRoundIndex]
     : null;
   const currentQuestion = currentQuestionIndex !== null ? quiz[currentQuestionIndex] : null;
+  const currentMatchingGroup = currentQuestionIndex !== null ? resolveQuizItemGroupAt(quiz, currentQuestionIndex) : null;
+  const activeMatchingGroup = currentMatchingGroup
+    && currentQuestionIndex === currentMatchingGroup.startIndex
+    && currentMatchingGroup.items.every((_, offset) => activeQuestionIndexes[currentRoundIndex + offset] === currentMatchingGroup.startIndex + offset)
+    ? currentMatchingGroup
+    : null;
   const currentQuestionIsMultiSelect = currentQuestion?.questionFormat === "MULTI_SELECT";
   const selectedChoiceIndex = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
   const selectedMultiChoiceIndices = currentQuestionIndex !== null ? roundMultiSelections[currentQuestionIndex] ?? [] : [];
-  const hasAnsweredCurrent = currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
+  const hasAnsweredCurrent = activeMatchingGroup
+    ? activeMatchingGroup.items.every((_, offset) => roundSelections[activeMatchingGroup.startIndex + offset] != null)
+    : currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
   const score = useMemo(
     () =>
       quiz.reduce((count, item, index) => {
@@ -675,6 +685,33 @@ export default function QuickReviewPage() {
     });
   };
 
+  const handleSelectMatchingChoice = (questionIndex: number, choiceIndex: number) => {
+    if (!activeMatchingGroup || hasAnsweredCurrent) {
+      return;
+    }
+    const nextRoundSelections = {
+      ...roundSelections,
+      [questionIndex]: choiceIndex,
+    };
+    const nextSelectedChoices = {
+      ...selectedChoices,
+      [questionIndex]: choiceIndex,
+    };
+    setRoundSelections(nextRoundSelections);
+    setSelectedChoices(nextSelectedChoices);
+    persistProgress({
+      currentQuestionIndex: currentRoundIndex,
+      currentRound: currentRoundType,
+      retryCount,
+      selectedChoices: nextSelectedChoices,
+      selectedMultiChoices,
+      retryQuestionIndexes,
+      activeQuestionIndexes,
+      roundSelections: nextRoundSelections,
+      roundMultiSelections,
+    });
+  };
+
   const handleSelectMultiChoices = (choiceIndices: number[]) => {
     if (!currentQuestion || currentQuestionIndex === null || !currentQuestionIsMultiSelect) {
       return;
@@ -706,9 +743,10 @@ export default function QuickReviewPage() {
     if (!hasAnsweredCurrent) {
       return;
     }
-    const isLastInRound = currentRoundIndex + 1 >= activeQuestionIndexes.length;
+    const questionStep = activeMatchingGroup?.items.length ?? 1;
+    const isLastInRound = currentRoundIndex + questionStep >= activeQuestionIndexes.length;
     if (!isLastInRound) {
-      const nextRoundIndex = currentRoundIndex + 1;
+      const nextRoundIndex = currentRoundIndex + questionStep;
       setCurrentRoundIndex(nextRoundIndex);
       persistProgress({
         currentQuestionIndex: nextRoundIndex,
@@ -1165,23 +1203,35 @@ export default function QuickReviewPage() {
                   : `Question ${currentRoundIndex + 1} of ${totalQuestions}`}
               </p>
             </div>
-            <h2 className="text-lg font-semibold leading-7 sm:text-xl">
-              {(currentQuestionIndex ?? 0) + 1}. {currentQuestion.question}
-            </h2>
-            <QuizChoiceList
-              questionKey={currentQuestion.question}
-              choices={currentQuestion.choices}
-              correctIndex={resolveQuizCorrectIndex(currentQuestion)}
-              correctIndices={currentQuestion.correctIndices}
-              questionFormat={currentQuestion.questionFormat}
-              selectedChoiceIndex={selectedChoiceIndex}
-              selectedMultiChoiceIndices={selectedMultiChoiceIndices}
-              revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
-              onSelectChoice={handleSelectChoice}
-              onSelectMultiChoices={handleSelectMultiChoices}
-            />
+            {activeMatchingGroup ? (
+              <QuizMatchingGroup
+                items={activeMatchingGroup.items}
+                groupStartIndex={activeMatchingGroup.startIndex}
+                selectedChoices={roundSelections}
+                revealAnswer={hasAnsweredCurrent}
+                onSelectChoice={handleSelectMatchingChoice}
+              />
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold leading-7 sm:text-xl">
+                  {(currentQuestionIndex ?? 0) + 1}. {currentQuestion.question}
+                </h2>
+                <QuizChoiceList
+                  questionKey={currentQuestion.question}
+                  choices={currentQuestion.choices}
+                  correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                  correctIndices={currentQuestion.correctIndices}
+                  questionFormat={currentQuestion.questionFormat}
+                  selectedChoiceIndex={selectedChoiceIndex}
+                  selectedMultiChoiceIndices={selectedMultiChoiceIndices}
+                  revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
+                  onSelectChoice={handleSelectChoice}
+                  onSelectMultiChoices={handleSelectMultiChoices}
+                />
+              </>
+            )}
 
-            {hasAnsweredCurrent && !currentQuestionIsMultiSelect ? (
+            {hasAnsweredCurrent && !currentQuestionIsMultiSelect && !activeMatchingGroup ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}

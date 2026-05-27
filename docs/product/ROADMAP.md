@@ -208,8 +208,8 @@ Additionally, engineering users need computational questions with worked solutio
 
    - **True/False standalone** — 2-choice questions (`["True", "False"]`); requires `choices` to be variable-length or a separate `questionFormat` field; scoring unchanged
    - ~~**Multi-select**~~ ✅ — "Select all that apply" shipped as `MULTI_SELECT` with `correctIndices`, all-or-nothing v1 scoring, and `correctIndex` preserved as a legacy fallback; available on all plans in every quiz mode except Board Exam
-   - **Matching type** — deliberate shared-choice block (multiple questions, same labeled option set); needs new `questionGroup` association in session state
-   - Remaining implementation order: True/False polish / audit as needed, then matching
+   - ~~**Matching type**~~ ✅ — deliberate shared-choice block shipped as `MATCHING` with `questionGroup`, shared option rendering, group-aware shuffle, and per-item single-correct scoring; available on all plans in every quiz mode except Board Exam
+   - Remaining implementation order: True/False polish / audit as needed
 
 ### Known Generation Reliability Issues (lower priority, v0.17.0)
 

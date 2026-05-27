@@ -221,6 +221,75 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateStudyPack_preservesValidMatchingGroup() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ArrayNode quiz = (ArrayNode) payload.get("quiz");
+        List<String> sharedChoices = List.of(
+                "Bernoulli's Principle",
+                "Pascal's Law",
+                "Archimedes' Principle",
+                "Continuity Equation"
+        );
+        setMatchingItem((ObjectNode) quiz.get(0), sharedChoices, "B", "group-1");
+        setMatchingItem((ObjectNode) quiz.get(1), sharedChoices, "C", "group-1");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Fluid mechanics notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", "Physics", List.of())
+        );
+
+        assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MATCHING");
+        assertThat(content.quiz().get(0).questionGroup()).isEqualTo("group-1");
+        assertThat(content.quiz().get(1).questionGroup()).isEqualTo("group-1");
+    }
+
+    @Test
+    void generateStudyPack_demotesMatchingGroupWithDifferingChoices() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ArrayNode quiz = (ArrayNode) payload.get("quiz");
+        ((ObjectNode) quiz.get(0)).put("questionFormat", "MATCHING").put("questionGroup", "group-1");
+        ((ObjectNode) quiz.get(1)).put("questionFormat", "MATCHING").put("questionGroup", "group-1");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+        );
+
+        assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MCQ");
+        assertThat(content.quiz().get(0).questionGroup()).isNull();
+        assertThat(content.quiz().get(1).questionGroup()).isNull();
+    }
+
+    @Test
+    void generateStudyPack_demotesMatchingGroupWithDuplicateCorrectIndexes() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ArrayNode quiz = (ArrayNode) payload.get("quiz");
+        List<String> sharedChoices = List.of(
+                "Bernoulli's Principle",
+                "Pascal's Law",
+                "Archimedes' Principle",
+                "Continuity Equation"
+        );
+        setMatchingItem((ObjectNode) quiz.get(0), sharedChoices, "B", "group-1");
+        setMatchingItem((ObjectNode) quiz.get(1), sharedChoices, "B", "group-1");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Fluid mechanics notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Engineering", "Physics", List.of())
+        );
+
+        assertThat(content.quiz().get(0).questionFormat()).isEqualTo("MCQ");
+        assertThat(content.quiz().get(0).questionGroup()).isNull();
+        assertThat(content.quiz().get(1).questionGroup()).isNull();
+    }
+
+    @Test
     void generateStudyPack_includesLearnerAndSubjectSpecificGuidanceInPrompt() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
@@ -1210,6 +1279,16 @@ class OpenAiLlmStudyPackServiceTest {
             ? "ATP is the usable energy output of cell respiration."
             : "This question checks the " + concept + " concept.");
         return item;
+    }
+
+    private void setMatchingItem(ObjectNode item, List<String> choices, String answer, String questionGroup) {
+        item.putArray("choices").removeAll();
+        ArrayNode choiceArray = (ArrayNode) item.get("choices");
+        choices.forEach(choiceArray::add);
+        item.put("answer", answer);
+        item.put("questionFormat", "MATCHING");
+        item.put("questionGroup", questionGroup);
+        item.putNull("correctIndices");
     }
 
     private ObjectNode generatedQuizItem(String question, List<String> choices, String answer, String explanation,

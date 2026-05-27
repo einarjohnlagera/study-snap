@@ -97,6 +97,28 @@ class QuizItemDeserializationTest {
     }
 
     @Test
+    void deserializesMatchingQuestionGroup() throws Exception {
+        QuizItem item = objectMapper.readValue(
+                """
+                {
+                  "question": "Pressure applied to a confined fluid is transmitted equally.",
+                  "choices": ["Bernoulli's Principle", "Pascal's Law", "Archimedes' Principle", "Continuity Equation"],
+                  "correctIndex": 1,
+                  "concept": "Pascal's Law",
+                  "explanation": "Pascal's Law describes pressure transmission in confined fluids.",
+                  "questionFormat": "MATCHING",
+                  "questionGroup": "group-1"
+                }
+                """,
+                QuizItem.class
+        );
+
+        assertThat(item.questionFormat()).isEqualTo("MATCHING");
+        assertThat(item.questionGroup()).isEqualTo("group-1");
+        assertThat(item.correctIndex()).isEqualTo(1);
+    }
+
+    @Test
     void equalityIncludesWorkingSolution() {
         QuizItem first = new QuizItem(
                 "What is the power?",
@@ -191,5 +213,38 @@ class QuizItemDeserializationTest {
 
         assertThat(first).isNotEqualTo(differentCorrectIndices);
         assertThat(first.hashCode()).isNotEqualTo(differentCorrectIndices.hashCode());
+    }
+
+    @Test
+    void equalityIncludesQuestionGroup() {
+        QuizItem first = new QuizItem(
+                "Pressure applied to a confined fluid is transmitted equally.",
+                List.of("Bernoulli's Principle", "Pascal's Law", "Archimedes' Principle", "Continuity Equation"),
+                1,
+                "Pascal's Law",
+                "Pascal's Law describes pressure transmission in confined fluids.",
+                null,
+                "MATCHING",
+                null,
+                null,
+                null,
+                "group-1"
+        );
+        QuizItem differentGroup = new QuizItem(
+                "Pressure applied to a confined fluid is transmitted equally.",
+                List.of("Bernoulli's Principle", "Pascal's Law", "Archimedes' Principle", "Continuity Equation"),
+                1,
+                "Pascal's Law",
+                "Pascal's Law describes pressure transmission in confined fluids.",
+                null,
+                "MATCHING",
+                null,
+                null,
+                null,
+                "group-2"
+        );
+
+        assertThat(first).isNotEqualTo(differentGroup);
+        assertThat(first.hashCode()).isNotEqualTo(differentGroup.hashCode());
     }
 }

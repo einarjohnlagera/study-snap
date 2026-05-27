@@ -114,6 +114,7 @@ Shared quiz items support these active formats:
 - `MCQ` — 4 choices, exactly 1 correct index
 - `TRUE_FALSE` — `["True", "False"]`, exactly 1 correct index
 - `MULTI_SELECT` — 4 choices, `correctIndices` contains 2–3 correct indexes
+- `MATCHING` — 2–4 consecutive single-correct items share the same 4-choice option set through `questionGroup`
 
 Multi-select rules:
 
@@ -124,6 +125,20 @@ Multi-select rules:
 - scored all-or-nothing in v1: the selected set must exactly match `correctIndices`; subsets and supersets are incorrect
 - v1 does not support 4-of-4 correct or "all of the above"
 - `correctIndex` remains populated with the first correct index as a legacy fallback for sharing, export, and review utilities that expect a single answer
+
+Matching rules:
+
+- available on all plans
+- allowed in Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, and Teacher Quiz
+- not allowed in Board Exam Mode; Board Exam remains single-correct standalone MCQ
+- generated at most once per quiz batch when notes contain named items that can be matched to distinct labels, descriptions, laws, steps, or categories
+- each matching item uses `questionFormat: "MATCHING"` and the same non-displayed `questionGroup` id, such as `group-1`
+- matching groups must be 2–4 consecutive items; non-consecutive items with the same `questionGroup` render as standalone MCQ
+- all items in a matching group must have identical `choices` arrays in the same order
+- each item in the group keeps its own single `correctIndex`; duplicate correct indexes in a group are invalid
+- backend validation demotes malformed matching groups to standalone MCQ by clearing `questionGroup` instead of failing the whole Study Pack
+- frontend display renders the shared A/B/C/D option set once above the group, then each item gets its own letter selection row
+- scoring is unchanged: each matching item is independently correct or incorrect using exact single-choice selection
 
 ## Generation lock and idempotency
 
@@ -168,5 +183,6 @@ Currently all quiz questions use a fixed format: 4 choices, 1 correct index. Pla
 - **Computational questions** — numerical answer choices with step-by-step worked solutions; requires `questionType` field and KaTeX/fixed-width rendering; engineering/sciences notes only
 - **True/False 2-choice** — requires variable-length `choices` array or a `questionFormat` discriminator
 - **Multi-select** — shipped as `MULTI_SELECT` with `correctIndices` while preserving `correctIndex` as a legacy fallback; all-or-nothing v1 scoring
+- **Matching type** — shipped as `MATCHING` with `questionGroup` shared option blocks; each item remains independently scored
 
 Do not implement format additions without a `EXAM_MODES.md` review — they affect scoring logic across all five quiz modes.

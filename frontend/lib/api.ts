@@ -24,7 +24,8 @@ export type QuizItem = {
   answer?: string;
   concept?: string;
   explanation: string;
-  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | null;
+  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | "MATCHING" | null;
+  questionGroup?: string | null;
   questionType?: "CONCEPTUAL" | "COMPUTATIONAL" | null;
   workingSolution?: string | null;
 };

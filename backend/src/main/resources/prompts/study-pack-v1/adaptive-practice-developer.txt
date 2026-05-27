@@ -13,11 +13,16 @@ RULES:
 - {TIME_EXPECTATION}
 - Standard MCQ questions must have 4 choices.
 - Standard MCQ questions must have a fully independent set of 4 answer choices. No two MCQ questions in this set may share the same set of choices.
+- The independent-choice rule does not apply inside a deliberate MATCHING block.
 - Standard MCQ answers must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.
 - You may include 1 to 2 MULTI_SELECT questions when a concept has multiple defining attributes, clauses, properties, or category members.
 - For MULTI_SELECT questions, set "questionFormat" to "MULTI_SELECT", keep exactly 4 choices, set "correctIndices" to 2 or 3 zero-based correct choice indexes, and set "answer" to the letter for the first correct index as a legacy fallback.
 - Do not use MULTI_SELECT when all 4 choices are correct.
+- You may include 1 MATCHING block when the notes contain named items that can be matched to distinct labels, laws, descriptions, steps, or categories.
+- A MATCHING block must be 2 to 4 consecutive questions with the same 4 choices in the same order; each item must have a distinct correct answer.
+- For MATCHING questions, set "questionFormat" to "MATCHING", set the same short "questionGroup" id such as "group-1" on each item in the block, set "correctIndices" to null, and set "answer" to that item's single correct letter.
+- Do not use MATCHING unless all items in the block can share the same option set.
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.
 - Concept is required for every question.
@@ -30,6 +35,7 @@ RULES:
         "choices": ["...", "...", "...", "..."],
         "answer": "A",
         "questionFormat": "MCQ",
+        "questionGroup": null,
         "correctIndices": null,
         "explanation": "...",
         "concept": "..."

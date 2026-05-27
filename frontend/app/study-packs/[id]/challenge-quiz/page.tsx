@@ -21,6 +21,7 @@ import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
@@ -60,6 +61,7 @@ import {
 } from "@/lib/challenge-quiz-timer";
 import {
   resolveQuizCorrectIndex,
+  resolveQuizItemGroupAt,
   serializeSelectedChoiceIndexRecord,
   serializeSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
@@ -702,11 +704,15 @@ export default function ChallengeQuizPage() {
       .filter(([, value]) => value.length > 0)
       .map(([key]) => key),
   ]).size, [selectedChoices, selectedMultiChoices]);
-  const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
-  const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
-  const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
+  const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
+  const currentMatchingGroup = !isBoardExamMode ? resolveQuizItemGroupAt(quiz, currentIndex) : null;
+  const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
+  const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
+  const currentMatchingGroupAnswered = currentMatchingGroup
+    ? currentMatchingGroup.items.every((_, offset) => selectedChoices[currentMatchingGroup.startIndex + offset] != null)
+    : false;
   useAppShellTitleOverride(activeMode === BOARD_EXAM_MODE ? "Board Exam" : null);
 
   useEffect(() => {
@@ -1639,38 +1645,59 @@ export default function ChallengeQuizPage() {
                     </p>
                   ) : null}
                 </div>
-                <h2 className="text-lg font-semibold leading-7 sm:text-xl">{currentQuestion.question}</h2>
-                <QuizChoiceList
-                  questionKey={currentQuestion.question}
-                  choices={currentQuestion.choices}
-                  correctIndex={resolveQuizCorrectIndex(currentQuestion)}
-                  correctIndices={currentQuestion.correctIndices}
-                  questionFormat={isBoardExamMode ? currentQuestion.questionFormat === "TRUE_FALSE" ? "TRUE_FALSE" : "MCQ" : currentQuestion.questionFormat}
-                  selectedChoiceIndex={selectedChoiceIndex}
-                  selectedMultiChoiceIndices={selectedMultiChoiceIndices}
-                  revealAnswer={false}
-                  disabled={quizInteractionDisabled}
-                  selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
-                  onSelectChoice={(choiceIndex) => {
-                    setSelectedChoices((previous) => {
-                      const next = { ...previous, [currentIndex]: choiceIndex };
-                      syncProgressRef(currentIndex, next, selectedMultiChoices);
-                      persistProgress(currentIndex, next, selectedMultiChoices);
-                      return next;
-                    });
-                  }}
-                  onSelectMultiChoices={(choiceIndices) => {
-                    if (isBoardExamMode) {
-                      return;
-                    }
-                    setSelectedMultiChoices((previous) => {
-                      const next = { ...previous, [currentIndex]: choiceIndices };
-                      syncProgressRef(currentIndex, progressRef.current.selectedChoices, next);
-                      persistProgress(currentIndex, progressRef.current.selectedChoices, next);
-                      return next;
-                    });
-                  }}
-                />
+                {currentMatchingGroup ? (
+                  <QuizMatchingGroup
+                    items={currentMatchingGroup.items}
+                    groupStartIndex={currentMatchingGroup.startIndex}
+                    selectedChoices={selectedChoices}
+                    revealAnswer={false}
+                    disabled={quizInteractionDisabled}
+                    selectionStyle="exam"
+                    onSelectChoice={(questionIndex, choiceIndex) => {
+                      setSelectedChoices((previous) => {
+                        const next = { ...previous, [questionIndex]: choiceIndex };
+                        syncProgressRef(currentIndex, next, selectedMultiChoices);
+                        persistProgress(currentIndex, next, selectedMultiChoices);
+                        return next;
+                      });
+                    }}
+                  />
+                ) : (
+                  <>
+                    <h2 className="text-lg font-semibold leading-7 sm:text-xl">{currentQuestion.question}</h2>
+                    <QuizChoiceList
+                      questionKey={currentQuestion.question}
+                      choices={currentQuestion.choices}
+                      correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                      correctIndices={currentQuestion.correctIndices}
+                      questionFormat={isBoardExamMode ? currentQuestion.questionFormat === "TRUE_FALSE" ? "TRUE_FALSE" : "MCQ" : currentQuestion.questionFormat}
+                      selectedChoiceIndex={selectedChoiceIndex}
+                      selectedMultiChoiceIndices={selectedMultiChoiceIndices}
+                      revealAnswer={false}
+                      disabled={quizInteractionDisabled}
+                      selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
+                      onSelectChoice={(choiceIndex) => {
+                        setSelectedChoices((previous) => {
+                          const next = { ...previous, [currentIndex]: choiceIndex };
+                          syncProgressRef(currentIndex, next, selectedMultiChoices);
+                          persistProgress(currentIndex, next, selectedMultiChoices);
+                          return next;
+                        });
+                      }}
+                      onSelectMultiChoices={(choiceIndices) => {
+                        if (isBoardExamMode) {
+                          return;
+                        }
+                        setSelectedMultiChoices((previous) => {
+                          const next = { ...previous, [currentIndex]: choiceIndices };
+                          syncProgressRef(currentIndex, progressRef.current.selectedChoices, next);
+                          persistProgress(currentIndex, progressRef.current.selectedChoices, next);
+                          return next;
+                        });
+                      }}
+                    />
+                  </>
+                )}
                 <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
                 {!isBoardExamMode ? (
                   <p className="text-xs text-foreground/50">You can finish anytime. Score is based on answered questions.</p>
@@ -1721,7 +1748,7 @@ export default function ChallengeQuizPage() {
                 variant="outline"
                 className="w-28 shrink-0 sm:w-auto"
                 onClick={() => {
-                  const nextIndex = Math.max(0, currentIndex - 1);
+                  const nextIndex = Math.max(0, (currentMatchingGroup?.startIndex ?? currentIndex) - 1);
                   syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices);
                   setCurrentIndex(nextIndex);
                   persistProgress(nextIndex, selectedChoices, selectedMultiChoices);
@@ -1731,17 +1758,17 @@ export default function ChallengeQuizPage() {
                 Previous
               </Button>
               <div className="flex gap-2">
-                {currentIndex < totalQuestions - 1 && !boardExamTimerExpired ? (
+                {(currentMatchingGroup?.endIndex ?? currentIndex) < totalQuestions - 1 && !boardExamTimerExpired ? (
                   <Button
                     type="button"
                     className="flex-1 sm:w-auto sm:flex-none"
                     onClick={() => {
-                      const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
+                      const nextIndex = Math.min(totalQuestions - 1, currentMatchingGroup ? currentMatchingGroup.endIndex + 1 : currentIndex + 1);
                       syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices);
                       setCurrentIndex(nextIndex);
                       persistProgress(nextIndex, selectedChoices, selectedMultiChoices);
                     }}
-                    disabled={quizInteractionDisabled}
+                    disabled={quizInteractionDisabled || Boolean(currentMatchingGroup && !currentMatchingGroupAnswered)}
                   >
                     Next
                   </Button>
