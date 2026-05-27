@@ -1587,6 +1587,26 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             );
         } catch (Exception ex) {
             log.warn(PARALLEL_LONG_EXAM_FALLBACK_LOG, ex.getMessage());
+            boolean firstSucceeded = firstBatch.isDone() && !firstBatch.isCompletedExceptionally();
+            boolean secondSucceeded = secondBatch.isDone() && !secondBatch.isCompletedExceptionally();
+            if (firstSucceeded || secondSucceeded) {
+                try {
+                    List<QuizItem> salvaged = firstSucceeded ? firstBatch.getNow(List.of()) : secondBatch.getNow(List.of());
+                    int remaining = totalQuestions - salvaged.size();
+                    if (remaining <= 0) {
+                        return salvaged.subList(0, Math.min(salvaged.size(), totalQuestions));
+                    }
+                    List<String> extendedDisallowed = new ArrayList<>(sanitizeQuestionList(disallowedQuestions));
+                    salvaged.stream().map(QuizItem::question).filter(Objects::nonNull).forEach(extendedDisallowed::add);
+                    List<QuizItem> fallback = generateLongExam(studyPackTitle, studyPackSummary, keyConcepts, extendedDisallowed, remaining, difficulty, context);
+                    List<QuizItem> uniqueFallback = QuizDeduplicationUtils.uniqueQuestions(fallback, QuizDeduplicationUtils.toNormalizedQuestionSet(salvaged));
+                    List<QuizItem> merged = new ArrayList<>(salvaged);
+                    merged.addAll(uniqueFallback);
+                    return merged.subList(0, Math.min(merged.size(), totalQuestions));
+                } catch (Exception salvageEx) {
+                    log.warn("Parallel long exam batch salvage failed, retrying full sequential: {}", salvageEx.getMessage());
+                }
+            }
             return generateLongExam(
                     studyPackTitle,
                     studyPackSummary,
