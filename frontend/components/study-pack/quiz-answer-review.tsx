@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import type { QuizItem } from "@/lib/api";
 import {
@@ -19,6 +20,7 @@ import {
   isQuizSelectionCorrect,
   resolveMultiSelectCorrectIndices,
   resolveQuizCorrectIndex,
+  resolveQuizItemGroupAt,
 } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
 
@@ -103,6 +105,7 @@ export function QuizAnswerReview({
 
   const effectiveReviewIndex = Math.min(currentReviewIndex, Math.max(visibleItems.length - 1, 0));
   const currentItem = visibleItems[effectiveReviewIndex] ?? null;
+  const currentMatchingGroup = currentItem ? resolveQuizItemGroupAt(quiz, currentItem.originalIndex) : null;
 
   if (reviewItems.length === 0) {
     return null;
@@ -300,16 +303,27 @@ export function QuizAnswerReview({
             </div>
           </div>
 
-          <QuizChoiceList
-            questionKey={`${currentItem.item.question}-${currentItem.originalIndex}`}
-            choices={currentItem.item.choices}
-            correctIndex={currentItem.correctIndex}
-            correctIndices={currentItem.correctIndices}
-            questionFormat={currentItem.item.questionFormat}
-            selectedChoiceIndex={currentItem.selectedChoiceIndex}
-            selectedMultiChoiceIndices={currentItem.selectedMultiChoiceIndices}
-            revealAnswer
-          />
+          {currentMatchingGroup ? (
+            <QuizMatchingGroup
+              items={currentMatchingGroup.items}
+              groupStartIndex={currentMatchingGroup.startIndex}
+              selectedChoices={selectedChoices}
+              revealAnswer
+              disabled
+              onSelectChoice={() => undefined}
+            />
+          ) : (
+            <QuizChoiceList
+              questionKey={`${currentItem.item.question}-${currentItem.originalIndex}`}
+              choices={currentItem.item.choices}
+              correctIndex={currentItem.correctIndex}
+              correctIndices={currentItem.correctIndices}
+              questionFormat={currentItem.item.questionFormat}
+              selectedChoiceIndex={currentItem.selectedChoiceIndex}
+              selectedMultiChoiceIndices={currentItem.selectedMultiChoiceIndices}
+              revealAnswer
+            />
+          )}
 
           {!currentHasSelectedAnswer ? (
             <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground/80">

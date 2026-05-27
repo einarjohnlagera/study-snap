@@ -24,6 +24,7 @@ public class QuizSessionStateUtils {
     private static final String QUESTION_FORMAT_KEY = "questionFormat";
     private static final String QUESTION_TYPE_KEY = "questionType";
     private static final String WORKING_SOLUTION_KEY = "workingSolution";
+    private static final String QUESTION_GROUP_KEY = "questionGroup";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
     private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
     private static final String SUB_MODE_KEY = "subMode";
@@ -199,6 +200,7 @@ public class QuizSessionStateUtils {
             Object questionFormatRaw = rawMap.get(QUESTION_FORMAT_KEY);
             Object questionTypeRaw = rawMap.get(QUESTION_TYPE_KEY);
             Object workingSolutionRaw = rawMap.get(WORKING_SOLUTION_KEY);
+            Object questionGroupRaw = rawMap.get(QUESTION_GROUP_KEY);
             Object choicesRaw = rawMap.get(CHOICES_KEY);
             if (!(questionRaw instanceof String question)) {
                 continue;
@@ -224,7 +226,8 @@ public class QuizSessionStateUtils {
             String questionFormat = questionFormatRaw instanceof String value ? value : null;
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices));
+            String questionGroup = questionGroupRaw instanceof String value ? value : null;
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup));
         }
 
         return quiz;
@@ -376,6 +379,7 @@ public class QuizSessionStateUtils {
             quizItem.put(QUESTION_FORMAT_KEY, item.questionFormat());
             quizItem.put(QUESTION_TYPE_KEY, item.questionType());
             quizItem.put(WORKING_SOLUTION_KEY, item.workingSolution());
+            quizItem.put(QUESTION_GROUP_KEY, item.questionGroup());
             serialized.add(quizItem);
         }
         return serialized;

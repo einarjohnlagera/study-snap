@@ -10,6 +10,54 @@ export type QuizDisplayChoice = {
   text: string;
 };
 
+export type GroupedQuizItem = QuizItem | QuizItem[];
+export type QuizItemGroup = {
+  items: QuizItem[];
+  startIndex: number;
+  endIndex: number;
+};
+
+export function groupQuizItems(quiz: QuizItem[]): GroupedQuizItem[] {
+  const groupedItems: GroupedQuizItem[] = [];
+  let index = 0;
+  while (index < quiz.length) {
+    const item = quiz[index];
+    const questionGroup = resolveMatchingQuestionGroup(item);
+    if (questionGroup) {
+      const groupItems: QuizItem[] = [item];
+      let nextIndex = index + 1;
+      while (nextIndex < quiz.length && resolveMatchingQuestionGroup(quiz[nextIndex]) === questionGroup) {
+        groupItems.push(quiz[nextIndex]);
+        nextIndex += 1;
+      }
+      if (groupItems.length > 1) {
+        groupedItems.push(groupItems);
+        index = nextIndex;
+        continue;
+      }
+    }
+    groupedItems.push(item);
+    index += 1;
+  }
+  return groupedItems;
+}
+
+export function resolveQuizItemGroupAt(quiz: QuizItem[], questionIndex: number): QuizItemGroup | null {
+  if (!Number.isInteger(questionIndex) || questionIndex < 0 || questionIndex >= quiz.length) {
+    return null;
+  }
+  let startIndex = 0;
+  for (const groupedItem of groupQuizItems(quiz)) {
+    const length = Array.isArray(groupedItem) ? groupedItem.length : 1;
+    const endIndex = startIndex + length - 1;
+    if (questionIndex >= startIndex && questionIndex <= endIndex) {
+      return Array.isArray(groupedItem) ? { items: groupedItem, startIndex, endIndex } : null;
+    }
+    startIndex += length;
+  }
+  return null;
+}
+
 export function resolveQuizCorrectIndex(item: QuizItem): number {
   if (Number.isInteger(item.correctIndex) && item.correctIndex >= 0 && item.correctIndex < item.choices.length) {
     return item.correctIndex;
@@ -206,6 +254,14 @@ function resolveChoiceLetterIndex(value: string, choiceCount: number): number | 
   }
   const index = normalizedValue.toUpperCase().charCodeAt(0) - 65;
   return index >= 0 && index < choiceCount ? index : null;
+}
+
+function resolveMatchingQuestionGroup(item: QuizItem | undefined): string | null {
+  if (!item || item.questionFormat !== "MATCHING" || typeof item.questionGroup !== "string") {
+    return null;
+  }
+  const normalized = item.questionGroup.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function buildDeterministicChoiceOrder(question: string, choices: string[]): number[] {

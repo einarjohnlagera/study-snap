@@ -24,6 +24,7 @@ public final class QuizItem {
     private final String questionFormat;
     private final String questionType;
     private final String workingSolution;
+    private final String questionGroup;
 
     public QuizItem(
             String question,
@@ -95,6 +96,22 @@ public final class QuizItem {
             String workingSolution,
             List<Integer> correctIndices
     ) {
+        this(question, choices, correctIndex, concept, explanation, legacyAnswer, questionFormat, questionType, workingSolution, correctIndices, null);
+    }
+
+    public QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices,
+            String questionGroup
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
@@ -104,6 +121,7 @@ public final class QuizItem {
         this.questionFormat = questionFormat;
         this.questionType = questionType;
         this.workingSolution = workingSolution;
+        this.questionGroup = normalizeQuestionGroup(questionGroup);
     }
 
     @JsonCreator
@@ -119,7 +137,8 @@ public final class QuizItem {
             @JsonProperty("questionFormat") String questionFormat,
             @JsonProperty("questionType") String questionType,
             @JsonProperty("workingSolution") String workingSolution,
-            @JsonProperty("correctIndices") List<Integer> correctIndices
+            @JsonProperty("correctIndices") List<Integer> correctIndices,
+            @JsonProperty("questionGroup") String questionGroup
     ) {
         this(
                 question,
@@ -131,7 +150,8 @@ public final class QuizItem {
                 questionFormat,
                 questionType,
                 workingSolution,
-                correctIndices
+                correctIndices,
+                questionGroup
         );
     }
 
@@ -177,6 +197,10 @@ public final class QuizItem {
 
     public String workingSolution() {
         return workingSolution;
+    }
+
+    public String questionGroup() {
+        return questionGroup;
     }
 
     private static Integer resolveCorrectIndex(
@@ -231,6 +255,13 @@ public final class QuizItem {
         return first >= 0 && first < choiceCount ? first : null;
     }
 
+    private static String normalizeQuestionGroup(String questionGroup) {
+        if (questionGroup == null || questionGroup.isBlank()) {
+            return null;
+        }
+        return questionGroup.trim();
+    }
+
     private static Integer answerLetterIndex(String answer, int choiceCount) {
         if (answer == null || choiceCount <= 0) {
             return null;
@@ -272,12 +303,13 @@ public final class QuizItem {
                 && Objects.equals(explanation, quizItem.explanation)
                 && Objects.equals(questionFormat, quizItem.questionFormat)
                 && Objects.equals(questionType, quizItem.questionType)
-                && Objects.equals(workingSolution, quizItem.workingSolution);
+                && Objects.equals(workingSolution, quizItem.workingSolution)
+                && Objects.equals(questionGroup, quizItem.questionGroup);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution);
+        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup);
     }
 
     @Override
@@ -292,6 +324,7 @@ public final class QuizItem {
                 + ", questionFormat='" + questionFormat + '\''
                 + ", questionType='" + questionType + '\''
                 + ", workingSolution='" + workingSolution + '\''
+                + ", questionGroup='" + questionGroup + '\''
                 + '}';
     }
 }

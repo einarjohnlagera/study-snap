@@ -1,5 +1,6 @@
 import {
   getDisplayedQuizChoices,
+  groupQuizItems,
   isMultiSelectSelectionCorrect,
   resolveQuizCorrectIndex,
   resolveMultiSelectCorrectIndices,
@@ -161,6 +162,50 @@ describe("quiz helpers", () => {
     ];
 
     expect(toSelectedMultiChoiceIndicesRecord({ 0: ["C. Turn blue litmus red", "A"] }, quiz)).toEqual({ 0: [0, 2] });
+  });
+
+  it("groups only consecutive matching items with the same question group", () => {
+    const sharedChoices = ["Bernoulli", "Pascal", "Archimedes", "Continuity"];
+    const quiz = [
+      {
+        question: "Pressure in a confined fluid.",
+        choices: sharedChoices,
+        correctIndex: 1,
+        questionFormat: "MATCHING" as const,
+        questionGroup: "group-1",
+        explanation: "Pascal's Law applies.",
+      },
+      {
+        question: "Buoyant force equals displaced fluid weight.",
+        choices: sharedChoices,
+        correctIndex: 2,
+        questionFormat: "MATCHING" as const,
+        questionGroup: "group-1",
+        explanation: "Archimedes' Principle applies.",
+      },
+      {
+        question: "Standalone recall.",
+        choices: ["A", "B", "C", "D"],
+        correctIndex: 0,
+        explanation: "A is correct.",
+      },
+      {
+        question: "Same group but separated.",
+        choices: sharedChoices,
+        correctIndex: 0,
+        questionFormat: "MATCHING" as const,
+        questionGroup: "group-1",
+        explanation: "Not grouped when separated.",
+      },
+    ];
+
+    const grouped = groupQuizItems(quiz);
+
+    expect(grouped).toHaveLength(3);
+    expect(Array.isArray(grouped[0])).toBe(true);
+    expect(grouped[0]).toHaveLength(2);
+    expect(Array.isArray(grouped[1])).toBe(false);
+    expect(Array.isArray(grouped[2])).toBe(false);
   });
 
   it("keeps standard MCQ deterministic shuffle unchanged", () => {

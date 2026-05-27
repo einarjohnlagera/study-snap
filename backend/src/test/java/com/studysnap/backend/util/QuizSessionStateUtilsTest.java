@@ -23,7 +23,8 @@ class QuizSessionStateUtilsTest {
                         "MCQ",
                         "COMPUTATIONAL",
                         "P = IV = 5 × 2 = 10 W",
-                        List.of(0, 2)
+                        List.of(0, 2),
+                        "group-1"
                 )
         );
 
@@ -43,6 +44,7 @@ class QuizSessionStateUtilsTest {
         assertThat(restored.getFirst().questionType()).isEqualTo("COMPUTATIONAL");
         assertThat(restored.getFirst().workingSolution()).isEqualTo("P = IV = 5 × 2 = 10 W");
         assertThat(restored.getFirst().correctIndices()).containsExactly(0, 2);
+        assertThat(restored.getFirst().questionGroup()).isEqualTo("group-1");
     }
 
     @Test

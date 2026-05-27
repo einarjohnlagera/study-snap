@@ -218,7 +218,8 @@ public class ShareService {
                     item.questionFormat(),
                     item.questionType(),
                     item.workingSolution(),
-                    item.correctIndices()
+                    item.correctIndices(),
+                    item.questionGroup()
             );
         }
         return new QuizItem(
@@ -231,7 +232,8 @@ public class ShareService {
                 item.questionFormat(),
                 item.questionType(),
                 item.workingSolution(),
-                item.correctIndices()
+                item.correctIndices(),
+                item.questionGroup()
         );
     }
 

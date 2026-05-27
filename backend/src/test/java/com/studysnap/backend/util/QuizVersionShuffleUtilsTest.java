@@ -59,6 +59,52 @@ class QuizVersionShuffleUtilsTest {
         assertThat(shuffled.answer()).isIn("Correct A", "Correct B");
     }
 
+    @Test
+    void shuffleQuestionsAndChoices_appliesSameChoicePermutationToMatchingGroup() {
+        List<String> choices = List.of(
+                "Bernoulli's Principle",
+                "Pascal's Law",
+                "Archimedes' Principle",
+                "Continuity Equation"
+        );
+        List<QuizItem> questions = List.of(
+                new QuizItem(
+                        "Pressure applied to a confined fluid is transmitted equally.",
+                        choices,
+                        1,
+                        "Pascal's Law",
+                        "Pascal's Law describes pressure transmission in confined fluids.",
+                        null,
+                        "MATCHING",
+                        null,
+                        null,
+                        null,
+                        "group-1"
+                ),
+                new QuizItem(
+                        "Buoyant force equals the weight of fluid displaced.",
+                        choices,
+                        2,
+                        "Archimedes",
+                        "Archimedes' Principle describes buoyant force.",
+                        null,
+                        "MATCHING",
+                        null,
+                        null,
+                        null,
+                        "group-1"
+                )
+        );
+
+        List<QuizItem> shuffled = QuizVersionShuffleUtils.shuffleQuestionsAndChoices(questions, "B", "quiz-4");
+
+        assertThat(shuffled).hasSize(2);
+        assertThat(shuffled.get(0).choices()).containsExactlyElementsOf(shuffled.get(1).choices());
+        assertThat(shuffled.get(0).choices().get(shuffled.get(0).correctIndex())).isEqualTo("Pascal's Law");
+        assertThat(shuffled.get(1).choices().get(shuffled.get(1).correctIndex())).isEqualTo("Archimedes' Principle");
+        assertThat(shuffled).extracting(QuizItem::questionGroup).containsOnly("group-1");
+    }
+
     private List<QuizItem> buildQuestions() {
         return IntStream.rangeClosed(1, 8)
                 .mapToObj(index -> new QuizItem(
