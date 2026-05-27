@@ -59,7 +59,8 @@ public final class QuizVersionShuffleUtils {
                     null,
                     question.questionFormat(),
                     question.questionType(),
-                    question.workingSolution()
+                    question.workingSolution(),
+                    question.correctIndices()
             );
         }
         List<Integer> choiceOrder = IntStream.range(0, choices.size())
@@ -71,12 +72,16 @@ public final class QuizVersionShuffleUtils {
         );
 
         List<String> shuffledChoices = new ArrayList<>(choiceOrder.size());
+        List<Integer> shuffledCorrectIndices = new ArrayList<>();
         Integer shuffledCorrectIndex = null;
         for (int shuffledIndex = 0; shuffledIndex < choiceOrder.size(); shuffledIndex++) {
             int originalIndex = choiceOrder.get(shuffledIndex);
             shuffledChoices.add(choices.get(originalIndex));
             if (Objects.equals(question.correctIndex(), originalIndex)) {
                 shuffledCorrectIndex = shuffledIndex;
+            }
+            if (question.correctIndices() != null && question.correctIndices().contains(originalIndex)) {
+                shuffledCorrectIndices.add(shuffledIndex);
             }
         }
         return new QuizItem(
@@ -88,7 +93,8 @@ public final class QuizVersionShuffleUtils {
                 null,
                 question.questionFormat(),
                 question.questionType(),
-                question.workingSolution()
+                question.workingSolution(),
+                shuffledCorrectIndices
         );
     }
 

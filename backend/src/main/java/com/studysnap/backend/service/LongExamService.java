@@ -35,6 +35,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
@@ -320,11 +321,19 @@ public class LongExamService {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         int currentQuestionIndex = Math.clamp(request.questionIndex(), 0, Math.max(0, quiz.size() - 1));
         session.setCurrentQuestionIndex(currentQuestionIndex);
-        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(
+        Map<String, Object> nextSessionState = QuizSessionStateUtils.withSelectedChoice(
                 session.getSessionState(),
                 request.questionIndex(),
                 request.selectedChoiceIndex()
-        ));
+        );
+        if (request.selectedMultiChoiceIndices() != null) {
+            nextSessionState = QuizSessionStateUtils.withSelectedMultiChoice(
+                    nextSessionState,
+                    request.questionIndex(),
+                    request.selectedMultiChoiceIndices()
+            );
+        }
+        session.setSessionState(nextSessionState);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
         return buildSessionResponse(saved);
     }
@@ -364,7 +373,8 @@ public class LongExamService {
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
-        LongExamStatistics statistics = computeStatistics(quiz, selectedChoices);
+        Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
+        LongExamStatistics statistics = computeStatistics(quiz, selectedChoices, selectedMultiChoices);
         BigDecimal scorePercentage = BigDecimal.valueOf(statistics.scorePercentage())
                 .setScale(2, RoundingMode.HALF_UP);
 
@@ -479,6 +489,7 @@ public class LongExamService {
                 session.getStatus().name(),
                 quiz,
                 QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz),
+                QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz),
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
                 totalQuestions,
                 extractDifficulty(session.getSessionState()),
@@ -543,7 +554,11 @@ public class LongExamService {
         session.setCompletedAt(null);
     }
 
-    private LongExamStatistics computeStatistics(List<QuizItem> quiz, Map<Integer, Integer> selectedChoices) {
+    private LongExamStatistics computeStatistics(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
         Map<String, DomainCounter> counters = new LinkedHashMap<>();
         int correctAnswers = 0;
         for (int index = 0; index < quiz.size(); index++) {
@@ -552,14 +567,13 @@ public class LongExamService {
             DomainCounter counter = counters.computeIfAbsent(domain, unused -> new DomainCounter());
             counter.totalQuestions += 1;
 
-            Integer selectedChoiceIndex = selectedChoices.get(index);
-            if (item != null && selectedChoiceIndex != null && selectedChoiceIndex.equals(item.correctIndex())) {
+            if (QuizSessionReviewUtils.isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices)) {
                 counter.correctAnswers += 1;
                 correctAnswers += 1;
             }
         }
 
-        int answeredQuestions = selectedChoices.size();
+        int answeredQuestions = countAnsweredQuestions(selectedChoices, selectedMultiChoices);
         int scorePercentage = answeredQuestions <= 0
                 ? 0
                 : calculateAccuracy(correctAnswers, answeredQuestions);
@@ -588,6 +602,23 @@ public class LongExamService {
                 performanceSummary,
                 suggestedNextStep
         );
+    }
+
+    private int countAnsweredQuestions(
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        Set<Integer> answeredQuestionIndexes = new LinkedHashSet<>();
+        if (selectedChoices != null) {
+            answeredQuestionIndexes.addAll(selectedChoices.keySet());
+        }
+        if (selectedMultiChoices != null) {
+            selectedMultiChoices.entrySet().stream()
+                    .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
+                    .map(Map.Entry::getKey)
+                    .forEach(answeredQuestionIndexes::add);
+        }
+        return answeredQuestionIndexes.size();
     }
 
     private Map<String, Object> buildMasteryReportMetadata(LongExamStatistics statistics) {

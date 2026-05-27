@@ -21,6 +21,7 @@ public record QuizSessionReviewResponse(
         List<ChallengeQuizConceptStatResponse> conceptBreakdown,
         List<QuizItem> quiz,
         Map<Integer, Integer> selectedChoices,
+        Map<Integer, List<Integer>> selectedMultiChoices,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt
 ) {

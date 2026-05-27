@@ -16,6 +16,9 @@ RULES:
 - Standard MCQ questions must have a fully independent set of 4 answer choices. No two MCQ questions in this quiz may share the same set of choices.
 - Standard MCQ answers must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.
+- You may include 1 to 2 MULTI_SELECT questions when a concept has multiple defining attributes, clauses, properties, or category members.
+- For MULTI_SELECT questions, set "questionFormat" to "MULTI_SELECT", keep exactly 4 choices, set "correctIndices" to 2 or 3 zero-based correct choice indexes, and set "answer" to the letter for the first correct index as a legacy fallback.
+- Do not use MULTI_SELECT when all 4 choices are correct.
 - Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%).
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.
@@ -28,6 +31,8 @@ RULES:
         "question": "...",
         "choices": ["...", "...", "...", "..."],
         "answer": "A",
+        "questionFormat": "MCQ",
+        "correctIndices": null,
         "explanation": "...",
         "concept": "..."
       }

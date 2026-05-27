@@ -60,6 +60,18 @@ class QuizValidationUtilsTest {
     }
 
     @Test
+    void hasInvalidCorrectIndices_validatesMultiSelectCorrectIndexCountAndRange() {
+        List<String> choices = List.of("A", "B", "C", "D");
+
+        assertThat(QuizValidationUtils.hasInvalidCorrectIndices(List.of(0), choices, "MULTI_SELECT")).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidCorrectIndices(List.of(0, 2), choices, "MULTI_SELECT")).isFalse();
+        assertThat(QuizValidationUtils.hasInvalidCorrectIndices(List.of(0, 1, 2), choices, "MULTI_SELECT")).isFalse();
+        assertThat(QuizValidationUtils.hasInvalidCorrectIndices(List.of(0, 4), choices, "MULTI_SELECT")).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidCorrectIndices(List.of(0, 0), choices, "MULTI_SELECT")).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidCorrectIndices(null, choices, "MCQ")).isFalse();
+    }
+
+    @Test
     void randomizeChoices_isDeterministicPerQuestionSeed() {
         List<String> original = List.of("A", "B", "C", "D");
 

@@ -882,6 +882,9 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
   - `answer` must be `A` / `B` / `C` / `D`
   - `explanation` is required
   - `concept` is required
+- `MULTI_SELECT` is a plan-agnostic quiz format for Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, and Teacher Quiz only; do not add it to Board Exam prompts or Board Exam UX.
+- Multi-select questions must keep exactly 4 choices, use `correctIndices` with 2-3 correct zero-based indexes, and score all-or-nothing. Keep `correctIndex` populated with `correctIndices[0]` as a legacy fallback.
+- Quiz session state must store multi-select answers under `selectedMultiChoices` through `QuizSessionStateUtils`; do not manipulate the session JSON directly in service code.
 - Raw LLM quiz output may use answer letters, but canonical stored/shared quiz data must normalize to:
   - `question`
   - `choices`

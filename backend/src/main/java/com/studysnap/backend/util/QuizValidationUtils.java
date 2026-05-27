@@ -15,6 +15,9 @@ public class QuizValidationUtils {
     private static final int MCQ_CHOICE_COUNT = 4;
     private static final int TRUE_FALSE_CHOICE_COUNT = 2;
     private static final String TRUE_FALSE_FORMAT = "TRUE_FALSE";
+    private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
+    private static final int MIN_MULTI_SELECT_CORRECT_INDICES = 2;
+    private static final int MAX_MULTI_SELECT_CORRECT_INDICES = 3;
     private static final Pattern LEADING_CHOICE_LABEL_PATTERN = Pattern.compile("^\\s*[A-Da-d]\\s*[.)]\\s*");
 
     public boolean hasInvalidChoices(List<String> choices, String questionFormat) {
@@ -31,6 +34,25 @@ public class QuizValidationUtils {
                 return true;
             }
             if (!normalizedChoices.add(StringNormalizationUtils.normalizeForChoiceDuplicateCheck(sanitizedChoice))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasInvalidCorrectIndices(List<Integer> correctIndices, List<String> choices, String questionFormat) {
+        if (!MULTI_SELECT_FORMAT.equals(questionFormat)) {
+            return false;
+        }
+        if (choices == null || choices.size() != MCQ_CHOICE_COUNT
+                || correctIndices == null
+                || correctIndices.size() < MIN_MULTI_SELECT_CORRECT_INDICES
+                || correctIndices.size() > MAX_MULTI_SELECT_CORRECT_INDICES) {
+            return true;
+        }
+        Set<Integer> uniqueIndices = new HashSet<>();
+        for (Integer index : correctIndices) {
+            if (index == null || index < 0 || index >= choices.size() || !uniqueIndices.add(index)) {
                 return true;
             }
         }

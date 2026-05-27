@@ -14,6 +14,12 @@ export function resolveQuizCorrectIndex(item: QuizItem): number {
   if (Number.isInteger(item.correctIndex) && item.correctIndex >= 0 && item.correctIndex < item.choices.length) {
     return item.correctIndex;
   }
+  if (item.questionFormat === "MULTI_SELECT") {
+    const firstCorrectIndex = resolveMultiSelectCorrectIndices(item)[0];
+    if (Number.isInteger(firstCorrectIndex)) {
+      return firstCorrectIndex;
+    }
+  }
   const legacyAnswerIndex = item.answerIndex;
   if (
     typeof legacyAnswerIndex === "number"
@@ -51,7 +57,30 @@ export function resolveQuizCorrectAnswer(item: QuizItem): string | null {
   return correctIndex >= 0 && correctIndex < item.choices.length ? item.choices[correctIndex] : null;
 }
 
-export function isQuizSelectionCorrect(item: QuizItem, selectedChoiceIndex: number | null | undefined): boolean {
+export function resolveMultiSelectCorrectIndices(item: QuizItem): number[] {
+  if (!Array.isArray(item.correctIndices) || item.correctIndices.length === 0) {
+    return [];
+  }
+  return normalizeChoiceIndexSet(item.correctIndices, item.choices.length);
+}
+
+export function isMultiSelectSelectionCorrect(item: QuizItem, selectedIndices: number[]): boolean {
+  const correctIndices = resolveMultiSelectCorrectIndices(item);
+  const selected = normalizeChoiceIndexSet(selectedIndices, item.choices.length);
+  return selected.length > 0
+    && selected.length === correctIndices.length
+    && selected.every((index, position) => index === correctIndices[position]);
+}
+
+export function isQuizSelectionCorrect(
+  item: QuizItem,
+  selectedChoiceIndex: number | number[] | null | undefined,
+): boolean {
+  if (item.questionFormat === "MULTI_SELECT") {
+    return Array.isArray(selectedChoiceIndex)
+      ? isMultiSelectSelectionCorrect(item, selectedChoiceIndex)
+      : false;
+  }
   return selectedChoiceIndex != null && selectedChoiceIndex === resolveQuizCorrectIndex(item);
 }
 
@@ -81,6 +110,38 @@ export function serializeSelectedChoiceIndexRecord(value: Record<number, number>
     Object.entries(value)
       .filter(([, selectedChoiceIndex]) => Number.isInteger(selectedChoiceIndex) && selectedChoiceIndex >= 0)
       .map(([questionIndex, selectedChoiceIndex]) => [String(questionIndex), selectedChoiceIndex]),
+  );
+}
+
+export function toSelectedMultiChoiceIndicesRecord(value: unknown, quiz: QuizItem[]): Record<number, number[]> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const selectedChoices: Record<number, number[]> = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const questionIndex = Number(rawKey);
+    if (!Number.isInteger(questionIndex) || questionIndex < 0 || questionIndex >= quiz.length) {
+      continue;
+    }
+
+    const selectedIndexes = resolveSelectedChoiceIndexes(rawValue, quiz[questionIndex]);
+    if (selectedIndexes.length > 0) {
+      selectedChoices[questionIndex] = selectedIndexes;
+    }
+  }
+
+  return selectedChoices;
+}
+
+export function serializeSelectedMultiChoiceIndicesRecord(value: Record<number, number[]>): Record<string, number[]> {
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([questionIndex, selectedChoiceIndices]) => [
+        String(questionIndex),
+        normalizeChoiceIndexSet(selectedChoiceIndices, Number.POSITIVE_INFINITY),
+      ])
+      .filter(([, selectedChoiceIndices]) => Array.isArray(selectedChoiceIndices) && selectedChoiceIndices.length > 0),
   );
 }
 
@@ -120,6 +181,22 @@ function resolveSelectedChoiceIndex(rawValue: unknown, item: QuizItem): number |
     return resolveChoiceLetterIndex(normalizedSelectedChoice || rawValue, item.choices.length);
   }
   return null;
+}
+
+function resolveSelectedChoiceIndexes(rawValue: unknown, item: QuizItem): number[] {
+  if (!Array.isArray(rawValue)) {
+    return [];
+  }
+  const indexes = rawValue
+    .map((value) => resolveSelectedChoiceIndex(value, item))
+    .filter((value): value is number => value !== null);
+  return normalizeChoiceIndexSet(indexes, item.choices.length);
+}
+
+function normalizeChoiceIndexSet(values: number[], choiceCount: number): number[] {
+  return Array.from(new Set(values))
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < choiceCount)
+    .sort((a, b) => a - b);
 }
 
 function resolveChoiceLetterIndex(value: string, choiceCount: number): number | null {

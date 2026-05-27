@@ -52,8 +52,11 @@ Tags
 - avoid punctuation-heavy labels and sentence-like tags
 
 Key Concepts
-- exactly 8 to 10 items
-- short phrases only
+- use the field name "keyConcepts" exactly; do not use "key_concepts"
+- minimum 5 items, maximum 10 items
+- each item must be a plain text string, not an object or nested value
+- each item must be 1 to 4 words
+- do not wrap individual key concept strings in extra quotes inside the value
 
 Quiz
 - exactly {QUIZ_COUNT} questions
@@ -61,6 +64,9 @@ Quiz
 - standard MCQ questions must have 4 choices
 - standard MCQ answers must be exactly one of: A, B, C, D
 - exactly one choice must be correct
+- You may include 1 to 2 MULTI_SELECT questions when a concept has multiple defining attributes, clauses, properties, or category members.
+- For MULTI_SELECT questions, set "questionFormat" to "MULTI_SELECT", keep exactly 4 choices, set "correctIndices" to 2 or 3 zero-based correct choice indexes, and set "answer" to the letter for the first correct index as a legacy fallback.
+- Do not use MULTI_SELECT when all 4 choices are correct.
 - each question should target a distinct concept when possible
 - vary question framing — do not start every question with "Which of the following"; distribute across positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%)
 - concept must be 1 to 3 words — never a sentence, never more than 3 words, never null

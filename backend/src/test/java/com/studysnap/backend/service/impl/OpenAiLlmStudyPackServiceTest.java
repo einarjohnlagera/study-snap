@@ -200,6 +200,27 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateStudyPack_acceptsSnakeCaseKeyConceptsAlias() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ArrayNode keyConcepts = (ArrayNode) payload.remove("keyConcepts");
+        payload.set("key_concepts", keyConcepts);
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Biology",
+                        "Biology",
+                        List.of("cells", "respiration")
+                )
+        );
+
+        assertThat(content.keyConcepts()).contains("Glycolysis");
+    }
+
+    @Test
     void generateStudyPack_includesLearnerAndSubjectSpecificGuidanceInPrompt() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));

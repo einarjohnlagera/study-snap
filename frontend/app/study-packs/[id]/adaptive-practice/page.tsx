@@ -61,6 +61,7 @@ export default function AdaptivePracticePage() {
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
+  const [selectedMultiChoices, setSelectedMultiChoices] = useState<Record<number, number[]>>({});
   const [completionTracked, setCompletionTracked] = useState(false);
   const [premiumLocked, setPremiumLocked] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
@@ -107,6 +108,7 @@ export default function AdaptivePracticePage() {
     setAdaptiveQuiz(response);
     setCurrentIndex(0);
     setSelectedChoices({});
+    setSelectedMultiChoices({});
     setCompletionTracked(false);
     setShowAnswerReview(false);
     if (response.status === "IN_PROGRESS" && response.quiz.length > 0) {
@@ -231,13 +233,16 @@ export default function AdaptivePracticePage() {
   const hasQuestions = quiz.length > 0;
   const currentQuestion = hasQuestions ? quiz[currentIndex] : null;
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
-  const hasAnsweredCurrent = selectedChoiceIndex !== null;
+  const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
+  const currentQuestionIsMultiSelect = currentQuestion?.questionFormat === "MULTI_SELECT";
+  const hasAnsweredCurrent = currentQuestionIsMultiSelect ? selectedMultiChoiceIndices.length > 0 : selectedChoiceIndex !== null;
   const isComplete = hasQuestions && currentIndex >= quiz.length;
   const score = useMemo(() => {
     return quiz.reduce((count, question, index) => {
-      return isQuizSelectionCorrect(question, selectedChoices[index]) ? count + 1 : count;
+      const selected = question.questionFormat === "MULTI_SELECT" ? selectedMultiChoices[index] : selectedChoices[index];
+      return isQuizSelectionCorrect(question, selected) ? count + 1 : count;
     }, 0);
-  }, [quiz, selectedChoices]);
+  }, [quiz, selectedChoices, selectedMultiChoices]);
   const scorePercentage = useMemo(() => {
     if (quiz.length === 0) {
       return 0;
@@ -366,6 +371,16 @@ export default function AdaptivePracticePage() {
     setSelectedChoices((prev) => ({
       ...prev,
       [currentIndex]: choiceIndex,
+    }));
+  };
+
+  const handleSelectMultiChoices = (choiceIndices: number[]) => {
+    if (!currentQuestion || !currentQuestionIsMultiSelect) {
+      return;
+    }
+    setSelectedMultiChoices((prev) => ({
+      ...prev,
+      [currentIndex]: choiceIndices,
     }));
   };
 
@@ -573,7 +588,13 @@ export default function AdaptivePracticePage() {
             <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
           {showAnswerReview ? (
-            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" planType={currentPlan} />
+            <QuizAnswerReview
+              quiz={quiz}
+              selectedChoices={selectedChoices}
+              selectedMultiChoices={selectedMultiChoices}
+              className="mt-2"
+              planType={currentPlan}
+            />
           ) : null}
           <QuizFeedbackPanel
             quizLabel="Adaptive Practice"
@@ -610,13 +631,17 @@ export default function AdaptivePracticePage() {
                 questionKey={currentQuestion.question}
                 choices={currentQuestion.choices}
                 correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                correctIndices={currentQuestion.correctIndices}
+                questionFormat={currentQuestion.questionFormat}
                 selectedChoiceIndex={selectedChoiceIndex}
-                revealAnswer={hasAnsweredCurrent}
+                selectedMultiChoiceIndices={selectedMultiChoiceIndices}
+                revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
                 onSelectChoice={handleSelectChoice}
+                onSelectMultiChoices={handleSelectMultiChoices}
               />
             ) : null}
 
-            {hasAnsweredCurrent && currentQuestion ? (
+            {hasAnsweredCurrent && currentQuestion && !currentQuestionIsMultiSelect ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}

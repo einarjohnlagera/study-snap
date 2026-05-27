@@ -15,6 +15,7 @@ public class QuizSessionStateUtils {
     private static final String QUESTION_KEY = "question";
     private static final String CHOICES_KEY = "choices";
     private static final String CORRECT_INDEX_KEY = "correctIndex";
+    private static final String CORRECT_INDICES_KEY = "correctIndices";
     private static final String ANSWER_INDEX_KEY = "answerIndex";
     private static final String CORRECT_ANSWER_INDEX_KEY = "correctAnswerIndex";
     private static final String ANSWER_KEY = "answer";
@@ -24,6 +25,7 @@ public class QuizSessionStateUtils {
     private static final String QUESTION_TYPE_KEY = "questionType";
     private static final String WORKING_SOLUTION_KEY = "workingSolution";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
+    private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
     private static final String SUB_MODE_KEY = "subMode";
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
@@ -67,6 +69,39 @@ public class QuizSessionStateUtils {
         }
         selectedChoices.put(String.valueOf(questionIndex), choiceIndex);
         state.put(SELECTED_CHOICES_KEY, selectedChoices);
+        return state;
+    }
+
+    public Map<String, Object> writeSelectedMultiChoice(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            List<Integer> choiceIndices
+    ) {
+        return withSelectedMultiChoice(sessionState, questionIndex, choiceIndices);
+    }
+
+    public Map<String, Object> withSelectedMultiChoice(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            List<Integer> choiceIndices
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+
+        Map<String, Object> selectedChoices = copyStringKeyMap(state.get(SELECTED_MULTI_CHOICES_KEY));
+        selectedChoices.put(String.valueOf(questionIndex), normalizeIntegerList(choiceIndices));
+        state.put(SELECTED_MULTI_CHOICES_KEY, selectedChoices);
+        return state;
+    }
+
+    public Map<String, Object> clearSelectedMultiChoices(Map<String, Object> sessionState) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        state.put(SELECTED_MULTI_CHOICES_KEY, Map.of());
         return state;
     }
 
@@ -158,6 +193,7 @@ public class QuizSessionStateUtils {
             Object answerIndexRaw = rawMap.get(ANSWER_INDEX_KEY);
             Object correctAnswerIndexRaw = rawMap.get(CORRECT_ANSWER_INDEX_KEY);
             Object answerRaw = rawMap.get(ANSWER_KEY);
+            Object correctIndicesRaw = rawMap.get(CORRECT_INDICES_KEY);
             Object conceptRaw = rawMap.get(CONCEPT_KEY);
             Object explanationRaw = rawMap.get(EXPLANATION_KEY);
             Object questionFormatRaw = rawMap.get(QUESTION_FORMAT_KEY);
@@ -183,11 +219,12 @@ public class QuizSessionStateUtils {
             String concept = conceptRaw instanceof String value ? value : null;
             String explanation = explanationRaw instanceof String value ? value : null;
             Integer correctIndex = parseCorrectIndex(choices.size(), correctIndexRaw, answerIndexRaw, correctAnswerIndexRaw);
+            List<Integer> correctIndices = parseIndexList(choices.size(), correctIndicesRaw);
             String answer = answerRaw instanceof String value ? value : null;
             String questionFormat = questionFormatRaw instanceof String value ? value : null;
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution));
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices));
         }
 
         return quiz;
@@ -258,6 +295,67 @@ public class QuizSessionStateUtils {
         return selectedChoices.isEmpty() ? Map.of() : Map.copyOf(selectedChoices);
     }
 
+    public Map<Integer, List<Integer>> readSelectedMultiChoices(Map<String, Object> sessionState, List<QuizItem> quiz) {
+        return extractSelectedMultiChoiceIndexes(sessionState, quiz);
+    }
+
+    public Map<Integer, List<Integer>> readSelectedMultiChoices(Map<String, Object> sessionState) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = sessionState.get(SELECTED_MULTI_CHOICES_KEY);
+        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, List<Integer>> selectedChoices = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            if (!(entry.getKey() instanceof String keyString)) {
+                continue;
+            }
+            try {
+                int questionIndex = Integer.parseInt(keyString);
+                List<Integer> choiceIndexes = normalizeUnknownChoiceIndexList(entry.getValue());
+                if (questionIndex >= 0 && !choiceIndexes.isEmpty()) {
+                    selectedChoices.put(questionIndex, choiceIndexes);
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return selectedChoices.isEmpty() ? Map.of() : Map.copyOf(selectedChoices);
+    }
+
+    public Map<Integer, List<Integer>> extractSelectedMultiChoiceIndexes(Map<String, Object> sessionState, List<QuizItem> quiz) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = sessionState.get(SELECTED_MULTI_CHOICES_KEY);
+        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, List<Integer>> selectedChoices = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            Object key = entry.getKey();
+            if (!(key instanceof String keyString)) {
+                continue;
+            }
+            try {
+                int questionIndex = Integer.parseInt(keyString);
+                if (questionIndex < 0 || questionIndex >= quiz.size()) {
+                    continue;
+                }
+                List<Integer> selectedChoiceIndexes = resolveSelectedChoiceIndexes(entry.getValue(), quiz.get(questionIndex));
+                if (!selectedChoiceIndexes.isEmpty()) {
+                    selectedChoices.put(questionIndex, selectedChoiceIndexes);
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return selectedChoices.isEmpty() ? Map.of() : Map.copyOf(selectedChoices);
+    }
+
     private List<Map<String, Object>> serializeQuiz(List<QuizItem> quiz) {
         if (quiz == null || quiz.isEmpty()) {
             return List.of();
@@ -272,6 +370,7 @@ public class QuizSessionStateUtils {
             quizItem.put(QUESTION_KEY, item.question());
             quizItem.put(CHOICES_KEY, item.choices() == null ? List.of() : new ArrayList<>(item.choices()));
             quizItem.put(CORRECT_INDEX_KEY, item.correctIndex());
+            quizItem.put(CORRECT_INDICES_KEY, item.correctIndices() == null ? List.of() : new ArrayList<>(item.correctIndices()));
             quizItem.put(CONCEPT_KEY, item.concept());
             quizItem.put(EXPLANATION_KEY, item.explanation());
             quizItem.put(QUESTION_FORMAT_KEY, item.questionFormat());
@@ -320,6 +419,67 @@ public class QuizSessionStateUtils {
             }
         }
         return null;
+    }
+
+    private List<Integer> resolveSelectedChoiceIndexes(Object rawValue, QuizItem item) {
+        if (item == null || item.choices() == null || item.choices().isEmpty() || !(rawValue instanceof List<?> rawList)) {
+            return List.of();
+        }
+        List<Integer> selectedChoiceIndexes = new ArrayList<>();
+        for (Object rawItem : rawList) {
+            Integer selectedChoiceIndex = resolveSelectedChoiceIndex(rawItem, item);
+            if (selectedChoiceIndex != null && !selectedChoiceIndexes.contains(selectedChoiceIndex)) {
+                selectedChoiceIndexes.add(selectedChoiceIndex);
+            }
+        }
+        return selectedChoiceIndexes;
+    }
+
+    private List<Integer> parseIndexList(int choiceCount, Object rawValue) {
+        if (!(rawValue instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> indexes = new ArrayList<>();
+        for (Object rawItem : rawList) {
+            Integer parsed = parseCorrectIndex(choiceCount, rawItem);
+            if (parsed != null && !indexes.contains(parsed)) {
+                indexes.add(parsed);
+            }
+        }
+        return indexes;
+    }
+
+    private List<Integer> normalizeIntegerList(List<Integer> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private List<Integer> normalizeUnknownChoiceIndexList(Object rawValue) {
+        if (!(rawValue instanceof List<?> rawList)) {
+            return List.of();
+        }
+        List<Integer> indexes = new ArrayList<>();
+        for (Object rawItem : rawList) {
+            Integer parsed = null;
+            if (rawItem instanceof Number number) {
+                parsed = number.intValue();
+            } else if (rawItem instanceof String value) {
+                try {
+                    parsed = Integer.parseInt(value.trim());
+                } catch (NumberFormatException ignored) {
+                    // Ignore invalid numeric payloads.
+                }
+            }
+            if (parsed != null && parsed >= 0 && !indexes.contains(parsed)) {
+                indexes.add(parsed);
+            }
+        }
+        return indexes;
     }
 
     private Map<String, Object> copyStringKeyMap(Object raw) {

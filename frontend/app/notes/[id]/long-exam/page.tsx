@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import Link from "next/link";
 import {useParams, useRouter} from "next/navigation";
 import {BarChart3, BookOpen, Hourglass, ListChecks} from "lucide-react";
 import {BackLink} from "@/components/ui/back-link";
@@ -65,6 +66,10 @@ function normalizeSelectedChoices(selectedChoices?: Record<string, number> | nul
     return {...selectedChoices};
 }
 
+function normalizeSelectedMultiChoices(selectedChoices?: Record<string, number[]> | null): Record<string, number[]> {
+    return {...selectedChoices};
+}
+
 function getSelectedChoice(
     selectedChoices: Record<string, number>,
     questionIndex: number,
@@ -72,8 +77,20 @@ function getSelectedChoice(
     return selectedChoices[String(questionIndex)] ?? null;
 }
 
-function getAnsweredCount(selectedChoices: Record<string, number>): number {
-    return Object.keys(selectedChoices).length;
+function getSelectedMultiChoices(
+    selectedChoices: Record<string, number[]>,
+    questionIndex: number,
+): number[] {
+    return selectedChoices[String(questionIndex)] ?? [];
+}
+
+function getAnsweredCount(selectedChoices: Record<string, number>, selectedMultiChoices: Record<string, number[]>): number {
+    return new Set([
+        ...Object.keys(selectedChoices),
+        ...Object.entries(selectedMultiChoices)
+            .filter(([, value]) => value.length > 0)
+            .map(([key]) => key),
+    ]).size;
 }
 
 function getNowEpochSeconds(): number {
@@ -162,6 +179,7 @@ export default function LongExamPage() {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [quiz, setQuiz] = useState<QuizItem[]>([]);
     const [selectedChoices, setSelectedChoices] = useState<Record<string, number>>({});
+    const [selectedMultiChoices, setSelectedMultiChoices] = useState<Record<string, number[]>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [masteryReport, setMasteryReport] = useState<LongExamMasteryReportResponse | null>(null);
     const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
@@ -178,7 +196,7 @@ export default function LongExamPage() {
     const expectedQuestionCount = resolveExpectedLongExamQuestionCount(profileLearnerLevel);
     const selectedSourceCount = 1 + selectedAdditionalStudyPackIds.length;
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
-    const answeredCount = useMemo(() => getAnsweredCount(selectedChoices), [selectedChoices]);
+    const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
     const progressPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const hasActiveInProgressPrompt = activeStartResponse?.status === "IN_PROGRESS" && activeStartResponse.canResume;
     const timerState = resolveBoardExamTimerState(remainingSeconds);
@@ -231,6 +249,7 @@ export default function LongExamPage() {
         setQuiz(response.quiz);
         setSourceNoteRefs(response.sourceNoteRefs ?? []);
         setSelectedChoices({});
+        setSelectedMultiChoices({});
         setCurrentQuestionIndex(0);
         applyTimer(response);
         setPhase("running");
@@ -244,6 +263,7 @@ export default function LongExamPage() {
         setQuiz(response.quiz);
         setSourceNoteRefs(response.sourceNoteRefs ?? []);
         setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
+        setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
         setCurrentQuestionIndex(Math.min(Math.max(response.currentQuestionIndex, 0), Math.max(response.totalQuestions - 1, 0)));
         applyTimer(response);
         setPhase("running");
@@ -489,6 +509,7 @@ export default function LongExamPage() {
             setQuiz([]);
             setSourceNoteRefs([]);
             setSelectedChoices({});
+            setSelectedMultiChoices({});
             setCurrentQuestionIndex(0);
             setDeadlineEpochSeconds(null);
             setRemainingSeconds(0);
@@ -503,6 +524,32 @@ export default function LongExamPage() {
             setForfeiting(false);
         }
     }, [activeStartResponse, handleStartExam]);
+
+    const handleSelectMultiChoices = useCallback(async (choiceIndices: number[]) => {
+        if (!sessionId || !currentQuestion || savingProgress || currentQuestion.questionFormat !== "MULTI_SELECT") {
+            return;
+        }
+        const choiceKey = String(currentQuestionIndex);
+        setSelectedMultiChoices((current) => ({
+            ...current,
+            [choiceKey]: choiceIndices,
+        }));
+        setSavingProgress(true);
+        try {
+            const response = await saveLongExamProgress(sessionId, {
+                questionIndex: currentQuestionIndex,
+                selectedChoiceIndex: choiceIndices[0] ?? 0,
+                selectedMultiChoiceIndices: choiceIndices,
+            });
+            setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
+            setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
+            setCurrentQuestionIndex(Math.min(Math.max(response.currentQuestionIndex, 0), Math.max(response.totalQuestions - 1, 0)));
+        } catch {
+            showToast("Could not save that answer. Your selection is still visible.", "error");
+        } finally {
+            setSavingProgress(false);
+        }
+    }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
 
     const handleSelectChoice = useCallback(async (choiceIndex: number) => {
         if (!sessionId || !currentQuestion || savingProgress) {
@@ -520,6 +567,7 @@ export default function LongExamPage() {
                 selectedChoiceIndex: choiceIndex,
             });
             setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
+            setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
             setCurrentQuestionIndex(Math.min(Math.max(response.currentQuestionIndex, 0), Math.max(response.totalQuestions - 1, 0)));
         } catch {
             showToast("Could not save that answer. Your selection is still visible.", "error");
@@ -838,9 +886,9 @@ export default function LongExamPage() {
                             ) : note?.subject ? (
                                 <p className="text-sm text-foreground/55">
                                     Want a multi-note exam?{" "}
-                                    <a href="/notes/new" className="underline underline-offset-2 hover:text-foreground/80">
+                                    <Link href="/notes/new" className="underline underline-offset-2 hover:text-foreground/80">
                                         Create another note
-                                    </a>{" "}
+                                    </Link>{" "}
                                     with the subject <span className="font-medium text-foreground/75">{note.subject}</span> and it will appear here.
                                 </p>
                             ) : null}
@@ -924,11 +972,15 @@ export default function LongExamPage() {
                             questionKey={`${currentQuestion.question}-${currentQuestionIndex}`}
                             choices={currentQuestion.choices}
                             correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                            correctIndices={currentQuestion.correctIndices}
+                            questionFormat={currentQuestion.questionFormat}
                             selectedChoiceIndex={getSelectedChoice(selectedChoices, currentQuestionIndex)}
+                            selectedMultiChoiceIndices={getSelectedMultiChoices(selectedMultiChoices, currentQuestionIndex)}
                             revealAnswer={false}
                             selectionStyle="board-exam"
                             disabled={submitting}
                             onSelectChoice={(choiceIndex) => void handleSelectChoice(choiceIndex)}
+                            onSelectMultiChoices={(choiceIndices) => void handleSelectMultiChoices(choiceIndices)}
                         />
                         {savingProgress ? (
                             <p className="text-xs text-foreground/55">Saving answer...</p>
@@ -938,7 +990,7 @@ export default function LongExamPage() {
                     <QuestionNavigator
                         total={totalQuestions}
                         currentIndex={currentQuestionIndex}
-                        isAnswered={(index) => getSelectedChoice(selectedChoices, index) !== null}
+                        isAnswered={(index) => getSelectedChoice(selectedChoices, index) !== null || getSelectedMultiChoices(selectedMultiChoices, index).length > 0}
                         onSelect={(index) => setCurrentQuestionIndex(index)}
                         summary={`Question ${currentQuestionIndex + 1} of ${totalQuestions} · ${answeredCount} answered`}
                         disabled={submitting}

@@ -5,6 +5,7 @@ import {
   isQuizSelectionCorrect,
   resolveQuizCorrectIndex,
   toSelectedChoiceIndexRecord,
+  toSelectedMultiChoiceIndicesRecord,
   type QuizDisplayChoice,
 } from "@/lib/quiz";
 
@@ -175,6 +176,7 @@ function formatFilenameDate(date: Date): string {
 
 function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQuestionItem[] {
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
+  const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
 
   return review.quiz.map((item, index) => {
     const displayedChoices = getDisplayedQuizChoices(item);
@@ -183,18 +185,24 @@ function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQu
     const selectedChoice = displayedChoices.find((choice) => choice.canonicalIndex === selectedChoiceIndex) ?? null;
     const correctChoice = displayedChoices.find((choice) => choice.canonicalIndex === correctIndex) ?? null;
 
+    const selectedForScoring = item.questionFormat === "MULTI_SELECT"
+      ? selectedMultiChoices[index]
+      : selectedChoiceIndex;
+
     return {
       index,
       question: normalizePdfText(item.question) || `Question ${index + 1}`,
       concept: normalizePdfText(item.concept) || null,
       explanation: normalizePdfText(item.explanation) || null,
-      isCorrect: isQuizSelectionCorrect(item, selectedChoiceIndex),
+      isCorrect: isQuizSelectionCorrect(item, selectedForScoring),
       selectedChoice,
       correctChoice,
       choices: displayedChoices.map((choice) => ({
         choice,
         isCorrect: choice.canonicalIndex === correctIndex,
-        isSelected: choice.canonicalIndex === selectedChoiceIndex,
+        isSelected: item.questionFormat === "MULTI_SELECT"
+          ? (selectedMultiChoices[index] ?? []).includes(choice.canonicalIndex)
+          : choice.canonicalIndex === selectedChoiceIndex,
       })),
     };
   });
@@ -366,7 +374,8 @@ function buildPdfCommands(
   exportedAt: Date,
 ): string[] {
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
-  const score = computeScore(review.quiz, selectedChoices);
+  const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices);
   const performanceLevel = mapPerformanceLevel(score.scorePercentage);
   const questionItems = buildQuestionReviewItems(review);
   const builder = new SimplePdfDocumentBuilder();
@@ -425,7 +434,8 @@ function buildMistakesPdfCommands(
   exportedAt: Date,
 ): string[] {
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
-  const score = computeScore(review.quiz, selectedChoices);
+  const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices);
   const questionItems = buildQuestionReviewItems(review);
   const mistakeItems = questionItems.filter((item) => !item.isCorrect);
   const mistakeWeakConcepts = [
@@ -575,7 +585,8 @@ function buildAdaptivePracticePdfCommands(
   exportedAt: Date,
 ): string[] {
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
-  const score = computeScore(review.quiz, selectedChoices);
+  const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices);
   const performanceLevel = mapPerformanceLevel(score.scorePercentage);
   const questionItems = buildQuestionReviewItems(review);
   const builder = new SimplePdfDocumentBuilder();
@@ -783,8 +794,12 @@ export function hasExportableContent(
 ): boolean {
   if (exportType === "mistakes-only") {
     const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
+    const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
     return review.quiz.some(
-      (item, index) => !isQuizSelectionCorrect(item, selectedChoices[index] ?? null),
+      (item, index) => !isQuizSelectionCorrect(
+        item,
+        item.questionFormat === "MULTI_SELECT" ? selectedMultiChoices[index] : selectedChoices[index] ?? null,
+      ),
     );
   }
   if (exportType === "weak-concepts") {

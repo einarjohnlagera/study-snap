@@ -9,6 +9,7 @@ import java.util.Map;
 
 public final class QuizSessionReviewUtils {
     public static final int WEAK_CONCEPT_THRESHOLD = 60;
+    private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
     private static final String UNKNOWN_CONCEPT_LABEL = "Unknown";
 
     private QuizSessionReviewUtils() {}
@@ -16,6 +17,14 @@ public final class QuizSessionReviewUtils {
     public static List<ChallengeQuizConceptStatResponse> computeConceptBreakdown(
             List<QuizItem> quiz,
             Map<Integer, Integer> selectedChoices
+    ) {
+        return computeConceptBreakdown(quiz, selectedChoices, Map.of());
+    }
+
+    public static List<ChallengeQuizConceptStatResponse> computeConceptBreakdown(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
     ) {
         if (quiz == null || quiz.isEmpty()) {
             return List.of();
@@ -30,8 +39,7 @@ public final class QuizSessionReviewUtils {
             String concept = normalizeConcept(item.concept());
             ConceptCounter counter = counters.computeIfAbsent(concept, ignored -> new ConceptCounter());
             counter.totalQuestions += 1;
-            Integer selectedChoiceIndex = selectedChoices == null ? null : selectedChoices.get(index);
-            if (selectedChoiceIndex != null && selectedChoiceIndex.equals(item.correctIndex())) {
+            if (isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices)) {
                 counter.correctAnswers += 1;
             }
         }
@@ -69,6 +77,25 @@ public final class QuizSessionReviewUtils {
         }
         String trimmed = concept.trim();
         return trimmed.isEmpty() ? UNKNOWN_CONCEPT_LABEL : trimmed;
+    }
+
+    public static boolean isAnswerCorrect(
+            QuizItem item,
+            int questionIndex,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        if (item == null) {
+            return false;
+        }
+        if (MULTI_SELECT_FORMAT.equals(item.questionFormat())) {
+            List<Integer> selected = selectedMultiChoices == null ? List.of() : selectedMultiChoices.getOrDefault(questionIndex, List.of());
+            List<Integer> correct = item.correctIndices() == null ? List.of() : item.correctIndices();
+            return !selected.isEmpty() && selected.size() == correct.size()
+                    && selected.stream().sorted().toList().equals(correct.stream().sorted().toList());
+        }
+        Integer selectedChoiceIndex = selectedChoices == null ? null : selectedChoices.get(questionIndex);
+        return selectedChoiceIndex != null && selectedChoiceIndex.equals(item.correctIndex());
     }
 
     private static final class ConceptCounter {

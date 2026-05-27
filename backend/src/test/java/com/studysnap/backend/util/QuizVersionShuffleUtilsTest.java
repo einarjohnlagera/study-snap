@@ -37,6 +37,28 @@ class QuizVersionShuffleUtilsTest {
         assertThat(shuffled.choices().get(shuffled.correctIndex())).isEqualTo("Correct");
     }
 
+    @Test
+    void shuffleQuestionsAndChoices_remapsMultiSelectCorrectIndices() {
+        QuizItem question = new QuizItem(
+                "Which answers are correct?",
+                List.of("Correct A", "Distractor A", "Correct B", "Distractor B"),
+                null,
+                "Versioning",
+                "Both correct choices must follow the shuffled text.",
+                null,
+                "MULTI_SELECT",
+                null,
+                null,
+                List.of(0, 2)
+        );
+
+        QuizItem shuffled = QuizVersionShuffleUtils.shuffleQuestionsAndChoices(List.of(question), "B", "quiz-3").getFirst();
+
+        assertThat(shuffled.correctIndices().stream().map(shuffled.choices()::get).toList())
+                .containsExactlyInAnyOrder("Correct A", "Correct B");
+        assertThat(shuffled.answer()).isIn("Correct A", "Correct B");
+    }
+
     private List<QuizItem> buildQuestions() {
         return IntStream.rangeClosed(1, 8)
                 .mapToObj(index -> new QuizItem(
