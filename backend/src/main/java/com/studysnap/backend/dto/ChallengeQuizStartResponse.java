@@ -19,6 +19,7 @@ public record ChallengeQuizStartResponse(
         String selectedDifficulty,
         List<QuizItem> quiz,
         int currentQuestionIndex,
-        Map<String, Object> sessionState
+        Map<String, Object> sessionState,
+        List<LongExamSourceNoteRef> sourceNoteRefs
 ) {
 }

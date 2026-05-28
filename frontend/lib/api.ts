@@ -245,6 +245,7 @@ export type AnalyticsEventType =
   | "QUICK_REVIEW_COMPLETED"
   | "CHALLENGE_QUIZ_STARTED"
   | "CHALLENGE_QUIZ_COMPLETED"
+  | "BOARD_EXAM_STARTED"
   | "LONG_EXAM_STARTED"
   | "LONG_EXAM_COMPLETED"
   | "LONG_EXAM_FORFEITED"
@@ -694,6 +695,7 @@ export type ChallengeQuizStartRequest = {
   difficulty?: "easy" | "medium" | "hard";
   mode?: ChallengeQuizMode;
   sessionMode?: QuizStartSessionMode;
+  additionalStudyPackIds?: string[];
 };
 
 export type ChallengeQuizStartResponse = {
@@ -711,6 +713,7 @@ export type ChallengeQuizStartResponse = {
   quiz: QuizItem[];
   currentQuestionIndex: number;
   sessionState: Record<string, unknown> | null;
+  sourceNoteRefs?: LongExamSourceNoteRef[] | null;
 };
 
 export type ChallengeQuizProgressRequest = {

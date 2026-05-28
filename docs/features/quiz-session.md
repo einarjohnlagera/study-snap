@@ -64,3 +64,16 @@ Each entry contains:
 - `questionCount`
 
 This keeps multi-source Long Exam generation inside the shared quiz-session lifecycle without adding a new persistence aggregate.
+
+## Board Exam Multi-source State
+
+Board Exam sessions continue to use the existing `CHALLENGE` session row with `sessionState.mode = "board_exam"`. When a Pro user adds same-subject notes, the session stays anchored to the primary `studyPackId` and stores source attribution in `sessionState.sourceNoteRefs`.
+
+Each entry contains:
+
+- `studyPackId`
+- `noteId`
+- `noteTitle`
+- `questionCount`
+
+Multi-note Board Exam does not introduce a new mode or quota category. It keeps the fixed Board Exam question count, redistributes questions across up to 3 total same-subject notes, uses live Board Exam generation per source, and skips the single-note pre-generated pool path.
