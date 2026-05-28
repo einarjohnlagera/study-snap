@@ -1,0 +1,1 @@
+Your {{planName}} plan expires in 7 days

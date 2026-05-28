@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.service.SubscriptionExpiryEmailService;
 import com.studysnap.backend.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,10 +18,17 @@ import java.util.UUID;
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminJobController {
     private final SubscriptionService subscriptionService;
+    private final SubscriptionExpiryEmailService subscriptionExpiryEmailService;
 
     @PostMapping("/subscription-expiry/{subscriptionId}")
     public ResponseEntity<Void> expireSubscription(@PathVariable UUID subscriptionId) {
         subscriptionService.expireSubscriptionAndDowngradeToFree(subscriptionId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/subscription-expiry-emails")
+    public ResponseEntity<Void> triggerExpiryEmails() {
+        subscriptionExpiryEmailService.sendExpiryNotificationEmails();
         return ResponseEntity.ok().build();
     }
 }

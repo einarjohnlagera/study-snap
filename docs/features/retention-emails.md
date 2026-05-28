@@ -52,6 +52,30 @@ Configured under:
 
 Retention emails use the existing `EmailService` / Resend integration and template rendering system.
 
+## Subscription Expiry Emails
+
+Subscription expiry emails are transactional billing alerts, not behavior-based retention emails. They use a separate `SubscriptionExpiryEmailService` and `SubscriptionExpiryEmailScheduler`, and are sent regardless of `inactivityRemindersEnabled` or `weakConceptRemindersEnabled`.
+
+Types:
+
+- `SUBSCRIPTION_EXPIRY_7_DAY`
+  - trigger: active Plus/Pro subscription ending in the `now + 6 days` to `now + 8 days` window
+  - cooldown: `14` days
+- `SUBSCRIPTION_EXPIRY_1_DAY`
+  - trigger: active Plus/Pro subscription ending between `now` and `now + 36 hours`
+  - cooldown: `3` days
+- `SUBSCRIPTION_EXPIRED`
+  - trigger: expired Plus/Pro subscription with `endAt` between `now - 36 hours` and `now`
+  - cooldown: `30` days
+
+Rules:
+
+- Only verified users receive billing expiry emails.
+- Free subscriptions are never selected.
+- Deduplication uses `email_log` with the email type and cooldown window.
+- The CTA links to `/settings?tab=billing` and must not imply automatic renewal or automatic charging.
+- The scheduler runs daily at `0 0 3 * * *` by default via `studysnap.billing.expiry-email-cron`, after the subscription expiry lifecycle job.
+
 ## Future Learning Style Mapping
 
 V1 stores reminder preferences and sends fixed-threshold reminders.
