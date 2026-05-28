@@ -158,7 +158,8 @@ public class QuickReviewSessionController {
                 userId,
                 request.correctAnswers(),
                 request.totalQuestions(),
-                request.durationSeconds()
+                request.durationSeconds(),
+                request.correctConceptNames()
         );
     }
 

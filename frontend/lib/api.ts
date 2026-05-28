@@ -650,6 +650,14 @@ export type AdaptivePracticeCompleteRequest = {
   correctAnswers: number;
   totalQuestions: number;
   durationSeconds?: number;
+  correctConceptNames?: string[];
+};
+
+export type ConceptHealthEntry = {
+  concept: string;
+  lastCorrectAt: string | null;
+  isDue: boolean;
+  daysSinceReview: number | null;
 };
 
 export type ChallengeQuizMode = "challenge" | "board_exam";
@@ -1929,6 +1937,18 @@ export async function getMyStudyPack(id: string): Promise<StudyPackResponse> {
     true,
   );
   return parseApiResponse<StudyPackResponse>(response, "Could not load this Study Pack.");
+}
+
+export async function getConceptHealth(studyPackId: string): Promise<ConceptHealthEntry[]> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/concept-health`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ConceptHealthEntry[]>(response, "Could not load concept review signals.");
 }
 
 export async function updateStudyPackTags(studyPackId: string, tags: string[]): Promise<StudyPackResponse> {

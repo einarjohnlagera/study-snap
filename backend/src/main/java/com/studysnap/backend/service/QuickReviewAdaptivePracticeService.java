@@ -95,6 +95,7 @@ public class QuickReviewAdaptivePracticeService {
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
     private final StudyPackGenerationContextResolver generationContextResolver;
+    private final ConceptHealthService conceptHealthService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
@@ -135,7 +136,14 @@ public class QuickReviewAdaptivePracticeService {
         }
 
         List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
-        if (weakConcepts.isEmpty()) {
+        List<String> focusConcepts = resolveAdaptiveFocusConcepts(
+            userId,
+            studyPackId,
+            studyPack,
+            weakConcepts,
+            OffsetDateTime.now(ZoneOffset.UTC)
+        );
+        if (focusConcepts.isEmpty()) {
             return new QuickReviewAdaptiveQuizResponse(
                 null,
                 null,
@@ -149,12 +157,12 @@ public class QuickReviewAdaptivePracticeService {
 
         assertAdaptivePracticeQuotaAvailable(userId, planType);
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-        int questionCount = resolveAdaptiveQuestionCount(weakConcepts.size());
+        int questionCount = resolveAdaptiveQuestionCount(focusConcepts.size());
         QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
             userId,
             studyPackId,
             studyPack,
-            weakConcepts
+            focusConcepts
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
@@ -162,8 +170,8 @@ public class QuickReviewAdaptivePracticeService {
             List<QuizItem> generatedQuiz = quizGenerationService.generateAdaptivePracticeQuiz(
                 studyPack.getTitle(),
                 studyPack.getSummary(),
-                studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
-                weakConcepts,
+                getKeyConcepts(studyPack),
+                focusConcepts,
                 disallowedQuestions,
                 questionCount,
                 generationContext
@@ -180,7 +188,7 @@ public class QuickReviewAdaptivePracticeService {
                 );
             }
 
-            markSessionReady(session, adaptiveQuiz, weakConcepts);
+            markSessionReady(session, adaptiveQuiz, focusConcepts);
             QuickReviewSessionEntity savedSession = quickReviewSessionRepository.save(session);
             userUsageService.incrementAdaptiveQuizGeneration(userId, savedSession.getCreatedAt());
 
@@ -188,7 +196,7 @@ public class QuickReviewAdaptivePracticeService {
                 activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
                 analyticsService.trackEvent(userId, AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED, studyPackId, Map.of(
                     ANALYTICS_METADATA_SESSION_ID, savedSession.getId().toString(),
-                    ANALYTICS_METADATA_WEAK_CONCEPT_COUNT, weakConcepts.size()
+                    ANALYTICS_METADATA_WEAK_CONCEPT_COUNT, focusConcepts.size()
                 ));
             } catch (RuntimeException ignored) {
                 // Activity/analytics failures must not turn a generated quiz into a failed session.
@@ -236,7 +244,14 @@ public class QuickReviewAdaptivePracticeService {
         }
 
         List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
-        if (weakConcepts.isEmpty()) {
+        List<String> focusConcepts = resolveAdaptiveFocusConcepts(
+            userId,
+            studyPackId,
+            studyPack,
+            weakConcepts,
+            OffsetDateTime.now(ZoneOffset.UTC)
+        );
+        if (focusConcepts.isEmpty()) {
             return new QuickReviewAdaptiveQuizResponse(
                 null,
                 null,
@@ -253,7 +268,7 @@ public class QuickReviewAdaptivePracticeService {
             null,
             studyPack.getId().toString(),
             studyPack.getTitle(),
-            weakConcepts,
+            focusConcepts,
             List.of(),
             FOCUS_MESSAGE
         );
@@ -264,7 +279,8 @@ public class QuickReviewAdaptivePracticeService {
         UUID userId,
         Integer correctAnswers,
         Integer totalQuestions,
-        Integer durationSeconds
+        Integer durationSeconds,
+        List<String> correctConceptNames
     ) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, AdaptivePracticeSessionNotFoundException::new);
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
@@ -302,8 +318,12 @@ public class QuickReviewAdaptivePracticeService {
         session.setCorrectAnswers(safeCorrectAnswers);
         session.setScorePercentage(scorePercentage);
         session.setDurationSeconds(durationSeconds);
-        session.setCompletedAt(OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        session.setCompletedAt(now);
         quickReviewSessionRepository.save(session);
+        if (correctConceptNames != null && !correctConceptNames.isEmpty()) {
+            conceptHealthService.recordCorrectAnswers(userId, session.getStudyPackId(), correctConceptNames, now);
+        }
         return new SimpleMessageResponse(ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE);
     }
 
@@ -435,6 +455,24 @@ public class QuickReviewAdaptivePracticeService {
             }
         }
         return new ArrayList<>(normalized);
+    }
+
+    private List<String> resolveAdaptiveFocusConcepts(
+        UUID userId,
+        UUID studyPackId,
+        StudyPackEntity studyPack,
+        List<String> weakConcepts,
+        OffsetDateTime now
+    ) {
+        LinkedHashSet<String> focusConcepts = new LinkedHashSet<>(
+            conceptHealthService.getDueConcepts(userId, studyPackId, getKeyConcepts(studyPack), now)
+        );
+        focusConcepts.addAll(weakConcepts);
+        return new ArrayList<>(focusConcepts);
+    }
+
+    private List<String> getKeyConcepts(StudyPackEntity studyPack) {
+        return studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts();
     }
 
     private int resolveAdaptiveQuestionCount(int weakConceptCount) {

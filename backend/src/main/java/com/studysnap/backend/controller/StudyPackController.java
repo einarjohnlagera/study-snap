@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ConfirmTextRequest;
+import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
@@ -9,6 +10,7 @@ import com.studysnap.backend.dto.UpdateStudyPackMetadataRequest;
 import com.studysnap.backend.dto.UpdateStudyPackTagsRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.ConceptHealthService;
 import com.studysnap.backend.service.StudyPackService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
 
 @RestController
 @RequestMapping("/study-packs")
@@ -36,6 +41,7 @@ import java.util.UUID;
 public class StudyPackController {
 	private final AuthService authService;
 	private final StudyPackService studyPackService;
+	private final ConceptHealthService conceptHealthService;
 
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public StudyPackResponse createFromText(
@@ -75,6 +81,19 @@ public class StudyPackController {
 	) {
 		UUID userId = user.userId();
 		return studyPackService.getById(id, userId);
+	}
+
+	@GetMapping("/{id}/concept-health")
+	public List<ConceptHealthEntryResponse> getConceptHealth(
+			@PathVariable String id,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		return conceptHealthService.getConceptHealthForOwnedStudyPack(
+				userId,
+				id,
+				OffsetDateTime.now(ZoneOffset.UTC)
+		);
 	}
 
 	@GetMapping
@@ -126,4 +145,3 @@ public class StudyPackController {
 		studyPackService.recordQuickReviewActivity(id, userId, request.activityType());
 	}
 }
-

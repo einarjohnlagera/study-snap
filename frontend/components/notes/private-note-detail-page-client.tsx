@@ -40,6 +40,7 @@ import {
   createStudyPackFromNote,
   deleteNote,
   generateGeneratedQuiz,
+  getConceptHealth,
   getMe,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
@@ -55,6 +56,7 @@ import {
   updateNote,
   updateNoteVisibility,
   type ChallengeQuizPerformanceSummaryResponse,
+  type ConceptHealthEntry,
   type NoteTargetProfileType,
   type NoteResponse,
   type NoteStudyPackStatus,
@@ -260,6 +262,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
   const [recentSessionHistory, setRecentSessionHistory] = useState<RecentQuizSessionHistoryItem[]>([]);
+  const [conceptHealth, setConceptHealth] = useState<ConceptHealthEntry[] | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -658,12 +661,53 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const currentPlan = usageSummary?.plan ?? (isPaidPlan ? (getAuthUser()?.planType ?? "FREE") : "FREE");
+  const canViewConceptHealth = currentPlan === "PLUS" || currentPlan === "PRO";
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
   const hasReachedAdaptivePracticeLimit = currentPlan === "PRO" && adaptivePracticeRemaining !== null && adaptivePracticeRemaining <= 0;
   const shouldShowNearLimitBanner = usageSummary
     ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
+  const conceptHealthByName = useMemo(() => {
+    const byName = new Map<string, ConceptHealthEntry>();
+    for (const entry of conceptHealth ?? []) {
+      byName.set(entry.concept, entry);
+    }
+    return byName;
+  }, [conceptHealth]);
+  const dueConceptCount = useMemo(
+    () => note?.keyConcepts.filter((concept) => conceptHealthByName.get(concept)?.isDue).length ?? 0,
+    [conceptHealthByName, note?.keyConcepts],
+  );
+  useEffect(() => {
+    if (
+      activeStudyPackTab !== "key-concepts"
+      || !note?.studyPackId
+      || note.studyPackStatus !== "STUDY_PACK_READY"
+      || !canViewConceptHealth
+    ) {
+      setConceptHealth(null);
+      return;
+    }
+
+    let active = true;
+    setConceptHealth(null);
+    void getConceptHealth(note.studyPackId)
+      .then((entries) => {
+        if (active) {
+          setConceptHealth(entries);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setConceptHealth([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeStudyPackTab, canViewConceptHealth, note?.studyPackId, note?.studyPackStatus]);
   const showFirstStudyPackSuccessBanner = !isTeacherMode && firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
   const availableCourseProgramSuggestions = useMemo(
@@ -1882,11 +1926,41 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 ) : isDraft || note.keyConcepts.length === 0 ? (
                   <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
                 ) : (
-                  <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                    {note.keyConcepts.map((concept, index) => (
-                      <li key={`${note.id}-concept-${index}`}>{concept}</li>
-                    ))}
-                  </ul>
+                  <>
+                    <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
+                      {note.keyConcepts.map((concept, index) => {
+                        const health = canViewConceptHealth ? conceptHealthByName.get(concept) : null;
+                        return (
+                          <li key={`${note.id}-concept-${index}`}>
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              <span>{concept}</span>
+                              {health?.isDue && health.daysSinceReview !== null ? (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                                  Due — {health.daysSinceReview}d ago
+                                </span>
+                              ) : null}
+                              {health?.isDue && health.daysSinceReview === null ? (
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/50">
+                                  Not yet practiced
+                                </span>
+                              ) : null}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {canViewConceptHealth && dueConceptCount > 0 ? (
+                      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-foreground/80">
+                        <span>You have {dueConceptCount} concept(s) due for review.</span>{" "}
+                        <Link
+                          href={`/notes/${note.id}/adaptive-practice`}
+                          className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
+                        >
+                          Start Adaptive Practice
+                        </Link>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </Card>
             ) : null}

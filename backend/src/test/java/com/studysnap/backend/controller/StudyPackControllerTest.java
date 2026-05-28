@@ -8,6 +8,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.ConceptHealthService;
 import com.studysnap.backend.service.StudyPackService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,12 +37,14 @@ class StudyPackControllerTest {
     private AuthService authService;
     @Mock
     private StudyPackService studyPackService;
+    @Mock
+    private ConceptHealthService conceptHealthService;
 
     private StudyPackController studyPackController;
 
     @BeforeEach
     void setUp() {
-        studyPackController = new StudyPackController(authService, studyPackService);
+        studyPackController = new StudyPackController(authService, studyPackService, conceptHealthService);
     }
 
     @Test
