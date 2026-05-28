@@ -2,7 +2,7 @@
 
 ## v0.18.0 - Profile Completeness & Communication
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: complete the Professional profile experience, fix subscription expiry and email communication gaps, add KaTeX math rendering for computational working solutions, and introduce concept-level spaced repetition signals in Adaptive Practice.
 

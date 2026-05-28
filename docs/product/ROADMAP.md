@@ -6,11 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.18.0 - Profile Completeness & Communication` is the current in-progress release.
+`v0.19.0 - Multi-Note Depth & Simulation Parity` is the current in-progress release.
 
-`v0.17.0 - Quiz Quality & Depth` is complete and is the previous documentation baseline.
+`v0.18.0 - Profile Completeness & Communication` is complete and is the previous documentation baseline.
 
-`v0.19.0 - Multi-Note Depth & Simulation Parity` is the next planned release.
+`v0.20.0` is the next planned release.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -18,7 +18,7 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.18.0 - Profile Completeness & Communication
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: complete the Professional profile experience, fix communication gaps (subscription expiry notifications, outdated email templates, spam folder guidance), add KaTeX math rendering for computational working solutions, and introduce concept-level spaced repetition signals in Adaptive Practice.
 
