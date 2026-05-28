@@ -18,22 +18,22 @@ You can start here:
 {{dashboard_url}}
 
 Free includes:
-- 10 Study Packs per month
-- Quick Review
-- Challenge Quiz (limited per month)
+- 10 Study Packs / month
+- 5 Quizzes / month
+- Summary + Key Concepts
 - Public Library access
 
 Plus adds:
-- Higher monthly limits
-- More exports
-- More topic note generations
+- Adaptive Practice
+- Higher Study Pack and quiz limits
+- More exports and shareable links
 
 Pro adds:
-- Adaptive Practice
-- Weak Concept Training
-- Difficulty Selection
 - Board Exam Mode
-- Highest monthly limits
+- Interview Practice
+- Long Exam Mode
+- Difficulty selection
+- Highest monthly limits and unlimited exports
 
 — NoteLib
 Turn Notes Into Quizzes

@@ -623,6 +623,7 @@ public class AuthService {
         UserEntity saved = userRepository.save(user);
         subscriptionService.createDefaultFreeSubscription(saved);
         linkGoogleProvider(saved, googleIdentity, now, true);
+        emailVerificationService.sendWelcomeEmail(saved);
         analyticsService.trackEvent(saved.getId(), AnalyticsEventType.SIGNUP, saved.getId(), Map.of("method", "google"));
         analyticsService.trackEvent(saved.getId(), AnalyticsEventType.SIGNUP_COMPLETED, saved.getId(), Map.of("method", "google"));
         return saved;

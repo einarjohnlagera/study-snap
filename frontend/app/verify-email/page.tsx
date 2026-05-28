@@ -168,7 +168,7 @@ function VerifyEmailPageContent() {
     try {
       await requestEmailVerification();
       setToastTone("success");
-      setToastMessage("Verification email sent. Check your inbox.");
+      setToastMessage("Verification email sent. Check your inbox or spam folder.");
     } catch (resendError) {
       if (resendError instanceof ApiRequestError && (resendError.code === "VERIFICATION_EMAIL_COOLDOWN" || resendError.status === 429)) {
         setToastTone("info");
@@ -210,7 +210,7 @@ function VerifyEmailPageContent() {
           <CardDescription>
             {showFirstStudyWelcome
               ? "Let’s create your first Study Pack."
-              : "Email verification is required before generating Study Packs."}
+              : "Email verification is required to unlock all features."}
           </CardDescription>
         </div>
 
@@ -223,9 +223,14 @@ function VerifyEmailPageContent() {
             {loading ? "Verifying your email..." : "Verification request processed."}
           </p>
         ) : (
-          <p className="text-sm text-foreground/80">
-            Check your inbox and open your verification link. You can resend the email if needed.
-          </p>
+          <>
+            <p className="text-sm text-foreground/80">
+              Check your inbox and open your verification link. You can resend the email if needed.
+            </p>
+            <p className="text-sm text-foreground/50">
+              Don&apos;t see it? Check your Spam or Promotions folder.
+            </p>
+          </>
         )}
 
         {message ? <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p> : null}
