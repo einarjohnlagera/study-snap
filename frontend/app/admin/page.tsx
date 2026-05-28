@@ -263,6 +263,8 @@ export default function AdminPage() {
       { label: "Quick Reviews", value: formatMetric(summary.engagement.quickReviewsStarted) },
       { label: "Challenge Quizzes", value: formatMetric(summary.engagement.challengeQuizzesStarted) },
       { label: "Adaptive Practice", value: formatMetric(summary.engagement.adaptivePracticeStarted) },
+      { label: "Long Exams", value: formatMetric(summary.engagement.longExamsStarted) },
+      { label: "Interview Practice", value: formatMetric(summary.engagement.interviewPracticeStarted) },
       { label: "Paywall Views", value: formatMetric(summary.engagement.paywallViews) },
       { label: "Upgrade Clicks", value: formatMetric(summary.engagement.upgradeClicks) },
       { label: "Signups", value: formatMetric(summary.engagement.signups) },

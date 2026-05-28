@@ -342,6 +342,8 @@ export type AdminDashboardSummaryResponse = {
     quickReviewsStarted: number;
     challengeQuizzesStarted: number;
     adaptivePracticeStarted: number;
+    longExamsStarted: number;
+    interviewPracticeStarted: number;
     paywallViews: number;
     upgradeClicks: number;
     signups: number;

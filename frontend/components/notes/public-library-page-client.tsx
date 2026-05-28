@@ -815,7 +815,7 @@ export function PublicLibraryPageClient() {
     setTagDraft([]);
     setTagsFilterDraft([]);
     setSelectedSourceFilters([]);
-    setAudienceLockedToAll(false);
+    setAudienceLockedToAll(true);
     setAudienceDraft(NOTE_TARGET_PROFILE_ALL);
     setCourseProgramSearchQuery("");
     setSubjectSearchQuery("");
