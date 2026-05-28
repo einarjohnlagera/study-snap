@@ -1195,7 +1195,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (quizMode == QuizMode.BOARD_EXAM) {
             return guidance;
         }
-        return guidance + " For each question, set questionType to \"COMPUTATIONAL\" for computation or formula-based questions, or \"CONCEPTUAL\" for all others. For COMPUTATIONAL questions, include a workingSolution field with a concise step-by-step derivation (show formula, substitution, and final result). For CONCEPTUAL questions, omit workingSolution or set it to null.";
+        return guidance + " For each question, set questionType to \"COMPUTATIONAL\" for computation or formula-based questions, or \"CONCEPTUAL\" for all others. For COMPUTATIONAL questions, include a workingSolution field with a concise step-by-step derivation (show formula, substitution, and final result). Format all mathematical expressions in workingSolution using LaTeX: wrap inline formulas with $...$ (e.g. $P = IV$) and standalone equations with $$...$$ on their own line (e.g. $$P = \\\\frac{V^2}{R}$$). Use plain text for narrative steps and labels; only the math expressions themselves should be in LaTeX delimiters. For CONCEPTUAL questions, omit workingSolution or set it to null.";
     }
 
     private String buildTrueFalseGuidance(boolean allowTrueFalse) {

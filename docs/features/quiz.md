@@ -140,6 +140,14 @@ Matching rules:
 - frontend display renders the shared A/B/C/D option set once above the group, then each item gets its own letter selection row
 - scoring is unchanged: each matching item is independently correct or incorrect using exact single-choice selection
 
+Computational working solution rules:
+
+- `COMPUTATIONAL` questions may include `workingSolution` with formula, substitution, and final-result steps
+- `workingSolution` math expressions use LaTeX delimiters: inline `$...$` and display `$$...$$`
+- the frontend renders `workingSolution` math with KaTeX inside the working-solution panel only
+- question text, choices, and explanations remain plain text and do not receive KaTeX rendering
+- plain-text working solutions remain supported as a fallback for older generated content
+
 ## Generation lock and idempotency
 
 Quick Review:
@@ -180,7 +188,7 @@ These are prompt-level defects confirmed in live quizzes. They do not require sc
 Currently all quiz questions use a fixed format: 4 choices, 1 correct index. Planned additions in v0.17.0 require schema and UI changes:
 
 - **Framing variety** (prompt only, no schema change) — NOT/EXCEPT/TRUE framing within the existing 4-choice MCQ
-- **Computational questions** — numerical answer choices with step-by-step worked solutions; requires `questionType` field and KaTeX/fixed-width rendering; engineering/sciences notes only
+- **Computational questions** — numerical answer choices with step-by-step worked solutions; uses `questionType` plus a `workingSolution` field rendered with KaTeX for LaTeX-formatted math expressions; engineering/sciences notes only
 - **True/False 2-choice** — requires variable-length `choices` array or a `questionFormat` discriminator
 - **Multi-select** — shipped as `MULTI_SELECT` with `correctIndices` while preserving `correctIndex` as a legacy fallback; all-or-nothing v1 scoring
 - **Matching type** — shipped as `MATCHING` with `questionGroup` shared option blocks; each item remains independently scored

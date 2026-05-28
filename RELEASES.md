@@ -14,6 +14,7 @@ Theme: complete the Professional profile experience, fix subscription expiry and
 - **Parent profile hidden** — removed the "Parent" option from the Profile Type picker in profile settings; the profile type remains in the enum and backend but is not shown until the use case is defined.
 - **Interview Practice prestart UI polish** — redesigned prestart page to match Long Exam's layout: free header with "Built from [note]" attribution, standalone Session Length card, What to Expect card with icon-list items, full-width note picker rows (replacing chips), and a consistent footer bar with note/question count.
 - **Subscription expiry email notifications** — paid users receive a 7-day warning, a 1-day reminder, and a post-expiry "your plan has ended" email with a renewal link; deduplication via email_log prevents re-sends; emails are transactional and sent regardless of retention email preferences; plain-text fallback templates added for all three variants (missing `.txt` files would have caused silent NPE in Resend payload serialization).
+- **KaTeX math rendering for working solutions (Pro)** — `workingSolution` panels for COMPUTATIONAL questions now render LaTeX expressions using KaTeX; inline `$...$` and block `$$...$$` delimiters are detected and rendered; plain-text solutions fall back gracefully; LLM prompts updated to emit LaTeX-formatted working solutions for all quantitative quiz modes.
 
 ---
 
