@@ -588,7 +588,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <p className="text-sm text-amber-900 dark:text-amber-200">
-                  Verify your email to generate Study Packs, use OCR, and publish notes.
+                  Verify your email to unlock all features. You can write and save notes in the meantime.
                 </p>
               </div>
               <ResponsiveActionButton

@@ -61,6 +61,9 @@ export function VerifyEmailRequiredModal({
           Please verify your email before upgrading your plan. This helps us secure your account and send important
           updates.
         </p>
+        <p className="text-foreground/60">
+          Don&apos;t see the email? Check your Spam or Promotions folder.
+        </p>
         {message ? (
           <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm text-foreground">
             {message}
