@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.service.SubscriptionExpiryEmailService;
 import com.studysnap.backend.service.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,8 @@ class AdminJobControllerTest {
 
     @Mock
     private SubscriptionService subscriptionService;
+    @Mock
+    private SubscriptionExpiryEmailService subscriptionExpiryEmailService;
 
     @Test
     void controller_requiresAdminRole() {
@@ -29,12 +32,22 @@ class AdminJobControllerTest {
 
     @Test
     void expireSubscription_callsServiceAndReturnsOk() {
-        AdminJobController controller = new AdminJobController(subscriptionService);
+        AdminJobController controller = new AdminJobController(subscriptionService, subscriptionExpiryEmailService);
         UUID subscriptionId = UUID.randomUUID();
 
         ResponseEntity<Void> response = controller.expireSubscription(subscriptionId);
 
         verify(subscriptionService).expireSubscriptionAndDowngradeToFree(subscriptionId);
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void triggerExpiryEmails_callsServiceAndReturnsOk() {
+        AdminJobController controller = new AdminJobController(subscriptionService, subscriptionExpiryEmailService);
+
+        ResponseEntity<Void> response = controller.triggerExpiryEmails();
+
+        verify(subscriptionExpiryEmailService).sendExpiryNotificationEmails();
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
 }

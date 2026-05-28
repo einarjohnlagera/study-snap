@@ -53,4 +53,11 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
             SubscriptionStatus status,
             OffsetDateTime endAt
     );
+
+    List<SubscriptionEntity> findByPlanTypeInAndStatusAndEndAtBetween(
+            Collection<PlanType> planTypes,
+            SubscriptionStatus status,
+            OffsetDateTime windowStart,
+            OffsetDateTime windowEnd
+    );
 }
