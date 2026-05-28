@@ -10,7 +10,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.18.0 - Profile Completeness & Communication` is complete and is the previous documentation baseline.
 
-`v0.20.0` is the next planned release.
+`v0.20.0` is the next planned release. Candidate items: re-engagement email campaign (see `docs/campaigns/re-engagement-2025.md`).
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
