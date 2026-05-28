@@ -10,6 +10,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.17.0 - Quiz Quality & Depth` is complete and is the previous documentation baseline.
 
+`v0.19.0 - Multi-Note Depth & Simulation Parity` is the next planned release.
+
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
@@ -58,6 +60,48 @@ Additionally, engineering and sciences users see plain-text working solutions wh
 - KaTeX rendering must not affect non-computational question text — scope it only to `workingSolution` display
 - Spaced repetition data must be per-user per-study-pack — do not mix concept health across different notes
 - The five quiz modes remain unchanged; spaced repetition is a signal layer on top of Adaptive Practice, not a new mode
+
+---
+
+## v0.19.0 - Multi-Note Depth & Simulation Parity
+
+**Status: Planned**
+
+Theme: complete the multi-note story across all premium simulation modes. Board Exam is the last mode without multi-note support — Long Exam has had it since v0.14.0. This is the highest-priority shipping target for the Facebook group audience, where board exam reviewers are the primary demographic.
+
+### Why this release
+
+Board exam reviewers studying across multiple subject areas need to simulate full-coverage exams — not just single-topic ones. Multi-note Long Exam shipped in v0.14.0 and proved the pattern is sound. Multi-note Board Exam completes the simulation parity story.
+
+The Facebook study groups driving organic growth are dominated by board exam reviewers. Multi-note Board Exam is the one feature most likely to generate word-of-mouth there.
+
+### Primary focus
+
+1. **Multi-note Board Exam (Pro)** — Pro users can span a Board Exam session across up to 3 same-subject notes, mirroring the multi-note Long Exam feature exactly.
+
+   - Prestart screen gets a "Span this exam across more notes" section (same-subject filter, same note-picker row style as Long Exam)
+   - Questions split proportionally across selected notes by source; source refs stored in session JSONB
+   - Generation: live at session start (no pre-generated pool rethink needed for v1 multi-note; the pool is scoped to the combined source set)
+   - Existing single-note Board Exam flow unchanged for users who pick only one note
+   - Empty-state hint on single-note prestart: "Create another note with the same subject to unlock multi-note exam mode" (mirrors the Long Exam hint from v0.17.0)
+   - Backend follows the same pattern as `LongExamService` for multi-note source merging and question pool allocation
+   - Pro-only, same Board Exam quota rules; no quota change
+   - Subject constraint enforced at the picker level (same-subject filter); cross-domain Board Exam is out of scope for v1
+
+2. **Admin analytics subject drift fix** — "Top Subjects by Study Pack" currently groups on the study pack's own `subject` column, which was set at generation time and never updated. If the user later adds or changes the note's subject, the pack's subject lags. Fix: join through `NoteEntity` to use the current note subject instead of the stored pack subject for the top-subjects aggregation.
+
+### Implementation stances
+
+- Multi-note Board Exam must reuse the existing `BOARD_EXAM` session discriminator and generation pipeline; no new mode, no new quota category
+- Source-note references in session JSONB follow the existing Long Exam pattern (`sourceNoteIds`, `sourceNoteQuestionCounts`)
+- Board Exam stays feedback-free during the session — multi-note does not change the exam-simulation identity contract
+- Admin subject metric fix changes only the repository query — no entity change, no migration
+
+### Anti-drift notes
+
+- Do not skip the same-subject constraint for v1 (cross-domain Board Exam is a separate design question)
+- Multi-note Board Exam does not change question count — the same per-session cap applies; questions are redistributed across sources, not added
+- The five quiz modes remain unchanged; multi-note is a configuration of an existing mode, not a new mode
 
 ---
 
@@ -761,7 +805,7 @@ Revisit for a different mode if a cold-start bottleneck is confirmed by usage da
 
 - **Multi-note Long Exam** — shipped in v0.14.0
 - **Board Exam advanced result analytics** — promoted into the active v0.15.0 premium-mode result presentation scope
-- **Multi-note Board Exam** — allow Pro users to span a Board Exam across up to 3 same-subject notes, mirroring the multi-note Long Exam feature; pre-generated question pools would need to be scoped per source-note combination or generated live for multi-note sessions; do not implement until usage data from single-note Board Exam pools (shipped v0.15.0) shows demand for cross-note simulation
+- **Multi-note Board Exam** — planned for v0.19.0; see v0.19.0 section above for full spec
 - **Long Exam tier promotion to Plus** — only if usage data justifies the LLM cost; not part of the current v0.15.0 cap refactor unless the cost review supports it
 - **Planning-only** — cross-profile mode unlock (Students opting into Board Exam without changing profile); curated exam decks / cohort content (Pro+); cross-profile journey (Student → Board Taker upgrade flow with continuity)
 
