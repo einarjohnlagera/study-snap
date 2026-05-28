@@ -19,6 +19,9 @@ Theme: complete the Professional profile experience, fix subscription expiry and
 - **Public Library "Clear all" filter bug fix** — "Clear all" was incorrectly resetting `audienceLockedToAll` to `false`, causing the profile-based audience pre-filter (e.g. Professional) to immediately re-apply after clearing; fixed to lock to All on clear.
 - **Admin dashboard engagement metrics gap** — Long Exam and Interview Practice were missing from the Engagement section of the admin dashboard; added `LONG_EXAM_STARTED` and `INTERVIEW_PRACTICE_STARTED` counts as "Long Exams" and "Interview Practice" metric cards.
 - **Library filter persistence** — private library filters (search, subject, course/program, tags, readiness, sort) are now reflected in URL query params; state initializes from URL on mount so back navigation restores the exact filter state.
+- **Back-navigation filter restore (private library)** — opening a note from the filtered library now encodes the current filter URL as a `?ref=` param on the note URL; the "← Library" back link reads `ref` from `searchParams` so clicking it returns to the exact filtered state; fixed three "prune stale values" effects that ran on mount with empty `items` and wiped URL-restored subject/courseProgram/tag filters before data loaded.
+- **Back-navigation filter restore (public library)** — opening a note from the filtered public library saves the current filter URL to `sessionStorage`; the "← Public Library" back link restores it; fixed `window` → `globalThis` lint violation in `PublicLibraryBackLink`.
+- **Public Library audience pre-filter re-application bug** — after a Professional user cleared the audience pre-filter, navigating to a note and back would re-apply the Professional filter; fixed by writing `?audience=all` to the URL when the user explicitly selects "All", so the URL encodes the intent rather than relying on transient `audienceLockedToAll` React state that resets on re-mount.
 
 ---
 
