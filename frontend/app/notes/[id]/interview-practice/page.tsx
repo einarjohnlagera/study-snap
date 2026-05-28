@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { AlertCircle, BarChart3, Clock, MessageSquare } from "lucide-react";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { Button } from "@/components/ui/button";
@@ -28,7 +30,6 @@ type ChoiceLetter = "A" | "B" | "C" | "D";
 
 const QUESTION_COUNT_OPTIONS = [5, 10] as const;
 const MAX_ADDITIONAL_NOTES = 2;
-const NOTE_CHIP_TITLE_MAX_LENGTH = 40;
 const SOFT_TIMER_SECONDS = 120;
 const TIMER_EXPIRED_COPY = "Try to wrap up - you can keep going.";
 const LEAVE_TITLE = "Leave interview practice?";
@@ -50,14 +51,6 @@ function resolveBandLabel(band: InterviewReadinessReportResponse["band"]) {
   if (band === "READY") return "Ready";
   if (band === "ALMOST_READY") return "Almost ready";
   return "Needs more practice";
-}
-
-function truncateNoteTitle(title: string | null) {
-  const label = title?.trim() || "Untitled note";
-  if (label.length <= NOTE_CHIP_TITLE_MAX_LENGTH) {
-    return label;
-  }
-  return `${label.slice(0, NOTE_CHIP_TITLE_MAX_LENGTH - 1)}...`;
 }
 
 export default function InterviewPracticePage() {
@@ -288,99 +281,164 @@ export default function InterviewPracticePage() {
       </div>
 
       {phase === "prestart" ? (
-        <Card className="space-y-4 p-4 sm:p-6">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">INTERVIEW PRACTICE</p>
-            <h1 className="text-2xl font-semibold">Start Interview Practice</h1>
-            <p className="text-sm text-foreground/80">
-              Review your practice setup for {note?.title ?? "this note"}.
+        <section className="space-y-6 sm:space-y-8">
+          <header className="space-y-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Interview Practice
+            </h1>
+            <p className="max-w-2xl text-base leading-relaxed text-foreground/70 sm:text-lg">
+              Scenario-based practice with AI critique after every answer.
             </p>
-          </div>
-
-          <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Session length</p>
-                <p>Pick how many scenarios to run.</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {QUESTION_COUNT_OPTIONS.map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    onClick={() => setQuestionCount(count)}
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-left transition",
-                      questionCount === count
-                        ? "border-blue-500 bg-blue-500/10 text-foreground"
-                        : "border-border bg-background text-foreground/75 hover:border-foreground/30",
-                    )}
-                  >
-                    <span className="block text-sm font-medium">{count} questions</span>
-                    <span className="mt-1 block text-xs text-foreground/60">
-                      {count === 5 ? "Focused warm-up" : "Full practice session"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {availableNotes.length > 0 ? (
-              <div className="space-y-2 border-t border-border pt-3">
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Add more notes (optional)</p>
-                  <p>Practice across multiple notes for a cross-domain session.</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {availableNotes.map((availableNote) => {
-                    const selected = additionalNoteIds.includes(availableNote.id);
-                    const disabled = !selected && additionalNoteIds.length >= MAX_ADDITIONAL_NOTES;
-                    return (
-                      <button
-                        key={availableNote.id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => handleToggleAdditionalNote(availableNote.id)}
-                        title={availableNote.title ?? "Untitled note"}
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                          selected
-                            ? "border-blue-500 bg-blue-500/10 text-foreground"
-                            : "border-border bg-background text-foreground/75 hover:border-foreground/30",
-                          disabled ? "cursor-not-allowed opacity-45 hover:border-border" : "",
-                        )}
-                      >
-                        {truncateNoteTitle(availableNote.title)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            {note?.title ? (
+              <p className="text-sm text-foreground/55">
+                Built from <span className="font-medium text-foreground/80">{note.title}</span>
+              </p>
             ) : null}
-            <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Soft timer</p>
-                <p>2 min per question. Non-enforcing - you can keep going past the timer.</p>
-              </div>
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Format</p>
-                <p>Scenario MCQ with AI critique after each answer.</p>
-              </div>
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Monthly limit</p>
-                <p>Counts toward your monthly Interview Practice limit (10/mo).</p>
-              </div>
+          </header>
+
+          <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <div className="space-y-1">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                Session length
+              </h2>
+              <p className="text-sm text-foreground/70">Pick how many scenarios to run.</p>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {QUESTION_COUNT_OPTIONS.map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  aria-pressed={questionCount === count}
+                  onClick={() => setQuestionCount(count)}
+                  className={cn(
+                    "rounded-xl border px-4 py-3 text-left transition",
+                    questionCount === count
+                      ? "border-foreground/40 bg-foreground/5 text-foreground"
+                      : "border-border bg-background text-foreground/75 hover:border-foreground/25 hover:bg-muted/30",
+                  )}
+                >
+                  <span className="block text-sm font-medium text-foreground">{count} questions</span>
+                  <span className="block text-xs text-foreground/60">
+                    {count === 5 ? "Focused warm-up" : "Full practice session"}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="outline" onClick={() => router.push(modeSelectHref)}>
-              Choose another mode
-            </Button>
-            <Button type="button" onClick={() => void handleStart()}>
-              Start Interview Practice
-            </Button>
+          <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+              What to expect
+            </h2>
+            <ul className="mt-5 space-y-5">
+              <li className="flex gap-4">
+                <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Scenario MCQ with AI critique</p>
+                  <p className="text-sm leading-relaxed text-foreground/70">
+                    Scenario-based multiple-choice questions. After each answer, AI critiques your reasoning and gives a follow-up prompt.
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-4">
+                <Clock className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Soft timer, non-enforcing</p>
+                  <p className="text-sm leading-relaxed text-foreground/70">
+                    2 minutes per question. The timer is a guide — you can keep going past it.
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-4">
+                <BarChart3 className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Readiness report at the end</p>
+                  <p className="text-sm leading-relaxed text-foreground/70">
+                    Strengths, gaps, talking points, and pacing notes to guide your next practice.
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-4">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-foreground/70" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Counts toward your monthly limit</p>
+                  <p className="text-sm leading-relaxed text-foreground/70">
+                    Each session counts toward your 10/mo Interview Practice quota on Pro.
+                  </p>
+                </div>
+              </li>
+            </ul>
           </div>
-        </Card>
+
+          {availableNotes.length > 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+              <div className="space-y-1">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                  Add context from more notes
+                </h2>
+                <p className="text-sm text-foreground/70">
+                  Add up to {MAX_ADDITIONAL_NOTES} ready notes for a cross-domain session.
+                </p>
+              </div>
+              <div className="mt-4 grid gap-2">
+                {availableNotes.map((availableNote) => {
+                  const selected = additionalNoteIds.includes(availableNote.id);
+                  const disabled = !selected && additionalNoteIds.length >= MAX_ADDITIONAL_NOTES;
+                  return (
+                    <button
+                      key={availableNote.id}
+                      type="button"
+                      disabled={disabled}
+                      aria-pressed={selected}
+                      onClick={() => handleToggleAdditionalNote(availableNote.id)}
+                      className={cn(
+                        "rounded-xl border px-4 py-3 text-left transition",
+                        selected
+                          ? "border-foreground/40 bg-foreground/5 text-foreground"
+                          : "border-border bg-background text-foreground/75 hover:border-foreground/25 hover:bg-muted/30",
+                        disabled ? "cursor-not-allowed opacity-45 hover:border-border hover:bg-background" : "",
+                      )}
+                    >
+                      <span className="block text-sm font-medium text-foreground">{availableNote.title ?? "Untitled note"}</span>
+                      <span className="block text-xs text-foreground/60">{availableNote.courseProgram ?? availableNote.subject}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : note?.courseProgram ? (
+            <p className="text-sm text-foreground/55">
+              Want a cross-domain session?{" "}
+              <Link href="/notes/new" className="underline underline-offset-2 hover:text-foreground/80">
+                Create another note
+              </Link>{" "}
+              in the same course and it will appear here.
+            </p>
+          ) : null}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-foreground/65">
+              {1 + additionalNoteIds.length} {1 + additionalNoteIds.length === 1 ? "note" : "notes"} · {questionCount} questions
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => router.push(modeSelectHref)}
+              >
+                Choose another mode
+              </Button>
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleStart()}
+              >
+                Start Interview Practice
+              </Button>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       {phase === "generating" ? (
