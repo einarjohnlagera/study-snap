@@ -1,0 +1,12 @@
+Hi {{firstName}},
+
+Your NoteLib {{planName}} plan ended on {{expiryDate}}. Your account has been moved to the free plan.
+
+You can still access your notes and any previously generated Study Packs. Paid features like Adaptive Practice, higher limits, and exports are paused until you renew.
+
+Renew your plan:
+{{renewUrl}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app
