@@ -93,12 +93,6 @@ const PROFILE_TYPE_OPTIONS: ProfileTypeOption[] = [
     description: "Generate, preview, and export quiz materials from your notes.",
   },
   {
-    value: "PARENT",
-    label: "Parent",
-    description: "Support and monitor your child's learning progress.",
-    disabled: true,
-  },
-  {
     value: "PROFESSIONAL",
     label: "Professional",
     description: "Scenario-based practice and knowledge review for certifications and career growth.",
