@@ -431,21 +431,24 @@ export default function LibraryPage() {
   }, [tagCounts]);
 
   useEffect(() => {
+    if (loading) return;
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
       setSelectedSubject(ALL_SUBJECTS);
     }
-  }, [availableSubjects, selectedSubject]);
+  }, [availableSubjects, loading, selectedSubject]);
 
   useEffect(() => {
+    if (loading) return;
     if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     }
-  }, [availableCoursePrograms, selectedCourseProgram]);
+  }, [availableCoursePrograms, loading, selectedCourseProgram]);
 
   useEffect(() => {
+    if (loading) return;
     setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
     setTagDraft((previous) => previous.filter((tag) => availableTags.includes(tag)));
-  }, [availableTags]);
+  }, [availableTags, loading]);
 
   useEffect(() => {
     if (tagSelectorOpen) {
@@ -632,6 +635,12 @@ export default function LibraryPage() {
     setSelectionMode(false);
     setSelectedNoteIds([]);
   }, []);
+
+  const handleNoteNavigate = useCallback((noteId: string) => {
+    const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy);
+    const params = new URLSearchParams({ from: "library", ref: returnUrl });
+    router.push(`/notes/${noteId}?${params.toString()}`);
+  }, [readinessFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
     if (!canIncludeInExam(item)) {
@@ -888,7 +897,7 @@ export default function LibraryPage() {
                         toggleNoteSelection(item);
                         return;
                       }
-                      router.push(`/notes/${item.id}?from=library`);
+                      handleNoteNavigate(item.id);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
@@ -897,7 +906,7 @@ export default function LibraryPage() {
                           toggleNoteSelection(item);
                           return;
                         }
-                        router.push(`/notes/${item.id}?from=library`);
+                        handleNoteNavigate(item.id);
                       }
                     }}
                     aria-pressed={selectionMode ? isSelected : undefined}

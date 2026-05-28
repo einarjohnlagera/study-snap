@@ -76,6 +76,7 @@ const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
 const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
 const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 400;
+const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
 
@@ -839,7 +840,7 @@ export function PublicLibraryPageClient() {
     setSubjectSearchQuery("");
     setTagSearchQuery("");
     replacePublicLibraryFilters({
-      audience: null,
+      audience: NOTE_TARGET_PROFILE_ALL,
       courseProgram: null,
       search: null,
       sort: null,
@@ -850,7 +851,7 @@ export function PublicLibraryPageClient() {
   }, [replacePublicLibraryFilters]);
 
   const applyModalFilters = useCallback(() => {
-    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : null;
+    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : NOTE_TARGET_PROFILE_ALL;
     const nextSubject = subjectFilterDraft !== ALL_SUBJECTS ? slugifyPublicLibraryFilterValue(subjectFilterDraft) : null;
     const nextTags = tagsFilterDraft.map((tag) => slugifyPublicLibraryFilterValue(tag));
     const nextCourseProgram = courseProgramDraft !== ALL_COURSE_PROGRAMS ? slugifyPublicLibraryFilterValue(courseProgramDraft) : null;
@@ -1069,7 +1070,7 @@ export function PublicLibraryPageClient() {
               setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
               replacePublicLibraryFilters({
                 ...parsedUrlFilters,
-                audience: null,
+                audience: NOTE_TARGET_PROFILE_ALL,
                 view: null,
               });
             }}
@@ -1185,6 +1186,11 @@ export function PublicLibraryPageClient() {
     () => buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey),
     [parsedUrlFilters, searchParamsKey],
   );
+  const handleNoteNavigate = useCallback((path: string) => {
+    globalThis.sessionStorage?.setItem(PUBLIC_LIBRARY_RETURN_KEY, currentPublicLibraryPath);
+    startRouteProgress();
+    router.push(path);
+  }, [currentPublicLibraryPath, router, startRouteProgress]);
   const resolvedShareUrl = useMemo(() => {
     if (globalThis.window === undefined) {
       return currentPublicLibraryPath;
@@ -1318,7 +1324,7 @@ export function PublicLibraryPageClient() {
                 onClick={() => {
                   setAudienceLockedToAll(true);
                   setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
-                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: null, view: null });
+                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: NOTE_TARGET_PROFILE_ALL, view: null });
                 }}
               >
                 View all notes
@@ -1350,10 +1356,7 @@ export function PublicLibraryPageClient() {
                     item={item}
                     currentUserId={currentUserId}
                     currentUsername={currentUsername}
-                    onNavigate={(path) => {
-                      startRouteProgress();
-                      router.push(path);
-                    }}
+                    onNavigate={handleNoteNavigate}
                     existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
                     onCopySuccess={handleCopySuccess}
                     onLikeSuccess={handleLikeSuccess}
@@ -1384,7 +1387,7 @@ export function PublicLibraryPageClient() {
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
-                          audience: null,
+                          audience: NOTE_TARGET_PROFILE_ALL,
                           view: null,
                         });
                       }}
@@ -1403,10 +1406,7 @@ export function PublicLibraryPageClient() {
                   items={featuredNotes}
                   currentUserId={currentUserId}
                   currentUsername={currentUsername}
-                  onNavigate={(path) => {
-                    startRouteProgress();
-                    router.push(path);
-                  }}
+                  onNavigate={handleNoteNavigate}
                   onViewMore={() => openDiscoveryView("featured")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
@@ -1420,10 +1420,7 @@ export function PublicLibraryPageClient() {
                   items={popularNotes}
                   currentUserId={currentUserId}
                   currentUsername={currentUsername}
-                  onNavigate={(path) => {
-                    startRouteProgress();
-                    router.push(path);
-                  }}
+                  onNavigate={handleNoteNavigate}
                   onViewMore={() => openDiscoveryView("popular")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
@@ -1437,10 +1434,7 @@ export function PublicLibraryPageClient() {
                   items={recentNotes}
                   currentUserId={currentUserId}
                   currentUsername={currentUsername}
-                  onNavigate={(path) => {
-                    startRouteProgress();
-                    router.push(path);
-                  }}
+                  onNavigate={handleNoteNavigate}
                   onViewMore={() => openDiscoveryView("recent")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
@@ -1464,7 +1458,7 @@ export function PublicLibraryPageClient() {
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
-                          audience: null,
+                          audience: NOTE_TARGET_PROFILE_ALL,
                           view: null,
                         });
                       }}
@@ -1491,10 +1485,7 @@ export function PublicLibraryPageClient() {
                   item={item}
                   currentUserId={currentUserId}
                   currentUsername={currentUsername}
-                  onNavigate={(path) => {
-                    startRouteProgress();
-                    router.push(path);
-                  }}
+                  onNavigate={handleNoteNavigate}
                   existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
                   onCopySuccess={handleCopySuccess}
                   onLikeSuccess={handleLikeSuccess}

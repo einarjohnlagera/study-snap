@@ -258,6 +258,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const awaitingGeneratedMetadataSuggestionRef = useRef(false);
   const suggestedStudyPackIdRef = useRef<string | null>(null);
 
+  const libraryReturnHref = useMemo(() => {
+    const ref = searchParams.get("ref");
+    return ref && ref.startsWith("/library") ? ref : "/library";
+  }, [searchParams]);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
@@ -1416,7 +1420,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <BackLink href="/library" label="Library" />
+      <BackLink href={libraryReturnHref} label="Library" />
 
       {loading ? (
         <Card className="p-6">Loading note...</Card>
