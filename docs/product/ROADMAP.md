@@ -90,6 +90,10 @@ The Facebook study groups driving organic growth are dominated by board exam rev
 
 2. **Admin analytics subject drift fix** — "Top Subjects by Study Pack" currently groups on the study pack's own `subject` column, which was set at generation time and never updated. If the user later adds or changes the note's subject, the pack's subject lags. Fix: join through `NoteEntity` to use the current note subject instead of the stored pack subject for the top-subjects aggregation.
 
+### Completed in v0.19.0 so far
+
+- **Multi-note Board Exam (Pro)** — shipped multi-source Board Exam support for up to 3 same-subject notes with the existing `BOARD_EXAM` discriminator, same quota/category, fixed question cap redistribution, `sessionState.sourceNoteRefs`, per-source live Board Exam generation, and in-session source attribution.
+
 ### Implementation stances
 
 - Multi-note Board Exam must reuse the existing `BOARD_EXAM` session discriminator and generation pipeline; no new mode, no new quota category

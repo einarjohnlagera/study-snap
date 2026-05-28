@@ -36,6 +36,7 @@ import {
   getMe,
   getMyStudyPack,
   getNote,
+  listNotes,
   isEmailNotVerifiedError,
   isNotEnoughNewQuestionsError,
   startChallengeQuizSession,
@@ -43,6 +44,7 @@ import {
   updateChallengeQuizSessionProgress,
   updateProfileLearnerLevel,
   type LearnerLevel,
+  type NoteListItemResponse,
   type NoteResponse,
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
@@ -103,6 +105,8 @@ const BOARD_EXAM_LEAVE_DESCRIPTION = "Your progress will be submitted and counte
 const BOARD_EXAM_LEAVE_ERROR = "Could not submit and leave. Please try again.";
 const BOARD_EXAM_BEFORE_UNLOAD_MESSAGE = "You are currently in Board Exam Mode. Leaving will submit your current answers and end the exam.";
 const BOARD_EXAM_FOCUS_TIP = "Board Exam Mode hides distractions to simulate a real test environment.";
+const BOARD_EXAM_MAX_ADDITIONAL_NOTES = 2;
+const BOARD_EXAM_MULTI_NOTE_EMPTY_HINT = "Create another note with the same subject to unlock multi-note exam mode";
 const MOBILE_NAVIGATOR_MEDIA_QUERY = "(max-width: 639px)";
 
 function isMobileQuestionNavigatorViewport(): boolean {
@@ -192,6 +196,24 @@ function formatTimer(seconds: number): string {
 
 function getNowEpochSeconds(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function normalizeSubjectForMatch(subject?: string | null): string {
+  return subject?.trim().toLowerCase() ?? "";
+}
+
+function resolveSameSubjectSourceNotes(
+  currentNote: NoteResponse,
+  notes: NoteListItemResponse[],
+): NoteListItemResponse[] {
+  const currentSubject = normalizeSubjectForMatch(currentNote.subject);
+  if (!currentSubject) {
+    return [];
+  }
+  return notes
+    .filter((candidate) => candidate.id !== currentNote.id)
+    .filter((candidate) => candidate.studyPackStatus === "STUDY_PACK_READY" && Boolean(candidate.studyPackId))
+    .filter((candidate) => normalizeSubjectForMatch(candidate.subject) === currentSubject);
 }
 
 function getBoardExamTimerDescription(timerState: BoardExamTimerState): string | null {
@@ -298,6 +320,10 @@ export default function ChallengeQuizPage() {
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
+  const [availableBoardExamSourceNotes, setAvailableBoardExamSourceNotes] = useState<NoteListItemResponse[]>([]);
+  const [selectedBoardExamAdditionalStudyPackIds, setSelectedBoardExamAdditionalStudyPackIds] = useState<string[]>([]);
+  const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
+  const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
 
   const noteId = useMemo(() => {
@@ -463,6 +489,26 @@ export default function ChallengeQuizPage() {
     }
   };
 
+  const refreshBoardExamSourceNotes = useCallback(async (noteDetail: NoteResponse) => {
+    setSourceNotesLoading(true);
+    setSourceNotesError(null);
+    try {
+      const notes = await listNotes();
+      const sameSubjectNotes = resolveSameSubjectSourceNotes(noteDetail, notes);
+      setAvailableBoardExamSourceNotes(sameSubjectNotes);
+      setSelectedBoardExamAdditionalStudyPackIds((current) => {
+        const availableStudyPackIds = new Set(sameSubjectNotes.map((sourceNote) => sourceNote.studyPackId).filter(Boolean));
+        return current.filter((studyPackId) => availableStudyPackIds.has(studyPackId));
+      });
+    } catch {
+      setAvailableBoardExamSourceNotes([]);
+      setSelectedBoardExamAdditionalStudyPackIds([]);
+      setSourceNotesError("Could not load same-subject notes.");
+    } finally {
+      setSourceNotesLoading(false);
+    }
+  }, []);
+
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
@@ -597,6 +643,7 @@ export default function ChallengeQuizPage() {
         return;
       }
       setNote(detail);
+      void refreshBoardExamSourceNotes(detail);
       const authUser = getAuthUser();
       const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
       const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO"
@@ -690,7 +737,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, noteId, pathname, router, sharedModeSelectionEntryRequested, syncProgressRef]);
+  }, [applyStartedSession, noteId, pathname, refreshBoardExamSourceNotes, router, sharedModeSelectionEntryRequested, syncProgressRef]);
 
   useEffect(() => {
     void loadNote();
@@ -706,6 +753,8 @@ export default function ChallengeQuizPage() {
   ]).size, [selectedChoices, selectedMultiChoices]);
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
+  const activeSourceNoteRefs = challengeSession?.sourceNoteRefs ?? [];
+  const selectedBoardExamSourceCount = 1 + selectedBoardExamAdditionalStudyPackIds.length;
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
   const currentMatchingGroup = !isBoardExamMode ? resolveQuizItemGroupAt(quiz, currentIndex) : null;
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
@@ -714,6 +763,18 @@ export default function ChallengeQuizPage() {
     ? currentMatchingGroup.items.every((_, offset) => selectedChoices[currentMatchingGroup.startIndex + offset] != null)
     : false;
   useAppShellTitleOverride(activeMode === BOARD_EXAM_MODE ? "Board Exam" : null);
+
+  const toggleBoardExamAdditionalSource = useCallback((studyPackIdToToggle: string) => {
+    setSelectedBoardExamAdditionalStudyPackIds((current) => {
+      if (current.includes(studyPackIdToToggle)) {
+        return current.filter((studyPackIdValue) => studyPackIdValue !== studyPackIdToToggle);
+      }
+      if (current.length >= BOARD_EXAM_MAX_ADDITIONAL_NOTES) {
+        return current;
+      }
+      return [...current, studyPackIdToToggle];
+    });
+  }, []);
 
   useEffect(() => {
     progressRef.current = {
@@ -918,6 +979,9 @@ export default function ChallengeQuizPage() {
       const request: ChallengeQuizStartRequest = nextMode === CHALLENGE_MODE && note.difficultySelectionAvailable
         ? { difficulty: selectedDifficulty, mode: nextMode }
         : { mode: nextMode };
+      if (nextMode === BOARD_EXAM_MODE && selectedBoardExamAdditionalStudyPackIds.length > 0) {
+        request.additionalStudyPackIds = selectedBoardExamAdditionalStudyPackIds;
+      }
       const started = await startChallengeQuizSession(note.id, request);
       if (!started.sessionId) {
         throw new Error(nextMode === BOARD_EXAM_MODE ? "Could not start Board Exam Mode." : "Could not start Challenge Quiz.");
@@ -949,7 +1013,7 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, selectedMode, viewerPlanType]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedBoardExamAdditionalStudyPackIds, selectedDifficulty, selectedMode, viewerPlanType]);
 
   const handleRetry = () => {
     timeoutAutoSubmitRequestedRef.current = false;
@@ -1570,6 +1634,73 @@ export default function ChallengeQuizPage() {
               </ul>
             </div>
 
+            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+              <div className="space-y-1">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                  Span this exam across more notes
+                </h2>
+                <p className="text-sm text-foreground/70">
+                  Add up to 2 ready Study Packs from this subject.
+                </p>
+              </div>
+              {sourceNotesLoading ? (
+                <p className="mt-4 text-sm text-foreground/60">Loading same-subject notes...</p>
+              ) : sourceNotesError ? (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-foreground/60">
+                    {sourceNotesError} Single-note Board Exam is still available.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      if (note) {
+                        void refreshBoardExamSourceNotes(note);
+                      }
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : availableBoardExamSourceNotes.length > 0 ? (
+                <div className="mt-4 grid gap-2">
+                  {availableBoardExamSourceNotes.map((sourceNote) => {
+                    const sourceStudyPackId = sourceNote.studyPackId ?? "";
+                    const selected = selectedBoardExamAdditionalStudyPackIds.includes(sourceStudyPackId);
+                    const capped = !selected && selectedBoardExamAdditionalStudyPackIds.length >= BOARD_EXAM_MAX_ADDITIONAL_NOTES;
+                    return (
+                      <button
+                        key={sourceNote.id}
+                        type="button"
+                        className={cn(
+                          "rounded-xl border px-4 py-3 text-left transition",
+                          selected
+                            ? "border-foreground/40 bg-foreground/5 text-foreground"
+                            : "border-border bg-background text-foreground/75 hover:border-foreground/25 hover:bg-muted/30",
+                          capped && "opacity-60",
+                        )}
+                        aria-pressed={selected}
+                        onClick={() => toggleBoardExamAdditionalSource(sourceStudyPackId)}
+                      >
+                        <span className="block text-sm font-medium text-foreground">{sourceNote.title ?? "Untitled note"}</span>
+                        <span className="block text-xs text-foreground/60">{sourceNote.subject}</span>
+                      </button>
+                    );
+                  })}
+                  {selectedBoardExamAdditionalStudyPackIds.length > 0 ? (
+                    <p className="flex items-center gap-2 text-sm text-foreground/70">
+                      <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>Generating from multiple notes may take up to a minute.</span>
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-foreground/55">{BOARD_EXAM_MULTI_NOTE_EMPTY_HINT}</p>
+              )}
+            </div>
+
             {!boardExamAvailable ? (
               <p className="text-sm text-amber-700 dark:text-amber-300">Pro required to start Board Exam Mode.</p>
             ) : null}
@@ -1579,7 +1710,9 @@ export default function ChallengeQuizPage() {
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-foreground/65">Counts toward your monthly Board Exam usage.</p>
+              <p className="text-sm text-foreground/65">
+                {selectedBoardExamSourceCount} {selectedBoardExamSourceCount === 1 ? "note" : "notes"} · Counts toward your monthly Board Exam usage.
+              </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   type="button"
@@ -1625,12 +1758,21 @@ export default function ChallengeQuizPage() {
               </Button>
             </div>
           ) : null}
+          {isBoardExamMode && activeSourceNoteRefs.length > 1 ? (
+            <div className="rounded-xl border border-foreground/15 bg-muted/20 p-4 text-sm text-foreground/80">
+              <p className="font-medium text-foreground">Sources · {activeSourceNoteRefs.length} notes</p>
+              <p className="mt-1 text-foreground/65">
+                {activeSourceNoteRefs.map((source) => source.noteTitle || "Untitled note").join(", ")}
+              </p>
+            </div>
+          ) : null}
           <Card className={cn("space-y-4 p-4 sm:p-5", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
             {currentQuestion ? (
               <div className="space-y-4">
                 <div className="space-y-1">
                   <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">
                     Question {Math.min(currentIndex + 1, totalQuestions)} of {totalQuestions}
+                    {isBoardExamMode && activeSourceNoteRefs.length > 1 ? ` · ${activeSourceNoteRefs.length} notes` : ""}
                   </p>
                   {isBoardExamMode && boardExamTimerDescription ? (
                     <p className={cn(

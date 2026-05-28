@@ -8,6 +8,8 @@ Theme: complete the multi-note story across all premium simulation modes — Mul
 
 ### ✅ Shipped
 
+- **Multi-note Board Exam (Pro)** — Pro users can now span Board Exam Mode across up to 3 same-subject notes. The flow keeps the existing `BOARD_EXAM` identity, quota, fixed question cap, and feedback-free simulation behavior while redistributing questions across selected sources, storing `sessionState.sourceNoteRefs`, skipping single-note pools for multi-source starts, and showing source attribution in-session.
+
 ---
 
 ## v0.18.0 - Profile Completeness & Communication

@@ -6,8 +6,10 @@ import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidBoardExamSourceException;
 import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -26,6 +28,7 @@ import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.util.QuizSessionStateUtils;
@@ -57,6 +60,8 @@ class ChallengeQuizServiceTest {
 
     @Mock
     private StudyPackRepository studyPackRepository;
+    @Mock
+    private NoteRepository noteRepository;
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
@@ -90,8 +95,10 @@ class ChallengeQuizServiceTest {
     void setUp() {
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
                 .thenReturn(Optional.empty());
+        lenient().when(noteRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         challengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
+                noteRepository,
                 quickReviewSessionRepository,
                 quizGenerationService,
                 subscriptionService,
@@ -257,6 +264,7 @@ class ChallengeQuizServiceTest {
         studyPack.setOwnerUserId(userId);
         studyPack.setTitle("Pack title");
         studyPack.setSummary("Summary");
+        studyPack.setSubject("Nursing");
         studyPack.setKeyConcepts(List.of("Concept"));
         studyPack.setQuiz(List.of(
                 new QuizItem("Practice?", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
@@ -405,7 +413,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
                 userId,
-                new ChallengeQuizStartRequest("hard", "board_exam")
+                new ChallengeQuizStartRequest("hard", "board_exam", null)
         );
 
         assertThat(response.mode()).isEqualTo("board_exam");
@@ -470,7 +478,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
                 userId,
-                new ChallengeQuizStartRequest(null, "board_exam")
+                new ChallengeQuizStartRequest(null, "board_exam", null)
         );
 
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
@@ -479,6 +487,234 @@ class ChallengeQuizServiceTest {
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService).incrementBoardExamGeneration(eq(userId), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_createsMultiNoteBoardExamWithSourceRefs() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID secondStudyPackId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UUID thirdStudyPackId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+        StudyPackEntity second = buildStudyPack(secondStudyPackId, secondNoteId, userId);
+        second.setTitle("Second source");
+        StudyPackEntity third = buildStudyPack(thirdStudyPackId, thirdNoteId, userId);
+        third.setTitle("Third source");
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(secondStudyPackId, userId)).thenReturn(Optional.of(second));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(thirdStudyPackId, userId)).thenReturn(Optional.of(third));
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class))).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                "Nursing",
+                List.of()
+        ));
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(),
+                any(),
+                any(),
+                any(),
+                eq(4),
+                eq("mixed"),
+                any(StudyPackGenerationContext.class)
+        )).thenReturn(
+                buildQuizWithPrefix("Primary", 4),
+                buildQuizWithPrefix("Second", 4),
+                buildQuizWithPrefix("Third", 4)
+        );
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primaryStudyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest(null, "board_exam", List.of(
+                        secondStudyPackId.toString(),
+                        thirdStudyPackId.toString()
+                ))
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.quiz()).hasSize(12);
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::studyPackId)
+                .containsExactly(primaryStudyPackId.toString(), secondStudyPackId.toString(), thirdStudyPackId.toString());
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::questionCount)
+                .containsExactly(4, 4, 4);
+        verify(examQuestionPoolService, never()).sampleQuestions(
+                eq(primaryStudyPackId),
+                eq(ExamQuestionPoolService.MODE_BOARD_EXAM),
+                anyInt(),
+                any()
+        );
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.BOARD_EXAM_STARTED), eq(primaryStudyPackId), any());
+    }
+
+    @Test
+    void startSession_deduplicatesDuplicateBoardExamSourceIds() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+        StudyPackEntity additional = buildStudyPack(additionalStudyPackId, additionalNoteId, userId);
+        additional.setTitle("Additional source");
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId)).thenReturn(Optional.of(additional));
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class))).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                "Nursing",
+                List.of()
+        ));
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(),
+                any(),
+                any(),
+                any(),
+                eq(6),
+                eq("mixed"),
+                any(StudyPackGenerationContext.class)
+        )).thenReturn(
+                buildQuizWithPrefix("Primary", 6),
+                buildQuizWithPrefix("Additional", 6)
+        );
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primaryStudyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest(null, "board_exam", List.of(
+                        additionalStudyPackId.toString(),
+                        additionalStudyPackId.toString()
+                ))
+        );
+
+        assertThat(response.sourceNoteRefs()).hasSize(2);
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::questionCount)
+                .containsExactly(6, 6);
+    }
+
+    @Test
+    void startSession_rejectsMultiNoteBoardExamWhenSubjectMismatches() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+        StudyPackEntity additional = buildStudyPack(additionalStudyPackId, additionalNoteId, userId);
+        additional.setSubject("Engineering");
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId)).thenReturn(Optional.of(additional));
+
+        String id = primaryStudyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
+                null,
+                "board_exam",
+                List.of(additionalStudyPackId.toString())
+        );
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(id, userId, request))
+                .isInstanceOf(InvalidBoardExamSourceException.class)
+                .hasMessage("All notes must share the same subject");
+    }
+
+    @Test
+    void startSession_rejectsMultiNoteBoardExamWhenPrimarySubjectIsBlank() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+        primary.setSubject(" ");
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+
+        String id = primaryStudyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
+                null,
+                "board_exam",
+                List.of(additionalStudyPackId.toString())
+        );
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(id, userId, request))
+                .isInstanceOf(InvalidBoardExamSourceException.class)
+                .hasMessage("Add a subject to this note before adding more sources");
+    }
+
+    @Test
+    void startSession_rejectsBoardExamWithMoreThanTwoAdditionalSources() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+
+        String id = primaryStudyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
+                null,
+                "board_exam",
+                List.of(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID().toString())
+        );
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(id, userId, request))
+                .isInstanceOf(InvalidBoardExamSourceException.class)
+                .hasMessage("Too many notes selected for the available question count — remove one");
+    }
+
+    @Test
+    void getInProgressSession_returnsBoardExamSourceRefsFromSessionState() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        session.setCurrentQuestionIndex(0);
+        session.setSessionState(Map.of(
+                "mode", "board_exam",
+                "difficulty", "mixed",
+                "completed", false,
+                "sourceNoteRefs", List.of(
+                        Map.of("studyPackId", studyPackId.toString(), "noteId", noteId.toString(), "noteTitle", "Primary", "questionCount", 6),
+                        Map.of("studyPackId", UUID.randomUUID().toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "Second", "questionCount", 6)
+                )
+        ));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.of(session));
+
+        ChallengeQuizStartResponse response = challengeQuizService.getInProgressSession(studyPackId.toString(), userId);
+
+        assertThat(response.sourceNoteRefs()).hasSize(2);
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::questionCount)
+                .containsExactly(6, 6);
     }
 
     @Test
@@ -527,7 +763,7 @@ class ChallengeQuizServiceTest {
                 ));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "board_exam");
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "board_exam", null);
         String studyPackIdRaw = studyPackId.toString();
         assertThatThrownBy(() -> challengeQuizService.startSession(studyPackIdRaw, userId, request))
                 .isInstanceOf(MonthlyBoardExamLimitReachedException.class);
@@ -570,7 +806,7 @@ class ChallengeQuizServiceTest {
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "board_exam");
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "board_exam", null);
         String studyPackIdRaw = studyPackId.toString();
         assertThatThrownBy(() -> challengeQuizService.startSession(studyPackIdRaw, userId, request))
                 .isInstanceOf(MonthlyChallengeQuizLimitReachedException.class);
@@ -590,6 +826,7 @@ class ChallengeQuizServiceTest {
         properties.getQuizGeneration().setMode("mock");
         ChallengeQuizService mockModeChallengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
+                noteRepository,
                 quickReviewSessionRepository,
                 new QuizGenerationService(llmStudyPackService, properties),
                 subscriptionService,
@@ -642,7 +879,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = mockModeChallengeQuizService.startSession(
                 studyPackId.toString(),
                 userId,
-                new ChallengeQuizStartRequest(null, "board_exam")
+                new ChallengeQuizStartRequest(null, "board_exam", null)
         );
 
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
@@ -1039,7 +1276,7 @@ class ChallengeQuizServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
         String id = studyPackId.toString();
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("expert", null);
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("expert", null, null);
         assertThatThrownBy(() -> challengeQuizService.startSession(
                 id,
                 userId,
@@ -1060,7 +1297,7 @@ class ChallengeQuizServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
 
         String id = studyPackId.toString();
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "oral_exam");
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "oral_exam", null);
         assertThatThrownBy(() -> challengeQuizService.startSession(
                 id,
                 userId,
@@ -1082,5 +1319,47 @@ class ChallengeQuizServiceTest {
             ));
         }
         return quiz;
+    }
+
+    private List<QuizItem> buildQuizWithPrefix(String prefix, int count) {
+        java.util.ArrayList<QuizItem> quiz = new java.util.ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            quiz.add(new QuizItem(
+                    prefix + " question " + index,
+                    List.of("A", "B", "C", "D"),
+                    index % 4,
+                    "Concept",
+                    "Explanation"
+            ));
+        }
+        return quiz;
+    }
+
+    private void stubBoardExamStartDependencies(UUID userId, UUID studyPackId, StudyPackEntity studyPack) {
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
     }
 }
