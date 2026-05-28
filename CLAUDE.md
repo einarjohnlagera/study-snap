@@ -14,7 +14,7 @@ Current version: **v0.18.0** — see `RELEASES.md` for in-progress scope, `docs/
 - `docs/product/ROADMAP.md` — what's in scope for the current release and future phases
 - `docs/product/SPEC.md` — canonical product behavior
 - `docs/product/EXAM_MODES.md` — quiz mode hierarchy (locked contract; exactly 5 modes)
-- `docs/features/<feature>.md` — per-feature behavior rules (48 files; check before changing any feature)
+- `docs/features/<feature>.md` — per-feature behavior rules (48 files; **read before changing any feature, update after shipping any behavioral change** — updating `RELEASES.md` alone is not enough)
 - `RELEASES.md` — every completed and in-progress change; always update when shipping work
 - `GPT_CONTEXT.md` — version-stamped snapshot of the full product state; useful to understand where things stand
 
