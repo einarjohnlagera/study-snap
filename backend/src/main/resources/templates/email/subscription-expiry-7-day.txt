@@ -1,0 +1,14 @@
+Hi {{firstName}},
+
+Your NoteLib {{planName}} plan expires on {{expiryDate}}.
+
+Renew now to keep your access to Study Packs, quizzes, and practice sessions without interruption.
+
+Renew your plan:
+{{renewUrl}}
+
+If you have questions, reply to this email or reach us at support@mail.notelib.app.
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

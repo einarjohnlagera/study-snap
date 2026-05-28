@@ -1,0 +1,12 @@
+Hi {{firstName}},
+
+Your NoteLib {{planName}} plan expires tomorrow on {{expiryDate}}.
+
+Renew today to avoid losing access to your study features.
+
+Renew your plan:
+{{renewUrl}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app
