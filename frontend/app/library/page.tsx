@@ -1,7 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {useRouter} from "next/navigation";
+import {useRouter, useSearchParams} from "next/navigation";
 import {
   ArrowUpDown,
   CheckSquare,
@@ -45,6 +45,7 @@ type LibraryReadinessFilter = "ALL" | "DRAFT" | "QUIZ_READY" | "STUDY_PACK_READY
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
+const LIBRARY_FILTER_SYNC_DEBOUNCE_MS = 400;
 const SUBJECT_FALLBACK = "General";
 const POPULAR_TAG_LIMIT = 5;
 const COURSE_PROGRAM_LIMIT = 10;
@@ -188,6 +189,60 @@ function buildPriorityComparator(recentValues: string[], counts: Map<string, num
   };
 }
 
+function parseReadinessFilter(value: string | null): LibraryReadinessFilter {
+  if (value === "draft") return "DRAFT";
+  if (value === "quiz_ready") return "QUIZ_READY";
+  if (value === "study_pack_ready") return "STUDY_PACK_READY";
+  return "ALL";
+}
+
+function parseSortOption(value: string | null): LibrarySortOption {
+  if (value === "reviewed") return "RECENTLY_REVIEWED";
+  if (value === "newest") return "NEWEST";
+  if (value === "title_asc") return "TITLE_ASC";
+  if (value === "title_desc") return "TITLE_DESC";
+  if (value === "oldest") return "OLDEST";
+  return "RECENTLY_UPDATED";
+}
+
+function readinessFilterToParam(filter: LibraryReadinessFilter): string | null {
+  if (filter === "DRAFT") return "draft";
+  if (filter === "QUIZ_READY") return "quiz_ready";
+  if (filter === "STUDY_PACK_READY") return "study_pack_ready";
+  return null;
+}
+
+function sortOptionToParam(sort: LibrarySortOption): string | null {
+  if (sort === "RECENTLY_REVIEWED") return "reviewed";
+  if (sort === "NEWEST") return "newest";
+  if (sort === "TITLE_ASC") return "title_asc";
+  if (sort === "TITLE_DESC") return "title_desc";
+  if (sort === "OLDEST") return "oldest";
+  return null;
+}
+
+function buildLibraryUrl(
+  q: string,
+  subject: string,
+  cp: string,
+  tags: string[],
+  status: LibraryReadinessFilter,
+  sort: LibrarySortOption,
+): string {
+  const params = new URLSearchParams();
+  const trimmedQ = q.trim();
+  if (trimmedQ) params.set("q", trimmedQ);
+  if (subject !== ALL_SUBJECTS) params.set("subject", subject);
+  if (cp !== ALL_COURSE_PROGRAMS) params.set("cp", cp);
+  if (tags.length > 0) params.set("tags", tags.join(","));
+  const statusParam = readinessFilterToParam(status);
+  if (statusParam) params.set("status", statusParam);
+  const sortParam = sortOptionToParam(sort);
+  if (sortParam) params.set("sort", sortParam);
+  const qs = params.toString();
+  return `/library${qs ? `?${qs}` : ""}`;
+}
+
 function LibraryLoading() {
   return (
     <div className="space-y-4">
@@ -214,14 +269,19 @@ function canIncludeInExam(item: NoteListItemResponse): boolean {
 
 export default function LibraryPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const initialLoadStartedRef = useRef(false);
+  const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
-  const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
+  const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
+  const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(() => searchParams.get("cp") ?? ALL_COURSE_PROGRAMS);
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => {
+    const raw = searchParams.get("tags");
+    return raw ? raw.split(",").filter(Boolean) : [];
+  });
   const [tagDraft, setTagDraft] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_UPDATED");
+  const [sortBy, setSortBy] = useState<LibrarySortOption>(() => parseSortOption(searchParams.get("sort")));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
@@ -236,7 +296,7 @@ export default function LibraryPage() {
   const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
-  const [readinessFilter, setReadinessFilter] = useState<LibraryReadinessFilter>("ALL");
+  const [readinessFilter, setReadinessFilter] = useState<LibraryReadinessFilter>(() => parseReadinessFilter(searchParams.get("status")));
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -297,6 +357,16 @@ export default function LibraryPage() {
     const timeoutId = globalThis.setTimeout(() => setToast(null), 2200);
     return () => globalThis.clearTimeout(timeoutId);
   }, [toast]);
+
+  useEffect(() => {
+    const timeoutId = globalThis.setTimeout(() => {
+      router.replace(
+        buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy),
+        { scroll: false },
+      );
+    }, LIBRARY_FILTER_SYNC_DEBOUNCE_MS);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, router]);
 
   const hasItems = items.length > 0;
 
@@ -361,21 +431,24 @@ export default function LibraryPage() {
   }, [tagCounts]);
 
   useEffect(() => {
+    if (loading) return;
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
       setSelectedSubject(ALL_SUBJECTS);
     }
-  }, [availableSubjects, selectedSubject]);
+  }, [availableSubjects, loading, selectedSubject]);
 
   useEffect(() => {
+    if (loading) return;
     if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     }
-  }, [availableCoursePrograms, selectedCourseProgram]);
+  }, [availableCoursePrograms, loading, selectedCourseProgram]);
 
   useEffect(() => {
+    if (loading) return;
     setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
     setTagDraft((previous) => previous.filter((tag) => availableTags.includes(tag)));
-  }, [availableTags]);
+  }, [availableTags, loading]);
 
   useEffect(() => {
     if (tagSelectorOpen) {
@@ -392,6 +465,14 @@ export default function LibraryPage() {
       setCourseProgramComboOpen(false);
     }
   }, [moreFiltersOpen]);
+
+  useEffect(() => {
+    if (!courseProgramComboOpen) return;
+    const id = globalThis.setTimeout(() => {
+      courseProgramDropdownRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => globalThis.clearTimeout(id);
+  }, [courseProgramComboOpen]);
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
@@ -554,6 +635,12 @@ export default function LibraryPage() {
     setSelectionMode(false);
     setSelectedNoteIds([]);
   }, []);
+
+  const handleNoteNavigate = useCallback((noteId: string) => {
+    const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy);
+    const params = new URLSearchParams({ from: "library", ref: returnUrl });
+    router.push(`/notes/${noteId}?${params.toString()}`);
+  }, [readinessFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
     if (!canIncludeInExam(item)) {
@@ -810,7 +897,7 @@ export default function LibraryPage() {
                         toggleNoteSelection(item);
                         return;
                       }
-                      router.push(`/notes/${item.id}?from=library`);
+                      handleNoteNavigate(item.id);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
@@ -819,7 +906,7 @@ export default function LibraryPage() {
                           toggleNoteSelection(item);
                           return;
                         }
-                        router.push(`/notes/${item.id}?from=library`);
+                        handleNoteNavigate(item.id);
                       }
                     }}
                     aria-pressed={selectionMode ? isSelected : undefined}
@@ -1041,7 +1128,7 @@ export default function LibraryPage() {
                 />
               </div>
               {courseProgramComboOpen ? (
-                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                <div ref={courseProgramDropdownRef} className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
                   <button
                     type="button"
                     className={getComboboxItemClassName(selectedCourseProgram === ALL_COURSE_PROGRAMS)}

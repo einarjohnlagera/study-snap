@@ -87,6 +87,13 @@ Readiness visibility:
 - Public Library does not expose `Quiz Ready` because public discovery should focus on notes, summaries, Quick Check, and copy/share flows.
 - Exam Builder still uses generated-quiz data internally for note selection, question counts, disabled states, and DOCX export.
 
+Private Library filter persistence:
+
+- Filter state is reflected in URL query params (`q`, `subject`, `cp`, `tags`, `status`, `sort`); state is initialized from the URL on mount so deep links and browser back/forward work correctly.
+- When navigating from a note card to Note Detail, the current filter URL is encoded as a `?ref=` param on the note URL (e.g. `/notes/{id}?from=library&ref=%2Flibrary%3Ftags%3DReview`). The note detail "← Library" back link reads `ref` to restore the exact filtered state.
+- The `?ref=` approach is used instead of `sessionStorage` because Next.js Router Cache keys by URL; sessionStorage state would be restored from cache when revisiting the same note within the cache TTL, breaking the back link for different filter contexts.
+- The three filter-pruning effects (subject, courseProgram, tags — which remove selections no longer present in loaded items) are gated by `loading` state. They do not run during initial load so URL-restored selections survive until items are fetched and pruning is valid.
+
 Private Library sorting:
 
 - `Recently Updated`
@@ -129,6 +136,13 @@ Public Library filter presentation:
 - `Course / Program` is an inline chip row between `Subject` and `Tags`; it uses the same URL-synced `courseProgram` query param as the public library filter state.
 - public filter rails use a right-edge fade affordance and `Browse all` text links for overflow.
 - `More Filters` is reserved for source filters (`By You`, `Official`, `Community`).
+
+Public Library filter persistence:
+
+- Filter state is reflected in URL query params (`view`, `search`, `subject`, `tag`, `audience`, `courseProgram`, `sort`); state is initialized from the URL on mount.
+- When the user explicitly selects "All" for the audience filter (clearing the profile pre-filter), `?audience=all` is written to the URL. This prevents the profile default audience from re-applying on re-mount or back-navigation.
+- When navigating from a note card to a public note detail, the current public library URL is saved to `sessionStorage` under `notelib_public_library_return_url`. The `PublicLibraryBackLink` component reads this on mount and uses it as the back link href, restoring the exact filtered state.
+- `sessionStorage` is used (instead of `?ref=`) for public notes because public note URLs are canonical SEO slugs that must not be polluted with navigation state params.
 
 Growth behavior:
 

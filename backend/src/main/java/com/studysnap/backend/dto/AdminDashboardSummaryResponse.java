@@ -37,6 +37,8 @@ public record AdminDashboardSummaryResponse(
             long quickReviewsStarted,
             long challengeQuizzesStarted,
             long adaptivePracticeStarted,
+            long longExamsStarted,
+            long interviewPracticeStarted,
             long paywallViews,
             long upgradeClicks,
             long signups,

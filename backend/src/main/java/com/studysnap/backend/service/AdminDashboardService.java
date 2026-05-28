@@ -111,6 +111,8 @@ public class AdminDashboardService {
                         analyticsEventRepository.countByEventType(AnalyticsEventType.QUICK_REVIEW_STARTED),
                         analyticsEventRepository.countByEventType(AnalyticsEventType.CHALLENGE_QUIZ_STARTED),
                         analyticsEventRepository.countByEventType(AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED),
+                        analyticsEventRepository.countByEventType(AnalyticsEventType.LONG_EXAM_STARTED),
+                        analyticsEventRepository.countByEventType(AnalyticsEventType.INTERVIEW_PRACTICE_STARTED),
                         analyticsEventRepository.countByEventType(AnalyticsEventType.PAYWALL_VIEWED),
                         analyticsEventRepository.countByEventType(AnalyticsEventType.UPGRADE_CLICKED),
                         analyticsEventRepository.countByEventType(AnalyticsEventType.SIGNUP_COMPLETED),

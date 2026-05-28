@@ -4,8 +4,15 @@ import { useEffect, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
 import { getAuthUser } from "@/lib/auth";
 
+const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
+const PUBLIC_LIBRARY_DEFAULT_HREF = "/public/library";
+
 export function PublicLibraryBackLink() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [returnHref] = useState(() => {
+    const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_KEY);
+    return saved && saved.startsWith("/public/library") ? saved : PUBLIC_LIBRARY_DEFAULT_HREF;
+  });
 
   useEffect(() => {
     const syncAuth = () => {
@@ -13,9 +20,9 @@ export function PublicLibraryBackLink() {
     };
 
     syncAuth();
-    window.addEventListener("studysnap-auth-change", syncAuth);
+    globalThis.addEventListener("studysnap-auth-change", syncAuth);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncAuth);
+      globalThis.removeEventListener("studysnap-auth-change", syncAuth);
     };
   }, []);
 
@@ -23,5 +30,5 @@ export function PublicLibraryBackLink() {
     return null;
   }
 
-  return <BackLink href="/public/library" label="Public Library" />;
+  return <BackLink href={returnHref} label="Public Library" />;
 }

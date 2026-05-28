@@ -23,7 +23,7 @@ export type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
 export type PublicLibrarySortQuery = "popular" | "recent" | "title" | "views" | "copied";
 
 export type PublicLibraryUrlFilters = {
-  audience?: NoteTargetProfileType | null;
+  audience?: NoteTargetProfileType | "ALL" | null;
   courseProgram?: string | null;
   search?: string | null;
   sort?: PublicLibrarySortQuery | null;
@@ -115,15 +115,21 @@ export function resolvePublicLibraryValuesBySlug(values: string[], slugs: string
     .filter((value): value is string => value !== null);
 }
 
-export function toPublicLibraryAudienceQueryValue(value: NoteTargetProfileType | null | undefined) {
+export function toPublicLibraryAudienceQueryValue(value: NoteTargetProfileType | "ALL" | null | undefined) {
   if (!value) {
     return null;
+  }
+  if (value === "ALL") {
+    return "all";
   }
   return slugifyPublicLibraryFilterValue(value.replaceAll("_", "-"));
 }
 
-export function parsePublicLibraryAudienceQueryValue(value: string | null | undefined): NoteTargetProfileType | null {
+export function parsePublicLibraryAudienceQueryValue(value: string | null | undefined): NoteTargetProfileType | "ALL" | null {
   const normalized = slugifyPublicLibraryFilterValue(value);
+  if (normalized === "all") {
+    return "ALL";
+  }
   if (normalized === "student") {
     return "STUDENT";
   }
