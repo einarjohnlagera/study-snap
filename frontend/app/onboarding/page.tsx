@@ -38,6 +38,7 @@ import {
 } from "@/lib/onboarding-v2";
 import {
   COURSE_PROGRAM_SUGGESTIONS,
+  getDefaultLearnerLevel,
   getGroupedLearnerLevels,
 } from "@/lib/learning-profile";
 import {
@@ -108,7 +109,7 @@ const COMPLETION_COPY: Record<OnboardingProfileType, string> = {
   STUDENT: "Your Study Pack is ready. Start practicing when you're ready.",
   BOARD_EXAM: "Your first practice material is ready. Keep going and build toward exam day.",
   TEACHER: "Your Study Pack is ready. You can export a quiz for your students any time.",
-  PROFESSIONAL: "Your study material is ready. Start your certification review whenever you're set.",
+  PROFESSIONAL: "Your study material is ready. Try Interview Practice from any note to sharpen your professional skills.",
 };
 
 function isOnboardingProfileType(value: string | null | undefined): value is OnboardingProfileType {
@@ -595,6 +596,7 @@ export default function OnboardingPage() {
       ...previous,
       profileType: value,
       examDate: value === "BOARD_EXAM" ? previous.examDate : "",
+      learnerLevel: getDefaultLearnerLevel(value),
     }));
     trackOnboardingEvent("ONBOARDING_V2_PROFILE_SELECTED", {
       profile_type: value,

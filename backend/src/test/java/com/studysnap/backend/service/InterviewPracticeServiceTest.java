@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +29,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
+import com.studysnap.backend.exception.InvalidInterviewPracticeRequestException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
@@ -37,6 +39,7 @@ import com.studysnap.backend.util.QuizSessionStateUtils;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -101,7 +104,7 @@ class InterviewPracticeServiceTest {
         List<QuizItem> quiz = buildQuiz(5);
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
-        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, noteId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId),
                 eq(studyPackId),
@@ -113,6 +116,7 @@ class InterviewPracticeServiceTest {
         when(userUsageService.getMonthlyUsage(eq(userId), any())).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(generationContextResolver.resolveForStudyPack(userId, studyPack))
                 .thenReturn(new StudyPackGenerationContext(null, null, "Backend", List.of()));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quizGenerationService.generateInterviewPracticeQuiz(
                 eq(studyPack.getTitle()),
                 eq(studyPack.getSummary()),
@@ -124,13 +128,232 @@ class InterviewPracticeServiceTest {
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        InterviewPracticeStartResponse response = service.startSession(userId, new InterviewPracticeStartRequest(noteId, 5));
+        InterviewPracticeStartResponse response = service.startSession(userId, new InterviewPracticeStartRequest(noteId, 5, null));
 
         assertThat(response.status()).isEqualTo("IN_PROGRESS");
         assertThat(response.questionCount()).isEqualTo(5);
         assertThat(response.question()).isNotNull();
+        assertThat(response.sourceNoteRefs()).isEmpty();
         verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.INTERVIEW_PRACTICE);
         verify(userUsageService).incrementInterviewPracticeGeneration(eq(userId), any());
+    }
+
+    @Test
+    void startSession_twoSourcesGeneratesAndMergesProportionally() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(
+                userId,
+                primaryNoteId,
+                primaryStudyPackId,
+                "System Design Interview Prep",
+                StudyPackStatus.DONE
+        );
+        StudyPackEntity additionalStudyPack = buildStudyPack(
+                userId,
+                additionalNoteId,
+                additionalStudyPackId,
+                "Behavioral Interview Prep",
+                StudyPackStatus.DONE
+        );
+
+        stubReadyStart(userId, primaryNoteId, primaryStudyPackId, primaryStudyPack);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, additionalNoteId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any()))
+                .thenReturn(new StudyPackGenerationContext(null, null, "Backend", List.of()));
+        when(quizGenerationService.generateInterviewPracticeQuiz(
+                eq(primaryStudyPack.getTitle()),
+                eq(primaryStudyPack.getSummary()),
+                eq(primaryStudyPack.getKeyConcepts()),
+                any(),
+                eq(5),
+                any()
+        )).thenReturn(buildQuiz("Primary", 5));
+        when(quizGenerationService.generateInterviewPracticeQuiz(
+                eq(additionalStudyPack.getTitle()),
+                eq(additionalStudyPack.getSummary()),
+                eq(additionalStudyPack.getKeyConcepts()),
+                any(),
+                eq(5),
+                any()
+        )).thenReturn(buildQuiz("Additional", 5));
+
+        InterviewPracticeStartResponse response = service.startSession(
+                userId,
+                new InterviewPracticeStartRequest(primaryNoteId, 10, List.of(additionalNoteId))
+        );
+
+        assertThat(response.status()).isEqualTo("IN_PROGRESS");
+        assertThat(response.questionCount()).isEqualTo(10);
+        assertThat(response.sourceNoteRefs())
+                .extracting("noteId", "questionCount")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(primaryNoteId.toString(), 5),
+                        org.assertj.core.groups.Tuple.tuple(additionalNoteId.toString(), 5)
+                );
+        verify(quizGenerationService, times(2))
+                .generateInterviewPracticeQuiz(any(), any(), any(), any(), anyInt(), any());
+        verify(userUsageService).incrementInterviewPracticeGeneration(eq(userId), any());
+    }
+
+    @Test
+    void startSession_threeSourcesGivesRemainderToPrimary() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        UUID thirdStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId, "System Design", StudyPackStatus.DONE);
+        StudyPackEntity additionalStudyPack = buildStudyPack(userId, additionalNoteId, additionalStudyPackId, "Algorithms", StudyPackStatus.DONE);
+        StudyPackEntity thirdStudyPack = buildStudyPack(userId, thirdNoteId, thirdStudyPackId, "Behavioral", StudyPackStatus.DONE);
+
+        stubReadyStart(userId, primaryNoteId, primaryStudyPackId, primaryStudyPack);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, additionalNoteId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, thirdNoteId))
+                .thenReturn(Optional.of(thirdStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(thirdStudyPackId, userId))
+                .thenReturn(Optional.of(thirdStudyPack));
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any()))
+                .thenReturn(new StudyPackGenerationContext(null, null, "Backend", List.of()));
+        when(quizGenerationService.generateInterviewPracticeQuiz(
+                eq(primaryStudyPack.getTitle()), any(), any(), any(), eq(4), any()
+        )).thenReturn(buildQuiz("Primary", 4));
+        when(quizGenerationService.generateInterviewPracticeQuiz(
+                eq(additionalStudyPack.getTitle()), any(), any(), any(), eq(3), any()
+        )).thenReturn(buildQuiz("Additional", 3));
+        when(quizGenerationService.generateInterviewPracticeQuiz(
+                eq(thirdStudyPack.getTitle()), any(), any(), any(), eq(3), any()
+        )).thenReturn(buildQuiz("Third", 3));
+
+        InterviewPracticeStartResponse response = service.startSession(
+                userId,
+                new InterviewPracticeStartRequest(primaryNoteId, 10, List.of(additionalNoteId, thirdNoteId))
+        );
+
+        assertThat(response.sourceNoteRefs())
+                .extracting("questionCount")
+                .containsExactly(4, 3, 3);
+        assertThat(response.questionCount()).isEqualTo(10);
+    }
+
+    @Test
+    void startSession_moreThanTwoAdditionalNotesThrowsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(
+                noteId,
+                5,
+                List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
+        );
+
+        assertThatThrownBy(() -> service.startSession(userId, request))
+                .isInstanceOf(InvalidInterviewPracticeRequestException.class)
+                .hasMessageContaining("A maximum of 2 additional notes is allowed.");
+    }
+
+    @Test
+    void startSession_additionalNoteCannotEqualPrimary() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(noteId, 5, List.of(noteId));
+
+        assertThatThrownBy(() -> service.startSession(userId, request))
+                .isInstanceOf(InvalidInterviewPracticeRequestException.class)
+                .hasMessageContaining("Primary note cannot be included as an additional source.");
+    }
+
+    @Test
+    void startSession_duplicateAdditionalNotesThrowsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(
+                noteId,
+                5,
+                List.of(additionalNoteId, additionalNoteId)
+        );
+
+        assertThatThrownBy(() -> service.startSession(userId, request))
+                .isInstanceOf(InvalidInterviewPracticeRequestException.class)
+                .hasMessageContaining("Duplicate additional notes are not allowed.");
+    }
+
+    @Test
+    void startSession_nullAdditionalNoteThrowsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        List<UUID> additionalNoteIds = new ArrayList<>();
+        additionalNoteIds.add(null);
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(noteId, 5, additionalNoteIds);
+
+        assertThatThrownBy(() -> service.startSession(userId, request))
+                .isInstanceOf(InvalidInterviewPracticeRequestException.class)
+                .hasMessageContaining("Additional notes cannot include empty values.");
+    }
+
+    @Test
+    void startSession_additionalNoteNotOwnedThrowsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
+        stubReadyValidation(userId, primaryNoteId, primaryStudyPackId, primaryStudyPack);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, additionalNoteId))
+                .thenReturn(Optional.empty());
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(
+                primaryNoteId,
+                5,
+                List.of(additionalNoteId)
+        );
+
+        assertThatThrownBy(() -> service.startSession(userId, request))
+                .isInstanceOf(InvalidInterviewPracticeRequestException.class)
+                .hasMessageContaining("One or more selected notes do not have a Study Pack.");
+    }
+
+    @Test
+    void startSession_additionalNoteWithoutReadyStudyPackThrowsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
+        StudyPackEntity additionalStudyPack = buildStudyPack(
+                userId,
+                additionalNoteId,
+                additionalStudyPackId,
+                "Failed Interview Prep",
+                StudyPackStatus.FAILED
+        );
+        stubReadyValidation(userId, primaryNoteId, primaryStudyPackId, primaryStudyPack);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, additionalNoteId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(
+                primaryNoteId,
+                5,
+                List.of(additionalNoteId)
+        );
+
+        assertThatThrownBy(() -> service.startSession(userId, request))
+                .isInstanceOf(InvalidInterviewPracticeRequestException.class)
+                .hasMessageContaining("One or more selected notes do not have a Study Pack.");
     }
 
     @Test
@@ -141,7 +364,7 @@ class InterviewPracticeServiceTest {
         StudyPackEntity studyPack = buildStudyPack(userId, noteId, studyPackId);
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
-        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, noteId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId),
                 eq(studyPackId),
@@ -163,7 +386,7 @@ class InterviewPracticeServiceTest {
                         0
                 ));
 
-        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(noteId, 5);
+        InterviewPracticeStartRequest request = new InterviewPracticeStartRequest(noteId, 5, null);
         assertThatThrownBy(() -> service.startSession(userId, request))
                 .isInstanceOf(InterviewPracticeQuotaExhaustedException.class);
 
@@ -223,22 +446,62 @@ class InterviewPracticeServiceTest {
     }
 
     private StudyPackEntity buildStudyPack(UUID userId, UUID noteId, UUID studyPackId) {
+        return buildStudyPack(userId, noteId, studyPackId, "Senior Java Backend Interview Prep", StudyPackStatus.DONE);
+    }
+
+    private StudyPackEntity buildStudyPack(
+            UUID userId,
+            UUID noteId,
+            UUID studyPackId,
+            String title,
+            StudyPackStatus status
+    ) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(studyPackId);
         studyPack.setOwnerUserId(userId);
         studyPack.setNoteId(noteId);
         studyPack.setInputType(InputType.TEXT);
-        studyPack.setTitle("Senior Java Backend Interview Prep");
+        studyPack.setTitle(title);
         studyPack.setSummary("Backend interview notes.");
         studyPack.setKeyConcepts(List.of("Transactions", "Concurrency"));
         studyPack.setQuiz(List.of(new QuizItem("Existing question", List.of("A", "B", "C", "D"), 0, "Existing", "Existing explanation")));
         studyPack.setModelTier(ModelTier.FREE);
         studyPack.setModelUsed("mock");
-        studyPack.setStatus(StudyPackStatus.DONE);
+        studyPack.setStatus(status);
         studyPack.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         studyPack.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         studyPack.setTags(new String[0]);
         return studyPack;
+    }
+
+    private void stubReadyStart(
+            UUID userId,
+            UUID noteId,
+            UUID studyPackId,
+            StudyPackEntity studyPack
+    ) {
+        stubReadyValidation(userId, noteId, studyPackId, studyPack);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private void stubReadyValidation(
+            UUID userId,
+            UUID noteId,
+            UUID studyPackId,
+            StudyPackEntity studyPack
+    ) {
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, noteId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.ADAPTIVE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any()))
+                .thenReturn(buildUsagePeriod());
+        when(userUsageService.getMonthlyUsage(eq(userId), any())).thenReturn(UserUsageService.MonthlyUsage.zero());
     }
 
     private BillingUsagePeriodService.UsagePeriod buildUsagePeriod() {
@@ -272,9 +535,13 @@ class InterviewPracticeServiceTest {
     }
 
     private List<QuizItem> buildQuiz(int count) {
+        return buildQuiz("Scenario", count);
+    }
+
+    private List<QuizItem> buildQuiz(String prefix, int count) {
         return java.util.stream.IntStream.range(0, count)
                 .mapToObj(index -> new QuizItem(
-                        "Scenario question " + index,
+                        prefix + " question " + index,
                         List.of("Option A", "Option B", "Option C", "Option D"),
                         index % 2,
                         index % 2 == 0 ? "Transactions" : "Concurrency",

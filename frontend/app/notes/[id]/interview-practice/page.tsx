@@ -12,9 +12,11 @@ import {
   forfeitInterviewPracticeSession,
   getMe,
   getNote,
+  listNotes,
   startInterviewPractice,
   type InterviewPracticeAnswerResponse,
   type InterviewReadinessReportResponse,
+  type NoteListItemResponse,
   type NoteResponse,
   type QuizItem,
 } from "@/lib/api";
@@ -25,6 +27,8 @@ type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "for
 type ChoiceLetter = "A" | "B" | "C" | "D";
 
 const QUESTION_COUNT_OPTIONS = [5, 10] as const;
+const MAX_ADDITIONAL_NOTES = 2;
+const NOTE_CHIP_TITLE_MAX_LENGTH = 40;
 const SOFT_TIMER_SECONDS = 120;
 const TIMER_EXPIRED_COPY = "Try to wrap up - you can keep going.";
 const LEAVE_TITLE = "Leave interview practice?";
@@ -48,6 +52,14 @@ function resolveBandLabel(band: InterviewReadinessReportResponse["band"]) {
   return "Needs more practice";
 }
 
+function truncateNoteTitle(title: string | null) {
+  const label = title?.trim() || "Untitled note";
+  if (label.length <= NOTE_CHIP_TITLE_MAX_LENGTH) {
+    return label;
+  }
+  return `${label.slice(0, NOTE_CHIP_TITLE_MAX_LENGTH - 1)}...`;
+}
+
 export default function InterviewPracticePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -55,6 +67,8 @@ export default function InterviewPracticePage() {
   const noteHref = `/notes/${noteId}`;
   const [phase, setPhase] = useState<InterviewPhase>("prestart");
   const [note, setNote] = useState<NoteResponse | null>(null);
+  const [availableNotes, setAvailableNotes] = useState<NoteListItemResponse[]>([]);
+  const [additionalNoteIds, setAdditionalNoteIds] = useState<string[]>([]);
   const [questionCount, setQuestionCount] = useState<5 | 10>(5);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<QuizItem[]>([]);
@@ -74,8 +88,15 @@ export default function InterviewPracticePage() {
     let active = true;
     async function load() {
       try {
-        const [noteResult, me] = await Promise.all([getNote(noteId), getMe()]);
+        const [noteResult, me, notes] = await Promise.all([
+          getNote(noteId),
+          getMe(),
+          listNotes().catch(() => [] as NoteListItemResponse[]),
+        ]);
         if (!active) return;
+        setAvailableNotes(
+          notes.filter((item) => item.id !== noteId && item.studyPackStatus === "STUDY_PACK_READY"),
+        );
         if (me.profileType !== "PROFESSIONAL" || me.planType !== "PRO") {
           router.replace(noteHref);
           return;
@@ -127,11 +148,27 @@ export default function InterviewPracticePage() {
     setQuestionStartedAtMs(Date.now());
   }, []);
 
+  const handleToggleAdditionalNote = useCallback((selectedNoteId: string) => {
+    setAdditionalNoteIds((current) => {
+      if (current.includes(selectedNoteId)) {
+        return current.filter((id) => id !== selectedNoteId);
+      }
+      if (current.length >= MAX_ADDITIONAL_NOTES) {
+        return current;
+      }
+      return [...current, selectedNoteId];
+    });
+  }, []);
+
   const handleStart = useCallback(async () => {
     setPhase("generating");
     setError(null);
     try {
-      const response = await startInterviewPractice({ noteId, questionCount });
+      const response = await startInterviewPractice({
+        noteId,
+        questionCount,
+        ...(additionalNoteIds.length > 0 ? { additionalNoteIds } : {}),
+      });
       setSessionId(response.sessionId);
       if (response.status === "GENERATING") {
         setPhase("generating");
@@ -148,7 +185,7 @@ export default function InterviewPracticePage() {
       setError(err instanceof Error ? err.message : "Could not start Interview Practice.");
       setPhase("error");
     }
-  }, [noteId, questionCount, resetQuestionState]);
+  }, [additionalNoteIds, noteId, questionCount, resetQuestionState]);
 
   const handleAnswer = useCallback(async () => {
     if (!sessionId || !currentQuestion || !selectedChoice || submittingAnswer) {
@@ -282,6 +319,38 @@ export default function InterviewPracticePage() {
                 ))}
               </div>
             </div>
+            {availableNotes.length > 0 ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Add more notes (optional)</p>
+                  <p>Practice across multiple notes for a cross-domain session.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {availableNotes.map((availableNote) => {
+                    const selected = additionalNoteIds.includes(availableNote.id);
+                    const disabled = !selected && additionalNoteIds.length >= MAX_ADDITIONAL_NOTES;
+                    return (
+                      <button
+                        key={availableNote.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => handleToggleAdditionalNote(availableNote.id)}
+                        title={availableNote.title ?? "Untitled note"}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                          selected
+                            ? "border-blue-500 bg-blue-500/10 text-foreground"
+                            : "border-border bg-background text-foreground/75 hover:border-foreground/30",
+                          disabled ? "cursor-not-allowed opacity-45 hover:border-border" : "",
+                        )}
+                      >
+                        {truncateNoteTitle(availableNote.title)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
               <div className="space-y-1">
                 <p className="font-medium text-foreground">Soft timer</p>

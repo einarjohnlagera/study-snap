@@ -158,6 +158,13 @@ export function getGroupedLearnerLevels(
   return { recommended, other, recommendedGroupLabel: "Recommended for Students" };
 }
 
+export function getDefaultLearnerLevel(profileType: ProfileType | null | undefined): LearnerLevel {
+  if (profileType === "BOARD_EXAM") return "BOARD_EXAM_REVIEW";
+  if (profileType === "PROFESSIONAL") return "PROFESSIONAL";
+  if (profileType === "TEACHER") return "PERSONAL_LEARNING";
+  return "COLLEGE";
+}
+
 export function getCourseProgramHelperText(
   learnerLevel: LearnerLevel | "" | null | undefined,
   context: CourseProgramFieldContext = "profile",
