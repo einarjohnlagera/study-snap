@@ -94,8 +94,13 @@ export default function InterviewPracticePage() {
           listNotes().catch(() => [] as NoteListItemResponse[]),
         ]);
         if (!active) return;
+        const primaryCourseProgram = noteResult.courseProgram?.trim() ?? null;
         setAvailableNotes(
-          notes.filter((item) => item.id !== noteId && item.studyPackStatus === "STUDY_PACK_READY"),
+          notes.filter((item) => {
+            if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
+            if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
+            return true;
+          }),
         );
         if (me.profileType !== "PROFESSIONAL" || me.planType !== "PRO") {
           router.replace(noteHref);

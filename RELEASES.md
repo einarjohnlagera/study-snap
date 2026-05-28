@@ -10,6 +10,7 @@ Theme: complete the Professional profile experience, fix subscription expiry and
 
 - **Professional profile gap fix** — selecting Professional in onboarding now auto-selects the Professional learner level; the completion screen copy updated to mention Interview Practice; the note detail page now recognises Professional users (previously fell through to Student), and shows an Interview Practice action button for Pro-plan Professional users.
 - **Multi-note Interview Practice** — Professional Pro users can add up to 2 additional notes on the Interview Practice prestart screen; questions are distributed proportionally across sources with cross-source deduplication; no subject constraint (real interviews span domains).
+- **Interview Practice note picker filter** — additional notes shown in the prestart picker are now filtered to match the primary note's course/program, preventing unrelated domain notes from appearing; falls back to all ready notes when the primary note has no course/program set.
 
 ---
 
