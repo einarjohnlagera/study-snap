@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, ChevronDown, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -489,6 +489,8 @@ export function PublicLibraryPageClient() {
   const [tagsFilterDraft, setTagsFilterDraft] = useState<string[]>([]);
   const [subjectComboOpen, setSubjectComboOpen] = useState(false);
   const [courseProgramComboOpen, setCourseProgramComboOpen] = useState(false);
+  const subjectDropdownRef = useRef<HTMLDivElement>(null);
+  const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
 
   // Computed once on mount — the profile-based audience default for this user
   const profileDefaultAudience = useMemo(
@@ -788,6 +790,22 @@ export function PublicLibraryPageClient() {
       globalThis.clearTimeout(timeoutId);
     };
   }, [shareToastMessage]);
+
+  useEffect(() => {
+    if (!subjectComboOpen) return;
+    const id = globalThis.setTimeout(() => {
+      subjectDropdownRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => globalThis.clearTimeout(id);
+  }, [subjectComboOpen]);
+
+  useEffect(() => {
+    if (!courseProgramComboOpen) return;
+    const id = globalThis.setTimeout(() => {
+      courseProgramDropdownRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => globalThis.clearTimeout(id);
+  }, [courseProgramComboOpen]);
 
   const toggleDraftTag = useCallback((tag: string) => {
     setTagDraft((previous) => (
@@ -1547,7 +1565,7 @@ export function PublicLibraryPageClient() {
                 />
               </div>
               {subjectComboOpen ? (
-                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                <div ref={subjectDropdownRef} className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
                   <button
                     type="button"
                     className={getComboboxItemClassName(subjectFilterDraft === ALL_SUBJECTS)}
@@ -1625,7 +1643,7 @@ export function PublicLibraryPageClient() {
                 />
               </div>
               {courseProgramComboOpen ? (
-                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                <div ref={courseProgramDropdownRef} className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
                   <button
                     type="button"
                     className={getComboboxItemClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}

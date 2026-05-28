@@ -271,6 +271,7 @@ export default function LibraryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialLoadStartedRef = useRef(false);
+  const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
@@ -461,6 +462,14 @@ export default function LibraryPage() {
       setCourseProgramComboOpen(false);
     }
   }, [moreFiltersOpen]);
+
+  useEffect(() => {
+    if (!courseProgramComboOpen) return;
+    const id = globalThis.setTimeout(() => {
+      courseProgramDropdownRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
+    return () => globalThis.clearTimeout(id);
+  }, [courseProgramComboOpen]);
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
@@ -1110,7 +1119,7 @@ export default function LibraryPage() {
                 />
               </div>
               {courseProgramComboOpen ? (
-                <div className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                <div ref={courseProgramDropdownRef} className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
                   <button
                     type="button"
                     className={getComboboxItemClassName(selectedCourseProgram === ALL_COURSE_PROGRAMS)}
