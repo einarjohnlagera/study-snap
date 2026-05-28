@@ -1,5 +1,6 @@
 package com.studysnap.backend.util;
 
+import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import lombok.experimental.UtilityClass;
 
@@ -31,6 +32,11 @@ public class QuizSessionStateUtils {
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
     private static final String TIME_SPENT_SECONDS_KEY = "timeSpentSeconds";
+    private static final String INTERVIEW_SOURCE_NOTE_REFS_KEY = "interviewSourceNoteRefs";
+    private static final String SOURCE_STUDY_PACK_ID_KEY = "studyPackId";
+    private static final String SOURCE_NOTE_ID_KEY = "noteId";
+    private static final String SOURCE_NOTE_TITLE_KEY = "noteTitle";
+    private static final String SOURCE_QUESTION_COUNT_KEY = "questionCount";
     public static final String SESSION_STATE_POOL_SOURCED = "poolSourced";
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
@@ -118,6 +124,36 @@ public class QuizSessionStateUtils {
         state.put(SELECTED_CHOICES_KEY, Map.of());
         state.put(TIME_SPENT_SECONDS_KEY, Map.of());
         return state;
+    }
+
+    public Map<String, Object> withInterviewSourceNoteRefs(
+            Map<String, Object> sessionState,
+            List<InterviewSourceNoteRef> sourceNoteRefs
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        state.put(INTERVIEW_SOURCE_NOTE_REFS_KEY, serializeInterviewSourceNoteRefs(sourceNoteRefs));
+        return state;
+    }
+
+    public List<InterviewSourceNoteRef> extractInterviewSourceNoteRefs(Map<String, Object> sessionState) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return List.of();
+        }
+        Object raw = sessionState.get(INTERVIEW_SOURCE_NOTE_REFS_KEY);
+        if (!(raw instanceof List<?> rawEntries) || rawEntries.isEmpty()) {
+            return List.of();
+        }
+        List<InterviewSourceNoteRef> sourceNoteRefs = new ArrayList<>(rawEntries.size());
+        for (Object rawEntry : rawEntries) {
+            InterviewSourceNoteRef sourceNoteRef = extractInterviewSourceNoteRef(rawEntry);
+            if (sourceNoteRef != null) {
+                sourceNoteRefs.add(sourceNoteRef);
+            }
+        }
+        return sourceNoteRefs;
     }
 
     public Map<String, Object> withPoolSourced(Map<String, Object> sessionState, boolean poolSourced) {
@@ -385,6 +421,39 @@ public class QuizSessionStateUtils {
         return serialized;
     }
 
+    private List<Map<String, Object>> serializeInterviewSourceNoteRefs(List<InterviewSourceNoteRef> sourceNoteRefs) {
+        if (sourceNoteRefs == null || sourceNoteRefs.isEmpty()) {
+            return List.of();
+        }
+        return sourceNoteRefs.stream()
+                .map(sourceNoteRef -> {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put(SOURCE_STUDY_PACK_ID_KEY, sourceNoteRef.studyPackId());
+                    entry.put(SOURCE_NOTE_ID_KEY, sourceNoteRef.noteId());
+                    entry.put(SOURCE_NOTE_TITLE_KEY, sourceNoteRef.noteTitle());
+                    entry.put(SOURCE_QUESTION_COUNT_KEY, sourceNoteRef.questionCount());
+                    return entry;
+                })
+                .toList();
+    }
+
+    private InterviewSourceNoteRef extractInterviewSourceNoteRef(Object rawEntry) {
+        if (rawEntry instanceof InterviewSourceNoteRef sourceNoteRef) {
+            return sourceNoteRef;
+        }
+        if (!(rawEntry instanceof Map<?, ?> sourceMap)) {
+            return null;
+        }
+        String studyPackId = readStringValue(sourceMap, SOURCE_STUDY_PACK_ID_KEY);
+        String noteId = readStringValue(sourceMap, SOURCE_NOTE_ID_KEY);
+        String noteTitle = readStringValue(sourceMap, SOURCE_NOTE_TITLE_KEY);
+        int questionCount = readIntValue(sourceMap, SOURCE_QUESTION_COUNT_KEY);
+        if (studyPackId == null || noteId == null || questionCount <= 0) {
+            return null;
+        }
+        return new InterviewSourceNoteRef(studyPackId, noteId, noteTitle, questionCount);
+    }
+
     private Integer parseCorrectIndex(int choiceCount, Object... candidates) {
         for (Object value : candidates) {
             if (value instanceof Number number) {
@@ -496,5 +565,21 @@ public class QuizSessionStateUtils {
             }
         }
         return copy;
+    }
+
+    private String readStringValue(Map<?, ?> sourceMap, String key) {
+        Object raw = sourceMap.get(key);
+        if (raw instanceof String value && !value.isBlank()) {
+            return value;
+        }
+        return null;
+    }
+
+    private int readIntValue(Map<?, ?> sourceMap, String key) {
+        Object raw = sourceMap.get(key);
+        if (raw instanceof Number number) {
+            return number.intValue();
+        }
+        return 0;
     }
 }

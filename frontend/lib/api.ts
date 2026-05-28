@@ -863,6 +863,12 @@ export type InterviewPracticeStartResponse = {
   currentQuestionIndex: number;
   softTimerSeconds: number;
   question: QuizItem | null;
+  sourceNoteRefs?: Array<{
+    noteId: string;
+    noteTitle: string | null;
+    studyPackId: string;
+    questionCount: number;
+  }>;
 };
 
 export type InterviewPracticeAnswerResponse = {
@@ -2550,7 +2556,7 @@ export async function forfeitLongExamSession(
 }
 
 export async function startInterviewPractice(
-  body: { noteId: string; questionCount: number },
+  body: { noteId: string; questionCount: number; additionalNoteIds?: string[] },
 ): Promise<InterviewPracticeStartResponse> {
   const response = await fetchWithAuth(
     "/interview-practice/start",

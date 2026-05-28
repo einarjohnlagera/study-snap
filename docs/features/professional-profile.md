@@ -79,7 +79,7 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 
 ### Setup
 
-- Source: single note (multi-note deferred to v0.15+)
+- Source: up to 3 notes (primary + 2 additional); no subject constraint required
 - Question count: **5 or 10** (no other lengths). 5 = warm-up (~10 min), 10 = full session (~20 min)
 - Difficulty: locked at senior framing for Pro
 - Disclaimer: "AI will provide feedback after each question. Sessions count toward your monthly Interview Practice quota."
@@ -131,9 +131,8 @@ Interview Practice is a **sub-mode of Adaptive Practice**, not a standalone quiz
 - An open-ended free-text mode. v1 keeps MC structure with scenario reframing; conversational evaluation is a v0.16+ consideration if usage justifies it.
 - A mode that consumes Adaptive Practice or Challenge Quiz quotas. The dedicated quota is the value-clarity choice.
 
-### Future direction (v0.15+)
+### Future direction
 
-- **Multi-note Interview Practice (smart context aggregation)**: instead of single-note v1, generate from the base note PLUS related notes that share `courseProgram` AND at least one tag (e.g., `courseProgram="Software Engineer"` + tag `Java` → pull all Java-tagged notes under that program). Cap at 2–3 sibling notes to manage prompt size and per-session cost. Requires the same multi-source generation context as Multi-note Long Exam — build that infrastructure first, prove stability, then extend to Interview Practice. Re-validate cost math at v0.15.0 start since aggregating sibling notes increases prompt tokens against `gpt-4.1`.
 - **Structured interview templates** (e.g. "Backend Engineer = PL + DB + Behavioral"): would need a role taxonomy or user-defined template system. Out of scope until v1 usage data shows demand and v1 limitations are real.
 - **Open-ended / conversational evaluation**: free-text answers with AI rubric scoring instead of MC. Architecturally different — would need new session schema, new evaluation pipeline, new result model. Consider only if v1 usage proves the demand and the MC-with-critique format hits its ceiling.
 - **Profile / role enrichment**: capturing target role explicitly on the user profile (not on the note) to drive better generation context. Bigger architectural decision; do not bundle with Interview Practice work.

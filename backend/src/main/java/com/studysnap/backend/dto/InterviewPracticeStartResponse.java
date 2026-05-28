@@ -1,6 +1,7 @@
 package com.studysnap.backend.dto;
 
 import java.util.UUID;
+import java.util.List;
 
 public record InterviewPracticeStartResponse(
         UUID sessionId,
@@ -10,6 +11,7 @@ public record InterviewPracticeStartResponse(
         int questionCount,
         int currentQuestionIndex,
         int softTimerSeconds,
-        QuizItem question
+        QuizItem question,
+        List<InterviewSourceNoteRef> sourceNoteRefs
 ) {
 }

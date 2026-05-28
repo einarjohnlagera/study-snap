@@ -301,11 +301,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isPaidPlan, setIsPaidPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") !== "FREE");
   const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
   const [userRole, setUserRole] = useState<"USER" | "ADMIN">(() => getAuthUser()?.role ?? "USER");
-  const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">(() => {
+  const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL">(() => {
     const authUser = getAuthUser();
-    return authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER"
-      ? authUser.profileType
-      : "STUDENT";
+    const pt = authUser?.profileType;
+    if (pt === "BOARD_EXAM" || pt === "TEACHER" || pt === "PROFESSIONAL") return pt;
+    return "STUDENT";
   });
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
@@ -460,7 +460,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setIsPaidPlan((authUser?.planType ?? "FREE") !== "FREE");
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       setUserRole(authUser?.role ?? "USER");
-      setProfileType(authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER" ? authUser.profileType : "STUDENT");
+      const pt = authUser?.profileType;
+      setProfileType(pt === "BOARD_EXAM" || pt === "TEACHER" || pt === "PROFESSIONAL" ? pt : "STUDENT");
       if (authUser && hasPendingFirstStudyOnboarding(authUser)) {
         setFirstStudyStep(getFirstStudyOnboardingStep(authUser.id));
         return;
@@ -1815,6 +1816,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Challenge Quiz" />
                       {hasAdaptiveTargets ? (
                         <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />
+                      ) : null}
+                      {profileType === "PROFESSIONAL" && currentPlan === "PRO" ? (
+                        <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/interview-practice`)} action="interviewPractice" label="Interview Practice" />
                       ) : null}
                     </>
                   )}

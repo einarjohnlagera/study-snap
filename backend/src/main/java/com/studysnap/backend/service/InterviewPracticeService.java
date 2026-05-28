@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.InterviewPracticeAnswerResponse;
 import com.studysnap.backend.dto.InterviewPracticeStartRequest;
 import com.studysnap.backend.dto.InterviewPracticeStartResponse;
 import com.studysnap.backend.dto.InterviewReadinessReportResponse;
+import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -16,6 +17,7 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotFoundException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotInProgressException;
@@ -42,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -55,11 +58,16 @@ public class InterviewPracticeService {
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_QUESTION_COUNT = "questionCount";
     private static final String ANALYTICS_METADATA_SCORE_PERCENTAGE = "scorePercentage";
+    private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
+    private static final String MESSAGE_ADDITIONAL_NOTE_MISSING_STUDY_PACK = "One or more selected notes do not have a Study Pack.";
+    private static final String MESSAGE_NOT_ENOUGH_UNIQUE_QUESTIONS = "Could not generate enough unique interview questions.";
     private static final String REPORT_BAND_READY = "READY";
     private static final String REPORT_BAND_ALMOST_READY = "ALMOST_READY";
     private static final String REPORT_BAND_NEEDS_PRACTICE = "NEEDS_PRACTICE";
     private static final int QUESTION_COUNT_SHORT = 5;
     private static final int QUESTION_COUNT_LONG = 10;
+    private static final int MAX_ADDITIONAL_SOURCE_COUNT = 2;
+    private static final int MIN_QUESTIONS_PER_SOURCE = 1;
     private static final int SOFT_TIMER_SECONDS = 120;
     private static final int READY_THRESHOLD = 80;
     private static final int ALMOST_READY_THRESHOLD = 50;
@@ -89,11 +97,15 @@ public class InterviewPracticeService {
             throw new InvalidInterviewPracticeRequestException("A source note is required.");
         }
         int questionCount = normalizeQuestionCount(request.questionCount());
+        List<UUID> additionalNoteIds = resolveAdditionalNoteIds(request, noteId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.INTERVIEW_PRACTICE);
 
-        StudyPackEntity studyPack = studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)
+        StudyPackEntity studyPack = studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, noteId)
                 .orElseThrow(StudyPackNotFoundException::new);
+        if (!isStudyPackReady(studyPack)) {
+            throw new StudyPackNotFoundException();
+        }
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId,
@@ -112,31 +124,30 @@ public class InterviewPracticeService {
 
         assertQuotaAvailable(userId, planType);
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(userId, studyPack));
-        StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(userId, studyPack);
-        List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+        List<InterviewSourceNoteRef> sourceNoteRefs = resolveSourceNoteRefs(
+                studyPack,
+                userId,
+                additionalNoteIds,
+                questionCount
+        );
+        List<InterviewSourceNoteRef> sessionSourceNoteRefs = additionalNoteIds.isEmpty() ? List.of() : sourceNoteRefs;
+        QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
+                userId,
+                studyPack,
+                sessionSourceNoteRefs
+        ));
         try {
-            List<QuizItem> generatedQuiz = quizGenerationService.generateInterviewPracticeQuiz(
-                    studyPack.getTitle(),
-                    studyPack.getSummary(),
-                    studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
-                    disallowedQuestions,
-                    questionCount,
-                    generationContext
-            );
-            List<QuizItem> interviewQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                    generatedQuiz,
-                    QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
-            );
+            List<QuizItem> interviewQuiz = generateQuizForSources(userId, sourceNoteRefs);
             if (interviewQuiz.size() != questionCount) {
-                throw new InvalidInterviewPracticeRequestException("Could not generate enough unique interview questions.");
+                throw new InvalidInterviewPracticeRequestException(MESSAGE_NOT_ENOUGH_UNIQUE_QUESTIONS);
             }
             markReady(session, interviewQuiz);
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
             userUsageService.incrementInterviewPracticeGeneration(userId, saved.getCreatedAt());
             trackAnalytics(userId, AnalyticsEventType.INTERVIEW_PRACTICE_STARTED, studyPack.getId(), Map.of(
                     ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
-                    ANALYTICS_METADATA_QUESTION_COUNT, interviewQuiz.size()
+                    ANALYTICS_METADATA_QUESTION_COUNT, interviewQuiz.size(),
+                    ANALYTICS_METADATA_SOURCE_COUNT, sourceNoteRefs.size()
             ));
             return toStartResponse(saved);
         } catch (RuntimeException ex) {
@@ -225,7 +236,11 @@ public class InterviewPracticeService {
         return new SimpleMessageResponse(INTERVIEW_FORFEITED_MESSAGE);
     }
 
-    private QuickReviewSessionEntity buildGeneratingSession(UUID userId, StudyPackEntity studyPack) {
+    private QuickReviewSessionEntity buildGeneratingSession(
+            UUID userId,
+            StudyPackEntity studyPack,
+            List<InterviewSourceNoteRef> sourceNoteRefs
+    ) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
@@ -241,17 +256,21 @@ public class InterviewPracticeService {
         session.setRetryCount(0);
         session.setDurationSeconds(null);
         session.setSessionMetadata(null);
-        session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(
+        Map<String, Object> sessionState = QuizSessionStateUtils.withInterviewPracticeState(
                 List.of(),
                 SUB_MODE_INTERVIEW,
                 SOFT_TIMER_SECONDS
-        ));
+        );
+        session.setSessionState(QuizSessionStateUtils.withInterviewSourceNoteRefs(sessionState, sourceNoteRefs));
         session.setCreatedAt(OffsetDateTime.now());
         session.setCompletedAt(null);
         return session;
     }
 
     private void markReady(QuickReviewSessionEntity session, List<QuizItem> quiz) {
+        List<InterviewSourceNoteRef> sourceNoteRefs = QuizSessionStateUtils.extractInterviewSourceNoteRefs(
+                session.getSessionState()
+        );
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -261,11 +280,12 @@ public class InterviewPracticeService {
         session.setRetryCount(0);
         session.setDurationSeconds(null);
         session.setSessionMetadata(null);
-        session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(
+        Map<String, Object> sessionState = QuizSessionStateUtils.withInterviewPracticeState(
                 quiz,
                 SUB_MODE_INTERVIEW,
                 SOFT_TIMER_SECONDS
-        ));
+        );
+        session.setSessionState(QuizSessionStateUtils.withInterviewSourceNoteRefs(sessionState, sourceNoteRefs));
         session.setCompletedAt(null);
     }
 
@@ -292,7 +312,8 @@ public class InterviewPracticeService {
                 session.getTotalQuestions() == null ? quiz.size() : session.getTotalQuestions(),
                 currentIndex,
                 SOFT_TIMER_SECONDS,
-                question
+                question,
+                QuizSessionStateUtils.extractInterviewSourceNoteRefs(session.getSessionState())
         );
     }
 
@@ -376,6 +397,113 @@ public class InterviewPracticeService {
             return questionCount;
         }
         throw new InvalidInterviewPracticeRequestException("Question count must be 5 or 10.");
+    }
+
+    private List<UUID> resolveAdditionalNoteIds(InterviewPracticeStartRequest request, UUID primaryNoteId) {
+        if (request == null || request.additionalNoteIds() == null || request.additionalNoteIds().isEmpty()) {
+            return List.of();
+        }
+        if (request.additionalNoteIds().size() > MAX_ADDITIONAL_SOURCE_COUNT) {
+            throw new InvalidInterviewPracticeRequestException("A maximum of 2 additional notes is allowed.");
+        }
+        Set<UUID> uniqueNoteIds = new LinkedHashSet<>();
+        for (UUID additionalNoteId : request.additionalNoteIds()) {
+            if (additionalNoteId == null) {
+                throw new InvalidInterviewPracticeRequestException("Additional notes cannot include empty values.");
+            }
+            if (additionalNoteId.equals(primaryNoteId)) {
+                throw new InvalidInterviewPracticeRequestException("Primary note cannot be included as an additional source.");
+            }
+            if (!uniqueNoteIds.add(additionalNoteId)) {
+                throw new InvalidInterviewPracticeRequestException("Duplicate additional notes are not allowed.");
+            }
+        }
+        return List.copyOf(uniqueNoteIds);
+    }
+
+    private List<InterviewSourceNoteRef> resolveSourceNoteRefs(
+            StudyPackEntity primaryStudyPack,
+            UUID userId,
+            List<UUID> additionalNoteIds,
+            int questionCount
+    ) {
+        List<StudyPackEntity> sources = new ArrayList<>(1 + additionalNoteIds.size());
+        sources.add(primaryStudyPack);
+        for (UUID additionalNoteId : additionalNoteIds) {
+            sources.add(findOwnedReadyInterviewSourceOrThrow(userId, additionalNoteId));
+        }
+
+        int sourceCount = sources.size();
+        int baseQuestionCount = questionCount / sourceCount;
+        if (baseQuestionCount < MIN_QUESTIONS_PER_SOURCE) {
+            throw new InvalidInterviewPracticeRequestException(
+                    "Too many source notes for the selected question count. Reduce the number of notes or increase question count."
+            );
+        }
+        int remainder = questionCount % sourceCount;
+        List<InterviewSourceNoteRef> sourceNoteRefs = new ArrayList<>(sourceCount);
+        for (int index = 0; index < sources.size(); index++) {
+            StudyPackEntity source = sources.get(index);
+            int sourceQuestionCount = baseQuestionCount + (index == 0 ? remainder : 0);
+            sourceNoteRefs.add(buildSourceNoteRef(source, sourceQuestionCount));
+        }
+        return sourceNoteRefs;
+    }
+
+    private StudyPackEntity findOwnedReadyInterviewSourceOrThrow(UUID userId, UUID noteId) {
+        StudyPackEntity studyPack = studyPackRepository.findByOwnerUserIdAndNoteIdForUpdate(userId, noteId)
+                .orElseThrow(() -> new InvalidInterviewPracticeRequestException(MESSAGE_ADDITIONAL_NOTE_MISSING_STUDY_PACK));
+        if (!isStudyPackReady(studyPack)) {
+            throw new InvalidInterviewPracticeRequestException(MESSAGE_ADDITIONAL_NOTE_MISSING_STUDY_PACK);
+        }
+        return studyPack;
+    }
+
+    private InterviewSourceNoteRef buildSourceNoteRef(StudyPackEntity studyPack, int questionCount) {
+        return new InterviewSourceNoteRef(
+                studyPack.getId().toString(),
+                studyPack.getNoteId().toString(),
+                studyPack.getTitle(),
+                questionCount
+        );
+    }
+
+    private List<QuizItem> generateQuizForSources(UUID userId, List<InterviewSourceNoteRef> sourceNoteRefs) {
+        List<QuizItem> mergedQuiz = new ArrayList<>();
+        Set<String> disallowedQuestions = new LinkedHashSet<>();
+        for (InterviewSourceNoteRef sourceNoteRef : sourceNoteRefs) {
+            UUID sourceStudyPackId = UUID.fromString(sourceNoteRef.studyPackId());
+            StudyPackEntity sourceStudyPack = studyPackRepository.findByIdAndOwnerUserIdForUpdate(sourceStudyPackId, userId)
+                    .orElseThrow(StudyPackNotFoundException::new);
+            StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(
+                    userId,
+                    sourceStudyPack
+            );
+            List<String> sourceDisallowedQuestions = new ArrayList<>(extractQuestionTexts(sourceStudyPack.getQuiz()));
+            sourceDisallowedQuestions.addAll(extractQuestionTexts(mergedQuiz));
+            disallowedQuestions.addAll(
+                    QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(sourceDisallowedQuestions)
+            );
+            List<QuizItem> generatedQuiz = quizGenerationService.generateInterviewPracticeQuiz(
+                    sourceStudyPack.getTitle(),
+                    sourceStudyPack.getSummary(),
+                    sourceStudyPack.getKeyConcepts() == null ? List.of() : sourceStudyPack.getKeyConcepts(),
+                    sourceDisallowedQuestions,
+                    sourceNoteRef.questionCount(),
+                    generationContext
+            );
+            List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
+                    generatedQuiz,
+                    disallowedQuestions
+            );
+            mergedQuiz.addAll(uniqueGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+        }
+        return mergedQuiz;
+    }
+
+    private boolean isStudyPackReady(StudyPackEntity studyPack) {
+        return studyPack != null && studyPack.getStatus() == StudyPackStatus.DONE;
     }
 
     private int parseChoiceIndex(String selectedChoice) {

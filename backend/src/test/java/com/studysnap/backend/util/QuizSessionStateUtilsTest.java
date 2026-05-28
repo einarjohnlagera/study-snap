@@ -1,5 +1,6 @@
 package com.studysnap.backend.util;
 
+import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import org.junit.jupiter.api.Test;
 
@@ -76,6 +77,32 @@ class QuizSessionStateUtilsTest {
         assertThat(QuizSessionStateUtils.extractQuiz(null)).isEmpty();
         assertThat(QuizSessionStateUtils.extractQuiz(Map.of())).isEmpty();
         assertThat(QuizSessionStateUtils.extractQuiz(Map.of("quiz", "invalid"))).isEmpty();
+    }
+
+    @Test
+    void withInterviewSourceNoteRefs_andExtractInterviewSourceNoteRefs_roundTrip() {
+        List<InterviewSourceNoteRef> sourceNoteRefs = List.of(
+                new InterviewSourceNoteRef("study-pack-1", "note-1", "System Design", 4),
+                new InterviewSourceNoteRef("study-pack-2", "note-2", "Behavioral", 3)
+        );
+
+        Map<String, Object> state = QuizSessionStateUtils.withInterviewSourceNoteRefs(
+                Map.of("subMode", "INTERVIEW"),
+                sourceNoteRefs
+        );
+
+        assertThat(state).containsEntry("subMode", "INTERVIEW");
+        assertThat(QuizSessionStateUtils.extractInterviewSourceNoteRefs(state)).containsExactlyElementsOf(sourceNoteRefs);
+    }
+
+    @Test
+    void extractInterviewSourceNoteRefs_returnsEmptyForMissingOrEmptyPayload() {
+        assertThat(QuizSessionStateUtils.extractInterviewSourceNoteRefs(null)).isEmpty();
+        assertThat(QuizSessionStateUtils.extractInterviewSourceNoteRefs(Map.of())).isEmpty();
+
+        Map<String, Object> state = QuizSessionStateUtils.withInterviewSourceNoteRefs(Map.of(), List.of());
+
+        assertThat(QuizSessionStateUtils.extractInterviewSourceNoteRefs(state)).isEmpty();
     }
 
     @Test

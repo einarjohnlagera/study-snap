@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   BookOpen,
+  Briefcase,
   Copy,
   Globe,
   HelpCircle,
@@ -47,6 +48,7 @@ export type ActionIconName =
   | "quickReview"
   | "challengeQuiz"
   | "adaptivePractice"
+  | "interviewPractice"
   | "retry"
   | "save"
   | "settings"
@@ -72,6 +74,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   quickReview: Zap,
   challengeQuiz: Trophy,
   adaptivePractice: Target,
+  interviewPractice: Briefcase,
   retry: RotateCcw,
   save: Save,
   settings: Settings,
