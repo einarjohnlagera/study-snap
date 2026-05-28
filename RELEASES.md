@@ -1,5 +1,15 @@
 # RELEASES.md - NoteLib
 
+## v0.19.0 - Multi-Note Depth & Simulation Parity
+
+**Status: In Progress**
+
+Theme: complete the multi-note story across all premium simulation modes — Multi-note Board Exam is the last remaining gap — and fix the admin analytics subject drift.
+
+### ✅ Shipped
+
+---
+
 ## v0.18.0 - Profile Completeness & Communication
 
 **Status: Released**

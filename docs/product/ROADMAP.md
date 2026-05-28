@@ -65,7 +65,7 @@ Additionally, engineering and sciences users see plain-text working solutions wh
 
 ## v0.19.0 - Multi-Note Depth & Simulation Parity
 
-**Status: Planned**
+**Status: In Progress**
 
 Theme: complete the multi-note story across all premium simulation modes. Board Exam is the last mode without multi-note support — Long Exam has had it since v0.14.0. This is the highest-priority shipping target for the Facebook group audience, where board exam reviewers are the primary demographic.
 
