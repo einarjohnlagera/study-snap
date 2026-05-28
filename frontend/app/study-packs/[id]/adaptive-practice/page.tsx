@@ -417,11 +417,24 @@ export default function AdaptivePracticePage() {
         ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
         : undefined;
       if (adaptiveQuiz?.sessionId) {
-        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, {
+        const correctConceptNames = quiz
+          .filter((question, index) => {
+            const selected = question.questionFormat === "MULTI_SELECT"
+              ? selectedMultiChoices[index]
+              : selectedChoices[index];
+            return isQuizSelectionCorrect(question, selected);
+          })
+          .map((question) => question.concept)
+          .filter((concept): concept is string => Boolean(concept?.trim()));
+        const completeRequest: Parameters<typeof completeAdaptivePracticeSession>[1] = {
           correctAnswers: score,
           totalQuestions: quiz.length,
           durationSeconds,
-        }).catch(() => {
+        };
+        if (correctConceptNames.length > 0) {
+          completeRequest.correctConceptNames = correctConceptNames;
+        }
+        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, completeRequest).catch(() => {
           // Completion persistence should not block adaptive practice flow.
         });
       }

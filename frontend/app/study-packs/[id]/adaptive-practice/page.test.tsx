@@ -187,6 +187,49 @@ describe("AdaptivePracticePage", () => {
     expect(screen.getByText("Score: 1 / 1 (100%)")).toBeInTheDocument();
   });
 
+  it("includes correctly answered concept names when completing Adaptive Practice", async () => {
+    setupGeneratedAdaptiveQuiz();
+
+    render(<AdaptivePracticePage />);
+
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+
+    await waitFor(() => {
+      expect(completeAdaptivePracticeSession).toHaveBeenCalledWith("session-1", expect.objectContaining({
+        correctAnswers: 1,
+        totalQuestions: 1,
+        correctConceptNames: ["Trigonometric derivatives"],
+      }));
+    });
+  });
+
+  it("omits correct concept names when all Adaptive Practice answers are wrong", async () => {
+    setupGeneratedAdaptiveQuiz();
+
+    render(<AdaptivePracticePage />);
+
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    const wrongChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*-cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(wrongChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+
+    await waitFor(() => {
+      expect(completeAdaptivePracticeSession).toHaveBeenCalledWith("session-1", expect.objectContaining({
+        correctAnswers: 0,
+        totalQuestions: 1,
+      }));
+    });
+    const completeRequest = (completeAdaptivePracticeSession as jest.Mock).mock.calls[0]?.[1];
+    expect(completeRequest).not.toHaveProperty("correctConceptNames");
+  });
+
   it("forfeits the active Adaptive Practice session before leaving", async () => {
     setupGeneratedAdaptiveQuiz();
 
@@ -452,9 +495,9 @@ describe("AdaptivePracticePage", () => {
     expect(review).toHaveTextContent("What is the derivative of sin(x)?");
     expect(review).toHaveTextContent("Trigonometric derivatives");
     expect(review).toHaveTextContent("-cos(x)");
-    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("Your Answer");
     expect(review).toHaveTextContent("cos(x)");
-    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("Correct Answer");
     expect(review).toHaveTextContent("The derivative of sin(x) is cos(x).");
   });
 });

@@ -22,6 +22,7 @@ import com.studysnap.backend.util.QuizSessionStateUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -71,6 +72,8 @@ class QuickReviewAdaptivePracticeServiceTest {
     private AiRateLimitService aiRateLimitService;
     @Mock
     private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private ConceptHealthService conceptHealthService;
 
     private QuickReviewAdaptivePracticeService adaptivePracticeService;
 
@@ -90,7 +93,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 authService,
                 analyticsService,
                 aiRateLimitService,
-                generationContextResolver
+                generationContextResolver,
+                conceptHealthService
         );
     }
 
@@ -203,7 +207,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 authService,
                 analyticsService,
                 aiRateLimitService,
-                generationContextResolver
+                generationContextResolver,
+                conceptHealthService
         );
         QuickReviewSessionEntity latestChallenge = new QuickReviewSessionEntity();
         latestChallenge.setId(UUID.randomUUID());
@@ -235,6 +240,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(QuickReviewSessionMode.CHALLENGE),
                 any()
         )).thenReturn(List.of(latestChallenge));
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), any(), any(OffsetDateTime.class)))
+                .thenReturn(List.of());
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
                         PlanType.PRO,
@@ -272,6 +279,140 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
     }
 
+    @Test
+    void generateAdaptiveQuiz_generatesFromDueConceptsWhenWeakConceptsAreEmpty() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        studyPack.setKeyConcepts(List.of("Old Concept"));
+        QuickReviewSessionEntity latestQuickReview = buildCompletedSourceSession(
+                userId,
+                studyPackId,
+                noteId,
+                List.of()
+        );
+        List<QuizItem> generatedQuiz = buildGeneratedQuiz("Old Concept", 5);
+
+        stubAdaptiveGeneration(userId, studyPackId, studyPack, latestQuickReview, generatedQuiz);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), eq(List.of("Old Concept")), any(OffsetDateTime.class)))
+                .thenReturn(List.of("Old Concept"));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(),
+                userId
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.weakConcepts()).containsExactly("Old Concept");
+        assertThat(response.quiz()).hasSize(5);
+        verify(quizGenerationService).generateAdaptivePracticeQuiz(
+                eq("Pack"),
+                eq("Summary"),
+                eq(List.of("Old Concept")),
+                eq(List.of("Old Concept")),
+                any(),
+                eq(5),
+                any()
+        );
+    }
+
+    @Test
+    void generateAdaptiveQuiz_mergesDueConceptsBeforeWeakConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        studyPack.setKeyConcepts(List.of("Old Concept", "Current Concept"));
+        QuickReviewSessionEntity latestQuickReview = buildCompletedSourceSession(
+                userId,
+                studyPackId,
+                noteId,
+                List.of("Weak Concept", "Old Concept")
+        );
+        List<QuizItem> generatedQuiz = buildGeneratedQuiz("Old Concept", 5);
+
+        stubAdaptiveGeneration(userId, studyPackId, studyPack, latestQuickReview, generatedQuiz);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), eq(List.of("Old Concept", "Current Concept")), any(OffsetDateTime.class)))
+                .thenReturn(List.of("Old Concept"));
+
+        adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> focusConceptsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(quizGenerationService).generateAdaptivePracticeQuiz(
+                eq("Pack"),
+                eq("Summary"),
+                eq(List.of("Old Concept", "Current Concept")),
+                focusConceptsCaptor.capture(),
+                any(),
+                eq(5),
+                any()
+        );
+        assertThat(focusConceptsCaptor.getValue()).containsExactly("Old Concept", "Weak Concept");
+    }
+
+    @Test
+    void completeAdaptiveSession_recordsCorrectConceptNamesWhenPresent() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(),
+                userId,
+                1,
+                1,
+                20,
+                List.of("Trigonometric derivatives")
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Trigonometric derivatives")),
+                any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
+    void completeAdaptiveSession_doesNotRecordConceptHealthWhenCorrectConceptNamesAreNull() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(),
+                userId,
+                1,
+                1,
+                20,
+                null
+        );
+
+        verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
+    }
+
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID ownerUserId) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(studyPackId);
@@ -288,6 +429,93 @@ class QuickReviewAdaptivePracticeServiceTest {
                 "Explanation"
         )));
         return studyPack;
+    }
+
+    private void stubAdaptiveGeneration(
+            UUID userId,
+            UUID studyPackId,
+            StudyPackEntity studyPack,
+            QuickReviewSessionEntity latestQuickReview,
+            List<QuizItem> generatedQuiz
+    ) {
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.ADAPTIVE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any()
+        )).thenReturn(List.of(latestQuickReview));
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(List.of());
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(ActivityType.STARTED_ADAPTIVE_PRACTICE),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        ));
+        when(quizGenerationService.generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any()))
+                .thenReturn(generatedQuiz);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private QuickReviewSessionEntity buildCompletedSourceSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            List<String> weakConcepts
+    ) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+        session.setCompletedAt(OffsetDateTime.now().minusMinutes(5));
+        session.setSessionMetadata(Map.of("weakConcepts", weakConcepts));
+        return session;
+    }
+
+    private List<QuizItem> buildGeneratedQuiz(String concept, int questionCount) {
+        List<QuizItem> quiz = new java.util.ArrayList<>();
+        for (int index = 0; index < questionCount; index++) {
+            quiz.add(new QuizItem(
+                    "Generated Q " + index,
+                    List.of("A", "B", "C", "D"),
+                    "A",
+                    concept,
+                    "Explanation"
+            ));
+        }
+        return quiz;
     }
 
     private QuickReviewSessionEntity buildInProgressAdaptiveSession(UUID sessionId, UUID userId, UUID studyPackId, UUID noteId) {

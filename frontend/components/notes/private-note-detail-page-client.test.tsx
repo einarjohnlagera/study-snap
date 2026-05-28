@@ -7,6 +7,7 @@ import {
   createPremiumCheckoutSession,
   deleteNote,
   generateGeneratedQuiz,
+  getConceptHealth,
   getBillingPricing,
   getMyPlan,
   getMe,
@@ -68,6 +69,7 @@ jest.mock("@/lib/api", () => ({
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
   generateGeneratedQuiz: jest.fn(),
+  getConceptHealth: jest.fn(),
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
@@ -138,6 +140,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (copyNote as jest.Mock).mockReset();
     (deleteNote as jest.Mock).mockReset();
     (generateGeneratedQuiz as jest.Mock).mockReset();
+    (getConceptHealth as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
@@ -155,6 +158,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (updateNoteVisibility as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Senior High – STEM"]);
+    (getConceptHealth as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({
       learnerLevel: "COLLEGE",
     });

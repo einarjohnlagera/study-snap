@@ -41,6 +41,10 @@ Shared ownership rule:
 - weak-area follow-up mode
 - Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
 - generated separately from Quick Review and Challenge Quiz
+- targets weak concepts from the latest Quick Review or Challenge Quiz, plus due concepts from `concept_health`
+- due threshold is fixed at 3 days: `last_correct_at` missing or 3+ days old is due
+- due concepts are merged ahead of weak concepts at generation time; due-only sessions can generate even when the latest review has no weak concepts
+- Key Concepts tab shows due-status badges for Plus/Pro users only, using per-user per-study-pack concept health
 
 ### Long Exam Mode
 
@@ -147,6 +151,15 @@ Computational working solution rules:
 - the frontend renders `workingSolution` math with KaTeX inside the working-solution panel only
 - question text, choices, and explanations remain plain text and do not receive KaTeX rendering
 - plain-text working solutions remain supported as a fallback for older generated content
+
+Concept-level review signals:
+
+- `concept_health` stores `user_id`, `study_pack_id`, `concept`, and `last_correct_at`
+- records are written when Adaptive Practice completion includes correctly answered concept names from `QuizItem.concept`
+- data is scoped per user per study pack; never mix concept health across notes or Study Packs
+- v1 due logic is intentionally lightweight: never reviewed or last correct answer 3+ days ago means due
+- Adaptive Practice resolves due concepts from the source Study Pack key concepts and merges them before weak concepts
+- Key Concepts tab displays due badges only for users whose plan includes Adaptive Practice
 
 ## Generation lock and idempotency
 
