@@ -32,11 +32,13 @@ export const LOGIN_REASON_QUERY_KEY = "reason";
 export const LOGIN_REASON_SESSION_EXPIRED = "session_expired";
 export const LOGIN_REASON_LOGGED_OUT = "logged_out";
 export const LOGIN_REASON_AUTH_REQUIRED = "auth_required";
+export const LOGIN_REASON_PASSWORD_RESET = "password_reset";
 
 export type LoginReason =
   | typeof LOGIN_REASON_SESSION_EXPIRED
   | typeof LOGIN_REASON_LOGGED_OUT
-  | typeof LOGIN_REASON_AUTH_REQUIRED;
+  | typeof LOGIN_REASON_AUTH_REQUIRED
+  | typeof LOGIN_REASON_PASSWORD_RESET;
 
 const SESSION_EXPIRED_USER_KEY = "notelib-session-expired-user-id";
 

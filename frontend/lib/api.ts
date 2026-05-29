@@ -1746,6 +1746,24 @@ export async function requestEmailVerificationLegacy(): Promise<SimpleMessageRes
   return parseApiResponse<SimpleMessageResponse>(response, "Could not send verification email. Please try again.");
 }
 
+export async function forgotPassword(email: string): Promise<SimpleMessageResponse> {
+  const response = await fetch(buildUrl("/auth/forgot-password"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not send reset email. Please try again.");
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<SimpleMessageResponse> {
+  const response = await fetch(buildUrl("/auth/reset-password"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, newPassword }),
+  });
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not reset password. Please try again.");
+}
+
 export async function updateEngagementMode(request: UpdateEngagementModeRequest): Promise<MeResponse> {
   const response = await fetchWithAuth(
     "/auth/preferences/engagement-mode",
