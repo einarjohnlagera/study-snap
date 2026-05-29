@@ -734,19 +734,36 @@ public class ChallengeQuizService {
             List<UUID> additionalStudyPackIds,
             int questionCount
     ) {
-        List<StudyPackEntity> sources = new ArrayList<>(1 + additionalStudyPackIds.size());
-        sources.add(primaryStudyPack);
-        String primarySubject = resolveNoteSubjectForStudyPack(primaryStudyPack);
+        String primarySubject = noteRepository.findById(primaryStudyPack.getNoteId())
+                .map(note -> normalizeSubjectForMatch(note.getSubject()))
+                .orElseGet(() -> normalizeSubjectForMatch(primaryStudyPack.getSubject()));
         if (!additionalStudyPackIds.isEmpty() && primarySubject.isBlank()) {
             throw InvalidBoardExamSourceException.primarySubjectRequired();
         }
+
+        List<StudyPackEntity> additionalStudyPacks = new ArrayList<>(additionalStudyPackIds.size());
         for (UUID additionalStudyPackId : additionalStudyPackIds) {
-            StudyPackEntity additionalStudyPack = findOwnedBoardExamSourceOrThrow(additionalStudyPackId, userId);
-            if (!primarySubject.equals(resolveNoteSubjectForStudyPack(additionalStudyPack))) {
-                throw InvalidBoardExamSourceException.subjectMismatch();
-            }
-            sources.add(additionalStudyPack);
+            additionalStudyPacks.add(findOwnedBoardExamSourceOrThrow(additionalStudyPackId, userId));
         }
+
+        if (!additionalStudyPacks.isEmpty()) {
+            List<UUID> additionalNoteIds = additionalStudyPacks.stream().map(StudyPackEntity::getNoteId).toList();
+            Map<UUID, String> subjectByNoteId = noteRepository.findAllById(additionalNoteIds).stream()
+                    .collect(Collectors.toMap(note -> note.getId(), note -> normalizeSubjectForMatch(note.getSubject())));
+            for (StudyPackEntity additionalStudyPack : additionalStudyPacks) {
+                String additionalSubject = subjectByNoteId.getOrDefault(
+                        additionalStudyPack.getNoteId(),
+                        normalizeSubjectForMatch(additionalStudyPack.getSubject())
+                );
+                if (!primarySubject.equals(additionalSubject)) {
+                    throw InvalidBoardExamSourceException.subjectMismatch();
+                }
+            }
+        }
+
+        List<StudyPackEntity> sources = new ArrayList<>(1 + additionalStudyPacks.size());
+        sources.add(primaryStudyPack);
+        sources.addAll(additionalStudyPacks);
 
         int sourceCount = sources.size();
         int baseQuestionCount = questionCount / sourceCount;
@@ -1406,12 +1423,6 @@ public class ChallengeQuizService {
 
     private String normalizeSubjectForMatch(String subject) {
         return subject == null ? "" : subject.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String resolveNoteSubjectForStudyPack(StudyPackEntity studyPack) {
-        return noteRepository.findById(studyPack.getNoteId())
-                .map(note -> normalizeSubjectForMatch(note.getSubject()))
-                .orElseGet(() -> normalizeSubjectForMatch(studyPack.getSubject()));
     }
 
     private QuickReviewSessionEntity buildGeneratingSession(
