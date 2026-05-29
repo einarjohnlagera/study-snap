@@ -9,6 +9,7 @@ import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/n
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
@@ -160,12 +161,10 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
         {/* Summary — always visible */}
         <Card className="space-y-3 p-4 sm:p-6">
           <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-          <div className="max-w-3xl space-y-3 text-sm leading-relaxed text-foreground/80">
-            <p>
-              {isDraft
-                ? "This public note does not have a generated summary yet."
-                : (normalizedSummary || "No summary available yet.")}
-            </p>
+          <div className="max-w-3xl">
+            {isDraft
+              ? <p className="text-sm leading-relaxed text-foreground/80">This public note does not have a generated summary yet.</p>
+              : <SummaryMarkdown content={normalizedSummary || "No summary available yet."} />}
           </div>
           {!isDraft && note.content?.trim() ? (
             <Link

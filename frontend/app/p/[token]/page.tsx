@@ -7,6 +7,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import {
   getPublicSharedStudyPack,
   remixSharedStudyPack,
@@ -153,9 +154,7 @@ export default function PublicSharePage() {
 
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">
-              {sharedStudyPack.summary}
-            </p>
+            <SummaryMarkdown content={sharedStudyPack.summary} className="text-foreground/85" />
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
