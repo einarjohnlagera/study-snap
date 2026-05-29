@@ -913,6 +913,9 @@ export default function QuickReviewPage() {
           </Button>
           <div className="min-w-0 flex-1 text-center">
             <p className="truncate text-sm font-semibold text-foreground">Quick Review</p>
+            {note?.title ? (
+              <p className="truncate text-xs text-foreground/55">{note.title}</p>
+            ) : null}
           </div>
           <div className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold text-foreground">
             {quickReviewProgressLabel}
@@ -1214,7 +1217,7 @@ export default function QuickReviewPage() {
             ) : (
               <>
                 <h2 className="text-lg font-semibold leading-7 sm:text-xl">
-                  {(currentQuestionIndex ?? 0) + 1}. {currentQuestion.question}
+                  {currentQuestion.question}
                 </h2>
                 <QuizChoiceList
                   questionKey={currentQuestion.question}

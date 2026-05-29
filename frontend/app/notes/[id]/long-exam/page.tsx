@@ -1057,6 +1057,15 @@ export default function LongExamPage() {
                         </div>
                     </div>
 
+                    {sourceNoteRefs.length > 1 ? (
+                        <div className="rounded-xl border border-foreground/15 bg-muted/20 p-4 text-sm text-foreground/80">
+                            <p className="font-medium text-foreground">Sources · {sourceNoteRefs.length} notes</p>
+                            <p className="mt-1 text-foreground/65">
+                                {sourceNoteRefs.map((source) => source.noteTitle || "Untitled note").join(", ")}
+                            </p>
+                        </div>
+                    ) : null}
+
                     <Card className="space-y-5 border-foreground/15 bg-card p-5 sm:p-6">
                         {currentMatchingGroup ? (
                             <QuizMatchingGroup

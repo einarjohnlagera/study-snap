@@ -9,6 +9,7 @@ Theme: TBD
 ### ✅ Shipped
 
 - **Re-engagement campaign (Admin)** — one-time admin-initiated email campaign targeting users inactive for 30+ days who signed up before v0.19.0. Profile-segmented into three variants (student/generic, professional, teacher). Available at `/admin/campaigns`; shows eligible count, last-sent date, and total recipients. Sends up to 100 emails per invocation (free Resend tier) with `email_log` deduplication so already-sent users are always skipped on re-runs.
+- **Quiz header polish** — Quick Review now shows the note title below the mode label in the sticky top bar and removes the redundant `N.` number prefix from question text (the progress counter serves this). Challenge Quiz shows the note title below the mode label in its running top bar. Long Exam now shows a sources banner listing all note titles in the running phase when the session spans multiple notes, matching Board Exam's existing treatment.
 
 ---
 
