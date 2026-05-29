@@ -78,6 +78,8 @@ class AuthServiceTest {
     private EmailVerificationService emailVerificationService;
     @Mock
     private AnalyticsService analyticsService;
+    @Mock
+    private PasswordResetService passwordResetService;
 
     private AuthService authService;
 
@@ -94,7 +96,8 @@ class AuthServiceTest {
             securityProperties,
             googleIdentityTokenVerifier,
             emailVerificationService,
-            analyticsService
+            analyticsService,
+            passwordResetService
         );
         lenient().when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
         lenient().when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
