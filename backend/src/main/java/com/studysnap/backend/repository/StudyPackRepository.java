@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.dto.AdminSubjectMetricItemResponse;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.InputType;
 import org.springframework.data.domain.Pageable;
@@ -60,9 +61,10 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     );
 
     @Query("""
-            select new com.studysnap.backend.dto.AdminSubjectMetricItemResponse(s.subject, count(s.id))
-            from StudyPackEntity s
-            group by s.subject
+            select new com.studysnap.backend.dto.AdminSubjectMetricItemResponse(n.subject, count(s.id))
+            from StudyPackEntity s, NoteEntity n
+            where n.id = s.noteId
+            group by n.subject
             order by count(s.id) desc
             """)
     List<AdminSubjectMetricItemResponse> findTopSubjectsByStudyPackCount(Pageable pageable);
