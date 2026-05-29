@@ -143,6 +143,23 @@ Unauthenticated users can reset their password via email link.
 - After successful reset: redirect to `/auth?reason=password_reset` with a green success banner ("Your password has been reset. Log in with your new password.").
 - "Forgot password?" link in the login form (login mode only, below the "Keep me signed in" checkbox).
 
+## Change Password
+
+Password-enabled users can change their password from Profile → Sign-in Methods.
+
+- UI: only shown when `signInMethods.passwordEnabled === true`
+- Toggle: "Change password" button reveals an inline form; "Cancel" hides it
+- Fields: current password, new password (min 8 chars), confirm new password
+- Client-side validation: confirms new passwords match and length ≥ 8 before submitting
+- Endpoint: `POST /api/auth/change-password` (authenticated)
+- Request: `{ currentPassword, newPassword }`
+- Backend behavior:
+  - Verifies current password via `passwordEncoder.matches()`; throws `InvalidCurrentPasswordException` (422) on mismatch
+  - Encodes and sets new `passwordHash`
+  - Updates `lastPasswordChangeAt`
+  - Bumps `tokenVersion` by 1 — revokes all active refresh tokens/sessions on other devices
+- Success: inline success message; form cleared and collapsed
+
 ## Non-Goals
 
 - classroom/family linking
