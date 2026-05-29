@@ -26,11 +26,11 @@ Theme: bring inactive users back and turn visitors into active learners — re-e
 - **Quiz header polish** — note title in Quick Review and Challenge Quiz top bars; Long Exam sources banner for multi-note sessions.
 - **Study Pack summary enrichment** — AI summary now includes optional markdown comparison tables and a Common Misconceptions paragraph; frontend renders via `react-markdown` + `remark-gfm` across all surfaces.
 - **Teacher In-App Guided Tips** — five one-time contextual tips covering dashboard intro, note content quality, Generate Quiz modal, library multi-note checkboxes, and DOCX export. All use existing `GuidanceTip` + `hasSeenTip()` system; confirmed already in codebase prior to v0.20.0 planning.
+- **Profile-Aware Landing Page** — `ProfileLearningSection` with interactive profile tabs (Students / Exam Reviewers / Teachers / Professionals), per-profile taglines, steps, mode chips, and screenshots. `HowItWorksSection` and `ProfileShowcaseSection` already replaced; confirmed in codebase prior to v0.20.0 planning.
 
-### 🔲 In scope
+### 🔲 Pending Codex
 
-1. **Profile-Aware Landing Page** — replace static "How it works" + "Who It's For" sections with a single interactive profile-tab component. Frontend-only.
-2. **Post-signup copy-note → instant quiz flow** — new signups from a public note page skip onboarding and land directly in a Quick Review on the copied note. Requires `copyIntent` param surviving OAuth redirect → Codex.
+1. **Post-signup copy-note → instant quiz flow** — new signups from a public note page skip onboarding and land directly in a Quick Review on the copied note. Requires `copyIntent` param surviving OAuth redirect. Codex prompt to be written when tokens are available.
 
 ### 🔲 Deferred (Study Pack section improvements — items 2 & 4)
 

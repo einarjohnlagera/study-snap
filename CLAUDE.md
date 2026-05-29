@@ -184,6 +184,8 @@ type: concise subject
 
 **Never commit automatically.** Always present changes and wait for an explicit "commit" instruction from the user before running `git commit`. Do not stage, commit, or push as a side effect of implementing or updating docs.
 
+**Branch protection is enforced on `main`.** Direct pushes to `main` are blocked by a repository ruleset. All changes — including docs-only changes — must go on a feature or docs branch and be merged via pull request. Never commit directly to `main`.
+
 Always update `RELEASES.md` with a bullet under the current version section when shipping any change.
 
 **Release kickoff checklist** (do this when opening a new version, before the first feature commit):
