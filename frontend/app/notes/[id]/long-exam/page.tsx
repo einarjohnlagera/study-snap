@@ -101,7 +101,7 @@ function getNowEpochSeconds(): number {
 }
 
 function normalizeSubjectForMatch(subject?: string | null): string {
-    return subject?.trim().toLowerCase() ?? "";
+    return subject?.trim().toLocaleLowerCase("en") ?? "";
 }
 
 function isLongExamSessionExpired(activeSession: LongExamStartResponse): boolean {
