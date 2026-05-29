@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AuthResponse;
+import com.studysnap.backend.dto.ChangePasswordRequest;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
@@ -82,6 +83,15 @@ public class AuthController {
     @PreAuthorize("isAuthenticated()")
     public SignInMethodsResponse signInMethods(@AuthenticationPrincipal AuthenticatedUser user) {
         return authService.getSignInMethods(user.userId());
+    }
+
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    public SimpleMessageResponse changePassword(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody ChangePasswordRequest request
+    ) {
+        return authService.changePassword(user.userId(), request);
     }
 
     @PostMapping("/google/connect")

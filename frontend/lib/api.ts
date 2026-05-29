@@ -1398,6 +1398,22 @@ export async function getSignInMethods(): Promise<SignInMethodsResponse> {
   return parseApiResponse<SignInMethodsResponse>(response, "Could not load sign-in methods.");
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const response = await fetchWithAuth(
+    "/auth/change-password",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getAccessToken()}`,
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    },
+    true,
+  );
+  await parseApiResponse<{ message: string }>(response, "Could not change password. Please try again.");
+}
+
 export async function connectGoogle(request: GoogleConnectRequest): Promise<SignInMethodsResponse> {
   const response = await fetchWithAuth(
     "/auth/google/connect",
