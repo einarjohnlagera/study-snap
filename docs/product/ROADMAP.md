@@ -85,7 +85,7 @@ The Facebook study groups driving organic growth are dominated by board exam rev
    - Existing single-note Board Exam flow unchanged for users who pick only one note
    - Empty-state hint on single-note prestart: "Create another note with the same subject to unlock multi-note exam mode" (mirrors the Long Exam hint from v0.17.0)
    - Backend follows the same pattern as `LongExamService` for multi-note source merging and question pool allocation
-   - Pro-only, same Board Exam quota rules; no quota change
+   - Pro-only, with Board Exam quota charged per source note and the monthly cap raised for normal single-note headroom
    - Subject constraint enforced at the picker level (same-subject filter); cross-domain Board Exam is out of scope for v1
 
 2. **Admin analytics subject drift fix** — "Top Subjects by Study Pack" currently groups on the study pack's own `subject` column, which was set at generation time and never updated. If the user later adds or changes the note's subject, the pack's subject lags. Fix: join through `NoteEntity` to use the current note subject instead of the stored pack subject for the top-subjects aggregation.
@@ -104,7 +104,7 @@ The Facebook study groups driving organic growth are dominated by board exam rev
 ### Anti-drift notes
 
 - Do not skip the same-subject constraint for v1 (cross-domain Board Exam is a separate design question)
-- Multi-note Board Exam does not change question count — the same per-session cap applies; questions are redistributed across sources, not added
+- Multi-note Board Exam scales question count by source count (`min(12 * sourceCount, 30)`) so wider simulations get more coverage while staying capped at a 30-minute exam
 - The five quiz modes remain unchanged; multi-note is a configuration of an existing mode, not a new mode
 
 ---

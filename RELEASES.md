@@ -12,6 +12,9 @@ Theme: complete the multi-note story across all premium simulation modes — Mul
 - **Multi-note Board Exam polish** — batch-fetch additional note subjects in a single query instead of one per source; align frontend subject normalization to use explicit English locale (`toLocaleLowerCase('en')`) matching backend `Locale.ROOT` behavior.
 - **Admin analytics subject drift fix** — "Top Subjects by Study Pack" now joins through `NoteEntity` to use the note's current subject instead of the study pack's stale cached subject column; a JPQL theta-join (`FROM StudyPackEntity s, NoteEntity n WHERE n.id = s.noteId`) keeps this as a query-only change with no entity or migration work.
 - **Multi-note Board Exam session parity** — Board Exam sessions that span multiple notes now surface on every participating note's Recent Sessions and update `lastSessionCompletedAt` for each source note (previously only the primary note was updated); the history sublabel now reads "Multi-note Board Exam · spans N notes" matching the Long Exam pattern.
+- **Simulation quota economics** — Board Exam now charges quota per source note instead of per session, Long Exam does the same for multi-note starts, and the Pro monthly caps increased to 10 Board Exam source-note units and 12 Long Exam source-note units.
+- **Board Exam coverage scaling** — Board Exam question count now scales with source count (`min(12 * sourceCount, 30)`): single-note remains 12 questions, two-note sessions generate 24, and three-note sessions cap at 30.
+- **Simulation paywall timing** — Board Exam quota checks now surface on mode selection and prestart page load before users click Begin, while Long Exam direct visits show the Pro paywall modal instead of silently redirecting non-Pro users.
 
 ---
 

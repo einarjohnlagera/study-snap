@@ -63,8 +63,8 @@ Designed for serious learners preparing for board and entrance exams.
 - `50` Quizzes / month
 - `30` Adaptive Practice sessions / month
 - `10` Interview Practice sessions / month
-- `10` Long Exam sessions / month
-- `5` Board Exam sessions / month
+- `12` Long Exam sessions / month
+- `10` Board Exam sessions / month
 - Unlimited exports
 - Unlimited shareable quiz links
 
@@ -72,8 +72,8 @@ Designed for serious learners preparing for board and entrance exams.
 
 - Adaptive Practice (higher limit — `30` sessions / month)
 - Interview Practice (`10` sessions / month, Professional profile)
-- Long Exam Mode (`10` sessions / month)
-- Board Exam Mode (`5` sessions / month, also uses the shared Quiz budget)
+- Long Exam Mode (`12` sessions / month)
+- Board Exam Mode (`10` sessions / month, also uses the shared Quiz budget)
 - Difficulty selection (Easy / Medium / Hard)
 - Highest note generation limits (`100` topic notes / month)
 - Everything in Plus
@@ -116,8 +116,8 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Adaptive Practice | — | 10 sessions | 30 sessions |
 | Interview Practice | — | — | 10 sessions |
 | Difficulty selection | — | — | ✓ |
-| Board Exam Mode | — | — | 5 sessions |
-| Long Exam Mode | — | — | 10 sessions |
+| Board Exam Mode | — | — | 10 sessions |
+| Long Exam Mode | — | — | 12 sessions |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |
 
 ---
