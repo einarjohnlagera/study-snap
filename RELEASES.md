@@ -2,7 +2,7 @@
 
 ## v0.19.0 - Multi-Note Depth & Simulation Parity
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: complete the multi-note story across all premium simulation modes — Multi-note Board Exam is the last remaining gap — and fix the admin analytics subject drift.
 

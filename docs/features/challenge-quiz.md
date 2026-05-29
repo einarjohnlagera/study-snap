@@ -54,8 +54,9 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 
 - Challenge Quiz is available on Free, Plus, and Pro with monthly limits
 - Board Exam Mode is Pro-only
-- Board Exam Mode consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month by default)
-- Board Exam quota is deducted per source note at session start
+- Board Exam Mode consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month; default configurable)
+- Board Exam quota is deducted **per source note** at session start — a 3-note session costs 3 quota units
+- The paywall for quota exhaustion fires at mode-card click (mode-selection step), not at the Begin Board Exam button
 - Free and Plus users who choose Board Exam Mode must hit the shared Pro upsell flow
 - monthly quiz-limit exhaustion is separate from Pro-only feature gating
 
@@ -66,7 +67,8 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 - an existing `GENERATING` or `IN_PROGRESS` session must be reused instead of creating duplicates
 - active generation uses the shared generation lock and recovery flow
 - Challenge mode starts with **5 questions** (`INITIAL_CHALLENGE_QUIZ_COUNT = 5`)
-- Board Exam Mode generates based on the user's learner profile (10–15 questions) and does not use progressive generation
+- Board Exam Mode question count scales with source count: `min(12 × sourceCount, 30)` — single-note: 12, two-note: 24, three-note: 30
+- Board Exam Mode does not use progressive generation; question count is fixed at session start
 - Board Exam Mode does not expose a difficulty selector; it defaults to Mixed to preserve exam-simulation framing
 
 ### AI Generation Spec

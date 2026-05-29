@@ -76,4 +76,4 @@ Each entry contains:
 - `noteTitle`
 - `questionCount`
 
-Multi-note Board Exam does not introduce a new mode or quota category. It keeps the fixed Board Exam question count, redistributes questions across up to 3 total same-subject notes, uses live Board Exam generation per source, and skips the single-note pre-generated pool path.
+Multi-note Board Exam does not introduce a new mode or quota category. Question count scales with source count (`min(12 × sourceCount, 30)`): single-note stays at 12, two-note generates 24, three-note caps at 30. Quota is deducted per source note at session start. Multi-note sessions skip the single-note pre-generated pool path and use live Board Exam generation per source. Board Exam sessions now surface on every participating note's Recent Sessions list (not only the primary note), and `lastSessionCompletedAt` is updated for all source notes.
