@@ -25,12 +25,12 @@ Theme: bring inactive users back and turn visitors into active learners — re-e
 - **Re-engagement campaign (Admin)** — one-time admin email blast targeting users inactive 30+ days, segmented by profile type.
 - **Quiz header polish** — note title in Quick Review and Challenge Quiz top bars; Long Exam sources banner for multi-note sessions.
 - **Study Pack summary enrichment** — AI summary now includes optional markdown comparison tables and a Common Misconceptions paragraph; frontend renders via `react-markdown` + `remark-gfm` across all surfaces.
+- **Teacher In-App Guided Tips** — five one-time contextual tips covering dashboard intro, note content quality, Generate Quiz modal, library multi-note checkboxes, and DOCX export. All use existing `GuidanceTip` + `hasSeenTip()` system; confirmed already in codebase prior to v0.20.0 planning.
 
 ### 🔲 In scope
 
-1. **Teacher In-App Guided Tips** — five one-time contextual tips for the Teacher workflow using the existing `GuidanceTip` + `hasSeenTip()` system. No new infrastructure; Claude Code can do this directly.
-2. **Profile-Aware Landing Page** — replace static "How it works" + "Who It's For" sections with a single interactive profile-tab component. Frontend-only.
-3. **Post-signup copy-note → instant quiz flow** — new signups from a public note page skip onboarding and land directly in a Quick Review on the copied note. Requires `copyIntent` param surviving OAuth redirect → Codex.
+1. **Profile-Aware Landing Page** — replace static "How it works" + "Who It's For" sections with a single interactive profile-tab component. Frontend-only.
+2. **Post-signup copy-note → instant quiz flow** — new signups from a public note page skip onboarding and land directly in a Quick Review on the copied note. Requires `copyIntent` param surviving OAuth redirect → Codex.
 
 ### 🔲 Deferred (Study Pack section improvements — items 2 & 4)
 
