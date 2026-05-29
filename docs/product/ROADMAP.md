@@ -30,7 +30,12 @@ Theme: bring inactive users back and turn visitors into active learners — re-e
 
 ### 🔲 Pending Codex
 
-1. **Post-signup copy-note → instant quiz flow** — new signups from a public note page skip onboarding and land directly in a Quick Review on the copied note. Requires `copyIntent` param surviving OAuth redirect. Codex prompt to be written when tokens are available.
+1. **Forgot Password + Change Password** — closes the re-engagement loop: users receiving re-engagement emails must be able to get back in even if they've forgotten their password, and password-auth users should be able to rotate it once they're back. Two scopes:
+   - **Forgot password flow**: token generation, reset email, `/forgot-password` and `/reset-password` pages. No backend endpoint or frontend page currently exists.
+   - **Change password**: update-password endpoint (current password verification + new password), form in the Profile page sign-in methods section. `passwordEnabled` field already in `SignInMethodsResponse`; no action exists yet.
+   - Delete Account (stub in Settings as "Coming Soon") deferred to v0.21.0 — lower urgency for this theme.
+
+2. **Post-signup copy-note → instant quiz flow** — new signups from a public note page skip onboarding and land directly in a Quick Review on the copied note. Requires `copyIntent` param surviving OAuth redirect. Codex prompt to be written when tokens are available.
 
 ### 🔲 Deferred (Study Pack section improvements — items 2 & 4)
 
