@@ -165,7 +165,7 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "dashboard" | "help" | "library" | "profile" | "publicLibrary" | "settings";
+  action: "admin" | "campaigns" | "dashboard" | "help" | "library" | "profile" | "publicLibrary" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
@@ -388,6 +388,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     ];
     if (user.role === "ADMIN") {
       nav.push({ href: "/admin", label: "Admin", action: "admin" as const });
+      nav.push({ href: "/admin/campaigns", label: "Campaigns", action: "campaigns" as const });
     }
     return nav;
   }, [user.role]);

@@ -190,7 +190,7 @@ export default function AdminCampaignsPage() {
 
       <section className="space-y-3">
         <CampaignCard
-          name="Re-engagement 2025"
+          name="Re-engagement — Pre-v0.19.0 Users"
           description="Users who signed up before v0.19.0 and have been inactive for 30+ days. Segmented by profile type."
           status={status}
           loadError={loadError}
