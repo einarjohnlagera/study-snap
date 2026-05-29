@@ -12,6 +12,7 @@ import {
   House,
   Link2,
   LogOut,
+  Mail,
   Pencil,
   Plus,
   RotateCcw,
@@ -39,6 +40,7 @@ export type ActionIconName =
   | "edit"
   | "library"
   | "admin"
+  | "campaigns"
   | "help"
   | "open"
   | "private"
@@ -65,6 +67,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   edit: Pencil,
   library: BookOpen,
   admin: Shield,
+  campaigns: Mail,
   help: HelpCircle,
   open: ArrowUpRight,
   private: Lock,
