@@ -1,5 +1,15 @@
 # RELEASES.md - NoteLib
 
+## v0.20.0 - TBD
+
+**Status: In Progress**
+
+Theme: TBD
+
+### ✅ Shipped
+
+---
+
 ## v0.19.0 - Multi-Note Depth & Simulation Parity
 
 **Status: Released**

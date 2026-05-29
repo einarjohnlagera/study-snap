@@ -6,11 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.19.0 - Multi-Note Depth & Simulation Parity` is the current in-progress release.
+`v0.20.0` is the current in-progress release.
 
-`v0.18.0 - Profile Completeness & Communication` is complete and is the previous documentation baseline.
+`v0.19.0 - Multi-Note Depth & Simulation Parity` is complete and is the previous documentation baseline.
 
-`v0.20.0` is the next planned release. Candidate items: re-engagement email campaign (see `docs/campaigns/re-engagement-2025.md`).
+Candidate items for v0.20.0: re-engagement email campaign (see `docs/campaigns/re-engagement-2025.md`).
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
