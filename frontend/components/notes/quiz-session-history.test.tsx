@@ -92,4 +92,21 @@ describe("QuizSessionHistory", () => {
     expect(screen.getByText("Long Exam")).toBeInTheDocument();
     expect(screen.getByText("Multi-note Long Exam · spans 3 notes")).toBeInTheDocument();
   });
+
+  it("shows the note span for multi-note Board Exam history", () => {
+    render(
+      <QuizSessionHistory
+        sessions={[{
+          ...historyItems[0],
+          sessionId: "board-exam-1",
+          sessionMode: "BOARD_EXAM",
+          participatingNoteCount: 2,
+        }]}
+        onSelectSession={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Board Exam")).toBeInTheDocument();
+    expect(screen.getByText("Multi-note Board Exam · spans 2 notes")).toBeInTheDocument();
+  });
 });
