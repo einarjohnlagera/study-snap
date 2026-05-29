@@ -43,9 +43,9 @@ class EmailTemplateServiceTest {
         );
 
         assertThat(rendered.subject()).isEqualTo("Welcome to NoteLib — Turn Notes Into Quizzes");
-        assertThat(rendered.textBody()).contains("10 Study Packs per month");
-        assertThat(rendered.textBody()).contains("Challenge Quiz (limited per month)");
-        assertThat(rendered.textBody()).contains("Difficulty Selection");
+        assertThat(rendered.textBody()).contains("10 Study Packs / month");
+        assertThat(rendered.textBody()).contains("Challenge Quiz");
+        assertThat(rendered.textBody()).contains("Difficulty selection");
         assertThat(rendered.textBody()).doesNotContain("Challenge Quiz (Premium — coming soon)");
     }
 

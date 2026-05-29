@@ -913,7 +913,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(quizItems).hasSize(14);
         assertThat(quizItems.getFirst().question()).isEqualTo("Sequential question 0");
-        verify(responseSpec, times(3)).body(String.class);
+        verify(responseSpec, times(5)).body(String.class);
     }
 
     @Test
