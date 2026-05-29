@@ -88,6 +88,10 @@ export function QuizSessionHistory({
                     <p className="text-xs text-foreground/65">
                       Multi-note Long Exam · spans {session.participatingNoteCount} notes
                     </p>
+                  ) : session.sessionMode === "BOARD_EXAM" && session.participatingNoteCount > 1 ? (
+                    <p className="text-xs text-foreground/65">
+                      Multi-note Board Exam · spans {session.participatingNoteCount} notes
+                    </p>
                   ) : null}
                 </div>
                 <span className="self-start rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">

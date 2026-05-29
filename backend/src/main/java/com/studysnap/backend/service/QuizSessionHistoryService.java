@@ -105,7 +105,9 @@ public class QuizSessionHistoryService {
         if (session.getNoteId() != null) {
             noteIds.add(session.getNoteId());
         }
-        if (session.getSessionMode() != QuickReviewSessionMode.LONG_EXAM) {
+        boolean isMultiNoteMode = session.getSessionMode() == QuickReviewSessionMode.LONG_EXAM
+                || (session.getSessionMode() == QuickReviewSessionMode.CHALLENGE && isBoardExam(session.getSessionState()));
+        if (!isMultiNoteMode) {
             return noteIds;
         }
         Object rawSourceRefs = session.getSessionState() == null

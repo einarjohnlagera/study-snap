@@ -77,6 +77,75 @@ class QuizSessionHistoryServiceTest {
     }
 
     @Test
+    void findLatestSessionCompletedAtByNoteIds_includesParticipatingBoardExamNotes() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-05-21T10:00:00Z");
+        QuickReviewSessionEntity boardExam = buildSession(
+                userId,
+                primaryNoteId,
+                QuickReviewSessionMode.CHALLENGE,
+                completedAt,
+                Map.of(
+                        "mode", "board_exam",
+                        SESSION_STATE_SOURCE_NOTE_REFS, List.of(
+                                Map.of("noteId", primaryNoteId.toString()),
+                                Map.of("noteId", additionalNoteId.toString())
+                        )
+                )
+        );
+        when(quickReviewSessionRepository.findByUserIdAndStatusAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).thenReturn(List.of(boardExam));
+
+        Map<UUID, OffsetDateTime> completedAtByNoteId = quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                userId,
+                List.of(primaryNoteId, additionalNoteId)
+        );
+
+        assertThat(completedAtByNoteId)
+                .containsEntry(primaryNoteId, completedAt)
+                .containsEntry(additionalNoteId, completedAt);
+    }
+
+    @Test
+    void listRecentSessions_surfacesBoardExamSessionOnAdditionalSourceNote() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-05-21T10:00:00Z");
+        QuickReviewSessionEntity boardExam = buildSession(
+                userId,
+                primaryNoteId,
+                QuickReviewSessionMode.CHALLENGE,
+                completedAt,
+                Map.of(
+                        "mode", "board_exam",
+                        SESSION_STATE_SOURCE_NOTE_REFS, List.of(
+                                Map.of("noteId", primaryNoteId.toString()),
+                                Map.of("noteId", additionalNoteId.toString())
+                        )
+                )
+        );
+        when(quickReviewSessionRepository.findByUserIdAndStatusAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).thenReturn(List.of(boardExam));
+
+        List<RecentQuizSessionHistoryResponse> sessions = quizSessionHistoryService.listRecentSessions(
+                additionalNoteId.toString(),
+                userId,
+                10
+        );
+
+        assertThat(sessions).hasSize(1);
+        assertThat(sessions.getFirst().sessionMode()).isEqualTo("BOARD_EXAM");
+        assertThat(sessions.getFirst().participatingNoteCount()).isEqualTo(2);
+    }
+
+    @Test
     void listRecentSessions_mapsEveryStoredModeAndLongExamParticipationCount() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
