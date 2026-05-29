@@ -1290,6 +1290,9 @@ export default function ChallengeQuizPage() {
               <p className="truncate text-sm font-semibold text-blue-700 dark:text-blue-300">
                 {quizModeLabel}
               </p>
+              {note?.title ? (
+                <p className="truncate text-xs text-foreground/55">{note.title}</p>
+              ) : null}
             </div>
             <div
               data-testid="challenge-quiz-timer"
