@@ -49,12 +49,12 @@ Do not derive plan access from:
 
 - `100` Study Packs / month
 - `50` Challenge Quizzes / month
-- Board Exam Mode uses the shared Challenge Quiz budget and has a dedicated `5` sessions / month hard cap
+- Board Exam Mode uses the shared Challenge Quiz budget and has a dedicated `10` source-note units / month hard cap; quota is deducted per source note (a 3-note session costs 3 units)
 - topic note generation: backend-configured Pro limit (`100` by default)
 - OCR: backend-configured Pro limit (`100` by default)
 - exports: unlimited
 - Adaptive Practice available and quota-limited (`30` / month by default)
-- Long Exam available and quota-limited (`10` / month by default)
+- Long Exam available and quota-limited (`12` source-note units / month by default; quota is deducted per source note)
 - Difficulty selection available
 - Board Exam Mode available
 
@@ -81,9 +81,10 @@ Topic note generation and OCR are distinct monthly quotas from Study Packs.
 
 Long Exam and Board Exam quotas are distinct monthly counters:
 
-- Long Exam is Pro-only and consumes `longExamUsed` only after successful session generation starts
-- Board Exam is Pro-only, still consumes the shared Challenge Quiz budget, and also consumes `boardExamUsed`
+- Long Exam is Pro-only and consumes `longExamUsed` per source note (not per session) — a 3-note Long Exam deducts 3 units; quota is checked and incremented only after successful session generation starts
+- Board Exam is Pro-only, consumes the shared Challenge Quiz budget, and also consumes `boardExamUsed` per source note — a 3-note Board Exam deducts 3 units
 - Board Exam must be blocked when either the Challenge Quiz budget is exhausted or the Board Exam hard cap is exhausted
+- Active sessions can always be resumed regardless of quota state; quota is only checked when starting a new session
 - Challenge Quiz, Adaptive Practice, Interview Practice, Study Pack, topic note generation, OCR, and export quotas remain separate from these counters unless explicitly stated above
 
 When topic note generation is exhausted:
