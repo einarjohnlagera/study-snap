@@ -35,6 +35,7 @@ export type PaywallModalVariant =
   | "adaptive-practice"
   | "interview-practice-limit"
   | "board-exam-mode"
+  | "board-exam-limit"
   | "long-exam-mode"
   | "difficulty-selection"
   | "challenge-quiz-limit"
@@ -84,6 +85,8 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "EXPORT_LIMIT";
     case "board-exam-mode":
       return "BOARD_EXAM_MODE_LOCKED";
+    case "board-exam-limit":
+      return "QUIZ_LIMIT";
     case "long-exam-mode":
       return "LONG_EXAM_MODE_LOCKED";
     case "difficulty-selection":

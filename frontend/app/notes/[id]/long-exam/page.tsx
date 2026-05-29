@@ -16,6 +16,7 @@ import {QuizMatchingGroup} from "@/components/study-pack/quiz-matching-group";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
 import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
+import {PaywallModal} from "@/components/billing/paywall-modal";
 import {ToastMessage} from "@/components/ui/toast-message";
 import {getAuthUser} from "@/lib/auth";
 import {
@@ -46,6 +47,7 @@ import {
 } from "@/lib/challenge-quiz-timer";
 import {resolveQuizCorrectIndex, resolveQuizItemGroupAt} from "@/lib/quiz";
 import {cn} from "@/lib/utils";
+import {getUpgradeCtas, type AppPlanType} from "@/src/config/plans";
 
 type LongExamPhase = "prestart" | "generating" | "paused-recovery" | "running" | "complete";
 type ToastState = {
@@ -99,7 +101,7 @@ function getNowEpochSeconds(): number {
 }
 
 function normalizeSubjectForMatch(subject?: string | null): string {
-    return subject?.trim().toLowerCase() ?? "";
+    return subject?.trim().toLocaleLowerCase("en") ?? "";
 }
 
 function isLongExamSessionExpired(activeSession: LongExamStartResponse): boolean {
@@ -176,6 +178,9 @@ export default function LongExamPage() {
     const [sourceNoteRefs, setSourceNoteRefs] = useState<LongExamSourceNoteRef[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<ToastState | null>(null);
+    const [showLongExamPaywall, setShowLongExamPaywall] = useState(false);
+    const [longExamUsedThisMonth, setLongExamUsedThisMonth] = useState(0);
+    const [longExamMonthlyLimit, setLongExamMonthlyLimit] = useState(0);
     const [activeStartResponse, setActiveStartResponse] = useState<LongExamStartResponse | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [quiz, setQuiz] = useState<QuizItem[]>([]);
@@ -196,6 +201,10 @@ export default function LongExamPage() {
     const totalQuestions = quiz.length;
     const expectedQuestionCount = resolveExpectedLongExamQuestionCount(profileLearnerLevel);
     const selectedSourceCount = 1 + selectedAdditionalStudyPackIds.length;
+    const longExamRemaining = Math.max(0, longExamMonthlyLimit - longExamUsedThisMonth);
+    const longExamLimitReached = longExamMonthlyLimit > 0 && longExamUsedThisMonth >= longExamMonthlyLimit;
+    const longExamSourceCountExceedsRemaining = selectedSourceCount > longExamRemaining;
+    const longExamUpgradeCtas = getUpgradeCtas((getAuthUser()?.planType ?? "FREE") as AppPlanType);
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
     const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentQuestionIndex);
     const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
@@ -225,11 +234,11 @@ export default function LongExamPage() {
     }, []);
 
     const trackStarted = useCallback((response: {
-        sessionId: string;
+        sessionId: string | null;
         totalQuestions?: number;
         difficulty?: string | null
     }) => {
-        if (startedTrackedRef.current) {
+        if (startedTrackedRef.current || !response.sessionId) {
             return;
         }
         startedTrackedRef.current = true;
@@ -246,6 +255,9 @@ export default function LongExamPage() {
     }, [noteId, studyPackId]);
 
     const enterRunningFromStart = useCallback((response: LongExamStartResponse) => {
+        if (!response.sessionId) {
+            return;
+        }
         setActiveStartResponse(null);
         setSessionId(response.sessionId);
         setQuiz(response.quiz);
@@ -284,7 +296,8 @@ export default function LongExamPage() {
         }
         const authUser = getAuthUser();
         if (authUser?.planType !== "PRO") {
-            router.replace(`/notes/${noteId}`);
+            setShowLongExamPaywall(true);
+            setLoading(false);
             return;
         }
 
@@ -304,7 +317,9 @@ export default function LongExamPage() {
             }
 
             const activeSession = await getActiveLongExamSession(noteDetail.studyPackId);
-            if (!activeSession) {
+            setLongExamUsedThisMonth(activeSession?.usedThisMonth ?? 0);
+            setLongExamMonthlyLimit(activeSession?.monthlyLimit ?? 0);
+            if (!activeSession?.sessionId || !activeSession.status) {
                 setActiveStartResponse(null);
                 return;
             }
@@ -446,6 +461,10 @@ export default function LongExamPage() {
         if (!studyPackId || starting) {
             return;
         }
+        if (longExamSourceCountExceedsRemaining) {
+            setError(`Not enough Long Exam quota for ${selectedSourceCount} notes. Remove a note or upgrade.`);
+            return;
+        }
         setStarting(true);
         setError(null);
         startedTrackedRef.current = false;
@@ -454,6 +473,8 @@ export default function LongExamPage() {
                 ? {additionalStudyPackIds: selectedAdditionalStudyPackIds}
                 : {};
             const response = await startLongExam(studyPackId, requestBody);
+            setLongExamUsedThisMonth(response.usedThisMonth);
+            setLongExamMonthlyLimit(response.monthlyLimit);
             setActiveStartResponse(response);
             setSessionId(response.sessionId);
             trackStarted(response);
@@ -473,11 +494,14 @@ export default function LongExamPage() {
                 setError("Long Exam generation failed. Please try again.");
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Could not start Long Exam.");
+            const message = err instanceof Error ? err.message : "Could not start Long Exam.";
+            setError(message.toLowerCase().includes("monthly long exam limit")
+                ? "You've reached your monthly Long Exam limit."
+                : message);
         } finally {
             setStarting(false);
         }
-    }, [enterRunningFromStart, selectedAdditionalStudyPackIds, starting, studyPackId, trackStarted]);
+    }, [enterRunningFromStart, longExamSourceCountExceedsRemaining, selectedAdditionalStudyPackIds, selectedSourceCount, starting, studyPackId, trackStarted]);
 
     const handleResumeActiveSession = useCallback(async () => {
         if (!activeStartResponse?.sessionId) {
@@ -722,10 +746,6 @@ export default function LongExamPage() {
         beforeUnloadMessage: LONG_EXAM_BEFORE_UNLOAD_MESSAGE,
     });
 
-    if (getAuthUser()?.planType !== "PRO") {
-        return null;
-    }
-
     if (loading) {
         return (
             <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
@@ -735,6 +755,22 @@ export default function LongExamPage() {
                     <div className="h-8 w-3/4 animate-pulse rounded bg-foreground/10"/>
                     <div className="h-24 w-full animate-pulse rounded bg-foreground/10"/>
                 </Card>
+            </main>
+        );
+    }
+
+    if (showLongExamPaywall) {
+        return (
+            <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
+                <PaywallModal
+                    isOpen={showLongExamPaywall}
+                    variant="long-exam-mode"
+                    source="long_exam_page_load"
+                    onClose={() => {
+                        setShowLongExamPaywall(false);
+                        router.push(noteDetailHref);
+                    }}
+                />
             </main>
         );
     }
@@ -903,10 +939,20 @@ export default function LongExamPage() {
                                             );
                                         })}
                                         {selectedAdditionalStudyPackIds.length > 0 ? (
-                                            <p className="flex items-center gap-2 text-sm text-foreground/70">
-                                                <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true"/>
-                                                <span>Generating from multiple notes may take up to a minute.</span>
-                                            </p>
+                                            <>
+                                                <p className="flex items-center gap-2 text-sm text-foreground/70">
+                                                    <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true"/>
+                                                    <span>Generating from multiple notes may take up to a minute.</span>
+                                                </p>
+                                                <p className="text-sm text-foreground/70">
+                                                    This session will use {selectedSourceCount} of your {longExamRemaining} remaining Long Exam sessions.
+                                                </p>
+                                                {longExamSourceCountExceedsRemaining ? (
+                                                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                                                        Not enough Long Exam quota for {selectedSourceCount} notes. Remove a note or upgrade.
+                                                    </p>
+                                                ) : null}
+                                            </>
                                         ) : null}
                                     </div>
                                 </div>
@@ -918,6 +964,24 @@ export default function LongExamPage() {
                                     </Link>{" "}
                                     with the subject <span className="font-medium text-foreground/75">{note.subject}</span> and it will appear here.
                                 </p>
+                            ) : null}
+
+                            {longExamLimitReached ? (
+                                <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/25 dark:text-amber-100">
+                                    <p className="font-medium">You've used all {longExamMonthlyLimit} Long Exam sessions for this month.</p>
+                                    <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
+                                        You can still review existing results. Start a new Long Exam when your quota resets.
+                                    </p>
+                                    {longExamUpgradeCtas.primary ? (
+                                        <Button
+                                            type="button"
+                                            className="mt-3 w-full sm:w-auto"
+                                            onClick={() => router.push("/settings?section=plans")}
+                                        >
+                                            {longExamUpgradeCtas.primary.label}
+                                        </Button>
+                                    ) : null}
+                                </div>
                             ) : null}
 
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -938,7 +1002,7 @@ export default function LongExamPage() {
                                         type="button"
                                         className="w-full sm:w-auto"
                                         onClick={() => void handleStartExam()}
-                                        disabled={!studyPackId || starting}
+                                        disabled={!studyPackId || starting || longExamLimitReached || longExamSourceCountExceedsRemaining}
                                     >
                                         {starting ? "Starting..." : "Begin Long Exam"}
                                     </Button>

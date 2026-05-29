@@ -82,13 +82,13 @@ public class UserUsageService {
     }
 
     @Transactional
-    public void incrementLongExamGeneration(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
+    public void incrementLongExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 0, count, 0, 0, 0, 0, 0);
     }
 
     @Transactional
-    public void incrementBoardExamGeneration(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0);
+    public void incrementBoardExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, count, 0, 0, 0, 0);
     }
 
     @Transactional

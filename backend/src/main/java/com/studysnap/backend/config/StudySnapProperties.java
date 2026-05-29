@@ -106,8 +106,8 @@ public class StudySnapProperties {
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
         private int proMonthlyInterviewPracticeLimit = 10;
-        private int proMonthlyLongExamLimit = 10;
-        private int proMonthlyBoardExamLimit = 5;
+        private int proMonthlyLongExamLimit = 12;
+        private int proMonthlyBoardExamLimit = 10;
         private int freeMonthlyOcrLimit = 20;
         private int plusMonthlyOcrLimit = 50;
         private int proMonthlyOcrLimit = 100;

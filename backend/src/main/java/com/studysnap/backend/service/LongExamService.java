@@ -145,12 +145,12 @@ public class LongExamService {
         authService.requireEmailVerified(userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.LONG_EXAM_SESSION);
-        assertLongExamQuotaAvailable(userId, planType);
-
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         String difficulty = resolveDifficulty(request);
         int questionCount = resolveQuestionCount(userId);
         List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
+        int sourceCount = additionalStudyPackIds.size() + 1;
+        assertLongExamQuotaAvailable(userId, planType, sourceCount);
         AtomicBoolean createdSession = new AtomicBoolean(false);
         AtomicBoolean poolSourcedSession = new AtomicBoolean(false);
 
@@ -222,7 +222,7 @@ public class LongExamService {
             throw new LongExamGenerationFailedException();
         }
         if (createdSession.get()) {
-            userUsageService.incrementLongExamGeneration(userId, OffsetDateTime.now(ZoneOffset.UTC));
+            userUsageService.incrementLongExamGenerationBy(userId, sourceCount, OffsetDateTime.now(ZoneOffset.UTC));
         }
         if (createdSession.get() && !poolSourcedSession.get() && additionalStudyPackIds.isEmpty()) {
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
@@ -311,7 +311,7 @@ public class LongExamService {
                         OBSERVABLE_STATUSES
                 )
                 .map(this::buildStartResponse)
-                .orElse(null);
+                .orElseGet(() -> buildEmptyStartResponse(userId));
     }
 
     public LongExamSessionResponse saveProgress(UUID sessionId, UUID userId, LongExamProgressRequest request) {
@@ -446,10 +446,10 @@ public class LongExamService {
                 .orElse(null);
     }
 
-    private int assertLongExamQuotaAvailable(UUID userId, PlanType planType) {
+    private int assertLongExamQuotaAvailable(UUID userId, PlanType planType, int sourceCount) {
         long usedThisMonth = countLongExamUsedThisMonth(userId);
         int monthlyLimit = properties.getPricing().resolveMonthlyLongExamLimit(planType);
-        if (usedThisMonth < monthlyLimit) {
+        if (usedThisMonth + sourceCount <= monthlyLimit) {
             return (int) usedThisMonth;
         }
         throw new MonthlyLongExamLimitReachedException();
@@ -477,6 +477,23 @@ public class LongExamService {
                 extractTimerStartedAtEpochSeconds(session.getSessionState()),
                 extractSourceNoteRefs(session.getSessionState()),
                 (int) countLongExamUsedThisMonth(session.getUserId()),
+                properties.getPricing().resolveMonthlyLongExamLimit(planType)
+        );
+    }
+
+    private LongExamStartResponse buildEmptyStartResponse(UUID userId) {
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        return new LongExamStartResponse(
+                null,
+                null,
+                List.of(),
+                0,
+                DIFFICULTY_MIXED,
+                false,
+                0,
+                0,
+                List.of(),
+                (int) countLongExamUsedThisMonth(userId),
                 properties.getPricing().resolveMonthlyLongExamLimit(planType)
         );
     }

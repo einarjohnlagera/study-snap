@@ -76,6 +76,7 @@ import {
 import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
 type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup";
@@ -89,6 +90,7 @@ type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFES
 type ChallengeViewerPlanType = "FREE" | "PLUS" | "PRO" | null;
 type ChallengePaywallVariant =
   | "board-exam-mode"
+  | "board-exam-limit"
   | "long-exam-mode"
   | "interview-practice-limit"
   | "difficulty-selection"
@@ -313,6 +315,8 @@ export default function ChallengeQuizPage() {
   const [viewerProfileType, setViewerProfileType] = useState<ChallengeViewerProfileType>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<ChallengePaywallVariant | null>(null);
   const [challengeQuizLimitReached, setChallengeQuizLimitReached] = useState(false);
+  const [boardExamUsedThisMonth, setBoardExamUsedThisMonth] = useState(0);
+  const [boardExamMonthlyLimit, setBoardExamMonthlyLimit] = useState(0);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
   const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(() => (
     resolvePreferredChallengeMode(getAuthUser()?.profileType)
@@ -363,11 +367,13 @@ export default function ChallengeQuizPage() {
         ? "difficulty"
         : variant === "challenge-quiz-limit"
           ? "quiz_limit"
-          : variant === "long-exam-mode"
-            ? "long_exam"
-            : variant === "interview-practice-limit"
-              ? "interview_practice"
-              : "board_exam";
+          : variant === "board-exam-limit"
+            ? "board_exam_limit"
+            : variant === "long-exam-mode"
+              ? "long_exam"
+              : variant === "interview-practice-limit"
+                ? "interview_practice"
+                : "board_exam";
       void trackAnalyticsEvent({
         eventType: "FEATURE_LOCKED_CLICKED",
         metadata: {
@@ -513,6 +519,8 @@ export default function ChallengeQuizPage() {
     timeoutAutoSubmitRequestedRef.current = false;
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
     setSelectedDifficulty(normalizePracticeDifficulty(started.selectedDifficulty));
+    setBoardExamUsedThisMonth(started.boardExamUsedThisMonth ?? 0);
+    setBoardExamMonthlyLimit(started.boardExamMonthlyLimit ?? 0);
 
     if (started.status === "GENERATING") {
       syncProgressRef(0, {}, {});
@@ -671,6 +679,8 @@ export default function ChallengeQuizPage() {
       }
 
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
+      setBoardExamUsedThisMonth(inProgress.boardExamUsedThisMonth ?? 0);
+      setBoardExamMonthlyLimit(inProgress.boardExamMonthlyLimit ?? 0);
       if (sharedModeSelectionEntryRequested) {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
         syncProgressRef(0, {}, {});
@@ -755,6 +765,10 @@ export default function ChallengeQuizPage() {
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const activeSourceNoteRefs = challengeSession?.sourceNoteRefs ?? [];
   const selectedBoardExamSourceCount = 1 + selectedBoardExamAdditionalStudyPackIds.length;
+  const boardExamRemaining = Math.max(0, boardExamMonthlyLimit - boardExamUsedThisMonth);
+  const boardExamLimitReached = boardExamMonthlyLimit > 0 && boardExamUsedThisMonth >= boardExamMonthlyLimit;
+  const boardExamSourceCountExceedsRemaining = selectedBoardExamSourceCount > boardExamRemaining;
+  const boardExamUpgradeCtas = getUpgradeCtas((viewerPlanType ?? "FREE") as AppPlanType);
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
   const currentMatchingGroup = !isBoardExamMode ? resolveQuizItemGroupAt(quiz, currentIndex) : null;
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
@@ -1008,6 +1022,9 @@ export default function ChallengeQuizPage() {
           setPhase("prestart");
           openLockedFeaturePaywall("challenge-quiz-limit", "challenge_quiz_start");
         }
+      } else if (message.toLowerCase().includes("monthly board exam limit")) {
+        setPhase("prestart");
+        openLockedFeaturePaywall("board-exam-limit", "board_exam_start");
       }
     } finally {
       startInFlightRef.current = false;
@@ -1154,8 +1171,12 @@ export default function ChallengeQuizPage() {
       }
       return;
     }
+    if (boardExamLimitReached) {
+      openLockedFeaturePaywall("board-exam-limit", "board_exam_mode_selection");
+      return;
+    }
     setPrestartStep("board-exam-setup");
-  }, [boardExamAvailable, challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
+  }, [boardExamAvailable, boardExamLimitReached, challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
   const handleSelectLongExamMode = useCallback(() => {
     setError(null);
     if (viewerPlanType !== "PRO") {
@@ -1690,10 +1711,20 @@ export default function ChallengeQuizPage() {
                     );
                   })}
                   {selectedBoardExamAdditionalStudyPackIds.length > 0 ? (
-                    <p className="flex items-center gap-2 text-sm text-foreground/70">
-                      <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span>Generating from multiple notes may take up to a minute.</span>
-                    </p>
+                    <>
+                      <p className="flex items-center gap-2 text-sm text-foreground/70">
+                        <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Generating from multiple notes may take up to a minute.</span>
+                      </p>
+                      <p className="text-sm text-foreground/70">
+                        This session will use {selectedBoardExamSourceCount} of your {boardExamRemaining} remaining Board Exam sessions.
+                      </p>
+                      {boardExamSourceCountExceedsRemaining ? (
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          Not enough Board Exam quota for {selectedBoardExamSourceCount} notes. Remove a note or upgrade.
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               ) : (
@@ -1708,6 +1739,23 @@ export default function ChallengeQuizPage() {
               <p className="text-sm text-foreground/75">Preparing your board exam...</p>
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            {boardExamLimitReached ? (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/25 dark:text-amber-100">
+                <p className="font-medium">You've used all {boardExamMonthlyLimit} Board Exam sessions for this month.</p>
+                <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
+                  You can still review existing results. Start a new Board Exam when your quota resets.
+                </p>
+                {boardExamUpgradeCtas.primary ? (
+                  <Button
+                    type="button"
+                    className="mt-3 w-full sm:w-auto"
+                    onClick={() => router.push("/settings?section=plans")}
+                  >
+                    {boardExamUpgradeCtas.primary.label}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-foreground/65">
@@ -1723,22 +1771,20 @@ export default function ChallengeQuizPage() {
                 >
                   Choose another mode
                 </Button>
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    if (!boardExamAvailable) {
-                      openLockedFeaturePaywall("board-exam-mode", "board_exam_setup");
-                      return;
-                    }
-                    setShowBoardExamStartModal(true);
-                  }}
-                  disabled={challengeGenerationLocked}
-                >
-                  {boardExamAvailable
-                    ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
-                    : "Unlock Board Exam Mode"}
-                </Button>
+                {!boardExamLimitReached ? (
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      setShowBoardExamStartModal(true);
+                    }}
+                    disabled={challengeGenerationLocked || boardExamSourceCountExceedsRemaining}
+                  >
+                    {boardExamAvailable
+                      ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
+                      : "Unlock Board Exam Mode"}
+                  </Button>
+                ) : null}
               </div>
             </div>
           </section>

@@ -188,7 +188,7 @@ class LongExamServiceTest {
         assertThat(response.sourceNoteRefs()).hasSize(1);
         assertThat(response.sourceNoteRefs().getFirst().questionCount()).isEqualTo(25);
         assertThat(response.usedThisMonth()).isZero();
-        assertThat(response.monthlyLimit()).isEqualTo(10);
+        assertThat(response.monthlyLimit()).isEqualTo(12);
         assertThat(dispatchedTask).isNotNull();
         QuickReviewSessionEntity generatingSession = savedSessions.getFirst();
         when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(Optional.of(generatingSession));
@@ -200,7 +200,7 @@ class LongExamServiceTest {
             QuickReviewSessionStatus.IN_PROGRESS
         );
         verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.LONG_EXAM_SESSION);
-        verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_STARTED), eq(studyPackId),
             any());
     }
@@ -239,7 +239,7 @@ class LongExamServiceTest {
         verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
         verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(),
             any(), any());
-        verify(userUsageService).incrementLongExamGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test
@@ -289,7 +289,7 @@ class LongExamServiceTest {
         verify(quizGenerationService, never()).generateLongExamParallel(any(), any(), any(), any(), anyInt(), any(),
             any(), any());
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(userUsageService, never()).incrementLongExamGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(userUsageService, never()).incrementLongExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
     }
 
     @Test
@@ -308,7 +308,7 @@ class LongExamServiceTest {
                 0,
                 0,
                 0,
-                10,
+                12,
                 0
             ));
 
@@ -317,7 +317,7 @@ class LongExamServiceTest {
             .isInstanceOf(MonthlyLongExamLimitReachedException.class);
 
         verify(studyPackRepository, never()).findByIdAndOwnerUserIdForUpdate(any(), any());
-        verify(userUsageService, never()).incrementLongExamGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(userUsageService, never()).incrementLongExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
     }
 
     @Test
@@ -398,6 +398,42 @@ class LongExamServiceTest {
             .extracting(source -> source.noteTitle() + ":" + source.questionCount())
             .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
         verify(examQuestionPoolService, never()).sampleQuestions(any(UUID.class), any(), anyInt(), any());
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(2), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_withTwoAdditionalNotesDeductsThreeLongExamUnits() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID secondStudyPackId = UUID.randomUUID();
+        UUID thirdStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(secondStudyPackId, userId))
+            .thenReturn(Optional.of(buildStudyPack(secondStudyPackId, userId, "Second Biology", BIOLOGY_SUBJECT)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(thirdStudyPackId, userId))
+            .thenReturn(Optional.of(buildStudyPack(thirdStudyPackId, userId, "Third Biology", BIOLOGY_SUBJECT)));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId),
+            eq(primaryStudyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        longExamService.startSession(
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(null, List.of(secondStudyPackId.toString(), thirdStudyPackId.toString()))
+        );
+
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(3), any(OffsetDateTime.class));
     }
 
     @Test
@@ -448,6 +484,7 @@ class LongExamServiceTest {
                 "Additional Biology 1:6",
                 "Additional Biology 2:6"
             );
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(4), any(OffsetDateTime.class));
     }
 
     @Test

@@ -707,6 +707,8 @@ export type ChallengeQuizStartResponse = {
   timeLimitSeconds: number;
   usedThisMonth: number;
   monthlyLimit: number;
+  boardExamUsedThisMonth: number;
+  boardExamMonthlyLimit: number;
   difficultySelectionAvailable: boolean;
   mode: ChallengeQuizMode;
   selectedDifficulty: "easy" | "medium" | "hard" | "mixed";
@@ -810,8 +812,8 @@ export type QuizSessionReviewResponse = {
 };
 
 export type LongExamStartResponse = {
-  sessionId: string;
-  status: QuizSessionStatus;
+  sessionId: string | null;
+  status: QuizSessionStatus | null;
   quiz: QuizItem[];
   totalQuestions: number;
   difficulty: string | null;

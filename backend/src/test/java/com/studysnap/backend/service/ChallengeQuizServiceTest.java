@@ -418,12 +418,14 @@ class ChallengeQuizServiceTest {
 
         assertThat(response.mode()).isEqualTo("board_exam");
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
-        assertThat(response.monthlyLimit()).isEqualTo(5);
+        assertThat(response.monthlyLimit()).isEqualTo(10);
         assertThat(response.usedThisMonth()).isEqualTo(1);
+        assertThat(response.boardExamMonthlyLimit()).isEqualTo(10);
+        assertThat(response.boardExamUsedThisMonth()).isEqualTo(1);
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
-        verify(userUsageService).incrementBoardExamGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
         verify(featureGateService, never()).checkFeatureAccess(PlanType.PRO, Feature.DIFFICULTY_SELECTION);
     }
 
@@ -486,7 +488,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.quiz()).hasSize(12);
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
-        verify(userUsageService).incrementBoardExamGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test
@@ -518,13 +520,13 @@ class ChallengeQuizServiceTest {
                 any(),
                 any(),
                 any(),
-                eq(4),
+                eq(10),
                 eq("mixed"),
                 any(StudyPackGenerationContext.class)
         )).thenReturn(
-                buildQuizWithPrefix("Primary", 4),
-                buildQuizWithPrefix("Second", 4),
-                buildQuizWithPrefix("Third", 4)
+                buildQuizWithPrefix("Primary", 10),
+                buildQuizWithPrefix("Second", 10),
+                buildQuizWithPrefix("Third", 10)
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -539,13 +541,14 @@ class ChallengeQuizServiceTest {
         );
 
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        assertThat(response.quiz()).hasSize(12);
+        assertThat(response.quiz()).hasSize(30);
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::studyPackId)
                 .containsExactly(primaryStudyPackId.toString(), secondStudyPackId.toString(), thirdStudyPackId.toString());
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::questionCount)
-                .containsExactly(4, 4, 4);
+                .containsExactly(10, 10, 10);
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(3), any(OffsetDateTime.class));
         verify(examQuestionPoolService, never()).sampleQuestions(
                 eq(primaryStudyPackId),
                 eq(ExamQuestionPoolService.MODE_BOARD_EXAM),
@@ -579,12 +582,12 @@ class ChallengeQuizServiceTest {
                 any(),
                 any(),
                 any(),
-                eq(6),
+                eq(12),
                 eq("mixed"),
                 any(StudyPackGenerationContext.class)
         )).thenReturn(
-                buildQuizWithPrefix("Primary", 6),
-                buildQuizWithPrefix("Additional", 6)
+                buildQuizWithPrefix("Primary", 12),
+                buildQuizWithPrefix("Additional", 12)
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -601,7 +604,9 @@ class ChallengeQuizServiceTest {
         assertThat(response.sourceNoteRefs()).hasSize(2);
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::questionCount)
-                .containsExactly(6, 6);
+                .containsExactly(12, 12);
+        assertThat(response.quiz()).hasSize(24);
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(2), any(OffsetDateTime.class));
     }
 
     @Test
@@ -660,7 +665,13 @@ class ChallengeQuizServiceTest {
         UUID primaryNoteId = UUID.randomUUID();
         StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
 
-        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId)).thenReturn(Optional.of(primary));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
 
         String id = primaryStudyPackId.toString();
         ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
@@ -759,7 +770,7 @@ class ChallengeQuizServiceTest {
                         0,
                         0,
                         0,
-                        5
+                        10
                 ));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
@@ -770,7 +781,67 @@ class ChallengeQuizServiceTest {
 
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(userUsageService, never()).incrementBoardExamGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(userUsageService, never()).incrementBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_blocksMultiNoteBoardExamWhenRemainingQuotaCannotCoverSourceCount() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(new UserUsageService.MonthlyUsage(
+                OffsetDateTime.now().minusDays(5),
+                OffsetDateTime.now().plusDays(25),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                9
+        ));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
+                null,
+                "board_exam",
+                List.of(additionalStudyPackId.toString())
+        );
+        String studyPackIdRaw = studyPackId.toString();
+        assertThatThrownBy(() -> challengeQuizService.startSession(studyPackIdRaw, userId, request))
+                .isInstanceOf(MonthlyBoardExamLimitReachedException.class);
+
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
     }
 
     @Test
@@ -813,7 +884,7 @@ class ChallengeQuizServiceTest {
 
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(userUsageService, never()).incrementBoardExamGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(userUsageService, never()).incrementBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
     }
 
     @Test
