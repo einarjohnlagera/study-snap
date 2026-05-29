@@ -338,7 +338,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         Set<String> normalizedConcepts = new HashSet<>();
         for (int i = 0; i < promptQuizItems.size(); i++) {
             PromptQuizItem item = promptQuizItems.get(i);
-            validatePromptQuizItem(item, normalizedQuestions, normalizedConcepts, i);
+            validatePromptQuizItem(item, normalizedQuestions, i);
             String normalizedConcept = normalizeAndValidateConcept(item.concept(), i);
             String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
             if (!normalizedQuestions.add(normalizedQuestionKey)) {
@@ -346,7 +346,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
             String normalizedConceptKey = StringNormalizationUtils.normalizeForDuplicateCheck(normalizedConcept);
             if (!normalizedConcepts.add(normalizedConceptKey)) {
-                throw invalidOutput("The study pack service returned repetitive quiz concepts. Please try again.");
+                log.warn("Duplicate quiz concept detected and allowed: concept={}", normalizedConcept);
             }
 
             int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
@@ -370,7 +370,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private void validatePromptQuizItem(
             PromptQuizItem item,
             Set<String> normalizedQuestions,
-            Set<String> normalizedConcepts,
             int quizIndex
     ) {
         if (StringNormalizationUtils.isBlank(item.question())) {
@@ -388,12 +387,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
         if (normalizedQuestions.contains(normalizedQuestionKey)) {
             throw invalidOutput("The study pack service returned repetitive quiz questions. Please try again.");
-        }
-        String normalizedConceptKey = StringNormalizationUtils.normalizeForDuplicateCheck(
-                StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(item.concept())
-        );
-        if (normalizedConcepts.contains(normalizedConceptKey)) {
-            throw invalidOutput("The study pack service returned repetitive quiz concepts. Please try again.");
         }
     }
 
@@ -1820,7 +1813,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 if (attempt == MAX_INVALID_OUTPUT_ATTEMPTS) {
                     throw ex;
                 }
-                log.info("Retrying OpenAI response validation after invalid output on attempt {}", attempt);
+                log.warn("Retrying OpenAI response validation after invalid output on attempt {}: {}", attempt, ex.getMessage());
             }
         }
         throw Objects.requireNonNull(lastInvalidOutput, "lastInvalidOutput");
