@@ -11,5 +11,11 @@ import java.util.UUID;
 public interface EmailLogRepository extends JpaRepository<EmailLogEntity, UUID> {
     boolean existsByUserIdAndEmailTypeAndSentAtAfter(UUID userId, RetentionEmailType emailType, OffsetDateTime sentAt);
 
+    boolean existsByUserIdAndEmailType(UUID userId, RetentionEmailType emailType);
+
     Optional<EmailLogEntity> findTopByUserIdAndEmailTypeOrderBySentAtDesc(UUID userId, RetentionEmailType emailType);
+
+    long countByEmailType(RetentionEmailType emailType);
+
+    Optional<EmailLogEntity> findTopByEmailTypeOrderBySentAtDesc(RetentionEmailType emailType);
 }

@@ -1,0 +1,17 @@
+Hi {{firstName}},
+
+A lot has been added since you first joined — including a mode built specifically for Professional users:
+
+Interview Practice — scenario-based questions from your own notes, with AI feedback after each answer. Soft 2-minute timer simulates real interview pacing.
+
+Multi-note sessions — span a study session across multiple notes for broader coverage.
+
+Public Library — discover and copy notes from the community.
+
+Come back and see how much has changed.
+
+Go to Dashboard: {{dashboardUrl}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

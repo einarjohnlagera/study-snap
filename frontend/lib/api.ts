@@ -1563,6 +1563,35 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
 }
 
+export type CampaignStatusResponse = {
+  eligibleCount: number;
+  totalSent: number;
+  lastSentAt: string | null;
+};
+
+export type ReEngagementSendResult = {
+  sent: number;
+  skipped: number;
+};
+
+export async function getReEngagementCampaignStatus(): Promise<CampaignStatusResponse> {
+  const response = await fetchWithAuth(
+    "/admin/campaigns/re-engagement/status",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<CampaignStatusResponse>(response, "Could not load campaign status.");
+}
+
+export async function sendReEngagementCampaign(): Promise<ReEngagementSendResult> {
+  const response = await fetchWithAuth(
+    "/admin/campaigns/re-engagement/send",
+    { method: "POST", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<ReEngagementSendResult>(response, "Could not send campaign.");
+}
+
 export async function issueAdminRefund(transactionId: string): Promise<AdminIssueRefundResponse> {
   const response = await fetchWithAuth(
     "/admin/billing/refund",
