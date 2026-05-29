@@ -364,6 +364,7 @@ public class StudySnapProperties {
         private String appBaseUrl = "http://localhost:3000";
         private int verificationTokenHours = 24;
         private int resendCooldownSeconds = 60;
+        private int passwordResetTokenMinutes = 60;
     }
 
     @Getter

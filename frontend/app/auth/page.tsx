@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
@@ -13,6 +14,7 @@ import {
   getAuthUser,
   LOGIN_REASON_AUTH_REQUIRED,
   LOGIN_REASON_LOGGED_OUT,
+  LOGIN_REASON_PASSWORD_RESET,
   LOGIN_REASON_QUERY_KEY,
   LOGIN_REASON_SESSION_EXPIRED,
   type AuthUser,
@@ -68,6 +70,12 @@ function AuthPageContent() {
           message: "Please log in to continue.",
           className:
             "rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground/80",
+        };
+      case LOGIN_REASON_PASSWORD_RESET:
+        return {
+          message: "Your password has been reset. Log in with your new password.",
+          className:
+            "rounded-md border border-green-300/60 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-700/60 dark:bg-green-950/40 dark:text-green-200",
         };
       default:
         return null;
@@ -328,14 +336,24 @@ function AuthPageContent() {
             />
           </label>
           {mode === "login" ? (
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={keepSignedIn}
-                onChange={(e) => setKeepSignedIn(e.target.checked)}
-              />
-              Keep me signed in for 30 days
-            </label>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={(e) => setKeepSignedIn(e.target.checked)}
+                />
+                Keep me signed in for 30 days
+              </label>
+              <div>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-foreground/60 underline underline-offset-2 hover:text-foreground"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
           ) : null}
 
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}

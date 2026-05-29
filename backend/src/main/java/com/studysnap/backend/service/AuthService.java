@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.ForgotPasswordRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
@@ -10,6 +11,7 @@ import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
+import com.studysnap.backend.dto.ResetPasswordRequest;
 import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
@@ -100,6 +102,7 @@ public class AuthService {
     private final GoogleIdentityTokenVerifier googleIdentityTokenVerifier;
     private final EmailVerificationService emailVerificationService;
     private final AnalyticsService analyticsService;
+    private final PasswordResetService passwordResetService;
 
     public AuthResponse signup(SignupRequest request, String ipAddress, String userAgent) {
         String email = normalizeEmail(request.email());
@@ -805,5 +808,13 @@ public class AuthService {
                 .ifPresent(existing -> {
                     throw new AppException("USERNAME_ALREADY_EXISTS", USERNAME_TAKEN_MESSAGE, HttpStatus.CONFLICT);
                 });
+    }
+
+    public SimpleMessageResponse forgotPassword(ForgotPasswordRequest request) {
+        return passwordResetService.sendPasswordResetEmail(request.email());
+    }
+
+    public SimpleMessageResponse resetPassword(ResetPasswordRequest request) {
+        return passwordResetService.resetPassword(request.token(), request.newPassword());
     }
 }

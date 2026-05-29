@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.ForgotPasswordRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
@@ -10,6 +11,7 @@ import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
+import com.studysnap.backend.dto.ResetPasswordRequest;
 import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -135,6 +137,18 @@ public class AuthController {
     @GetMapping("/verify-email")
     public SimpleMessageResponse verifyEmail(@RequestParam("token") String token) {
         return authService.verifyEmailToken(token);
+    }
+
+    @PostMapping("/forgot-password")
+    public SimpleMessageResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest servletRequest) {
+        authRateLimitService.assertAllowed("forgot-password", resolveClientIp(servletRequest));
+        return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/reset-password")
+    public SimpleMessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest servletRequest) {
+        authRateLimitService.assertAllowed("reset-password", resolveClientIp(servletRequest));
+        return authService.resetPassword(request);
     }
 
     @PostMapping("/preferences/engagement-mode")

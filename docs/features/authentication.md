@@ -120,6 +120,29 @@ Google OAuth is supported as an alternative sign-in method alongside email/passw
 
 Users with an existing email/password account can link Google from Profile → Identity → Sign-in Methods via `POST /auth/google/connect`. The backend links the Google provider to the existing user if the verified Google email matches.
 
+## Forgot Password
+
+Unauthenticated users can reset their password via email link.
+
+### Endpoints
+
+- `POST /api/auth/forgot-password` — accepts `{ email }`, rate-limited by IP. Always returns a generic success message regardless of whether the email is registered (no user enumeration). Silently no-ops for unknown emails, non-ACTIVE accounts, and accounts without a password hash (Google-only).
+- `POST /api/auth/reset-password` — accepts `{ token, newPassword }`, rate-limited by IP. Returns `400 INVALID_RESET_TOKEN` for unknown, already-used, or expired tokens.
+
+### Token model
+
+- Raw 32-byte token → Base64URL encoded → SHA-256 hashed before storage in `password_reset_tokens` table.
+- TTL: 60 minutes (`passwordResetTokenMinutes` in `StudySnapProperties.Email`).
+- Any active tokens for the user are invalidated on each new request.
+- On successful reset: password re-hashed, `tokenVersion` bumped (revokes all active JWTs), `failedLoginAttempts` cleared, `lockedUntil` cleared, `emailVerifiedAt` backfilled if null (proving email ownership).
+
+### Frontend
+
+- `/forgot-password` — email form with generic success state after submit.
+- `/reset-password?token=...` — three states: (a) password form, (b) submitting, (c) invalid/expired with "Request a new link" CTA to `/forgot-password`.
+- After successful reset: redirect to `/auth?reason=password_reset` with a green success banner ("Your password has been reset. Log in with your new password.").
+- "Forgot password?" link in the login form (login mode only, below the "Keep me signed in" checkbox).
+
 ## Non-Goals
 
 - classroom/family linking
