@@ -8,6 +8,8 @@ Theme: TBD
 
 ### ✅ Shipped
 
+- **Re-engagement campaign (Admin)** — one-time admin-initiated email campaign targeting users inactive for 30+ days who signed up before v0.19.0. Profile-segmented into three variants (student/generic, professional, teacher). Available at `/admin/campaigns`; shows eligible count, last-sent date, and total recipients. Sends up to 100 emails per invocation (free Resend tier) with `email_log` deduplication so already-sent users are always skipped on re-runs.
+
 ---
 
 ## v0.19.0 - Multi-Note Depth & Simulation Parity

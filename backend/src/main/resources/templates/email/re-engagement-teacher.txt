@@ -1,0 +1,17 @@
+Hi {{firstName}},
+
+A lot has been added since you first joined — including tools built around how teachers actually work:
+
+Exam Builder — select multiple notes, organize questions into sections, and export a combined DOCX exam.
+
+Shareable Quiz Links — share a quiz directly with students, no signup required.
+
+Multi-note exams — span Long Exam and Board Exam sessions across multiple notes for broader exam coverage.
+
+Come back and see how much has changed.
+
+Go to Dashboard: {{dashboardUrl}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

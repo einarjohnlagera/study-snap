@@ -6,6 +6,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToastMessage } from "@/components/ui/toast-message";
+import Link from "next/link";
 import {
   ApiRequestError,
   getAdminDashboardRecentEvents,
@@ -280,7 +281,12 @@ export default function AdminPage() {
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       {refundSuccessMessage ? <ToastMessage message={refundSuccessMessage} tone="success" /> : null}
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold text-foreground">Admin Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-semibold text-foreground">Admin Dashboard</h1>
+          <Link href="/admin/campaigns" className="text-sm text-foreground/55 hover:text-foreground/80">
+            Campaigns →
+          </Link>
+        </div>
         <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
           Internal view of product usage, billing health, upgrade activity, and Public Library growth.
         </p>

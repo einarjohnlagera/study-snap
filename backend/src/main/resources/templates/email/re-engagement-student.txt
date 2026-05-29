@@ -1,0 +1,19 @@
+Hi {{firstName}},
+
+When you first joined, NoteLib was just getting started. A lot has been built since then — here's what's waiting for you:
+
+Adaptive Practice — focuses your review on concepts you keep missing, not ones you already know.
+
+Board Exam Mode — simulates the real exam: timed, no feedback during the session, full question set. You can now span it across multiple notes for full-coverage exams.
+
+Spaced Repetition signals — Key Concepts now tracks which topics are overdue for review and surfaces them automatically.
+
+Public Library — discover and copy notes from the community to supplement your own.
+
+Come back and see how much has changed.
+
+Go to Dashboard: {{dashboardUrl}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app
