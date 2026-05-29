@@ -12,6 +12,7 @@ import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { AppModal } from "@/components/ui/app-modal";
 import { ToastMessage } from "@/components/ui/toast-message";
 import {
+  changePassword,
   completeOnboardingProfileType,
   connectGoogle,
   getMe,
@@ -223,6 +224,11 @@ export default function ProfilePage() {
   const [signInMethods, setSignInMethods] = useState<SignInMethodsResponse | null>(null);
   const [signInMethodsMessage, setSignInMethodsMessage] = useState<string | null>(null);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [changePwForm, setChangePwForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [changePwLoading, setChangePwLoading] = useState(false);
+  const [changePwError, setChangePwError] = useState<string | null>(null);
+  const [changePwSuccess, setChangePwSuccess] = useState<string | null>(null);
   const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
 
   const scrollToRequestedSection = useCallback(() => {
@@ -624,6 +630,30 @@ export default function ProfilePage() {
     }
   }, [connectingGoogle]);
 
+  const handleChangePassword = async () => {
+    setChangePwError(null);
+    setChangePwSuccess(null);
+    if (changePwForm.newPassword !== changePwForm.confirmPassword) {
+      setChangePwError("New passwords do not match.");
+      return;
+    }
+    if (changePwForm.newPassword.length < 8) {
+      setChangePwError("New password must be at least 8 characters.");
+      return;
+    }
+    setChangePwLoading(true);
+    try {
+      await changePassword(changePwForm.currentPassword, changePwForm.newPassword);
+      setChangePwSuccess("Password changed successfully. You may be signed out on other devices.");
+      setChangePwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setShowChangePassword(false);
+    } catch (err) {
+      setChangePwError(err instanceof Error ? err.message : "Could not change password.");
+    } finally {
+      setChangePwLoading(false);
+    }
+  };
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       {loading ? (
@@ -746,11 +776,68 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-sm font-medium">Email and password</p>
-                  <p className="text-sm text-foreground/70">
-                    {signInMethods?.passwordEnabled ? "Enabled" : "Not set up"}
-                  </p>
+                <div className="space-y-3 rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Email and password</p>
+                      <p className="text-sm text-foreground/70">
+                        {signInMethods?.passwordEnabled ? "Enabled" : "Not set up"}
+                      </p>
+                    </div>
+                    {signInMethods?.passwordEnabled ? (
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        onClick={() => {
+                          setShowChangePassword((v) => !v);
+                          setChangePwError(null);
+                          setChangePwSuccess(null);
+                          setChangePwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                        }}
+                      >
+                        {showChangePassword ? "Cancel" : "Change password"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {showChangePassword && signInMethods?.passwordEnabled ? (
+                    <div className="space-y-2">
+                      <input
+                        type="password"
+                        placeholder="Current password"
+                        autoComplete="current-password"
+                        value={changePwForm.currentPassword}
+                        onChange={(e) => setChangePwForm((f) => ({ ...f, currentPassword: e.target.value }))}
+                        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      />
+                      <input
+                        type="password"
+                        placeholder="New password (min. 8 characters)"
+                        autoComplete="new-password"
+                        value={changePwForm.newPassword}
+                        onChange={(e) => setChangePwForm((f) => ({ ...f, newPassword: e.target.value }))}
+                        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      />
+                      <input
+                        type="password"
+                        placeholder="Confirm new password"
+                        autoComplete="new-password"
+                        value={changePwForm.confirmPassword}
+                        onChange={(e) => setChangePwForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      />
+                      {changePwError ? <p className="text-xs text-red-500">{changePwError}</p> : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full"
+                        loading={changePwLoading}
+                        loadingText="Changing password..."
+                        onClick={() => void handleChangePassword()}
+                      >
+                        Change password
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-3 rounded-lg border border-border p-3">
                   <div>
@@ -772,6 +859,7 @@ export default function ProfilePage() {
                   ) : null}
                 </div>
               </div>
+              {changePwSuccess ? <p className="text-xs text-green-600 dark:text-green-400">{changePwSuccess}</p> : null}
               {signInMethodsMessage ? <p className="text-xs text-foreground/60">{signInMethodsMessage}</p> : null}
             </div>
           </Card>

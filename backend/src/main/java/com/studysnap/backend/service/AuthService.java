@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AuthResponse;
+import com.studysnap.backend.dto.ChangePasswordRequest;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
@@ -32,6 +33,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
+import com.studysnap.backend.exception.InvalidCurrentPasswordException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
@@ -255,6 +257,19 @@ public class AuthService {
     @Transactional(readOnly = true)
     public SignInMethodsResponse getSignInMethods(UUID userId) {
         return buildSignInMethodsResponse(findUserOrThrow(userId));
+    }
+
+    public SimpleMessageResponse changePassword(UUID userId, ChangePasswordRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new InvalidCurrentPasswordException();
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setLastPasswordChangeAt(now);
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        user.setUpdatedAt(now);
+        return new SimpleMessageResponse("Password changed successfully.");
     }
 
     public AuthResponse refresh(RefreshTokenRequest request, String ipAddress, String userAgent) {
