@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import type { StudyPackResponse } from "@/lib/api";
 
 type StudyPackResultsProps = {
@@ -104,7 +105,7 @@ export function StudyPackResults({
 
       <Card>
         <CardTitle className="mb-2">Summary</CardTitle>
-        <CardDescription>{studyPackResult.summary}</CardDescription>
+        <SummaryMarkdown content={studyPackResult.summary} />
       </Card>
 
       <Card>

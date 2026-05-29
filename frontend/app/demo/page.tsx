@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { QuizItem } from "@/lib/api";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 
 type DemoStep = "choose" | "input" | "note" | "pack-loading" | "results";
 
@@ -268,7 +269,7 @@ function ResultsStep() {
 
       <Card className="p-4 sm:p-6">
         <CardTitle className="mb-2">Summary</CardTitle>
-        <CardDescription>{pack.summary}</CardDescription>
+        <SummaryMarkdown content={pack.summary} />
       </Card>
 
       <Card className="p-4 sm:p-6">

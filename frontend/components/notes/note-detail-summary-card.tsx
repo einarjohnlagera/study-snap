@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 
 type NoteDetailSummaryCardProps = Readonly<{
   summary: string;
@@ -23,9 +24,7 @@ export function NoteDetailSummaryCard({
           View Full Notes →
         </button>
       </div>
-      <p className="text-sm leading-relaxed text-foreground/80">
-        {summary}
-      </p>
+      <SummaryMarkdown content={summary} />
     </Card>
   );
 }

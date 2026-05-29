@@ -20,13 +20,30 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 
 The LLM should produce:
 - title
-- summary
+- summary (plain prose + optional markdown comparison table + optional Common Misconceptions paragraph)
 - subject
 - tags
 - keyConcepts
 - quiz[]
 
 The strict JSON contract is documented in `docs/ai/PROMPTS.md`.
+
+## Enhanced summary format
+
+The summary field supports limited markdown to enrich the generated content:
+
+### Comparison table
+When the notes contain multiple related concepts that can be meaningfully compared (e.g. different laws, methods, categories), the AI should include a compact GFM pipe table (2–4 rows, 2–3 columns). Omitted when not applicable.
+
+### Common Misconceptions
+When the notes contain concepts that are commonly misunderstood or confused, the AI appends a short **Common Misconceptions** paragraph listing 1–3 brief points. The heading is bolded using `**Common Misconceptions**`. Omitted when no clear misconceptions apply.
+
+### Constraints
+- Max 200 words (up from 120)
+- Use `**bold**` only for the "Common Misconceptions" heading and pipe syntax for tables; no markdown headings (`#`) in the summary body
+- Plain prose remains the primary format; structured sections are additive
+- Frontend renders summary via `<SummaryMarkdown>` (wraps `react-markdown` + `remark-gfm`) across all study pack surfaces
+- Preview-only contexts (e.g. public library listing card) use `stripMarkdownForPreview()` to show plain prose only
 
 ## Quiz quality principles
 

@@ -97,4 +97,24 @@ export function splitPublicNoteBlocks(value: string | null | undefined): string[
     .filter((block) => block.length > 0);
 }
 
+export function stripMarkdownForPreview(text: string | null | undefined): string {
+  if (!text) return "";
+  // Find the first prose paragraph (skip table rows and separator lines).
+  const paragraphs = text.split(/\n{2,}/);
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed.startsWith("|") && !trimmed.startsWith("-")) {
+      return trimmed
+        .replaceAll(/\*\*/g, "")
+        .replaceAll(/\s+/g, " ")
+        .trim();
+    }
+  }
+  return text
+    .replaceAll(/\*\*/g, "")
+    .replaceAll(/[|]/g, "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+}
+
 export { PUBLIC_NOTE_HOOK_FALLBACK };

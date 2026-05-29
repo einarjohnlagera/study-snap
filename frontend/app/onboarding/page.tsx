@@ -47,6 +47,7 @@ import {
   resolveRemainingUsageCredits,
 } from "@/lib/plans";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
@@ -1167,7 +1168,9 @@ export default function OnboardingPage() {
                 open={previewOpen.summary}
                 onToggle={togglePreviewSection}
               >
-                <p>{note?.summary ?? "Summary preview will be available when you open your Study Pack."}</p>
+                {note?.summary
+                  ? <SummaryMarkdown content={note.summary} />
+                  : <p className="text-sm text-foreground/70">Summary preview will be available when you open your Study Pack.</p>}
               </GenerationSection>
 
               <GenerationSection

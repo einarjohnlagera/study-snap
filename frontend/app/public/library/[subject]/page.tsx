@@ -15,6 +15,7 @@ import {
   buildPublicLibrarySubjectPath,
   getPublicTitleSlug,
 } from "@/lib/public-note-path";
+import { stripMarkdownForPreview } from "@/lib/public-note-text";
 import { getServerPublicNotesBySubjectSlug, getServerPublicSubjects } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
@@ -66,7 +67,7 @@ function getSectionedNotes(notes: SubjectNote[]) {
 
 function SubjectNoteCard({ note }: Readonly<{ note: SubjectNote }>) {
   const title = note.title?.trim() || "Untitled note";
-  const summary = note.summaryPreview?.trim() || note.contentPreview?.trim() || "No preview available yet.";
+  const summary = stripMarkdownForPreview(note.summaryPreview?.trim() || note.contentPreview?.trim()) || "No preview available yet.";
   const href = buildPublicLibraryNotePathFromSlug({
     subject: note.subject,
     slug: getNoteSlug(note),
