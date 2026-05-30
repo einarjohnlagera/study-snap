@@ -165,6 +165,65 @@ Items 1, 3, 4, 5, and 6 Codex prompts are independent and can be queued simultan
 
 ---
 
+## v0.22.0 - Course-First Discovery
+
+**Status: Planned**
+
+Theme: make `courseProgram` the primary discovery axis across the public library and dashboard — replacing the profile-type audience gate that creates false boundaries between students and exam reviewers studying the same material.
+
+### Why this release
+
+Two gaps remain after v0.21.0's courseProgram-first dashboard section:
+
+1. **The audience pre-filter in the public library creates the wrong boundaries** — a nursing student with a STUDENT profile misses notes tagged for BOARD_TAKER even when the content is directly relevant. In the Philippine exam prep context especially, "Student" and "Exam Reviewer" overlap almost entirely. The pre-filter hides content rather than surfacing it.
+
+2. **Anonymous and first-time visitors have no guided path to their content** — users who land on the public library from a shared link or search engine see everything at once. There's no prompt to tell them that filtering by course/program (PNLE, NMAT, etc.) is the fastest path to relevant notes. The filter exists but is invisible to users who don't know to look for it.
+
+### Primary focus
+
+1. **Remove the audience pre-filter from the Public Library**
+
+   Stop using `targetProfileType` as the default gate in `GET /notes/public`. Default the public library view to "All" for every profile type, including Teacher. The audience filter remains available as an optional manual filter for users who want to narrow by it, but it is no longer applied automatically on page load.
+
+   - Remove the profile-type → `NoteTargetProfileType` pre-filter mapping from the frontend public library page
+   - When `?audience=` param is absent, render the full public note list (same as "All" behavior today)
+   - The `targetProfileType` badge on note cards stays; the field on note creation stays for Teachers
+   - `courseProgram` + `subject` + `tags` become the primary browse signals
+
+2. **Course/Program helper CTA in the Public Library**
+
+   A dismissible banner shown above the note list when no `courseProgram` filter is active. Surfaces the Course/Program filter to users who don't know it exists.
+
+   Copy: *"Studying for a specific exam or program?"* → **[Browse by Course/Program]**
+
+   Behavior:
+   - Clicking opens the filter sheet (or inline filter on desktop) and focuses the Course/Program field
+   - Dismissed per session via `sessionStorage` (anonymous users) or until a `courseProgram` filter is applied
+   - Hidden when `?courseProgram=` is already active in the URL
+   - For signed-in users with `courseProgram` set in their profile: show a smarter variant — *"See notes for [CourseProgram] →"* — that pre-fills the filter directly instead of opening the sheet
+
+   Signed-in users who set `courseProgram` in their profile and already land on the Community Notes dashboard section do not need this prompt; the CTA is primarily for anonymous visitors and signed-in users without a course/program set.
+
+### Implementation stances
+
+- Audience pre-filter removal is frontend-only — the `targetProfileType` query param on `GET /notes/public` remains valid and functional; we just stop sending it automatically
+- The helper CTA is a small frontend-only addition; no new backend work
+- `targetProfileType` badge on note cards is unchanged
+- Teacher note creation flow is unchanged — Teachers still set target audience when creating notes; we just stop using it as a visibility gate on the browse side
+
+### Anti-drift notes
+
+- Do not remove `targetProfileType` from the public note API response — it is still used for the badge on note cards and as an optional manual filter
+- The `?audience=all` URL param behavior (introduced in v0.18.0 to prevent profile default re-application) remains valid; the pre-filter removal makes it redundant but harmless
+- The helper CTA must not appear when a `courseProgram` filter is already active — check the URL param before rendering
+- Use `sessionStorage` for CTA dismissal on the public library (consistent with how the back-nav return URL is stored); do not use `localStorage` for session-scoped UI state
+
+### Sequencing
+
+Both items are frontend-only and independent. They can be implemented in a single Codex prompt or separately. Write Codex prompts at the start of v0.22.0.
+
+---
+
 ## v0.18.0 - Profile Completeness & Communication
 
 **Status: Released**
