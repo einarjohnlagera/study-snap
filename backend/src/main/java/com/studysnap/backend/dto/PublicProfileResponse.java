@@ -12,10 +12,12 @@ public record PublicProfileResponse(
         boolean isOfficial,
         boolean publicProfileVisible,
         boolean isCurrentUser,
+        String userId,
         int publicNotesCount,
         long totalCopies,
         long totalShares,
         long totalViews,
+        long totalProfileShares,
         List<PublicProfileNoteResponse> publicNotes
 ) {
 }

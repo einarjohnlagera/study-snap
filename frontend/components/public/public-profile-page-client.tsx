@@ -17,6 +17,7 @@ import {
   ApiRequestError,
   getPublicCreatorProfile,
   getPublicProfile,
+  trackAnalyticsEvent,
   type ProfileType,
   type PublicProfileResponse,
   updatePublicProfileVisibility,
@@ -208,6 +209,9 @@ export function PublicProfilePageClient({
     if (profile.totalViews > 0) {
       items.push({ label: "Total Views", value: profile.totalViews });
     }
+    if (profile.totalProfileShares > 0) {
+      items.push({ label: "Profile Shares", value: profile.totalProfileShares });
+    }
     return items;
   }, [profile]);
 
@@ -312,6 +316,20 @@ export function PublicProfilePageClient({
       ?? bestByMetric("shareCount", "Most Shared Note", "share");
   }, [profile?.publicNotes]);
 
+  const NOTE_DISPLAY_LIMIT = 8;
+
+  const displayedNotes = useMemo(() => {
+    const notes = profile?.publicNotes ?? [];
+    return [...notes]
+      .sort((a, b) =>
+        b.copyCount - a.copyCount ||
+        b.viewCount - a.viewCount ||
+        b.shareCount - a.shareCount ||
+        (a.title ?? "").localeCompare(b.title ?? "")
+      )
+      .slice(0, NOTE_DISPLAY_LIMIT);
+  }, [profile?.publicNotes]);
+
   const handleShareProfile = () => {
     if (isOwner && profile && !profile.publicProfileVisible) {
       setShowSharePrivateConfirm(true);
@@ -351,6 +369,9 @@ export function PublicProfilePageClient({
     try {
       await navigator.clipboard.writeText(shareModalUrl);
       setShareModalCopied(true);
+      if (profile?.userId) {
+        void trackAnalyticsEvent({ eventType: "PUBLIC_PROFILE_SHARED", entityId: profile.userId });
+      }
     } catch {
       // Silently fail — the URL is still visible for manual copy.
     }
@@ -595,7 +616,11 @@ export function PublicProfilePageClient({
           <h2 id="public-profile-notes" className="text-xl font-semibold">
             Public notes
           </h2>
-          <p className="text-sm text-foreground/65">{notesCountLabel}</p>
+          <p className="text-sm text-foreground/65">
+            {profile.publicNotes.length > NOTE_DISPLAY_LIMIT
+              ? `Top ${NOTE_DISPLAY_LIMIT} of ${notesCountLabel}`
+              : notesCountLabel}
+          </p>
         </div>
 
         {profile.publicNotes.length === 0 ? (
@@ -605,7 +630,7 @@ export function PublicProfilePageClient({
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {profile.publicNotes.map((note) => (
+            {displayedNotes.map((note) => (
               <Card
                 key={note.noteId}
                 role="link"
@@ -624,6 +649,7 @@ export function PublicProfilePageClient({
                   courseProgram={normalizeCourseProgram(note.courseProgram)}
                   subject={note.subject}
                   tags={note.tags}
+                  tagDisplayLimit={3}
                   contentPreview={note.contentPreview}
                   summaryPreview={note.summaryPreview}
                   copyCount={note.copyCount > 0 ? note.copyCount : null}

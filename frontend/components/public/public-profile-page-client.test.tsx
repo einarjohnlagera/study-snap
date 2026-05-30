@@ -36,10 +36,12 @@ const baseProfile: PublicProfileResponse = {
   isOfficial: false,
   publicProfileVisible: true,
   isCurrentUser: false,
+  userId: "user-1",
   publicNotesCount: 1,
   totalCopies: 5,
   totalShares: 2,
   totalViews: 9,
+  totalProfileShares: 0,
   publicNotes: [
     {
       noteId: "note-1",
