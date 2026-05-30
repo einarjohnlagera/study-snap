@@ -32,6 +32,7 @@ Current version: **v0.21.0** — see `RELEASES.md` for in-progress scope, `docs/
 
 **Tiebreaker:** if the change requires reading `AGENTS.md` anti-drift rules and applying them across many files, use Codex. If it's dropping a known component in a known slot with no logic changes, Claude Code does it directly.
 
+- Always check `docs/codex-prompts/` for an existing prompt before writing a new one — if one exists for the current release item, use it directly
 - Always use `docs/skills/codex-prompt-generator.md` when writing a Codex prompt
 - Never blur the line: if the user wants a Codex prompt, write one — don't start implementing instead
 - Never implement automatically when the user asks for a prompt
