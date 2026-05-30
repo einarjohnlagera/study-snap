@@ -103,6 +103,29 @@ Private Library sorting:
 - `Title (Z-A)`
 - `Oldest`
 
+## Saved Filters
+
+Users can save a named snapshot of the current private library filter state and re-apply it with one click.
+
+Storage: backend-persisted in a `user_library_filters` table (`id`, `user_id`, `name`, `filter_state` JSONB, `created_at`).
+
+`filter_state` stores: `{ search?, subject?, courseProgram?, tags?, status?, sort? }` — the same params as the private library URL model.
+
+Interaction:
+
+- "Save filter" button is visible in the filter bar when at least one filter is active
+- Clicking opens a name input dialog; submitting saves to the backend via `POST /library-filters`
+- Saved filters are accessible from a dropdown or list in the filter bar; clicking one applies all its params to the current filter state
+- Each saved filter row has a trash/delete icon; deleting calls `DELETE /library-filters/{id}`
+- `GET /library-filters` loads all saved filters for the current user on mount
+
+Rules:
+
+- Available to all plan tiers (no gating for v1)
+- Scope is private library only; public library saved filters are deferred
+- Saved filter names have a max length of 100 characters
+- Applying a saved filter replaces all current filter params with the saved state (does not merge)
+
 ## Public Library
 
 Route:
