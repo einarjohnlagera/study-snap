@@ -1,12 +1,22 @@
 # RELEASES.md - NoteLib
 
-## v0.21.0 - TBD
+## v0.21.0 - Personalized Discovery & Library Organization
 
 **Status: In Progress**
 
-Theme: TBD
+Theme: surface community notes relevant to each user's study track and let them save and reuse their own filter shortcuts — making the app feel personal from day one.
 
 ### ✅ Shipped
+
+### 🔲 Pending Codex
+
+- **Public Library creator filter + profile "View all" link** — `creator` (username) query param added to `GET /notes/public`; public profile gains a "View all X notes →" link to `/public/library?creator=<username>` when capped notes exist. Codex prompt: `docs/codex-prompts/v0.21.0-creator-filter-view-all.md`. Unblocks the subject badge removal below.
+- **Community Notes dashboard section** — "Notes for [CourseProgram]" section visible on all profile-type dashboards below Recent Notes; shows up to 4 public notes from the existing public library endpoint filtered by the user's `courseProgram`; "See all in Public Library →" links to `/public/library?courseProgram=<value>`; modal prompt when no `courseProgram` is set. Codex prompt: `docs/codex-prompts/v0.21.0-course-program-dashboard.md`.
+- **Saved Filters for private library** — users can save named filter combinations in the private library; stored in a new backend `user_library_filters` table; filter bar gains "Save filter" action + saved filters picker to apply or delete. Codex prompt: `docs/codex-prompts/v0.21.0-saved-library-filters.md`.
+
+### 🔲 Pending Claude Code (unblocked after creator filter ships)
+
+- **Remove Learning Focus subject badges from public profile** — remove the subject badge list from the public profile header's Learning Focus section; keep only the "Mostly shares notes in…" summary sentence. The "View all notes →" creator filter link replaces badge-list subject browsing.
 
 ---
 

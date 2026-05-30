@@ -99,6 +99,26 @@ Current action behavior:
 - Free and Plus users see the same weak concepts and get a `Revisit Note` link to the source note so they can review material even without Adaptive Practice access
 - The upgrade prompt (`Unlock Adaptive Practice`) is shown only when no source note is resolvable
 
+## Community Notes Section
+
+A section visible to all profile types, placed below Recent Notes.
+
+**Section title**: "Notes for [CourseProgram]" — e.g. "Notes for PNLE", "Notes for NMAT"
+**Data source**: `GET /notes/public?courseProgram=<value>&size=4` — the same endpoint as the Public Library
+**Footer link**: "See all in Public Library →" navigates to `/public/library?courseProgram=<value>`
+
+Behavior by state:
+
+- `courseProgram` is set and matching public notes exist → show up to 4 note cards using the shared public library card layout; clicking a card navigates to the canonical public note detail page
+- `courseProgram` is set but no matching public notes exist → hide the section entirely; do not show an empty state
+- `courseProgram` is not set → render a placeholder card with a modal CTA:
+  - Modal title: "Set your Course/Program"
+  - Modal body: "Set your Course/Program to see public notes tailored for your review track."
+  - Primary CTA: "Go to Learner Profile" (navigates to `/profile#learning-profile`)
+  - Secondary CTA: "Cancel"
+
+Applies to STUDENT, BOARD_EXAM, TEACHER, and PROFESSIONAL profile types.
+
 ## First-study guidance
 
 Dashboard may also show first-study guidance for verified users who still have `studyPackCount == 0` and have not completed the separate product-onboarding tracker.

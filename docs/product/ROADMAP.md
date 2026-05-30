@@ -52,16 +52,82 @@ Richer Quick Recall and Concept Relationships need a dedicated `keyConcepts` mig
 
 ---
 
-## v0.21.0 - TBD
+## v0.21.0 - Personalized Discovery & Library Organization
 
-**Status: Planned**
+**Status: In Progress**
 
-Theme: TBD
+Theme: surface community notes relevant to each user's study track and let them save and reuse their own filter shortcuts — making the app feel personal from day one.
 
-### 🔲 Deferred from v0.20.0
+### Why this release
 
-- **Public Library creator filter + profile "View all" link** — add a `creator` (username) query param to the public library backend query and the frontend URL model (`public-library-url.ts`). Once the filter exists, add a "View all X notes →" link on the public profile page (visible only when capped notes exist) that navigates to `/public/library?creator=<username>`. This makes the public library the single canonical place to browse a creator's notes. Multi-system change (backend query + frontend URL model + profile link).
-- **Remove Learning Focus subject badges from public profile** — remove the subjects badge list from the Learning Focus section of the public profile header; keep only the summary sentence ("Mostly shares notes in…"). The badge list shows every unique subject across all public notes with no cap, which becomes noise for prolific creators. Removal is blocked until the public library creator filter link exists (the link becomes the replacement for subject browsing). Frontend-only once the above ships.
+Three gaps appeared after v0.20.0:
+
+1. **The Dashboard feels generic for exam reviewers** — users studying for a specific exam (PNLE, NMAT, board exams) have no fast path to community notes for their track. The public library already supports `courseProgram` filtering; surfacing it on the Dashboard turns an existing inventory into a personalized discovery feature with near-zero backend work.
+
+2. **Private library filters are manual every time** — v0.18.0 shipped URL-based filter persistence, but users who study across multiple subjects still re-apply the same filter combinations on every session. Named saved filters close the loop without requiring note reorganization.
+
+3. **Public profiles cap at 8 notes with no escape path** — a prolific creator has no "see all" link. A `creator` filter on the public library — already designed to be the canonical discovery place — fixes this with a single backend query addition and one frontend link.
+
+### Primary focus
+
+1. **Public Library creator filter + profile "View all" link** *(deferred from v0.20.0)*
+
+   Add `creator` (username) as a query param to `GET /notes/public`. Once the backend filter exists, add a "View all X notes →" link to the public profile page (visible only when `publicNotesCount > 8`) that navigates to `/public/library?creator=<username>`.
+
+   - Backend: join `users.username = :creator` on the existing public note query; `creator` is optional and combinable with other params
+   - Frontend: add `PUBLIC_LIBRARY_CREATOR_QUERY_PARAM = "creator"` to `public-library-url.ts`; update `PublicLibraryUrlFilters` type, `buildPublicLibraryUrl`, and `parsePublicLibraryFilters`
+   - Public Library UI: when `?creator=` is present, show an active "By @username" filter badge; clearing it removes the param
+   - Public profile page: "View all X notes →" link rendered when `profile.publicNotesCount > 8`; link builds to `/public/library?creator=<username>`
+   - Codex prompt: `docs/codex-prompts/v0.21.0-creator-filter-view-all.md`
+
+2. **Remove Learning Focus subject badges from public profile** *(deferred from v0.20.0, blocked on item 1)*
+
+   Remove the subject badge list (`subjects.map(SubjectBadge)`) from the Learning Focus section of `public-profile-page-client.tsx`. Keep the `learningFocusSummary` sentence. The "View all notes →" creator filter link replaces badge-based subject browsing. Frontend-only; handled by Claude Code after item 1 commits.
+
+3. **Community Notes dashboard section** *(new)*
+
+   New section on the Dashboard visible to all profile types, placed below Recent Notes. Title: "Notes for [CourseProgram]" (e.g. "Notes for PNLE"). Shows up to 4 public notes from `GET /notes/public?courseProgram=<value>&size=4`. Footer link: "See all in Public Library →" navigates to `/public/library?courseProgram=<value>`.
+
+   - Visible to STUDENT, BOARD_EXAM, TEACHER, and PROFESSIONAL profiles
+   - When `courseProgram` is set and matching notes exist: show up to 4 cards
+   - When `courseProgram` is set but no matching public notes exist: hide the section entirely
+   - When `courseProgram` is not set: render a placeholder card with a modal CTA — "Set your Course/Program to see notes tailored for your review track" with "Go to Learner Profile" (primary, `/profile#learning-profile`) + "Cancel" (secondary)
+   - Requires adding an optional `size` param (max 50, default 20) to `GET /notes/public`
+   - Note cards reuse the shared public library card layout
+   - Codex prompt: `docs/codex-prompts/v0.21.0-course-program-dashboard.md`
+
+4. **Saved Filters for private library** *(new)*
+
+   Users can save a named snapshot of the current private library filter state and re-apply it with one click. Backend-persisted from the start.
+
+   - New migration `V68__user_library_filters.sql`: table `user_library_filters` with `id` (UUID PK), `user_id` (FK → users), `name` (VARCHAR 100), `filter_state` (JSONB), `created_at` (TIMESTAMPTZ)
+   - `filter_state` shape: `{ search?, subject?, courseProgram?, tags?, status?, sort? }` — mirrors private library URL params
+   - Endpoints: `GET /library-filters` (list user's saved filters), `POST /library-filters` (create), `DELETE /library-filters/{id}` (delete, owner-only)
+   - Frontend: "Save filter" button in the filter bar visible when at least one filter is active; opens a name input dialog on click; submitting calls the backend
+   - Saved filters accessible from a dropdown or list in the filter bar; clicking applies all params; trash icon deletes
+   - Scope: private library only; public library saved filters deferred
+   - Codex prompt: `docs/codex-prompts/v0.21.0-saved-library-filters.md`
+
+### Implementation stances
+
+- `GET /notes/public?creator=<username>` joins `users.username` on the existing query — no new endpoint, no new entity
+- Community Notes section calls the existing public library endpoint directly from the frontend — only backend change is an optional `size` param on `GET /notes/public`
+- `user_library_filters` is a simple user-owned table; no plan gating for v1 (all plans can use saved filters)
+- No localStorage fallback for saved filters — backend-persisted from the start
+- Subject badge removal is frontend-only and safe to do inline after the creator filter ships
+
+### Anti-drift notes
+
+- `creator` filter uses `username`, not `userId` or `displayName`; existing public note canonical URLs (`/public/library/{subject}/{slug}`) are unchanged
+- Community Notes section does not create a new page or route — it links to the existing `/public/library?courseProgram=<value>` URL
+- No changes to note generation, quiz sessions, or Study Pack flows in this release
+- Saved filters are plan-agnostic for v1; do not add gating without an explicit plan rules update to `docs/product/PLANS.md`
+- Use `globalThis` instead of `window`/`self`/`global` for all new browser globals in frontend code (ESLint enforces this)
+- Analytics events use the `AnalyticsEventType` enum in both Java and TypeScript — add new values before firing events
+
+### Sequencing
+
+Items 1, 3, and 4 Codex prompts are independent and can be queued simultaneously. Item 2 is handled by Claude Code immediately after item 1 commits.
 
 ---
 

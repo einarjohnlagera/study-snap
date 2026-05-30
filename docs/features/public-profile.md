@@ -115,6 +115,22 @@ Non-owners only see Share Profile when the profile is already public (they canno
 - official badge is backend-derived only
 - hide learner-level and course/program rows entirely when those values are empty
 
+## View All Notes Link
+
+When a creator has more notes than the capped list of 8 (i.e. `publicNotesCount > 8`), show a "View all X notes →" link below the note list. The link navigates to `/public/library?creator=<username>`, making the Public Library the canonical place to browse a creator's full catalog.
+
+- Visible to all viewers (owner and non-owner) when the condition is met
+- Hides when `publicNotesCount <= 8` (the full catalog is already shown)
+- Uses the creator's `username` in the URL, not `userId` or `displayName`
+
+## Learning Focus — Subject Badges
+
+The Learning Focus section shows a `learningFocusSummary` sentence ("Mostly shares notes in…") derived from the creator's public note subjects and course programs.
+
+The subject badge list (`subjects.map(SubjectBadge)`) that previously appeared below the summary sentence has been removed. The "View all notes →" link to the filtered public library is the replacement for subject-based browsing.
+
+Rule: the Learning Focus section displays only the summary sentence; no subject chips or badges.
+
 ## Notes
 
 - Public Profile remains a learning profile, not a social-media profile.
