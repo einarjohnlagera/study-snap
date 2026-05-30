@@ -108,6 +108,22 @@ Three gaps appeared after v0.20.0:
    - Scope: private library only; public library saved filters deferred
    - Codex prompt: `docs/codex-prompts/v0.21.0-saved-library-filters.md`
 
+5. **Admin funnel metrics page** *(new — conversion visibility)*
+
+   New admin-only `/admin/funnel` page showing the five most critical funnel health numbers. All queries run against existing tables — no new event tracking or analytics SDK required.
+
+   | Metric | What it reveals |
+   |---|---|
+   | Signup → first Study Pack (% + median days) | Activation rate — are users reaching the core value? |
+   | Notes with 0 Study Packs after 7 days | "Stuck before generation" pool |
+   | Free quota hit rate | Are free users even reaching the paywall? |
+   | Paywall seen → upgrade (%) | Is the paywall converting at all? |
+   | Study Pack generated → quiz started within 7 days | Are users closing the value loop? |
+
+   - Display as daily and weekly aggregates
+   - No new migrations — derive metrics from `users`, `notes`, `study_packs`, `quiz_sessions`, `user_usage` tables
+   - Codex prompt: `docs/codex-prompts/v0.21.0-admin-funnel-metrics.md`
+
 ### Implementation stances
 
 - `GET /notes/public?creator=<username>` joins `users.username` on the existing query — no new endpoint, no new entity
@@ -127,7 +143,7 @@ Three gaps appeared after v0.20.0:
 
 ### Sequencing
 
-Items 1, 3, and 4 Codex prompts are independent and can be queued simultaneously. Item 2 is handled by Claude Code immediately after item 1 commits.
+Items 1, 3, 4, and 5 Codex prompts are independent and can be queued simultaneously. Item 2 is handled by Claude Code immediately after item 1 commits.
 
 ---
 

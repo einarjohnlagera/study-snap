@@ -18,6 +18,10 @@ Theme: surface community notes relevant to each user's study track and let them 
 
 - **Remove Learning Focus subject badges from public profile** — remove the subject badge list from the public profile header's Learning Focus section; keep only the "Mostly shares notes in…" summary sentence. The "View all notes →" creator filter link replaces badge-list subject browsing.
 
+### 🔲 Pending Codex (Conversion Visibility)
+
+- **Admin funnel metrics page** — new `/admin/funnel` page showing five key funnel numbers: signup → first Study Pack rate (activation rate + median days), notes with 0 Study Packs after 7 days (stuck-before-generation pool), free quota hit rate (% of free users who hit the generation limit), paywall seen → upgrade conversion rate, and Study Pack generated → quiz started within 7 days (value loop closure rate). All metrics are computed from existing tables — no new tracking infrastructure. Displayed as daily/weekly aggregates. Codex prompt: `docs/codex-prompts/v0.21.0-admin-funnel-metrics.md`.
+
 ---
 
 ## v0.20.0 - Conversion & Re-engagement
