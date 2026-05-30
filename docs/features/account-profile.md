@@ -25,9 +25,10 @@ Existing users are backfilled automatically from `displayName`, then email prefi
 
 The private `/profile` identity card lets users edit username alongside their identity fields.
 
-Helper copy:
+Helper copy (v0.21.0+):
 
-`Your username is used for public attribution and profile links.`
+- **Display Name**: `The name shown on your public notes and profile. Falls back to your first name if left blank.`
+- **Username**: `Your @handle on NoteLib — shown on your public profile and next to your public notes.`
 
 Changing username should validate format and uniqueness before save.
 

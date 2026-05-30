@@ -124,6 +124,22 @@ Three gaps appeared after v0.20.0:
    - No new migrations — derive metrics from `users`, `notes`, `study_packs`, `quiz_sessions`, `user_usage` tables
    - Codex prompt: `docs/codex-prompts/v0.21.0-admin-funnel-metrics.md`
 
+6. **Admin summary re-generation** *(new — official content backfill)*
+
+   One-time (but idempotent) endpoint to backfill enriched summaries for admin-owned study packs that pre-date the v0.20.0 enrichment format.
+
+   - `POST /admin/study-packs/regenerate-summaries` — targets packs owned by `UserRole.ADMIN` users whose `summary` does not yet contain `|`
+   - Async via `llmParallelTaskExecutor`; returns `{ queued: N, skipped: N }` immediately
+   - Updates only `study_packs.summary` — quiz, key concepts, tags untouched
+   - No quota deduction; idempotent (already-enriched packs are skipped on re-run)
+   - Codex prompt: `docs/codex-prompts/v0.21.0-admin-regenerate-summaries.md`
+
+### Shipped in this release (Claude Code)
+
+- **Official author detection made role-based** — removed hardcoded email constant from `NoteService`; `isOfficialAuthor()` now checks `UserRole.ADMIN` only; admin's `displayName` drives the "By X" label on public notes
+- **Summary word limit raised to 350** — `MAX_SUMMARY_WORDS` and `developer.txt` prompt both updated; fixes validation rejections for enriched summaries
+- **Profile Identity helper text** — plain-language helper text added for Display Name and Username fields on `/profile`
+
 ### Implementation stances
 
 - `GET /notes/public?creator=<username>` joins `users.username` on the existing query — no new endpoint, no new entity
@@ -140,10 +156,12 @@ Three gaps appeared after v0.20.0:
 - Saved filters are plan-agnostic for v1; do not add gating without an explicit plan rules update to `docs/product/PLANS.md`
 - Use `globalThis` instead of `window`/`self`/`global` for all new browser globals in frontend code (ESLint enforces this)
 - Analytics events use the `AnalyticsEventType` enum in both Java and TypeScript — add new values before firing events
+- Official author is now `UserRole.ADMIN` — do not recreate email-based checks; `isNoteLibOfficialAccount()` has been removed
+- Admin summary re-generation uses `llmParallelTaskExecutor` only — never `studyPackGenerationTaskExecutor`
 
 ### Sequencing
 
-Items 1, 3, 4, and 5 Codex prompts are independent and can be queued simultaneously. Item 2 is handled by Claude Code immediately after item 1 commits.
+Items 1, 3, 4, 5, and 6 Codex prompts are independent and can be queued simultaneously. Item 2 is handled by Claude Code immediately after item 1 commits.
 
 ---
 

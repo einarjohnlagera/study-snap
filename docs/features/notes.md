@@ -28,6 +28,8 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 - `courseProgram` on the note is the **authoritative** source for generation context; user profile `courseProgram` is fallback only when the note field is blank
 - AI-generated subject must be a reusable academic label with **no topic suffix** — strip anything after `–`, `:`, or `-` before saving (e.g. `Biology – Cell Division` → `Biology`)
 - The share modal/gate is the **same everywhere**: public content → share modal directly; private content → confirm-to-make-public modal first; do not invent content-specific flows
+- **Official author** is determined by `UserRole.ADMIN` only — `isOfficialAuthor(user)` returns `user != null && user.getRole() == UserRole.ADMIN`; the old email-based `isNoteLibOfficialAccount()` method has been removed; do not recreate it
+- **Public author name** resolution order: admin user's `displayName` if set → `"NoteLib"` fallback for admin with no displayName → non-admin user's `displayName` → `firstName` → `"Anonymous learner"`
 - Target Audience is **hidden and auto-prefilled** for Student, Board Exam, and Professional profiles; **visible and user-picked** for Teacher/Admin
 
 ## Note metadata

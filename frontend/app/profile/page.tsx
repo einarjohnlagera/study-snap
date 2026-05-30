@@ -724,6 +724,9 @@ export default function ProfilePage() {
                   value={identityForm.displayName}
                   onChange={(event) => handleIdentityFieldChange("displayName", event.target.value)}
                 />
+                <p className="text-xs text-foreground/60">
+                  The name shown on your public notes and profile. Falls back to your first name if left blank.
+                </p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Username</span>
@@ -734,7 +737,7 @@ export default function ProfilePage() {
                   autoComplete="username"
                 />
                 <p className="text-xs text-foreground/60">
-                  Your username is used for public attribution and profile links.
+                  Your @handle on NoteLib — shown on your public profile and next to your public notes.
                 </p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
