@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.20.0` is the current in-progress release.
+`v0.21.0` is the current in-progress release.
 
-`v0.19.0 - Multi-Note Depth & Simulation Parity` is complete and is the previous documentation baseline.
+`v0.20.0 - Conversion & Re-engagement` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -16,9 +16,9 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.20.0 - Conversion & Re-engagement
 
-**Status: In Progress**
+**Status: Released**
 
-Theme: bring inactive users back and turn visitors into active learners — re-engagement campaigns, study pack content quality improvements, and teacher/conversion surface polish.
+Theme: bring inactive users back and close account security gaps — re-engagement campaigns, forgot/change password, richer AI summaries, and public profile polish.
 
 ### ✅ Shipped
 

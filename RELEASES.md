@@ -1,10 +1,10 @@
 # RELEASES.md - NoteLib
 
-## v0.20.0 - TBD
+## v0.20.0 - Conversion & Re-engagement
 
-**Status: In Progress**
+**Status: Released**
 
-Theme: TBD
+Theme: bring inactive users back and close account security gaps — re-engagement campaigns, forgot/change password, richer AI summaries, and public profile polish.
 
 ### ✅ Shipped
 
