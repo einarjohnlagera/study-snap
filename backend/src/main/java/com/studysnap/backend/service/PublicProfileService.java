@@ -78,6 +78,7 @@ public class PublicProfileService {
         long totalCopies = copyCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
         long totalShares = shareCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
         long totalViews = viewCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
+        long totalProfileShares = analyticsEventRepository.countByEventTypeAndEntityId(AnalyticsEventType.PUBLIC_PROFILE_SHARED, userId);
 
         return new PublicProfileResponse(
                 resolvePublicDisplayName(user),
@@ -89,10 +90,12 @@ public class PublicProfileService {
                 isOfficialAuthor(user),
                 publicProfileVisible,
                 viewerOwnsProfile,
+                userId.toString(),
                 publicNotes.size(),
                 totalCopies,
                 totalShares,
                 totalViews,
+                totalProfileShares,
                 publicNotes.stream()
                         .map(note -> new PublicProfileNoteResponse(
                                 note.getId().toString(),

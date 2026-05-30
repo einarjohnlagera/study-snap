@@ -48,4 +48,6 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
             @Param("eventType") AnalyticsEventType eventType,
             @Param("noteIds") List<UUID> noteIds
     );
+
+    long countByEventTypeAndEntityId(AnalyticsEventType eventType, UUID entityId);
 }

@@ -264,6 +264,7 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_COPIED"
   | "PUBLIC_NOTE_COPY_CLICKED"
   | "PUBLIC_NOTE_SHARED"
+  | "PUBLIC_PROFILE_SHARED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
@@ -1139,10 +1140,12 @@ export type PublicProfileResponse = {
   isOfficial: boolean;
   publicProfileVisible: boolean;
   isCurrentUser: boolean;
+  userId: string;
   publicNotesCount: number;
   totalCopies: number;
   totalShares: number;
   totalViews: number;
+  totalProfileShares: number;
   publicNotes: PublicProfileNoteResponse[];
 };
 

@@ -30,9 +30,10 @@ Related APIs:
 - subjects derived from public notes
 - `publicNotesCount`
 - `totalCopies`
-- `totalShares` when the profile's notes have real share activity
+- `totalShares` when the profile's notes have real share activity (counts `PUBLIC_NOTE_SHARED` events on individual note pages)
 - `totalViews` when the profile's notes have real view activity
-- list of public notes only
+- `totalProfileShares` when the profile link has been shared (counts `PUBLIC_PROFILE_SHARED` events fired when someone copies the "Share Profile" link)
+- list of public notes only (capped at 8, sorted by copies → views → shares → title)
 
 Portfolio polish:
 

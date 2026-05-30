@@ -95,6 +95,8 @@ class PublicProfileServiceTest {
                         eventProjection(noteOneId, 12L),
                         eventProjection(noteTwoId, 8L)
                 ));
+        when(analyticsEventRepository.countByEventTypeAndEntityId(AnalyticsEventType.PUBLIC_PROFILE_SHARED, userId))
+                .thenReturn(6L);
 
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
@@ -106,10 +108,12 @@ class PublicProfileServiceTest {
         assertThat(response.profileType()).isEqualTo("TEACHER");
         assertThat(response.isOfficial()).isFalse();
         assertThat(response.publicProfileVisible()).isTrue();
+        assertThat(response.userId()).isEqualTo(userId.toString());
         assertThat(response.publicNotesCount()).isEqualTo(2);
         assertThat(response.totalCopies()).isEqualTo(7);
         assertThat(response.totalShares()).isEqualTo(4);
         assertThat(response.totalViews()).isEqualTo(20);
+        assertThat(response.totalProfileShares()).isEqualTo(6);
         assertThat(response.publicNotes())
                 .extracting(
                         PublicProfileNoteResponse::noteId,
