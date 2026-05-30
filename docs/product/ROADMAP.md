@@ -204,10 +204,38 @@ Two gaps remain after v0.21.0's courseProgram-first dashboard section:
 
    Signed-in users who set `courseProgram` in their profile and already land on the Community Notes dashboard section do not need this prompt; the CTA is primarily for anonymous visitors and signed-in users without a course/program set.
 
+3. **"More in [CourseProgram]" section on public note detail pages**
+
+   When a user opens a public note that has a `courseProgram` set, show 3–4 related public notes with the same courseProgram at the bottom of the page. Calls the existing `GET /notes/public?courseProgram=<value>&size=4` endpoint — no new backend endpoint needed.
+
+   - Visible to both anonymous and signed-in users
+   - Hidden when the note has no `courseProgram`
+   - Uses the shared public library note card layout
+   - Cards link to the canonical public note route
+   - Section title: *"More notes for [CourseProgram]"*
+
+   Extends session depth for users arriving from a shared link or search engine — gives them a natural next note to read instead of a dead end.
+
+4. **Meaningful empty state when courseProgram filter returns no results**
+
+   Replace the generic empty state with a content-creation hook when a courseProgram filter is active and returns zero notes.
+
+   Empty state copy: *"No [CourseProgram] notes shared yet."* with a secondary line: *"Got notes? Share them with the community."* — CTA navigates to `/notes/new` for signed-in users, or `/auth` for anonymous users.
+
+   - Only shown when `?courseProgram=` is active and the note list is empty
+   - Generic empty state remains for other filter combinations
+
+5. **Friction-free anonymous browsing — no conversion nudges in the library**
+
+   The public library and public note detail pages are fully explorable without an account. No sign-up prompts, no login gates on browsing or filtering, no interstitials. The only login gate is on write actions (copying a note, liking).
+
+   This is a design constraint, not a feature: when implementing items 1–4 above, do not add any "sign up to see more" banners, soft-gates, or conversion prompts anywhere in the public library or public note detail flow.
+
 ### Implementation stances
 
 - Audience pre-filter removal is frontend-only — the `targetProfileType` query param on `GET /notes/public` remains valid and functional; we just stop sending it automatically
-- The helper CTA is a small frontend-only addition; no new backend work
+- All five items are frontend-only; no new backend endpoints or migrations
+- Items 3 and 4 reuse the existing `GET /notes/public` endpoint with `courseProgram` + `size` params (the `size` param is added in v0.21.0)
 - `targetProfileType` badge on note cards is unchanged
 - Teacher note creation flow is unchanged — Teachers still set target audience when creating notes; we just stop using it as a visibility gate on the browse side
 
@@ -217,10 +245,11 @@ Two gaps remain after v0.21.0's courseProgram-first dashboard section:
 - The `?audience=all` URL param behavior (introduced in v0.18.0 to prevent profile default re-application) remains valid; the pre-filter removal makes it redundant but harmless
 - The helper CTA must not appear when a `courseProgram` filter is already active — check the URL param before rendering
 - Use `sessionStorage` for CTA dismissal on the public library (consistent with how the back-nav return URL is stored); do not use `localStorage` for session-scoped UI state
+- No sign-up prompts, interstitials, or conversion nudges anywhere in the public library or public note detail — the library is friction-free for anonymous users by design
 
 ### Sequencing
 
-Both items are frontend-only and independent. They can be implemented in a single Codex prompt or separately. Write Codex prompts at the start of v0.22.0.
+All five items are frontend-only. Items 1 and 2 are the core changes and should ship together. Items 3 and 4 are independent additions and can be implemented in the same Codex prompt or separately. Item 5 is a constraint on the others, not a separate implementation task. Write Codex prompts at the start of v0.22.0.
 
 ---
 
