@@ -27,6 +27,31 @@ Shareable filter URLs:
 - the Public Library list page exposes `Share this list`, which copies the current canonical filtered URL instead of a stale local-only filter state
 - the list-share action is most useful on smaller screens; desktop may keep the page itself shareable without giving the button primary visual weight
 
+## Key Files
+
+**Backend**
+- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes/public` (filter endpoint), `GET /notes/public/{id}`, `POST /notes/public/{id}/like`, `GET /notes/public/seo/{subject}/{slug}`
+- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listPublic(viewerUserId, search, sort, subject, tags, courseProgram, audience)`, `getPublicById`, `togglePublicNoteLike`
+- `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL public note query with multi-param filtering
+- `backend/src/main/java/com/studysnap/backend/util/PublicNotesScoringUtils.java` — discovery score formula (`viewCount + copyCount×3 + likeCount×2`) with 30-day age decay; `computeScore(note, now)`
+
+**Frontend**
+- `frontend/components/notes/public-library-page-client.tsx` — main public library client; filter state; discovery/filter mode switching; section rendering (Featured / Popular / Recent)
+- `frontend/app/public/library/page.tsx` — server component entry; passes `searchParams` to client
+- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered, ISR 300s, `generateStaticParams`)
+- `frontend/lib/public-library-url.ts` — canonical URL model: `PublicLibraryUrlFilters` type, `buildPublicLibraryUrl()`, `parsePublicLibraryFilters()`; single source of truth for public library URL construction
+- `frontend/lib/public-library-discovery.ts` — frontend discovery scoring and section deduplication helpers
+- `frontend/lib/api.ts` — `listPublicNotes(params?)`, `getPublicNote(id)`, `togglePublicNoteLike(id)`
+
+## Anti-drift Notes
+
+- Public Library back-navigation to a filtered state uses `sessionStorage` (key: `notelib_public_library_return_url`) — not `?ref=` — because public note URLs are canonical SEO slugs that must not be polluted with navigation state
+- Discovery mode and filter mode are **mutually exclusive** — any active filter/search/sort switches to filter mode and hides the Featured / Popular / Recent sections
+- Audience filter uses `note.targetProfileType`, never the creator's `user.profileType`
+- The `creator` filter (v0.21.0) uses `username`, not `userId` or `displayName`
+- Do not implement "Trending this week" without windowed backend fields (`recentCopyCount`, `recentLikeCount`) — lifetime totals on recent notes is a different signal; see section H under Planned Improvements
+- Anonymous quiz sessions must not create `QuickReviewSessionEntity` rows — no backend session state until the user authenticates
+
 ## Landing Page Preview
 
 Landing page should visually reinforce Public Library as a real discovery surface, not just describe it in copy.

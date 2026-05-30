@@ -4,6 +4,32 @@
 
 Notes are the primary user-authored workspace in NoteLib. Users organize note metadata first, then turn notes into Study Packs for review.
 
+## Key Files
+
+**Backend**
+- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint); subject/courseProgram suggestion endpoints
+- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — note CRUD, `listMine(userId)`, `listPublic(...)`, visibility change, note copy, subject/courseProgram autocomplete
+- `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `tags`, `visibility`, `studyPackStatus`, `targetProfileType`, `ownerUserId`
+- `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL queries for private/public note lists, subject/courseProgram suggestion queries
+
+**Frontend**
+- `frontend/app/notes/new/page.tsx` — Create Note route (write / generate-from-topic / import start options)
+- `frontend/app/notes/[id]/page.tsx` — Note Detail route (server component entry)
+- `frontend/app/notes/[id]/edit/page.tsx` — Edit Note route
+- `frontend/components/notes/note-editor-page-client.tsx` — shared editor client for create and edit modes
+- `frontend/components/notes/private-note-detail-page-client.tsx` — Note Detail client; Study Pack status polling; AI suggestion modal trigger; quiz mode entry points
+- `frontend/components/notes/ai-suggestion-modal.tsx` — post-generation AI metadata suggestions (title / subject / tags)
+- `frontend/lib/api.ts` — `listNotes()`, `createNote()`, `updateNote()`, `deleteNote()`, `updateNoteVisibility()`, `copyNote()`
+
+## Anti-drift Notes
+
+- Note content is **locked** after Study Pack generation (`STUDY_PACK_READY`) — do not re-enable the content editor for ready notes; only title, courseProgram, subject, and tags remain editable
+- `Generate Study Pack` saves the note then navigates immediately to Note Detail — **never wait** for LLM completion before navigation; generation is always async
+- `courseProgram` on the note is the **authoritative** source for generation context; user profile `courseProgram` is fallback only when the note field is blank
+- AI-generated subject must be a reusable academic label with **no topic suffix** — strip anything after `–`, `:`, or `-` before saving (e.g. `Biology – Cell Division` → `Biology`)
+- The share modal/gate is the **same everywhere**: public content → share modal directly; private content → confirm-to-make-public modal first; do not invent content-specific flows
+- Target Audience is **hidden and auto-prefilled** for Student, Board Exam, and Professional profiles; **visible and user-picked** for Teacher/Admin
+
 ## Note metadata
 
 Current note-authoring fields:

@@ -4,6 +4,28 @@
 
 Library surfaces make NoteLib a reusable note-first workspace with a clear split between private work and public discovery.
 
+## Key Files
+
+**Backend**
+- `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint)
+- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listMine(userId)`, `listPublic(...)`, note CRUD, subject/courseProgram autocomplete queries
+- `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL queries for private and public note lists; subject/courseProgram suggestion queries
+
+**Frontend**
+- `frontend/app/library/page.tsx` — private library route; filter state via URL params (`q`, `subject`, `cp`, `tags`, `status`, `sort`); `?ref=` back-navigation encoding
+- `frontend/app/library/exam-builder/page.tsx` — Teacher/Admin exam builder; multi-note checkbox selection, section management, DOCX export
+- `frontend/components/notes/library-toolbar.tsx` — filter bar: search, subject rail, tags rail, readiness chips, sort
+- `frontend/components/notes/library-sheet-modal.tsx` — "More Filters" bottom sheet/modal (Course/Program, additional filters)
+- `frontend/components/notes/shared-note-card.tsx` — shared note card layout reused across library, public library, and dashboard
+- `frontend/lib/api.ts` — `listNotes()` (private list), `listPublicNotes(params?)`, `createNote()`, `updateNote()`, `deleteNote()`
+
+## Anti-drift Notes
+
+- Private library filter state lives in URL params — do not use `sessionStorage` or local state for filter values (the `?ref=` pattern for back-navigation is a separate concern from filter state)
+- The three filter-pruning effects (subject, courseProgram, tags) are gated by `loading` state; they must not run on initial mount before items are fetched (would wipe URL-restored selections)
+- `Quiz Ready` filter and badge are **Teacher/Admin only** — hidden for Student and Board Taker library views
+- Saved filters (v0.21.0) are backend-persisted in `user_library_filters`; no localStorage fallback; available to all plan tiers
+
 ## Library
 
 Route:
