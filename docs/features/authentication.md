@@ -4,6 +4,31 @@
 
 Provide account/session behavior that supports Note-first ownership and safe generation controls.
 
+## Key Files
+
+**Backend**
+- `backend/src/main/java/com/studysnap/backend/controller/AuthController.java` — all auth endpoints: signup, login, logout, refresh, me, verify-email, resend-verification, forgot-password, reset-password, change-password, Google OAuth (`/auth/google`, `/auth/google/connect`)
+- `backend/src/main/java/com/studysnap/backend/service/AuthService.java` — signup, login, token issuance, Google user creation/linking, password reset and change, `tokenVersion` bump
+- `backend/src/main/java/com/studysnap/backend/security/JwtAuthenticationFilter.java` — JWT validation on every request; reads `tokenVersion` to reject revoked tokens
+- `backend/src/main/java/com/studysnap/backend/security/AuthenticatedUser.java` — principal record injected via `@AuthenticationPrincipal`; use `user.userId()` to get the authenticated UUID
+
+**Frontend**
+- `frontend/app/auth/page.tsx` — login/signup page; handles `reason` query param messaging; uses `GoogleAuthButton`
+- `frontend/app/forgot-password/page.tsx` — forgot password email form (generic success state after submit)
+- `frontend/app/reset-password/page.tsx` — reset password; three states: form / submitting / invalid-expired
+- `frontend/lib/auth.ts` — client-side auth state management; token refresh logic
+- `frontend/lib/api.ts` — `login()`, `signup()`, `loginWithGoogle()`, `logout()`, `getMe()`, `forgotPassword()`, `resetPassword()`, `changePassword()`
+- `frontend/components/auth/google-auth-button.tsx` — NoteLib-styled Google OAuth button; must never show Google's native button
+
+## Anti-drift Notes
+
+- `tokenVersion` **must be bumped** whenever a password is reset or changed — this revokes all active JWTs and sessions on other devices
+- `POST /auth/forgot-password` always returns the same generic response regardless of whether the email exists — no user enumeration; silently no-ops for Google-only accounts
+- Google OAuth uses `redirect_uri: "postmessage"` — do not change this to a real redirect URI
+- Never show Google's personalized "Continue as {name}" button in NoteLib UI; always use `GoogleAuthButton` with `"Continue with Google"` label
+- Manual logout redirects to `/login?reason=logged_out` **without** preserving a `redirect` destination — a stale redirect after sign-out would re-enter a protected page without login intent
+- Unverified users **cannot** generate Study Packs or use OCR — enforce via `EMAIL_VERIFICATION_REQUIRED` (403) in the backend, not just frontend gating
+
 ## Core Ownership Model
 
 - Notes are owned by authenticated users (`owner_user_id`).

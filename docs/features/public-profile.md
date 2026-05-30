@@ -4,6 +4,28 @@
 
 Public Profile is the public showcase surface for one creator's public identity and public notes.
 
+## Key Files
+
+**Backend**
+- `backend/src/main/java/com/studysnap/backend/controller/PublicProfileController.java` — `GET /public/creator/{username}`, `GET /public/profile/{userId}` (legacy compat), `PUT /users/profile/public-visibility`
+- `backend/src/main/java/com/studysnap/backend/service/PublicProfileService.java` — profile resolution; public notes aggregation (capped at 8, sorted copies→views→shares→title); metric aggregation (`totalCopies`, `totalViews`, `totalShares`, `totalProfileShares`)
+- `backend/src/main/java/com/studysnap/backend/dto/PublicProfileResponse.java` — response shape: `displayName`, `username`, `publicNotesCount`, metrics, capped note list
+
+**Frontend**
+- `frontend/components/public/public-profile-page-client.tsx` — all public profile UI: header metrics, Learning Focus section (`learningFocusSummary`; subject badge list removed in v0.21.0), note grid, "View all notes →" link (v0.21.0), owner controls (Edit / Share / Visibility toggle)
+- `frontend/app/public/creator/[username]/page.tsx` — server component entry for username-based route
+- `frontend/app/public/profile/[userId]/page.tsx` — legacy `userId` route for backward-compat; resolves internally
+- `frontend/lib/server-public-profiles.ts` — server-side `getPublicCreatorProfile(username)` fetch helper
+- `frontend/lib/api.ts` — `getPublicCreatorProfile(username)`, `getPublicProfile(userId)` (legacy), `updatePublicProfileVisibility(visible)`
+
+## Anti-drift Notes
+
+- Public profile URLs use `username` for new links (`/public/creator/{username}`); `userId`-based links (`/public/profile/{userId}`) must remain compatible as redirects
+- Learning Focus section shows **only** the `learningFocusSummary` sentence (v0.21.0+); subject badge list has been removed
+- "View all X notes →" link is conditional on `publicNotesCount > 8`; must use `buildPublicLibraryUrl({ creator: username })` — never hardcode the URL
+- Owner controls (`Edit Profile`, visibility toggle) must not be visible to non-owners
+- `Share Profile` must go through the same public/private gate as note sharing — confirm modal before opening share modal for private profiles
+
 Route:
 
 - `/public/profile/{userId}`

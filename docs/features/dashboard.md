@@ -4,6 +4,26 @@
 
 Dashboard is a guidance surface, not a management screen. It should help users decide what to do next in the note -> Study Pack -> quiz loop.
 
+## Key Files
+
+**Backend**
+- `backend/src/main/java/com/studysnap/backend/controller/DashboardController.java` — dashboard endpoints: `/dashboard/overview`, `/dashboard/continue-studying`, `/dashboard/focus-areas`, `/dashboard/weekly-activity`, `/dashboard/performance-summary`
+- `backend/src/main/java/com/studysnap/backend/service/DashboardService.java` — business logic for all sections; resolves continue-studying recommendation, weak concepts, weekly activity, `courseProgram` context
+
+**Frontend**
+- `frontend/app/dashboard/page.tsx` — main dashboard client; `SupportedDashboardProfileType` branching (STUDENT / BOARD_EXAM / TEACHER / PROFESSIONAL); all section composition per profile type
+- `frontend/app/dashboard/continue-spotlight.tsx` — Continue Studying card
+- `frontend/app/dashboard/dashboard-focus-areas-card.tsx` — Focus Areas / weak concepts section
+- `frontend/app/dashboard/study-pack-grid.tsx` — Recent Notes grid
+- `frontend/lib/api.ts` — `getDashboardOverview()`, `getContinueStudyingRecommendation()`, `getTodayFocus()`
+
+## Anti-drift Notes
+
+- Dashboard sections are **profile-type branched** inside `page.tsx` using `resolveDashboardProfileType()`; do not add profile checks inside individual section components
+- Continue Studying must use the `resumeType` label from the backend directly — do not infer mode labels on the frontend
+- Focus Areas shows `Revisit Note` for Free/Plus users when Adaptive Practice is gated; only show the upgrade prompt when no source note is resolvable
+- The Community Notes section (v0.21.0) uses `GET /notes/public?courseProgram=<value>&size=4` directly — no new dashboard backend endpoint
+
 ## Current Personalization Prompt
 
 After onboarding completes, Dashboard may show a lightweight learner-level prompt near the top.
