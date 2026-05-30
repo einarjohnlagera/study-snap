@@ -52,6 +52,19 @@ Richer Quick Recall and Concept Relationships need a dedicated `keyConcepts` mig
 
 ---
 
+## v0.21.0 - TBD
+
+**Status: Planned**
+
+Theme: TBD
+
+### 🔲 Deferred from v0.20.0
+
+- **Public Library creator filter + profile "View all" link** — add a `creator` (username) query param to the public library backend query and the frontend URL model (`public-library-url.ts`). Once the filter exists, add a "View all X notes →" link on the public profile page (visible only when capped notes exist) that navigates to `/public/library?creator=<username>`. This makes the public library the single canonical place to browse a creator's notes. Multi-system change (backend query + frontend URL model + profile link).
+- **Remove Learning Focus subject badges from public profile** — remove the subjects badge list from the Learning Focus section of the public profile header; keep only the summary sentence ("Mostly shares notes in…"). The badge list shows every unique subject across all public notes with no cap, which becomes noise for prolific creators. Removal is blocked until the public library creator filter link exists (the link becomes the replacement for subject browsing). Frontend-only once the above ships.
+
+---
+
 ## v0.18.0 - Profile Completeness & Communication
 
 **Status: Released**
