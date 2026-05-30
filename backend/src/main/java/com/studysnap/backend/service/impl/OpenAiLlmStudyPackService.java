@@ -53,7 +53,7 @@ import java.util.function.Supplier;
 public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
     private static final int STUDY_PACK_QUIZ_QUESTION_COUNT = 5;
-    private static final int MAX_SUMMARY_WORDS = 200;
+    private static final int MAX_SUMMARY_WORDS = 350;
     private static final int MAX_STUDY_TIP_WORDS = 20;
     private static final int MAX_GENERATED_NOTE_WORDS = 700;
     private static final int MAX_GENERATED_NOTE_TITLE_WORDS = 12;
