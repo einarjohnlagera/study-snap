@@ -182,6 +182,8 @@ type: concise subject
 - bullet of high-signal change
 ```
 
+**Always present a plan before implementing.** For any non-trivial change, describe what you intend to do and wait for explicit approval before writing code. Do not start implementing while explaining the plan.
+
 **Never commit automatically.** Always present changes and wait for an explicit "commit" instruction from the user before running `git commit`. Do not stage, commit, or push as a side effect of implementing or updating docs.
 
 **Branch protection is enforced on `main`.** Direct pushes to `main` are blocked by a repository ruleset. All changes — including docs-only changes — must go on a feature or docs branch and be merged via pull request. Never commit directly to `main`.
