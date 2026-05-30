@@ -8,6 +8,10 @@ Theme: surface community notes relevant to each user's study track and let them 
 
 ### ✅ Shipped
 
+- **Official author detection made role-based** — removed hardcoded `OFFICIAL_AUTHOR_EMAIL` constant and `isNoteLibOfficialAccount()` email check from `NoteService`; `isOfficialAuthor()` now uses `UserRole.ADMIN` only. Admin users' actual `displayName` is shown on public notes (falls back to "NoteLib" if displayName is unset). No API or frontend changes required.
+- **Summary word limit raised to 350** — `MAX_SUMMARY_WORDS` raised from 200 to 350 in `OpenAiLlmStudyPackService` and `developer.txt` prompt; fixes validation rejections for enriched summaries that include a comparison table and Common Misconceptions section (markdown pipe characters inflate the `countWords()` count by ~60 tokens above readable word count).
+- **Profile Identity helper text** — added helper text for Display Name ("The name shown on your public notes and profile. Falls back to your first name if left blank.") and rewrote Username helper text to plain English ("Your @handle on NoteLib — shown on your public profile and next to your public notes.").
+
 ### 🔲 Pending Codex
 
 - **Public Library creator filter + profile "View all" link** — `creator` (username) query param added to `GET /notes/public`; public profile gains a "View all X notes →" link to `/public/library?creator=<username>` when capped notes exist. Codex prompt: `docs/codex-prompts/v0.21.0-creator-filter-view-all.md`. Unblocks the subject badge removal below.
@@ -18,9 +22,10 @@ Theme: surface community notes relevant to each user's study track and let them 
 
 - **Remove Learning Focus subject badges from public profile** — remove the subject badge list from the public profile header's Learning Focus section; keep only the "Mostly shares notes in…" summary sentence. The "View all notes →" creator filter link replaces badge-list subject browsing.
 
-### 🔲 Pending Codex (Conversion Visibility)
+### 🔲 Pending Codex (Conversion Visibility & Admin Tools)
 
 - **Admin funnel metrics page** — new `/admin/funnel` page showing five key funnel numbers: signup → first Study Pack rate (activation rate + median days), notes with 0 Study Packs after 7 days (stuck-before-generation pool), free quota hit rate (% of free users who hit the generation limit), paywall seen → upgrade conversion rate, and Study Pack generated → quiz started within 7 days (value loop closure rate). All metrics are computed from existing tables — no new tracking infrastructure. Displayed as daily/weekly aggregates. Codex prompt: `docs/codex-prompts/v0.21.0-admin-funnel-metrics.md`.
+- **Admin summary re-generation** — `POST /admin/study-packs/regenerate-summaries` re-generates the `summary` field only for admin-owned study packs whose summary is not yet enriched (no `|` character); async via `llmParallelTaskExecutor`; returns `{ queued: N, skipped: N }` immediately; idempotent. Backfills official NoteLib notes with the enriched summary format (comparison tables + Common Misconceptions). Codex prompt: `docs/codex-prompts/v0.21.0-admin-regenerate-summaries.md`.
 
 ---
 

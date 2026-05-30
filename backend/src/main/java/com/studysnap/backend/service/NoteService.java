@@ -68,7 +68,6 @@ public class NoteService {
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
     private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
-    private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE = "NOTE_TARGET_PROFILE_TYPE_REQUIRED";
     private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_CODE = "NOTE_TARGET_PROFILE_TYPE_INVALID";
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE = "Please choose who this note is for.";
@@ -824,9 +823,6 @@ public class NoteService {
     }
 
     private String resolvePublicAuthorName(UserEntity user) {
-        if (isNoteLibOfficialAccount(user)) {
-            return OFFICIAL_AUTHOR_DISPLAY_NAME;
-        }
         if (user == null) {
             return DEFAULT_AUTHOR_NAME;
         }
@@ -834,11 +830,11 @@ public class NoteService {
         if (displayName != null) {
             return displayName;
         }
-        String firstName = normalizeOptionalText(user.getFirstName());
-        if (firstName != null) {
-            return firstName;
+        if (isOfficialAuthor(user)) {
+            return OFFICIAL_AUTHOR_DISPLAY_NAME;
         }
-        return DEFAULT_AUTHOR_NAME;
+        String firstName = normalizeOptionalText(user.getFirstName());
+        return firstName != null ? firstName : DEFAULT_AUTHOR_NAME;
     }
 
     private String resolvePublicAuthorUsername(UserEntity user) {
@@ -846,12 +842,7 @@ public class NoteService {
     }
 
     private boolean isOfficialAuthor(UserEntity user) {
-        return isNoteLibOfficialAccount(user) || (user != null && user.getRole() == UserRole.ADMIN);
-    }
-
-    private boolean isNoteLibOfficialAccount(UserEntity user) {
-        String email = user == null ? null : normalizeOptionalText(user.getEmail());
-        return OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(email);
+        return user != null && user.getRole() == UserRole.ADMIN;
     }
 
     private boolean isCurrentUser(UUID ownerUserId, UUID viewerUserId) {
