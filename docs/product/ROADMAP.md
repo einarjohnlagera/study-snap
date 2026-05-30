@@ -173,11 +173,13 @@ Theme: make `courseProgram` the primary discovery axis across the public library
 
 ### Why this release
 
-Two gaps remain after v0.21.0's courseProgram-first dashboard section:
+Three gaps remain after v0.21.0's courseProgram-first dashboard section:
 
 1. **The audience pre-filter in the public library creates the wrong boundaries** — a nursing student with a STUDENT profile misses notes tagged for BOARD_TAKER even when the content is directly relevant. In the Philippine exam prep context especially, "Student" and "Exam Reviewer" overlap almost entirely. The pre-filter hides content rather than surfacing it.
 
 2. **Anonymous and first-time visitors have no guided path to their content** — users who land on the public library from a shared link or search engine see everything at once. There's no prompt to tell them that filtering by course/program (PNLE, NMAT, etc.) is the fastest path to relevant notes. The filter exists but is invisible to users who don't know to look for it.
+
+3. **Private libraries and public profiles lack a coverage view** — a user with 50 notes has no way to see their own distribution at a glance (`15 Biology, 8 Physics, 3 Chemistry`), and visitors to a public profile can't gauge a creator's depth or breadth. Note stats close both gaps: the private library gets a quick-filter breakdown strip; public profiles gain a subject-count header and subject-filtered creator links that replace the static badge list removed in v0.21.0.
 
 ### Primary focus
 
@@ -231,11 +233,34 @@ Two gaps remain after v0.21.0's courseProgram-first dashboard section:
 
    This is a design constraint, not a feature: when implementing items 1–4 above, do not add any "sign up to see more" banners, soft-gates, or conversion prompts anywhere in the public library or public note detail flow.
 
+6. **Note stats strip in the private library**
+
+   A compact subject breakdown shown above the note list when the user has enough notes to make it meaningful. Shows subject chips with counts — e.g., `Biology 12 · Physics 8 · Chemistry 3`. Clicking a chip applies the subject filter. Hidden for users below the threshold.
+
+   - New `GET /notes/stats` endpoint: returns the authenticated user's note counts grouped by `subject`, `courseProgram`, and `studyPackStatus`
+   - Strip renders the top subjects by count; "Other" chip if more than 5 subjects
+   - Chips are interactive — clicking applies the subject filter to the note list
+   - Shown only when the user has ≥ 2 subjects and ≥ 5 total notes
+
+7. **Public profile polish — note stats and subject links**
+
+   Enrich the public profile with creator-level stats derived from their public notes. Replaces the static subject badge list (removed in v0.21.0) with meaningful, navigable coverage signals.
+
+   - **Header count line**: "X notes across Y subjects" — gives visitors an immediate sense of a creator's depth
+   - **Subject chips**: top subjects by public note count, each linking to `/public/library?creator=<username>&subject=<subject>` — lets visitors browse the creator's notes by topic
+   - **"Most active in" line**: top 2–3 subjects by count — gives the profile personality without requiring a bio
+
+   Backend: add `notesBySubject` (top subjects + counts) and aggregate counts to the existing `GET /public/profile/{username}` response, derived from public notes only. No new endpoint.
+
+   Depends on v0.21.0 item 1 (`creator` filter param on `GET /notes/public`) being shipped — subject chips link to `?creator=<username>&subject=<subject>`.
+
 ### Implementation stances
 
 - Audience pre-filter removal is frontend-only — the `targetProfileType` query param on `GET /notes/public` remains valid and functional; we just stop sending it automatically
-- All five items are frontend-only; no new backend endpoints or migrations
+- Items 1–5 are frontend-only; no new backend endpoints or migrations
 - Items 3 and 4 reuse the existing `GET /notes/public` endpoint with `courseProgram` + `size` params (the `size` param is added in v0.21.0)
+- Item 6 requires a new `GET /notes/stats` backend endpoint (authenticated) and one new frontend component
+- Item 7 requires extending the `GET /public/profile/{username}` response with note stat fields — no new endpoint
 - `targetProfileType` badge on note cards is unchanged
 - Teacher note creation flow is unchanged — Teachers still set target audience when creating notes; we just stop using it as a visibility gate on the browse side
 
@@ -246,10 +271,12 @@ Two gaps remain after v0.21.0's courseProgram-first dashboard section:
 - The helper CTA must not appear when a `courseProgram` filter is already active — check the URL param before rendering
 - Use `sessionStorage` for CTA dismissal on the public library (consistent with how the back-nav return URL is stored); do not use `localStorage` for session-scoped UI state
 - No sign-up prompts, interstitials, or conversion nudges anywhere in the public library or public note detail — the library is friction-free for anonymous users by design
+- Note stats on the public profile are derived from **public notes only** — never expose private note counts or subjects on a public-facing page
+- Item 7 subject chips depend on the v0.21.0 `creator` filter param shipping first — do not implement item 7 before v0.21.0 item 1 is merged
 
 ### Sequencing
 
-All five items are frontend-only. Items 1 and 2 are the core changes and should ship together. Items 3 and 4 are independent additions and can be implemented in the same Codex prompt or separately. Item 5 is a constraint on the others, not a separate implementation task. Write Codex prompts at the start of v0.22.0.
+Items 1 and 2 are the core changes and should ship together. Items 3, 4, and 6 are independent and can be implemented in the same Codex prompt or separately. Item 5 is a constraint on the others, not a separate implementation task. Item 7 is blocked on v0.21.0 item 1 (creator filter) shipping first. Write Codex prompts at the start of v0.22.0.
 
 ---
 
