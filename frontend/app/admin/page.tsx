@@ -286,6 +286,9 @@ export default function AdminPage() {
           <Link href="/admin/campaigns" className="text-sm text-foreground/55 hover:text-foreground/80">
             Campaigns →
           </Link>
+          <Link href="/admin/funnel" className="text-sm text-foreground/55 hover:text-foreground/80">
+            Funnel →
+          </Link>
         </div>
         <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
           Internal view of product usage, billing health, upgrade activity, and Public Library growth.
