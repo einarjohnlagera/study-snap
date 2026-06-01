@@ -239,7 +239,7 @@ Supported query params:
 - `audience`
 - `courseProgram`
 - `creator` (username — filters to a single creator's public notes)
-- `size` (optional integer, max 50, defaults to 20 — limits result count; used by the Dashboard Community Notes section)
+- `size` (optional integer, clamped to 1-50 when present — limits result count; omitted means uncapped)
 - `sort`
 
 Behavior:

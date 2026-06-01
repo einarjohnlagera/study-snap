@@ -8,6 +8,7 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   listNotes,
+  listPublicNotes,
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { setAuthUser } from "@/lib/auth";
@@ -41,6 +42,7 @@ jest.mock("@/lib/api", () => ({
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   getQuickReviewPerformanceSummary: jest.fn(),
   listNotes: jest.fn(),
+  listPublicNotes: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
 
@@ -97,6 +99,35 @@ const overview = {
   },
 };
 
+const publicNotes = [
+  {
+    id: "public-note-1",
+    ownerUserId: null,
+    title: "PNLE Fundamentals",
+    courseProgram: "PNLE",
+    targetProfileType: "BOARD_TAKER",
+    subject: "Nursing",
+    tags: ["review"],
+    contentPreview: "Nursing board exam fundamentals.",
+    summaryPreview: "A quick PNLE review summary.",
+    visibility: "PUBLIC",
+    studyPackId: "pack-1",
+    studyPackStatus: "STUDY_PACK_READY",
+    quizCount: 12,
+    copyCount: 4,
+    likeCount: 2,
+    shareCount: 1,
+    viewCount: 30,
+    authorDisplayName: "Creator",
+    authorUsername: "creator",
+    isOfficialAuthor: false,
+    isCurrentUser: false,
+    createdAt: "2026-03-20T00:00:00Z",
+    updatedAt: "2026-03-21T00:00:00Z",
+    likedByCurrentUser: false,
+  },
+] as const;
+
 describe("DashboardPage profile variants", () => {
   beforeEach(() => {
     routerMock.push.mockReset();
@@ -106,6 +137,7 @@ describe("DashboardPage profile variants", () => {
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (listPublicNotes as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
@@ -126,6 +158,7 @@ describe("DashboardPage profile variants", () => {
     });
     (getDashboardOverview as jest.Mock).mockResolvedValue(overview);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNotes);
   });
 
   it("renders the student dashboard with review-first sections", async () => {
@@ -136,6 +169,7 @@ describe("DashboardPage profile variants", () => {
       productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
       studyPackCount: 2,
       profileType: "STUDENT",
+      courseProgram: "PNLE",
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
@@ -154,6 +188,8 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByRole("link", { name: "Resume Quick Review" })).toHaveAttribute("href", "/notes/note-1/quick-review");
     expect(screen.getByText("Weak Concepts")).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See all in Public Library →" })).toHaveAttribute("href", "/public/library?courseProgram=PNLE");
     expect(screen.getByText("Quick Review")).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
@@ -229,6 +265,7 @@ describe("DashboardPage profile variants", () => {
       productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
       studyPackCount: 2,
       profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
       examDate: "2099-05-15",
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
@@ -255,8 +292,33 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByText("Weak Areas")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Adaptive Practice" })).toBeInTheDocument();
     expect(screen.getByText("Study Activity This Week")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Practice Weak Areas" })).toBeInTheDocument();
+  });
+
+  it("renders community notes for professional profiles", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Pro",
+      displayName: "Pro",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "PROFESSIONAL",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PLUS",
+        limits: { studyPacksPerMonth: 40, challengeQuizzesPerMonth: 20, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
   });
 
   it("renders the teacher dashboard with material and quiz-focused sections", async () => {
@@ -267,6 +329,7 @@ describe("DashboardPage profile variants", () => {
       productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
       studyPackCount: 2,
       profileType: "TEACHER",
+      courseProgram: "PNLE",
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
@@ -323,6 +386,7 @@ describe("DashboardPage profile variants", () => {
       screen.getByText("Welcome to NoteLib! Start by creating a note, then generate a Study Pack and review the quiz in Quiz Preview."),
     ).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByText("Recently Generated Quizzes")).toBeInTheDocument();
     expect(screen.getByText("Ready to Export")).toBeInTheDocument();
     expect(screen.getByText("Teacher Help / Tips")).toBeInTheDocument();

@@ -196,7 +196,7 @@ class NoteControllerTest {
     void listPublic_mapsAudienceQueryToTargetProfileFilter() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT))
+        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4))
                 .thenReturn(List.of());
 
         List<NoteListItemResponse> response = noteController.listPublic(
@@ -208,6 +208,7 @@ class NoteControllerTest {
                 CREATOR_USERNAME,
                 "student",
                 null,
+                4,
                 user
         );
 
@@ -219,8 +220,33 @@ class NoteControllerTest {
                 List.of("mexican-history"),
                 "nursing",
                 CREATOR_USERNAME,
-                NoteTargetProfileType.STUDENT
+                NoteTargetProfileType.STUDENT,
+                4
         );
+        assertThat(response).isEmpty();
+    }
+
+    @Test
+    void listPublic_clampsLargeSizeBeforeDelegating() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50))
+                .thenReturn(List.of());
+
+        List<NoteListItemResponse> response = noteController.listPublic(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                200,
+                user
+        );
+
+        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50);
         assertThat(response).isEmpty();
     }
 
@@ -427,12 +453,12 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null)).thenReturn(expected);
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null)).thenReturn(expected);
 
-        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, null, null, null, null, null, user);
+        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, null, null, null, null, null, null, user);
 
         assertThat(response).isEqualTo(expected);
-        verify(noteService).listPublic(userId, null, null, null, null, null, null, null);
+        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, null);
     }
 
     @Test

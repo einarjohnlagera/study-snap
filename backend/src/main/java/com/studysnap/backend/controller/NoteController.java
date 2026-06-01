@@ -64,6 +64,8 @@ import java.util.UUID;
 public class NoteController {
     private static final String AUTO_APPLY_METADATA_REQUEST_PARAM = "autoApplyMetadata";
     private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
+    private static final int PUBLIC_NOTES_MIN_SIZE = 1;
+    private static final int PUBLIC_NOTES_MAX_SIZE = 50;
 
     private final AuthService authService;
     private final NoteService noteService;
@@ -401,6 +403,7 @@ public class NoteController {
             @RequestParam(value = "creator", required = false) String creator,
             @RequestParam(value = "audience", required = false) String audience,
             @RequestParam(value = "targetProfileType", required = false) NoteTargetProfileType targetProfileType,
+            @RequestParam(value = "size", required = false) Integer size,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
@@ -412,7 +415,8 @@ public class NoteController {
                 tags,
                 courseProgram,
                 creator,
-                resolvePublicAudienceFilter(audience, targetProfileType)
+                resolvePublicAudienceFilter(audience, targetProfileType),
+                size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE)
         );
     }
 
