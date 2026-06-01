@@ -2,18 +2,24 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
 import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
+  createSavedLibraryFilter,
+  deleteSavedLibraryFilter,
+  getSavedLibraryFilters,
   listNotes,
   listSubjects,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
+const replaceMock = jest.fn();
 const routerMock = {
   push: pushMock,
+  replace: replaceMock,
 };
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -21,7 +27,10 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  createSavedLibraryFilter: jest.fn(),
+  deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
+  getSavedLibraryFilters: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
 }));
@@ -30,10 +39,34 @@ jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
 }));
 
+async function openMoreFilters() {
+  fireEvent.click(screen.getByRole("button", { name: "Open more filters" }));
+  await screen.findByRole("heading", { name: "More Filters" });
+}
+
+function selectSubjectFilter(subject: string) {
+  fireEvent.focus(screen.getAllByPlaceholderText("All")[0]);
+  fireEvent.mouseDown(screen.getAllByRole("button", { name: subject })[0]);
+}
+
+async function openTagSelectorFromFilters() {
+  fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
+  await screen.findByRole("heading", { name: "Select tags" });
+}
+
 describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    replaceMock.mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
+    (getSavedLibraryFilters as jest.Mock).mockResolvedValue([]);
+    (createSavedLibraryFilter as jest.Mock).mockResolvedValue({
+      id: "saved-filter-1",
+      name: "Review Notes",
+      filterState: { search: "review" },
+      createdAt: "2026-03-24T00:00:00Z",
+    });
+    (deleteSavedLibraryFilter as jest.Mock).mockResolvedValue(undefined);
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
@@ -106,7 +139,7 @@ describe("Library page", () => {
     fireEvent.click(card as HTMLElement);
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library&ref=%2Flibrary");
     });
   });
 
@@ -172,6 +205,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
+    await openMoreFilters();
 
     expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
     expect(screen.queryByText("Quiz Ready")).not.toBeInTheDocument();
@@ -188,20 +222,22 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
+    await openMoreFilters();
 
     expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
     expect(screen.queryByText("Quiz Ready")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Study Pack Ready" })).toBeInTheDocument();
   });
 
-  it("filters notes by horizontal subject chips", async () => {
+  it("filters notes by subject from the more filters modal", async () => {
     render(<LibraryPage />);
 
     expect(await screen.findByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
+    await openMoreFilters();
+    selectSubjectFilter("Biology");
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -218,6 +254,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
+    await openMoreFilters();
 
     expect(screen.getByRole("button", { name: "Draft" })).toBeInTheDocument();
 
@@ -264,6 +301,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     await screen.findByText("Ready Note");
+    await openMoreFilters();
     fireEvent.click(screen.getByRole("button", { name: "Draft" }));
 
     expect(screen.queryByText("Ready Note")).not.toBeInTheDocument();
@@ -281,6 +319,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
+    await openMoreFilters();
 
     expect(screen.getByRole("button", { name: "Quiz Ready" })).toBeInTheDocument();
     expect(screen.getAllByText("Quiz Ready").length).toBeGreaterThanOrEqual(2);
@@ -296,6 +335,7 @@ describe("Library page", () => {
     const { rerender } = render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
+    await openMoreFilters();
     fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
@@ -308,24 +348,23 @@ describe("Library page", () => {
     rerender(<LibraryPage />);
 
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
       expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     });
+    await openMoreFilters();
+    expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
   });
 
-  it("filters subjects from the searchable subject selector", async () => {
+  it("filters subjects from the searchable subject field", async () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
+    await openMoreFilters();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[0]);
-    expect(screen.getByRole("heading", { name: "Select subject" })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByPlaceholderText("Search subjects..."), {
+    fireEvent.focus(screen.getAllByPlaceholderText("All")[0]);
+    fireEvent.change(screen.getAllByPlaceholderText("Search subjects...")[0], {
       target: { value: "pha" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "Pharmacy" }).at(-1) as HTMLElement);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.mouseDown(screen.getAllByRole("button", { name: "Pharmacy" })[0]);
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -346,16 +385,142 @@ describe("Library page", () => {
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
   });
 
+  it("shows the save filter action only when a filter is active", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Loading filters..." })).not.toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: "Save filter" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "review" },
+    });
+
+    expect(screen.getByRole("button", { name: "Save filter" })).toBeInTheDocument();
+  });
+
+  it("keeps the save filter dialog open and shows an inline error for a blank name", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "review" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Name is required")).toBeInTheDocument();
+    expect(createSavedLibraryFilter).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Save filter" })).toBeInTheDocument();
+  });
+
+  it("saves the active filter state and adds the saved filter to the picker", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "review" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save filter" }));
+    fireEvent.change(screen.getByLabelText("Filter name"), {
+      target: { value: "Review Notes" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(createSavedLibraryFilter).toHaveBeenCalledWith("Review Notes", { search: "review" });
+    });
+    expect(await screen.findByText("Filter saved")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Saved filters" }));
+    expect(screen.getByRole("button", { name: "Review Notes" })).toBeInTheDocument();
+  });
+
+  it("applies a saved filter by replacing the current library URL params", async () => {
+    (getSavedLibraryFilters as jest.Mock).mockResolvedValue([
+      {
+        id: "saved-filter-2",
+        name: "Pharmacy Ready",
+        filterState: {
+          courseProgram: "Pharmacy",
+          tags: ["math"],
+          status: "STUDY_PACK_READY",
+          sort: "TITLE_ASC",
+        },
+        createdAt: "2026-03-24T00:00:00Z",
+      },
+    ]);
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "cell" },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Saved filters" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pharmacy Ready" }));
+
+    expect(replaceMock).toHaveBeenCalledWith(
+      "/library?cp=Pharmacy&tags=math&status=study_pack_ready&sort=title_asc",
+      { scroll: false },
+    );
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
+  it("deletes a saved filter from the picker", async () => {
+    (getSavedLibraryFilters as jest.Mock).mockResolvedValue([
+      {
+        id: "saved-filter-3",
+        name: "Chemistry Review",
+        filterState: { subject: "Chemistry" },
+        createdAt: "2026-03-24T00:00:00Z",
+      },
+    ]);
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(await screen.findByRole("button", { name: "Saved filters" }));
+    expect(screen.getByRole("button", { name: "Chemistry Review" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete saved filter Chemistry Review" }));
+
+    await waitFor(() => {
+      expect(deleteSavedLibraryFilter).toHaveBeenCalledWith("saved-filter-3");
+    });
+    expect(screen.queryByRole("button", { name: "Chemistry Review" })).not.toBeInTheDocument();
+    expect(screen.getByText("Filter deleted")).toBeInTheDocument();
+  });
+
+  it("silently hides saved filters when loading them fails", async () => {
+    (getSavedLibraryFilters as jest.Mock).mockRejectedValue(new Error("network"));
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Cell Respiration")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Loading filters..." })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "Saved filters" })).not.toBeInTheDocument();
+  });
+
   it("filters notes by a single selected tag", async () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    await openMoreFilters();
+    await openTagSelectorFromFilters();
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "energy" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "energy" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "energy" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
@@ -368,15 +533,16 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    await openMoreFilters();
+    await openTagSelectorFromFilters();
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "math" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "math" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "math" })[0]);
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "med" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "medication" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "medication" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
@@ -389,15 +555,16 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    await openMoreFilters();
+    await openTagSelectorFromFilters();
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "energy" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "energy" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "energy" })[0]);
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "exam" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "exam" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "exam" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
@@ -410,12 +577,13 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    await openMoreFilters();
+    selectSubjectFilter("Biology");
+    await openTagSelectorFromFilters();
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "cells" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "cells" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "cells" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
@@ -431,11 +599,12 @@ describe("Library page", () => {
     fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "dosage" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    await openMoreFilters();
+    await openTagSelectorFromFilters();
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "review" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
@@ -448,22 +617,22 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
-    expect(screen.getByRole("heading", { name: "Select tags" })).toBeInTheDocument();
+    await openMoreFilters();
+    await openTagSelectorFromFilters();
 
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "mito" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "mitochondria" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
     expect(screen.getByText("Selected tags")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
     expect(screen.queryByText("Selected tags")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "mitochondria" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    expect(screen.getByRole("button", { name: "mitochondria" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "mitochondria" })[0]).toBeInTheDocument();
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
     expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
@@ -474,12 +643,13 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    await openMoreFilters();
+    selectSubjectFilter("Biology");
+    await openTagSelectorFromFilters();
     fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
       target: { value: "review" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.getByText("No notes match these filters")).toBeInTheDocument();
@@ -507,7 +677,9 @@ describe("Library page", () => {
 
     await screen.findByText("Dosage Calculations");
 
-    expect(screen.getByRole("button", { name: "Pharmacy" })).toBeInTheDocument();
+    await openMoreFilters();
+    fireEvent.focus(screen.getAllByPlaceholderText("All")[0]);
+    expect(screen.getAllByRole("button", { name: "Pharmacy" })[0]).toBeInTheDocument();
     expect(screen.getAllByText("Pharmacy")).not.toHaveLength(0);
   });
 

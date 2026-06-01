@@ -1073,6 +1073,22 @@ export type NoteListItemResponse = {
   likedByCurrentUser: boolean;
 };
 
+export type SavedLibraryFilterState = {
+  search?: string;
+  subject?: string;
+  courseProgram?: string;
+  tags?: string[];
+  status?: string;
+  sort?: string;
+};
+
+export type SavedLibraryFilterResponse = {
+  id: string;
+  name: string;
+  filterState: SavedLibraryFilterState;
+  createdAt: string;
+};
+
 export type MultiNoteQuizDocxExportRequest = {
   sections: Array<{
     title: string;
@@ -3051,6 +3067,49 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
     true,
   );
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
+}
+
+export async function getSavedLibraryFilters(): Promise<SavedLibraryFilterResponse[]> {
+  const response = await fetchWithAuth(
+    "/library-filters",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SavedLibraryFilterResponse[]>(response, "Could not load saved filters.");
+}
+
+export async function createSavedLibraryFilter(
+  name: string,
+  filterState: SavedLibraryFilterState,
+): Promise<SavedLibraryFilterResponse> {
+  const response = await fetchWithAuth(
+    "/library-filters",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ name, filterState }),
+    },
+    true,
+  );
+  return parseApiResponse<SavedLibraryFilterResponse>(response, "Could not save filter.");
+}
+
+export async function deleteSavedLibraryFilter(id: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/library-filters/${id}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.ok) {
+    return;
+  }
+  await parseApiResponse<never>(response, "Could not delete filter.");
 }
 
 export async function listPublicNotes(params?: {
