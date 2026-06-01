@@ -329,7 +329,7 @@ studysnap:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}
       issuer: ${JWT_ISSUER:notelib}
       access-token-minutes: ${JWT_ACCESS_TOKEN_MINUTES:15}
-      refresh-token-days: ${JWT_REFRESH_TOKEN_DAYS:1}
+      refresh-token-days: ${JWT_REFRESH_TOKEN_DAYS:7}
       refresh-token-days-keep-signed-in: ${JWT_REFRESH_TOKEN_DAYS_KEEP_SIGNED_IN:30}
     auth:
       max-failed-attempts: ${AUTH_MAX_FAILED_ATTEMPTS:5}
