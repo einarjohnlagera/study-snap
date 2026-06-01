@@ -3058,6 +3058,7 @@ export async function listPublicNotes(params?: {
   courseProgram?: string;
   creator?: string | null;
   search?: string;
+  size?: number;
   sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
   subject?: string;
   tags?: string[];
@@ -3074,6 +3075,9 @@ export async function listPublicNotes(params?: {
   }
   if (params?.search) {
     searchParams.set("search", params.search);
+  }
+  if (typeof params?.size === "number") {
+    searchParams.set("size", String(params.size));
   }
   if (params?.sort) {
     searchParams.set("sort", params.sort);

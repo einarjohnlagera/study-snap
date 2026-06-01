@@ -310,7 +310,8 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType
+            NoteTargetProfileType targetProfileType,
+            Integer size
     ) {
         String normalizedCreator = normalizePublicLibraryCreator(creator);
         List<NoteEntity> notes;
@@ -323,7 +324,8 @@ public class NoteService {
         }
         List<NoteListItemResponse> items = toListItems(notes, viewerUserId, false);
         items = filterPublicLibraryItems(items, search, subject, tags, courseProgram);
-        return sortPublicLibraryItems(items, sort);
+        items = sortPublicLibraryItems(items, sort);
+        return limitPublicLibraryItems(items, size);
     }
 
     @Transactional(readOnly = true)
@@ -375,6 +377,15 @@ public class NoteService {
                     .toList();
             default -> items;
         };
+    }
+
+    private List<NoteListItemResponse> limitPublicLibraryItems(List<NoteListItemResponse> items, Integer size) {
+        if (size == null) {
+            return items;
+        }
+        return items.stream()
+                .limit(size)
+                .toList();
     }
 
     private boolean matchesPublicLibrarySearch(NoteListItemResponse item, String normalizedSearch) {

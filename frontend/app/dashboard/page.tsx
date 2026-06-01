@@ -41,6 +41,7 @@ import { DashboardError } from "./dashboard-error";
 import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
+import { DashboardCommunityNotesSection } from "./dashboard-community-notes-section";
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { AppModal } from "@/components/ui/app-modal";
 import {
@@ -628,6 +629,10 @@ export default function DashboardPage() {
                   viewAllLabel="View All in Library"
                 />
               )}
+              <DashboardCommunityNotesSection
+                courseProgram={profile?.courseProgram ?? null}
+                viewerUserId={profile?.id ?? null}
+              />
               <DashboardStrongestNotes />
               <DashboardActionCard
                 title="Quick Review"
@@ -701,6 +706,10 @@ export default function DashboardPage() {
                 activity={overview?.weeklyActivity ?? null}
                 title="Study Activity This Week"
               />
+              <DashboardCommunityNotesSection
+                courseProgram={profile?.courseProgram ?? null}
+                viewerUserId={profile?.id ?? null}
+              />
               <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
             </>
           ) : null}
@@ -757,6 +766,10 @@ export default function DashboardPage() {
                   draftStatusLabel="Draft"
                 />
               )}
+              <DashboardCommunityNotesSection
+                courseProgram={profile?.courseProgram ?? null}
+                viewerUserId={profile?.id ?? null}
+              />
               <TeacherTipsCard />
             </>
           ) : null}

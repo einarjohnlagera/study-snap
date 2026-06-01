@@ -13,10 +13,10 @@ Theme: surface community notes relevant to each user's study track and let them 
 - **Profile Identity helper text** — added helper text for Display Name ("The name shown on your public notes and profile. Falls back to your first name if left blank.") and rewrote Username helper text to plain English ("Your @handle on NoteLib — shown on your public profile and next to your public notes.").
 - **Public Library creator filter + profile "View all" link** — `GET /notes/public` now supports a username-based `creator` filter; public profiles with more than 8 public notes link visitors to `/public/library?creator=<username>` for the full catalog.
 - **Remove Learning Focus subject badges from public profile** — removed the subject badge list from the public profile header's Learning Focus section; the "Mostly shares notes in…" summary sentence is kept; the creator filter "View all" link now handles subject browsing.
+- **Community Notes dashboard section** — Dashboard now surfaces up to 4 public notes for the user's `courseProgram` below Recent Notes, links to the filtered Public Library, and prompts users without a Course/Program to complete their Learning Profile.
 
 ### 🔲 Pending Codex
 
-- **Community Notes dashboard section** — "Notes for [CourseProgram]" section visible on all profile-type dashboards below Recent Notes; shows up to 4 public notes from the existing public library endpoint filtered by the user's `courseProgram`; "See all in Public Library →" links to `/public/library?courseProgram=<value>`; modal prompt when no `courseProgram` is set. Codex prompt: `docs/codex-prompts/v0.21.0-course-program-dashboard.md`.
 - **Saved Filters for private library** — users can save named filter combinations in the private library; stored in a new backend `user_library_filters` table; filter bar gains "Save filter" action + saved filters picker to apply or delete. Codex prompt: `docs/codex-prompts/v0.21.0-saved-library-filters.md`.
 
 ### 🔲 Pending Codex (Conversion Visibility & Admin Tools)
