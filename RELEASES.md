@@ -2,7 +2,7 @@
 
 ## v0.21.0 - Personalized Discovery & Library Organization
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: surface community notes relevant to each user's study track and let them save and reuse their own filter shortcuts — making the app feel personal from day one.
 
