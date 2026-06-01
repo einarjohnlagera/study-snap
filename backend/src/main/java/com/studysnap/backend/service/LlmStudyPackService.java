@@ -11,6 +11,8 @@ import java.util.List;
 public interface LlmStudyPackService {
 	GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context);
 
+	String regenerateSummary(String normalizedNoteContent, StudyPackGenerationContext context);
+
 	String generateNoteFromTopic(String topic, StudyPackGenerationContext context);
 
 	String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries);

@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +19,7 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     Optional<UserEntity> findByEmailIgnoreCase(String email);
     Optional<UserEntity> findByPendingEmailIgnoreCase(String email);
     Optional<UserEntity> findByUsernameIgnoreCase(String username);
+    List<UserEntity> findByRole(UserRole role);
     long countByEmailVerifiedAtIsNotNull();
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNull(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus status);
