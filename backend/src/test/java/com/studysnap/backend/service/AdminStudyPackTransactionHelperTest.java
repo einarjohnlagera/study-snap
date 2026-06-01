@@ -29,6 +29,8 @@ class AdminStudyPackTransactionHelperTest {
     private UserRepository userRepository;
     @Mock
     private LlmStudyPackService llmStudyPackService;
+    @Mock
+    private RegenerationProgressTracker progressTracker;
 
     private AdminStudyPackTransactionHelper transactionHelper;
 
@@ -38,7 +40,8 @@ class AdminStudyPackTransactionHelperTest {
                 noteRepository,
                 studyPackRepository,
                 userRepository,
-                llmStudyPackService
+                llmStudyPackService,
+                progressTracker
         );
     }
 

@@ -25,11 +25,13 @@ public class AdminStudyPackTransactionHelper {
     private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
     private final LlmStudyPackService llmStudyPackService;
+    private final RegenerationProgressTracker progressTracker;
 
     @Transactional
     public void regenerateOnePack(StudyPackEntity pack) {
         if (pack == null || pack.getId() == null || pack.getNoteId() == null) {
             log.warn("Admin summary regeneration skipped study pack with missing identifiers");
+            progressTracker.recordFailure();
             return;
         }
 
@@ -38,9 +40,11 @@ public class AdminStudyPackTransactionHelper {
                     .orElse(null);
             if (currentPack == null) {
                 log.warn("Admin summary regeneration skipped missing packId={}", pack.getId());
+                progressTracker.recordSuccess();
                 return;
             }
             if (currentPack.getSummary() != null && currentPack.getSummary().contains(ENRICHED_SUMMARY_MARKER)) {
+                progressTracker.recordSuccess();
                 return;
             }
 
@@ -48,6 +52,7 @@ public class AdminStudyPackTransactionHelper {
                     .orElse(null);
             if (note == null) {
                 log.warn("Admin summary regeneration skipped packId={} because source note was not found", currentPack.getId());
+                progressTracker.recordSuccess();
                 return;
             }
 
@@ -55,7 +60,9 @@ public class AdminStudyPackTransactionHelper {
             String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context);
             currentPack.setSummary(newSummary);
             studyPackRepository.save(currentPack);
+            progressTracker.recordSuccess();
         } catch (Exception ex) {
+            progressTracker.recordFailure();
             log.warn(
                     "Admin summary regeneration failed for packId={} reason={}",
                     pack.getId(),

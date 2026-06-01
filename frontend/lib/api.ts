@@ -446,6 +446,13 @@ export type AdminRegenerateSummariesResponse = {
   skipped: number;
 };
 
+export type AdminRegenerationStatusResponse = {
+  total: number;
+  processed: number;
+  failed: number;
+  done: boolean;
+};
+
 export type SubmitFeedbackRequest = {
   message: string;
 };
@@ -1652,6 +1659,18 @@ export async function regenerateAdminSummaries(): Promise<AdminRegenerateSummari
     true,
   );
   return parseApiResponse<AdminRegenerateSummariesResponse>(response, "Could not queue regeneration.");
+}
+
+export async function getAdminRegenerationStatus(): Promise<AdminRegenerationStatusResponse> {
+  const response = await fetchWithAuth(
+    "/admin/study-packs/regeneration-status",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminRegenerationStatusResponse>(response, "Could not fetch regeneration status.");
 }
 
 export type CampaignStatusResponse = {

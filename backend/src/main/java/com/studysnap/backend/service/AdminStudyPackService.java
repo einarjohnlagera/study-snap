@@ -23,6 +23,7 @@ public class AdminStudyPackService {
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
     private final AdminStudyPackTransactionHelper transactionHelper;
+    private final RegenerationProgressTracker progressTracker;
     @Qualifier("llmParallelTaskExecutor")
     private final AsyncTaskExecutor llmParallelTaskExecutor;
 
@@ -39,6 +40,7 @@ public class AdminStudyPackService {
                 adminUserIds,
                 ENRICHED_SUMMARY_MARKER
         );
+        progressTracker.startRun(packs.size());
         packs.forEach(pack -> CompletableFuture.runAsync(
                 () -> transactionHelper.regenerateOnePack(pack),
                 llmParallelTaskExecutor

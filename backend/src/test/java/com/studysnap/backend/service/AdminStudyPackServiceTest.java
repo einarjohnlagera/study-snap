@@ -32,6 +32,8 @@ class AdminStudyPackServiceTest {
     private StudyPackRepository studyPackRepository;
     @Mock
     private AdminStudyPackTransactionHelper transactionHelper;
+    @Mock
+    private RegenerationProgressTracker progressTracker;
 
     private AdminStudyPackService adminStudyPackService;
 
@@ -42,6 +44,7 @@ class AdminStudyPackServiceTest {
                 userRepository,
                 studyPackRepository,
                 transactionHelper,
+                progressTracker,
                 directExecutor
         );
     }

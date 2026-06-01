@@ -1,7 +1,9 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
+import com.studysnap.backend.dto.AdminRegenerationStatusResponse;
 import com.studysnap.backend.service.AdminStudyPackService;
+import com.studysnap.backend.service.RegenerationProgressTracker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -17,6 +19,8 @@ class AdminStudyPackControllerTest {
 
     @Mock
     private AdminStudyPackService adminStudyPackService;
+    @Mock
+    private RegenerationProgressTracker progressTracker;
 
     @Test
     void controller_requiresAdminRole() {
@@ -28,7 +32,7 @@ class AdminStudyPackControllerTest {
 
     @Test
     void regenerateSummaries_returnsQueuedAndSkippedCounts() {
-        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService);
+        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService, progressTracker);
         AdminRegenerateSummariesResponse expected = new AdminRegenerateSummariesResponse(3, 7);
         when(adminStudyPackService.regenerateOfficialSummaries()).thenReturn(expected);
 
@@ -36,5 +40,17 @@ class AdminStudyPackControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(adminStudyPackService).regenerateOfficialSummaries();
+    }
+
+    @Test
+    void regenerationStatus_returnsProgressTrackerStatus() {
+        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService, progressTracker);
+        AdminRegenerationStatusResponse expected = new AdminRegenerationStatusResponse(10, 4, 1, false);
+        when(progressTracker.getStatus()).thenReturn(expected);
+
+        AdminRegenerationStatusResponse response = controller.regenerationStatus();
+
+        assertThat(response).isEqualTo(expected);
+        verify(progressTracker).getStatus();
     }
 }

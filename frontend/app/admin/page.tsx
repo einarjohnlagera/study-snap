@@ -12,12 +12,14 @@ import {
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
+  getAdminRegenerationStatus,
   issueAdminRefund,
   regenerateAdminSummaries,
   type AdminRecentUpgradeItemResponse,
   type AdminDashboardRecentEventsResponse,
   type AdminDashboardSummaryResponse,
   type AdminDashboardTopContentResponse,
+  type AdminRegenerationStatusResponse,
 } from "@/lib/api";
 import { requireAdminUser } from "@/lib/route-guards";
 
@@ -133,6 +135,7 @@ export default function AdminPage() {
   const [regeneratingSummaries, setRegeneratingSummaries] = useState(false);
   const [regenerateSummariesError, setRegenerateSummariesError] = useState<string | null>(null);
   const [regenerateSummariesMessage, setRegenerateSummariesMessage] = useState<string | null>(null);
+  const [regenerationProgress, setRegenerationProgress] = useState<AdminRegenerationStatusResponse | null>(null);
 
   const loadDashboard = useCallback(async () => {
     if (!requireAdminUser(router)) {
@@ -231,18 +234,37 @@ export default function AdminPage() {
   const handleRegenerateSummaries = async () => {
     setRegeneratingSummaries(true);
     setRegenerateSummariesError(null);
+    setRegenerationProgress(null);
     try {
       const response = await regenerateAdminSummaries();
-      setRegenerateSummariesMessage(
-        `Queued ${response.queued} summaries for regeneration (${response.skipped} already enriched)`,
-      );
+      if (response.queued === 0) {
+        setRegenerateSummariesMessage(`No summaries to regenerate (${response.skipped} already enriched)`);
+        setRegeneratingSummaries(false);
+        return;
+      }
+      const pollInterval = globalThis.setInterval(async () => {
+        try {
+          const status = await getAdminRegenerationStatus();
+          setRegenerationProgress(status);
+          if (status.done) {
+            globalThis.clearInterval(pollInterval);
+            setRegeneratingSummaries(false);
+            setRegenerateSummariesMessage(
+              `Done: ${status.processed} regenerated, ${status.failed} failed (${response.skipped} already enriched)`,
+            );
+            setRegenerationProgress(null);
+          }
+        } catch {
+          globalThis.clearInterval(pollInterval);
+          setRegeneratingSummaries(false);
+        }
+      }, 2500);
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 403) {
         router.replace("/dashboard");
         return;
       }
       setRegenerateSummariesError("Could not queue regeneration. Try again.");
-    } finally {
       setRegeneratingSummaries(false);
     }
   };
@@ -333,8 +355,13 @@ export default function AdminPage() {
               onClick={() => void handleRegenerateSummaries()}
               disabled={regeneratingSummaries}
             >
-              {regeneratingSummaries ? "Queuing..." : "Regenerate Summaries"}
+              {regeneratingSummaries ? "Processing..." : "Regenerate Summaries"}
             </Button>
+            {regenerationProgress ? (
+              <p className="text-sm text-foreground/65">
+                Processing {regenerationProgress.processed + regenerationProgress.failed}/{regenerationProgress.total}...
+              </p>
+            ) : null}
             {regenerateSummariesError ? (
               <p className="text-sm text-red-600 dark:text-red-400">{regenerateSummariesError}</p>
             ) : null}
