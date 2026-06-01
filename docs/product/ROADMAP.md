@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.21.0` is the current in-progress release.
+`v0.22.0` is the current in-progress release.
 
-`v0.20.0 - Conversion & Re-engagement` is complete and is the previous documentation baseline.
+`v0.21.0 - Personalized Discovery & Library Organization` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 

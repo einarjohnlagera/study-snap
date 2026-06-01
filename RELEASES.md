@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.22.0 - Course-First Discovery
+
+**Status: In Progress**
+
+Theme: TBD
+
+### ✅ Shipped
+
+### 🔲 Pending
+
+---
+
 ## v0.21.0 - Personalized Discovery & Library Organization
 
 **Status: Released**
