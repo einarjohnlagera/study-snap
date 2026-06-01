@@ -1353,7 +1353,19 @@ function syncStoredAuthUserFromMe(me: MeResponse): void {
   });
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
 async function tryRefreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+  refreshPromise = doRefreshAccessToken().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
+async function doRefreshAccessToken(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     clearAuthUser();

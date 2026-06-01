@@ -17,7 +17,7 @@ Provide account/session behavior that supports Note-first ownership and safe gen
 - `frontend/app/forgot-password/page.tsx` — forgot password email form (generic success state after submit)
 - `frontend/app/reset-password/page.tsx` — reset password; three states: form / submitting / invalid-expired
 - `frontend/lib/auth.ts` — client-side auth state management; token refresh logic
-- `frontend/lib/api.ts` — `login()`, `signup()`, `loginWithGoogle()`, `logout()`, `getMe()`, `forgotPassword()`, `resetPassword()`, `changePassword()`
+- `frontend/lib/api.ts` — `login()`, `signup()`, `loginWithGoogle()`, `logout()`, `getMe()`, `forgotPassword()`, `resetPassword()`, `changePassword()`; `refreshPromise` coalesces concurrent refresh calls
 - `frontend/components/auth/google-auth-button.tsx` — NoteLib-styled Google OAuth button; must never show Google's native button
 
 ## Anti-drift Notes
@@ -26,6 +26,7 @@ Provide account/session behavior that supports Note-first ownership and safe gen
 - `POST /auth/forgot-password` always returns the same generic response regardless of whether the email exists — no user enumeration; silently no-ops for Google-only accounts
 - Google OAuth uses `redirect_uri: "postmessage"` — do not change this to a real redirect URI
 - Never show Google's personalized "Continue as {name}" button in NoteLib UI; always use `GoogleAuthButton` with `"Continue with Google"` label
+- Token refresh is coalesced: `refreshPromise` in `api.ts` ensures all concurrent callers wait on the same in-flight refresh rather than each sending the refresh token independently. Never remove this guard — doing so reintroduces a race condition where the second caller sends the already-revoked token and triggers an unexpected sign-out.
 - Manual logout redirects to `/login?reason=logged_out` **without** preserving a `redirect` destination — a stale redirect after sign-out would re-enter a protected page without login intent
 - Unverified users **cannot** generate Study Packs or use OCR — enforce via `EMAIL_VERIFICATION_REQUIRED` (403) in the backend, not just frontend gating
 

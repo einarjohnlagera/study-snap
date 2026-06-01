@@ -8,6 +8,8 @@ Theme: TBD
 
 ### ✅ Shipped
 
+- **Fix concurrent token refresh race condition** — when multiple API calls fire simultaneously with an expired access token, all callers now coalesce on a single in-flight refresh promise (`refreshPromise` in `api.ts`) rather than each independently sending the refresh token. Previously the second caller would send the already-revoked token, get rejected, and trigger an unexpected sign-out. Also bumped the default `JWT_REFRESH_TOKEN_DAYS` from 1 → 7 so users are not forced to re-login after one day of inactivity.
+
 ### 🔲 Pending
 
 ---
