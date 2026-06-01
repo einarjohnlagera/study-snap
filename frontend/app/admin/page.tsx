@@ -13,6 +13,7 @@ import {
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
   issueAdminRefund,
+  regenerateAdminSummaries,
   type AdminRecentUpgradeItemResponse,
   type AdminDashboardRecentEventsResponse,
   type AdminDashboardSummaryResponse,
@@ -129,6 +130,9 @@ export default function AdminPage() {
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundSuccessMessage, setRefundSuccessMessage] = useState<string | null>(null);
   const [issuingRefund, setIssuingRefund] = useState(false);
+  const [regeneratingSummaries, setRegeneratingSummaries] = useState(false);
+  const [regenerateSummariesError, setRegenerateSummariesError] = useState<string | null>(null);
+  const [regenerateSummariesMessage, setRegenerateSummariesMessage] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     if (!requireAdminUser(router)) {
@@ -171,6 +175,16 @@ export default function AdminPage() {
     };
   }, [refundSuccessMessage]);
 
+  useEffect(() => {
+    if (!regenerateSummariesMessage) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => setRegenerateSummariesMessage(null), 4000);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [regenerateSummariesMessage]);
+
   const handleOpenRefundModal = (item: AdminRecentUpgradeItemResponse) => {
     setRefundTarget(item);
     setRefundError(null);
@@ -211,6 +225,25 @@ export default function AdminPage() {
       setRefundError(err instanceof Error ? err.message : "Could not issue refund.");
     } finally {
       setIssuingRefund(false);
+    }
+  };
+
+  const handleRegenerateSummaries = async () => {
+    setRegeneratingSummaries(true);
+    setRegenerateSummariesError(null);
+    try {
+      const response = await regenerateAdminSummaries();
+      setRegenerateSummariesMessage(
+        `Queued ${response.queued} summaries for regeneration (${response.skipped} already enriched)`,
+      );
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 403) {
+        router.replace("/dashboard");
+        return;
+      }
+      setRegenerateSummariesError("Could not queue regeneration. Try again.");
+    } finally {
+      setRegeneratingSummaries(false);
     }
   };
 
@@ -280,15 +313,32 @@ export default function AdminPage() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       {refundSuccessMessage ? <ToastMessage message={refundSuccessMessage} tone="success" /> : null}
+      {regenerateSummariesMessage ? <ToastMessage message={regenerateSummariesMessage} tone="success" /> : null}
       <header className="space-y-2">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-semibold text-foreground">Admin Dashboard</h1>
-          <Link href="/admin/campaigns" className="text-sm text-foreground/55 hover:text-foreground/80">
-            Campaigns →
-          </Link>
-          <Link href="/admin/funnel" className="text-sm text-foreground/55 hover:text-foreground/80">
-            Funnel →
-          </Link>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-wrap items-center gap-4">
+            <h1 className="text-3xl font-semibold text-foreground">Admin Dashboard</h1>
+            <Link href="/admin/campaigns" className="text-sm text-foreground/55 hover:text-foreground/80">
+              Campaigns →
+            </Link>
+            <Link href="/admin/funnel" className="text-sm text-foreground/55 hover:text-foreground/80">
+              Funnel →
+            </Link>
+          </div>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void handleRegenerateSummaries()}
+              disabled={regeneratingSummaries}
+            >
+              {regeneratingSummaries ? "Queuing..." : "Regenerate Summaries"}
+            </Button>
+            {regenerateSummariesError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{regenerateSummariesError}</p>
+            ) : null}
+          </div>
         </div>
         <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
           Internal view of product usage, billing health, upgrade activity, and Public Library growth.

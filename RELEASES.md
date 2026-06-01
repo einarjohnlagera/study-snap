@@ -16,10 +16,11 @@ Theme: surface community notes relevant to each user's study track and let them 
 - **Community Notes dashboard section** — Dashboard now surfaces up to 4 public notes for the user's `courseProgram` below Recent Notes, links to the filtered Public Library, and prompts users without a Course/Program to complete their Learning Profile.
 - **Saved Filters for private library** — users can save named private-library filter states to backend storage, apply them from the Library filter bar, and delete stale saved filters.
 - **Admin funnel metrics page** — added admin-only `/admin/funnel` and `GET /admin/funnel/metrics` with five all-time conversion-health metrics: activation rate plus median days to first Study Pack, verified users stuck before generation, free quota hit rate excluding active paid users, paywall seen → subscription started conversion, and Study Pack generated → quiz started within 7 days. Metrics are derived from existing tables only; no migrations or new analytics events.
+- **Admin summary re-generation** — added `POST /admin/study-packs/regenerate-summaries` to queue summary-only regeneration for admin-owned Study Packs whose summaries are not yet enriched. The endpoint returns queued/skipped counts immediately, runs work on `llmParallelTaskExecutor`, updates only `study_packs.summary`, and skips already-enriched summaries idempotently.
 
 ### 🔲 Pending Codex (Conversion Visibility & Admin Tools)
 
-- **Admin summary re-generation** — `POST /admin/study-packs/regenerate-summaries` re-generates the `summary` field only for admin-owned study packs whose summary is not yet enriched (no `|` character); async via `llmParallelTaskExecutor`; returns `{ queued: N, skipped: N }` immediately; idempotent. Backfills official NoteLib notes with the enriched summary format (comparison tables + Common Misconceptions). Codex prompt: `docs/codex-prompts/v0.21.0-admin-regenerate-summaries.md`.
+- No pending admin conversion tools.
 
 ---
 

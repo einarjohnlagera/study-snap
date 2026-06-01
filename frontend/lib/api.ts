@@ -441,6 +441,11 @@ export type AdminFunnelMetricsResponse = {
   };
 };
 
+export type AdminRegenerateSummariesResponse = {
+  queued: number;
+  skipped: number;
+};
+
 export type SubmitFeedbackRequest = {
   message: string;
 };
@@ -1635,6 +1640,18 @@ export async function getAdminFunnelMetrics(): Promise<AdminFunnelMetricsRespons
     true,
   );
   return parseApiResponse<AdminFunnelMetricsResponse>(response, "Could not load funnel metrics.");
+}
+
+export async function regenerateAdminSummaries(): Promise<AdminRegenerateSummariesResponse> {
+  const response = await fetchWithAuth(
+    "/admin/study-packs/regenerate-summaries",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminRegenerateSummariesResponse>(response, "Could not queue regeneration.");
 }
 
 export type CampaignStatusResponse = {

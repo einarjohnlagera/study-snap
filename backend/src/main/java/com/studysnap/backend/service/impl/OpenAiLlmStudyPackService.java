@@ -120,8 +120,29 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
+    public String regenerateSummary(String normalizedNoteContent, StudyPackGenerationContext context) {
+        return retryOnceOnInvalidOutput(() -> regenerateSummaryOnce(normalizedNoteContent, context));
+    }
+
+    @Override
     public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
         return retryOnceOnInvalidOutput(() -> generateNoteFromTopicOnce(topic, context));
+    }
+
+    private String regenerateSummaryOnce(String normalizedNoteContent, StudyPackGenerationContext context) {
+        String model = requireConfiguredModel();
+        JsonSchemaResponse<PromptRegeneratedSummary> response = executeJsonSchemaOperation(
+                model,
+                buildSummaryRegenerationInputMessages(normalizedNoteContent, context),
+                summaryRegenerationOperation(),
+                buildRegeneratedSummarySchema(),
+                PromptRegeneratedSummary.class
+        );
+        String summary = response.payload().summary();
+        if (StringNormalizationUtils.countWords(summary) > MAX_SUMMARY_WORDS) {
+            throw invalidOutput("The study pack service returned an invalid summary format. Please try again.");
+        }
+        return summary;
     }
 
     private String generateNoteFromTopicOnce(String topic, StudyPackGenerationContext context) {
@@ -190,6 +211,22 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 + buildSubjectSuggestionGuidanceBlock(context)
                 + "\nStudy notes:\n"
                 + normalizedNotesText;
+    }
+
+    private ArrayNode buildSummaryRegenerationInputMessages(String normalizedNoteContent, StudyPackGenerationContext context) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.systemPrompt()));
+        input.add(buildTextMessage(
+                "developer",
+                buildStudyPackDeveloperPrompt(context)
+                        + "\n\nSummary-only regeneration: return JSON only with this structure: {\"summary\": string}. "
+                        + "Regenerate only the summary using the Summary rules above. Do not return title, subject, tags, keyConcepts, quiz, or any other keys."
+        ));
+        input.add(buildTextMessage(
+                "user",
+                buildStudyPackUserPrompt(normalizedNoteContent, context)
+        ));
+        return input;
     }
 
     private String requireConfiguredModel() {
@@ -834,6 +871,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .put("type", "string")
                 .put("minLength", 1)
                 .put("maxLength", 180);
+        return root;
+    }
+
+    private JsonNode buildRegeneratedSummarySchema() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("type", "object");
+        root.put("additionalProperties", false);
+        root.putArray("required").add("summary");
+        root.putObject("properties")
+                .putObject("summary")
+                .put("type", "string")
+                .put("minLength", 1);
         return root;
     }
 
@@ -1981,6 +2030,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         );
     }
 
+    private JsonSchemaOperation summaryRegenerationOperation() {
+        return new JsonSchemaOperation(
+                "note_lib_regenerated_summary",
+                "openai_summary_regeneration_request_failed",
+                "openai_summary_regeneration_unavailable",
+                "The summary regeneration service returned an empty response. Please try again.",
+                "The summary regeneration service returned an unexpected format. Please try again.",
+                "Summary regeneration failed. Please try again in a moment.",
+                "Summary regeneration is temporarily unavailable. Please try again."
+        );
+    }
+
     private JsonSchemaOperation noteGenerationOperation() {
         return new JsonSchemaOperation(
                 "note_lib_generated_note",
@@ -2039,6 +2100,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             Objects.requireNonNull(tags, "tags");
             Objects.requireNonNull(keyConcepts, "keyConcepts");
             Objects.requireNonNull(quiz, "quiz");
+        }
+    }
+
+    private record PromptRegeneratedSummary(String summary) {
+        PromptRegeneratedSummary {
+            Objects.requireNonNull(summary, "summary");
         }
     }
 

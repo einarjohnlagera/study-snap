@@ -78,6 +78,11 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
+    public String regenerateSummary(String normalizedNoteContent, StudyPackGenerationContext context) {
+        return "These official notes have been refreshed into a concise enriched summary for focused review.";
+    }
+
+    @Override
     public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
         String normalizedTopic = topic == null || topic.isBlank() ? "this topic" : topic.trim();
         return GENERATED_NOTE_TEMPLATE.formatted(normalizedTopic, normalizedTopic, normalizedTopic, normalizedTopic);
