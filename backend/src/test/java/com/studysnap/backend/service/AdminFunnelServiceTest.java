@@ -4,9 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AdminFunnelMetricsResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
-import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserUsageEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -66,7 +64,7 @@ class AdminFunnelServiceTest {
     @Test
     void getMetrics_returnsZeroRates_whenNoData() {
         stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of());
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
@@ -86,7 +84,7 @@ class AdminFunnelServiceTest {
     @Test
     void getMetrics_activationRate_computedCorrectly() {
         stubBaseMetrics(10, 4, 2.5, 0, 0, 0, 0);
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of());
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
@@ -100,7 +98,7 @@ class AdminFunnelServiceTest {
     @Test
     void getMetrics_stuckUsers_excludesUsersWithStudyPacks() {
         stubBaseMetrics(2, 1, null, 1, 0, 0, 0);
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of());
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
@@ -113,7 +111,7 @@ class AdminFunnelServiceTest {
     @Test
     void getMetrics_stuckUsers_excludesRecentNotes() {
         stubBaseMetrics(1, 0, null, 0, 0, 0, 0);
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of());
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
@@ -128,8 +126,8 @@ class AdminFunnelServiceTest {
         UUID freeUserId = UUID.randomUUID();
         UUID paidUserId = UUID.randomUUID();
         stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
-                .thenReturn(List.of(buildSubscription(paidUserId)));
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of(paidUserId));
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of(
                         buildUsage(freeUserId, 10),
@@ -146,7 +144,7 @@ class AdminFunnelServiceTest {
     @Test
     void getMetrics_paywallConversion_onlyCountsUsersWhoUpgradedAfterPaywall() {
         stubBaseMetrics(0, 0, null, 0, 3, 2, 0);
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of());
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
@@ -197,15 +195,4 @@ class AdminFunnelServiceTest {
         return usage;
     }
 
-    private SubscriptionEntity buildSubscription(UUID userId) {
-        UserEntity user = new UserEntity();
-        user.setId(userId);
-
-        SubscriptionEntity subscription = new SubscriptionEntity();
-        subscription.setId(UUID.randomUUID());
-        subscription.setUser(user);
-        subscription.setPlanType(PlanType.PRO);
-        subscription.setStatus(SubscriptionStatus.ACTIVE);
-        return subscription;
-    }
 }

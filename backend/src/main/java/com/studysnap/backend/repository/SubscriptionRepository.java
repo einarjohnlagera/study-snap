@@ -48,6 +48,19 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
             @Param("now") OffsetDateTime now
     );
 
+    @Query("""
+            select s.user.id
+            from SubscriptionEntity s
+            where s.planType in :planTypes
+              and s.status = :status
+              and (s.endAt is null or s.endAt > :now)
+            """)
+    List<UUID> findActiveUserIdsByPlanTypeInAndStatus(
+            @Param("planTypes") Collection<PlanType> planTypes,
+            @Param("status") SubscriptionStatus status,
+            @Param("now") OffsetDateTime now
+    );
+
     List<SubscriptionEntity> findByPlanTypeInAndStatusAndEndAtBefore(
             Collection<PlanType> planTypes,
             SubscriptionStatus status,

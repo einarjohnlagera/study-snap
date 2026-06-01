@@ -4,7 +4,6 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AdminFunnelMetricsResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserUsageEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
@@ -18,10 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -76,15 +75,11 @@ public class AdminFunnelService {
     }
 
     private AdminFunnelMetricsResponse.QuotaHitMetrics getQuotaHitMetrics(OffsetDateTime now) {
-        Set<UUID> paidUserIds = subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(
-                        List.of(PlanType.PLUS, PlanType.PRO),
-                        SubscriptionStatus.ACTIVE,
-                        now
-                ).stream()
-                .map(SubscriptionEntity::getUser)
-                .map(user -> user == null ? null : user.getId())
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
+        Set<UUID> paidUserIds = new HashSet<>(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(
+                List.of(PlanType.PLUS, PlanType.PRO),
+                SubscriptionStatus.ACTIVE,
+                now
+        ));
 
         List<UserUsageEntity> currentPeriodUsage = userUsageRepository
                 .findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(now, now);
