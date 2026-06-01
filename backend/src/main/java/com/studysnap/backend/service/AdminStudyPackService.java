@@ -7,6 +7,8 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -14,10 +16,12 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 
 @Service
 @RequiredArgsConstructor
 public class AdminStudyPackService {
+    private static final Logger log = LoggerFactory.getLogger(AdminStudyPackService.class);
     private static final String ENRICHED_SUMMARY_MARKER = "|";
 
     private final UserRepository userRepository;
@@ -41,10 +45,17 @@ public class AdminStudyPackService {
                 ENRICHED_SUMMARY_MARKER
         );
         progressTracker.startRun(packs.size());
-        packs.forEach(pack -> CompletableFuture.runAsync(
-                () -> transactionHelper.regenerateOnePack(pack),
-                llmParallelTaskExecutor
-        ));
+        packs.forEach(pack -> {
+            try {
+                CompletableFuture.runAsync(
+                        () -> transactionHelper.regenerateOnePack(pack),
+                        llmParallelTaskExecutor
+                );
+            } catch (RejectedExecutionException ex) {
+                log.warn("Admin summary regeneration task rejected for packId={} — executor queue full", pack.getId());
+                progressTracker.recordFailure();
+            }
+        });
 
         return new AdminRegenerateSummariesResponse(packs.size(), totalAdminPacks - packs.size());
     }
