@@ -3056,6 +3056,7 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
 export async function listPublicNotes(params?: {
   audience?: NoteTargetProfileType;
   courseProgram?: string;
+  creator?: string | null;
   search?: string;
   sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
   subject?: string;
@@ -3067,6 +3068,9 @@ export async function listPublicNotes(params?: {
   }
   if (params?.courseProgram) {
     searchParams.set("courseProgram", params.courseProgram);
+  }
+  if (params?.creator) {
+    searchParams.set("creator", params.creator);
   }
   if (params?.search) {
     searchParams.set("search", params.search);

@@ -398,6 +398,7 @@ public class NoteController {
             @RequestParam(value = "subject", required = false) String subject,
             @RequestParam(value = "tag", required = false) List<String> tags,
             @RequestParam(value = "courseProgram", required = false) String courseProgram,
+            @RequestParam(value = "creator", required = false) String creator,
             @RequestParam(value = "audience", required = false) String audience,
             @RequestParam(value = "targetProfileType", required = false) NoteTargetProfileType targetProfileType,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -410,6 +411,7 @@ public class NoteController {
                 subject,
                 tags,
                 courseProgram,
+                creator,
                 resolvePublicAudienceFilter(audience, targetProfileType)
         );
     }

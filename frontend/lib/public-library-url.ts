@@ -7,6 +7,7 @@ export const PUBLIC_LIBRARY_SUBJECT_QUERY_PARAM = "subject";
 export const PUBLIC_LIBRARY_TAG_QUERY_PARAM = "tag";
 export const PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM = "audience";
 export const PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM = "courseProgram";
+export const PUBLIC_LIBRARY_CREATOR_QUERY_PARAM = "creator";
 export const PUBLIC_LIBRARY_SORT_QUERY_PARAM = "sort";
 
 const PUBLIC_LIBRARY_FILTER_QUERY_PARAMS = [
@@ -16,6 +17,7 @@ const PUBLIC_LIBRARY_FILTER_QUERY_PARAMS = [
   PUBLIC_LIBRARY_TAG_QUERY_PARAM,
   PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM,
   PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM,
+  PUBLIC_LIBRARY_CREATOR_QUERY_PARAM,
   PUBLIC_LIBRARY_SORT_QUERY_PARAM,
 ] as const;
 
@@ -25,6 +27,7 @@ export type PublicLibrarySortQuery = "popular" | "recent" | "title" | "views" | 
 export type PublicLibraryUrlFilters = {
   audience?: NoteTargetProfileType | "ALL" | null;
   courseProgram?: string | null;
+  creator?: string | null;
   search?: string | null;
   sort?: PublicLibrarySortQuery | null;
   subject?: string | null;
@@ -150,6 +153,7 @@ export function parsePublicLibraryFilters(searchParams?: SearchParamsInput): Req
   return {
     audience: parsePublicLibraryAudienceQueryValue(params.get(PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM)),
     courseProgram: normalizeFilterValue(params.get(PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM)),
+    creator: normalizeFilterValue(params.get(PUBLIC_LIBRARY_CREATOR_QUERY_PARAM)),
     search: normalizeFilterValue(params.get(PUBLIC_LIBRARY_SEARCH_QUERY_PARAM)),
     sort: sort === "popular" || sort === "recent" || sort === "title" || sort === "views" || sort === "copied"
       ? sort
@@ -175,6 +179,7 @@ export function buildPublicLibraryUrl(
   const search = normalizeFilterValue(filters.search);
   const subject = normalizeFilterValue(filters.subject);
   const courseProgram = normalizeFilterValue(filters.courseProgram);
+  const creator = normalizeFilterValue(filters.creator);
   const audience = toPublicLibraryAudienceQueryValue(filters.audience);
 
   if (filters.view) {
@@ -188,6 +193,9 @@ export function buildPublicLibraryUrl(
   }
   if (courseProgram) {
     params.set(PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM, courseProgram);
+  }
+  if (creator) {
+    params.set(PUBLIC_LIBRARY_CREATOR_QUERY_PARAM, creator);
   }
   if (audience) {
     params.set(PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM, audience);

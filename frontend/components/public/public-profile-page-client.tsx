@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
@@ -13,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import { formatLearnerLevel, normalizeCourseProgram } from "@/lib/learning-profile";
+import { buildPublicLibraryUrl } from "@/lib/public-library-url";
 import {
   ApiRequestError,
   getPublicCreatorProfile,
@@ -330,6 +332,13 @@ export function PublicProfilePageClient({
       .slice(0, NOTE_DISPLAY_LIMIT);
   }, [profile?.publicNotes]);
 
+  const viewAllNotesUrl = useMemo(() => {
+    if (!profile?.username || profile.publicNotesCount <= NOTE_DISPLAY_LIMIT) {
+      return null;
+    }
+    return buildPublicLibraryUrl({ creator: profile.username });
+  }, [profile?.publicNotesCount, profile?.username]);
+
   const handleShareProfile = () => {
     if (isOwner && profile && !profile.publicProfileVisible) {
       setShowSharePrivateConfirm(true);
@@ -629,41 +638,53 @@ export function PublicProfilePageClient({
             <p className="text-sm text-foreground/75">This user has no public notes yet.</p>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {displayedNotes.map((note) => (
-              <Card
-                key={note.noteId}
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }));
-                  }
-                }}
-                className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
-              >
-                <SharedNoteCard
-                  title={note.title}
-                  courseProgram={normalizeCourseProgram(note.courseProgram)}
-                  subject={note.subject}
-                  tags={note.tags}
-                  tagDisplayLimit={3}
-                  contentPreview={note.contentPreview}
-                  summaryPreview={note.summaryPreview}
-                  copyCount={note.copyCount > 0 ? note.copyCount : null}
-                  viewCount={note.viewCount > 0 ? note.viewCount : null}
-                  metadataBadges={(
-                    <NoteQualityBadges
-                      copyCount={note.copyCount}
-                      viewCount={note.viewCount}
-                    />
-                  )}
-                />
-              </Card>
-            ))}
-          </div>
+          <>
+            <div className="grid gap-4 md:grid-cols-2">
+              {displayedNotes.map((note) => (
+                <Card
+                  key={note.noteId}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }));
+                    }
+                  }}
+                  className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
+                >
+                  <SharedNoteCard
+                    title={note.title}
+                    courseProgram={normalizeCourseProgram(note.courseProgram)}
+                    subject={note.subject}
+                    tags={note.tags}
+                    tagDisplayLimit={3}
+                    contentPreview={note.contentPreview}
+                    summaryPreview={note.summaryPreview}
+                    copyCount={note.copyCount > 0 ? note.copyCount : null}
+                    viewCount={note.viewCount > 0 ? note.viewCount : null}
+                    metadataBadges={(
+                      <NoteQualityBadges
+                        copyCount={note.copyCount}
+                        viewCount={note.viewCount}
+                      />
+                    )}
+                  />
+                </Card>
+              ))}
+            </div>
+            {viewAllNotesUrl ? (
+              <div className="flex justify-center sm:justify-end">
+                <Link
+                  href={viewAllNotesUrl}
+                  className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                >
+                  View all {profile.publicNotesCount} notes →
+                </Link>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
 

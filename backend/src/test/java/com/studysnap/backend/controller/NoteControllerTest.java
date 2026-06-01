@@ -49,6 +49,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class NoteControllerTest {
 
+    private static final String CREATOR_USERNAME = "einarjohn";
+
     @Mock
     private AuthService authService;
     @Mock
@@ -194,7 +196,7 @@ class NoteControllerTest {
     void listPublic_mapsAudienceQueryToTargetProfileFilter() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", NoteTargetProfileType.STUDENT))
+        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT))
                 .thenReturn(List.of());
 
         List<NoteListItemResponse> response = noteController.listPublic(
@@ -203,6 +205,7 @@ class NoteControllerTest {
                 "history",
                 List.of("mexican-history"),
                 "nursing",
+                CREATOR_USERNAME,
                 "student",
                 null,
                 user
@@ -215,6 +218,7 @@ class NoteControllerTest {
                 "history",
                 List.of("mexican-history"),
                 "nursing",
+                CREATOR_USERNAME,
                 NoteTargetProfileType.STUDENT
         );
         assertThat(response).isEmpty();
@@ -423,12 +427,12 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null, null, null, null, null)).thenReturn(expected);
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null)).thenReturn(expected);
 
-        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, null, null, null, null, user);
+        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, null, null, null, null, null, user);
 
         assertThat(response).isEqualTo(expected);
-        verify(noteService).listPublic(userId, null, null, null, null, null, null);
+        verify(noteService).listPublic(userId, null, null, null, null, null, null, null);
     }
 
     @Test
