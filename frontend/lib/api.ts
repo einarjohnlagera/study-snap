@@ -414,6 +414,33 @@ export type AdminDashboardRecentEventsResponse = {
   recentFeedback: AdminRecentFeedbackItemResponse[];
 };
 
+export type AdminFunnelMetricsResponse = {
+  activation: {
+    totalVerifiedUsers: number;
+    activatedUsers: number;
+    activationRatePercent: number;
+    medianDaysToFirstPack: number | null;
+  };
+  stuckUsers: {
+    stuckUsersCount: number;
+  };
+  quotaHit: {
+    freeUsersHitQuota: number;
+    totalFreeUsers: number;
+    ratePercent: number;
+  };
+  paywallConversion: {
+    usersSeenPaywall: number;
+    usersUpgradedAfterPaywall: number;
+    ratePercent: number;
+  };
+  valueLoop: {
+    usersGeneratedPack: number;
+    usersStartedQuizWithin7Days: number;
+    ratePercent: number;
+  };
+};
+
 export type SubmitFeedbackRequest = {
   message: string;
 };
@@ -1596,6 +1623,18 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
     true,
   );
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
+}
+
+export async function getAdminFunnelMetrics(): Promise<AdminFunnelMetricsResponse> {
+  const response = await fetchWithAuth(
+    "/admin/funnel/metrics",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminFunnelMetricsResponse>(response, "Could not load funnel metrics.");
 }
 
 export type CampaignStatusResponse = {

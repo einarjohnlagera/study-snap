@@ -36,6 +36,23 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Optional<StudyPackEntity> findByNoteId(UUID noteId);
     long countByOwnerUserId(UUID ownerUserId);
 
+    @Query("select count(distinct s.ownerUserId) from StudyPackEntity s")
+    long countDistinctOwnerUserIds();
+
+    @Query(value = """
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
+                ORDER BY EXTRACT(EPOCH FROM (fp.first_at - u.created_at)) / 86400.0
+            )
+            FROM users u
+            JOIN (
+                SELECT sp.owner_user_id, MIN(sp.created_at) AS first_at
+                FROM study_packs sp
+                GROUP BY sp.owner_user_id
+            ) fp ON u.id = fp.owner_user_id
+            WHERE u.email_verified_at IS NOT NULL
+            """, nativeQuery = true)
+    Double findMedianDaysFromVerifiedSignupToFirstPack();
+
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from StudyPackEntity s where s.id = :id and s.ownerUserId = :ownerUserId")
