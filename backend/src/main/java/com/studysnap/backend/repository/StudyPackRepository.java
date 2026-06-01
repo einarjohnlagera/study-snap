@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
@@ -35,6 +36,36 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Optional<StudyPackEntity> findByOwnerUserIdAndNoteId(UUID ownerUserId, UUID noteId);
     Optional<StudyPackEntity> findByNoteId(UUID noteId);
     long countByOwnerUserId(UUID ownerUserId);
+
+    @Query("select count(distinct s.ownerUserId) from StudyPackEntity s")
+    long countDistinctOwnerUserIds();
+
+    long countByOwnerUserIdIn(List<UUID> ownerUserIds);
+
+    @Query("""
+            select sp
+            from StudyPackEntity sp
+            where sp.ownerUserId in :adminUserIds
+              and (sp.summary is null or sp.summary not like concat('%', :enrichedSummaryMarker, '%'))
+            """)
+    List<StudyPackEntity> findByOwnerUserIdInAndSummaryNotEnriched(
+            @Param("adminUserIds") List<UUID> adminUserIds,
+            @Param("enrichedSummaryMarker") String enrichedSummaryMarker
+    );
+
+    @Query(value = """
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
+                ORDER BY EXTRACT(EPOCH FROM (fp.first_at - u.created_at)) / 86400.0
+            )
+            FROM users u
+            JOIN (
+                SELECT sp.owner_user_id, MIN(sp.created_at) AS first_at
+                FROM study_packs sp
+                GROUP BY sp.owner_user_id
+            ) fp ON u.id = fp.owner_user_id
+            WHERE u.email_verified_at IS NOT NULL
+            """, nativeQuery = true)
+    Double findMedianDaysFromVerifiedSignupToFirstPack();
 
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
     @Lock(LockModeType.PESSIMISTIC_WRITE)

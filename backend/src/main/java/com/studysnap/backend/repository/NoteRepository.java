@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +24,24 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility visibility, NoteTargetProfileType targetProfileType);
+
+    @Query("""
+            select count(distinct n.ownerUserId)
+            from NoteEntity n
+            where n.createdAt < :cutoff
+              and not exists (
+                  select 1
+                  from StudyPackEntity sp
+                  where sp.ownerUserId = n.ownerUserId
+              )
+              and exists (
+                  select 1
+                  from UserEntity u
+                  where u.id = n.ownerUserId
+                    and u.emailVerifiedAt is not null
+              )
+            """)
+    long countVerifiedUsersWithNotesBeforeAndNoStudyPacks(@Param("cutoff") OffsetDateTime cutoff);
 
     @Query("""
             select n

@@ -414,6 +414,45 @@ export type AdminDashboardRecentEventsResponse = {
   recentFeedback: AdminRecentFeedbackItemResponse[];
 };
 
+export type AdminFunnelMetricsResponse = {
+  activation: {
+    totalVerifiedUsers: number;
+    activatedUsers: number;
+    activationRatePercent: number;
+    medianDaysToFirstPack: number | null;
+  };
+  stuckUsers: {
+    stuckUsersCount: number;
+  };
+  quotaHit: {
+    freeUsersHitQuota: number;
+    totalFreeUsers: number;
+    ratePercent: number;
+  };
+  paywallConversion: {
+    usersSeenPaywall: number;
+    usersUpgradedAfterPaywall: number;
+    ratePercent: number;
+  };
+  valueLoop: {
+    usersGeneratedPack: number;
+    usersStartedQuizWithin7Days: number;
+    ratePercent: number;
+  };
+};
+
+export type AdminRegenerateSummariesResponse = {
+  queued: number;
+  skipped: number;
+};
+
+export type AdminRegenerationStatusResponse = {
+  total: number;
+  processed: number;
+  failed: number;
+  done: boolean;
+};
+
 export type SubmitFeedbackRequest = {
   message: string;
 };
@@ -1073,6 +1112,22 @@ export type NoteListItemResponse = {
   likedByCurrentUser: boolean;
 };
 
+export type SavedLibraryFilterState = {
+  search?: string;
+  subject?: string;
+  courseProgram?: string;
+  tags?: string[];
+  status?: string;
+  sort?: string;
+};
+
+export type SavedLibraryFilterResponse = {
+  id: string;
+  name: string;
+  filterState: SavedLibraryFilterState;
+  createdAt: string;
+};
+
 export type MultiNoteQuizDocxExportRequest = {
   sections: Array<{
     title: string;
@@ -1580,6 +1635,42 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
     true,
   );
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
+}
+
+export async function getAdminFunnelMetrics(): Promise<AdminFunnelMetricsResponse> {
+  const response = await fetchWithAuth(
+    "/admin/funnel/metrics",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminFunnelMetricsResponse>(response, "Could not load funnel metrics.");
+}
+
+export async function regenerateAdminSummaries(): Promise<AdminRegenerateSummariesResponse> {
+  const response = await fetchWithAuth(
+    "/admin/study-packs/regenerate-summaries",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminRegenerateSummariesResponse>(response, "Could not queue regeneration.");
+}
+
+export async function getAdminRegenerationStatus(): Promise<AdminRegenerationStatusResponse> {
+  const response = await fetchWithAuth(
+    "/admin/study-packs/regeneration-status",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminRegenerationStatusResponse>(response, "Could not fetch regeneration status.");
 }
 
 export type CampaignStatusResponse = {
@@ -3053,11 +3144,55 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
 }
 
+export async function getSavedLibraryFilters(): Promise<SavedLibraryFilterResponse[]> {
+  const response = await fetchWithAuth(
+    "/library-filters",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SavedLibraryFilterResponse[]>(response, "Could not load saved filters.");
+}
+
+export async function createSavedLibraryFilter(
+  name: string,
+  filterState: SavedLibraryFilterState,
+): Promise<SavedLibraryFilterResponse> {
+  const response = await fetchWithAuth(
+    "/library-filters",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ name, filterState }),
+    },
+    true,
+  );
+  return parseApiResponse<SavedLibraryFilterResponse>(response, "Could not save filter.");
+}
+
+export async function deleteSavedLibraryFilter(id: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/library-filters/${id}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.ok) {
+    return;
+  }
+  await parseApiResponse<never>(response, "Could not delete filter.");
+}
+
 export async function listPublicNotes(params?: {
   audience?: NoteTargetProfileType;
   courseProgram?: string;
   creator?: string | null;
   search?: string;
+  size?: number;
   sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
   subject?: string;
   tags?: string[];
@@ -3074,6 +3209,9 @@ export async function listPublicNotes(params?: {
   }
   if (params?.search) {
     searchParams.set("search", params.search);
+  }
+  if (typeof params?.size === "number") {
+    searchParams.set("size", String(params.size));
   }
   if (params?.sort) {
     searchParams.set("sort", params.sort);

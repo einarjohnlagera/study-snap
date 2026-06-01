@@ -138,7 +138,7 @@ export function StudyPackGrid({
         ))}
       </div>
 
-      <div className="pt-0.5">
+      <div className="flex justify-end pt-0.5">
         <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           {viewAllLabel} &rarr;
         </Link>

@@ -4,13 +4,16 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
 import {
   ArrowUpDown,
+  Bookmark,
   CheckSquare,
   ChevronDown,
   Filter,
   Globe,
   Lock,
   Square,
+  Trash2,
 } from "lucide-react";
+import {AppModal} from "@/components/ui/app-modal";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {SharedNoteCard} from "@/components/notes/shared-note-card";
@@ -20,9 +23,15 @@ import {NoteStateBadge} from "@/components/notes/note-state-badge";
 import {ResponsiveActionButton, ResponsiveActionLink} from "@/components/ui/action-button";
 import {getAuthUser} from "@/lib/auth";
 import {
+  ApiRequestError,
+  createSavedLibraryFilter,
+  deleteSavedLibraryFilter,
+  getSavedLibraryFilters,
   listNotes,
   listSubjects,
   type NoteListItemResponse,
+  type SavedLibraryFilterResponse,
+  type SavedLibraryFilterState,
   type NoteVisibility,
 } from "@/lib/api";
 import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickable-card";
@@ -52,6 +61,11 @@ const COURSE_PROGRAM_LIMIT = 10;
 const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const MORE_FILTERS_TITLE = "More Filters";
+const SAVE_FILTER_NAME_MAX_LENGTH = 100;
+const FILTER_SAVED_TOAST = "Filter saved";
+const FILTER_DELETED_TOAST = "Filter deleted";
+const FILTER_SAVE_ERROR_TOAST = "Could not save filter";
+const FILTER_DELETE_ERROR_TOAST = "Could not delete filter";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
@@ -243,6 +257,58 @@ function buildLibraryUrl(
   return `/library${qs ? `?${qs}` : ""}`;
 }
 
+function buildSavedFilterState(
+  q: string,
+  subject: string,
+  cp: string,
+  tags: string[],
+  status: LibraryReadinessFilter,
+  sort: LibrarySortOption,
+): SavedLibraryFilterState {
+  const filterState: SavedLibraryFilterState = {};
+  const trimmedSearch = q.trim();
+  if (trimmedSearch) filterState.search = trimmedSearch;
+  if (subject !== ALL_SUBJECTS) filterState.subject = subject;
+  if (cp !== ALL_COURSE_PROGRAMS) filterState.courseProgram = cp;
+  if (tags.length > 0) filterState.tags = tags;
+  if (status !== "ALL") filterState.status = status;
+  if (sort !== "RECENTLY_UPDATED") filterState.sort = sort;
+  return filterState;
+}
+
+function readSavedString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function readSavedTags(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => readSavedString(entry))
+    .filter((entry): entry is string => entry !== null);
+}
+
+function readSavedReadinessFilter(value: unknown): LibraryReadinessFilter {
+  if (value === "DRAFT" || value === "QUIZ_READY" || value === "STUDY_PACK_READY") {
+    return value;
+  }
+  return "ALL";
+}
+
+function readSavedSortOption(value: unknown): LibrarySortOption {
+  if (
+    value === "RECENTLY_REVIEWED"
+    || value === "NEWEST"
+    || value === "TITLE_ASC"
+    || value === "TITLE_DESC"
+    || value === "OLDEST"
+  ) {
+    return value;
+  }
+  return "RECENTLY_UPDATED";
+}
+
 function LibraryLoading() {
   return (
     <div className="space-y-4">
@@ -300,6 +366,15 @@ export default function LibraryPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [savedFilters, setSavedFilters] = useState<SavedLibraryFilterResponse[]>([]);
+  const [savedFiltersLoading, setSavedFiltersLoading] = useState(true);
+  const [savedFiltersUnavailable, setSavedFiltersUnavailable] = useState(false);
+  const [savedFiltersOpen, setSavedFiltersOpen] = useState(false);
+  const [saveFilterOpen, setSaveFilterOpen] = useState(false);
+  const [saveFilterName, setSaveFilterName] = useState("");
+  const [saveFilterError, setSaveFilterError] = useState<string | null>(null);
+  const [saveFilterSubmitting, setSaveFilterSubmitting] = useState(false);
+  const [deletingSavedFilterId, setDeletingSavedFilterId] = useState<string | null>(null);
 
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
@@ -342,6 +417,20 @@ export default function LibraryPage() {
     }
   }, [router]);
 
+  const loadSavedFilters = useCallback(async () => {
+    setSavedFiltersLoading(true);
+    setSavedFiltersUnavailable(false);
+    try {
+      const filters = await getSavedLibraryFilters();
+      setSavedFilters(filters);
+    } catch {
+      setSavedFilters([]);
+      setSavedFiltersUnavailable(true);
+    } finally {
+      setSavedFiltersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (initialLoadStartedRef.current) {
       return;
@@ -349,6 +438,10 @@ export default function LibraryPage() {
     initialLoadStartedRef.current = true;
     void loadLibrary();
   }, [loadLibrary]);
+
+  useEffect(() => {
+    void loadSavedFilters();
+  }, [loadSavedFilters]);
 
   useEffect(() => {
     if (!toast) {
@@ -559,6 +652,86 @@ export default function LibraryPage() {
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0;
+  const currentSavedFilterState = useMemo(() => buildSavedFilterState(
+    searchQuery,
+    selectedSubject,
+    selectedCourseProgram,
+    selectedTags,
+    readinessFilter,
+    sortBy,
+  ), [readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
+  const hasSavableFilter = Object.keys(currentSavedFilterState).length > 0;
+
+  const applySavedFilter = useCallback((filterState: SavedLibraryFilterState) => {
+    const nextSearch = readSavedString(filterState.search) ?? "";
+    const nextSubject = readSavedString(filterState.subject) ?? ALL_SUBJECTS;
+    const nextCourseProgram = readSavedString(filterState.courseProgram) ?? ALL_COURSE_PROGRAMS;
+    const nextTags = readSavedTags(filterState.tags);
+    const nextReadinessFilter = readSavedReadinessFilter(filterState.status);
+    const nextSort = readSavedSortOption(filterState.sort);
+
+    setSearchQuery(nextSearch);
+    setSelectedSubject(nextSubject);
+    setSelectedCourseProgram(nextCourseProgram);
+    setSelectedTags(nextTags);
+    setTagDraft(nextTags);
+    setReadinessFilter(nextReadinessFilter);
+    setSortBy(nextSort);
+    setSavedFiltersOpen(false);
+    router.replace(
+      buildLibraryUrl(nextSearch, nextSubject, nextCourseProgram, nextTags, nextReadinessFilter, nextSort),
+      { scroll: false },
+    );
+  }, [router]);
+
+  const resetSaveFilterDialog = useCallback(() => {
+    setSaveFilterName("");
+    setSaveFilterError(null);
+    setSaveFilterOpen(false);
+  }, []);
+
+  const handleSaveFilter = useCallback(async () => {
+    const name = saveFilterName.trim();
+    if (!name) {
+      setSaveFilterError("Name is required");
+      return;
+    }
+    if (name.length > SAVE_FILTER_NAME_MAX_LENGTH) {
+      setSaveFilterError("Name must be 100 characters or fewer");
+      return;
+    }
+
+    setSaveFilterSubmitting(true);
+    setSaveFilterError(null);
+    try {
+      const created = await createSavedLibraryFilter(name, currentSavedFilterState);
+      setSavedFilters((previous) => [created, ...previous]);
+      setSavedFiltersUnavailable(false);
+      setToast(FILTER_SAVED_TOAST);
+      resetSaveFilterDialog();
+    } catch (saveError) {
+      if (saveError instanceof ApiRequestError && saveError.status === 400) {
+        setSaveFilterError(saveError.message);
+      } else {
+        setToast(FILTER_SAVE_ERROR_TOAST);
+      }
+    } finally {
+      setSaveFilterSubmitting(false);
+    }
+  }, [currentSavedFilterState, resetSaveFilterDialog, saveFilterName]);
+
+  const handleDeleteSavedFilter = useCallback(async (filterId: string) => {
+    setDeletingSavedFilterId(filterId);
+    setSavedFilters((previous) => previous.filter((filter) => filter.id !== filterId));
+    try {
+      await deleteSavedLibraryFilter(filterId);
+      setToast(FILTER_DELETED_TOAST);
+    } catch {
+      setToast(FILTER_DELETE_ERROR_TOAST);
+    } finally {
+      setDeletingSavedFilterId(null);
+    }
+  }, []);
 
   const sortedFilteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -809,6 +982,76 @@ export default function LibraryPage() {
               </div>
             </div>
 
+            {(hasSavableFilter || (!savedFiltersUnavailable && (savedFiltersLoading || savedFilters.length > 0))) ? (
+              <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="relative">
+                  {!savedFiltersUnavailable ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setSavedFiltersOpen((previous) => !previous)}
+                        disabled={savedFiltersLoading}
+                      >
+                        <Bookmark className="h-4 w-4" aria-hidden="true" />
+                        <span>{savedFiltersLoading ? "Loading filters..." : "Saved filters"}</span>
+                      </Button>
+                      {savedFiltersOpen ? (
+                        <div className="absolute left-0 top-12 z-20 w-72 rounded-lg border border-border bg-background p-2 shadow-lg">
+                          {savedFilters.length === 0 ? (
+                            <p className="px-2 py-2 text-sm text-foreground/65">No saved filters yet.</p>
+                          ) : (
+                            <div className="max-h-72 space-y-1 overflow-y-auto">
+                              {savedFilters.map((filter) => (
+                                <div key={filter.id} className="flex items-center gap-2 rounded-md hover:bg-highlight">
+                                  <button
+                                    type="button"
+                                    className="min-w-0 flex-1 px-3 py-2 text-left text-sm"
+                                    onClick={() => applySavedFilter(filter.filterState)}
+                                  >
+                                    <span className="block truncate font-medium">{filter.name}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-md p-2 text-foreground/60 hover:bg-background hover:text-red-600 disabled:opacity-50"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleDeleteSavedFilter(filter.id);
+                                    }}
+                                    disabled={deletingSavedFilterId === filter.id}
+                                    aria-label={`Delete saved filter ${filter.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+
+                {hasSavableFilter ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      setSaveFilterName("");
+                      setSaveFilterError(null);
+                      setSaveFilterOpen(true);
+                    }}
+                  >
+                    <Bookmark className="h-4 w-4" aria-hidden="true" />
+                    <span>Save filter</span>
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
             {hasActiveFilters ? (
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                 <p className="text-xs text-foreground/60">Active filters:</p>
@@ -985,6 +1228,52 @@ export default function LibraryPage() {
           ) : null}
         </div>
       )}
+
+      <AppModal
+        isOpen={saveFilterOpen}
+        title="Save filter"
+        onClose={() => {
+          if (!saveFilterSubmitting) {
+            resetSaveFilterDialog();
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={resetSaveFilterDialog}
+              disabled={saveFilterSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void handleSaveFilter()} disabled={saveFilterSubmitting}>
+              {saveFilterSubmitting ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-2">
+          <label htmlFor="saved-filter-name" className="text-sm font-medium">
+            Filter name
+          </label>
+          <input
+            id="saved-filter-name"
+            type="text"
+            value={saveFilterName}
+            onChange={(event) => {
+              setSaveFilterName(event.target.value);
+              setSaveFilterError(null);
+            }}
+            maxLength={SAVE_FILTER_NAME_MAX_LENGTH}
+            placeholder="PNLE Notes"
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+          />
+          {saveFilterError ? (
+            <p className="text-sm text-red-600 dark:text-red-300">{saveFilterError}</p>
+          ) : null}
+        </div>
+      </AppModal>
 
       <LibrarySheetModal
         isOpen={moreFiltersOpen}
