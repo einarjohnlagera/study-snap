@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
-import { SubjectBadge } from "@/components/notes/subject-badge";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -238,16 +237,6 @@ export function PublicProfilePageClient({
     return normalizeCourseProgram(profile?.courseProgram);
   }, [profile?.courseProgram]);
 
-  const subjects = useMemo(() => {
-    const values = new Set<string>();
-    for (const note of profile?.publicNotes ?? []) {
-      const subject = note.subject?.trim();
-      if (subject) {
-        values.add(subject);
-      }
-    }
-    return Array.from(values).sort((left, right) => left.localeCompare(right));
-  }, [profile?.publicNotes]);
 
   const topCoursePrograms = useMemo(() => {
     const counts = new Map<string, number>();
@@ -572,19 +561,10 @@ export function PublicProfilePageClient({
         {visibilityMessage ? (
           <p className="text-xs text-foreground/60">{visibilityMessage}</p>
         ) : null}
-        {learningFocusSummary || subjects.length > 0 ? (
+        {learningFocusSummary ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Learning Focus</p>
-            {learningFocusSummary ? (
-              <p className="text-sm text-foreground/75">{learningFocusSummary}</p>
-            ) : null}
-            {subjects.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {subjects.map((subject) => (
-                  <SubjectBadge key={subject} subject={subject} />
-                ))}
-              </div>
-            ) : null}
+            <p className="text-sm text-foreground/75">{learningFocusSummary}</p>
           </div>
         ) : null}
       </header>
