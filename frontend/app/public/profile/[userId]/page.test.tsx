@@ -136,6 +136,126 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("This user has no public notes yet.")).toBeInTheDocument();
   });
 
+  it("links to the creator-filtered public library when capped notes exist", async () => {
+    (getServerPublicProfile as jest.Mock).mockResolvedValue({
+      status: "ok",
+      profile: {
+        displayName: "Prolific Creator",
+        username: "einarjohn",
+        bio: null,
+        learnerLevel: null,
+        courseProgram: null,
+        profileType: "STUDENT",
+        isOfficial: false,
+        publicProfileVisible: true,
+        publicNotesCount: 23,
+        totalCopies: 0,
+        totalShares: 0,
+        totalViews: 0,
+        publicNotes: [
+          {
+            noteId: "note-1",
+            title: "Visible Note",
+            courseProgram: "PNLE",
+            subject: "Nursing",
+            tags: [],
+            contentPreview: "Public note preview.",
+            summaryPreview: "",
+            copyCount: 0,
+            shareCount: 0,
+            viewCount: 0,
+            slug: "visible-note",
+          },
+        ],
+      },
+    });
+
+    render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-1" }) }));
+
+    expect(screen.getByRole("link", { name: "View all 23 notes →" })).toHaveAttribute(
+      "href",
+      "/public/library?creator=einarjohn",
+    );
+  });
+
+  it("hides the view-all link when all public notes are already shown", async () => {
+    (getServerPublicProfile as jest.Mock).mockResolvedValue({
+      status: "ok",
+      profile: {
+        displayName: "Small Catalog",
+        username: "smallcatalog",
+        bio: null,
+        learnerLevel: null,
+        courseProgram: null,
+        profileType: "STUDENT",
+        isOfficial: false,
+        publicProfileVisible: true,
+        publicNotesCount: 8,
+        totalCopies: 0,
+        totalShares: 0,
+        totalViews: 0,
+        publicNotes: [
+          {
+            noteId: "note-1",
+            title: "Visible Note",
+            courseProgram: "PNLE",
+            subject: "Nursing",
+            tags: [],
+            contentPreview: "Public note preview.",
+            summaryPreview: "",
+            copyCount: 0,
+            shareCount: 0,
+            viewCount: 0,
+            slug: "visible-note",
+          },
+        ],
+      },
+    });
+
+    render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-1" }) }));
+
+    expect(screen.queryByRole("link", { name: /View all/i })).not.toBeInTheDocument();
+  });
+
+  it("hides the view-all link for legacy profiles without usernames", async () => {
+    (getServerPublicProfile as jest.Mock).mockResolvedValue({
+      status: "ok",
+      profile: {
+        displayName: "Legacy Creator",
+        username: null,
+        bio: null,
+        learnerLevel: null,
+        courseProgram: null,
+        profileType: "STUDENT",
+        isOfficial: false,
+        publicProfileVisible: true,
+        publicNotesCount: 23,
+        totalCopies: 0,
+        totalShares: 0,
+        totalViews: 0,
+        publicNotes: [
+          {
+            noteId: "note-1",
+            title: "Visible Note",
+            courseProgram: "PNLE",
+            subject: "Nursing",
+            tags: [],
+            contentPreview: "Public note preview.",
+            summaryPreview: "",
+            copyCount: 0,
+            shareCount: 0,
+            viewCount: 0,
+            slug: "visible-note",
+          },
+        ],
+      },
+    });
+
+    render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-1" }) }));
+
+    expect(screen.queryByRole("link", { name: /View all/i })).not.toBeInTheDocument();
+  });
+
   it("shows the private-profile message when the profile is not public", async () => {
     (getServerPublicProfile as jest.Mock).mockResolvedValue({
       status: "private",

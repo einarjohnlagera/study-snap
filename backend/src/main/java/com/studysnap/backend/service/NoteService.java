@@ -309,11 +309,18 @@ public class NoteService {
             String subject,
             List<String> tags,
             String courseProgram,
+            String creator,
             NoteTargetProfileType targetProfileType
     ) {
-        List<NoteEntity> notes = targetProfileType == null
-                ? noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
-                : noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
+        String normalizedCreator = normalizePublicLibraryCreator(creator);
+        List<NoteEntity> notes;
+        if (normalizedCreator != null) {
+            notes = noteRepository.findPublicNotes(NoteVisibility.PUBLIC, targetProfileType, normalizedCreator);
+        } else if (targetProfileType == null) {
+            notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        } else {
+            notes = noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
+        }
         List<NoteListItemResponse> items = toListItems(notes, viewerUserId, false);
         items = filterPublicLibraryItems(items, search, subject, tags, courseProgram);
         return sortPublicLibraryItems(items, sort);
@@ -414,6 +421,13 @@ public class NoteService {
             return null;
         }
         return value.trim().toLowerCase();
+    }
+
+    private String normalizePublicLibraryCreator(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private List<String> normalizePublicLibraryFilterSlugs(List<String> values) {

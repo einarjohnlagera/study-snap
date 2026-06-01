@@ -502,11 +502,12 @@ export function PublicLibraryPageClient() {
   // URL audience takes priority; profile default applies only on fresh visit (not after user clears)
   const effectiveAudience = useMemo<NoteTargetProfileFilter>(() => {
     if (parsedUrlFilters.audience) return parsedUrlFilters.audience;
+    if (parsedUrlFilters.creator) return NOTE_TARGET_PROFILE_ALL;
     if (audienceLockedToAll || profileDefaultAudience === NOTE_TARGET_PROFILE_ALL) {
       return NOTE_TARGET_PROFILE_ALL;
     }
     return profileDefaultAudience;
-  }, [audienceLockedToAll, parsedUrlFilters.audience, profileDefaultAudience]);
+  }, [audienceLockedToAll, parsedUrlFilters.audience, parsedUrlFilters.creator, profileDefaultAudience]);
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -516,6 +517,7 @@ export function PublicLibraryPageClient() {
         listPublicNotes({
           audience: effectiveAudience !== NOTE_TARGET_PROFILE_ALL ? effectiveAudience : undefined,
           courseProgram: parsedUrlFilters.courseProgram ?? undefined,
+          creator: parsedUrlFilters.creator ?? undefined,
           search: parsedUrlFilters.search ?? undefined,
           sort: parsedUrlFilters.sort ?? undefined,
           subject: parsedUrlFilters.subject ?? undefined,
@@ -534,7 +536,7 @@ export function PublicLibraryPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveAudience, parsedUrlFilters.courseProgram, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
+  }, [effectiveAudience, parsedUrlFilters.courseProgram, parsedUrlFilters.creator, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
 
   useEffect(() => {
     void loadNotes();
@@ -842,6 +844,7 @@ export function PublicLibraryPageClient() {
     replacePublicLibraryFilters({
       audience: NOTE_TARGET_PROFILE_ALL,
       courseProgram: null,
+      creator: null,
       search: null,
       sort: null,
       subject: null,
@@ -941,6 +944,7 @@ export function PublicLibraryPageClient() {
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
+    || parsedUrlFilters.creator !== null
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
@@ -1057,8 +1061,30 @@ export function PublicLibraryPageClient() {
     });
   }, [filteredItems, selectedSort]);
 
+  const clearCreatorFilter = useCallback(() => {
+    replacePublicLibraryFilters({
+      ...parsedUrlFilters,
+      creator: null,
+      view: null,
+    });
+  }, [parsedUrlFilters, replacePublicLibraryFilters]);
+
   const activeFilterSummary = hasActiveFilters ? (
     <div className="flex flex-wrap items-center gap-2">
+      {parsedUrlFilters.creator ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+          By @{parsedUrlFilters.creator}
+          <button
+            type="button"
+            className="text-foreground/65 hover:text-foreground"
+            onClick={clearCreatorFilter}
+            aria-label="Clear creator filter"
+          >
+            x
+          </button>
+        </span>
+      ) : null}
+
       {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
           For: {getNoteTargetProfileLabel(selectedTargetProfile)}

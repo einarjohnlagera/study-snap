@@ -25,6 +25,21 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     List<NoteEntity> findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility visibility, NoteTargetProfileType targetProfileType);
 
     @Query("""
+            select n
+            from NoteEntity n
+            join UserEntity u on u.id = n.ownerUserId
+            where n.visibility = :visibility
+              and (:targetProfileType is null or n.targetProfileType = :targetProfileType)
+              and (:creator is null or lower(u.username) = lower(:creator))
+            order by n.updatedAt desc
+            """)
+    List<NoteEntity> findPublicNotes(
+            @Param("visibility") NoteVisibility visibility,
+            @Param("targetProfileType") NoteTargetProfileType targetProfileType,
+            @Param("creator") String creator
+    );
+
+    @Query("""
             select n.subject
             from NoteEntity n
             where n.subject is not null
