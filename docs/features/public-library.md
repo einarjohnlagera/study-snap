@@ -213,7 +213,7 @@ Public Library browsing rails:
   - `All`
   - `Student`
   - `Board Taker`
-- canonical base route `/public/library` means `All`; the UI should only apply an audience filter when `?audience=` is present
+- canonical base route `/public/library` means `All`; the UI should only apply an audience filter when `?audience=` is present — **do not apply a profile-based default audience on fresh visit**
 - audience filtering must use `note.targetProfileType`, never the creator's `user.profileType`
 - `Subjects` stays single-select with `All` as the default
 - `Popular Tags` stays multi-select and should use OR logic within the tag group
@@ -256,6 +256,16 @@ Behavior:
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
 - tag and subject selector search inputs must keep focus while typing; modal rerenders must not move focus to the close button or other controls
+
+## Course/Program Helper CTA
+
+A dismissible discovery hint shown above the note list when no `courseProgram` filter is active and no creator filter is set:
+
+- Text: `Studying for a specific exam or program? Browse notes by Course or Program.`
+- Action: `Browse by Course/Program` — opens the filter sheet
+- Dismiss button (X) hides the card and stores dismissal in `sessionStorage` (key: `notelib_public_library_cp_cta_dismissed`); it reappears on a new browsing session
+- Hidden when `?courseProgram=` or `?creator=` is already present in the URL
+- Do not show while the note list is loading
 
 ## Empty state
 
