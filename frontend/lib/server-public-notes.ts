@@ -37,7 +37,7 @@ async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
     throw new Error("Could not load public notes.");
   }
   const payload = (await response.json()) as ServerPublicNoteListResponse;
-  return payload.items;
+  return payload.items ?? [];
 }
 
 export async function getServerPublicNoteById(noteId: string) {
