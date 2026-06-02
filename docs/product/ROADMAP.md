@@ -64,13 +64,13 @@ Design constraint carried over from v0.22.0: **friction-free anonymous browsing 
 
 #### P1 — Grow what's working
 
-**4. Public-note share & SEO polish**
+**4. Public-note share & SEO polish (✅ shipped)**
 
    Widen the top of the funnel by leaning into the discovery that already converts to views (the top public note has 156 views; Nursing is the leading subject).
 
-   - Stronger Open Graph / share cards for public note pages (title, subject, question count, "quiz yourself" framing)
-   - Verify canonical SEO paths and structured metadata are complete for public note + subject pages
-   - No backend data changes expected; metadata and share-surface work only
+   - ✅ Dynamic per-note Open Graph share card (`opengraph-image.tsx`): title, subject, `{N} practice questions · Quiz yourself`. `generateMetadata` drops the static default so the file-convention card wins; Twitter falls back to the same `og:image`.
+   - ✅ Canonical SEO paths + structured metadata verified — Article JSON-LD was **already present** on note pages (`buildArticleStructuredData`) and CollectionPage JSON-LD on subject pages; OG/Twitter/canonical already complete via `buildPageMetadata`. Only the dynamic share image was missing.
+   - Frontend-only; no backend data changes. Verified via production build (`next/og` compiles under `--webpack`).
 
 #### P2 — Low-cost generosity (deprioritized)
 

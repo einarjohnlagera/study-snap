@@ -58,6 +58,13 @@ export async function generateMetadata({ params }: PublicLibrarySeoPageProps): P
     openGraph: {
       ...metadata.openGraph,
       url,
+      // Drop the static default so the per-note `opengraph-image.tsx` card wins.
+      images: undefined,
+    },
+    twitter: {
+      ...metadata.twitter,
+      // No twitter-image file convention; Twitter falls back to the dynamic og:image.
+      images: undefined,
     },
   };
 }
