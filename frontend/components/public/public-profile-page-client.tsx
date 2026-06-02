@@ -252,7 +252,7 @@ export function PublicProfilePageClient({
       .map(([value]) => value);
   }, [profile?.publicNotes]);
 
-  const topSubjects = useMemo(() => {
+  const summaryTopSubjects = useMemo(() => {
     const counts = new Map<string, number>();
     for (const note of profile?.publicNotes ?? []) {
       const subject = note.subject?.trim();
@@ -267,21 +267,34 @@ export function PublicProfilePageClient({
   }, [profile?.publicNotes]);
 
   const learningFocusSummary = useMemo(() => {
-    const overlappingLabels = topCoursePrograms.filter((value) => topSubjects.includes(value));
+    const overlappingLabels = topCoursePrograms.filter((value) => summaryTopSubjects.includes(value));
     if (overlappingLabels.length > 0) {
       return `Mostly shares notes in ${formatLabelList(overlappingLabels)}.`;
     }
-    if (topCoursePrograms.length > 0 && topSubjects.length > 0) {
-      return `Mostly shares notes for ${formatLabelList(topCoursePrograms)}, especially ${formatLabelList(topSubjects)}.`;
+    if (topCoursePrograms.length > 0 && summaryTopSubjects.length > 0) {
+      return `Mostly shares notes for ${formatLabelList(topCoursePrograms)}, especially ${formatLabelList(summaryTopSubjects)}.`;
     }
     if (topCoursePrograms.length > 0) {
       return `Mostly shares notes for ${formatLabelList(topCoursePrograms)}.`;
     }
-    if (topSubjects.length > 0) {
-      return `Mostly shares notes in ${formatLabelList(topSubjects)}.`;
+    if (summaryTopSubjects.length > 0) {
+      return `Mostly shares notes in ${formatLabelList(summaryTopSubjects)}.`;
     }
     return null;
-  }, [topCoursePrograms, topSubjects]);
+  }, [topCoursePrograms, summaryTopSubjects]);
+
+  const learningFocusStatLine = useMemo(() => {
+    if (!profile) {
+      return "0 notes";
+    }
+    const notesLabel = `${profile.publicNotesCount} ${profile.publicNotesCount === 1 ? "note" : "notes"}`;
+    if (profile.totalPublicSubjectCount >= 2) {
+      return `${notesLabel} across ${profile.totalPublicSubjectCount} subjects`;
+    }
+    return notesLabel;
+  }, [profile]);
+
+  const learningFocusSubjectChips = profile?.username ? profile.notesBySubject : [];
 
   const featuredNote = useMemo(() => {
     const notes = profile?.publicNotes ?? [];
@@ -561,12 +574,26 @@ export function PublicProfilePageClient({
         {visibilityMessage ? (
           <p className="text-xs text-foreground/60">{visibilityMessage}</p>
         ) : null}
-        {learningFocusSummary ? (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Learning Focus</p>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Learning Focus</p>
+          <p className="text-sm font-semibold text-foreground/85">{learningFocusStatLine}</p>
+          {learningFocusSummary ? (
             <p className="text-sm text-foreground/75">{learningFocusSummary}</p>
-          </div>
-        ) : null}
+          ) : null}
+          {learningFocusSubjectChips.length > 0 && profile.username ? (
+            <div className="flex flex-wrap gap-2">
+              {learningFocusSubjectChips.map((subjectCount) => (
+                <Link
+                  key={subjectCount.subject}
+                  href={buildPublicLibraryUrl({ creator: profile.username, subject: subjectCount.subject })}
+                  className="motion-lift rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/75 transition-colors hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-300"
+                >
+                  {subjectCount.subject}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {featuredNote ? (

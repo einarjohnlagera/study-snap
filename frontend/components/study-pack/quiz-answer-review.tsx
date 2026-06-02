@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import type { QuizItem } from "@/lib/api";
 import {
@@ -277,7 +278,7 @@ export function QuizAnswerReview({
                 </span>
               </div>
               <h3 className="break-words text-base font-semibold leading-relaxed sm:text-lg">
-                {currentItem.item.question}
+                <QuizQuestionText text={currentItem.item.question} />
               </h3>
             </div>
           </div>

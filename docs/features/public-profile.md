@@ -8,11 +8,11 @@ Public Profile is the public showcase surface for one creator's public identity 
 
 **Backend**
 - `backend/src/main/java/com/studysnap/backend/controller/PublicProfileController.java` — `GET /public/creator/{username}`, `GET /public/profile/{userId}` (legacy compat), `PUT /users/profile/public-visibility`
-- `backend/src/main/java/com/studysnap/backend/service/PublicProfileService.java` — profile resolution; public notes aggregation (capped at 8, sorted copies→views→shares→title); metric aggregation (`totalCopies`, `totalViews`, `totalShares`, `totalProfileShares`)
-- `backend/src/main/java/com/studysnap/backend/dto/PublicProfileResponse.java` — response shape: `displayName`, `username`, `publicNotesCount`, metrics, capped note list
+- `backend/src/main/java/com/studysnap/backend/service/PublicProfileService.java` — profile resolution; public notes aggregation (capped at 8, sorted copies→views→shares→title); metric aggregation (`totalCopies`, `totalViews`, `totalShares`, `totalProfileShares`); public subject-count aggregation
+- `backend/src/main/java/com/studysnap/backend/dto/PublicProfileResponse.java` — response shape: `displayName`, `username`, `publicNotesCount`, metrics, `notesBySubject`, `totalPublicSubjectCount`, capped note list
 
 **Frontend**
-- `frontend/components/public/public-profile-page-client.tsx` — all public profile UI: header metrics, Learning Focus section (`learningFocusSummary`; subject badge list removed in v0.21.0), note grid, "View all notes →" link (v0.21.0), owner controls (Edit / Share / Visibility toggle)
+- `frontend/components/public/public-profile-page-client.tsx` — all public profile UI: header metrics, Learning Focus section (public note scope line, `learningFocusSummary`, subject chips), note grid, "View all notes →" link (v0.21.0), owner controls (Edit / Share / Visibility toggle)
 - `frontend/app/public/creator/[username]/page.tsx` — server component entry for username-based route
 - `frontend/app/public/profile/[userId]/page.tsx` — legacy `userId` route for backward-compat; resolves internally
 - `frontend/lib/server-public-profiles.ts` — server-side `getPublicCreatorProfile(username)` fetch helper
@@ -21,7 +21,7 @@ Public Profile is the public showcase surface for one creator's public identity 
 ## Anti-drift Notes
 
 - Public profile URLs use `username` for new links (`/public/creator/{username}`); `userId`-based links (`/public/profile/{userId}`) must remain compatible as redirects
-- Learning Focus section shows **only** the `learningFocusSummary` sentence (v0.21.0+); subject badge list has been removed
+- Learning Focus section shows a public-note scope line, the `learningFocusSummary` sentence when available, and note-count-backed subject chips that link into the creator-filtered Public Library
 - "View all X notes →" link is conditional on `publicNotesCount > 8`; must use `buildPublicLibraryUrl({ creator: username })` — never hardcode the URL
 - Owner controls (`Edit Profile`, visibility toggle) must not be visible to non-owners
 - `Share Profile` must go through the same public/private gate as note sharing — confirm modal before opening share modal for private profiles
@@ -55,6 +55,8 @@ Related APIs:
 - `totalShares` when the profile's notes have real share activity (counts `PUBLIC_NOTE_SHARED` events on individual note pages)
 - `totalViews` when the profile's notes have real view activity
 - `totalProfileShares` when the profile link has been shared (counts `PUBLIC_PROFILE_SHARED` events fired when someone copies the "Share Profile" link)
+- `notesBySubject` as the top 5 public-note subjects by count, sorted descending
+- `totalPublicSubjectCount` as the uncapped count of distinct public-note subjects
 - list of public notes only (capped at 8, sorted by copies → views → shares → title)
 
 Portfolio polish:
@@ -147,11 +149,13 @@ When a creator has more notes than the capped list of 8 (i.e. `publicNotesCount 
 
 ## Learning Focus — Subject Badges
 
-The Learning Focus section shows a `learningFocusSummary` sentence ("Mostly shares notes in…") derived from the creator's public note subjects and course programs.
+The Learning Focus section turns public-note subject coverage into a lightweight discovery surface:
 
-The subject badge list (`subjects.map(SubjectBadge)`) that previously appeared below the summary sentence has been removed. The "View all notes →" link to the filtered public library is the replacement for subject-based browsing.
+- Header stat line: `X notes across Y subjects` when `totalPublicSubjectCount >= 2`; otherwise `X notes`
+- Summary sentence: `learningFocusSummary` ("Mostly shares notes in…") derived from the creator's public note subjects and course programs
+- Subject chips: up to 5 `notesBySubject` entries, each derived from public notes only and linked to `/public/library?creator=<username>&subject=<subject>`
 
-Rule: the Learning Focus section displays only the summary sentence; no subject chips or badges.
+Chips are hidden when `notesBySubject` is empty. Legacy `userId` profile routes remain compatible, but new subject-chip links must use the creator `username`.
 
 ## Notes
 

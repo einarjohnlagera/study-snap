@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.dto.NoteStatsResponse.SubjectCount;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.PublicProfileService;
@@ -48,6 +49,8 @@ class PublicProfileControllerTest {
                 2,
                 9,
                 0,
+                List.of(new SubjectCount("Biology", 1)),
+                1,
                 List.of(new PublicProfileNoteResponse(
                         "note-1",
                         "Cell Structure",
@@ -88,6 +91,8 @@ class PublicProfileControllerTest {
                 0,
                 0,
                 0,
+                0,
+                List.of(),
                 0,
                 List.of()
         );

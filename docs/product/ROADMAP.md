@@ -6,9 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.22.0` is the current in-progress release.
-
-`v0.21.0 - Personalized Discovery & Library Organization` is complete and is the previous documentation baseline.
+`v0.22.0 - Course & Subject Discovery` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -165,34 +163,51 @@ Items 1, 3, 4, 5, and 6 Codex prompts are independent and can be queued simultan
 
 ---
 
-## v0.22.0 - Course-First Discovery
+## v0.22.0 - Course & Subject Discovery
 
-**Status: Planned**
+**Status: Released**
 
-Theme: make `courseProgram` the primary discovery axis across the public library and dashboard — replacing the profile-type audience gate that creates false boundaries between students and exam reviewers studying the same material.
+Theme: make Course/Program and Subject the primary discovery axes across the public library, private library, and public profiles — removing the profile-type audience gate, surfacing subject breakdowns as interactive filter shortcuts, and closing a session reliability bug that caused unexpected sign-outs under concurrent API load.
 
 ### Why this release
 
-Three gaps remain after v0.21.0's courseProgram-first dashboard section:
+Four gaps remain after v0.21.0:
 
 1. **The audience pre-filter in the public library creates the wrong boundaries** — a nursing student with a STUDENT profile misses notes tagged for BOARD_TAKER even when the content is directly relevant. In the Philippine exam prep context especially, "Student" and "Exam Reviewer" overlap almost entirely. The pre-filter hides content rather than surfacing it.
 
 2. **Anonymous and first-time visitors have no guided path to their content** — users who land on the public library from a shared link or search engine see everything at once. There's no prompt to tell them that filtering by course/program (PNLE, NMAT, etc.) is the fastest path to relevant notes. The filter exists but is invisible to users who don't know to look for it.
 
-3. **Private libraries and public profiles lack a coverage view** — a user with 50 notes has no way to see their own distribution at a glance (`15 Biology, 8 Physics, 3 Chemistry`), and visitors to a public profile can't gauge a creator's depth or breadth. Note stats close both gaps: the private library gets a quick-filter breakdown strip; public profiles gain a subject-count header and subject-filtered creator links that replace the static badge list removed in v0.21.0.
+3. **Private libraries and public profiles lack a coverage view** — a user with 50 notes has no way to see their own distribution at a glance, and visitors to a public profile can't gauge a creator's depth or breadth. Note stats and library counts close both gaps.
 
-### Primary focus
+4. **A concurrent refresh race condition causes unexpected sign-outs** — when multiple API calls fire simultaneously with an expired access token, each independently attempts a token refresh. The first succeeds and revokes the old refresh token; the second sends the now-revoked token, gets rejected, and triggers `handleUnauthorizedSession()` — signing the user out mid-session. This also makes the session-expiry redirect hit-or-miss.
 
-1. **Remove the audience pre-filter from the Public Library**
+### Prioritized items
 
-   Stop using `targetProfileType` as the default gate in `GET /notes/public`. Default the public library view to "All" for every profile type, including Teacher. The audience filter remains available as an optional manual filter for users who want to narrow by it, but it is no longer applied automatically on page load.
+#### P0 — Fix first (reliability bug)
+
+**1. Fix concurrent token refresh race condition**
+
+   Deduplicate simultaneous refresh attempts in `fetchWithAuth` using a module-level shared promise. When a refresh is already in progress, all concurrent callers wait on the same promise rather than each independently sending the refresh token.
+
+   - Add `let refreshPromise: Promise<boolean> | null = null` to `api.ts`
+   - Wrap `tryRefreshAccessToken` so concurrent callers coalesce on the same in-flight request
+   - Clear the shared promise in a `finally` block so the next expiry cycle can refresh again
+   - Also bump default `JWT_REFRESH_TOKEN_DAYS` from 1 → 7 in `application.yaml` (the 1-day default is too aggressive for a study app; users who open the app on day 2 may be forced to log in again)
+   - Frontend-only except for the config change
+
+#### P1 — Core theme (ship together)
+
+**2. Remove the audience pre-filter from the Public Library**
+
+   Stop using `targetProfileType` as the default gate in `GET /notes/public`. Default the public library view to "All" for every profile type, including Teacher. The audience filter remains available as an optional manual filter, but is no longer applied automatically on page load.
 
    - Remove the profile-type → `NoteTargetProfileType` pre-filter mapping from the frontend public library page
    - When `?audience=` param is absent, render the full public note list (same as "All" behavior today)
    - The `targetProfileType` badge on note cards stays; the field on note creation stays for Teachers
    - `courseProgram` + `subject` + `tags` become the primary browse signals
+   - Frontend-only
 
-2. **Course/Program helper CTA in the Public Library**
+**3. Course/Program helper CTA in the Public Library**
 
    A dismissible banner shown above the note list when no `courseProgram` filter is active. Surfaces the Course/Program filter to users who don't know it exists.
 
@@ -202,81 +217,107 @@ Three gaps remain after v0.21.0's courseProgram-first dashboard section:
    - Clicking opens the filter sheet (or inline filter on desktop) and focuses the Course/Program field
    - Dismissed per session via `sessionStorage` (anonymous users) or until a `courseProgram` filter is applied
    - Hidden when `?courseProgram=` is already active in the URL
-   - For signed-in users with `courseProgram` set in their profile: show a smarter variant — *"See notes for [CourseProgram] →"* — that pre-fills the filter directly instead of opening the sheet
+   - For signed-in users with `courseProgram` set in their profile: smarter variant — *"See notes for [CourseProgram] →"* — that pre-fills the filter directly
+   - Frontend-only
 
-   Signed-in users who set `courseProgram` in their profile and already land on the Community Notes dashboard section do not need this prompt; the CTA is primarily for anonymous visitors and signed-in users without a course/program set.
+#### P2 — High value, independent
 
-3. **"More in [CourseProgram]" section on public note detail pages**
+**4. "More in [CourseProgram]" section on public note detail pages**
 
-   When a user opens a public note that has a `courseProgram` set, show 3–4 related public notes with the same courseProgram at the bottom of the page. Calls the existing `GET /notes/public?courseProgram=<value>&size=4` endpoint — no new backend endpoint needed.
+   When a user opens a public note with a `courseProgram` set, show 3–4 related public notes at the bottom. Calls the existing `GET /notes/public?courseProgram=<value>&size=4` — no new endpoint needed.
 
    - Visible to both anonymous and signed-in users
    - Hidden when the note has no `courseProgram`
-   - Uses the shared public library note card layout
-   - Cards link to the canonical public note route
    - Section title: *"More notes for [CourseProgram]"*
+   - Frontend-only
 
-   Extends session depth for users arriving from a shared link or search engine — gives them a natural next note to read instead of a dead end.
+**5. Note count display in private and public library**
 
-4. **Meaningful empty state when courseProgram filter returns no results**
+   Show a total note count in both library views so users can gauge the community's growth and their own library size.
 
-   Replace the generic empty state with a content-creation hook when a courseProgram filter is active and returns zero notes.
+   - **Private library**: total = `allNotes.length` (already loaded client-side); shown as "X notes" above or inline with the filter bar. No backend change.
+   - **Public library**: requires a `total` field on the `GET /notes/public` response. Wrap the existing plain-array response in `{ items: NoteListItemResponse[], total: number }` where `total` reflects the untruncated filtered count. Frontend updates all callers of `listPublicNotes` to handle the new shape.
+   - When filters are active, show "X of Y notes" (e.g., "43 of 177 notes")
 
-   Empty state copy: *"No [CourseProgram] notes shared yet."* with a secondary line: *"Got notes? Share them with the community."* — CTA navigates to `/notes/new` for signed-in users, or `/auth` for anonymous users.
+**6. Meaningful empty state when courseProgram filter returns no results**
 
-   - Only shown when `?courseProgram=` is active and the note list is empty
-   - Generic empty state remains for other filter combinations
+   Replace the generic empty state with a content-creation hook when a `courseProgram` filter is active and returns zero notes.
 
-5. **Friction-free anonymous browsing — no conversion nudges in the library**
+   Copy: *"No [CourseProgram] notes shared yet."* with *"Got notes? Share them with the community."* — CTA to `/notes/new` for signed-in users, `/auth` for anonymous.
+
+   - Only when `?courseProgram=` is active and the list is empty
+   - Frontend-only
+
+#### P3 — Backend work, higher effort
+
+**7. Note stats strip in the private library**
+
+   A compact subject breakdown shown above the note list when the user has enough notes. Shows subject chips with counts — e.g., `Biology 12 · Physics 8 · Chemistry 3`. Clicking a chip applies the subject filter.
+
+   - New `GET /notes/stats` endpoint: note counts grouped by `subject`, `courseProgram`, and `studyPackStatus`
+   - Strip renders top subjects by count; "Other" chip if more than 5 subjects
+   - Shown only when the user has ≥ 2 subjects and ≥ 5 total notes
+
+**8. Public profile polish — note stats and subject links**
+
+   Enrich the public profile with creator-level stats from their public notes. Replaces the static subject badge list (removed in v0.21.0).
+
+   - **Header count line**: "X notes across Y subjects"
+   - **Subject chips**: top subjects by public note count, each linking to `/public/library?creator=<username>&subject=<subject>`
+   - **"Most active in" line**: top 2–3 subjects by count
+
+   Backend: add `notesBySubject` and aggregate counts to `GET /public/profile/{username}` — no new endpoint. Derived from public notes only.
+
+   Depends on v0.21.0 creator filter (`GET /notes/public?creator=`) being merged first.
+
+#### P4 — Polish & fixes
+
+**9. Statement 1 / Statement 2 quiz question formatting**
+
+   Multi-statement questions (e.g. "Statement 1: … Statement 2: … Which is correct?") currently render as a single dense paragraph. Detect the `Statement N:` pattern in the quiz question renderer and display each statement on its own labeled line for readability.
+
+   - Frontend-only; one component change in the shared question renderer
+   - No data model or prompt changes
+
+**10. Matching group prompt quality fix**
+
+   Board Exam and Long Exam MATCHING questions are frequently demoted to MCQ because the LLM generates inconsistent choices across questions in a group (`reason=different_choices`). Strengthen the prompt constraint to require that all questions in a MATCHING group share identical choices.
+
+   - Prompt file change only (Long Exam `developer.txt`)
+   - No backend or frontend changes
+
+#### Design constraint (applies to all P1–P2 items)
+
+**11. Friction-free anonymous browsing**
 
    The public library and public note detail pages are fully explorable without an account. No sign-up prompts, no login gates on browsing or filtering, no interstitials. The only login gate is on write actions (copying a note, liking).
 
-   This is a design constraint, not a feature: when implementing items 1–4 above, do not add any "sign up to see more" banners, soft-gates, or conversion prompts anywhere in the public library or public note detail flow.
-
-6. **Note stats strip in the private library**
-
-   A compact subject breakdown shown above the note list when the user has enough notes to make it meaningful. Shows subject chips with counts — e.g., `Biology 12 · Physics 8 · Chemistry 3`. Clicking a chip applies the subject filter. Hidden for users below the threshold.
-
-   - New `GET /notes/stats` endpoint: returns the authenticated user's note counts grouped by `subject`, `courseProgram`, and `studyPackStatus`
-   - Strip renders the top subjects by count; "Other" chip if more than 5 subjects
-   - Chips are interactive — clicking applies the subject filter to the note list
-   - Shown only when the user has ≥ 2 subjects and ≥ 5 total notes
-
-7. **Public profile polish — note stats and subject links**
-
-   Enrich the public profile with creator-level stats derived from their public notes. Replaces the static subject badge list (removed in v0.21.0) with meaningful, navigable coverage signals.
-
-   - **Header count line**: "X notes across Y subjects" — gives visitors an immediate sense of a creator's depth
-   - **Subject chips**: top subjects by public note count, each linking to `/public/library?creator=<username>&subject=<subject>` — lets visitors browse the creator's notes by topic
-   - **"Most active in" line**: top 2–3 subjects by count — gives the profile personality without requiring a bio
-
-   Backend: add `notesBySubject` (top subjects + counts) and aggregate counts to the existing `GET /public/profile/{username}` response, derived from public notes only. No new endpoint.
-
-   Depends on v0.21.0 item 1 (`creator` filter param on `GET /notes/public`) being shipped — subject chips link to `?creator=<username>&subject=<subject>`.
+   Do not add any "sign up to see more" banners, soft-gates, or conversion prompts anywhere in the public library or public note detail flow when implementing items 2–6 above.
 
 ### Implementation stances
 
-- Audience pre-filter removal is frontend-only — the `targetProfileType` query param on `GET /notes/public` remains valid and functional; we just stop sending it automatically
-- Items 1–5 are frontend-only; no new backend endpoints or migrations
-- Items 3 and 4 reuse the existing `GET /notes/public` endpoint with `courseProgram` + `size` params (the `size` param is added in v0.21.0)
-- Item 6 requires a new `GET /notes/stats` backend endpoint (authenticated) and one new frontend component
-- Item 7 requires extending the `GET /public/profile/{username}` response with note stat fields — no new endpoint
+- Item 1 (race condition fix) is frontend-only except for bumping `JWT_REFRESH_TOKEN_DAYS` in `application.yaml`
+- Items 2, 3, 4, 6, 9 are frontend-only; no backend changes
+- Item 5 requires wrapping the `GET /notes/public` response — a small breaking change to the array response type; all existing callers must be updated
+- Item 7 requires a new `GET /notes/stats` backend endpoint (authenticated) and one new frontend component
+- Item 8 requires extending the `GET /public/profile/{username}` response — no new endpoint
+- Item 10 is a prompt file change only
 - `targetProfileType` badge on note cards is unchanged
-- Teacher note creation flow is unchanged — Teachers still set target audience when creating notes; we just stop using it as a visibility gate on the browse side
+- Teacher note creation flow is unchanged
 
 ### Anti-drift notes
 
 - Do not remove `targetProfileType` from the public note API response — it is still used for the badge on note cards and as an optional manual filter
-- The `?audience=all` URL param behavior (introduced in v0.18.0 to prevent profile default re-application) remains valid; the pre-filter removal makes it redundant but harmless
-- The helper CTA must not appear when a `courseProgram` filter is already active — check the URL param before rendering
-- Use `sessionStorage` for CTA dismissal on the public library (consistent with how the back-nav return URL is stored); do not use `localStorage` for session-scoped UI state
-- No sign-up prompts, interstitials, or conversion nudges anywhere in the public library or public note detail — the library is friction-free for anonymous users by design
-- Note stats on the public profile are derived from **public notes only** — never expose private note counts or subjects on a public-facing page
-- Item 7 subject chips depend on the v0.21.0 `creator` filter param shipping first — do not implement item 7 before v0.21.0 item 1 is merged
+- The `?audience=all` URL param behavior (v0.18.0) remains valid; the pre-filter removal makes it redundant but harmless
+- The helper CTA must not appear when `?courseProgram=` is already active
+- Use `sessionStorage` for CTA dismissal — not `localStorage`
+- Note stats on the public profile are derived from **public notes only** — never expose private note counts on a public-facing page
+- Item 8 subject chips depend on the v0.21.0 `creator` filter param being merged first
+- The concurrent refresh fix must coalesce on a single in-flight promise — do not use a mutex lock or queue
 
 ### Sequencing
 
-Items 1 and 2 are the core changes and should ship together. Items 3, 4, and 6 are independent and can be implemented in the same Codex prompt or separately. Item 5 is a constraint on the others, not a separate implementation task. Item 7 is blocked on v0.21.0 item 1 (creator filter) shipping first. Write Codex prompts at the start of v0.22.0.
+Item 1 (race condition) ships first — it's a standing bug. Items 2 and 3 ship together (core theme). Items 4, 5, and 6 are independent of each other and can be Codex-prompted separately or batched. Item 7 and 8 are the heavier backend items and can be deferred to the second half of the release. Items 9 and 10 are small enough to handle inline (Claude Code) without a Codex prompt.
 
 ---
 

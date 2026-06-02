@@ -12,6 +12,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -1217,7 +1218,7 @@ export default function QuickReviewPage() {
             ) : (
               <>
                 <h2 className="text-lg font-semibold leading-7 sm:text-xl">
-                  {currentQuestion.question}
+                  <QuizQuestionText text={currentQuestion.question} />
                 </h2>
                 <QuizChoiceList
                   questionKey={currentQuestion.question}

@@ -2,7 +2,9 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatsResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
@@ -393,8 +395,16 @@ public class NoteController {
         return noteService.listMine(userId);
     }
 
+    @GetMapping("/stats")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteStatsResponse getMyStats(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getMyStats(user.userId());
+    }
+
     @GetMapping("/public")
-    public List<NoteListItemResponse> listPublic(
+    public PublicNoteListResponse listPublic(
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "subject", required = false) String subject,

@@ -213,7 +213,7 @@ Public Library browsing rails:
   - `All`
   - `Student`
   - `Board Taker`
-- canonical base route `/public/library` means `All`; the UI should only apply an audience filter when `?audience=` is present
+- canonical base route `/public/library` means `All`; the UI should only apply an audience filter when `?audience=` is present — **do not apply a profile-based default audience on fresh visit**
 - audience filtering must use `note.targetProfileType`, never the creator's `user.profileType`
 - `Subjects` stays single-select with `All` as the default
 - `Popular Tags` stays multi-select and should use OR logic within the tag group
@@ -230,6 +230,19 @@ Public Library browsing rails:
 ## Backend Filtering + URL Sync
 
 `GET /notes/public` is the backend filter source for shareable Public Library URLs.
+
+Response shape:
+
+```json
+{
+  "items": [],
+  "total": 0
+}
+```
+
+- `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp.
+- `total` is captured after public-note list mapping and before in-memory filters such as `search`, `subject`, `tag`, and `courseProgram`; DB-level creator and audience pre-filters still apply before this baseline is captured.
+- Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
 
 Supported query params:
 
@@ -255,7 +268,19 @@ Behavior:
 - search is case-insensitive
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
+- Public Library shows the response count near the filter bar: `{total} notes` with no active URL filters, or `{items.length} of {total} notes` when `search`, `subject`, `tag`, `courseProgram`, non-ALL `audience`, or `creator` is present
+- the count is hidden while the list is loading to avoid a transient `0 notes` state
 - tag and subject selector search inputs must keep focus while typing; modal rerenders must not move focus to the close button or other controls
+
+## Course/Program Helper CTA
+
+A dismissible discovery hint shown above the note list when no `courseProgram` filter is active and no creator filter is set:
+
+- Text: `Studying for a specific exam or program? Browse notes by Course or Program.`
+- Action: `Browse by Course/Program` — opens the filter sheet
+- Dismiss button (X) hides the card and stores dismissal in `sessionStorage` (key: `notelib_public_library_cp_cta_dismissed`); it reappears on a new browsing session
+- Hidden when `?courseProgram=` or `?creator=` is already present in the URL
+- Do not show while the note list is loading
 
 ## Empty state
 
@@ -489,6 +514,17 @@ The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Modal title: 
 ### H — "Trending this week" section (blocked — needs backend windowed counts)
 
 `NoteListItemResponse` has no windowed engagement fields (`recentCopyCount`, `recentLikeCount`, etc.). Implementing a true 7-day trending signal requires backend support: either per-event timestamps queryable as a rolling aggregate, or precomputed windowed counts persisted alongside the note. Do not ship under a "Trending this week" label without real windowed data — lifetime totals on recent notes is not the same signal. Revisit when backend adds windowed count fields.
+
+### K — "More [CourseProgram] notes" section on public note detail (resolved in v0.22.0)
+
+When the current public note has a `courseProgram` set, the detail page shows a lateral discovery section after the Practice Mode Teaser and before the Ownership Actions block:
+
+- Heading: `More {courseProgram} notes` with a `View all →` link to `/public/library?courseProgram={slug}`
+- Shows up to 4 other study-ready (`STUDY_PACK_READY`) public notes with the same `courseProgram`, sorted by engagement score (`viewCount + copyCount×3 + likeCount×2`)
+- Cards link to the canonical public note detail path; each card shows title, subject, and summary preview (line-clamped)
+- If the current note has no `courseProgram`, the section is hidden entirely
+- `courseProgram` is read from `NoteListItemResponse` (the list endpoint already includes it) — no `PublicNoteDetailResponse` DTO change is needed
+- Next.js deduplicates the `GET /notes/public` fetch within the same render via its built-in fetch deduplication for matching URL + cache options
 
 ### I — Practice-mode preview teaser on public note detail (resolved)
 

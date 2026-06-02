@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.dto.NoteStatsResponse.SubjectCount;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -13,6 +14,7 @@ import com.studysnap.backend.exception.PublicProfilePrivateException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -40,6 +42,7 @@ public class PublicProfileService {
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
     private static final int SUMMARY_PREVIEW_MAX_LENGTH = 180;
+    private static final int PUBLIC_SUBJECT_COUNT_LIMIT = 5;
 
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
@@ -79,6 +82,11 @@ public class PublicProfileService {
         long totalShares = shareCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
         long totalViews = viewCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
         long totalProfileShares = analyticsEventRepository.countByEventTypeAndEntityId(AnalyticsEventType.PUBLIC_PROFILE_SHARED, userId);
+        List<NoteSubjectCountProjection> publicSubjectCounts = noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC);
+        List<SubjectCount> notesBySubject = publicSubjectCounts.stream()
+                .limit(PUBLIC_SUBJECT_COUNT_LIMIT)
+                .map(subjectCount -> new SubjectCount(subjectCount.getSubject(), Math.toIntExact(subjectCount.getNoteCount())))
+                .toList();
 
         return new PublicProfileResponse(
                 resolvePublicDisplayName(user),
@@ -96,6 +104,8 @@ public class PublicProfileService {
                 totalShares,
                 totalViews,
                 totalProfileShares,
+                notesBySubject,
+                publicSubjectCounts.size(),
                 publicNotes.stream()
                         .map(note -> new PublicProfileNoteResponse(
                                 note.getId().toString(),

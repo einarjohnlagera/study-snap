@@ -26,10 +26,12 @@ import {
   ApiRequestError,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
+  getNoteStats,
   getSavedLibraryFilters,
   listNotes,
   listSubjects,
   type NoteListItemResponse,
+  type NoteStatsResponse,
   type SavedLibraryFilterResponse,
   type SavedLibraryFilterState,
   type NoteVisibility,
@@ -339,6 +341,7 @@ export default function LibraryPage() {
   const initialLoadStartedRef = useRef(false);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [noteStats, setNoteStats] = useState<NoteStatsResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(() => searchParams.get("cp") ?? ALL_COURSE_PROGRAMS);
@@ -398,9 +401,10 @@ export default function LibraryPage() {
     setLoading(true);
     setError(null);
     try {
-      const [notesResult, subjectsResult] = await Promise.allSettled([
+      const [notesResult, subjectsResult, statsResult] = await Promise.allSettled([
         listNotes(),
         listSubjects("mine"),
+        getNoteStats(),
       ]);
       if (notesResult.status !== "fulfilled") {
         throw notesResult.reason;
@@ -408,6 +412,12 @@ export default function LibraryPage() {
       const notes = notesResult.value;
       setItems(notes);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
+      if (statsResult.status === "fulfilled") {
+        setNoteStats(statsResult.value);
+      } else {
+        console.warn("Could not load note stats.", statsResult.reason);
+        setNoteStats(null);
+      }
       setVisibleCount(LIBRARY_PAGE_SIZE);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load your notes.";
@@ -803,6 +813,20 @@ export default function LibraryPage() {
     [sortedFilteredItems, visibleCount],
   );
   const hasMore = visibleCount < sortedFilteredItems.length;
+  const showSubjectStatsStrip = !loading
+    && selectedSubject === ALL_SUBJECTS
+    && noteStats !== null
+    && noteStats.totalNotes >= 5
+    && noteStats.topSubjects.length >= 2;
+
+  const applySubjectStatsFilter = useCallback((subject: string) => {
+    setSelectedSubject(subject);
+    setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
+    router.replace(
+      buildLibraryUrl(searchQuery, subject, selectedCourseProgram, selectedTags, readinessFilter, sortBy),
+      { scroll: false },
+    );
+  }, [readinessFilter, router, searchQuery, selectedCourseProgram, selectedTags, sortBy]);
 
   const resetSelectionMode = useCallback(() => {
     setSelectionMode(false);
@@ -982,6 +1006,12 @@ export default function LibraryPage() {
               </div>
             </div>
 
+            <p className="border-t border-border pt-3 text-sm text-foreground/60">
+              {hasActiveFilters
+                ? `${sortedFilteredItems.length} of ${items.length} notes`
+                : `${items.length} notes`}
+            </p>
+
             {(hasSavableFilter || (!savedFiltersUnavailable && (savedFiltersLoading || savedFilters.length > 0))) ? (
               <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="relative">
@@ -1105,6 +1135,30 @@ export default function LibraryPage() {
                 Sorted by {SORT_LABELS[sortBy]}
               </p>
             )}
+
+            {showSubjectStatsStrip && noteStats ? (
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                <p className="mr-1 text-xs font-medium uppercase tracking-wide text-foreground/55">
+                  Subjects
+                </p>
+                {noteStats.topSubjects.map((subjectCount) => (
+                  <button
+                    key={subjectCount.subject}
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:bg-highlight active:bg-highlight-strong"
+                    onClick={() => applySubjectStatsFilter(subjectCount.subject)}
+                  >
+                    <span>{subjectCount.subject}</span>
+                    <span className="text-foreground/50">{subjectCount.count}</span>
+                  </button>
+                ))}
+                {noteStats.otherSubjectsCount > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt px-3 py-1.5 text-sm font-medium text-foreground/55">
+                    Other {noteStats.otherSubjectsCount}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </Card>
 
           {visibleItems.length === 0 ? (

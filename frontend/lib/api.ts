@@ -1112,6 +1112,20 @@ export type NoteListItemResponse = {
   likedByCurrentUser: boolean;
 };
 
+export type PublicNoteListResponse = {
+  items: NoteListItemResponse[];
+  total: number;
+};
+
+export type NoteStatsResponse = {
+  topSubjects: Array<{
+    subject: string;
+    count: number;
+  }>;
+  otherSubjectsCount: number;
+  totalNotes: number;
+};
+
 export type SavedLibraryFilterState = {
   search?: string;
   subject?: string;
@@ -1185,6 +1199,11 @@ export type PublicProfileNoteResponse = {
   slug: string;
 };
 
+export type SubjectCountResponse = {
+  subject: string;
+  count: number;
+};
+
 export type PublicProfileResponse = {
   displayName: string;
   username?: string | null;
@@ -1201,6 +1220,8 @@ export type PublicProfileResponse = {
   totalShares: number;
   totalViews: number;
   totalProfileShares: number;
+  notesBySubject: SubjectCountResponse[];
+  totalPublicSubjectCount: number;
   publicNotes: PublicProfileNoteResponse[];
 };
 
@@ -1353,7 +1374,19 @@ function syncStoredAuthUserFromMe(me: MeResponse): void {
   });
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
 async function tryRefreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+  refreshPromise = doRefreshAccessToken().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
+async function doRefreshAccessToken(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     clearAuthUser();
@@ -3144,6 +3177,18 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
 }
 
+export async function getNoteStats(): Promise<NoteStatsResponse> {
+  const response = await fetchWithAuth(
+    "/notes/stats",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteStatsResponse>(response, "Could not load note stats.");
+}
+
 export async function getSavedLibraryFilters(): Promise<SavedLibraryFilterResponse[]> {
   const response = await fetchWithAuth(
     "/library-filters",
@@ -3196,7 +3241,7 @@ export async function listPublicNotes(params?: {
   sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
   subject?: string;
   tags?: string[];
-}): Promise<NoteListItemResponse[]> {
+}): Promise<PublicNoteListResponse> {
   const searchParams = new URLSearchParams();
   if (params?.audience) {
     searchParams.set("audience", params.audience);
@@ -3225,7 +3270,7 @@ export async function listPublicNotes(params?: {
     method: "GET",
     headers: buildAuthHeaders(),
   });
-  return parseApiResponse<NoteListItemResponse[]>(response, "Could not load public notes.");
+  return parseApiResponse<PublicNoteListResponse>(response, "Could not load public notes.");
 }
 
 export async function togglePublicNoteLike(noteId: string): Promise<PublicNoteLikeResponse> {

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, ChevronDown, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
@@ -52,12 +52,12 @@ import {
   getNoteTargetProfileLabel,
   NOTE_TARGET_PROFILE_ALL,
   PUBLIC_NOTE_TARGET_PROFILE_TYPES,
-  resolvePublicLibraryTargetProfileFilter,
   type NoteTargetProfileFilter,
 } from "@/lib/note-target-profile";
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+const PUBLIC_LIBRARY_COURSE_PROGRAM_CTA_KEY = "notelib_public_library_cp_cta_dismissed";
 const PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD = 10;
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
@@ -455,6 +455,7 @@ export function PublicLibraryPageClient() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => getAuthUser()?.username ?? null);
   const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
@@ -482,10 +483,15 @@ export function PublicLibraryPageClient() {
   const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
   const [shareToastMessage, setShareToastMessage] = useState<string | null>(null);
   const [shareToastTone, setShareToastTone] = useState<"success" | "error">("success");
-  // Tracks whether the user has explicitly dismissed the profile-based audience default
-  const [audienceLockedToAll, setAudienceLockedToAll] = useState(false);
   // Modal draft state — staged until "Apply" is clicked
   const [audienceDraft, setAudienceDraft] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
+  const [ctaDismissed, setCtaDismissed] = useState<boolean>(() => {
+    try {
+      return globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_COURSE_PROGRAM_CTA_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [subjectFilterDraft, setSubjectFilterDraft] = useState<string>(ALL_SUBJECTS);
   const [tagsFilterDraft, setTagsFilterDraft] = useState<string[]>([]);
   const [subjectComboOpen, setSubjectComboOpen] = useState(false);
@@ -493,21 +499,10 @@ export function PublicLibraryPageClient() {
   const subjectDropdownRef = useRef<HTMLDivElement>(null);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Computed once on mount — the profile-based audience default for this user
-  const profileDefaultAudience = useMemo(
-    () => resolvePublicLibraryTargetProfileFilter(getAuthUser()?.profileType),
-    [],
-  );
-
-  // URL audience takes priority; profile default applies only on fresh visit (not after user clears)
   const effectiveAudience = useMemo<NoteTargetProfileFilter>(() => {
     if (parsedUrlFilters.audience) return parsedUrlFilters.audience;
-    if (parsedUrlFilters.creator) return NOTE_TARGET_PROFILE_ALL;
-    if (audienceLockedToAll || profileDefaultAudience === NOTE_TARGET_PROFILE_ALL) {
-      return NOTE_TARGET_PROFILE_ALL;
-    }
-    return profileDefaultAudience;
-  }, [audienceLockedToAll, parsedUrlFilters.audience, parsedUrlFilters.creator, profileDefaultAudience]);
+    return NOTE_TARGET_PROFILE_ALL;
+  }, [parsedUrlFilters.audience]);
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -528,7 +523,8 @@ export function PublicLibraryPageClient() {
       if (notesResult.status !== "fulfilled") {
         throw notesResult.reason;
       }
-      setItems(notesResult.value);
+      setItems(notesResult.value.items);
+      setTotal(notesResult.value.total);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
@@ -836,13 +832,12 @@ export function PublicLibraryPageClient() {
     setTagDraft([]);
     setTagsFilterDraft([]);
     setSelectedSourceFilters([]);
-    setAudienceLockedToAll(true);
     setAudienceDraft(NOTE_TARGET_PROFILE_ALL);
     setCourseProgramSearchQuery("");
     setSubjectSearchQuery("");
     setTagSearchQuery("");
     replacePublicLibraryFilters({
-      audience: NOTE_TARGET_PROFILE_ALL,
+      audience: null,
       courseProgram: null,
       creator: null,
       search: null,
@@ -853,15 +848,21 @@ export function PublicLibraryPageClient() {
     });
   }, [replacePublicLibraryFilters]);
 
+  const handleCtaDismiss = useCallback(() => {
+    try {
+      globalThis.sessionStorage?.setItem(PUBLIC_LIBRARY_COURSE_PROGRAM_CTA_KEY, "1");
+    } catch {
+      // sessionStorage unavailable (e.g. private browsing with storage blocked)
+    }
+    setCtaDismissed(true);
+  }, []);
+
   const applyModalFilters = useCallback(() => {
-    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : NOTE_TARGET_PROFILE_ALL;
+    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : null;
     const nextSubject = subjectFilterDraft !== ALL_SUBJECTS ? slugifyPublicLibraryFilterValue(subjectFilterDraft) : null;
     const nextTags = tagsFilterDraft.map((tag) => slugifyPublicLibraryFilterValue(tag));
     const nextCourseProgram = courseProgramDraft !== ALL_COURSE_PROGRAMS ? slugifyPublicLibraryFilterValue(courseProgramDraft) : null;
 
-    if (audienceDraft !== selectedTargetProfile) {
-      setAudienceLockedToAll(audienceDraft === NOTE_TARGET_PROFILE_ALL);
-    }
     if (subjectFilterDraft !== ALL_SUBJECTS) {
       setRecentSubjects((previous) => updateRecentValues(previous, [subjectFilterDraft]));
     }
@@ -881,7 +882,7 @@ export function PublicLibraryPageClient() {
       view: null,
     });
     setFilterSheetOpen(false);
-  }, [audienceDraft, courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, selectedTargetProfile, subjectFilterDraft, tagsFilterDraft]);
+  }, [audienceDraft, courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, subjectFilterDraft, tagsFilterDraft]);
 
   const subjectPriorityComparator = useMemo(
     () => buildPriorityComparator(recentSubjects, subjectCounts),
@@ -948,6 +949,12 @@ export function PublicLibraryPageClient() {
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
+  const hasActiveUrlFilters = (parsedUrlFilters.search?.trim().length ?? 0) > 0
+    || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
+    || selectedCourseProgram !== ALL_COURSE_PROGRAMS
+    || parsedUrlFilters.creator !== null
+    || selectedSubject !== ALL_SUBJECTS
+    || selectedTags.length > 0;
   const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
 
   // Discovery mode: no active search/filter and default sort → show discovery sections
@@ -1092,11 +1099,10 @@ export function PublicLibraryPageClient() {
             type="button"
             className="text-foreground/65 hover:text-foreground"
             onClick={() => {
-              setAudienceLockedToAll(true);
               setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
               replacePublicLibraryFilters({
                 ...parsedUrlFilters,
-                audience: NOTE_TARGET_PROFILE_ALL,
+                audience: null,
                 view: null,
               });
             }}
@@ -1324,16 +1330,48 @@ export function PublicLibraryPageClient() {
               </div>
             </div>
 
-            {hasActiveFilters ? (
-              <div className="border-t border-border pt-3">
-                {activeFilterSummary}
+            <div className="space-y-3 border-t border-border pt-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p data-testid="note-count-pill" className="text-sm text-foreground/50">
+                  {hasActiveUrlFilters
+                    ? `${items.length} of ${total} notes`
+                    : `${total} notes`}
+                </p>
+                {!hasActiveFilters ? (
+                  <p className="text-xs text-foreground/50">
+                    Sorted by {PUBLIC_SORT_LABELS[selectedSort]}
+                  </p>
+                ) : null}
               </div>
-            ) : (
-              <p className="border-t border-border pt-3 text-xs text-foreground/50">
-                Sorted by {PUBLIC_SORT_LABELS[selectedSort]}
-              </p>
-            )}
+              {hasActiveFilters ? activeFilterSummary : null}
+            </div>
           </Card>
+
+          {!ctaDismissed && !parsedUrlFilters.courseProgram && !parsedUrlFilters.creator && !loading ? (
+            <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <p className="text-sm text-foreground/75">
+                Studying for a specific exam or program? Browse notes by Course or Program.
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilterSheetOpen(true)}
+                >
+                  Browse by Course/Program
+                </Button>
+                <button
+                  type="button"
+                  aria-label="Dismiss this tip"
+                  onClick={handleCtaDismiss}
+                  className="text-foreground/50 hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </Card>
+          ) : null}
 
           {!loading && selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
             <Card className="flex flex-col gap-3 border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -1348,9 +1386,8 @@ export function PublicLibraryPageClient() {
                 size="sm"
                 className="shrink-0"
                 onClick={() => {
-                  setAudienceLockedToAll(true);
                   setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
-                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: NOTE_TARGET_PROFILE_ALL, view: null });
+                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: null, view: null });
                 }}
               >
                 View all notes
@@ -1409,11 +1446,10 @@ export function PublicLibraryPageClient() {
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        setAudienceLockedToAll(true);
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
-                          audience: NOTE_TARGET_PROFILE_ALL,
+                          audience: null,
                           view: null,
                         });
                       }}
@@ -1480,11 +1516,10 @@ export function PublicLibraryPageClient() {
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        setAudienceLockedToAll(true);
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
-                          audience: NOTE_TARGET_PROFILE_ALL,
+                          audience: null,
                           view: null,
                         });
                       }}
@@ -1492,6 +1527,17 @@ export function PublicLibraryPageClient() {
                     >
                       View all notes
                     </Button>
+                  </>
+                ) : selectedCourseProgram !== ALL_COURSE_PROGRAMS && searchQuery.trim().length === 0 ? (
+                  <>
+                    <h2 className="text-base font-semibold sm:text-lg">No {selectedCourseProgram} notes shared yet.</h2>
+                    <p className="text-sm text-foreground/75">Got notes? Share them with the community.</p>
+                    <Link
+                      href={currentUserId ? "/notes/new" : "/auth"}
+                      className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                    >
+                      Share a note
+                    </Link>
                   </>
                 ) : (
                   <>
@@ -1569,6 +1615,7 @@ export function PublicLibraryPageClient() {
               <div className="relative">
                 <input
                   type="text"
+                  aria-label="Subject"
                   value={subjectComboOpen ? subjectSearchQuery : (subjectFilterDraft !== ALL_SUBJECTS ? subjectFilterDraft : "")}
                   onChange={(event) => setSubjectSearchQuery(event.target.value)}
                   placeholder={subjectComboOpen ? "Search subjects..." : "All"}
@@ -1647,6 +1694,7 @@ export function PublicLibraryPageClient() {
               <div className="relative">
                 <input
                   type="text"
+                  aria-label="Course / Program"
                   value={courseProgramComboOpen ? courseProgramSearchQuery : (courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : "")}
                   onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
                   placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}

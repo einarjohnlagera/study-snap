@@ -1,12 +1,23 @@
 # RELEASES.md - NoteLib
 
-## v0.22.0 - Course-First Discovery
+## v0.22.0 - Course & Subject Discovery
 
-**Status: In Progress**
+**Status: Released**
 
-Theme: TBD
+Theme: make Course/Program and Subject the primary discovery axes across the public library, private library, and public profiles — removing the profile-type audience gate that created false boundaries, surfacing subject breakdowns as interactive filter shortcuts, and closing a session reliability bug that caused unexpected sign-outs under concurrent API load.
 
 ### ✅ Shipped
+
+- **Fix concurrent token refresh race condition** — when multiple API calls fire simultaneously with an expired access token, all callers now coalesce on a single in-flight refresh promise (`refreshPromise` in `api.ts`) rather than each independently sending the refresh token. Previously the second caller would send the already-revoked token, get rejected, and trigger an unexpected sign-out. Also bumped the default `JWT_REFRESH_TOKEN_DAYS` from 1 → 7 so users are not forced to re-login after one day of inactivity.
+- **Remove Public Library audience pre-filter** — the Public Library no longer auto-applies a profile-based audience filter on fresh visit. All users now land on the full unfiltered library; the audience filter still works when explicitly set via URL param or the filter sheet. Cleaned up `audienceLockedToAll` and `profileDefaultAudience` workarounds that guarded against re-application after the user cleared the filter.
+- **Course/Program helper CTA** — a dismissible card above the note list prompts users to browse by Course or Program when no course program filter is active. Clicking "Browse by Course/Program" opens the filter sheet directly. Dismissed state is stored in `sessionStorage` so it does not reappear within the same browsing session.
+- **"More [CourseProgram] notes" section on public note detail pages** — when the current note has a `courseProgram` set, the public note detail page shows a "More [X] notes" section after the Practice Mode Teaser. Fetches up to 4 other study-ready public notes with the same course program, sorted by engagement score, with a "View all →" link to the filtered Public Library. `courseProgram` is read from the already-fetched list response (`NoteListItemResponse`) so no backend DTO changes were needed. Next.js deduplicates the `GET /notes/public` fetch within the same render.
+- **Library note counts** — Private Library and Public Library now show a note count near the filter bar (`X notes`, or `X of Y notes` when filters are active). `GET /notes/public` now returns `{ items, total }`, with SSR helpers unwrapping `items` for existing static and server-rendered public pages.
+- **Private Library subject stats strip** — users with at least 5 notes across multiple subjects now see a subject-count strip above their Library results. Subject chips apply the existing `subject` URL filter, and the new authenticated `GET /notes/stats` endpoint provides top-subject counts plus the total note baseline.
+- **Public Profile subject breakdown** — public profiles now show a Learning Focus stat line (`X notes across Y subjects`) plus top subject chips backed by public-note counts. Each chip links to the creator-filtered Public Library for that subject, and both username and legacy userId profile endpoints return the new fields.
+- **Course/Program empty state in Public Library** — when a `courseProgram` filter is active and returns no results, the Public Library shows "No [CourseProgram] notes shared yet." with a "Share a note" CTA linking to `/notes/new` (signed-in) or `/auth` (anonymous). Generic "No public notes match your filters." empty state is preserved for all other filter combinations.
+- **Statement 1/2 quiz question formatting** — multi-statement questions (e.g. "Statement 1: … Statement 2: …") now render each statement on its own labeled line instead of as a single dense paragraph. Applied across Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam (via `quiz-answer-review`), and shared quiz pages via a new `QuizQuestionText` component.
+- **Matching group prompt quality fix** — strengthened the Long Exam prompt constraint for MATCHING blocks: choices must be the identical array copied exactly across all items in the group; any deviation requires falling back to standard MCQ. Reduces `reason=different_choices` demotions at validation time.
 
 ### 🔲 Pending
 

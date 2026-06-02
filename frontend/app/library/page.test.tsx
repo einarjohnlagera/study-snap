@@ -4,6 +4,7 @@ import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
+  getNoteStats,
   getSavedLibraryFilters,
   listNotes,
   listSubjects,
@@ -16,10 +17,11 @@ const routerMock = {
   push: pushMock,
   replace: replaceMock,
 };
+let currentSearch = "";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(currentSearch),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -30,6 +32,7 @@ jest.mock("@/lib/api", () => ({
   createSavedLibraryFilter: jest.fn(),
   deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
+  getNoteStats: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
@@ -58,7 +61,13 @@ describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    currentSearch = "";
     (getAuthUser as jest.Mock).mockReturnValue(null);
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [],
+      otherSubjectsCount: 0,
+      totalNotes: 3,
+    });
     (getSavedLibraryFilters as jest.Mock).mockResolvedValue([]);
     (createSavedLibraryFilter as jest.Mock).mockResolvedValue({
       id: "saved-filter-1",
@@ -128,6 +137,7 @@ describe("Library page", () => {
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
+    expect(screen.getByText("3 notes")).toBeInTheDocument();
     expect(screen.getByText("Nursing")).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
@@ -141,6 +151,119 @@ describe("Library page", () => {
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library&ref=%2Flibrary");
     });
+  });
+
+  it("renders subject stats when the library has enough notes across multiple subjects", async () => {
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [
+        { subject: "Biology", count: 3 },
+        { subject: "Chemistry", count: 2 },
+      ],
+      otherSubjectsCount: 0,
+      totalNotes: 5,
+    });
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByRole("button", { name: "Biology 3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chemistry 2" })).toBeInTheDocument();
+  });
+
+  it("does not render subject stats below the total note threshold", async () => {
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [
+        { subject: "Biology", count: 2 },
+        { subject: "Chemistry", count: 2 },
+      ],
+      otherSubjectsCount: 0,
+      totalNotes: 4,
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    expect(screen.queryByRole("button", { name: "Biology 2" })).not.toBeInTheDocument();
+  });
+
+  it("does not render subject stats when only one subject exists", async () => {
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [
+        { subject: "Biology", count: 5 },
+      ],
+      otherSubjectsCount: 0,
+      totalNotes: 5,
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    expect(screen.queryByRole("button", { name: "Biology 5" })).not.toBeInTheDocument();
+  });
+
+  it("shows an Other chip for subjects beyond the top subjects", async () => {
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [
+        { subject: "Biology", count: 4 },
+        { subject: "Chemistry", count: 3 },
+      ],
+      otherSubjectsCount: 2,
+      totalNotes: 9,
+    });
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Other 2")).toBeInTheDocument();
+  });
+
+  it("applies the subject URL filter when a subject stats chip is clicked", async () => {
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [
+        { subject: "Biology", count: 3 },
+        { subject: "Chemistry", count: 2 },
+      ],
+      otherSubjectsCount: 0,
+      totalNotes: 5,
+    });
+
+    render(<LibraryPage />);
+
+    const biologyChip = await screen.findByRole("button", { name: "Biology 3" });
+    replaceMock.mockClear();
+    fireEvent.click(biologyChip);
+
+    expect(replaceMock).toHaveBeenCalledWith("/library?subject=Biology", { scroll: false });
+  });
+
+  it("hides subject stats when a subject filter is already active", async () => {
+    currentSearch = "?subject=Biology";
+    (getNoteStats as jest.Mock).mockResolvedValue({
+      topSubjects: [
+        { subject: "Biology", count: 3 },
+        { subject: "Chemistry", count: 2 },
+      ],
+      otherSubjectsCount: 0,
+      totalNotes: 5,
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    expect(screen.queryByRole("button", { name: "Biology 3" })).not.toBeInTheDocument();
+  });
+
+  it("suppresses subject stats when loading stats fails", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    (getNoteStats as jest.Mock).mockRejectedValue(new Error("stats failed"));
+
+    try {
+      render(<LibraryPage />);
+
+      await screen.findByText("Cell Respiration");
+      expect(screen.queryByRole("button", { name: "Biology 3" })).not.toBeInTheDocument();
+      expect(warnSpy).toHaveBeenCalledWith("Could not load note stats.", expect.any(Error));
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it("uses the all-mode session timestamp from the note list for the reviewed label", async () => {
@@ -267,6 +390,7 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("2 of 3 notes")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
 

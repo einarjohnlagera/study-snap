@@ -3,6 +3,11 @@ import { getPublicSubjectSlug } from "@/lib/public-note-path";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
+type ServerPublicNoteListResponse = {
+  items: NoteListItemResponse[];
+  total: number;
+};
+
 function buildApiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
@@ -31,7 +36,8 @@ async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
   if (!response.ok) {
     throw new Error("Could not load public notes.");
   }
-  return (await response.json()) as NoteListItemResponse[];
+  const payload = (await response.json()) as ServerPublicNoteListResponse;
+  return payload.items;
 }
 
 export async function getServerPublicNoteById(noteId: string) {
@@ -84,4 +90,9 @@ export async function getServerPublicSubjects() {
 export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
   const notes = await getServerPublicNotes();
   return notes.filter((note) => getPublicSubjectSlug(note.subject) === subjectSlug);
+}
+
+export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
+  const notes = await getServerPublicNotes();
+  return notes.filter((note) => note.courseProgram === courseProgram);
 }

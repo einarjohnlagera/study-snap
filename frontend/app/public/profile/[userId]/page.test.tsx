@@ -56,6 +56,12 @@ describe("PublicProfilePage", () => {
         totalCopies: 7,
         totalShares: 4,
         totalViews: 20,
+        totalProfileShares: 0,
+        notesBySubject: [
+          { subject: "Biology", count: 1 },
+          { subject: "Chemistry", count: 1 },
+        ],
+        totalPublicSubjectCount: 2,
         publicNotes: [
           {
             noteId: "note-1",
@@ -127,6 +133,9 @@ describe("PublicProfilePage", () => {
         totalCopies: 0,
         totalShares: 0,
         totalViews: 0,
+        totalProfileShares: 0,
+        notesBySubject: [],
+        totalPublicSubjectCount: 0,
         publicNotes: [],
       },
     });
@@ -152,6 +161,9 @@ describe("PublicProfilePage", () => {
         totalCopies: 0,
         totalShares: 0,
         totalViews: 0,
+        totalProfileShares: 0,
+        notesBySubject: [],
+        totalPublicSubjectCount: 0,
         publicNotes: [
           {
             noteId: "note-1",
@@ -194,6 +206,9 @@ describe("PublicProfilePage", () => {
         totalCopies: 0,
         totalShares: 0,
         totalViews: 0,
+        totalProfileShares: 0,
+        notesBySubject: [],
+        totalPublicSubjectCount: 0,
         publicNotes: [
           {
             noteId: "note-1",
@@ -233,6 +248,9 @@ describe("PublicProfilePage", () => {
         totalCopies: 0,
         totalShares: 0,
         totalViews: 0,
+        totalProfileShares: 0,
+        notesBySubject: [],
+        totalPublicSubjectCount: 0,
         publicNotes: [
           {
             noteId: "note-1",
@@ -281,6 +299,9 @@ describe("PublicProfilePage", () => {
         totalCopies: 5,
         totalShares: 0,
         totalViews: 0,
+        totalProfileShares: 0,
+        notesBySubject: [],
+        totalPublicSubjectCount: 0,
         publicNotes: [],
       },
     });
