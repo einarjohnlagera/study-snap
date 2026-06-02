@@ -8,6 +8,8 @@ Theme: convert the public library's anonymous reading traffic into signed-up, ac
 
 ### ✅ Shipped
 
+- **Dynamic public-note share cards** — public note detail pages now generate a per-note Open Graph image (`opengraph-image.tsx`) showing the note title, subject, and `{N} practice questions · Quiz yourself in seconds` instead of the generic logo card. Makes shared links (especially in Facebook study groups) far more clickable. The page's `generateMetadata` drops the static default image so the file-convention card wins, and Twitter falls back to the same dynamic `og:image`. (Article JSON-LD structured data was already present on these pages.)
+
 ### 🔲 Pending
 
 ---

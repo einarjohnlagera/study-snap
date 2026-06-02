@@ -345,15 +345,15 @@ describe("PublicLibrarySeoPage", () => {
       type: "article",
       url: "https://notelib.app/public/library/science/cell-structure",
       siteName: "NoteLib",
-      images: expect.arrayContaining([
-        expect.objectContaining({ url: "https://notelib.app/og-image.png" }),
-      ]),
     });
+    // The static default image is dropped so the per-note opengraph-image.tsx
+    // file convention provides the dynamic share card.
+    expect(metadata.openGraph?.images).toBeUndefined();
     expect(metadata.twitter).toMatchObject({
       card: "summary_large_image",
       title: "Cell Structure | NoteLib",
-      images: ["https://notelib.app/og-image.png"],
     });
+    expect(metadata.twitter?.images).toBeUndefined();
   });
 
   it("falls back to generated description when the note summary is missing", async () => {
