@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -302,7 +303,7 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<NoteListItemResponse> listPublic(
+    public PublicNoteListResponse listPublic(
             UUID viewerUserId,
             String search,
             String sort,
@@ -322,10 +323,11 @@ public class NoteService {
         } else {
             notes = noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
         }
-        List<NoteListItemResponse> items = toListItems(notes, viewerUserId, false);
-        items = filterPublicLibraryItems(items, search, subject, tags, courseProgram);
+        List<NoteListItemResponse> allItems = toListItems(notes, viewerUserId, false);
+        int total = allItems.size();
+        List<NoteListItemResponse> items = filterPublicLibraryItems(allItems, search, subject, tags, courseProgram);
         items = sortPublicLibraryItems(items, sort);
-        return limitPublicLibraryItems(items, size);
+        return new PublicNoteListResponse(limitPublicLibraryItems(items, size), total);
     }
 
     @Transactional(readOnly = true)

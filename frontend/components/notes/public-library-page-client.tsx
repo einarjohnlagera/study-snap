@@ -455,6 +455,7 @@ export function PublicLibraryPageClient() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => getAuthUser()?.username ?? null);
   const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
@@ -522,7 +523,8 @@ export function PublicLibraryPageClient() {
       if (notesResult.status !== "fulfilled") {
         throw notesResult.reason;
       }
-      setItems(notesResult.value);
+      setItems(notesResult.value.items);
+      setTotal(notesResult.value.total);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
@@ -835,7 +837,7 @@ export function PublicLibraryPageClient() {
     setSubjectSearchQuery("");
     setTagSearchQuery("");
     replacePublicLibraryFilters({
-      audience: NOTE_TARGET_PROFILE_ALL,
+      audience: null,
       courseProgram: null,
       creator: null,
       search: null,
@@ -856,7 +858,7 @@ export function PublicLibraryPageClient() {
   }, []);
 
   const applyModalFilters = useCallback(() => {
-    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : NOTE_TARGET_PROFILE_ALL;
+    const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : null;
     const nextSubject = subjectFilterDraft !== ALL_SUBJECTS ? slugifyPublicLibraryFilterValue(subjectFilterDraft) : null;
     const nextTags = tagsFilterDraft.map((tag) => slugifyPublicLibraryFilterValue(tag));
     const nextCourseProgram = courseProgramDraft !== ALL_COURSE_PROGRAMS ? slugifyPublicLibraryFilterValue(courseProgramDraft) : null;
@@ -947,6 +949,12 @@ export function PublicLibraryPageClient() {
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
+  const hasActiveUrlFilters = (parsedUrlFilters.search?.trim().length ?? 0) > 0
+    || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
+    || selectedCourseProgram !== ALL_COURSE_PROGRAMS
+    || parsedUrlFilters.creator !== null
+    || selectedSubject !== ALL_SUBJECTS
+    || selectedTags.length > 0;
   const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
 
   // Discovery mode: no active search/filter and default sort → show discovery sections
@@ -1094,7 +1102,7 @@ export function PublicLibraryPageClient() {
               setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
               replacePublicLibraryFilters({
                 ...parsedUrlFilters,
-                audience: NOTE_TARGET_PROFILE_ALL,
+                audience: null,
                 view: null,
               });
             }}
@@ -1322,15 +1330,21 @@ export function PublicLibraryPageClient() {
               </div>
             </div>
 
-            {hasActiveFilters ? (
-              <div className="border-t border-border pt-3">
-                {activeFilterSummary}
+            <div className="space-y-3 border-t border-border pt-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p data-testid="note-count-pill" className="text-sm text-foreground/50">
+                  {hasActiveUrlFilters
+                    ? `${items.length} of ${total} notes`
+                    : `${total} notes`}
+                </p>
+                {!hasActiveFilters ? (
+                  <p className="text-xs text-foreground/50">
+                    Sorted by {PUBLIC_SORT_LABELS[selectedSort]}
+                  </p>
+                ) : null}
               </div>
-            ) : (
-              <p className="border-t border-border pt-3 text-xs text-foreground/50">
-                Sorted by {PUBLIC_SORT_LABELS[selectedSort]}
-              </p>
-            )}
+              {hasActiveFilters ? activeFilterSummary : null}
+            </div>
           </Card>
 
           {!ctaDismissed && !parsedUrlFilters.courseProgram && !parsedUrlFilters.creator && !loading ? (
@@ -1373,7 +1387,7 @@ export function PublicLibraryPageClient() {
                 className="shrink-0"
                 onClick={() => {
                   setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
-                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: NOTE_TARGET_PROFILE_ALL, view: null });
+                  replacePublicLibraryFilters({ ...parsedUrlFilters, audience: null, view: null });
                 }}
               >
                 View all notes
@@ -1435,7 +1449,7 @@ export function PublicLibraryPageClient() {
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
-                          audience: NOTE_TARGET_PROFILE_ALL,
+                          audience: null,
                           view: null,
                         });
                       }}
@@ -1505,7 +1519,7 @@ export function PublicLibraryPageClient() {
                         setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
                         replacePublicLibraryFilters({
                           ...parsedUrlFilters,
-                          audience: NOTE_TARGET_PROFILE_ALL,
+                          audience: null,
                           view: null,
                         });
                       }}
@@ -1590,6 +1604,7 @@ export function PublicLibraryPageClient() {
               <div className="relative">
                 <input
                   type="text"
+                  aria-label="Subject"
                   value={subjectComboOpen ? subjectSearchQuery : (subjectFilterDraft !== ALL_SUBJECTS ? subjectFilterDraft : "")}
                   onChange={(event) => setSubjectSearchQuery(event.target.value)}
                   placeholder={subjectComboOpen ? "Search subjects..." : "All"}
@@ -1668,6 +1683,7 @@ export function PublicLibraryPageClient() {
               <div className="relative">
                 <input
                   type="text"
+                  aria-label="Course / Program"
                   value={courseProgramComboOpen ? courseProgramSearchQuery : (courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : "")}
                   onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
                   placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}

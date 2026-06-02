@@ -231,6 +231,19 @@ Public Library browsing rails:
 
 `GET /notes/public` is the backend filter source for shareable Public Library URLs.
 
+Response shape:
+
+```json
+{
+  "items": [],
+  "total": 0
+}
+```
+
+- `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp.
+- `total` is captured after public-note list mapping and before in-memory filters such as `search`, `subject`, `tag`, and `courseProgram`; DB-level creator and audience pre-filters still apply before this baseline is captured.
+- Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
+
 Supported query params:
 
 - `search`
@@ -255,6 +268,8 @@ Behavior:
 - search is case-insensitive
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
+- Public Library shows the response count near the filter bar: `{total} notes` with no active URL filters, or `{items.length} of {total} notes` when `search`, `subject`, `tag`, `courseProgram`, non-ALL `audience`, or `creator` is present
+- the count is hidden while the list is loading to avoid a transient `0 notes` state
 - tag and subject selector search inputs must keep focus while typing; modal rerenders must not move focus to the close button or other controls
 
 ## Course/Program Helper CTA

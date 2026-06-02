@@ -592,38 +592,39 @@ class NoteServiceTest {
 
         var response = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null, null);
 
-        assertThat(response).hasSize(2);
-        assertThat(response)
+        assertThat(response.total()).isEqualTo(2);
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items())
                 .extracting(NoteListItemResponse::id)
                 .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
-        assertThat(response.getFirst().ownerUserId()).isNull();
-        assertThat(response.getFirst().courseProgram()).isEqualTo("Nursing");
-        assertThat(response.getFirst().targetProfileType()).isEqualTo("STUDENT");
-        assertThat(response.getFirst().authorDisplayName()).isEqualTo("Viewer");
-        assertThat(response.getFirst().contentPreview()).isEqualTo("viewer content");
-        assertThat(response.getFirst().summaryPreview()).isEmpty();
-        assertThat(response.getFirst().isOfficialAuthor()).isFalse();
-        assertThat(response.getFirst().isCurrentUser()).isTrue();
-        assertThat(response.getFirst().copyCount()).isZero();
-        assertThat(response.getFirst().likeCount()).isZero();
-        assertThat(response.getFirst().shareCount()).isZero();
-        assertThat(response.getFirst().viewCount()).isZero();
-        assertThat(response.getFirst().copiedFromNoteId()).isNull();
-        assertThat(response.getFirst().copiedFromPublic()).isFalse();
-        assertThat(response.getFirst().likedByCurrentUser()).isFalse();
-        assertThat(response.get(1).ownerUserId()).isNull();
-        assertThat(response.get(1).courseProgram()).isEqualTo("Chemistry");
-        assertThat(response.get(1).targetProfileType()).isEqualTo("BOARD_TAKER");
-        assertThat(response.get(1).authorDisplayName()).isEqualTo("Einar");
-        assertThat(response.get(1).contentPreview()).isEqualTo("official content");
-        assertThat(response.get(1).summaryPreview()).isEqualTo("Official summary preview");
-        assertThat(response.get(1).isOfficialAuthor()).isTrue();
-        assertThat(response.get(1).isCurrentUser()).isFalse();
-        assertThat(response.get(1).copyCount()).isZero();
-        assertThat(response.get(1).likeCount()).isZero();
-        assertThat(response.get(1).shareCount()).isZero();
-        assertThat(response.get(1).viewCount()).isZero();
-        assertThat(response.get(1).likedByCurrentUser()).isFalse();
+        assertThat(response.items().getFirst().ownerUserId()).isNull();
+        assertThat(response.items().getFirst().courseProgram()).isEqualTo("Nursing");
+        assertThat(response.items().getFirst().targetProfileType()).isEqualTo("STUDENT");
+        assertThat(response.items().getFirst().authorDisplayName()).isEqualTo("Viewer");
+        assertThat(response.items().getFirst().contentPreview()).isEqualTo("viewer content");
+        assertThat(response.items().getFirst().summaryPreview()).isEmpty();
+        assertThat(response.items().getFirst().isOfficialAuthor()).isFalse();
+        assertThat(response.items().getFirst().isCurrentUser()).isTrue();
+        assertThat(response.items().getFirst().copyCount()).isZero();
+        assertThat(response.items().getFirst().likeCount()).isZero();
+        assertThat(response.items().getFirst().shareCount()).isZero();
+        assertThat(response.items().getFirst().viewCount()).isZero();
+        assertThat(response.items().getFirst().copiedFromNoteId()).isNull();
+        assertThat(response.items().getFirst().copiedFromPublic()).isFalse();
+        assertThat(response.items().getFirst().likedByCurrentUser()).isFalse();
+        assertThat(response.items().get(1).ownerUserId()).isNull();
+        assertThat(response.items().get(1).courseProgram()).isEqualTo("Chemistry");
+        assertThat(response.items().get(1).targetProfileType()).isEqualTo("BOARD_TAKER");
+        assertThat(response.items().get(1).authorDisplayName()).isEqualTo("Einar");
+        assertThat(response.items().get(1).contentPreview()).isEqualTo("official content");
+        assertThat(response.items().get(1).summaryPreview()).isEqualTo("Official summary preview");
+        assertThat(response.items().get(1).isOfficialAuthor()).isTrue();
+        assertThat(response.items().get(1).isCurrentUser()).isFalse();
+        assertThat(response.items().get(1).copyCount()).isZero();
+        assertThat(response.items().get(1).likeCount()).isZero();
+        assertThat(response.items().get(1).shareCount()).isZero();
+        assertThat(response.items().get(1).viewCount()).isZero();
+        assertThat(response.items().get(1).likedByCurrentUser()).isFalse();
     }
 
     @Test
@@ -650,8 +651,9 @@ class NoteServiceTest {
 
         var response = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null, null);
 
-        assertThat(response).extracting(NoteListItemResponse::likeCount).containsExactly(12L, 0L);
-        assertThat(response).extracting(NoteListItemResponse::likedByCurrentUser).containsExactly(true, false);
+        assertThat(response.total()).isEqualTo(2);
+        assertThat(response.items()).extracting(NoteListItemResponse::likeCount).containsExactly(12L, 0L);
+        assertThat(response.items()).extracting(NoteListItemResponse::likedByCurrentUser).containsExactly(true, false);
     }
 
     @Test
@@ -733,7 +735,8 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Note1", "Note2");
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Note1", "Note2");
     }
 
     @Test
@@ -757,9 +760,10 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, null, "PNLE", null, null, 4);
 
-        assertThat(result).hasSize(4);
-        assertThat(result).extracting(NoteListItemResponse::courseProgram).containsOnly("PNLE");
-        assertThat(result).extracting(NoteListItemResponse::title)
+        assertThat(result.total()).isEqualTo(7);
+        assertThat(result.items()).hasSize(4);
+        assertThat(result.items()).extracting(NoteListItemResponse::courseProgram).containsOnly("PNLE");
+        assertThat(result.items()).extracting(NoteListItemResponse::title)
                 .containsExactly("PNLE Note 1", "PNLE Note 2", "PNLE Note 3", "PNLE Note 4");
     }
 
@@ -779,7 +783,8 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
 
-        assertThat(result).hasSize(6);
+        assertThat(result.total()).isEqualTo(6);
+        assertThat(result.items()).hasSize(6);
     }
 
     @Test
@@ -820,7 +825,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "featured", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("HighScore", "LowScore");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("HighScore", "LowScore");
     }
 
     @Test
@@ -861,7 +866,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "featured", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
     }
 
     @Test
@@ -899,7 +904,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "featured", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Eligible");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Eligible");
     }
 
     @Test
@@ -928,7 +933,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "popular", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
     }
 
     @Test
@@ -962,7 +967,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "popular", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Popular");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Popular");
     }
 
     @Test
@@ -986,7 +991,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "recent", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("RecentNote", "OldNote");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("RecentNote", "OldNote");
     }
 
     @Test
@@ -1002,16 +1007,16 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, "unknown_value", null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("First", "Second");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("First", "Second");
     }
 
     @Test
     void listPublic_withEmptyPublicNotes_returnsEmptyRegardlessOfSort() {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of());
 
-        assertThat(noteService.listPublic(null, null, "featured", null, null, null, null, null, null)).isEmpty();
-        assertThat(noteService.listPublic(null, null, "popular", null, null, null, null, null, null)).isEmpty();
-        assertThat(noteService.listPublic(null, null, "recent", null, null, null, null, null, null)).isEmpty();
+        assertThat(noteService.listPublic(null, null, "featured", null, null, null, null, null, null).items()).isEmpty();
+        assertThat(noteService.listPublic(null, null, "popular", null, null, null, null, null, null).items()).isEmpty();
+        assertThat(noteService.listPublic(null, null, "recent", null, null, null, null, null, null).items()).isEmpty();
     }
 
     @Test
@@ -1030,7 +1035,7 @@ class NoteServiceTest {
         // Case-insensitive match
         var result = noteService.listPublic(null, null, null, "Integral Calculus", null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("MatchNote");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("MatchNote");
     }
 
     @Test
@@ -1048,7 +1053,8 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, "cinco", null, null, null, null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Cinco de Mayo");
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Cinco de Mayo");
     }
 
     @Test
@@ -1066,7 +1072,7 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, List.of("battle-of-puebla"), null, null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Battle Notes");
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Battle Notes");
     }
 
     @Test
@@ -1091,7 +1097,8 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, List.of("kidneys"), "nursing", null, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Renal Review");
+        assertThat(result.total()).isEqualTo(3);
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Renal Review");
     }
 
     @Test
@@ -1118,8 +1125,9 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(viewerUserId, null, null, null, null, null, null, NoteTargetProfileType.BOARD_TAKER, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Board target");
-        assertThat(result.getFirst().targetProfileType()).isEqualTo("BOARD_TAKER");
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Board target");
+        assertThat(result.items().getFirst().targetProfileType()).isEqualTo("BOARD_TAKER");
     }
 
     @Test
@@ -1139,7 +1147,8 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, null, "nursing", EXISTING_CREATOR_USERNAME, null, null);
 
-        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Creator note");
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Creator note");
         verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, null, EXISTING_CREATOR_USERNAME);
     }
 
@@ -1150,7 +1159,8 @@ class NoteServiceTest {
 
         var result = noteService.listPublic(null, null, null, null, null, null, unknownCreator, null, null);
 
-        assertThat(result).isEmpty();
+        assertThat(result.total()).isZero();
+        assertThat(result.items()).isEmpty();
         verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, null, unknownCreator);
     }
 

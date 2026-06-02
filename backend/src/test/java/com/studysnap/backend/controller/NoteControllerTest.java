@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
@@ -197,9 +198,9 @@ class NoteControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4))
-                .thenReturn(List.of());
+                .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
-        List<NoteListItemResponse> response = noteController.listPublic(
+        PublicNoteListResponse response = noteController.listPublic(
                 "cinco",
                 "recent",
                 "history",
@@ -223,7 +224,8 @@ class NoteControllerTest {
                 NoteTargetProfileType.STUDENT,
                 4
         );
-        assertThat(response).isEmpty();
+        assertThat(response.items()).isEmpty();
+        assertThat(response.total()).isZero();
     }
 
     @Test
@@ -231,9 +233,9 @@ class NoteControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50))
-                .thenReturn(List.of());
+                .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
-        List<NoteListItemResponse> response = noteController.listPublic(
+        PublicNoteListResponse response = noteController.listPublic(
                 null,
                 null,
                 null,
@@ -247,7 +249,8 @@ class NoteControllerTest {
         );
 
         verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50);
-        assertThat(response).isEmpty();
+        assertThat(response.items()).isEmpty();
+        assertThat(response.total()).isZero();
     }
 
     @Test
@@ -453,11 +456,13 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null)).thenReturn(expected);
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null))
+                .thenReturn(new PublicNoteListResponse(expected, expected.size()));
 
-        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, null, null, null, null, null, null, user);
+        PublicNoteListResponse response = noteController.listPublic(null, null, null, null, null, null, null, null, null, user);
 
-        assertThat(response).isEqualTo(expected);
+        assertThat(response.items()).isEqualTo(expected);
+        assertThat(response.total()).isEqualTo(expected.size());
         verify(noteService).listPublic(userId, null, null, null, null, null, null, null, null);
     }
 

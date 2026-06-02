@@ -128,6 +128,7 @@ describe("Library page", () => {
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
+    expect(screen.getByText("3 notes")).toBeInTheDocument();
     expect(screen.getByText("Nursing")).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
@@ -267,6 +268,7 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("2 of 3 notes")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
 

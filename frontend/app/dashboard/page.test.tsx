@@ -158,7 +158,7 @@ describe("DashboardPage profile variants", () => {
     });
     (getDashboardOverview as jest.Mock).mockResolvedValue(overview);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
-    (listPublicNotes as jest.Mock).mockResolvedValue(publicNotes);
+    (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });
   });
 
   it("renders the student dashboard with review-first sections", async () => {
