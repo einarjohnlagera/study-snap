@@ -14,6 +14,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -30,6 +31,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -97,6 +99,11 @@ class PublicProfileServiceTest {
                 ));
         when(analyticsEventRepository.countByEventTypeAndEntityId(AnalyticsEventType.PUBLIC_PROFILE_SHARED, userId))
                 .thenReturn(6L);
+        when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of(
+                        subjectProjection("Biology", 1L),
+                        subjectProjection("Chemistry", 1L)
+                ));
 
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
@@ -114,6 +121,13 @@ class PublicProfileServiceTest {
         assertThat(response.totalShares()).isEqualTo(4);
         assertThat(response.totalViews()).isEqualTo(20);
         assertThat(response.totalProfileShares()).isEqualTo(6);
+        assertThat(response.notesBySubject())
+                .extracting("subject", "count")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Biology", 1),
+                        org.assertj.core.groups.Tuple.tuple("Chemistry", 1)
+                );
+        assertThat(response.totalPublicSubjectCount()).isEqualTo(2);
         assertThat(response.publicNotes())
                 .extracting(
                         PublicProfileNoteResponse::noteId,
@@ -163,6 +177,8 @@ class PublicProfileServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
+        when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of());
 
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
@@ -174,7 +190,71 @@ class PublicProfileServiceTest {
         assertThat(response.totalCopies()).isZero();
         assertThat(response.totalShares()).isZero();
         assertThat(response.totalViews()).isZero();
+        assertThat(response.notesBySubject()).isEmpty();
+        assertThat(response.totalPublicSubjectCount()).isZero();
         assertThat(response.publicNotes()).isEmpty();
+    }
+
+    @Test
+    void getByUserId_returnsSinglePublicSubjectStat() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("creator@example.com");
+        user.setFirstName("Creator");
+        user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(true);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of());
+        when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of(subjectProjection("Biology", 4L)));
+
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
+
+        assertThat(response.notesBySubject())
+                .extracting("subject", "count")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Biology", 4));
+        assertThat(response.totalPublicSubjectCount()).isEqualTo(1);
+        verify(noteRepository).countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC);
+    }
+
+    @Test
+    void getByUserId_capsPublicSubjectStatsAtFiveAndKeepsDistinctSubjectTotal() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("creator@example.com");
+        user.setFirstName("Creator");
+        user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(true);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of());
+        when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of(
+                        subjectProjection("Biology", 9L),
+                        subjectProjection("Chemistry", 8L),
+                        subjectProjection("Physics", 7L),
+                        subjectProjection("Anatomy", 6L),
+                        subjectProjection("Microbiology", 5L),
+                        subjectProjection("Pharmacology", 4L)
+                ));
+
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
+
+        assertThat(response.notesBySubject())
+                .extracting("subject", "count")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Biology", 9),
+                        org.assertj.core.groups.Tuple.tuple("Chemistry", 8),
+                        org.assertj.core.groups.Tuple.tuple("Physics", 7),
+                        org.assertj.core.groups.Tuple.tuple("Anatomy", 6),
+                        org.assertj.core.groups.Tuple.tuple("Microbiology", 5)
+                );
+        assertThat(response.totalPublicSubjectCount()).isEqualTo(6);
     }
 
     @Test
@@ -317,6 +397,20 @@ class PublicProfileServiceTest {
             @Override
             public long getTotalCount() {
                 return totalCount;
+            }
+        };
+    }
+
+    private NoteSubjectCountProjection subjectProjection(String subject, long noteCount) {
+        return new NoteSubjectCountProjection() {
+            @Override
+            public String getSubject() {
+                return subject;
+            }
+
+            @Override
+            public long getNoteCount() {
+                return noteCount;
             }
         };
     }

@@ -1,5 +1,7 @@
 package com.studysnap.backend.dto;
 
+import com.studysnap.backend.dto.NoteStatsResponse.SubjectCount;
+
 import java.util.List;
 
 public record PublicProfileResponse(
@@ -18,6 +20,8 @@ public record PublicProfileResponse(
         long totalShares,
         long totalViews,
         long totalProfileShares,
+        List<SubjectCount> notesBySubject,
+        int totalPublicSubjectCount,
         List<PublicProfileNoteResponse> publicNotes
 ) {
 }

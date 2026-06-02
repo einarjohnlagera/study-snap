@@ -106,6 +106,21 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     List<NoteSubjectCountProjection> countSubjectsByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     @Query("""
+            select n.subject as subject, count(n) as noteCount
+            from NoteEntity n
+            where n.ownerUserId = :ownerUserId
+              and n.visibility = :visibility
+              and n.subject is not null
+              and trim(n.subject) <> ''
+            group by n.subject
+            order by count(n) desc
+            """)
+    List<NoteSubjectCountProjection> countSubjectsByOwnerUserIdAndVisibility(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("visibility") NoteVisibility visibility
+    );
+
+    @Query("""
             select n.subject
             from NoteEntity n
             where n.visibility = :visibility
