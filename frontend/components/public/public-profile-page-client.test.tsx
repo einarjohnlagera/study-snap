@@ -42,6 +42,8 @@ const baseProfile: PublicProfileResponse = {
   totalShares: 2,
   totalViews: 9,
   totalProfileShares: 0,
+  notesBySubject: [{ subject: "Biology", count: 1 }],
+  totalPublicSubjectCount: 1,
   publicNotes: [
     {
       noteId: "note-1",
@@ -97,6 +99,7 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getAllByText("Biology")).not.toHaveLength(0);
     expect(screen.getByText("Total Shares")).toBeInTheDocument();
     expect(screen.getByText("Total Views")).toBeInTheDocument();
+    expect(screen.getAllByText("1 note")).not.toHaveLength(0);
     expect(screen.getByText("Mostly shares notes in Biology.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Featured note" })).toBeInTheDocument();
     expect(screen.getByText("Featured Note")).toBeInTheDocument();
@@ -129,6 +132,60 @@ describe("PublicProfilePageClient", () => {
     });
     expect(await screen.findByText("Public profile is now private.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
+  });
+
+  it("renders the public subject scope and links subject chips into the creator-filtered public library", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+    const profile = {
+      ...baseProfile,
+      publicNotesCount: 7,
+      notesBySubject: [
+        { subject: "Biology", count: 4 },
+        { subject: "Chemistry", count: 3 },
+      ],
+      totalPublicSubjectCount: 2,
+    };
+
+    render(
+      <PublicProfilePageClient
+        userId="studybuddy"
+        lookupType="username"
+        initialResult={{ status: "ok", profile }}
+      />,
+    );
+
+    expect(screen.getByText("7 notes across 2 subjects")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Biology" })).toHaveAttribute(
+      "href",
+      "/public/library?subject=Biology&creator=studybuddy",
+    );
+    expect(screen.getByRole("link", { name: "Chemistry" })).toHaveAttribute(
+      "href",
+      "/public/library?subject=Chemistry&creator=studybuddy",
+    );
+  });
+
+  it("falls back to the note count and hides subject chips when no public subject breakdown exists", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+    const profile = {
+      ...baseProfile,
+      publicNotesCount: 0,
+      notesBySubject: [],
+      totalPublicSubjectCount: 0,
+      publicNotes: [],
+    };
+
+    render(
+      <PublicProfilePageClient
+        userId="studybuddy"
+        lookupType="username"
+        initialResult={{ status: "ok", profile }}
+      />,
+    );
+
+    expect(screen.getAllByText("0 notes")).not.toHaveLength(0);
+    expect(screen.queryByText(/across/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Biology" })).not.toBeInTheDocument();
   });
 
   it("shows private confirm modal when owner tries to share a private profile", async () => {

@@ -1199,6 +1199,11 @@ export type PublicProfileNoteResponse = {
   slug: string;
 };
 
+export type SubjectCountResponse = {
+  subject: string;
+  count: number;
+};
+
 export type PublicProfileResponse = {
   displayName: string;
   username?: string | null;
@@ -1215,6 +1220,8 @@ export type PublicProfileResponse = {
   totalShares: number;
   totalViews: number;
   totalProfileShares: number;
+  notesBySubject: SubjectCountResponse[];
+  totalPublicSubjectCount: number;
   publicNotes: PublicProfileNoteResponse[];
 };
 
