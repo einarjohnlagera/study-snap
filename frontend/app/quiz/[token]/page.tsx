@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   ApiRequestError,
@@ -173,7 +174,7 @@ export default function SharedQuizPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
                       Question {index + 1}
                     </p>
-                    <h2 className="text-lg font-semibold">{question.question}</h2>
+                    <h2 className="text-lg font-semibold"><QuizQuestionText text={question.question} /></h2>
                   </div>
                   <div className="grid gap-2">
                     {question.choices.map((choice, choiceIndex) => {
@@ -224,7 +225,7 @@ export default function SharedQuizPage() {
           <Card className="space-y-5 p-5 sm:p-6">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{progressLabel}</p>
-              <h2 className="text-xl font-semibold leading-8">{currentQuestion.question}</h2>
+              <h2 className="text-xl font-semibold leading-8"><QuizQuestionText text={currentQuestion.question} /></h2>
               {currentQuestion.concept ? (
                 <p className="text-sm text-foreground/60">{currentQuestion.concept}</p>
               ) : null}
