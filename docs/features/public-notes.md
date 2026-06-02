@@ -77,12 +77,14 @@ Owner actions:
 
 Non-owner actions:
 
+- `Quiz yourself on this note` (primary conversion CTA)
 - `Create your own Study Pack`
 - `Copy to My Library`
 - `Share this note`
 
-Public note detail must not expose edit, delete, generation, or quiz actions.
-The note stays primary; Quick Check and CTA blocks should support the note rather than turning the page into a quiz-first surface.
+Public note detail must not expose edit, delete, generation, or run an inline full quiz on the public page itself.
+The note **content** stays primary — the page is note-first for reading and SEO, and the page hierarchy (summary, full notes) is not reordered behind a quiz.
+The *conversion CTA*, however, may be quiz-framed: `Quiz yourself on this note` is the primary CTA and routes through the copy → instant Quick Review flow (the actual quiz runs on the viewer's own copy, never on the public page). `Create your own Study Pack` and `Copy to My Library` remain as secondary actions.
 
 Copy-first generation rule:
 
