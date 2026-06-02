@@ -17,6 +17,7 @@ Theme: make Course/Program and Subject the primary discovery axes across the pub
 - **Public Profile subject breakdown** — public profiles now show a Learning Focus stat line (`X notes across Y subjects`) plus top subject chips backed by public-note counts. Each chip links to the creator-filtered Public Library for that subject, and both username and legacy userId profile endpoints return the new fields.
 - **Course/Program empty state in Public Library** — when a `courseProgram` filter is active and returns no results, the Public Library shows "No [CourseProgram] notes shared yet." with a "Share a note" CTA linking to `/notes/new` (signed-in) or `/auth` (anonymous). Generic "No public notes match your filters." empty state is preserved for all other filter combinations.
 - **Statement 1/2 quiz question formatting** — multi-statement questions (e.g. "Statement 1: … Statement 2: …") now render each statement on its own labeled line instead of as a single dense paragraph. Applied across Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam (via `quiz-answer-review`), and shared quiz pages via a new `QuizQuestionText` component.
+- **Matching group prompt quality fix** — strengthened the Long Exam prompt constraint for MATCHING blocks: choices must be the identical array copied exactly across all items in the group; any deviation requires falling back to standard MCQ. Reduces `reason=different_choices` demotions at validation time.
 
 ### 🔲 Pending
 
