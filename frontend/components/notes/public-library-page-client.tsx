@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, ChevronDown, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
@@ -1527,6 +1527,17 @@ export function PublicLibraryPageClient() {
                     >
                       View all notes
                     </Button>
+                  </>
+                ) : selectedCourseProgram !== ALL_COURSE_PROGRAMS && searchQuery.trim().length === 0 ? (
+                  <>
+                    <h2 className="text-base font-semibold sm:text-lg">No {selectedCourseProgram} notes shared yet.</h2>
+                    <p className="text-sm text-foreground/75">Got notes? Share them with the community.</p>
+                    <Link
+                      href={currentUserId ? "/notes/new" : "/auth"}
+                      className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                    >
+                      Share a note
+                    </Link>
                   </>
                 ) : (
                   <>
