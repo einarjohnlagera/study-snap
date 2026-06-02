@@ -85,3 +85,8 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
   const notes = await getServerPublicNotes();
   return notes.filter((note) => getPublicSubjectSlug(note.subject) === subjectSlug);
 }
+
+export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
+  const notes = await getServerPublicNotes();
+  return notes.filter((note) => note.courseProgram === courseProgram);
+}

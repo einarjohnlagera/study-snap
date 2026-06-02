@@ -10,10 +10,10 @@ import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
-import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
+import { buildPublicLibraryNotePathFromDetail, buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
-import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubjectSlug } from "@/lib/server-public-notes";
+import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
 
@@ -79,6 +79,18 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     })
     .slice(0, 3)
     .map((n) => ({ id: n.id, title: n.title, subject: n.subject, summaryPreview: n.summaryPreview, contentPreview: n.contentPreview }));
+
+  const courseProgram = allSubjectNotes.find((n) => n.id === note.id)?.courseProgram ?? null;
+  const moreByCourseProgram = courseProgram
+    ? (await getServerPublicNotesByCourseProgram(courseProgram))
+        .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")
+        .sort((a, b) => {
+          const scoreA = (a.viewCount ?? 0) + (a.copyCount ?? 0) * 3 + (a.likeCount ?? 0) * 2;
+          const scoreB = (b.viewCount ?? 0) + (b.copyCount ?? 0) * 3 + (b.likeCount ?? 0) * 2;
+          return scoreB - scoreA;
+        })
+        .slice(0, 4)
+    : [];
 
   const title = normalizePublicNoteText(note.title?.trim()) || "Untitled note";
   const description = buildDescription(title, note.summary);
@@ -237,6 +249,46 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
 
         {/* Practice mode teaser — before ownership actions */}
         {!isDraft ? <PublicPracticeModeTeaser /> : null}
+
+        {/* More notes in the same Course/Program */}
+        {moreByCourseProgram.length > 0 ? (
+          <section aria-labelledby="more-course-program-heading">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 id="more-course-program-heading" className="text-lg font-semibold sm:text-xl">
+                  More {courseProgram} notes
+                </h2>
+                <Link
+                  href={buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
+                  className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+                >
+                  View all →
+                </Link>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {moreByCourseProgram.map((n) => (
+                  <Link
+                    key={n.id}
+                    href={buildPublicLibraryNotePath({ subject: n.subject, title: n.title })}
+                    className="group block rounded-2xl border border-border bg-card p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5"
+                  >
+                    <p className="line-clamp-2 font-medium text-foreground group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                      {normalizePublicNoteText(n.title) || "Untitled note"}
+                    </p>
+                    {n.subject ? (
+                      <p className="mt-1 text-xs text-foreground/55">{n.subject}</p>
+                    ) : null}
+                    {n.summaryPreview ? (
+                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-foreground/70">
+                        {n.summaryPreview}
+                      </p>
+                    ) : null}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {/* Ownership actions — bottom, after content */}
         <section aria-labelledby="public-note-actions-heading">

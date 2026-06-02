@@ -500,6 +500,17 @@ The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Modal title: 
 
 `NoteListItemResponse` has no windowed engagement fields (`recentCopyCount`, `recentLikeCount`, etc.). Implementing a true 7-day trending signal requires backend support: either per-event timestamps queryable as a rolling aggregate, or precomputed windowed counts persisted alongside the note. Do not ship under a "Trending this week" label without real windowed data — lifetime totals on recent notes is not the same signal. Revisit when backend adds windowed count fields.
 
+### K — "More [CourseProgram] notes" section on public note detail (resolved in v0.22.0)
+
+When the current public note has a `courseProgram` set, the detail page shows a lateral discovery section after the Practice Mode Teaser and before the Ownership Actions block:
+
+- Heading: `More {courseProgram} notes` with a `View all →` link to `/public/library?courseProgram={slug}`
+- Shows up to 4 other study-ready (`STUDY_PACK_READY`) public notes with the same `courseProgram`, sorted by engagement score (`viewCount + copyCount×3 + likeCount×2`)
+- Cards link to the canonical public note detail path; each card shows title, subject, and summary preview (line-clamped)
+- If the current note has no `courseProgram`, the section is hidden entirely
+- `courseProgram` is read from `NoteListItemResponse` (the list endpoint already includes it) — no `PublicNoteDetailResponse` DTO change is needed
+- Next.js deduplicates the `GET /notes/public` fetch within the same render via its built-in fetch deduplication for matching URL + cache options
+
 ### I — Practice-mode preview teaser on public note detail (resolved)
 
 A non-interactive "Practice modes available once you copy this note" block showing Challenge Quiz, Adaptive Practice, and Board Exam Mode as teaser cards. Implemented as `PublicPracticeModeTeaser` (static server component, no "use client"), placed after Full Notes and before Ownership Actions, gated on `!isDraft`. Board Exam Mode carries a Pro chip; the other two modes are shown as freely available.
