@@ -82,13 +82,13 @@ Design constraint carried over from v0.22.0: **friction-free anonymous browsing 
 
 #### P2 — Low-cost generosity (deprioritized)
 
-**5. Free topic-note-generation 5 → 10**
+**5. Free topic-note-generation 5 → 10 (✅ shipped)**
 
-   Raise `freeMonthlyNoteGenerationLimit` from 5 to 10.
+   Raised `freeMonthlyNoteGenerationLimit` from 5 to 10 (Java default + `application.yaml`).
 
    - **Not a conversion lever** — production free-quota hit rate is 0.0%, so no current user is constrained by the cap
-   - Included only as cheap activation goodwill / headroom insurance; a one-line config change
-   - Do not frame this release around it
+   - Shipped only as cheap activation goodwill / headroom insurance; config-only change, no frontend or test changes (limits read dynamically; pricing copy is "Limited")
+   - Free Adaptive Practice was explicitly considered and **declined** for this release — it doesn't address the capture constraint, erodes the paid differentiator while we're building conversion, and is a packaging change (plans/pricing/landing cascade), not a quota tweak. See Deferred below.
 
 #### Deferred — revisit after capture improves
 

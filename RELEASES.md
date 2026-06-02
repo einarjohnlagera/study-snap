@@ -8,6 +8,8 @@ Theme: convert the public library's anonymous reading traffic into signed-up, ac
 
 ### ✅ Shipped
 
+- **Free note generation raised 5 → 10/month** — bumped `freeMonthlyNoteGenerationLimit` (default + `application.yaml`), aligning free topic-note generation with the free Study Pack limit (10). Goodwill / activation headroom, not a conversion lever — production free-quota hit rate is 0.0%, so no current user was constrained by the old cap. Frontend surfaces read the limit dynamically; pricing copy ("Limited") is unchanged.
+
 ### 🔲 Pending
 
 ---
