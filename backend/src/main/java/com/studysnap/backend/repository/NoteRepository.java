@@ -20,6 +20,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     List<NoteEntity> findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(UUID ownerUserId, NoteVisibility visibility);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
+    long countByOwnerUserId(UUID ownerUserId);
     long countByVisibility(NoteVisibility visibility);
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
@@ -92,6 +93,17 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
               and trim(n.subject) <> ''
             """)
     List<String> findSubjectValuesByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    @Query("""
+            select n.subject as subject, count(n) as noteCount
+            from NoteEntity n
+            where n.ownerUserId = :ownerUserId
+              and n.subject is not null
+              and trim(n.subject) <> ''
+            group by n.subject
+            order by count(n) desc
+            """)
+    List<NoteSubjectCountProjection> countSubjectsByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     @Query("""
             select n.subject
