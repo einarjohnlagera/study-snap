@@ -8,6 +8,7 @@ Theme: convert the public library's anonymous reading traffic into signed-up, ac
 
 ### ✅ Shipped
 
+- **Quiz-first public-note conversion CTA** — the public note detail page's conversion CTA now leads with "Quiz yourself on this note" (routing through the existing copy → instant Quick Review flow) instead of "Create your own Study Pack"; the mini-quiz completion screen leads with the same quiz-first CTA and demotes "Copy to My Library" to secondary. The page stays note-first (content/SEO unchanged) — only the CTA framing changed. Added a `PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED` analytics event to measure the new CTA, and parameterized `PublicSeoCopyCta` (`action`, `analyticsEvent`, `authModalTitle/Body`, `variant`). Most of the underlying capture flow (copy-intent cookie, signup `redirect`, auto-copy, auto-generate, auto-start Quick Review) already existed; Google OAuth is popup-based so no redirect-intent preservation work was needed.
 - **Dynamic public-note share cards** — public note detail pages now generate a per-note Open Graph image (`opengraph-image.tsx`) showing the note title, subject, and `{N} practice questions · Quiz yourself in seconds` instead of the generic logo card. Makes shared links (especially in Facebook study groups) far more clickable. The page's `generateMetadata` drops the static default image so the file-convention card wins, and Twitter falls back to the same dynamic `og:image`. (Article JSON-LD structured data was already present on these pages.)
 
 ### 🔲 Pending

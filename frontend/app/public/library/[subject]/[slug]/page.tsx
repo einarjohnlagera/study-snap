@@ -218,17 +218,27 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           />
         ) : null}
 
-        {/* Soft conversion CTA */}
+        {/* Soft conversion CTA — quiz-first; the note content above stays primary */}
         <Card className="space-y-3 border-primary/20 bg-primary/5 p-4 sm:p-6">
-          <h2 className="text-base font-semibold sm:text-lg">Study from your own notes</h2>
+          <h2 className="text-base font-semibold sm:text-lg">Ready to quiz yourself?</h2>
           <p className="text-sm text-foreground/75">
-            Turn your own notes into summaries, key concepts, and practice questions when you&apos;re ready to review.
+            Test what you remember with a full practice quiz on this note. Create a free account and start in seconds.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <PublicSeoCopyCta
               noteId={note.id}
+              label="Quiz yourself on this note"
+              redirectTarget="quick-review"
+              action="quickReview"
+              analyticsEvent="PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED"
+              authModalTitle="Quiz yourself on this note"
+              authModalBody="Create a free account or log in to quiz yourself on this note and keep practicing."
+            />
+            <PublicSeoCopyCta
+              noteId={note.id}
               label="Create your own Study Pack"
               redirectTarget="generate"
+              variant="outline"
             />
           </div>
         </Card>

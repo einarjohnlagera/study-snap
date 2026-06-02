@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
-import { ResponsiveActionButton } from "@/components/ui/action-button";
+import { ResponsiveActionButton, type ActionIconName } from "@/components/ui/action-button";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
-import { copyNote, trackAnalyticsEvent } from "@/lib/api";
+import { copyNote, trackAnalyticsEvent, type AnalyticsEventType } from "@/lib/api";
 import {
   buildCopiedNotePath,
   buildPublicCopyIntentQuery,
@@ -14,19 +14,29 @@ import {
   type PublicCopyRedirectTarget,
 } from "@/lib/public-note-copy";
 
-const AUTH_MODAL_TITLE = "Save this note";
-const AUTH_MODAL_BODY = "Create a free account or log in to copy this note to your library.";
+const DEFAULT_AUTH_MODAL_TITLE = "Save this note";
+const DEFAULT_AUTH_MODAL_BODY = "Create a free account or log in to copy this note to your library.";
 
 type PublicSeoCopyCtaProps = {
   noteId: string;
   label?: string;
   redirectTarget?: PublicCopyRedirectTarget;
+  action?: ActionIconName;
+  analyticsEvent?: AnalyticsEventType;
+  authModalTitle?: string;
+  authModalBody?: string;
+  variant?: "primary" | "outline";
 };
 
 export function PublicSeoCopyCta({
   noteId,
   label = "Copy to My Library",
   redirectTarget = "library",
+  action = "copy",
+  analyticsEvent = "PUBLIC_NOTE_COPY_CLICKED",
+  authModalTitle = DEFAULT_AUTH_MODAL_TITLE,
+  authModalBody = DEFAULT_AUTH_MODAL_BODY,
+  variant = "primary",
 }: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -85,7 +95,7 @@ export function PublicSeoCopyCta({
       return;
     }
     void trackAnalyticsEvent({
-      eventType: "PUBLIC_NOTE_COPY_CLICKED",
+      eventType: analyticsEvent,
       entityId: noteId,
       metadata: {
         path: pathname,
@@ -112,18 +122,19 @@ export function PublicSeoCopyCta({
     <div className="space-y-2">
       <ResponsiveActionButton
         type="button"
+        variant={variant === "outline" ? "outline" : undefined}
         className="w-full sm:w-auto"
         onClick={() => void handleCopy()}
         disabled={copying}
-        action="copy"
+        action={action}
         label={copying ? "Preparing your copy..." : label}
         showTextOnMobile
       />
       {copyError ? <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p> : null}
       <AppModal
         isOpen={authModalOpen}
-        title={AUTH_MODAL_TITLE}
-        description={AUTH_MODAL_BODY}
+        title={authModalTitle}
+        description={authModalBody}
         onClose={() => setAuthModalOpen(false)}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

@@ -61,7 +61,7 @@ describe("PublicMiniQuizPreview", () => {
   it("does not show the completion state or CTAs before answering", () => {
     render(<PublicMiniQuizPreview quiz={singleQuiz} noteId="note-1" />);
     expect(screen.queryByText("🎉 Quick Check Complete")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Copy & Start Practicing/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Quiz yourself on this note/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy to My Library/i })).not.toBeInTheDocument();
   });
 
@@ -118,7 +118,11 @@ describe("PublicMiniQuizPreview", () => {
     fireEvent.click(screen.getByRole("button", { name: "See Results" }));
 
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Copy & Start Practicing", redirectTarget: "quick-review" }),
+      expect.objectContaining({
+        label: "Quiz yourself on this note",
+        redirectTarget: "quick-review",
+        analyticsEvent: "PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED",
+      }),
     );
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
       expect.objectContaining({ label: "Copy to My Library" }),
@@ -135,7 +139,7 @@ describe("PublicMiniQuizPreview", () => {
     fireEvent.click(screen.getByRole("button", { name: "See Results" }));
 
     expect(screen.getByText("🎉 Quick Check Complete")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy & Start Practicing" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quiz yourself on this note" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy to My Library" })).toBeInTheDocument();
   });
 
