@@ -1,10 +1,10 @@
 # RELEASES.md - NoteLib
 
-## v0.22.0 - Course-First Discovery
+## v0.22.0 - Course & Subject Discovery
 
-**Status: In Progress**
+**Status: Released**
 
-Theme: TBD
+Theme: make Course/Program and Subject the primary discovery axes across the public library, private library, and public profiles — removing the profile-type audience gate that created false boundaries, surfacing subject breakdowns as interactive filter shortcuts, and closing a session reliability bug that caused unexpected sign-outs under concurrent API load.
 
 ### ✅ Shipped
 

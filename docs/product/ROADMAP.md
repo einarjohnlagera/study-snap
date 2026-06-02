@@ -6,9 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.22.0` is the current in-progress release.
-
-`v0.21.0 - Personalized Discovery & Library Organization` is complete and is the previous documentation baseline.
+`v0.22.0 - Course & Subject Discovery` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -165,11 +163,11 @@ Items 1, 3, 4, 5, and 6 Codex prompts are independent and can be queued simultan
 
 ---
 
-## v0.22.0 - Course-First Discovery
+## v0.22.0 - Course & Subject Discovery
 
-**Status: In Progress**
+**Status: Released**
 
-Theme: make `courseProgram` the primary discovery axis across the public library and dashboard — replacing the profile-type audience gate that creates false boundaries between students and exam reviewers studying the same material. Also closes a session reliability bug that causes unexpected sign-outs under concurrent API load.
+Theme: make Course/Program and Subject the primary discovery axes across the public library, private library, and public profiles — removing the profile-type audience gate, surfacing subject breakdowns as interactive filter shortcuts, and closing a session reliability bug that caused unexpected sign-outs under concurrent API load.
 
 ### Why this release
 
