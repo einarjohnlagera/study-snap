@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatsResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -392,6 +393,14 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteService.listMine(userId);
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteStatsResponse getMyStats(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getMyStats(user.userId());
     }
 
     @GetMapping("/public")

@@ -125,6 +125,31 @@ Private Library sorting:
 - `Title (Z-A)`
 - `Oldest`
 
+### Stats Strip
+
+The private Library may show a compact subject stats strip between the filter bar and the note list.
+
+Endpoint:
+
+- `GET /notes/stats` (authenticated)
+- response shape: `{ topSubjects: [{ subject, count }], otherSubjectsCount, totalNotes }`
+
+Backend behavior:
+
+- `topSubjects` counts the current user's notes grouped by non-blank `subject`, sorted by count descending, capped at 6 subjects.
+- notes with null or blank `subject` are excluded from subject chips but included in `totalNotes`.
+- `otherSubjectsCount` is the summed note count for subjects beyond the top 6.
+
+Frontend behavior:
+
+- show only when `totalNotes >= 5` and `topSubjects.length >= 2`
+- hide while the Library is loading
+- hide when a subject filter is already active
+- render one clickable chip per top subject as `{subject} {count}`
+- clicking a subject chip applies the existing private Library `subject` URL param and filters the list
+- render non-clickable `Other {otherSubjectsCount}` when `otherSubjectsCount > 0`
+- if `GET /notes/stats` fails, log the failure and suppress the strip without showing a user-facing error
+
 ## Saved Filters
 
 Users can save a named snapshot of the current private library filter state and re-apply it with one click.

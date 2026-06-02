@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatsResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -29,6 +30,7 @@ import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
+import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
@@ -79,6 +81,7 @@ public class NoteService {
     private static final String PUBLIC_SORT_COPIED = "copied";
     private static final String PUBLIC_SORT_VIEWS = "views";
     private static final String PUBLIC_SORT_TITLE = "title";
+    private static final int NOTE_STATS_TOP_SUBJECT_LIMIT = 6;
     private static final Comparator<String> COURSE_PROGRAM_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -300,6 +303,24 @@ public class NoteService {
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
         List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
         return toListItems(notes, ownerUserId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public NoteStatsResponse getMyStats(UUID ownerUserId) {
+        List<NoteSubjectCountProjection> subjectCounts = noteRepository.countSubjectsByOwnerUserId(ownerUserId);
+        List<NoteStatsResponse.SubjectCount> topSubjects = subjectCounts.stream()
+                .limit(NOTE_STATS_TOP_SUBJECT_LIMIT)
+                .map(subjectCount -> new NoteStatsResponse.SubjectCount(
+                        subjectCount.getSubject(),
+                        Math.toIntExact(subjectCount.getNoteCount())
+                ))
+                .toList();
+        int otherSubjectsCount = Math.toIntExact(subjectCounts.stream()
+                .skip(NOTE_STATS_TOP_SUBJECT_LIMIT)
+                .mapToLong(NoteSubjectCountProjection::getNoteCount)
+                .sum());
+        int totalNotes = Math.toIntExact(noteRepository.countByOwnerUserId(ownerUserId));
+        return new NoteStatsResponse(topSubjects, otherSubjectsCount, totalNotes);
     }
 
     @Transactional(readOnly = true)
