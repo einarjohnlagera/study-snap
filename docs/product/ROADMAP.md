@@ -6,9 +6,93 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.23.0` is the current in-progress release.
+
 `v0.22.0 - Course & Subject Discovery` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.23.0 - From Readers to Learners
+
+**Status: In Progress**
+
+Theme: convert the public library's anonymous reading traffic into signed-up, activated users. The acquisition engine already works — what's missing is the capture step that turns a reader into a learner.
+
+### Why this release
+
+Production funnel data (as of release kickoff) makes the leak unambiguous:
+
+| Signal | Value | Read |
+|---|---|---|
+| Public note views | 2,149 | The SEO / public-library acquisition engine works — real traffic is landing |
+| Public copies | 1 | Almost none of that traffic converts to any account action |
+| Verified users | 21 | The entire registered base is a rounding error next to the traffic |
+| Activation rate | 57.1% | Healthy — when users sign up, most generate a pack |
+| Median days to first pack | 0 days | When they activate, they do it immediately |
+| Value loop closure | 58.3% | Healthy — most who generate a pack start a quiz within 7 days |
+| Free quota hit rate | 0.0% | No free user is near any limit — quota changes are a no-op |
+| Paywall conversion | 0.0% (of 5) | Downstream and tiny; not the leak |
+
+The middle of the funnel (activation → value loop) is healthy. The problem is purely **capture**: ~2,149 anonymous readers produced ~21 accounts (≈0.05%). The only conversion point offered to a first-time reader today is "Copy this note" — a library-management action a visitor neither has context for nor wants yet. The natural first action for someone reading a study note is *"quiz me on this,"* not *"file this away."*
+
+If even 5% of public-note viewers became signups, the registered base would grow ~5x — which dwarfs any quota or paywall tuning. This release targets that single leak.
+
+Design constraint carried over from v0.22.0: **friction-free anonymous browsing stays.** No interstitials or sign-up walls on *reading* or *filtering*. The conversion gate lives only on *actions* (quiz, copy, like) — consistent with the existing "login gate on write actions only" rule.
+
+#### P0 — Capture the public traffic (core theme)
+
+**1. "Quiz yourself on this note" as the primary public-note CTA**
+
+   Reframe the public note detail conversion from "Copy" to "Test yourself." For an anonymous reader, the strongest hook is an immediate self-quiz, not library management.
+
+   - Make "Quiz yourself on this note" the primary CTA on public note detail pages; demote "Copy" to secondary
+   - Anonymous tap → free signup → land **directly** in a Quick Review on that note (skip onboarding for this path)
+   - Signed-in users go straight to the Quick Review
+   - Resurrects and supersedes the v0.20.0 deferred "post-signup → instant quiz flow" item
+   - Reuses the existing Quick Review session model; no new quiz infrastructure
+
+**2. Anonymous mini-quiz taste**
+
+   Let an anonymous reader answer 1–2 sample questions inline on the public note, then gate the remainder behind a free signup.
+
+   - Build on the existing `public-mini-quiz-preview` component
+   - After 1–2 questions: "See your score and the rest of the quiz — sign up free"
+   - The gate is on the *quiz action / score reveal*, never on reading — preserves friction-free browsing
+   - No anonymous session state is persisted (existing public-page rule); intent is captured at the signup boundary
+
+**3. Preserve intent through signup / OAuth**
+
+   Ensure the target note and the "go to quiz" intent survive the signup and OAuth round-trip so the user lands on the value moment, not a generic dashboard.
+
+   - Carry a `quizIntent` (note reference + destination) through the signup/OAuth redirect
+   - On first authenticated load, route to the Quick Review for that note
+   - Falls back gracefully to the note detail page if the note is no longer available
+
+#### P1 — Grow what's working
+
+**4. Public-note share & SEO polish**
+
+   Widen the top of the funnel by leaning into the discovery that already converts to views (the top public note has 156 views; Nursing is the leading subject).
+
+   - Stronger Open Graph / share cards for public note pages (title, subject, question count, "quiz yourself" framing)
+   - Verify canonical SEO paths and structured metadata are complete for public note + subject pages
+   - No backend data changes expected; metadata and share-surface work only
+
+#### P2 — Low-cost generosity (deprioritized)
+
+**5. Free topic-note-generation 5 → 10**
+
+   Raise `freeMonthlyNoteGenerationLimit` from 5 to 10.
+
+   - **Not a conversion lever** — production free-quota hit rate is 0.0%, so no current user is constrained by the cap
+   - Included only as cheap activation goodwill / headroom insurance; a one-line config change
+   - Do not frame this release around it
+
+#### Deferred — revisit after capture improves
+
+- **Free Adaptive Practice allowance** — a retention lever, but current value-loop closure (58.3%) and Adaptive Practice usage (2 sessions) do not justify prioritizing it now. Revisit once the registered base grows and retention becomes the binding constraint.
 
 ---
 
