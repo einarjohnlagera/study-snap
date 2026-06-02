@@ -22,6 +22,7 @@ import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
@@ -1855,7 +1856,7 @@ export default function ChallengeQuizPage() {
                   />
                 ) : (
                   <>
-                    <h2 className="text-lg font-semibold leading-7 sm:text-xl">{currentQuestion.question}</h2>
+                    <h2 className="text-lg font-semibold leading-7 sm:text-xl"><QuizQuestionText text={currentQuestion.question} /></h2>
                     <QuizChoiceList
                       questionKey={currentQuestion.question}
                       choices={currentQuestion.choices}

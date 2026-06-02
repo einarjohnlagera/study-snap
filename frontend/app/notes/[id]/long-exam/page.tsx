@@ -13,6 +13,7 @@ import {QuestionNavigator} from "@/components/exam-mode/question-navigator";
 import {ScoreReveal} from "@/components/exam-mode/score-reveal";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
 import {QuizMatchingGroup} from "@/components/study-pack/quiz-matching-group";
+import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
 import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
@@ -1081,7 +1082,7 @@ export default function LongExamPage() {
                             />
                         ) : (
                             <>
-                                <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl">{currentQuestion.question}</h1>
+                                <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl"><QuizQuestionText text={currentQuestion.question} /></h1>
                                 <QuizChoiceList
                                     questionKey={`${currentQuestion.question}-${currentQuestionIndex}`}
                                     choices={currentQuestion.choices}

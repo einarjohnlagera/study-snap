@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -661,7 +662,7 @@ export default function AdaptivePracticePage() {
             ) : currentQuestion ? (
               <>
                 <h2 className="text-lg font-semibold">
-                  {currentIndex + 1}. {currentQuestion.question}
+                  {currentIndex + 1}. <QuizQuestionText text={currentQuestion.question} />
                 </h2>
                 <QuizChoiceList
                   questionKey={currentQuestion.question}
