@@ -48,7 +48,7 @@ describe("DashboardCommunityNotesSection", () => {
   });
 
   it("renders matching public note cards and a filtered Public Library link", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([publicNote]);
+    (listPublicNotes as jest.Mock).mockResolvedValue({ items: [publicNote], total: 8 });
 
     render(<DashboardCommunityNotesSection courseProgram="PNLE" viewerUserId="user-1" />);
 
@@ -62,7 +62,7 @@ describe("DashboardCommunityNotesSection", () => {
   });
 
   it("hides itself when a course program has no matching notes", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([]);
+    (listPublicNotes as jest.Mock).mockResolvedValue({ items: [], total: 8 });
 
     render(<DashboardCommunityNotesSection courseProgram="PNLE" viewerUserId="user-1" />);
 

@@ -82,8 +82,8 @@ export function DashboardCommunityNotesSection({
         }
         setResult({
           courseProgram: normalizedCourseProgram,
-          hidden: result.length === 0,
-          notes: result,
+          hidden: result.items.length === 0,
+          notes: result.items,
         });
       })
       .catch(() => {

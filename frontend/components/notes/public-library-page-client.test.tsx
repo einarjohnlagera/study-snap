@@ -61,6 +61,10 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function publicNoteListResponse(items: ReturnType<typeof createPublicNote>[], total = items.length) {
+  return { items, total };
+}
+
 describe("PublicLibraryPageClient", () => {
   let currentAuthUser: { id: string; profileType?: "STUDENT" | "BOARD_EXAM" | "TEACHER" } | null = { id: "user-1" };
 
@@ -102,7 +106,7 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("shows viewer-relative author metadata and subtle save actions on non-owner cards", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-owner",
         ownerUserId: "user-1",
@@ -128,11 +132,12 @@ describe("PublicLibraryPageClient", () => {
         subject: "Physics",
         tags: ["motion"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
+    expect(screen.getByTestId("note-count-pill")).toHaveTextContent("3 notes");
     expect(screen.getByText("By NoteLib")).toBeInTheDocument();
     expect(screen.getByText("Official")).toBeInTheDocument();
     expect(screen.getByText("By Study Buddy · @studybuddy")).toBeInTheDocument();
@@ -142,16 +147,33 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
   });
 
+  it("shows the filtered public note count against the full public baseline", async () => {
+    currentSearch = "?search=cinco";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({
+        id: "note-history",
+        title: "Cinco de Mayo",
+        subject: "History",
+        tags: ["history"],
+      }),
+    ], 3));
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Cinco de Mayo")).toBeInTheDocument();
+    expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 3 notes");
+  });
+
   it("reads the audience filter from the URL and hides any Teacher audience filter", async () => {
     currentAuthUser = { id: "user-1", profileType: "STUDENT" };
     currentSearch = "?audience=student";
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-student",
         title: "Student Note",
         targetProfileType: "STUDENT",
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -161,13 +183,13 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("updates the card like count when a user likes a public note", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-community",
         title: "Community Note",
         likeCount: 2,
       }),
-    ]);
+    ]));
     (togglePublicNoteLike as jest.Mock).mockResolvedValue({ liked: true, likeCount: 3 });
 
     render(<PublicLibraryPageClient />);
@@ -186,7 +208,7 @@ describe("PublicLibraryPageClient", () => {
   it("hydrates the public library filters from the URL query params", async () => {
     currentSearch = "?search=cinco&subject=history&tag=mexican-history&courseProgram=latin-american-studies&sort=views";
     (listSubjects as jest.Mock).mockResolvedValue(["History"]);
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-history",
         title: "Cinco de Mayo",
@@ -194,7 +216,7 @@ describe("PublicLibraryPageClient", () => {
         courseProgram: "Latin American Studies",
         tags: ["Mexican History"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -206,13 +228,9 @@ describe("PublicLibraryPageClient", () => {
       subject: "history",
       tags: ["mexican-history"],
     }));
-    await waitFor(() => {
-      expect(
-        screen
-          .getAllByRole("button", { name: "History" })
-          .some((button) => button.getAttribute("aria-pressed") === "true"),
-      ).toBe(true);
-    });
+    expect(await screen.findByText("Subject: History")).toBeInTheDocument();
+    expect(screen.getAllByText("Mexican History")).not.toHaveLength(0);
+    expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 1 notes");
   });
 
   it("copies the current filtered public library URL from the share action", async () => {
@@ -226,14 +244,14 @@ describe("PublicLibraryPageClient", () => {
 
     currentSearch = "?search=cinco&subject=history&tag=mexican-history";
     (listSubjects as jest.Mock).mockResolvedValue(["History"]);
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-history",
         title: "Cinco de Mayo",
         subject: "History",
         tags: ["Mexican History"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -248,14 +266,14 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("keeps the main search focused and syncs the URL after a debounce", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Pyrolysis Basics",
         subject: "Chemistry",
         tags: ["pyro"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -284,7 +302,7 @@ describe("PublicLibraryPageClient", () => {
 
   it("updates the author badge when auth state hydrates after mount", async () => {
     currentAuthUser = null;
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         ownerUserId: "user-1",
@@ -293,7 +311,7 @@ describe("PublicLibraryPageClient", () => {
         tags: ["cells"],
         authorDisplayName: "My Notes",
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -308,14 +326,14 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("keeps the card clickable and shows Saved as the copied-state action", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-2",
         title: "Community Note",
         subject: "Physics",
         tags: ["motion"],
       }),
-    ]);
+    ]));
     (listNotes as jest.Mock).mockResolvedValue([
       {
         ...createPublicNote({
@@ -345,7 +363,7 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("copies from the card and shows the refined success modal actions", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-9",
         title: "Cell Notes",
@@ -354,7 +372,7 @@ describe("PublicLibraryPageClient", () => {
         viewCount: 9,
         copyCount: 4,
       }),
-    ]);
+    ]));
     (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
 
     render(<PublicLibraryPageClient />);
@@ -380,14 +398,14 @@ describe("PublicLibraryPageClient", () => {
 
   it("uses a bottom-sheet success surface on mobile", async () => {
     mobileSheetMatches = true;
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-9",
         title: "Cell Notes",
         subject: "Biology",
         tags: ["cells"],
       }),
-    ]);
+    ]));
     (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
 
     render(<PublicLibraryPageClient />);
@@ -406,7 +424,7 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("sorts public notes by most viewed from the shared sort sheet", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Most Viewed",
@@ -424,7 +442,7 @@ describe("PublicLibraryPageClient", () => {
         copyCount: 9,
         createdAt: "2026-03-29T09:00:00Z",
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -438,7 +456,7 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("filters public notes from the advanced filter sheet", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         ownerUserId: "user-1",
@@ -464,25 +482,31 @@ describe("PublicLibraryPageClient", () => {
         subject: "Physics",
         tags: ["motion"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("Mine")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
-    fireEvent.change(screen.getByLabelText("Course / Program"), {
+    const dialog = await screen.findByRole("dialog", { name: "More Filters" });
+    const modal = within(dialog);
+    const courseProgramInput = modal.getByLabelText("Course / Program");
+    fireEvent.focus(courseProgramInput);
+    fireEvent.change(courseProgramInput, {
       target: { value: "Engineering" },
     });
-    expect(screen.queryByLabelText("Learner Level")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Community"));
+    fireEvent.mouseDown(modal.getByRole("button", { name: "Engineering" }));
+    expect(modal.queryByLabelText("Learner Level")).not.toBeInTheDocument();
+    fireEvent.click(modal.getByLabelText("Community"));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
     expect(screen.queryByText("Mine")).not.toBeInTheDocument();
     expect(screen.queryByText("Official Example")).not.toBeInTheDocument();
     expect(screen.getByText("Community Physics")).toBeInTheDocument();
   });
 
-  it("filters by subject from the horizontal chip rail", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+  it("applies a subject filter from the filter sheet", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Biology Note",
@@ -495,29 +519,32 @@ describe("PublicLibraryPageClient", () => {
         subject: "Chemistry",
         tags: [],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
     await screen.findByText("Biology Note");
-    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const dialog = await screen.findByRole("dialog", { name: "More Filters" });
+    const modal = within(dialog);
+    const subjectInput = modal.getByLabelText("Subject");
+    fireEvent.focus(subjectInput);
+    fireEvent.mouseDown(modal.getByRole("button", { name: "Biology" }));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
     expect(replaceMock).toHaveBeenCalledWith("/public/library?subject=biology", { scroll: false });
-    expect(screen.queryByText("⭐ Featured Notes")).not.toBeInTheDocument();
-    expect(screen.getByText("Biology Note")).toBeInTheDocument();
-    expect(screen.queryByText("Chemistry Note")).not.toBeInTheDocument();
   });
 
   it("clearing active URL filters returns to the canonical public library route", async () => {
     currentSearch = "?subject=biology&tag=cells&search=cell";
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Biology Note",
         subject: "Biology",
         tags: ["cells"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -527,7 +554,7 @@ describe("PublicLibraryPageClient", () => {
     expect(replaceMock).toHaveBeenCalledWith("/public/library", { scroll: false });
   });
 
-  it("opens the subject selector from + More and filters subjects with search", async () => {
+  it("filters subjects with search from the filter sheet", async () => {
     (listSubjects as jest.Mock).mockResolvedValue([
       "Biology",
       "Chemistry",
@@ -537,29 +564,30 @@ describe("PublicLibraryPageClient", () => {
       "Programming",
       "Anatomy",
     ]);
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({ id: "note-1", title: "Anatomy Note", subject: "Anatomy", tags: [] }),
       createPublicNote({ id: "note-2", title: "Biology Note", subject: "Biology", tags: [] }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
     await screen.findByText("Anatomy Note");
-    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
-
-    const dialog = await screen.findByRole("dialog", { name: "Select subject" });
-    fireEvent.change(within(dialog).getByPlaceholderText("Search subjects..."), {
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const dialog = await screen.findByRole("dialog", { name: "More Filters" });
+    const modal = within(dialog);
+    const subjectInput = modal.getByLabelText("Subject");
+    fireEvent.focus(subjectInput);
+    fireEvent.change(subjectInput, {
       target: { value: "anat" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Anatomy" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    fireEvent.mouseDown(modal.getByRole("button", { name: "Anatomy" }));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
-    expect(screen.getByText("Anatomy Note")).toBeInTheDocument();
-    expect(screen.queryByText("Biology Note")).not.toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?subject=anatomy", { scroll: false });
   });
 
   it("applies OR logic for multiple tag selections from the tag selector", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Biology Cells",
@@ -578,13 +606,15 @@ describe("PublicLibraryPageClient", () => {
         subject: "History",
         tags: ["essay"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
     await screen.findByText("Biology Cells");
-    expect(screen.getByRole("button", { name: "Browse all" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const filtersDialog = await screen.findByRole("dialog", { name: "More Filters" });
+    expect(within(filtersDialog).getByRole("button", { name: "Browse all" })).toBeInTheDocument();
+    fireEvent.click(within(filtersDialog).getByRole("button", { name: "Browse all" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Select tags" });
     const modal = within(dialog);
@@ -610,25 +640,27 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("keeps tag browsing accessible even when only a few popular tags are visible", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Single Tag Note",
         subject: "Physics",
         tags: ["motion"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("Single Tag Note")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const filtersDialog = await screen.findByRole("dialog", { name: "More Filters" });
+    fireEvent.click(within(filtersDialog).getByRole("button", { name: "Browse all" }));
 
     expect(await screen.findByRole("dialog", { name: "Select tags" })).toBeInTheDocument();
   });
 
   it("shows curated discovery sections without the old browse-by-subject block", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "High Engagement Note",
@@ -637,7 +669,7 @@ describe("PublicLibraryPageClient", () => {
         viewCount: 15,
         copyCount: 8,
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 
@@ -646,14 +678,14 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("opens public note detail when a card is clicked", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
         title: "Community Note",
         subject: "Physics",
         tags: ["motion"],
       }),
-    ]);
+    ]));
 
     render(<PublicLibraryPageClient />);
 

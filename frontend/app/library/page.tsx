@@ -982,6 +982,12 @@ export default function LibraryPage() {
               </div>
             </div>
 
+            <p className="border-t border-border pt-3 text-sm text-foreground/50">
+              {hasActiveFilters
+                ? `${sortedFilteredItems.length} of ${items.length} notes`
+                : `${items.length} notes`}
+            </p>
+
             {(hasSavableFilter || (!savedFiltersUnavailable && (savedFiltersLoading || savedFilters.length > 0))) ? (
               <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="relative">

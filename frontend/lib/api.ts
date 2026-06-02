@@ -1112,6 +1112,11 @@ export type NoteListItemResponse = {
   likedByCurrentUser: boolean;
 };
 
+export type PublicNoteListResponse = {
+  items: NoteListItemResponse[];
+  total: number;
+};
+
 export type SavedLibraryFilterState = {
   search?: string;
   subject?: string;
@@ -3208,7 +3213,7 @@ export async function listPublicNotes(params?: {
   sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
   subject?: string;
   tags?: string[];
-}): Promise<NoteListItemResponse[]> {
+}): Promise<PublicNoteListResponse> {
   const searchParams = new URLSearchParams();
   if (params?.audience) {
     searchParams.set("audience", params.audience);
@@ -3237,7 +3242,7 @@ export async function listPublicNotes(params?: {
     method: "GET",
     headers: buildAuthHeaders(),
   });
-  return parseApiResponse<NoteListItemResponse[]>(response, "Could not load public notes.");
+  return parseApiResponse<PublicNoteListResponse>(response, "Could not load public notes.");
 }
 
 export async function togglePublicNoteLike(noteId: string): Promise<PublicNoteLikeResponse> {
