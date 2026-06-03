@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
 import com.studysnap.backend.dto.AdminRegenerationStatusResponse;
 import com.studysnap.backend.service.AdminStudyPackService;
@@ -22,6 +23,11 @@ public class AdminStudyPackController {
     @PostMapping("/regenerate-summaries")
     public AdminRegenerateSummariesResponse regenerateSummaries() {
         return adminStudyPackService.regenerateOfficialSummaries();
+    }
+
+    @PostMapping("/repair-malformed-quizzes")
+    public AdminRepairMalformedQuizzesResponse repairMalformedQuizzes() {
+        return adminStudyPackService.repairMalformedQuizzes();
     }
 
     @GetMapping("/regeneration-status")

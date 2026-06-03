@@ -78,6 +78,12 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             QuickReviewSessionStatus status
     );
 
+    boolean existsByStudyPackIdAndSessionModeAndStatus(
+            UUID studyPackId,
+            QuickReviewSessionMode sessionMode,
+            QuickReviewSessionStatus status
+    );
+
     Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
             UUID userId,
             UUID studyPackId,

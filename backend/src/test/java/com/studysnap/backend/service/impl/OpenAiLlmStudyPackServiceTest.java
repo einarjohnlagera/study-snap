@@ -133,7 +133,13 @@ class OpenAiLlmStudyPackServiceTest {
                 .contains("questionFormat")
                 .contains("\"TRUE_FALSE\"")
                 .contains("[\"True\", \"False\"]")
-                .contains("at most 25% True/False");
+                .contains("at most 25% True/False")
+                .contains("single declarative statement")
+                .contains("Which is correct?")
+                .contains("Both statements are correct")
+                .contains("Only Statement 1 is correct")
+                .contains("Only Statement 2 is correct")
+                .contains("Neither statement is correct");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -482,6 +488,26 @@ class OpenAiLlmStudyPackServiceTest {
                 assertThat(appException.getMessage()).isEqualTo(
                     "The study pack service returned repetitive quiz questions. Please try again.");
             });
+    }
+
+    @Test
+    void generateStudyPack_retriesWhenTrueFalseQuestionHasMcqIntentStem() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode invalidPayload = buildValidStudyPackPayload();
+        ArrayNode invalidQuiz = (ArrayNode) invalidPayload.get("quiz");
+        setMalformedTrueFalseItem((ObjectNode) invalidQuiz.get(0));
+        when(responseSpec.body(String.class)).thenReturn(
+                studyPackResponseJson(invalidPayload),
+                studyPackResponseJson(buildValidStudyPackPayload())
+        );
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of())
+        );
+
+        assertThat(content.quiz()).hasSize(5);
+        verify(responseSpec, times(2)).body(String.class);
     }
 
     // ── Quiz concept edge cases ──────────────────────────────────────────────
@@ -982,6 +1008,39 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateChallengeQuiz_retriesWhenTrueFalseQuestionHasMcqIntentStem() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode invalidPayload = buildGeneratedQuizPayload();
+        ArrayNode invalidQuestions = (ArrayNode) invalidPayload.get("questions");
+        ObjectNode invalidQuestion = generatedQuizItem(
+                "Statement 1: ATP stores cellular energy. Statement 2: ATP is reused after hydrolysis. Which is correct?",
+                List.of("True", "False"),
+                "A",
+                "This item asks the learner to choose between statements, not judge one statement true or false.",
+                "ATP production"
+        );
+        invalidQuestion.put("questionFormat", "TRUE_FALSE");
+        invalidQuestions.set(0, invalidQuestion);
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(invalidPayload),
+                generatedQuizResponseJson(buildGeneratedQuizPayload())
+        );
+
+        List<QuizItem> quizItems = service.generateChallengeQuiz(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP production"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+        );
+
+        assertThat(quizItems).hasSize(2);
+        verify(responseSpec, times(2)).body(String.class);
+    }
+
+    @Test
     void generateChallengeQuiz_failsAfterSecondInvalidPayload() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode invalidPayload = buildGeneratedQuizPayload();
@@ -1279,6 +1338,18 @@ class OpenAiLlmStudyPackServiceTest {
             ? "ATP is the usable energy output of cell respiration."
             : "This question checks the " + concept + " concept.");
         return item;
+    }
+
+    private void setMalformedTrueFalseItem(ObjectNode item) {
+        item.put("question", "Statement 1: Cells use ATP. Statement 2: ATP stores energy. Which is correct?");
+        item.putArray("choices").removeAll();
+        ArrayNode choiceArray = (ArrayNode) item.get("choices");
+        choiceArray.add("True");
+        choiceArray.add("False");
+        item.put("answer", "A");
+        item.put("questionFormat", "TRUE_FALSE");
+        item.put("concept", "ATP production");
+        item.put("explanation", "This item asks the learner to choose between statements.");
     }
 
     private void setMatchingItem(ObjectNode item, List<String> choices, String answer, String questionGroup) {

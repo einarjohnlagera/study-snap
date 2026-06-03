@@ -1,7 +1,6 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.dto.AdminSubjectMetricItemResponse;
-import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.InputType;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +17,37 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID> {
+    String MALFORMED_TRUE_FALSE_QUIZ_EXISTS_QUERY = """
+            exists (
+                select 1
+                from jsonb_array_elements(sp.quiz) q
+                where (
+                    q->>'questionFormat' = 'TRUE_FALSE'
+                    or (
+                        jsonb_array_length(q->'choices') = 2
+                        and exists (
+                            select 1
+                            from jsonb_array_elements_text(q->'choices') c
+                            where lower(c) = 'true'
+                        )
+                        and exists (
+                            select 1
+                            from jsonb_array_elements_text(q->'choices') c
+                            where lower(c) = 'false'
+                        )
+                    )
+                )
+                and (
+                    lower(q->>'question') ~ 'which\\s+(is|are|of the following|statement|one|of these)'
+                    or (
+                        lower(q->>'question') ~ 'statement\\s*1'
+                        and lower(q->>'question') ~ 'statement\\s*2'
+                    )
+                    or lower(q->>'question') ~ 'all of the following.{0,40}except'
+                )
+            )
+            """;
+
     List<StudyPackEntity> findByOwnerUserIdOrderByCreatedAtDescIdDesc(UUID ownerUserId, Pageable pageable);
     @Query("""
             select s
@@ -52,6 +82,13 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
             @Param("adminUserIds") List<UUID> adminUserIds,
             @Param("enrichedSummaryMarker") String enrichedSummaryMarker
     );
+
+    @Query(value = """
+            select distinct sp.*
+            from study_packs sp
+            where
+            """ + MALFORMED_TRUE_FALSE_QUIZ_EXISTS_QUERY, nativeQuery = true)
+    List<StudyPackEntity> findStudyPacksWithMalformedTrueFalseQuizItems();
 
     @Query(value = """
             SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
