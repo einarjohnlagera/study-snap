@@ -111,7 +111,7 @@ public class StudySnapProperties {
         private int freeMonthlyOcrLimit = 20;
         private int plusMonthlyOcrLimit = 50;
         private int proMonthlyOcrLimit = 100;
-        private int freeMonthlyNoteGenerationLimit = 5;
+        private int freeMonthlyNoteGenerationLimit = 10;
         private int plusMonthlyNoteGenerationLimit = 25;
         private int proMonthlyNoteGenerationLimit = 100;
         private int freeMonthlyDocxExportLimit = 2;

@@ -92,7 +92,7 @@ studysnap:
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
     plus-monthly-ocr-limit: ${PLUS_MONTHLY_OCR_LIMIT:50}
     pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:${PREMIUM_MONTHLY_OCR_LIMIT:100}}
-    free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:5}
+    free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:10}
     plus-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PLUS:25}
     pro-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PRO:${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}}
     free-monthly-docx-export-limit: ${FREE_MONTHLY_DOCX_EXPORT_LIMIT:2}
