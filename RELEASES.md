@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.23.1 - Quiz Format Fix
+
+**Status: In Progress**
+
+Theme: patch a quiz content-correctness bug where assertion-style "Which is correct?" questions were generated as TRUE_FALSE with True/False choices — a mismatch that undermines trust. Fixed at the shared generation + validation layer so it cannot recur in any quiz mode.
+
+### 🔲 Pending
+
+- **Fix True/False format mismatch on "which is correct?" questions** — (in progress)
+
+---
+
 ## v0.23.0 - From Readers to Learners
 
 **Status: Released**
