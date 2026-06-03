@@ -2,7 +2,7 @@
 
 ## v0.23.0 - From Readers to Learners
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: convert the public library's anonymous reading traffic into signed-up, activated users — turning the ~2,149 public-note views (≈0.05% account capture today) into the registered base the healthy middle funnel is starved of.
 
