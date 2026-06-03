@@ -1118,15 +1118,6 @@ export type PublicNoteListResponse = {
   total: number;
 };
 
-export type NoteStatsResponse = {
-  topSubjects: Array<{
-    subject: string;
-    count: number;
-  }>;
-  otherSubjectsCount: number;
-  totalNotes: number;
-};
-
 export type SavedLibraryFilterState = {
   search?: string;
   subject?: string;
@@ -3176,18 +3167,6 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
     true,
   );
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
-}
-
-export async function getNoteStats(): Promise<NoteStatsResponse> {
-  const response = await fetchWithAuth(
-    "/notes/stats",
-    {
-      method: "GET",
-      headers: buildAuthHeaders(),
-    },
-    true,
-  );
-  return parseApiResponse<NoteStatsResponse>(response, "Could not load note stats.");
 }
 
 export async function getSavedLibraryFilters(): Promise<SavedLibraryFilterResponse[]> {

@@ -6,9 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.23.0` is the current in-progress release.
-
-`v0.22.0 - Course & Subject Discovery` is complete and is the previous documentation baseline.
+`v0.23.0 - From Readers to Learners` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -16,7 +14,7 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.23.0 - From Readers to Learners
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: convert the public library's anonymous reading traffic into signed-up, activated users. The acquisition engine already works — what's missing is the capture step that turns a reader into a learner.
 

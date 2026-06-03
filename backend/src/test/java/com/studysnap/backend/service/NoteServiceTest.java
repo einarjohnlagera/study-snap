@@ -26,7 +26,6 @@ import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
-import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -721,75 +720,6 @@ class NoteServiceTest {
         assertThat(subjects).containsExactly("Biology – Cell Division", "History", "Physics");
     }
 
-    @Test
-    void getMyStats_withNoNotes_returnsEmptyStats() {
-        UUID ownerUserId = UUID.randomUUID();
-        when(noteRepository.countSubjectsByOwnerUserId(ownerUserId)).thenReturn(List.of());
-        when(noteRepository.countByOwnerUserId(ownerUserId)).thenReturn(0L);
-
-        var response = noteService.getMyStats(ownerUserId);
-
-        assertThat(response.topSubjects()).isEmpty();
-        assertThat(response.otherSubjectsCount()).isZero();
-        assertThat(response.totalNotes()).isZero();
-    }
-
-    @Test
-    void getMyStats_withExactlySixSubjects_returnsAllSubjectsWithoutOtherCount() {
-        UUID ownerUserId = UUID.randomUUID();
-        when(noteRepository.countSubjectsByOwnerUserId(ownerUserId)).thenReturn(List.of(
-                mockSubjectCount("Biology", 6L),
-                mockSubjectCount("Chemistry", 5L),
-                mockSubjectCount("Physics", 4L),
-                mockSubjectCount("Math", 3L),
-                mockSubjectCount("History", 2L),
-                mockSubjectCount("Anatomy", 1L)
-        ));
-        when(noteRepository.countByOwnerUserId(ownerUserId)).thenReturn(24L);
-
-        var response = noteService.getMyStats(ownerUserId);
-
-        assertThat(response.topSubjects()).extracting("subject", "count").containsExactly(
-                org.assertj.core.groups.Tuple.tuple("Biology", 6),
-                org.assertj.core.groups.Tuple.tuple("Chemistry", 5),
-                org.assertj.core.groups.Tuple.tuple("Physics", 4),
-                org.assertj.core.groups.Tuple.tuple("Math", 3),
-                org.assertj.core.groups.Tuple.tuple("History", 2),
-                org.assertj.core.groups.Tuple.tuple("Anatomy", 1)
-        );
-        assertThat(response.otherSubjectsCount()).isZero();
-        assertThat(response.totalNotes()).isEqualTo(24);
-    }
-
-    @Test
-    void getMyStats_withMoreThanSixSubjects_capsTopSubjectsAndSumsOtherSubjects() {
-        UUID ownerUserId = UUID.randomUUID();
-        when(noteRepository.countSubjectsByOwnerUserId(ownerUserId)).thenReturn(List.of(
-                mockSubjectCount("Biology", 8L),
-                mockSubjectCount("Chemistry", 7L),
-                mockSubjectCount("Physics", 6L),
-                mockSubjectCount("Math", 5L),
-                mockSubjectCount("History", 4L),
-                mockSubjectCount("Anatomy", 3L),
-                mockSubjectCount("Programming", 2L),
-                mockSubjectCount("Literature", 1L)
-        ));
-        when(noteRepository.countByOwnerUserId(ownerUserId)).thenReturn(40L);
-
-        var response = noteService.getMyStats(ownerUserId);
-
-        assertThat(response.topSubjects()).extracting("subject", "count").containsExactly(
-                org.assertj.core.groups.Tuple.tuple("Biology", 8),
-                org.assertj.core.groups.Tuple.tuple("Chemistry", 7),
-                org.assertj.core.groups.Tuple.tuple("Physics", 6),
-                org.assertj.core.groups.Tuple.tuple("Math", 5),
-                org.assertj.core.groups.Tuple.tuple("History", 4),
-                org.assertj.core.groups.Tuple.tuple("Anatomy", 3)
-        );
-        assertThat(response.otherSubjectsCount()).isEqualTo(3);
-        assertThat(response.totalNotes()).isEqualTo(40);
-    }
-
     // --- listPublic sort tests ---
 
     @Test
@@ -1241,20 +1171,6 @@ class NoteServiceTest {
         when(proj.getNoteId()).thenReturn(noteId);
         when(proj.getCopyCount()).thenReturn(count);
         return proj;
-    }
-
-    private NoteSubjectCountProjection mockSubjectCount(String subject, long count) {
-        return new NoteSubjectCountProjection() {
-            @Override
-            public String getSubject() {
-                return subject;
-            }
-
-            @Override
-            public long getNoteCount() {
-                return count;
-            }
-        };
     }
 
     private PublicNoteLikeCountProjection mockLikeCount(UUID noteId, long count) {
