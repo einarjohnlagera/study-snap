@@ -2,13 +2,15 @@
 
 ## v0.23.1 - Quiz Format Fix
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: patch a quiz content-correctness bug where assertion-style "Which is correct?" questions were generated as TRUE_FALSE with True/False choices — a mismatch that undermines trust. Fixed at the shared generation + validation layer so it cannot recur in any quiz mode.
 
-### 🔲 Pending
+### ✅ Shipped
 
-- **Fix True/False format mismatch on "which is correct?" questions** — (in progress)
+- **Fix True/False format mismatch on "which is correct?" questions** — strengthened shared Study Pack, Challenge, Adaptive Practice, Long Exam, Board Exam, and Teacher quiz prompts so `TRUE_FALSE` is only used for one declarative statement judged true/false. Assertion-style "Which is correct?", "Which of the following...", and multi-statement `Statement 1` / `Statement 2` items must now be `MCQ` with four assertion choices. Added shared backend validation that rejects malformed `TRUE_FALSE` + MCQ-intent stems and retries generation, plus admin-only `POST /admin/study-packs/repair-malformed-quizzes` to regenerate only affected `study_packs.quiz` values across all owners while preserving summaries and key concepts.
+
+### 🔲 Pending
 
 ---
 

@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
 import com.studysnap.backend.dto.AdminRegenerationStatusResponse;
 import com.studysnap.backend.service.AdminStudyPackService;
@@ -40,6 +41,18 @@ class AdminStudyPackControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(adminStudyPackService).regenerateOfficialSummaries();
+    }
+
+    @Test
+    void repairMalformedQuizzes_returnsQueuedAndSkippedCounts() {
+        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService, progressTracker);
+        AdminRepairMalformedQuizzesResponse expected = new AdminRepairMalformedQuizzesResponse(2, 5);
+        when(adminStudyPackService.repairMalformedQuizzes()).thenReturn(expected);
+
+        AdminRepairMalformedQuizzesResponse response = controller.repairMalformedQuizzes();
+
+        assertThat(response).isEqualTo(expected);
+        verify(adminStudyPackService).repairMalformedQuizzes();
     }
 
     @Test

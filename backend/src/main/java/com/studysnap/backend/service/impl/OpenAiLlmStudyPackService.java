@@ -76,7 +76,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
     private static final String MATCHING_FORMAT = "MATCHING";
     private static final String TRUE_FALSE_GUIDANCE = """
-            Mix in True/False questions where appropriate. True/False questions suit simple factual recall, definitions, or classification (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, or best-answer judgment.
+            Mix in True/False questions where appropriate. Use TRUE_FALSE ONLY for a single declarative statement that the learner judges true or false (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, best-answer judgment, or choosing among statement combinations.
+
+            NEVER use TRUE_FALSE for a question that asks the learner to choose, such as "Which is correct?", "Which of the following...", "Which statement...", "Which one...", or "Which of these...". NEVER use TRUE_FALSE for a stem that references multiple statements, such as "Statement 1: ... Statement 2: ... Which is correct?"
+
+            Assertion-style or multi-statement "Which is correct?" questions MUST be MCQ with four options, such as "Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", and "Neither statement is correct". They must never use ["True", "False"] choices.
 
             For True/False questions:
             - Set `questionFormat` to "TRUE_FALSE"
@@ -415,6 +419,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         normalizeAndValidateConcept(item.concept(), quizIndex);
         normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.");
         if (QuizValidationUtils.hasInvalidChoices(item.choices(), item.questionFormat())) {
+            throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
+        }
+        if (QuizValidationUtils.isFormatStemMismatch(item.question(), item.choices(), item.questionFormat())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
         if (QuizValidationUtils.hasInvalidCorrectIndices(item.correctIndices(), item.choices(), item.questionFormat())) {
@@ -1842,6 +1849,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
         if (QuizValidationUtils.hasInvalidChoices(item.choices(), item.questionFormat())) {
             throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
+        }
+        if (QuizValidationUtils.isFormatStemMismatch(item.question(), item.choices(), item.questionFormat())) {
+            throw invalidOutput(operationLabel + " returned an invalid quiz format. Please try again.");
         }
         if (QuizValidationUtils.hasInvalidCorrectIndices(item.correctIndices(), item.choices(), item.questionFormat())) {
             throw invalidOutput(operationLabel + " returned invalid multi-select answers. Please try again.");

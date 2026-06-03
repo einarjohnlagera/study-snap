@@ -60,6 +60,79 @@ class QuizValidationUtilsTest {
     }
 
     @Test
+    void isFormatStemMismatch_detectsTrueFalseWhichIsCorrectStem() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Which is correct about photosynthesis?",
+                List.of("True", "False"),
+                "TRUE_FALSE"
+        )).isTrue();
+    }
+
+    @Test
+    void isFormatStemMismatch_detectsWhichOfTheFollowingStem() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Which of the following describes glycolysis?",
+                List.of("True", "False"),
+                "TRUE_FALSE"
+        )).isTrue();
+    }
+
+    @Test
+    void isFormatStemMismatch_detectsMultiStatementWhichIsCorrectStem() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Statement 1: ATP stores usable energy. Statement 2: Oxygen is the final electron acceptor. Which is correct?",
+                List.of("True", "False"),
+                "TRUE_FALSE"
+        )).isTrue();
+    }
+
+    @Test
+    void isFormatStemMismatch_detectsAllExceptStem() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "All of the following are properties of enzymes except one.",
+                List.of("True", "False"),
+                "TRUE_FALSE"
+        )).isTrue();
+    }
+
+    @Test
+    void isFormatStemMismatch_detectsTrueFalseChoicesEvenWithoutFormat() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Which statement best describes mitosis?",
+                List.of("False", "True"),
+                null
+        )).isTrue();
+    }
+
+    @Test
+    void isFormatStemMismatch_allowsLegitimateDeclarativeTrueFalse() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Statement: Passive cooling reduces HVAC dependency. — True or False?",
+                List.of("True", "False"),
+                "TRUE_FALSE"
+        )).isFalse();
+    }
+
+    @Test
+    void isFormatStemMismatch_allowsNormalMcqAndOtherFormats() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Which is correct about enzymes?",
+                List.of("They lower activation energy", "They become reactants", "They remove products", "They stop reactions"),
+                "MCQ"
+        )).isFalse();
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Which properties apply to enzymes?",
+                List.of("Reusable", "Specific", "Lower activation energy", "Always consumed"),
+                "MULTI_SELECT"
+        )).isFalse();
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Match the law to its description.",
+                List.of("Ohm's Law", "Kirchhoff's Law", "Faraday's Law", "Lenz's Law"),
+                "MATCHING"
+        )).isFalse();
+    }
+
+    @Test
     void hasInvalidCorrectIndices_validatesMultiSelectCorrectIndexCountAndRange() {
         List<String> choices = List.of("A", "B", "C", "D");
 

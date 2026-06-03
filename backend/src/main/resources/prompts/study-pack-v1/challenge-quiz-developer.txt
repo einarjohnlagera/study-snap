@@ -26,7 +26,7 @@ RULES:
 - A MATCHING block must be 2 to 4 consecutive questions with the same 4 choices in the same order; each item must have a distinct correct answer.
 - For MATCHING questions, set "questionFormat" to "MATCHING", set the same short "questionGroup" id such as "group-1" on each item in the block, set "correctIndices" to null, and set "answer" to that item's single correct letter.
 - Do not use MATCHING unless all items in the block can share the same option set.
-- Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%).
+- Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%). Assertion-style "Which is correct?" items are MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"].
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.
 - Concept is required for every question.

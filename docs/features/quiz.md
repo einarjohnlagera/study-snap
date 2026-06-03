@@ -123,6 +123,14 @@ Shared quiz items support these active formats:
 - `MULTI_SELECT` — 4 choices, `correctIndices` contains 2–3 correct indexes
 - `MATCHING` — 2–4 consecutive single-correct items share the same 4-choice option set through `questionGroup`
 
+True/False rules:
+
+- `TRUE_FALSE` is only for a single declarative statement that the learner judges true or false.
+- Any stem that asks the learner to choose — "Which is correct?", "Which of the following...", "Which statement...", "Which one...", or "Which of these..." — must be `MCQ`, not `TRUE_FALSE`.
+- Multi-statement assertion items such as `Statement 1: ... Statement 2: ... Which is correct?` must be `MCQ` with four choices: `Both statements are correct`, `Only Statement 1 is correct`, `Only Statement 2 is correct`, and `Neither statement is correct`.
+- "All of the following ... except" stems are also MCQ-intent stems and must not use `TRUE_FALSE`.
+- Backend generation validation rejects any effectively true/false item whose stem matches those MCQ-intent patterns via `QuizValidationUtils.isFormatStemMismatch(...)`, forcing the existing LLM retry path instead of storing malformed quiz data.
+
 Multi-select rules:
 
 - available on all plans
@@ -154,6 +162,20 @@ Computational working solution rules:
 - the frontend renders `workingSolution` math with KaTeX inside the working-solution panel only
 - question text, choices, and explanations remain plain text and do not receive KaTeX rendering
 - plain-text working solutions remain supported as a fallback for older generated content
+
+## Admin Repair Tooling
+
+`POST /admin/study-packs/repair-malformed-quizzes` is an admin-only maintenance endpoint for existing stored quizzes with the True/False format mismatch.
+
+Rules:
+
+- scans `study_packs.quiz` across all owners for effectively true/false items whose stems match the same MCQ-intent patterns used by validation
+- queues affected packs on `llmParallelTaskExecutor` and returns `{ queued, skipped }` immediately
+- regenerates only the `quiz` field through the fixed shared generation and validation path
+- does not modify `summary` or `keyConcepts`, preserving summary enrichment and concept-health keys
+- skips clean packs idempotently, so re-running the endpoint is safe
+- skips packs with an active base Quick Review session because Quick Review uses the stored Study Pack quiz directly rather than snapshotting the quiz at session start
+- Challenge Quiz, Adaptive Practice, Long Exam, and Board Exam sessions snapshot generated quiz items in `sessionState`; Teacher `generatedQuiz` creation shares the fixed validation path but is not part of the `study_packs.quiz` repair scope
 
 Concept-level review signals:
 

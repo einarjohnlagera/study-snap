@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
@@ -58,5 +59,24 @@ public class AdminStudyPackService {
         });
 
         return new AdminRegenerateSummariesResponse(packs.size(), totalAdminPacks - packs.size());
+    }
+
+    public AdminRepairMalformedQuizzesResponse repairMalformedQuizzes() {
+        int totalPacks = Math.toIntExact(studyPackRepository.count());
+        List<StudyPackEntity> packs = studyPackRepository.findStudyPacksWithMalformedTrueFalseQuizItems();
+        progressTracker.startRun(packs.size());
+        packs.forEach(pack -> {
+            try {
+                CompletableFuture.runAsync(
+                        () -> transactionHelper.repairMalformedQuiz(pack),
+                        llmParallelTaskExecutor
+                );
+            } catch (RejectedExecutionException ex) {
+                log.warn("Admin malformed quiz repair task rejected for packId={} — executor queue full", pack.getId());
+                progressTracker.recordFailure();
+            }
+        });
+
+        return new AdminRepairMalformedQuizzesResponse(packs.size(), totalPacks - packs.size());
     }
 }
