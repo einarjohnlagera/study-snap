@@ -130,12 +130,17 @@ export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMini
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <PublicSeoCopyCta
               noteId={noteId}
-              label="Copy & Start Practicing"
+              label="Quiz yourself on this note"
               redirectTarget="quick-review"
+              action="quickReview"
+              analyticsEvent="PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED"
+              authModalTitle="Quiz yourself on this note"
+              authModalBody="Create a free account or log in to quiz yourself on this note and keep practicing."
             />
             <PublicSeoCopyCta
               noteId={noteId}
               label="Copy to My Library"
+              variant="outline"
             />
           </div>
         </div>

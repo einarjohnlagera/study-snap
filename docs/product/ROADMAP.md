@@ -43,52 +43,44 @@ Design constraint carried over from v0.22.0: **friction-free anonymous browsing 
 
 #### P0 — Capture the public traffic (core theme)
 
-**1. "Quiz yourself on this note" as the primary public-note CTA**
+> **Scope correction (post-audit):** a code audit at the start of P0 found the capture *plumbing* was already built — copy-intent cookie, signup `redirect` param, `?copy=1` auto-copy on return, and `generate=1`+`startQuickReview=1` auto-generate/auto-start Quick Review all existed. Google OAuth is popup-based (`ux_mode: "popup"`), so there is **no redirect round-trip to preserve** — original item 3 was a non-problem and is dropped. Email verification is **not** gated on generate/quiz endpoints, so the instant-quiz promise holds. The real gap was purely CTA framing, which is honored by the existing note-first / SEO rule (see `docs/features/public-notes.md`).
 
-   Reframe the public note detail conversion from "Copy" to "Test yourself." For an anonymous reader, the strongest hook is an immediate self-quiz, not library management.
+**1. Quiz-first conversion CTA (✅ shipped)**
 
-   - Make "Quiz yourself on this note" the primary CTA on public note detail pages; demote "Copy" to secondary
-   - Anonymous tap → free signup → land **directly** in a Quick Review on that note (skip onboarding for this path)
-   - Signed-in users go straight to the Quick Review
-   - Resurrects and supersedes the v0.20.0 deferred "post-signup → instant quiz flow" item
-   - Reuses the existing Quick Review session model; no new quiz infrastructure
+   Reframe the public note detail conversion from "Copy" to "Test yourself," without changing the note-first page hierarchy (SEO preserved).
 
-**2. Anonymous mini-quiz taste**
+   - "Quiz yourself on this note" is now the primary CTA on the conversion card and the mini-quiz completion screen; copy/generate demoted to secondary
+   - Routes through the existing copy → instant Quick Review flow (anonymous tap → free signup → auto-copy → auto-generate → auto-start Quick Review)
+   - Added `PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED` analytics event to measure CTA lift
+   - Parameterized `PublicSeoCopyCta` (`action`, `analyticsEvent`, `authModalTitle/Body`, `variant`); no new quiz infrastructure
 
-   Let an anonymous reader answer 1–2 sample questions inline on the public note, then gate the remainder behind a free signup.
+**2. Anonymous mini-quiz taste (already present; CTA reframed)**
 
-   - Build on the existing `public-mini-quiz-preview` component
-   - After 1–2 questions: "See your score and the rest of the quiz — sign up free"
-   - The gate is on the *quiz action / score reveal*, never on reading — preserves friction-free browsing
-   - No anonymous session state is persisted (existing public-page rule); intent is captured at the signup boundary
+   The `public-mini-quiz-preview` component already lets anonymous readers answer up to 3 sample questions, then surfaces the conversion CTA on completion. The completion CTA was reframed to quiz-first as part of item 1. Free-question count left at 3 deliberately — more free content supports the dwell-time / SEO that drives views; do not choke it.
 
-**3. Preserve intent through signup / OAuth**
+**3. ~~Preserve intent through signup / OAuth~~ (dropped — non-problem)**
 
-   Ensure the target note and the "go to quiz" intent survive the signup and OAuth round-trip so the user lands on the value moment, not a generic dashboard.
-
-   - Carry a `quizIntent` (note reference + destination) through the signup/OAuth redirect
-   - On first authenticated load, route to the Quick Review for that note
-   - Falls back gracefully to the note detail page if the note is no longer available
+   Google auth is popup-based, so the page URL and copy-intent cookie never leave during auth. No redirect-intent work needed.
 
 #### P1 — Grow what's working
 
-**4. Public-note share & SEO polish**
+**4. Public-note share & SEO polish (✅ shipped)**
 
    Widen the top of the funnel by leaning into the discovery that already converts to views (the top public note has 156 views; Nursing is the leading subject).
 
-   - Stronger Open Graph / share cards for public note pages (title, subject, question count, "quiz yourself" framing)
-   - Verify canonical SEO paths and structured metadata are complete for public note + subject pages
-   - No backend data changes expected; metadata and share-surface work only
+   - ✅ Dynamic per-note Open Graph share card (`opengraph-image.tsx`): title, subject, `{N} practice questions · Quiz yourself`. `generateMetadata` drops the static default so the file-convention card wins; Twitter falls back to the same `og:image`.
+   - ✅ Canonical SEO paths + structured metadata verified — Article JSON-LD was **already present** on note pages (`buildArticleStructuredData`) and CollectionPage JSON-LD on subject pages; OG/Twitter/canonical already complete via `buildPageMetadata`. Only the dynamic share image was missing.
+   - Frontend-only; no backend data changes. Verified via production build (`next/og` compiles under `--webpack`).
 
 #### P2 — Low-cost generosity (deprioritized)
 
-**5. Free topic-note-generation 5 → 10**
+**5. Free topic-note-generation 5 → 10 (✅ shipped)**
 
-   Raise `freeMonthlyNoteGenerationLimit` from 5 to 10.
+   Raised `freeMonthlyNoteGenerationLimit` from 5 to 10 (Java default + `application.yaml`).
 
    - **Not a conversion lever** — production free-quota hit rate is 0.0%, so no current user is constrained by the cap
-   - Included only as cheap activation goodwill / headroom insurance; a one-line config change
-   - Do not frame this release around it
+   - Shipped only as cheap activation goodwill / headroom insurance; config-only change, no frontend or test changes (limits read dynamically; pricing copy is "Limited")
+   - Free Adaptive Practice was explicitly considered and **declined** for this release — it doesn't address the capture constraint, erodes the paid differentiator while we're building conversion, and is a packaging change (plans/pricing/landing cascade), not a quota tweak. See Deferred below.
 
 #### Deferred — revisit after capture improves
 
