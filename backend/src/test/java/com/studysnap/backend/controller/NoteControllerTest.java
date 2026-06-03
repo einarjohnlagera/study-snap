@@ -5,7 +5,6 @@ import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
-import com.studysnap.backend.dto.NoteStatsResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -252,23 +251,6 @@ class NoteControllerTest {
         verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50);
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
-    }
-
-    @Test
-    void getMyStats_delegatesToNoteServiceForAuthenticatedUser() {
-        UUID userId = UUID.randomUUID();
-        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        NoteStatsResponse expected = new NoteStatsResponse(
-                List.of(new NoteStatsResponse.SubjectCount("Biology", 4)),
-                0,
-                4
-        );
-        when(noteService.getMyStats(userId)).thenReturn(expected);
-
-        NoteStatsResponse response = noteController.getMyStats(user);
-
-        assertThat(response).isEqualTo(expected);
-        verify(noteService).getMyStats(userId);
     }
 
     @Test

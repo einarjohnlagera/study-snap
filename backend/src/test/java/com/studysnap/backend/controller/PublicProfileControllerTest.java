@@ -1,8 +1,9 @@
 package com.studysnap.backend.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
-import com.studysnap.backend.dto.NoteStatsResponse.SubjectCount;
+import com.studysnap.backend.dto.SubjectCount;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.PublicProfileService;
@@ -20,6 +21,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PublicProfileControllerTest {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
     private PublicProfileService publicProfileService;
@@ -103,5 +106,14 @@ class PublicProfileControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(publicProfileService).getByUsername("studybuddy", viewer.userId());
+    }
+
+    @Test
+    void subjectCount_serializesWithPublicProfileJsonShape() throws Exception {
+        SubjectCount subjectCount = new SubjectCount("Anatomy", 2);
+
+        String json = objectMapper.writeValueAsString(subjectCount);
+
+        assertThat(json).isEqualTo("{\"subject\":\"Anatomy\",\"count\":2}");
     }
 }

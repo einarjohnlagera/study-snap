@@ -2,7 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
-import com.studysnap.backend.dto.NoteStatsResponse.SubjectCount;
+import com.studysnap.backend.dto.SubjectCount;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
