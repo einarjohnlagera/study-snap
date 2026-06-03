@@ -8,6 +8,8 @@ Theme: convert the public library's anonymous reading traffic into signed-up, ac
 
 ### ✅ Shipped
 
+- **Faceted private-library subject strip** — the Library subject chips now recompute against the active filters instead of always showing the whole-library breakdown. With a Course/Program (or tag/search/readiness) filter active, only that set's subjects appear, with matching counts; clicking a chip narrows within the current view. Computed client-side from the already-loaded note list, so it's accurate and removes the strip's dependency on the `GET /notes/stats` endpoint (endpoint removal handled separately).
+
 ### 🔲 Pending
 
 ---

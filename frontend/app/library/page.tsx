@@ -26,12 +26,10 @@ import {
   ApiRequestError,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
-  getNoteStats,
   getSavedLibraryFilters,
   listNotes,
   listSubjects,
   type NoteListItemResponse,
-  type NoteStatsResponse,
   type SavedLibraryFilterResponse,
   type SavedLibraryFilterState,
   type NoteVisibility,
@@ -341,7 +339,6 @@ export default function LibraryPage() {
   const initialLoadStartedRef = useRef(false);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
-  const [noteStats, setNoteStats] = useState<NoteStatsResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(() => searchParams.get("cp") ?? ALL_COURSE_PROGRAMS);
@@ -401,10 +398,9 @@ export default function LibraryPage() {
     setLoading(true);
     setError(null);
     try {
-      const [notesResult, subjectsResult, statsResult] = await Promise.allSettled([
+      const [notesResult, subjectsResult] = await Promise.allSettled([
         listNotes(),
         listSubjects("mine"),
-        getNoteStats(),
       ]);
       if (notesResult.status !== "fulfilled") {
         throw notesResult.reason;
@@ -412,12 +408,6 @@ export default function LibraryPage() {
       const notes = notesResult.value;
       setItems(notes);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
-      if (statsResult.status === "fulfilled") {
-        setNoteStats(statsResult.value);
-      } else {
-        console.warn("Could not load note stats.", statsResult.reason);
-        setNoteStats(null);
-      }
       setVisibleCount(LIBRARY_PAGE_SIZE);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load your notes.";
@@ -813,11 +803,51 @@ export default function LibraryPage() {
     [sortedFilteredItems, visibleCount],
   );
   const hasMore = visibleCount < sortedFilteredItems.length;
+
+  // Subject facet counts for the stats strip, computed over the notes matching
+  // every active filter EXCEPT subject — so the chips reflect the current view
+  // (e.g. only Nursing subjects when a Nursing course/program filter is active).
+  const subjectFacets = useMemo(() => {
+    const SUBJECT_FACET_LIMIT = 6;
+    const query = searchQuery.trim().toLowerCase();
+    const effectiveReadinessFilter = !showQuizReadyIndicators && readinessFilter === "QUIZ_READY"
+      ? "ALL"
+      : readinessFilter;
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const item of items) {
+      const itemTitle = item.title?.trim() || "Untitled note";
+      const itemTags = normalizeTags(item.tags);
+      const itemCourseProgram = normalizeCourseProgram(item.courseProgram);
+      const searchMatch = query.length === 0
+        || itemTitle.toLowerCase().includes(query)
+        || itemTags.some((tag) => tag.toLowerCase().includes(query));
+      const readinessMatch = effectiveReadinessFilter === "ALL"
+        || (effectiveReadinessFilter === "DRAFT" && item.studyPackStatus === "DRAFT")
+        || (effectiveReadinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
+        || (effectiveReadinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
+      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
+        || itemCourseProgram === selectedCourseProgram;
+      const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
+      if (!(searchMatch && readinessMatch && courseProgramMatch && tagMatch)) {
+        continue;
+      }
+      total += 1;
+      const itemSubject = getLibrarySubject(item);
+      counts.set(itemSubject, (counts.get(itemSubject) ?? 0) + 1);
+    }
+    const sorted = [...counts.entries()].sort(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    );
+    const topSubjects = sorted.slice(0, SUBJECT_FACET_LIMIT).map(([subject, count]) => ({ subject, count }));
+    const otherSubjectsCount = sorted.slice(SUBJECT_FACET_LIMIT).reduce((sum, [, count]) => sum + count, 0);
+    return { topSubjects, otherSubjectsCount, total };
+  }, [items, readinessFilter, searchQuery, selectedCourseProgram, selectedTags, showQuizReadyIndicators]);
+
   const showSubjectStatsStrip = !loading
     && selectedSubject === ALL_SUBJECTS
-    && noteStats !== null
-    && noteStats.totalNotes >= 5
-    && noteStats.topSubjects.length >= 2;
+    && subjectFacets.total >= 5
+    && subjectFacets.topSubjects.length >= 2;
 
   const applySubjectStatsFilter = useCallback((subject: string) => {
     setSelectedSubject(subject);
@@ -1136,12 +1166,12 @@ export default function LibraryPage() {
               </p>
             )}
 
-            {showSubjectStatsStrip && noteStats ? (
+            {showSubjectStatsStrip ? (
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                 <p className="mr-1 text-xs font-medium uppercase tracking-wide text-foreground/55">
                   Subjects
                 </p>
-                {noteStats.topSubjects.map((subjectCount) => (
+                {subjectFacets.topSubjects.map((subjectCount) => (
                   <button
                     key={subjectCount.subject}
                     type="button"
@@ -1152,9 +1182,9 @@ export default function LibraryPage() {
                     <span className="text-foreground/50">{subjectCount.count}</span>
                   </button>
                 ))}
-                {noteStats.otherSubjectsCount > 0 ? (
+                {subjectFacets.otherSubjectsCount > 0 ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt px-3 py-1.5 text-sm font-medium text-foreground/55">
-                    Other {noteStats.otherSubjectsCount}
+                    Other {subjectFacets.otherSubjectsCount}
                   </span>
                 ) : null}
               </div>

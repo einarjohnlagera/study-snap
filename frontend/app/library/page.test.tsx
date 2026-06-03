@@ -4,7 +4,6 @@ import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
-  getNoteStats,
   getSavedLibraryFilters,
   listNotes,
   listSubjects,
@@ -32,7 +31,6 @@ jest.mock("@/lib/api", () => ({
   createSavedLibraryFilter: jest.fn(),
   deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
-  getNoteStats: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
@@ -57,17 +55,46 @@ async function openTagSelectorFromFilters() {
   await screen.findByRole("heading", { name: "Select tags" });
 }
 
+// Minimal note builder for driving the (client-computed) subject stats strip.
+function buildNote(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    title: `Note ${id}`,
+    courseProgram: null,
+    subject: null,
+    tags: [],
+    contentPreview: "",
+    summaryPreview: "",
+    visibility: "PRIVATE",
+    studyPackId: null,
+    studyPackStatus: "DRAFT",
+    quizCount: null,
+    generatedQuizId: null,
+    generatedQuizQuestionCount: null,
+    createdAt: "2026-03-20T10:00:00Z",
+    updatedAt: "2026-03-21T10:00:00Z",
+    ...overrides,
+  };
+}
+
+function notesAcrossSubjects(subjectsByCount: Array<[string, number]>) {
+  const notes: ReturnType<typeof buildNote>[] = [];
+  let counter = 0;
+  for (const [subject, count] of subjectsByCount) {
+    for (let i = 0; i < count; i += 1) {
+      counter += 1;
+      notes.push(buildNote(`note-${counter}`, { subject }));
+    }
+  }
+  return notes;
+}
+
 describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
     currentSearch = "";
     (getAuthUser as jest.Mock).mockReturnValue(null);
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [],
-      otherSubjectsCount: 0,
-      totalNotes: 3,
-    });
     (getSavedLibraryFilters as jest.Mock).mockResolvedValue([]);
     (createSavedLibraryFilter as jest.Mock).mockResolvedValue({
       id: "saved-filter-1",
@@ -154,14 +181,9 @@ describe("Library page", () => {
   });
 
   it("renders subject stats when the library has enough notes across multiple subjects", async () => {
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [
-        { subject: "Biology", count: 3 },
-        { subject: "Chemistry", count: 2 },
-      ],
-      otherSubjectsCount: 0,
-      totalNotes: 5,
-    });
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]),
+    );
 
     render(<LibraryPage />);
 
@@ -170,60 +192,67 @@ describe("Library page", () => {
   });
 
   it("does not render subject stats below the total note threshold", async () => {
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [
-        { subject: "Biology", count: 2 },
-        { subject: "Chemistry", count: 2 },
-      ],
-      otherSubjectsCount: 0,
-      totalNotes: 4,
-    });
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([["Biology", 2], ["Chemistry", 2]]),
+    );
 
     render(<LibraryPage />);
 
-    await screen.findByText("Cell Respiration");
+    await screen.findByText("Note note-1");
     expect(screen.queryByRole("button", { name: "Biology 2" })).not.toBeInTheDocument();
   });
 
   it("does not render subject stats when only one subject exists", async () => {
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [
-        { subject: "Biology", count: 5 },
-      ],
-      otherSubjectsCount: 0,
-      totalNotes: 5,
-    });
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([["Biology", 5]]),
+    );
 
     render(<LibraryPage />);
 
-    await screen.findByText("Cell Respiration");
+    await screen.findByText("Note note-1");
     expect(screen.queryByRole("button", { name: "Biology 5" })).not.toBeInTheDocument();
   });
 
   it("shows an Other chip for subjects beyond the top subjects", async () => {
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [
-        { subject: "Biology", count: 4 },
-        { subject: "Chemistry", count: 3 },
-      ],
-      otherSubjectsCount: 2,
-      totalNotes: 9,
-    });
+    // 8 distinct subjects (1 note each) → top 6 chips + Other 2
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([
+        ["Anatomy", 1], ["Biology", 1], ["Chemistry", 1], ["Dosage", 1],
+        ["Ethics", 1], ["Foundations", 1], ["Genetics", 1], ["History", 1],
+      ]),
+    );
 
     render(<LibraryPage />);
 
     expect(await screen.findByText("Other 2")).toBeInTheDocument();
   });
 
+  it("recomputes subject facets within an active course/program filter", async () => {
+    // Faceting: with a course/program filter active, only that program's subjects show.
+    (listNotes as jest.Mock).mockResolvedValue([
+      ...notesAcrossSubjects([["Pharmacology", 3], ["Community Health Nursing", 2]]).map((n) => ({
+        ...n,
+        courseProgram: "Nursing",
+      })),
+      ...notesAcrossSubjects([["Architectural Design", 4]]).map((n) => ({
+        ...n,
+        courseProgram: "Architecture",
+      })),
+    ]);
+    currentSearch = "cp=Nursing";
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByRole("button", { name: "Pharmacology 3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Community Health Nursing 2" })).toBeInTheDocument();
+    // Architecture subject must NOT appear while filtered to the Nursing program
+    expect(screen.queryByRole("button", { name: "Architectural Design 4" })).not.toBeInTheDocument();
+  });
+
   it("applies the subject URL filter when a subject stats chip is clicked", async () => {
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [
-        { subject: "Biology", count: 3 },
-        { subject: "Chemistry", count: 2 },
-      ],
-      otherSubjectsCount: 0,
-      totalNotes: 5,
-    });
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]),
+    );
 
     render(<LibraryPage />);
 
@@ -235,35 +264,15 @@ describe("Library page", () => {
   });
 
   it("hides subject stats when a subject filter is already active", async () => {
-    currentSearch = "?subject=Biology";
-    (getNoteStats as jest.Mock).mockResolvedValue({
-      topSubjects: [
-        { subject: "Biology", count: 3 },
-        { subject: "Chemistry", count: 2 },
-      ],
-      otherSubjectsCount: 0,
-      totalNotes: 5,
-    });
+    currentSearch = "subject=Biology";
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]),
+    );
 
     render(<LibraryPage />);
 
-    await screen.findByText("Cell Respiration");
+    await screen.findByText("Note note-1");
     expect(screen.queryByRole("button", { name: "Biology 3" })).not.toBeInTheDocument();
-  });
-
-  it("suppresses subject stats when loading stats fails", async () => {
-    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
-    (getNoteStats as jest.Mock).mockRejectedValue(new Error("stats failed"));
-
-    try {
-      render(<LibraryPage />);
-
-      await screen.findByText("Cell Respiration");
-      expect(screen.queryByRole("button", { name: "Biology 3" })).not.toBeInTheDocument();
-      expect(warnSpy).toHaveBeenCalledWith("Could not load note stats.", expect.any(Error));
-    } finally {
-      warnSpy.mockRestore();
-    }
   });
 
   it("uses the all-mode session timestamp from the note list for the reviewed label", async () => {
