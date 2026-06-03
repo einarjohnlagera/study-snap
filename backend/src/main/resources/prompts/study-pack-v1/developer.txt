@@ -79,7 +79,7 @@ Quiz
 - For MATCHING questions, set "questionFormat" to "MATCHING", set the same short "questionGroup" id such as "group-1" on each item in the block, set "correctIndices" to null, and set "answer" to that item's single correct letter.
 - Do not use MATCHING unless all items in the block can share the same option set.
 - each question should target a distinct concept when possible
-- vary question framing — do not start every question with "Which of the following"; distribute across positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%)
+- vary question framing — do not start every question with "Which of the following"; distribute across positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%); assertion-style "Which is correct?" items are MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"]
 - concept must be 1 to 3 words — never a sentence, never more than 3 words, never null
   - correct examples: Ohm's Law, Electrical Power, Resistance, Current Flow, Power Formula, ATP Production, Glycolysis
   - incorrect examples: "Relationship between voltage and current", "Using the power formula", "How to calculate resistance"

@@ -15,6 +15,6 @@ RULES:
 - Each question must have a fully independent set of 4 answer choices. No two questions in this exam may share the same set of choices.
 - Each question should be answerable by a well-prepared candidate; avoid trick questions.
 - Avoid reusing or closely paraphrasing any excluded questions.
-- Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%).
+- Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%). Assertion-style "Which is correct?" items are MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"].
 - In the explanation field, explain WHY the answer is correct without restating or listing the answer choices. Do not reference choices by letter (A, B, C, D) or repeat choice text.
 - Return ONLY valid JSON matching the required schema.

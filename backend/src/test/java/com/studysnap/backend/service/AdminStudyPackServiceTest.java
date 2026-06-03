@@ -1,11 +1,19 @@
 package com.studysnap.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
+import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,17 +21,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.AsyncTaskExecutor;
 
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class AdminStudyPackServiceTest {
+
     private static final String ENRICHED_SUMMARY_MARKER = "|";
 
     @Mock
@@ -41,11 +41,11 @@ class AdminStudyPackServiceTest {
     void setUp() {
         AsyncTaskExecutor directExecutor = Runnable::run;
         adminStudyPackService = new AdminStudyPackService(
-                userRepository,
-                studyPackRepository,
-                transactionHelper,
-                progressTracker,
-                directExecutor
+            userRepository,
+            studyPackRepository,
+            transactionHelper,
+            progressTracker,
+            directExecutor
         );
     }
 
@@ -56,8 +56,8 @@ class AdminStudyPackServiceTest {
         when(userRepository.findByRole(UserRole.ADMIN)).thenReturn(List.of(admin));
         when(studyPackRepository.countByOwnerUserIdIn(adminUserIds)).thenReturn(1L);
         when(studyPackRepository.findByOwnerUserIdInAndSummaryNotEnriched(
-                eq(adminUserIds),
-                eq(ENRICHED_SUMMARY_MARKER)
+            adminUserIds,
+            ENRICHED_SUMMARY_MARKER
         )).thenReturn(List.of());
 
         AdminRegenerateSummariesResponse response = adminStudyPackService.regenerateOfficialSummaries();
@@ -78,8 +78,8 @@ class AdminStudyPackServiceTest {
         when(userRepository.findByRole(UserRole.ADMIN)).thenReturn(List.of(admin));
         when(studyPackRepository.countByOwnerUserIdIn(adminUserIds)).thenReturn(1L);
         when(studyPackRepository.findByOwnerUserIdInAndSummaryNotEnriched(
-                eq(adminUserIds),
-                eq(ENRICHED_SUMMARY_MARKER)
+            adminUserIds,
+            ENRICHED_SUMMARY_MARKER
         )).thenReturn(List.of(pack));
 
         AdminRegenerateSummariesResponse response = adminStudyPackService.regenerateOfficialSummaries();
@@ -99,6 +99,34 @@ class AdminStudyPackServiceTest {
         assertThat(response.skipped()).isZero();
         verify(studyPackRepository, never()).countByOwnerUserIdIn(org.mockito.ArgumentMatchers.any());
         verify(transactionHelper, never()).regenerateOnePack(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void repairMalformedQuizzes_queuesAffectedPacksAcrossAllOwners() {
+        StudyPackEntity pack = new StudyPackEntity();
+        pack.setId(UUID.randomUUID());
+        when(studyPackRepository.count()).thenReturn(4L);
+        when(studyPackRepository.findStudyPacksWithMalformedTrueFalseQuizItems()).thenReturn(List.of(pack));
+
+        AdminRepairMalformedQuizzesResponse response = adminStudyPackService.repairMalformedQuizzes();
+
+        assertThat(response.queued()).isEqualTo(1);
+        assertThat(response.skipped()).isEqualTo(3);
+        verify(progressTracker).startRun(1);
+        verify(transactionHelper).repairMalformedQuiz(pack);
+    }
+
+    @Test
+    void repairMalformedQuizzes_skipsCleanPacks() {
+        when(studyPackRepository.count()).thenReturn(2L);
+        when(studyPackRepository.findStudyPacksWithMalformedTrueFalseQuizItems()).thenReturn(List.of());
+
+        AdminRepairMalformedQuizzesResponse response = adminStudyPackService.repairMalformedQuizzes();
+
+        assertThat(response.queued()).isZero();
+        assertThat(response.skipped()).isEqualTo(2);
+        verify(progressTracker).startRun(0);
+        verify(transactionHelper, never()).repairMalformedQuiz(org.mockito.ArgumentMatchers.any());
     }
 
     private UserEntity buildAdminUser() {

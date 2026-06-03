@@ -9,6 +9,7 @@ RULES:
 - Learner level target: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
 - {TRUE_FALSE_GUIDANCE}
+- TRUE_FALSE is only for one declarative statement judged true or false. Any "Which is correct?", "Which of the following...", "Which statement...", or multi-statement "Statement 1... Statement 2..." item must be MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"].
 - {COMPUTATION_GUIDANCE}
 - {TIME_EXPECTATION}
 - Standard MCQ questions must have 4 choices.
