@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.23.1 - Quiz Format Fix` is the current patch release (quiz TRUE_FALSE format-mismatch correctness fix).
+`v0.23.1 - Quiz Format Fix` is complete (quiz TRUE_FALSE format-mismatch correctness fix) and is the current documentation baseline.
 
-`v0.23.0 - From Readers to Learners` is complete and is the previous documentation baseline.
+`v0.23.0 - From Readers to Learners` is the prior release.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
