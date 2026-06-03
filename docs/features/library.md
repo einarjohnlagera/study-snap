@@ -127,28 +127,19 @@ Private Library sorting:
 
 ### Stats Strip
 
-The private Library may show a compact subject stats strip between the filter bar and the note list.
+The private Library shows a compact subject stats strip inside the filter card, between the filter controls and the note list.
 
-Endpoint:
+The strip is **faceted**: counts are computed **client-side** from the already-loaded note list (`listNotes()` returns the full library), over the notes matching every active filter **except** subject. So the chips always reflect the current view — when a Course/Program, tag, search, or readiness filter is active, only the subjects present in that filtered set appear, with counts for those notes. With no filters active, it shows the whole-library subject breakdown. There is no dedicated stats endpoint.
 
-- `GET /notes/stats` (authenticated)
-- response shape: `{ topSubjects: [{ subject, count }], otherSubjectsCount, totalNotes }`
+Behavior:
 
-Backend behavior:
-
-- `topSubjects` counts the current user's notes grouped by non-blank `subject`, sorted by count descending, capped at 6 subjects.
-- notes with null or blank `subject` are excluded from subject chips but included in `totalNotes`.
-- `otherSubjectsCount` is the summed note count for subjects beyond the top 6.
-
-Frontend behavior:
-
-- show only when `totalNotes >= 5` and `topSubjects.length >= 2`
+- subject key uses the same `getLibrarySubject` resolution as the rest of the Library (subject → course/program → fallback), so chip clicks always match the subject filter
+- `topSubjects`: distinct subjects in the filtered set, sorted by count descending, capped at 6
+- `Other {n}`: summed count for subjects beyond the top 6 (non-clickable)
+- show only when the filtered set has `>= 5` notes and `>= 2` distinct subjects
 - hide while the Library is loading
 - hide when a subject filter is already active
-- render one clickable chip per top subject as `{subject} {count}`
-- clicking a subject chip applies the existing private Library `subject` URL param and filters the list
-- render non-clickable `Other {otherSubjectsCount}` when `otherSubjectsCount > 0`
-- if `GET /notes/stats` fails, log the failure and suppress the strip without showing a user-facing error
+- render one clickable chip per top subject as `{subject} {count}`; clicking applies the existing private Library `subject` URL param
 
 ## Saved Filters
 
