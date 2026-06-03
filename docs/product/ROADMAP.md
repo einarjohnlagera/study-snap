@@ -6,11 +6,69 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.23.1 - Quiz Format Fix` is complete (quiz TRUE_FALSE format-mismatch correctness fix) and is the current documentation baseline.
+`v0.24.0 - Guided Learning` is the current in-progress release.
 
-`v0.23.0 - From Readers to Learners` is the prior release.
+`v0.23.1 - Quiz Format Fix` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.24.0 - Guided Learning
+
+**Status: In Progress**
+
+Theme: turn NoteLib from a tool you *operate* into a study companion that shows **direction and progress** — finally closing the learning loop (study → assess → see gaps → targeted next action → repeat) the product has promised but never visibly delivered.
+
+### Why this release
+
+The dead-end is real: a learner copies a note, runs a Challenge Quiz, aces it — and then doesn't know what to review next. Exam reviewers feel this most. But an audit found the loop's halves **already exist and just aren't surfaced or closed at the right moments**:
+
+- `Today's Focus` card (`TodayFocusType`: RESUME_REVIEW / RETRY_REVIEW / REVIEW_PACK / PRACTICE_WEAK_CONCEPT / STUDY_SUGGESTION) already computes a next action.
+- `Focus Areas` card already shows per-concept accuracy bars.
+- `ConceptHealthEntity` already tracks per-user/per-concept mastery (spaced-repetition: `lastCorrectAt`, `isDue`, `daysSinceReview`).
+- Adaptive Practice already acts on weak concepts.
+
+What's missing: the loop isn't **closed at the post-quiz moment**, the act-on-weakness step is **paywalled** for free users, there is **no consolidated progress report by subject/topic**, and there is **no goal/destination** to orient progress.
+
+### Design principle (anti-drift — governs the entire learning loop)
+
+**Build on the concept-mastery spine that already exists; never build a content/curriculum system.**
+- **Goals** = an existing `courseProgram` / subject set that NoteLib **suggests** and the user confirms — never a blank-slate goal entry, never a generated syllabus.
+- **Progress and milestones** are **derived** from `ConceptHealth` mastery + `courseProgram` — e.g. "70% of Pharmacology concepts mastered," not "Lesson 3: The Nephron."
+- NoteLib must never generate topics, lessons, or curriculum content. The loop organizes the learner's own notes + community notes by their own performance data.
+
+#### P0 — Close the loop (Phase 1)
+
+**1. Post-session next-step handoff**
+   - At the quiz/session **results screen**, surface the session's weakest concepts + a one-tap next action (re-review missed, practice weak concepts). Close the loop *in-context*, not only on a dashboard the learner may not revisit.
+   - Reuse `ConceptHealth` + the existing `TodayFocusType` actions; no new content.
+
+**2. Free Adaptive Practice allowance**
+   - Give the FREE tier a small monthly Adaptive Practice allowance so the act-on-weakness step isn't a locked door. Without this the loop dies at the diagnosis for most users.
+   - Touches `FeatureGateService` / quotas + the plan/pricing/landing surfaces (cascade) — scope deliberately.
+
+#### P1 — Progress report (Phase 2)
+
+**3. "My Progress" view**
+   - Aggregate `ConceptHealth` **by subject/topic**: mastery %, strong vs struggling, due-for-review counts. The subject/topic awareness learners ask for, built on data already stored.
+   - Backend: one aggregation query (concept → note → subject). Frontend: a progress/report view (extend `Focus Areas` into a full page).
+
+#### P2 — Supporting
+
+**4. Full study-pack copying**
+   - Copying a public note copies its generated content (summary, key concepts, quiz) for **instant value**, with an optional "tailor to my level" regenerate. Still excludes session history + concept health (those are personal).
+   - Feeds the loop with content to study toward a goal. Depends on the v0.23.1 quiz-format fix being live (so copies don't propagate malformed questions). Reverses the long-standing "copy excludes generated fields" rule for public-note copies — a deliberate, documented change.
+
+**5. Guardian demand test**
+   - A "Parents & Guardians — coming soon" CTA on the landing page firing a `GUARDIAN_INTEREST` analytics event; a signal-only waitlist, NOT the Guardian flow. Pre-commit a build/no-build threshold. (Full spec: prior planning.)
+
+#### Deferred to v0.25.0 — Phase 3: Goal + milestones
+
+Gated on P0/P1 demonstrably lifting retention first.
+- "Set your goal" — **suggested** from the learner's subjects / `courseProgram`, user confirms.
+- Goal turns the progress report into a destination: % toward mastery of the track, mastery-threshold milestones, and a "next best subject to study" suggestion that reuses `courseProgram` public-note discovery to point at content for the gaps.
+- Strictly mastery-derived; no generated curriculum.
 
 ---
 

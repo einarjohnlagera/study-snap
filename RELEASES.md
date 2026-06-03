@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.24.0 - Guided Learning
+
+**Status: In Progress**
+
+Theme: turn NoteLib into a study companion that shows direction and progress — close the learning loop (study → assess → see gaps → targeted next action) by surfacing the concept-mastery data the app already tracks, and give learners a sense of where they are and what to do next.
+
+### ✅ Shipped
+
+### 🔲 Pending
+
+- **Post-session next-step handoff** — quiz results surface weak concepts + a one-tap next action (Phase 1)
+- **Free Adaptive Practice allowance** — so the act-on-weakness step isn't paywalled (Phase 1)
+- **"My Progress" report** — concept mastery aggregated by subject/topic (Phase 2)
+- **Full study-pack copying** — copies include generated content for instant value, with optional "tailor to my level" regenerate
+- **Guardian demand test** — landing CTA + `GUARDIAN_INTEREST` signal (waitlist, not the flow)
+
+---
+
 ## v0.23.1 - Quiz Format Fix
 
 **Status: Released**
