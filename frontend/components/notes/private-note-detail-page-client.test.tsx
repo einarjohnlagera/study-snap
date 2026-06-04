@@ -1155,14 +1155,16 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Regenerate Study Pack" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
     expect(screen.getByRole("dialog", { name: "Regenerate Study Pack?" })).toBeInTheDocument();
     expect(screen.getByText("This will replace the current summary, key concepts, and quiz with a new version tailored to your level. Your quiz history is preserved.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Regenerate Study Pack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
 
     await waitFor(() => {

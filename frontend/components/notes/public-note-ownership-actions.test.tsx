@@ -94,16 +94,16 @@ describe("PublicNoteOwnershipActions", () => {
       />,
     );
 
-    expect(screen.getByText("Bring this note into your own workspace so you can review it, practice from it, or build your own Study Pack.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create your own Study Pack" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy to My Library" })).toBeInTheDocument();
+    expect(screen.getByText(/Copy this note to your library and get the full Study Pack instantly/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy Study Pack" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy note only" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Copy to My Library" }),
+      expect.objectContaining({ label: "Copy Study Pack", includeStudyPack: true }),
     );
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Create your own Study Pack", redirectTarget: "generate" }),
+      expect.objectContaining({ label: "Copy note only", includeStudyPack: false }),
     );
   });
 

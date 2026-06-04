@@ -88,7 +88,7 @@ describe("PublicSeoCopyCta", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy to My Library" }));
 
     await waitFor(() => {
-      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1");
     });
   });
@@ -102,7 +102,7 @@ describe("PublicSeoCopyCta", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
     await waitFor(() => {
-      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1");
     });
   });
@@ -115,7 +115,7 @@ describe("PublicSeoCopyCta", () => {
     render(<PublicSeoCopyCta noteId="note-1" />);
 
     await waitFor(() => {
-      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1");
     });
   });
@@ -128,7 +128,7 @@ describe("PublicSeoCopyCta", () => {
     render(<PublicSeoCopyCta noteId="note-1" redirectTarget="generate" />);
 
     await waitFor(() => {
-      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1");
     });
   });
@@ -141,7 +141,7 @@ describe("PublicSeoCopyCta", () => {
     render(<PublicSeoCopyCta noteId="note-1" redirectTarget="quick-review" />);
 
     await waitFor(() => {
-      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
     });
   });
