@@ -15,9 +15,9 @@ Theme: turn NoteLib into a study companion that shows direction and progress —
 - **Full Study Pack copying** — copying a public note now includes the generated summary, key concepts, and quiz; the copied note arrives as Study Pack Ready when the source has a Study Pack.
 - **Study Pack regeneration** — users can now explicitly regenerate the Study Pack on any of their own notes; note content is editable again, and regeneration updates the existing pack in-place while preserving session history.
 
-### 🔲 Pending
+- **Guardian demand test** — "For Parents & Guardians — Coming Soon" section on the landing page; clicking "I'm interested" fires a `GUARDIAN_INTEREST` analytics event. Signal-only — no email collection, no Guardian flow. Build/no-build threshold: 50 `GUARDIAN_INTEREST` events before v0.25.0 kickoff.
 
-- **Guardian demand test** — landing CTA + `GUARDIAN_INTEREST` signal (waitlist, not the flow)
+### 🔲 Pending
 
 ---
 
