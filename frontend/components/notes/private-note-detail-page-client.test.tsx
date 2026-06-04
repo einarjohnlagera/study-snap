@@ -62,6 +62,10 @@ jest.mock("@/lib/auth", () => ({
   setAuthUser: jest.fn(),
 }));
 
+jest.mock("@/components/ui/summary-markdown", () => ({
+  SummaryMarkdown: ({ content }: { content: string }) => <div>{content}</div>,
+}));
+
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
@@ -652,22 +656,49 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("You've reached your quiz limit")).not.toBeInTheDocument();
   });
 
-  it("shows a paywall modal when a free user clicks Adaptive Practice", async () => {
+  it("shows the over-quota paywall when a free user has no Adaptive Practice sessions remaining", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 3,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 3,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 8,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
       studyPackId: "sp-1",
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
+      adaptivePracticeAvailable: true,
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
-    expect(await screen.findByText("Unlock Adaptive Practice")).toBeInTheDocument();
+    expect(await screen.findByText("You've used your free Adaptive Practice sessions")).toBeInTheDocument();
   });
 
   it("routes premium users with exhausted Adaptive Practice usage into the limit flow", async () => {

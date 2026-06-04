@@ -668,7 +668,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const canViewConceptHealth = currentPlan === "PLUS" || currentPlan === "PRO";
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
-  const hasReachedAdaptivePracticeLimit = currentPlan === "PRO" && adaptivePracticeRemaining !== null && adaptivePracticeRemaining <= 0;
+  const hasAdaptivePracticeQuota = (usageSummary?.limits.adaptivePracticePerMonth ?? 0) > 0;
+  const hasReachedAdaptivePracticeLimit = hasAdaptivePracticeQuota
+    && adaptivePracticeRemaining !== null
+    && adaptivePracticeRemaining <= 0;
+  const shouldUpgradeForAdaptivePracticeLimit = currentPlan !== "PRO" && hasReachedAdaptivePracticeLimit;
   const shouldShowNearLimitBanner = usageSummary
     ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
@@ -1240,11 +1244,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Verify your email to use this feature.");
       return;
     }
-    if (currentPlan === "FREE") {
-      openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice");
-      return;
-    }
     if (hasReachedAdaptivePracticeLimit) {
+      if (shouldUpgradeForAdaptivePracticeLimit) {
+        openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice_limit");
+        return;
+      }
       navigateTo(`/notes/${note.id}/adaptive-practice`);
       return;
     }

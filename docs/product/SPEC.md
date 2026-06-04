@@ -1003,7 +1003,7 @@ Dashboard guidance rules:
 - Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
 - Dashboard must not use LLM calls for statistics or recommendations.
 - `Focus Areas` should show the top weak concepts and route Pro users to Adaptive Practice through `noteId`.
-- Free and Plus users should see the same weak concepts but hit the soft Pro paywall when trying to start Adaptive Practice from Dashboard.
+- Free users can start Adaptive Practice up to the monthly Free allowance; over-quota users should see the shared upgrade flow for more sessions.
 - Board Taker dashboard should still use the shared note, quiz-session, activity, and usage data even when Board Exam is the default emphasis.
 - Teacher dashboard must hide student-only analytics widgets such as performance overview, recent quiz sessions, weak concepts, and score-tracking cards.
 - Teacher dashboard should keep the shared note / Study Pack workspace visible while changing intent toward creation, preview, and export.
@@ -1012,7 +1012,7 @@ Dashboard guidance rules:
 - Dashboard monthly usage should show for learning personas:
   - Study Packs
   - Challenge Quiz
-  - Adaptive Practice for Pro only
+  - Adaptive Practice for plans with a positive monthly Adaptive Practice limit
 - OCR usage must stay hidden from the dashboard UI.
 
 ### Shareable Study Packs
@@ -1428,11 +1428,11 @@ Plans: `FREE`, `PLUS`, `PRO`
 
 Plan limits:
 
-- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, higher note generation limits
+- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
+- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
 - Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
 - Current enforcement truth:
-  - Adaptive Practice access is Pro-only in runtime
+  - Adaptive Practice is quota-gated by plan: Free 3/month, Plus 10/month, Pro 30/month
   - Difficulty selection is Pro-only
   - Board Exam Mode is Pro-only
 - Pricing surfaces may still position Plus as the regular-study tier through shared plan messaging, but backend plan enforcement and `GET /api/me/plan` remain the behavior source of truth

@@ -392,9 +392,9 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("What is the powerhouse of the cell?");
     expect(review).toHaveTextContent("Cell organelles");
     expect(review).toHaveTextContent("Nucleus");
-    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("Your Answer");
     expect(review).toHaveTextContent("Mitochondria");
-    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("Correct Answer");
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 
@@ -408,7 +408,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     await screen.findByText("Quick Review Complete");
 
     expect(screen.getByRole("button", { name: "Retry Quick Review" })).toHaveClass("bg-primary");
-    expect(screen.getByRole("button", { name: "Go Pro for Adaptive Practice" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toHaveClass("border");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 

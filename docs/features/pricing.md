@@ -61,6 +61,7 @@ Important:
 
 - `10` Study Packs / month
 - `5` Quizzes / month
+- `3` Adaptive Practice sessions / month
 - `2` exports / month
 - `Summary + Key Concepts`
 
@@ -83,6 +84,7 @@ Important:
 - unlimited exports
 - difficulty selection
 - Board Exam Mode
+- Adaptive Practice: Free `3` sessions / month, Plus `10`, Pro `30`
 
 ## Important implementation note
 
@@ -94,7 +96,7 @@ Current enforcement truth:
 
 - Board Exam Mode is Pro-only
 - Difficulty selection is Pro-only
-- Adaptive Practice access is currently gated as Pro-only in runtime
+- Adaptive Practice is quota-gated by plan: Free `3` sessions / month, Plus `10`, Pro `30`
 
 If pricing copy and backend feature gates diverge, backend gating remains the behavior source of truth until the product intentionally changes it.
 

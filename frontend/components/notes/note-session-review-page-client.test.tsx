@@ -161,7 +161,7 @@ describe("NoteSessionReviewPageClient", () => {
     expect(adaptiveButtons[0]).toBeDisabled();
   });
 
-  it("shows a free-user message on the disabled Adaptive Practice option", async () => {
+  it("explains Adaptive Practice export requires an adaptive session", async () => {
     (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
 
     render(<NoteSessionReviewPageClient noteId="note-1" sessionId="quick-1" />);
@@ -171,7 +171,7 @@ describe("NoteSessionReviewPageClient", () => {
     await waitFor(() => {
       expect(screen.getAllByRole("button", { name: /^Full Review/ }).length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByText(/Adaptive Practice is available after completing a session \(Pro feature\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Complete an Adaptive Practice session before exporting this format\./i)).toBeInTheDocument();
   });
 
   it("exports the full review PDF with clear feedback when Full Review is selected", async () => {

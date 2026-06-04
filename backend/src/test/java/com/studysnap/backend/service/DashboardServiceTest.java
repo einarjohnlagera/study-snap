@@ -262,7 +262,7 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getOverview_marksAdaptivePracticeUnavailableForFreeUsers() {
+    void getOverview_marksAdaptivePracticeAvailableForFreeUsersWithQuota() {
         UUID userId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
@@ -282,7 +282,7 @@ class DashboardServiceTest {
 
         DashboardOverviewResponse response = dashboardService.getOverview(userId);
 
-        assertThat(response.focusAreas().adaptivePracticeAvailable()).isFalse();
+        assertThat(response.focusAreas().adaptivePracticeAvailable()).isTrue();
     }
 
     @Test

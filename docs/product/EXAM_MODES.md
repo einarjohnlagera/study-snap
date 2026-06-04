@@ -28,7 +28,7 @@ NoteLib supports exactly **five quiz-flavored modes** — three exam modes plus 
 |------|--------|----------|------|----------------------|
 | Quick Review | Practice | All | Lightweight, encouraging | `QUICK_REVIEW` (uses base Study Pack quiz) |
 | Challenge Quiz | Exam | All | Flexible, progressive, practice with stakes | `CHALLENGE` |
-| Adaptive Practice | Practice | Plus / Pro (per `PLANS.md`) | Targeted weak-area reinforcement | `ADAPTIVE` |
+| Adaptive Practice | Practice | All plans with quota (`Free` 3/mo, `Plus` 10/mo, `Pro` 30/mo per `PLANS.md`) | Targeted weak-area reinforcement | `ADAPTIVE` |
 | Long Exam | Exam | Student profile (primary), Board Taker (secondary) | Long-form mastery testing | `LONG_EXAM` |
 | Board Exam | Exam | Board Taker profile | High-stakes simulation | `BOARD_EXAM` (currently presented as a Challenge variant; future: own discriminator) |
 
@@ -77,7 +77,7 @@ No identity changes from `quick-review.md`; included here for completeness.
 ### Adaptive Practice (existing)
 
 - **Identity**: Targeted weak-area reinforcement. Not a full-coverage assessment.
-- **Audience**: Plus and Pro per `PLANS.md`. See *Open Discrepancies* below.
+- **Audience**: All learning profiles with monthly quota per `PLANS.md` (`Free` 3/mo, `Plus` 10/mo, `Pro` 30/mo). See *Open Discrepancies* below.
 - **Boundary**: Generated only from weak concepts. Result screen `Generate New Set` only.
 
 ### Long Exam Mode (new — Student-facing)

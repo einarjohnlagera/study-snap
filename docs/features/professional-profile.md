@@ -25,7 +25,7 @@ Professional Profile uses the full exam mode set with profile-aware label overri
 |---|---|---|---|
 | Quick Review | ✓ | "Quick Review" | Same as Student |
 | Challenge Quiz | ✓ | **"Certification Review"** | Same `CHALLENGE` engine; label override only |
-| Adaptive Practice | ✓ Plus / Pro | "Adaptive Practice" | Same engine; weak concept targeting is central for cert prep |
+| Adaptive Practice | ✓ all plans with quota | "Adaptive Practice" | Same engine; weak concept targeting is central for cert prep |
 | Long Exam | ✓ Pro only | **"Full Practice Exam"** | Same `LONG_EXAM` engine; label override only |
 | Board Exam | Hidden | — | Board Taker profile only |
 | Interview Practice (sub-mode) | ✓ Pro only | **"Interview Practice"** | Sub-mode of Adaptive Practice. Surfaced as a dedicated dashboard card and a Professional mode-selection tile. See "Interview Practice Mode (v0.14.0)" below. |

@@ -117,7 +117,7 @@ Display:
 
 - Study Packs usage
 - Challenge Quiz usage
-- Adaptive Practice usage for Pro only
+- Adaptive Practice usage for plans with a positive monthly Adaptive Practice limit
 
 Guardrails:
 
