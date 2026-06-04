@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.24.0 - Guided Learning` is the current in-progress release.
+`v0.25.0` is the next in-progress release (not yet kicked off).
 
-`v0.23.1 - Quiz Format Fix` is complete and is the previous documentation baseline.
+`v0.24.0 - Guided Learning` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -16,7 +16,7 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.24.0 - Guided Learning
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: turn NoteLib from a tool you *operate* into a study companion that shows **direction and progress** — finally closing the learning loop (study → assess → see gaps → targeted next action → repeat) the product has promised but never visibly delivered.
 
