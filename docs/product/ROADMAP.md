@@ -44,9 +44,9 @@ What's missing: the loop isn't **closed at the post-quiz moment**, the act-on-we
    - At the quiz/session **results screen**, surface the session's weakest concepts + a one-tap next action (re-review missed, practice weak concepts). Close the loop *in-context*, not only on a dashboard the learner may not revisit.
    - Reuse `ConceptHealth` + the existing `TodayFocusType` actions; no new content.
 
-**2. Free Adaptive Practice allowance**
+**2. Free Adaptive Practice allowance** *(✅ shipped)*
    - Give the FREE tier a small monthly Adaptive Practice allowance so the act-on-weakness step isn't a locked door. Without this the loop dies at the diagnosis for most users.
-   - Touches `FeatureGateService` / quotas + the plan/pricing/landing surfaces (cascade) — scope deliberately.
+   - Shipped as `3` Free sessions / month with quota-driven `FeatureGateService` availability, plan/pricing/landing copy updates, and over-quota paywall copy that says upgrade for more sessions rather than Adaptive Practice requires Pro.
 
 #### P1 — Progress report (Phase 2)
 

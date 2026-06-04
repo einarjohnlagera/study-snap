@@ -97,7 +97,7 @@ const studyModes = [
     title: "Adaptive Practice",
     description: "Targeted reinforcement on the concepts you keep missing.",
     icon: Sparkles,
-    planChip: "Plus / Pro",
+    planChip: "Free taste",
   },
   {
     title: "Long Exam",

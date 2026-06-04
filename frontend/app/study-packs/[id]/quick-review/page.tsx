@@ -18,7 +18,7 @@ import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard"
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { getPaidPlanCtaLabel } from "@/src/config/plans";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
@@ -1053,7 +1053,10 @@ export default function QuickReviewPage() {
                 className="w-full sm:w-auto"
                 onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
               >
-                {getPaidPlanCtaLabel("PRO")} for Adaptive Practice
+                {getUpgradeCtas(
+                  (viewerPlanType === "PLUS" || viewerPlanType === "PRO" ? viewerPlanType : "FREE") as AppPlanType,
+                  "adaptive-practice",
+                ).primary?.label ?? "Get More Adaptive Practice"}
               </Button>
             ) : null}
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>

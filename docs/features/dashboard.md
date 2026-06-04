@@ -65,7 +65,7 @@ Dashboard should prioritize:
 - `Adaptive Practice`
 - `Usage / Progress`
 
-If Adaptive Practice is locked for the current plan, the CTA should open the shared Pro paywall instead of navigating to a dead-end route.
+If Adaptive Practice quota is exhausted for the current plan, the CTA should open the shared upgrade flow with "upgrade for more sessions" framing instead of navigating to a dead-end route.
 
 ### Teacher
 

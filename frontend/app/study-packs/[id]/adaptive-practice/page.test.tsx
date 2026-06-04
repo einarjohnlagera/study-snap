@@ -318,6 +318,49 @@ describe("AdaptivePracticePage", () => {
     expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
+  it("shows the upgrade paywall when free users exhaust Adaptive Practice usage", async () => {
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: {
+          studyPacksPerMonth: 10,
+          challengeQuizzesPerMonth: 5,
+          adaptivePracticePerMonth: 3,
+          ocrPerMonth: 20,
+        },
+        usage: {
+          studyPacksUsed: 0,
+          challengeQuizzesUsed: 0,
+          adaptivePracticeUsed: 3,
+          ocrUsed: 0,
+        },
+        remaining: {
+          studyPacksRemaining: 10,
+          challengeQuizzesRemaining: 5,
+          adaptivePracticeRemaining: 0,
+          ocrRemaining: 20,
+        },
+      },
+      usageLoaded: true,
+      refreshUsageSummary: jest.fn(),
+    });
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText("You've used your free Adaptive Practice sessions")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
+  });
+
   it('result screen shows "Generate New Set" as the primary action', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       emailVerifiedAt: "2026-03-21T09:00:00Z",

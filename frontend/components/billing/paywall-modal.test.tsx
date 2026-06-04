@@ -112,17 +112,17 @@ describe("PaywallModal", () => {
       />,
     );
 
-    expect(await screen.findByText("Unlock Adaptive Practice")).toBeInTheDocument();
-    expect(screen.getByText("Train on your weak concepts and improve faster with targeted quizzes.")).toBeInTheDocument();
+    expect(await screen.findByText("You've used your free Adaptive Practice sessions")).toBeInTheDocument();
+    expect(screen.getByText("Free includes a small monthly taste of targeted weak-area practice. Upgrade for more sessions and keep closing your learning loop.")).toBeInTheDocument();
     expect(screen.getByText("Plus")).toBeInTheDocument();
     expect(screen.getByText("Pro")).toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue with Pro" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toBeInTheDocument();
     expect(screen.getByText("Access activates immediately after payment")).toBeInTheDocument();
     expect(screen.getByText("No automatic charges. You control renewals.")).toBeInTheDocument();
   });
 
-  it("saves the paywall upgrade context and starts checkout for Pro", async () => {
+  it("saves the paywall upgrade context and starts checkout for the plan-aware Study Pack upgrade", async () => {
     render(
       <PaywallModal
         isOpen
@@ -132,10 +132,10 @@ describe("PaywallModal", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Continue with Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Get More Study Packs" }));
 
     await waitFor(() => {
-      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", returnUrl: "/notes/note-1" });
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PLUS", returnUrl: "/notes/note-1" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
 
@@ -284,7 +284,7 @@ describe("PaywallModal", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Continue with Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Get More Adaptive Practice" }));
 
     expect(await screen.findByText("Verify your email first")).toBeInTheDocument();
     expect(createPremiumCheckoutSession).not.toHaveBeenCalled();

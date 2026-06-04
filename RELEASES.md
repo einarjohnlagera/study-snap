@@ -8,10 +8,11 @@ Theme: turn NoteLib into a study companion that shows direction and progress —
 
 ### ✅ Shipped
 
+- **Free Adaptive Practice allowance** — Free users now get `3` Adaptive Practice sessions per month, removing the paywall that broke the weak-area learning loop after Quick Review or Challenge Quiz. Backend plan limits, feature gates, plan comparison copy, paywall messaging, and mode-access surfaces now treat Adaptive Practice as quota-gated instead of Pro-only.
+
 ### 🔲 Pending
 
 - **Post-session next-step handoff** — quiz results surface weak concepts + a one-tap next action (Phase 1)
-- **Free Adaptive Practice allowance** — so the act-on-weakness step isn't paywalled (Phase 1)
 - **"My Progress" report** — concept mastery aggregated by subject/topic (Phase 2)
 - **Full study-pack copying** — copies include generated content for instant value, with optional "tailor to my level" regenerate
 - **Guardian demand test** — landing CTA + `GUARDIAN_INTEREST` signal (waitlist, not the flow)

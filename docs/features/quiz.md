@@ -41,7 +41,7 @@ Shared ownership rule:
 ### Adaptive Practice
 
 - weak-area follow-up mode
-- Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
+- Free = 3 sessions / month, Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
 - generated separately from Quick Review and Challenge Quiz
 - targets weak concepts from the latest Quick Review or Challenge Quiz, plus due concepts from `concept_health`
 - due threshold is fixed at 3 days: `last_correct_at` missing or 3+ days old is due

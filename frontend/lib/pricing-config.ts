@@ -7,6 +7,7 @@ export const pricingConfig = {
   free: {
     studyPacksPerMonth: 10,
     challengeQuizzesPerMonth: 5,
+    adaptivePracticePerMonth: 3,
     ocrPerMonth: 20,
     docxExportsPerMonth: 2,
     teacherDocxExportsPerMonth: 10,

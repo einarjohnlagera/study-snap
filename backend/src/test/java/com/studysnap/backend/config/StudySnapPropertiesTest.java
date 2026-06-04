@@ -40,4 +40,27 @@ class StudySnapPropertiesTest {
         assertThat(pricing.resolveMonthlyPdfExportLimit(PlanType.PLUS)).isEqualTo(15);
         assertThat(pricing.resolveMonthlyPdfExportLimit(PlanType.PRO)).isNull();
     }
+
+    @Test
+    void adaptivePracticeUsesFreeMonthlyQuotaWhenNotProOnly() {
+        StudySnapProperties.Pricing pricing = new StudySnapProperties().getPricing();
+
+        assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.FREE)).isEqualTo(3);
+        assertThat(pricing.isAdaptivePracticeAvailable(PlanType.FREE)).isTrue();
+        assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.PLUS)).isEqualTo(10);
+        assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.PRO)).isEqualTo(30);
+    }
+
+    @Test
+    void adaptivePracticeProOnlyFlagStillBlocksLowerPlans() {
+        StudySnapProperties.Pricing pricing = new StudySnapProperties().getPricing();
+        pricing.setAdaptivePracticeProOnly(true);
+
+        assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.FREE)).isZero();
+        assertThat(pricing.isAdaptivePracticeAvailable(PlanType.FREE)).isFalse();
+        assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.PLUS)).isZero();
+        assertThat(pricing.isAdaptivePracticeAvailable(PlanType.PLUS)).isFalse();
+        assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.PRO)).isEqualTo(30);
+        assertThat(pricing.isAdaptivePracticeAvailable(PlanType.PRO)).isTrue();
+    }
 }

@@ -12,6 +12,7 @@ Create notes, generate Study Packs, and review basic concepts.
 
 - `10` Study Packs / month
 - `5` Quizzes / month
+- `3` Adaptive Practice sessions / month
 - `2` exports / month (PDF / DOCX)
 - `3` shareable quiz links / month
 
@@ -19,6 +20,7 @@ Create notes, generate Study Packs, and review basic concepts.
 
 - Summary + Key Concepts
 - Quick Review
+- Adaptive Practice (taste — `3` sessions / month)
 
 ---
 
@@ -88,7 +90,7 @@ Free → Plus → Pro
 
 The ladder reflects the user's *study stage*, not just price:
 
-- **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review.
+- **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review, with a small Adaptive Practice allowance to close the weak-area loop.
 - **Plus** is for *regular study* — users who study consistently and want Adaptive Practice on weak areas without committing to exam-prep volume.
 - **Pro** is for *exam preparation* — board exam takers and serious learners who need difficulty selection, Board Exam Mode, and the highest generation limits.
 
@@ -113,7 +115,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Exports / month | 2 | 15 | Unlimited |
 | Shareable quiz links / month | 3 | 10 | Unlimited |
 | Topic note generation | Limited | Higher | Highest |
-| Adaptive Practice | — | 10 sessions | 30 sessions |
+| Adaptive Practice | 3 sessions | 10 sessions | 30 sessions |
 | Interview Practice | — | — | 10 sessions |
 | Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | 10 sessions |
@@ -142,7 +144,7 @@ This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use
 
 **Rationale:**
 - A Teacher on Plus (₱179/mo PH) gets a complete, professional quiz-authoring workflow with no export ceiling.
-- Pro features that teachers do not need — Board Exam Mode, Long Exam Mode, Adaptive Practice tracking, Difficulty Selection, Interview Practice — remain Pro-only. The Pro ladder is intact.
+- Advanced exam-prep features that teachers do not need — Board Exam Mode, Long Exam Mode, Difficulty Selection, Interview Practice, and higher Adaptive Practice volume — remain paid-plan differentiators. The Pro ladder is intact.
 - The export override costs nothing in LLM spend. The risk of abuse (non-teachers claiming Teacher profile to get unlimited exports) is low and the downside is limited to a cost-free feature.
 - This reflects a deliberate product value: NoteLib should be genuinely useful to Filipino teachers, for whom ₱249/mo Pro is proportionally steep relative to a government teacher's salary.
 

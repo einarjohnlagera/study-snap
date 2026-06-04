@@ -68,7 +68,7 @@ Meaning:
 ## Weak concepts and Adaptive Practice
 
 - weak concepts are visible to all plans after completion
-- current runtime gating keeps Adaptive Practice as a Pro-only action
+- Adaptive Practice is available to Free users up to 3 sessions / month, then opens the shared upgrade flow for more sessions
 - when Adaptive Practice is unavailable, Quick Review falls back to `Practice Again` as the main next step
 
 ## Review history
