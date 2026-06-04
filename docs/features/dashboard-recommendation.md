@@ -133,7 +133,7 @@ Recommended response shape:
 
 ```json
 {
-  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | REVIEW_NOTE | STUDY_SUGGESTION",
+  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | REVIEW_PACK | STUDY_SUGGESTION",
   "noteId": "uuid-or-null",
   "title": "string",
   "message": "string",
@@ -145,7 +145,7 @@ Priority order:
 
 1. Resume unfinished review
 2. Retry incorrect questions
-3. Practice weak concepts (Pro only)
+3. Practice weak concepts (plans with Adaptive Practice allowance and remaining quota)
 4. Review a specific note
 5. Study suggestion when no notes exist
 
@@ -154,8 +154,13 @@ Routing guidance:
 - `RESUME_REVIEW` -> Note Detail Quick Review path
 - `RETRY_REVIEW` -> Note Detail Quick Review path
 - `PRACTICE_WEAK_CONCEPT` -> Note Detail Adaptive Practice path
-- `REVIEW_NOTE` -> Note Detail path
+- `REVIEW_PACK` -> Note Detail path
 - `STUDY_SUGGESTION` -> New Note flow
+
+Quota guidance:
+
+- Free users may receive `PRACTICE_WEAK_CONCEPT` while their monthly Adaptive Practice allowance remains
+- exhausted quota should route to the quota-aware fallback or upgrade flow, not a dead-end start
 
 ## Mastery Snapshot
 

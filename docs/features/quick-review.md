@@ -35,13 +35,13 @@ Quick Review uses its own session model:
 
 ## Result screen
 
-Current Quick Review result behavior is intentionally simplified around one main next step.
+Current Quick Review result behavior is intentionally simplified around one server-resolved next step.
 
 Primary CTA rules:
 
-- weak concepts + Adaptive Practice available -> `Practice Weak Areas`
-- strong / perfect result -> `Take Another Challenge`
-- otherwise -> `Practice Again`
+- after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
+- the shared `<PostSessionNextStep>` component renders the dominant next action
+- fallback UI keeps the previous weak-area / challenge / retry guidance when the next-step fetch fails
 
 Secondary actions:
 
@@ -69,13 +69,14 @@ Meaning:
 
 - weak concepts are visible to all plans after completion
 - Adaptive Practice is available to Free users up to 3 sessions / month, then opens the shared upgrade flow for more sessions
-- when Adaptive Practice is unavailable, Quick Review falls back to `Practice Again` as the main next step
+- when the shared next-step response recommends Adaptive Practice but quota is exhausted, the component shows a plan-aware upgrade CTA instead of routing into the limit wall
 
 ## ConceptHealth
 
 - on completion, Quick Review records concepts answered fully correctly in the session to `ConceptHealth`
 - a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
 - weak or partially correct concepts are not recorded as mastered
+- the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved
 
 ## Review history
 
