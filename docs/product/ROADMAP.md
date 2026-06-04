@@ -6,13 +6,94 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.25.0` is the next in-progress release (not yet kicked off).
+`v0.25.0 - Exam Capture & Goal Setting` is the current in-progress release.
 
-`v0.24.1 - Content Moderation Hotfix` is complete and is the current documentation baseline.
+`v0.24.1 - Content Moderation Hotfix` is the current documentation baseline.
 
 `v0.24.0 - Guided Learning` is the previous feature baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.25.0 - Exam Capture & Goal Setting
+
+**Status: In progress**
+
+Theme: turn the marketing traffic NoteLib already earns into signed-up, activated learners — give the exam communities we post into (PNLE, LET, ALE, and beyond) a destination that says *"here's everything for your board exam,"* and give every new learner a **goal** that turns the progress report into a place they're trying to reach. Two tracks, one funnel: **exam page → signup → goal → progress toward goal → back to the community notes.**
+
+### Why this release
+
+The funnel leak is unambiguous and unchanged from v0.23.0 — it has only grown more lopsided as the marketing engine works:
+
+| Signal | Value | Read |
+|---|---|---|
+| Public note views | 2,613 | The acquisition engine works — the ALE / PNLE / LET community posts drive real traffic |
+| Public copies | 5 | Almost none of that traffic converts to any account action |
+| Total users | 29 | The entire registered base is a rounding error next to the traffic |
+| Activation rate | 55.6% (15 of 27) | Healthy — when users verify, most generate a pack |
+| Median days to first pack | 0 days | When they activate, they do it immediately |
+| Value loop closure | 50.0% (8 of 16) | Acceptable — half who generate a pack quiz within 7 days |
+| Free quota hit rate | 0.0% (of 25) | Nobody is near a limit — quota tuning is a no-op |
+| Paywall conversion | 0.0% (of 6) | Downstream and tiny; not the leak |
+
+~2,613 anonymous readers produced ~29 accounts (≈1%). The middle of the funnel is healthy; the leak is purely **capture**. Today the destination for a marketing post is a *single public note* with only "Quiz yourself" and "Copy" CTAs — there is no exam-level entry point that frames the full body of relevant notes, and no destination for a new signup to aim at once they're in.
+
+The two tracks attack the same funnel at adjacent points: Track 1 captures the reader; Track 2 gives the new account a reason to come back and a path back into the community notes.
+
+> **Sequencing note (deliberate, owner-approved):** the v0.24.0 roadmap gated Goal + Milestones on *"P0/P1 demonstrably lifting retention first."* That data does not exist yet — the v0.24.0 learning loop shipped days ago. We are building Track 2 **ahead of that gate on purpose**, because the goal is the activation hook that makes Track 1's capture worth more, not an isolated retention bet. If v0.24.0 retention data comes back weak, revisit the depth of Track 2 before investing further.
+
+### Design principle (anti-drift — governs both tracks)
+
+**An exam is not a new entity, and a goal is not a curriculum. Both are curated/derived views over data the app already stores.**
+
+- **An exam landing page** is a curated view over existing public notes, keyed on `courseProgram` + subject — *not* a new table, content type, or note kind. Reuse the `/public/library/[subject]` server-rendered pattern (SSR, `revalidate`, `buildPageMetadata`, structured data, featured/popular/recent discovery sections).
+- **`courseProgram` is free text, but production values are clean and canonical** (confirmed by the data audit below). Exam pages resolve through a **config alias map** (clean slug → the `courseProgram` value[s] for that exam, with rollups), never naive exact-match — and never a new entity.
+- **A goal** is **suggested** from the learner's `courseProgram`/subjects — or the exam they arrived through — and confirmed by the user. Never blank-slate goal entry, never a generated syllabus. Progress and milestones are **derived** from `ConceptHealth` mastery, e.g. "70% of Pharmacology concepts mastered," not "Lesson 3."
+- **The app stays universal, and exam pages are ungated.** Exam takers get a tailored discovery + goal surface; the generic public library, dashboard, and general-learner flows are unchanged. `/exam/[slug]` pages are **public and anonymous-accessible** (that is the SEO/capture value) and reachable by users of any profile type — there is **no Exam Reviewer profile gate**. Profile type drives in-app emphasis only, never access to a public library view. The *only* place profile interacts is **at signup**: arriving via an exam page may **suggest** an Exam Reviewer profile + a goal for that exam — suggested and confirmable, never forced.
+- **Friction-free anonymous browsing stays** (carried from v0.23.0): conversion gates live only on *actions* (quiz, copy), never on reading or filtering an exam page.
+
+#### Track 1 — Exam Capture (P0)
+
+**1. Exam landing pages**
+   - Server-rendered exam hub pages at `/exam/[slug]` — wave-1 launch set `ale`, `pnle`, `let` (wave-2 exams in a later release; see resolved decisions) — curated from public notes via the `courseProgram` config alias map.
+   - SEO metadata + structured data per exam; featured / popular / recent discovery sections reusing existing `public-library-discovery` infra; an exam-context header (what the exam covers, who it's for).
+   - Gives each marketing post a rich, browsable destination instead of a single note, and stands alone as an SEO surface ("free PNLE reviewer notes").
+
+**2. Exam-aware conversion CTA + signup**
+   - Primary "Start preparing for the [Exam]" CTA on the exam page → signup → land in the curated exam set.
+   - Reuse the v0.23.0 quiz-first capture plumbing (copy-intent cookie, signup `redirect`, auto-start). Carry the exam context through signup so onboarding pre-selects/derives the goal (the bridge into Track 2).
+
+**3. Curation layer (config alias map) — scope resolved by the data audit**
+   - The mapping from exam slug → the `courseProgram` value(s) that constitute it (with rollups, e.g. `pnle → ["Nursing", "Medical – Surgical Nursing"]`).
+   - **Resolved: a config alias map is sufficient for launch — no admin-tagging build in P0.** The production audit found `courseProgram` values are clean and canonical (not messy free-text variants), and the marketed exams map to the three largest buckets. Admin normalization (onboarding new exams, folding stragglers) is a deferred fast-follow, not a P0 blocker.
+
+#### Track 2 — Goal + Milestones (P1) — promoted from the v0.24.0 Phase 3 deferral
+
+**4. Set your goal**
+   - Suggested from the learner's subjects / `courseProgram` (or the exam they arrived through); the user confirms. Strictly mastery-derived; no generated curriculum.
+
+**5. Progress report becomes a destination**
+   - Reframe the existing v0.24.0 `/progress` report as "progress toward [goal/exam]": % toward mastery of the track, mastery-threshold milestones. Extend, do not rebuild.
+
+**6. Next-best-subject suggestion**
+   - Reuse `courseProgram` public-note discovery to point at community content for the learner's gaps — closing the loop back into the public library and the copy/quiz flywheel.
+
+### Kickoff audit & resolved decisions
+
+**Data audit (DONE).** 27 distinct `courseProgram` values across ~211 public notes — **clean and canonical**, not messy free-text variants. `courseProgram` is a *field of study*, not an exam name, so the mapping is **board exam → the program(s) whose graduates sit it.** The marketed channels are the three largest buckets:
+
+| Exam (marketing channel) | `courseProgram` | Public notes |
+|---|---|---|
+| **ALE** (Architect Licensure) | Architecture | 46 |
+| **PNLE** (Nurse Licensure) | Nursing (+ Medical – Surgical Nursing) | 44 |
+| **LET** (Licensure Exam for Teachers) | Education | 31 |
+
+Resolved from the audit:
+
+- **Launch set — wave 1 = ALE / PNLE / LET** (121 / 211 notes, 57%). Wave-2 candidates (≥7 notes: Accountancy → CPALE, Civil / Electrical / Mechanical Engineering, Pharmacy, Physical Therapy, Civil Service → CSE) ship in a later release. Too thin to launch (≤3): Criminology, Law, Medicine, Computer Science, Psychology. Academic-level values (High School, Senior High – STEM/HUMSS/ABM, Grade School) are **not** board exams — they belong to the universal/general-learner library, not this track.
+- **Curation — config alias map only; no admin-tagging build in P0** (data is clean enough; see Track 1 item 3). Admin normalization is a deferred fast-follow.
+- **Route — `/exam/[slug]`** (`/exam/ale`, `/exam/pnle`, `/exam/let`), consistent with the profile vocabulary. The page is a board-exam *discovery hub*, distinct from the *Board Exam Mode* / *Long Exam Mode* quiz modes — keep on-page/component naming clear of the quiz-mode terms.
 
 ---
 
@@ -65,9 +146,9 @@ What's missing: the loop isn't **closed at the post-quiz moment**, the act-on-we
 **5. Guardian demand test**
    - A "Parents & Guardians — coming soon" CTA on the landing page firing a `GUARDIAN_INTEREST` analytics event; a signal-only waitlist, NOT the Guardian flow. Pre-commit a build/no-build threshold. (Full spec: prior planning.)
 
-#### Deferred to v0.25.0 — Phase 3: Goal + milestones
+#### Phase 3: Goal + milestones — promoted to v0.25.0
 
-Gated on P0/P1 demonstrably lifting retention first.
+Originally gated on P0/P1 demonstrably lifting retention first; **promoted into v0.25.0 Track 2 ahead of that gate** as a deliberate, owner-approved decision (see the v0.25.0 sequencing note). Full spec now lives under v0.25.0.
 - "Set your goal" — **suggested** from the learner's subjects / `courseProgram`, user confirms.
 - Goal turns the progress report into a destination: % toward mastery of the track, mastery-threshold milestones, and a "next best subject to study" suggestion that reuses `courseProgram` public-note discovery to point at content for the gaps.
 - Strictly mastery-derived; no generated curriculum.

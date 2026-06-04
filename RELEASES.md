@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.25.0 - Exam Capture & Goal Setting
+
+**Status: In progress**
+
+Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …) into signed-up, activated learners with exam-specific landing pages, and give every new learner a goal that turns the progress report into a destination. Two tracks, one funnel — exam page → signup → goal → progress → back to community notes. App stays universal; an exam is a curated view over existing public notes (no new entity), and a goal is mastery-derived (no generated curriculum). See `docs/product/ROADMAP.md` for full scope and open kickoff questions.
+
+### ✅ Shipped
+
+_None yet._
+
+### 🔲 Pending
+
+- **Track 1 — Exam Capture:** exam landing pages, exam-aware conversion CTA + signup, curation/admin-tagging layer over free-text `courseProgram`.
+- **Track 2 — Goal + Milestones:** set-your-goal (suggested from `courseProgram`/subjects), `/progress` reframed as progress-toward-goal, next-best-subject suggestion.
+
+---
+
 ## v0.24.1 - Content Moderation Hotfix
 
 **Status: Released**
