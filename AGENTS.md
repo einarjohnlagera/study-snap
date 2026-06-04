@@ -86,11 +86,13 @@ Use these skills before writing prompts, before starting new features, and after
 
 ### Versioning Rule
 
-- Do not regenerate/overwrite generated content on the same Note.
-- Use `Make a Copy` only.
+- Never auto-regenerate generated content.
+- Regeneration is allowed only as an explicit user-confirmed action on an owned note.
+- Regeneration updates the existing Study Pack in-place so quiz/session history stays linked to the same Study Pack id.
 - Copy includes: `title`, `courseProgram`, `subject`, `tags`, `content`.
-- Copy does not include: generated `summary`, `key concepts`, `quiz`, session history, or performance history.
-- Copy result is a new `DRAFT` note.
+- Owner self-copy does not include: generated `summary`, `key concepts`, `quiz`, session history, or performance history.
+- Public-note copy is the documented exception: when the public source has a Study Pack, the copy includes the linked Study Pack and arrives as `STUDY_PACK_READY`.
+- Public-note copies without a linked Study Pack and owner self-copies remain new `DRAFT` notes.
 
 ### Paid Plan Cancellation Rule
 

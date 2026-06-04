@@ -124,7 +124,7 @@ describe("VerifyEmailPage", () => {
 
     await waitFor(() => {
       expect(copyNoteOnSignup).toHaveBeenCalledWith("public-note-1");
-      expect(routerMock.replace).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1&startQuickReview=1");
+      expect(routerMock.replace).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
     });
     expect(document.cookie).not.toContain("notelib-copy-intent=");
   });

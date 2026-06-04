@@ -6,10 +6,14 @@ const START_QUICK_REVIEW_QUERY_PARAM = "startQuickReview";
 
 export type PublicCopyRedirectTarget = "library" | "generate" | "quick-review";
 
-export function buildCopiedNotePath(noteId: string, redirectTarget: PublicCopyRedirectTarget = "library") {
+export function buildCopiedNotePath(
+  noteId: string,
+  redirectTarget: PublicCopyRedirectTarget = "library",
+  options?: { skipGenerate?: boolean },
+) {
   const next = new URLSearchParams({ [COPIED_QUERY_PARAM]: "1" });
 
-  if (redirectTarget === "generate" || redirectTarget === "quick-review") {
+  if (!options?.skipGenerate && (redirectTarget === "generate" || redirectTarget === "quick-review")) {
     next.set(GENERATE_QUERY_PARAM, "1");
   }
   if (redirectTarget === "quick-review") {

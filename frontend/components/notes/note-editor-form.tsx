@@ -763,7 +763,7 @@ export function NoteEditorForm({
                     />
                     {disableContentEditing ? (
                         <p className="text-xs text-foreground/60">
-                            {contentLockHint ?? "Note content is locked after generating a Study Pack. Make a copy to change the note itself."}
+                            {contentLockHint ?? "Content editing is unavailable right now."}
                         </p>
                     ) : (
                         <>

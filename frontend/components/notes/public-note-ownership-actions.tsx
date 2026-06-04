@@ -174,16 +174,33 @@ export function PublicNoteOwnershipActions({
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-foreground/75">
-            Bring this note into your own workspace so you can review it, practice from it, or build your own Study Pack.
+            Copy this note to your library and get the full Study Pack instantly — summary, key concepts, and practice quiz included.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <PublicSeoCopyCta
               noteId={noteId}
-              label="Create your own Study Pack"
-              redirectTarget="generate"
+              label="Copy Study Pack"
+              redirectTarget="quick-review"
+              action="copy"
+              analyticsEvent="PUBLIC_NOTE_COPY_CLICKED"
+              authModalTitle="Copy this Study Pack"
+              authModalBody="Create a free account or log in to copy this note and its Study Pack to your library."
+              includeStudyPack
             />
-            <PublicSeoCopyCta noteId={noteId} label="Copy to My Library" />
             <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share this note" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-foreground/55">Want just the note without the Study Pack?</span>
+            <PublicSeoCopyCta
+              noteId={noteId}
+              label="Copy note only"
+              redirectTarget="library"
+              action="copy"
+              variant="outline"
+              includeStudyPack={false}
+              authModalTitle="Copy this note"
+              authModalBody="Create a free account or log in to copy this note to your library."
+            />
           </div>
         </div>
       )}

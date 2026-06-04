@@ -17,6 +17,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
@@ -44,6 +45,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -135,20 +137,8 @@ public class NoteService {
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
-        NoteStatus currentStatus = resolveStatus(entity);
-        if (currentStatus == NoteStatus.GENERATED) {
-            String currentContent = entity.getContent() == null ? "" : entity.getContent().trim();
-            if (!currentContent.equals(normalizedRequestedContent)) {
-                throw new AppException(
-                        "NOTE_CONTENT_LOCKED",
-                        "Note content is locked after generating a Study Pack. Make a copy to change the note itself.",
-                        HttpStatus.CONFLICT
-                );
-            }
-        } else {
-            entity.setContent(normalizedRequestedContent);
-        }
 
+        entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
@@ -188,6 +178,10 @@ public class NoteService {
     }
 
     public NoteResponse copyNote(String id, UUID ownerUserId) {
+        return copyNote(id, ownerUserId, true);
+    }
+
+    public NoteResponse copyNote(String id, UUID ownerUserId, boolean includeStudyPack) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity source = noteRepository.findById(noteId)
                 .orElseThrow(NoteNotFoundException::new);
@@ -216,6 +210,7 @@ public class NoteService {
         copy.setVisibility(NoteVisibility.PRIVATE);
         copy.setTargetProfileType(resolveTargetProfileType(source));
         copy.setSourceNoteId(source.getId());
+        StudyPackEntity sourceStudyPack = null;
         if (isOwner) {
             copy.setCopiedFromNoteId(null);
             copy.setCopiedFromUserId(null);
@@ -228,18 +223,57 @@ public class NoteService {
             copy.setCopiedFromTitle(source.getTitle());
             copy.setCopiedFromPublic(Boolean.TRUE);
             copy.setCopiedAt(OffsetDateTime.now());
+            if (includeStudyPack) {
+                sourceStudyPack = studyPackRepository.findByNoteId(source.getId()).orElse(null);
+                if (sourceStudyPack != null) {
+                    copy.setStatus(NoteStatus.GENERATED);
+                }
+            }
         }
         copy.setCreatedAt(OffsetDateTime.now());
         copy.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(copy);
+        StudyPackEntity copiedStudyPack = null;
         if (!isOwner) {
+            copiedStudyPack = copySourceStudyPack(sourceStudyPack, saved);
             analyticsService.trackEvent(ownerUserId, AnalyticsEventType.PUBLIC_NOTE_COPIED, source.getId(), buildMetadata(
                     "copiedNoteId", saved.getId().toString(),
                     "sourceOwnerUserId", source.getOwnerUserId() == null ? null : source.getOwnerUserId().toString()
             ));
         }
-        return mapToResponse(saved, null);
+        return mapToResponse(saved, copiedStudyPack);
+    }
+
+    private StudyPackEntity copySourceStudyPack(StudyPackEntity sourceStudyPack, NoteEntity copy) {
+        if (sourceStudyPack == null) {
+            return null;
+        }
+
+        StudyPackEntity copiedStudyPack = new StudyPackEntity();
+        copiedStudyPack.setId(UUID.randomUUID());
+        copiedStudyPack.setOwnerUserId(copy.getOwnerUserId());
+        copiedStudyPack.setNoteId(copy.getId());
+        copiedStudyPack.setInputType(sourceStudyPack.getInputType());
+        copiedStudyPack.setTitle(sourceStudyPack.getTitle());
+        copiedStudyPack.setSummary(sourceStudyPack.getSummary());
+        copiedStudyPack.setSubject(sourceStudyPack.getSubject());
+        copiedStudyPack.setKeyConcepts(sourceStudyPack.getKeyConcepts() == null
+                ? null
+                : new ArrayList<>(sourceStudyPack.getKeyConcepts()));
+        copiedStudyPack.setQuiz(sourceStudyPack.getQuiz() == null
+                ? null
+                : new ArrayList<>(sourceStudyPack.getQuiz()));
+        copiedStudyPack.setTags(sourceStudyPack.getTags() == null
+                ? new String[0]
+                : Arrays.copyOf(sourceStudyPack.getTags(), sourceStudyPack.getTags().length));
+        copiedStudyPack.setModelTier(sourceStudyPack.getModelTier());
+        copiedStudyPack.setModelUsed(sourceStudyPack.getModelUsed());
+        copiedStudyPack.setStatus(StudyPackStatus.DONE);
+        OffsetDateTime now = OffsetDateTime.now();
+        copiedStudyPack.setCreatedAt(now);
+        copiedStudyPack.setUpdatedAt(now);
+        return studyPackRepository.save(copiedStudyPack);
     }
 
     public NoteResponse copyPublicNoteForSignup(String id, UUID ownerUserId) {

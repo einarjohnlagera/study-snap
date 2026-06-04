@@ -1083,6 +1083,26 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1", { scroll: false });
   });
 
+  it("skips copied-note auto-generation when the copied note is already ready and starts Quick Review", async () => {
+    searchParamValues = { generate: "1", startQuickReview: "1" };
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+    });
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({ sessionId: "qr-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await waitFor(() => {
+      expect(startQuickReviewSession).toHaveBeenCalledWith("note-1");
+    });
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quick-review?sessionId=qr-1");
+  });
+
   it("starts Quick Review automatically after copied-note generation finishes when requested", async () => {
     searchParamValues = { startQuickReview: "1" };
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
@@ -1101,6 +1121,53 @@ describe("PrivateNoteDetailPageClient", () => {
     });
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1", { scroll: false });
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quick-review?sessionId=qr-1");
+  });
+
+  it("shows copied Study Pack regeneration guidance only for copied ready notes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      copiedFromPublic: true,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.")).toBeInTheDocument();
+  });
+
+  it("confirms before regenerating an owned ready Study Pack", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "GENERATING",
+      studyPackId: "sp-1",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Regenerate Study Pack" }));
+    expect(screen.getByRole("dialog", { name: "Regenerate Study Pack?" })).toBeInTheDocument();
+    expect(screen.getByText("This will replace the current summary, key concepts, and quiz with a new version tailored to your level. Your quiz history is preserved.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate Study Pack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+
+    await waitFor(() => {
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+    });
   });
 
   it("shows a first-study success banner after the first Study Pack is ready", async () => {

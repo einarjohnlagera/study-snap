@@ -72,12 +72,10 @@ public class StudyPackService {
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
     private static final String STUDY_PACK = "study-pack";
-    private static final String ERROR_NOTE_ALREADY_GENERATED = "NOTE_ALREADY_GENERATED";
     private static final String ERROR_NOTE_GENERATION_IN_PROGRESS = "NOTE_GENERATION_IN_PROGRESS";
     private static final String ERROR_NOTE_ALREADY_HAS_STUDY_PACK = "NOTE_ALREADY_HAS_STUDY_PACK";
-    private static final String MESSAGE_NOTE_ALREADY_GENERATED = "This note is already generated. Make a copy to create a new Study Pack.";
     private static final String MESSAGE_NOTE_GENERATION_IN_PROGRESS = "A Study Pack is already being generated for this note.";
-    private static final String MESSAGE_NOTE_ALREADY_HAS_STUDY_PACK = "This note already has a Study Pack. Make a copy to generate a new version.";
+    private static final String MESSAGE_NOTE_ALREADY_HAS_STUDY_PACK = "This note already has a Study Pack. Use Regenerate Study Pack to replace it.";
     private static final Comparator<String> SUBJECT_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -106,7 +104,7 @@ public class StudyPackService {
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
-        NoteEntity requestedSourceNote = resolveSourceNoteForGeneration(request.noteId(), ownerUserId);
+        NoteEntity requestedSourceNote = resolveSourceNoteForGeneration(request.noteId(), ownerUserId, false);
         String normalizedText = requestedSourceNote == null
                 ? normalizeAndValidateText(request.notesText())
                 : normalizeAndValidateText(requestedSourceNote.getContent());
@@ -152,7 +150,7 @@ public class StudyPackService {
     public void startAsyncGenerationFromNote(String noteIdRaw, UUID ownerUserId, boolean autoApplyGeneratedMetadata) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
-        NoteEntity sourceNote = resolveSourceNoteForGeneration(noteIdRaw, ownerUserId);
+        NoteEntity sourceNote = resolveSourceNoteForGeneration(noteIdRaw, ownerUserId, true);
         if (sourceNote == null) {
             throw new NoteNotFoundException();
         }
@@ -493,10 +491,16 @@ public class StudyPackService {
             PlanType planType,
             UUID noteId
     ) {
-        StudyPackEntity entity = new StudyPackEntity();
-        entity.setId(UUID.randomUUID());
-        entity.setOwnerUserId(ownerUserId);
-        entity.setCreatedAt(OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity entity = noteId == null
+                ? new StudyPackEntity()
+                : studyPackRepository.findByNoteId(noteId).orElseGet(StudyPackEntity::new);
+        boolean isNewStudyPack = entity.getId() == null;
+        if (isNewStudyPack) {
+            entity.setId(UUID.randomUUID());
+            entity.setOwnerUserId(ownerUserId);
+            entity.setCreatedAt(now);
+        }
 
         entity.setNoteId(noteId);
         entity.setInputType(inputType);
@@ -516,15 +520,15 @@ public class StudyPackService {
         entity.setEstimatedCost(generated.estimatedCost());
         entity.setStatus(StudyPackStatus.DONE);
         entity.setErrorCode(null);
-        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(now);
         entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
-        userUsageService.incrementStudyPackGeneration(ownerUserId, savedEntity.getCreatedAt());
+        userUsageService.incrementStudyPackGeneration(ownerUserId, now);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, savedEntity.getId());
         return savedEntity;
     }
 
-    private NoteEntity resolveSourceNoteForGeneration(String noteIdRaw, UUID ownerUserId) {
+    private NoteEntity resolveSourceNoteForGeneration(String noteIdRaw, UUID ownerUserId, boolean allowExistingStudyPack) {
         if (noteIdRaw == null || noteIdRaw.isBlank()) {
             return null;
         }
@@ -535,13 +539,6 @@ public class StudyPackService {
                 .orElseThrow(NoteNotFoundException::new);
 
         NoteStatus sourceStatus = sourceNote.getStatus() == null ? NoteStatus.DRAFT : sourceNote.getStatus();
-        if (sourceStatus == NoteStatus.GENERATED) {
-            throw new AppException(
-                    ERROR_NOTE_ALREADY_GENERATED,
-                    MESSAGE_NOTE_ALREADY_GENERATED,
-                    HttpStatus.CONFLICT
-            );
-        }
         if (sourceStatus == NoteStatus.GENERATING) {
             throw new AppException(
                     ERROR_NOTE_GENERATION_IN_PROGRESS,
@@ -551,7 +548,7 @@ public class StudyPackService {
         }
 
         boolean hasExistingStudyPack = studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).isPresent();
-        if (hasExistingStudyPack) {
+        if (hasExistingStudyPack && !allowExistingStudyPack) {
             throw new AppException(
                     ERROR_NOTE_ALREADY_HAS_STUDY_PACK,
                     MESSAGE_NOTE_ALREADY_HAS_STUDY_PACK,

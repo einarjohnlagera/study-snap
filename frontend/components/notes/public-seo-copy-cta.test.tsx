@@ -136,13 +136,13 @@ describe("PublicSeoCopyCta", () => {
   it("auto-copies into quick review after login when the intent is quick-review", async () => {
     searchParamsMock = new URLSearchParams("copy=1&intent=quick-review");
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
-    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackStatus: "STUDY_PACK_READY" });
 
     render(<PublicSeoCopyCta noteId="note-1" redirectTarget="quick-review" />);
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-1");
-      expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1&startQuickReview=1");
+      expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
     });
   });
 });

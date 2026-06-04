@@ -8,6 +8,7 @@ type GuidanceTipProps = Readonly<{
   tipId: string;
   message: string;
   className?: string;
+  action?: { label: string; onClick: () => void };
 }>;
 
 /**
@@ -15,7 +16,7 @@ type GuidanceTipProps = Readonly<{
  * Once dismissed, it never appears again (tracked via localStorage).
  * Fades in on first render, fades out on dismiss.
  */
-export function GuidanceTip({ tipId, message, className }: GuidanceTipProps) {
+export function GuidanceTip({ tipId, message, className, action }: GuidanceTipProps) {
   const [visible, setVisible] = useState(() => !hasSeenTip(tipId));
   const [fading, setFading] = useState(false);
 
@@ -51,14 +52,25 @@ export function GuidanceTip({ tipId, message, className }: GuidanceTipProps) {
         .trim()}
     >
       <span>{message}</span>
-      <button
-        type="button"
-        onClick={handleDismiss}
-        aria-label="Dismiss tip"
-        className="mt-px shrink-0 rounded text-blue-500 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200"
-      >
-        <X className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {action ? (
+          <button
+            type="button"
+            onClick={() => { action.onClick(); handleDismiss(); }}
+            className="rounded text-xs font-medium text-blue-700 underline-offset-2 hover:underline dark:text-blue-300"
+          >
+            {action.label}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleDismiss}
+          aria-label="Dismiss tip"
+          className="mt-px rounded text-blue-500 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }
