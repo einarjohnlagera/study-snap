@@ -1683,7 +1683,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                             disabled={isGeneratingStudyPack || generating}
                           >
                             <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                            <span>Regenerate Study Pack</span>
+                            <span>Regenerate</span>
                           </button>
                         ) : null}
                         <button
