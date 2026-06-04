@@ -5,7 +5,6 @@ import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
-import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -13,8 +12,8 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
-import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
@@ -34,6 +33,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,8 +49,6 @@ class QuickReviewAdaptivePracticeServiceTest {
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
-    private ActivityEventRepository activityEventRepository;
-    @Mock
     private QuizGenerationService quizGenerationService;
     @Mock
     private LlmStudyPackService llmStudyPackService;
@@ -62,8 +60,6 @@ class QuickReviewAdaptivePracticeServiceTest {
     private FeatureGateService featureGateService;
     @Mock
     private UserUsageService userUsageService;
-    @Mock
-    private BillingUsagePeriodService billingUsagePeriodService;
     @Mock
     private AuthService authService;
     @Mock
@@ -82,14 +78,12 @@ class QuickReviewAdaptivePracticeServiceTest {
         adaptivePracticeService = new QuickReviewAdaptivePracticeService(
                 studyPackRepository,
                 quickReviewSessionRepository,
-                activityEventRepository,
                 quizGenerationService,
                 activityTrackingService,
                 subscriptionService,
                 featureGateService,
                 new StudySnapProperties(),
                 userUsageService,
-                billingUsagePeriodService,
                 authService,
                 analyticsService,
                 aiRateLimitService,
@@ -196,14 +190,12 @@ class QuickReviewAdaptivePracticeServiceTest {
         QuickReviewAdaptivePracticeService mockModeAdaptivePracticeService = new QuickReviewAdaptivePracticeService(
                 studyPackRepository,
                 quickReviewSessionRepository,
-                activityEventRepository,
                 new QuizGenerationService(llmStudyPackService, properties),
                 activityTrackingService,
                 subscriptionService,
                 featureGateService,
                 properties,
                 userUsageService,
-                billingUsagePeriodService,
                 authService,
                 analyticsService,
                 aiRateLimitService,
@@ -242,21 +234,6 @@ class QuickReviewAdaptivePracticeServiceTest {
         )).thenReturn(List.of(latestChallenge));
         when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), any(), any(OffsetDateTime.class)))
                 .thenReturn(List.of());
-        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.PRO,
-                        BillingCycle.MONTHLY,
-                        OffsetDateTime.now().minusDays(5),
-                        OffsetDateTime.now().plusDays(25),
-                        2026,
-                        3
-                ));
-        when(activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                eq(userId),
-                eq(ActivityType.STARTED_ADAPTIVE_PRACTICE),
-                any(OffsetDateTime.class),
-                any(OffsetDateTime.class)
-        )).thenReturn(0L);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
                 LearnerLevel.BOARD_EXAM_REVIEW,
@@ -350,6 +327,85 @@ class QuickReviewAdaptivePracticeServiceTest {
                 any()
         );
         assertThat(focusConceptsCaptor.getValue()).containsExactly("Old Concept", "Weak Concept");
+    }
+
+    @Test
+    void generateAdaptiveQuiz_allowsGenerationWhenUsageIsBelowFreeMonthlyLimit() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity sourceSession = buildCompletedSourceSession(
+                userId, studyPackId, noteId, List.of("Weak Concept")
+        );
+        List<QuizItem> generatedQuiz = buildGeneratedQuiz("Weak Concept", 5);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.QUICK_REVIEW), any()
+        )).thenReturn(List.of(sourceSession));
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(List.of());
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), any(), any(OffsetDateTime.class)))
+                .thenReturn(List.of());
+        // freeMonthlyAdaptivePracticeLimit defaults to 3; used = 2 → one slot remaining → should pass
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.now(), OffsetDateTime.now().plusMonths(1),
+                        0, 0, 2, 0, 0, 0, 0
+                ));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW, "Nursing", studyPack.getSubject(), List.of()
+        ));
+        when(quizGenerationService.generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any()))
+                .thenReturn(generatedQuiz);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(), userId
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void generateAdaptiveQuiz_throwsWhenFreeMonthlyLimitExhausted() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity sourceSession = buildCompletedSourceSession(
+                userId, studyPackId, noteId, List.of("Weak Concept")
+        );
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.QUICK_REVIEW), any()
+        )).thenReturn(List.of(sourceSession));
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(List.of());
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), any(), any(OffsetDateTime.class)))
+                .thenReturn(List.of());
+        // freeMonthlyAdaptivePracticeLimit defaults to 3; used = 3 → limit reached → should throw
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.now(), OffsetDateTime.now().plusMonths(1),
+                        0, 0, 3, 0, 0, 0, 0
+                ));
+
+        assertThatThrownBy(() -> adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId))
+                .isInstanceOf(AppException.class);
     }
 
     @Test
@@ -458,21 +514,6 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(QuickReviewSessionMode.CHALLENGE),
                 any()
         )).thenReturn(List.of());
-        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.PRO,
-                        BillingCycle.MONTHLY,
-                        OffsetDateTime.now().minusDays(5),
-                        OffsetDateTime.now().plusDays(25),
-                        2026,
-                        3
-                ));
-        when(activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                eq(userId),
-                eq(ActivityType.STARTED_ADAPTIVE_PRACTICE),
-                any(OffsetDateTime.class),
-                any(OffsetDateTime.class)
-        )).thenReturn(0L);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
                 LearnerLevel.BOARD_EXAM_REVIEW,

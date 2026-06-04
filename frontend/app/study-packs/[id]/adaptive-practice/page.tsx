@@ -348,7 +348,11 @@ export default function AdaptivePracticePage() {
         setShowVerifyEmailModal(true);
       }
       if (message.toLowerCase().includes("monthly adaptive practice limit")) {
-        setShowLimitReachedState(true);
+        if (currentPlan !== "PRO") {
+          openAdaptivePracticePaywall("adaptive_practice_limit_reached");
+        } else {
+          setShowLimitReachedState(true);
+        }
       } else {
         setError(message);
       }

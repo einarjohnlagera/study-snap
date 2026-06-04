@@ -16,7 +16,6 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
-import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
@@ -83,14 +82,12 @@ public class QuickReviewAdaptivePracticeService {
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
-    private final ActivityEventRepository activityEventRepository;
     private final QuizGenerationService quizGenerationService;
     private final ActivityTrackingService activityTrackingService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
-    private final BillingUsagePeriodService billingUsagePeriodService;
     private final AuthService authService;
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
@@ -501,7 +498,6 @@ public class QuickReviewAdaptivePracticeService {
 
     private void assertAdaptivePracticeQuotaAvailable(UUID userId, PlanType planType) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
         int monthlyLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
         if (monthlyLimit <= 0) {
             throw new AppException(
@@ -511,14 +507,7 @@ public class QuickReviewAdaptivePracticeService {
             );
         }
 
-        long usedFromActivityEvents = activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-            userId,
-            ActivityType.STARTED_ADAPTIVE_PRACTICE,
-            usagePeriod.periodStart(),
-            usagePeriod.periodEnd()
-        );
-        long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).adaptiveQuizGenerations();
-        long usedThisMonth = Math.max(usedFromActivityEvents, usedFromUsage);
+        long usedThisMonth = userUsageService.getMonthlyUsage(userId, now).adaptiveQuizGenerations();
         if (usedThisMonth < monthlyLimit) {
             return;
         }
