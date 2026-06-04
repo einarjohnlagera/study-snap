@@ -94,8 +94,8 @@ Display:
 
 Behavior:
 
-- Pro users get `Practice Weak Concepts` → Adaptive Practice on the source note
-- Free and Plus users get `Revisit Note` → source note page, so they can review material for their weakest concept without an Adaptive Practice session
+- Users with Adaptive Practice access and remaining quota can get `Practice Weak Concepts` → Adaptive Practice on the source note
+- When Adaptive Practice is unavailable or quota is exhausted, recommendations should fall back to a safe note-review path or the shared upgrade flow rather than implying the user has no next step
 - The `Unlock Adaptive Practice` paywall button appears only when weak concepts exist but no source note can be resolved (`practiceNoteId` is null)
 
 ## This Week
@@ -117,7 +117,7 @@ Display:
 
 - Study Packs usage
 - Challenge Quiz usage
-- Adaptive Practice usage for Pro only
+- Adaptive Practice usage for plans with a positive monthly Adaptive Practice limit
 
 Guardrails:
 
@@ -133,7 +133,7 @@ Recommended response shape:
 
 ```json
 {
-  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | REVIEW_NOTE | STUDY_SUGGESTION",
+  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | REVIEW_PACK | STUDY_SUGGESTION",
   "noteId": "uuid-or-null",
   "title": "string",
   "message": "string",
@@ -145,7 +145,7 @@ Priority order:
 
 1. Resume unfinished review
 2. Retry incorrect questions
-3. Practice weak concepts (Pro only)
+3. Practice weak concepts (plans with Adaptive Practice allowance and remaining quota)
 4. Review a specific note
 5. Study suggestion when no notes exist
 
@@ -154,8 +154,13 @@ Routing guidance:
 - `RESUME_REVIEW` -> Note Detail Quick Review path
 - `RETRY_REVIEW` -> Note Detail Quick Review path
 - `PRACTICE_WEAK_CONCEPT` -> Note Detail Adaptive Practice path
-- `REVIEW_NOTE` -> Note Detail path
+- `REVIEW_PACK` -> Note Detail path
 - `STUDY_SUGGESTION` -> New Note flow
+
+Quota guidance:
+
+- Free users may receive `PRACTICE_WEAK_CONCEPT` while their monthly Adaptive Practice allowance remains
+- exhausted quota should route to the quota-aware fallback or upgrade flow, not a dead-end start
 
 ## Mastery Snapshot
 
@@ -183,5 +188,5 @@ Session-history alignment:
 
 - Keep copy calm and non-judgmental.
 - Keep actions explicit (`Resume Review`, `Practice Weak Areas`, `Open Note`).
-- For Free users, do not emit adaptive-practice recommendations as actionable starts.
+- Free users may receive Adaptive Practice recommendations while their monthly allowance remains; when quota is exhausted, route to the quota-aware fallback or upgrade flow instead of a dead-end start.
 - Keep recommendation logic non-blocking; dashboard still renders if recommendation data is unavailable.

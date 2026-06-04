@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ConceptHealthService {
-    private static final int DUE_THRESHOLD_DAYS = 3;
+    static final int DUE_THRESHOLD_DAYS = 3;
 
     private final ConceptHealthRepository conceptHealthRepository;
     private final StudyPackRepository studyPackRepository;
@@ -155,7 +155,7 @@ public class ConceptHealthService {
         );
     }
 
-    private boolean isDue(OffsetDateTime lastCorrectAt, OffsetDateTime now) {
+    boolean isDue(OffsetDateTime lastCorrectAt, OffsetDateTime now) {
         return lastCorrectAt == null || !lastCorrectAt.isAfter(now.minusDays(DUE_THRESHOLD_DAYS));
     }
 

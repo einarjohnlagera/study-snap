@@ -278,7 +278,7 @@ interface PublicNoteCardProps {
   currentUsername: string | null;
   onNavigate: (path: string) => void;
   existingCopyNoteId?: string | null;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => void;
   onLikeSuccess: (payload: { noteId: string; liked: boolean; likeCount: number }) => void;
 }
 
@@ -368,9 +368,10 @@ function PublicNoteCard({
                 noteId={item.id}
                 isOwner={isOwner}
                 existingCopyNoteId={existingCopyNoteId}
-                onCopySuccess={({ copiedNoteId }) => onCopySuccess({
+                onCopySuccess={({ copiedNoteId, studyPackStatus }) => onCopySuccess({
                   copiedNoteId,
                   sourceNoteId: item.id,
+                  studyPackStatus,
                 })}
               />
             </div>
@@ -390,7 +391,7 @@ interface PublicLibraryDiscoverySectionProps {
   onNavigate: (path: string) => void;
   onViewMore: () => void;
   copiedNoteIdsBySourceId: Record<string, string>;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => void;
   onLikeSuccess: (payload: { noteId: string; liked: boolean; likeCount: number }) => void;
 }
 
@@ -479,6 +480,7 @@ export function PublicLibraryPageClient() {
   const [recentCoursePrograms, setRecentCoursePrograms] = useState<string[]>([]);
   const [copySuccessState, setCopySuccessState] = useState<{
     copiedNoteId: string;
+    studyPackStatus: NoteListItemResponse["studyPackStatus"];
   } | null>(null);
   const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
   const [shareToastMessage, setShareToastMessage] = useState<string | null>(null);
@@ -593,13 +595,14 @@ export function PublicLibraryPageClient() {
     void loadCopiedNotes();
   }, [loadCopiedNotes]);
 
-  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string }) => {
+  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => {
     setCopiedNoteIdsBySourceId((previous) => ({
       ...previous,
       [payload.sourceNoteId]: payload.copiedNoteId,
     }));
     setCopySuccessState({
       copiedNoteId: payload.copiedNoteId,
+      studyPackStatus: payload.studyPackStatus,
     });
   }, []);
 
@@ -1930,7 +1933,9 @@ export function PublicLibraryPageClient() {
               label={MODAL_START_REVIEW_LABEL}
               onClick={() => {
                 startRouteProgress();
-                router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review"));
+                router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review", {
+                  skipGenerate: copySuccessState.studyPackStatus === "STUDY_PACK_READY",
+                }));
               }}
               showTextOnMobile
             />

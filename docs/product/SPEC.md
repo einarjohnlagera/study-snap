@@ -70,11 +70,11 @@ Generated Study Pack outputs include:
 - Challenge Quiz
 - Adaptive Practice
 
-## Versioning Model (Copy)
+## Versioning Model (Copy + Regeneration)
 
-NoteLib does not overwrite existing generated content.
+The Study Pack is the generated version of a note. Regeneration is explicit and user-confirmed; NoteLib must never auto-regenerate a Study Pack after note edits.
 
-Users make a copy of a Note, edit that copy, and generate a new Study Pack from the copied Note.
+Users can edit the source note after a Study Pack exists. When they choose `Regenerate Study Pack` and confirm, NoteLib updates the existing Study Pack row in-place with a new summary, key concepts, and quiz. Existing quiz/session history remains linked through the same Study Pack id.
 
 Copy behavior:
 
@@ -84,14 +84,16 @@ Copy behavior:
   - subject
   - tags
   - note content
-- Copy does not include AI/generated history fields:
+- Owner self-copy does not include AI/generated history fields:
   - summary
   - key concepts
   - quizzes
   - performance history
   - quiz sessions
+- Public-note copy exception: copying a public note also copies the linked Study Pack when one exists. The copied note arrives as `Study Pack Ready` with the generated summary, key concepts, and quiz available immediately.
+- If the public source note has no Study Pack, the copy remains a Draft.
 
-This supports iterative learning and avoids accidental overwrites.
+This supports instant value from public notes while keeping regeneration explicit and user-controlled.
 
 ## User Flow
 
@@ -102,9 +104,9 @@ This supports iterative learning and avoids accidental overwrites.
 5. Note Detail shows `Generating`, then either `Study Pack Ready` or `Failed`.
 6. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice when the Study Pack is ready.
 7. Note Detail keeps recent completed quiz sessions so users can reopen a past attempt, review answers, and inspect concept performance over time.
-8. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
+8. If the user wants to improve the Study Pack, they edit the source note and explicitly confirm `Regenerate Study Pack`; the existing Study Pack is updated in-place.
 9. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
-10. Public notes can be copied into Library as new Draft notes.
+10. Public notes can be copied into Library; if the source has a Study Pack, the copy arrives as Study Pack Ready.
 
 ### Generate Note from topic
 
@@ -1003,7 +1005,7 @@ Dashboard guidance rules:
 - Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
 - Dashboard must not use LLM calls for statistics or recommendations.
 - `Focus Areas` should show the top weak concepts and route Pro users to Adaptive Practice through `noteId`.
-- Free and Plus users should see the same weak concepts but hit the soft Pro paywall when trying to start Adaptive Practice from Dashboard.
+- Free users can start Adaptive Practice up to the monthly Free allowance; over-quota users should see the shared upgrade flow for more sessions.
 - Board Taker dashboard should still use the shared note, quiz-session, activity, and usage data even when Board Exam is the default emphasis.
 - Teacher dashboard must hide student-only analytics widgets such as performance overview, recent quiz sessions, weak concepts, and score-tracking cards.
 - Teacher dashboard should keep the shared note / Study Pack workspace visible while changing intent toward creation, preview, and export.
@@ -1012,7 +1014,7 @@ Dashboard guidance rules:
 - Dashboard monthly usage should show for learning personas:
   - Study Packs
   - Challenge Quiz
-  - Adaptive Practice for Pro only
+  - Adaptive Practice for plans with a positive monthly Adaptive Practice limit
 - OCR usage must stay hidden from the dashboard UI.
 
 ### Shareable Study Packs
@@ -1428,11 +1430,11 @@ Plans: `FREE`, `PLUS`, `PRO`
 
 Plan limits:
 
-- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, higher note generation limits
+- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
+- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
 - Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
 - Current enforcement truth:
-  - Adaptive Practice access is Pro-only in runtime
+  - Adaptive Practice is quota-gated by plan: Free 3/month, Plus 10/month, Pro 30/month
   - Difficulty selection is Pro-only
   - Board Exam Mode is Pro-only
 - Pricing surfaces may still position Plus as the regular-study tier through shared plan messaging, but backend plan enforcement and `GET /api/me/plan` remain the behavior source of truth

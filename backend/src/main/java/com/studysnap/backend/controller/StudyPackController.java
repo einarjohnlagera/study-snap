@@ -3,15 +3,19 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.dto.UpdateStudyPackMetadataRequest;
 import com.studysnap.backend.dto.UpdateStudyPackTagsRequest;
+import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ConceptHealthService;
+import com.studysnap.backend.service.PostSessionNextStepService;
 import com.studysnap.backend.service.StudyPackService;
+import com.studysnap.backend.util.UuidParsingUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,6 +46,7 @@ public class StudyPackController {
 	private final AuthService authService;
 	private final StudyPackService studyPackService;
 	private final ConceptHealthService conceptHealthService;
+	private final PostSessionNextStepService postSessionNextStepService;
 
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public StudyPackResponse createFromText(
@@ -94,6 +99,16 @@ public class StudyPackController {
 				id,
 				OffsetDateTime.now(ZoneOffset.UTC)
 		);
+	}
+
+	@GetMapping("/{id}/next-step")
+	public NextStepResponse getNextStep(
+			@PathVariable String id,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(id, StudyPackNotFoundException::new);
+		return postSessionNextStepService.getNextStep(userId, studyPackId);
 	}
 
 	@GetMapping

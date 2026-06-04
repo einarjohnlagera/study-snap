@@ -8,6 +8,7 @@ import {
   generateAdaptiveQuickReviewQuiz,
   getInProgressAdaptivePracticeSession,
   getNote,
+  getPostSessionNextStep,
 } from "@/lib/api";
 
 const routerMock = {
@@ -44,6 +45,7 @@ jest.mock("@/lib/api", () => ({
   getInProgressAdaptivePracticeSession: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
+  getPostSessionNextStep: jest.fn(),
   isEmailNotVerifiedError: () => false,
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -92,6 +94,8 @@ describe("AdaptivePracticePage", () => {
       quiz: [],
     });
     (completeAdaptivePracticeSession as jest.Mock).mockReset();
+    (getPostSessionNextStep as jest.Mock).mockReset();
+    (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
     (forfeitAdaptivePracticeSession as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Adaptive Practice session forfeited." });
   });
@@ -318,6 +322,49 @@ describe("AdaptivePracticePage", () => {
     expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
+  it("shows the upgrade paywall when free users exhaust Adaptive Practice usage", async () => {
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: {
+          studyPacksPerMonth: 10,
+          challengeQuizzesPerMonth: 5,
+          adaptivePracticePerMonth: 3,
+          ocrPerMonth: 20,
+        },
+        usage: {
+          studyPacksUsed: 0,
+          challengeQuizzesUsed: 0,
+          adaptivePracticeUsed: 3,
+          ocrUsed: 0,
+        },
+        remaining: {
+          studyPacksRemaining: 10,
+          challengeQuizzesRemaining: 5,
+          adaptivePracticeRemaining: 0,
+          ocrRemaining: 20,
+        },
+      },
+      usageLoaded: true,
+      refreshUsageSummary: jest.fn(),
+    });
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText("You've used your free Adaptive Practice sessions")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
+  });
+
   it('result screen shows "Generate New Set" as the primary action', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -359,6 +406,66 @@ describe("AdaptivePracticePage", () => {
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.getByRole("button", { name: "Generate New Set" })).toBeInTheDocument();
+  });
+
+  it("fetches and renders the server-resolved next step after Adaptive Practice completion", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      planType: "PRO",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Derivatives"],
+      message: "Focusing on weak areas.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+    (getPostSessionNextStep as jest.Mock).mockResolvedValue({
+      type: "REVIEW_PACK",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Derivatives",
+      message: "You are in good shape here. Step up with a challenge or review the note when ready.",
+      actionLabel: "Take a Challenge",
+      actionHref: "/notes/note-1/challenge-quiz",
+      concepts: [],
+      adaptivePracticeAvailable: true,
+      adaptivePracticeRemaining: null,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+
+    expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/challenge-quiz",
+    );
+    expect(getPostSessionNextStep).toHaveBeenCalledWith("study-pack-1");
   });
 
   it('result screen does not contain a "Note" button', async () => {

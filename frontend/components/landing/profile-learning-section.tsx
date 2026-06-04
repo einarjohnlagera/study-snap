@@ -68,7 +68,7 @@ const profileLearningLoops: ProfileLearningLoop[] = [
       { label: "Quick Review", tier: "free", tierLabel: "Free" },
       { label: "Challenge Quiz", tier: "free", tierLabel: "Free" },
       { label: "Long Exam", tier: "paid", tierLabel: "Pro" },
-      { label: "Adaptive Practice", tier: "paid", tierLabel: "Plus/Pro" },
+      { label: "Adaptive Practice", tier: "free", tierLabel: "Free taste" },
     ],
     screenshot: {
       src: "/landing/profile-student-light.png",
@@ -93,7 +93,7 @@ const profileLearningLoops: ProfileLearningLoop[] = [
       { label: "Quick Review", tier: "free", tierLabel: "Free" },
       { label: "Challenge Quiz", tier: "free", tierLabel: "Free" },
       { label: "Board Exam", tier: "paid", tierLabel: "Pro" },
-      { label: "Adaptive Practice", tier: "paid", tierLabel: "Plus/Pro" },
+      { label: "Adaptive Practice", tier: "free", tierLabel: "Free taste" },
     ],
     screenshot: {
       src: "/landing/profile-reviewer-light.png",

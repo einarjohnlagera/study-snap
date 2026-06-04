@@ -109,7 +109,11 @@ import {
 } from "@/lib/study-pack-generation";
 import { PUBLIC_NOTE_COPY_QUERY_PARAMS } from "@/lib/public-note-copy";
 import { resolvePaywallContextTypeFromVariant } from "@/lib/paywall-content";
+import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import Link from "next/link";
+
+const COPIED_STUDY_PACK_REGENERATE_HINT_ID = "copied-study-pack-regenerate-hint";
+const COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE = "This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.";
 
 function stateChip(status: NoteStudyPackStatus) {
   if (status === "STUDY_PACK_READY") {
@@ -286,6 +290,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
@@ -630,7 +635,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
   const canGenerateStudyPack = studyPackStatus === "DRAFT" || hasGenerationFailed;
+  const canTriggerStudyPackGeneration = canGenerateStudyPack || isStudyPackReady;
   const isDraft = !isStudyPackReady;
+  const copiedStudyPackGuidance = useMemo(() => {
+    const rules: GuidanceRule[] = [
+      {
+        id: COPIED_STUDY_PACK_REGENERATE_HINT_ID,
+        priority: 10,
+        condition: () => note?.copiedFromPublic === true && isStudyPackReady,
+        message: COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE,
+      },
+    ];
+    return pickActiveGuidance(rules);
+  }, [isStudyPackReady, note?.copiedFromPublic]);
   const generationMessage = resolveStudyPackGenerationMessage(generationMessageIndex);
   const pollingNoteId = note?.id ?? null;
   const title = note?.title?.trim() || "Untitled note";
@@ -668,7 +685,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const canViewConceptHealth = currentPlan === "PLUS" || currentPlan === "PRO";
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
-  const hasReachedAdaptivePracticeLimit = currentPlan === "PRO" && adaptivePracticeRemaining !== null && adaptivePracticeRemaining <= 0;
+  const hasAdaptivePracticeQuota = (usageSummary?.limits.adaptivePracticePerMonth ?? 0) > 0;
+  const hasReachedAdaptivePracticeLimit = hasAdaptivePracticeQuota
+    && adaptivePracticeRemaining !== null
+    && adaptivePracticeRemaining <= 0;
+  const shouldUpgradeForAdaptivePracticeLimit = currentPlan !== "PRO" && hasReachedAdaptivePracticeLimit;
   const shouldShowNearLimitBanner = usageSummary
     ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
@@ -884,7 +905,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [isEmailVerified, note, togglingVisibility, visibility]);
 
   const handleGenerate = useCallback(async () => {
-    if (!note || generating || !canGenerateStudyPack) {
+    if (!note || generating || !canTriggerStudyPackGeneration) {
       return;
     }
     if (!isEmailVerified) {
@@ -919,7 +940,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setGenerating(false);
     }
   }, [
-    canGenerateStudyPack,
+    canTriggerStudyPackGeneration,
     generating,
     hasReachedStudyPackLimit,
     isEmailVerified,
@@ -930,7 +951,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   useEffect(() => {
     const shouldAutoGenerate = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate) === "1";
-    if (!shouldAutoGenerate || autoGenerateHandledRef.current || !note || !canGenerateStudyPack) {
+    if (!shouldAutoGenerate || autoGenerateHandledRef.current || !note) {
       return;
     }
 
@@ -939,6 +960,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate);
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
 
+    if (!canGenerateStudyPack) {
+      return;
+    }
     if (!isEmailVerified) {
       setPendingPublicCopyGenerate(true);
       return;
@@ -1172,6 +1196,25 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   }, [navigateTo, note]);
 
+  const handleOpenRegenerateConfirm = () => {
+    if (!isStudyPackReady || isGeneratingStudyPack || generating) {
+      return;
+    }
+    setShowRegenerateConfirm(true);
+  };
+
+  const handleCancelRegenerate = () => {
+    if (generating) {
+      return;
+    }
+    setShowRegenerateConfirm(false);
+  };
+
+  const handleConfirmRegenerate = () => {
+    setShowRegenerateConfirm(false);
+    void handleGenerate();
+  };
+
   useEffect(() => {
     const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
     if (
@@ -1188,6 +1231,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     autoQuickReviewHandledRef.current = true;
     const next = new URLSearchParams(searchParams.toString());
     next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview);
+    next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate);
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
     void handleStartQuickReview();
   }, [handleStartQuickReview, isStudyPackReady, isTeacherMode, note, pathname, router, searchParams]);
@@ -1240,11 +1284,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Verify your email to use this feature.");
       return;
     }
-    if (currentPlan === "FREE") {
-      openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice");
-      return;
-    }
     if (hasReachedAdaptivePracticeLimit) {
+      if (shouldUpgradeForAdaptivePracticeLimit) {
+        openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice_limit");
+        return;
+      }
       navigateTo(`/notes/${note.id}/adaptive-practice`);
       return;
     }
@@ -1627,6 +1671,21 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         >
                           <ResponsiveActionContent action="share" label={sharing ? "Sharing..." : "Share"} showTextOnMobile iconClassName="h-4 w-4" />
                         </button>
+                        {isStudyPackReady ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="motion-lift flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                            onClick={() => {
+                              setNoteActionsMenuOpen(false);
+                              handleOpenRegenerateConfirm();
+                            }}
+                            disabled={isGeneratingStudyPack || generating}
+                          >
+                            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                            <span>Regenerate</span>
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           role="menuitem"
@@ -1798,6 +1857,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <GuidanceTip
                 tipId="note-detail-generate-study-pack"
                 message="Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note."
+              />
+            ) : null}
+            {copiedStudyPackGuidance && !isInlineMetadataEditMode ? (
+              <GuidanceTip
+                tipId={copiedStudyPackGuidance.id}
+                message={copiedStudyPackGuidance.message}
+                action={{ label: "Regenerate", onClick: handleOpenRegenerateConfirm }}
               />
             ) : null}
             {!isInlineMetadataEditMode ? (
@@ -2273,6 +2339,32 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           ) : null}
         </div>
       </AppModal>
+
+      <AppModal
+        isOpen={showRegenerateConfirm}
+        title="Regenerate Study Pack?"
+        description="This will replace the current summary, key concepts, and quiz with a new version tailored to your level. Your quiz history is preserved."
+        onClose={handleCancelRegenerate}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelRegenerate}
+              disabled={generating}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmRegenerate}
+              disabled={generating}
+            >
+              {generating ? "Regenerating..." : "Regenerate"}
+            </Button>
+          </div>
+        )}
+      />
 
       <DeleteConfirmationModal
         isOpen={showDeleteConfirm}

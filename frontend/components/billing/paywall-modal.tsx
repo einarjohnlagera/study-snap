@@ -94,6 +94,29 @@ function resolveTeacherUpgradeCtaContext(
   return undefined;
 }
 
+function resolveUpgradeCtaContext(
+  contextType: PaywallContext["type"],
+  profileType: ProfileType | null | undefined,
+): UpgradeCtaContext | undefined {
+  const teacherContext = resolveTeacherUpgradeCtaContext(contextType, profileType);
+  if (teacherContext) {
+    return teacherContext;
+  }
+  if (contextType === "ADAPTIVE_PRACTICE_LOCKED") {
+    return "adaptive-practice";
+  }
+  if (contextType === "INTERVIEW_PRACTICE_LOCKED") {
+    return "interview-practice";
+  }
+  if (contextType === "GENERATE_STUDY_PACK_LIMIT") {
+    return "study-pack-limit";
+  }
+  if (contextType === "GENERATE_NOTE_LIMIT") {
+    return "note-generation-limit";
+  }
+  return undefined;
+}
+
 function PlanCard({
   planType,
   currentPlan,
@@ -188,18 +211,18 @@ export function PaywallModal({
     () => resolvePaywallPresentation(normalizedContext.type, currentPlan, authUser?.profileType),
     [authUser?.profileType, currentPlan, normalizedContext.type],
   );
-  const teacherUpgradeCtaContext = useMemo(
-    () => resolveTeacherUpgradeCtaContext(normalizedContext.type, authUser?.profileType),
+  const upgradeCtaContext = useMemo(
+    () => resolveUpgradeCtaContext(normalizedContext.type, authUser?.profileType),
     [authUser?.profileType, normalizedContext.type],
   );
-  const teacherUpgradeCtas = useMemo(
-    () => teacherUpgradeCtaContext
+  const upgradeCtas = useMemo(
+    () => upgradeCtaContext
       ? getUpgradeCtas(appCurrentPlan, {
-          context: teacherUpgradeCtaContext,
+          context: upgradeCtaContext,
           profileType: authUser?.profileType,
         })
       : null,
-    [appCurrentPlan, authUser?.profileType, teacherUpgradeCtaContext],
+    [appCurrentPlan, authUser?.profileType, upgradeCtaContext],
   );
   const { billingPricing } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
@@ -219,8 +242,8 @@ export function PaywallModal({
       setSelectedPlan("PRO");
       return;
     }
-    if (teacherUpgradeCtas?.primary?.targetPlan) {
-      setSelectedPlan(teacherUpgradeCtas.primary.targetPlan);
+    if (upgradeCtas?.primary?.targetPlan) {
+      setSelectedPlan(upgradeCtas.primary.targetPlan);
     }
     if (hasTrackedOpenRef.current) {
       return;
@@ -237,7 +260,7 @@ export function PaywallModal({
         remaining: normalizedContext.remaining ?? null,
       },
     });
-  }, [currentPlan, isOpen, normalizedContext.remaining, normalizedContext.type, pathname, presentation.feature, source, teacherUpgradeCtas?.primary?.targetPlan]);
+  }, [currentPlan, isOpen, normalizedContext.remaining, normalizedContext.type, pathname, presentation.feature, source, upgradeCtas?.primary?.targetPlan]);
 
   const handleDismiss = () => {
     void trackAnalyticsEvent({
@@ -316,14 +339,14 @@ export function PaywallModal({
   };
 
   const isProUser = currentPlan === "PRO";
-  const selectedTeacherCta = teacherUpgradeCtas
-    ? selectedPlan === teacherUpgradeCtas.primary?.targetPlan
-      ? teacherUpgradeCtas.primary
-      : selectedPlan === teacherUpgradeCtas.secondary?.targetPlan
-        ? teacherUpgradeCtas.secondary
+  const selectedUpgradeCta = upgradeCtas
+    ? selectedPlan === upgradeCtas.primary?.targetPlan
+      ? upgradeCtas.primary
+      : selectedPlan === upgradeCtas.secondary?.targetPlan
+        ? upgradeCtas.secondary
         : null
     : null;
-  const checkoutCtaLabel = selectedTeacherCta?.label ?? `Continue with ${PLANS[selectedPlan].name}`;
+  const checkoutCtaLabel = selectedUpgradeCta?.label ?? `Continue with ${PLANS[selectedPlan].name}`;
 
   return (
     <>

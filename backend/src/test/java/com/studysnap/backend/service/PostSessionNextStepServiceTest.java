@@ -1,0 +1,261 @@
+package com.studysnap.backend.service;
+
+import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.NextStepResponse;
+import com.studysnap.backend.dto.TodayFocusType;
+import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.QuickReviewRound;
+import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class PostSessionNextStepServiceTest {
+    private static final String FIRST_CONCEPT = "Cardiac Output";
+    private static final String SECOND_CONCEPT = "Renal Clearance";
+    private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 6, 4, 7, 0, 0, 0, ZoneOffset.UTC);
+
+    @Mock
+    private StudyPackRepository studyPackRepository;
+    @Mock
+    private QuickReviewSessionRepository quickReviewSessionRepository;
+    @Mock
+    private ConceptHealthService conceptHealthService;
+    @Mock
+    private SubscriptionService subscriptionService;
+    @Mock
+    private UserUsageService userUsageService;
+
+    private StudySnapProperties properties;
+    private PostSessionNextStepService postSessionNextStepService;
+
+    @BeforeEach
+    void setUp() {
+        properties = new StudySnapProperties();
+        postSessionNextStepService = new PostSessionNextStepService(
+                studyPackRepository,
+                quickReviewSessionRepository,
+                conceptHealthService,
+                subscriptionService,
+                userUsageService,
+                properties
+        );
+    }
+
+    @Test
+    void getNextStep_returnsPracticeWeakConceptWhenDueConceptsExist() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 1);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of(FIRST_CONCEPT, SECOND_CONCEPT));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
+        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/adaptive-practice");
+        assertThat(response.adaptivePracticeAvailable()).isTrue();
+        assertThat(response.adaptivePracticeRemaining()).isEqualTo(2);
+    }
+
+    @Test
+    void getNextStep_returnsRetryReviewForQuickReviewMissesWhenNothingDue() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPack.getId()),
+                any(Pageable.class)
+        )).thenReturn(List.of(buildCompletedSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of(FIRST_CONCEPT))));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/quick-review");
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
+    }
+
+    @Test
+    void getNextStep_doesNotReturnRetryReviewForChallengeMisses() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPack.getId()),
+                any(Pageable.class)
+        )).thenReturn(List.of(buildCompletedSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of(FIRST_CONCEPT))));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/challenge-quiz");
+        assertThat(response.concepts()).isEmpty();
+    }
+
+    @Test
+    void getNextStep_returnsReviewPackWhenNothingDueAndNothingRetryable() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPack.getId()),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionLabel()).isEqualTo("Take a Challenge");
+        assertThat(response.concepts()).isEmpty();
+    }
+
+    @Test
+    void getNextStep_capsConceptsAtFive() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of("One", "Two", "Three", "Four", "Five", "Six"));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.concepts()).containsExactly("One", "Two", "Three", "Four", "Five");
+    }
+
+    @Test
+    void getNextStep_returnsReviewPackFallbackWhenConceptHealthThrows() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenThrow(new IllegalStateException("database unavailable"));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/challenge-quiz");
+    }
+
+    @Test
+    void getNextStep_returnsNullAdaptiveRemainingForPro() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.PRO, 12);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of(FIRST_CONCEPT));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.adaptivePracticeAvailable()).isTrue();
+        assertThat(response.adaptivePracticeRemaining()).isNull();
+    }
+
+    @Test
+    void getNextStep_returnsZeroAdaptiveRemainingForExhaustedFreeUser() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 3);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of(FIRST_CONCEPT));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.adaptivePracticeAvailable()).isTrue();
+        assertThat(response.adaptivePracticeRemaining()).isZero();
+    }
+
+    private void stubOwnedStudyPack(UUID userId, StudyPackEntity studyPack) {
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPack.getId(), userId)).thenReturn(Optional.of(studyPack));
+    }
+
+    private void stubPlanAndUsage(UUID userId, PlanType planType, int adaptiveUsed) {
+        when(subscriptionService.resolvePlan(userId)).thenReturn(planType);
+        if (planType != PlanType.PRO) {
+            when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                    .thenReturn(new UserUsageService.MonthlyUsage(
+                            NOW.minusDays(4),
+                            NOW.plusDays(26),
+                            0,
+                            0,
+                            adaptiveUsed,
+                            0,
+                            0,
+                            0,
+                            0
+                    ));
+        }
+    }
+
+    private StudyPackEntity buildStudyPack(UUID userId) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(UUID.randomUUID());
+        studyPack.setOwnerUserId(userId);
+        studyPack.setNoteId(UUID.randomUUID());
+        studyPack.setTitle("Physiology");
+        studyPack.setKeyConcepts(List.of(FIRST_CONCEPT, SECOND_CONCEPT));
+        return studyPack;
+    }
+
+    private QuickReviewSessionEntity buildCompletedSession(
+            UUID userId,
+            StudyPackEntity studyPack,
+            QuickReviewSessionMode mode,
+            List<String> weakConcepts
+    ) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(userId);
+        session.setStudyPackId(studyPack.getId());
+        session.setNoteId(studyPack.getNoteId());
+        session.setSessionMode(mode);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+        session.setCurrentQuestionIndex(2);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setTotalQuestions(2);
+        session.setCorrectAnswers(1);
+        session.setRetryCount(0);
+        session.setCreatedAt(NOW.minusMinutes(10));
+        session.setCompletedAt(NOW);
+        session.setSessionMetadata(Map.of("weakConcepts", weakConcepts));
+        return session;
+    }
+}

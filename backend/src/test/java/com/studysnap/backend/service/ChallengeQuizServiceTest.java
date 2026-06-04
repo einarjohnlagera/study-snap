@@ -88,6 +88,8 @@ class ChallengeQuizServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private ExamQuestionPoolService examQuestionPoolService;
+    @Mock
+    private ConceptHealthService conceptHealthService;
 
     private ChallengeQuizService challengeQuizService;
 
@@ -111,7 +113,8 @@ class ChallengeQuizServiceTest {
                 aiRateLimitService,
                 activityTrackingService,
                 generationContextResolver,
-                examQuestionPoolService
+                examQuestionPoolService,
+                conceptHealthService
         );
     }
 
@@ -910,7 +913,8 @@ class ChallengeQuizServiceTest {
                 aiRateLimitService,
                 activityTrackingService,
                 generationContextResolver,
-                examQuestionPoolService
+                examQuestionPoolService,
+                conceptHealthService
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -1116,6 +1120,91 @@ class ChallengeQuizServiceTest {
         );
 
         verify(activityTrackingService).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
+    }
+
+    @Test
+    void completeSession_recordsOnlyFullyCorrectChallengeConceptsToConceptHealth() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                studyPackId,
+                noteId,
+                "challenge",
+                List.of(
+                        new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Mastered", "Explanation"),
+                        new QuizItem("Question 2", List.of("A", "B", "C", "D"), "B", "Weak", "Explanation"),
+                        new QuizItem("Question 3", List.of("A", "B", "C", "D"), "D", "Mastered", "Explanation")
+                ),
+                Map.of("0", "A", "1", "C", "2", "D")
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(2, 3, 120)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("Mastered"),
+                session.getCompletedAt()
+        );
+    }
+
+    @Test
+    void completeSession_recordsFullyCorrectBoardExamConceptsToConceptHealth() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                studyPackId,
+                noteId,
+                "board_exam",
+                List.of(
+                        new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Board Mastery", "Explanation"),
+                        new QuizItem("Question 2", List.of("A", "B", "C", "D"), "C", "Board Weakness", "Explanation")
+                ),
+                Map.of("0", "A", "1", "B")
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(1, 2, 120)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("Board Mastery"),
+                session.getCompletedAt()
+        );
     }
 
     @Test
@@ -1404,6 +1493,37 @@ class ChallengeQuizServiceTest {
             ));
         }
         return quiz;
+    }
+
+    private QuickReviewSessionEntity buildInProgressChallengeSession(
+            UUID sessionId,
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            String mode,
+            List<QuizItem> quiz,
+            Map<String, ?> selectedChoices
+    ) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(quiz.size());
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                quiz,
+                Map.of(
+                        "mode", mode,
+                        "difficulty", "medium",
+                        "selectedChoices", selectedChoices,
+                        "completed", false
+                )
+        ));
+        return session;
     }
 
     private void stubBoardExamStartDependencies(UUID userId, UUID studyPackId, StudyPackEntity studyPack) {

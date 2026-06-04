@@ -158,7 +158,7 @@ Quiz mode visibility per profile is controlled by `lib/exam-mode-visibility.ts` 
 
 ### Versioning rule
 
-NoteLib does not overwrite generated content. The "Make a Copy" model is enforced product-wide: copy includes user-authored fields (title, courseProgram, subject, tags, content); copy excludes all AI/generated fields (summary, key concepts, quizzes, session history). Never add a regenerate-in-place flow.
+The Study Pack is the generated version of a note. Never auto-regenerate. Regeneration always requires explicit user confirmation and updates the existing Study Pack in-place so quiz/session history stays linked. Public-note copies include the linked StudyPack when one exists (intentional, documented exception); owner self-copies still copy only user-authored fields and exclude generated content. Do not "fix" either of these rules back to the old copy-only model.
 
 ---
 

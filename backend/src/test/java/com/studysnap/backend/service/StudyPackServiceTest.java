@@ -20,6 +20,7 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
@@ -117,6 +118,7 @@ class StudyPackServiceTest {
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(studyPackRepository.findByNoteId(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(generationContextResolver.resolve(any(UUID.class), any())).thenReturn(
@@ -246,12 +248,17 @@ class StudyPackServiceTest {
     }
 
     @Test
-    void createFromText_rejectsGenerationWhenNoteAlreadyGenerated() {
+    void createFromText_rejectsGenerationWhenNoteAlreadyHasStudyPack() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity generatedNote = buildDraftNote(noteId, userId, "already generated note");
         generatedNote.setStatus(NoteStatus.GENERATED);
+        StudyPackEntity existingStudyPack = new StudyPackEntity();
+        existingStudyPack.setId(UUID.randomUUID());
+        existingStudyPack.setOwnerUserId(userId);
+        existingStudyPack.setNoteId(noteId);
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(generatedNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.of(existingStudyPack));
 
         CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());
         assertThatThrownBy(() -> studyPackService.createFromText(
@@ -260,7 +267,7 @@ class StudyPackServiceTest {
         ))
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("NOTE_ALREADY_GENERATED");
+                .isEqualTo("NOTE_ALREADY_HAS_STUDY_PACK");
 
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
@@ -449,6 +456,95 @@ class StudyPackServiceTest {
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.FAILED);
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_fromGeneratedNoteUpdatesExistingStudyPackInPlace() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        NoteEntity generatedNote = buildDraftNote(noteId, userId, "updated note content");
+        generatedNote.setStatus(NoteStatus.GENERATED);
+        StudyPackEntity existingStudyPack = new StudyPackEntity();
+        existingStudyPack.setId(studyPackId);
+        existingStudyPack.setOwnerUserId(userId);
+        existingStudyPack.setNoteId(noteId);
+        existingStudyPack.setCreatedAt(OffsetDateTime.now().minusDays(5));
+        existingStudyPack.setSummary("Old summary");
+        existingStudyPack.setKeyConcepts(List.of("Old concept"));
+        existingStudyPack.setQuiz(List.of(new QuizItem("Old question", List.of("A", "B"), 0, "Old", "Old explanation")));
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "New title",
+                "New summary",
+                "Biology",
+                List.of("cells"),
+                List.of("New concept"),
+                List.of(new QuizItem("New question", List.of("A", "B"), 1, "New", "New explanation")),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(generatedNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.of(existingStudyPack));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(existingStudyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("updated note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        StudyPackEntity savedStudyPack = studyPackCaptor.getValue();
+        assertThat(savedStudyPack.getId()).isEqualTo(studyPackId);
+        assertThat(savedStudyPack.getSummary()).isEqualTo("New summary");
+        assertThat(savedStudyPack.getKeyConcepts()).containsExactly("New concept");
+        assertThat(savedStudyPack.getQuiz()).extracting(QuizItem::question).containsExactly("New question");
+        assertThat(savedStudyPack.getStatus()).isEqualTo(StudyPackStatus.DONE);
+        assertThat(generatedNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
+        verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), eq(studyPackId), any());
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_regenerationFailurePreservesExistingStudyPack() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity generatedNote = buildDraftNote(noteId, userId, "updated note content");
+        generatedNote.setStatus(NoteStatus.GENERATED);
+        StudyPackEntity existingStudyPack = new StudyPackEntity();
+        existingStudyPack.setId(UUID.randomUUID());
+        existingStudyPack.setOwnerUserId(userId);
+        existingStudyPack.setNoteId(noteId);
+        existingStudyPack.setSummary("Old summary");
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(generatedNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.of(existingStudyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("updated note content"), any(StudyPackGenerationContext.class)))
+                .thenThrow(new RuntimeException("LLM unavailable"));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        assertThat(generatedNote.getStatus()).isEqualTo(NoteStatus.FAILED);
+        assertThat(existingStudyPack.getSummary()).isEqualTo("Old summary");
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
     @Test

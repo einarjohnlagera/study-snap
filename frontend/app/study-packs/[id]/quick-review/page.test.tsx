@@ -5,12 +5,14 @@ import {
   completeQuickReviewSession,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
+  getPostSessionNextStep,
   getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
   updateQuickReviewSessionProgress,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
 const pushMock = jest.fn();
 const routerMock = {
@@ -37,6 +39,10 @@ jest.mock("@/lib/auth", () => ({
   setAuthUser: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-billing-usage-summary", () => ({
+  useBillingUsageSummary: jest.fn(),
+}));
+
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   completeQuickReviewSession: jest.fn(),
@@ -44,6 +50,7 @@ jest.mock("@/lib/api", () => ({
   generateQuickReviewStudyTip: jest.fn(),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
+  getPostSessionNextStep: jest.fn(),
   getNote: jest.fn(),
   saveQuickReviewConfidence: jest.fn(),
   startQuickReviewSession: jest.fn(),
@@ -104,6 +111,17 @@ describe("QuickReviewPage first-study onboarding", () => {
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (updateQuickReviewSessionProgress as jest.Mock).mockReset();
+    (getPostSessionNextStep as jest.Mock).mockReset();
+    (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
+    (useBillingUsageSummary as jest.Mock).mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { adaptivePracticePerMonth: 3 },
+        usage: { adaptivePracticeUsed: 0 },
+        remaining: { adaptivePracticeRemaining: 3 },
+      },
+    });
   });
 
   it("shows the completion modal after the first quick review and routes to dashboard", async () => {
@@ -190,6 +208,17 @@ describe("QuickReviewPage post-quiz UX", () => {
     (startQuickReviewSession as jest.Mock).mockReset();
     (saveQuickReviewConfidence as jest.Mock).mockReset();
     (updateQuickReviewSessionProgress as jest.Mock).mockResolvedValue(undefined);
+    (getPostSessionNextStep as jest.Mock).mockReset();
+    (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
+    (useBillingUsageSummary as jest.Mock).mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { adaptivePracticePerMonth: 3 },
+        usage: { adaptivePracticeUsed: 0 },
+        remaining: { adaptivePracticeRemaining: 3 },
+      },
+    });
   });
 
   function setupCompleteState(overrides: { adaptivePracticeAvailable?: boolean } = {}) {
@@ -215,6 +244,34 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     const noteButton = screen.queryByRole("button", { name: /^Note$/ });
     expect(noteButton).not.toBeInTheDocument();
+  });
+
+  it("fetches and renders the server-resolved next step after completion", async () => {
+    setupCompleteState({ adaptivePracticeAvailable: true });
+    (getPostSessionNextStep as jest.Mock).mockResolvedValue({
+      type: "PRACTICE_WEAK_CONCEPT",
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Cells",
+      message: "Cell organelles is due for review. Practice it while it is fresh.",
+      actionLabel: "Practice Weak Concepts",
+      actionHref: "/notes/note-1/adaptive-practice",
+      concepts: ["Cell organelles"],
+      adaptivePracticeAvailable: true,
+      adaptivePracticeRemaining: 2,
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByText("Cell organelles")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/adaptive-practice",
+    );
+    expect(getPostSessionNextStep).toHaveBeenCalledWith("study-pack-1");
   });
 
   it("loads Quick Review once and does not loop initialization calls", async () => {
@@ -392,9 +449,9 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("What is the powerhouse of the cell?");
     expect(review).toHaveTextContent("Cell organelles");
     expect(review).toHaveTextContent("Nucleus");
-    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("Your Answer");
     expect(review).toHaveTextContent("Mitochondria");
-    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("Correct Answer");
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 
@@ -408,7 +465,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     await screen.findByText("Quick Review Complete");
 
     expect(screen.getByRole("button", { name: "Retry Quick Review" })).toHaveClass("bg-primary");
-    expect(screen.getByRole("button", { name: "Go Pro for Adaptive Practice" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toHaveClass("border");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 

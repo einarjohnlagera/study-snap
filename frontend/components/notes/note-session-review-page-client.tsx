@@ -17,7 +17,6 @@ import {
 import { normalizeNoteDetailTab } from "@/lib/note-entry";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { exportQuizSessionReviewDocument, hasExportableContent } from "@/lib/quiz-session-export";
-import { getAuthUser } from "@/lib/auth";
 import { getQuizSessionModeLabel } from "@/lib/quiz-session-history";
 import {
   buildNoteSessionReviewBackLabel,
@@ -122,12 +121,7 @@ export function NoteSessionReviewPageClient({
   }, [noteId, router, sessionId, sessionMode]);
 
   const adaptivePracticeExportEnabled = review?.sessionMode === "ADAPTIVE";
-  const adaptiveDisabledReason = (() => {
-    const isPro = getAuthUser()?.planType === "PRO";
-    return isPro
-      ? "No adaptive practice yet — complete a session to generate one"
-      : "Adaptive Practice is available after completing a session (Pro feature)";
-  })();
+  const adaptiveDisabledReason = "Complete an Adaptive Practice session before exporting this format.";
 
   const handleExport = async (exportType: "full" | "mistakes-only" | "weak-concepts" | "adaptive-practice") => {
     if (!review || exporting) {

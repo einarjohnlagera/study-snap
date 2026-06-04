@@ -71,6 +71,17 @@ public final class QuizSessionReviewUtils {
                 .toList();
     }
 
+    public static List<String> computeFullyCorrectConcepts(List<ChallengeQuizConceptStatResponse> conceptBreakdown) {
+        if (conceptBreakdown == null || conceptBreakdown.isEmpty()) {
+            return List.of();
+        }
+        return conceptBreakdown.stream()
+                .filter(stat -> stat != null && stat.totalQuestions() > 0)
+                .filter(stat -> stat.correctAnswers() == stat.totalQuestions())
+                .map(ChallengeQuizConceptStatResponse::concept)
+                .toList();
+    }
+
     private static String normalizeConcept(String concept) {
         if (concept == null) {
             return UNKNOWN_CONCEPT_LABEL;

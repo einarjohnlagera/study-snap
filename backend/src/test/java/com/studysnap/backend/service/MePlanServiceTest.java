@@ -39,6 +39,7 @@ class MePlanServiceTest {
         properties.getPricing().setProMonthlyStudyPackLimit(100);
         properties.getPricing().setFreeMonthlyChallengeQuizLimit(5);
         properties.getPricing().setProMonthlyChallengeQuizLimit(50);
+        properties.getPricing().setFreeMonthlyAdaptivePracticeLimit(3);
         properties.getPricing().setProMonthlyAdaptivePracticeLimit(30);
         properties.getPricing().setProMonthlyLongExamLimit(10);
         properties.getPricing().setProMonthlyBoardExamLimit(5);
@@ -52,7 +53,7 @@ class MePlanServiceTest {
         properties.getPricing().setFreeMonthlyPdfExportLimit(2);
         properties.getPricing().setPlusMonthlyPdfExportLimit(15);
         properties.getPricing().setProMonthlyPdfExportLimit(-1);
-        properties.getPricing().setAdaptivePracticeProOnly(true);
+        properties.getPricing().setAdaptivePracticeProOnly(false);
         properties.getPricing().setDifficultySelectionProOnly(true);
         FeatureGateService featureGateService = new FeatureGateService(subscriptionService, properties);
         mePlanService = new MePlanService(
@@ -94,7 +95,7 @@ class MePlanServiceTest {
         assertThat(response.usageCycle().endsAt()).isEqualTo(OffsetDateTime.parse("2026-04-10T00:00:00Z"));
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(10);
         assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(5);
-        assertThat(response.limits().adaptivePracticePerMonth()).isZero();
+        assertThat(response.limits().adaptivePracticePerMonth()).isEqualTo(3);
         assertThat(response.limits().longExamPerMonth()).isZero();
         assertThat(response.limits().boardExamPerMonth()).isZero();
         assertThat(response.limits().ocrPerMonth()).isEqualTo(20);
@@ -112,14 +113,14 @@ class MePlanServiceTest {
         assertThat(response.usage().pdfExportsUsed()).isZero();
         assertThat(response.remaining().studyPacksRemaining()).isEqualTo(7);
         assertThat(response.remaining().challengeQuizzesRemaining()).isEqualTo(3);
-        assertThat(response.remaining().adaptivePracticeRemaining()).isZero();
+        assertThat(response.remaining().adaptivePracticeRemaining()).isEqualTo(3);
         assertThat(response.remaining().longExamRemaining()).isZero();
         assertThat(response.remaining().boardExamRemaining()).isZero();
         assertThat(response.remaining().ocrRemaining()).isEqualTo(15);
         assertThat(response.remaining().noteGenerationsRemaining()).isEqualTo(3);
         assertThat(response.remaining().docxExportsRemaining()).isEqualTo(1);
         assertThat(response.remaining().pdfExportsRemaining()).isEqualTo(2);
-        assertThat(response.features().adaptivePracticeAvailable()).isFalse();
+        assertThat(response.features().adaptivePracticeAvailable()).isTrue();
         assertThat(response.features().difficultySelectionAvailable()).isFalse();
         assertThat(response.features().fileUploadAvailable()).isTrue();
         assertThat(response.features().ocrAvailable()).isTrue();

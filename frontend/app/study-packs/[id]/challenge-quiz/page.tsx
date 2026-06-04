@@ -18,12 +18,14 @@ import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { AppModal } from "@/components/ui/app-modal";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
+import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -37,6 +39,7 @@ import {
   getMe,
   getMyStudyPack,
   getNote,
+  getPostSessionNextStep,
   listNotes,
   isEmailNotVerifiedError,
   isNotEnoughNewQuestionsError,
@@ -47,6 +50,7 @@ import {
   type LearnerLevel,
   type NoteListItemResponse,
   type NoteResponse,
+  type PostSessionNextStepResponse,
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
 } from "@/lib/api";
@@ -95,7 +99,8 @@ type ChallengePaywallVariant =
   | "long-exam-mode"
   | "interview-practice-limit"
   | "difficulty-selection"
-  | "challenge-quiz-limit";
+  | "challenge-quiz-limit"
+  | "adaptive-practice";
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
@@ -315,6 +320,7 @@ export default function ChallengeQuizPage() {
   const [viewerPlanType, setViewerPlanType] = useState<ChallengeViewerPlanType>(null);
   const [viewerProfileType, setViewerProfileType] = useState<ChallengeViewerProfileType>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<ChallengePaywallVariant | null>(null);
+  const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const [challengeQuizLimitReached, setChallengeQuizLimitReached] = useState(false);
   const [boardExamUsedThisMonth, setBoardExamUsedThisMonth] = useState(0);
   const [boardExamMonthlyLimit, setBoardExamMonthlyLimit] = useState(0);
@@ -330,6 +336,7 @@ export default function ChallengeQuizPage() {
   const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
   const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
+  const { usageSummary } = useBillingUsageSummary();
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -347,6 +354,7 @@ export default function ChallengeQuizPage() {
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const [generateMoreToast, setGenerateMoreToast] = useState<string | null>(null);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const groupedLearnerLevels = useMemo(
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
     [viewerProfileType],
@@ -370,11 +378,13 @@ export default function ChallengeQuizPage() {
           ? "quiz_limit"
           : variant === "board-exam-limit"
             ? "board_exam_limit"
-            : variant === "long-exam-mode"
-              ? "long_exam"
-              : variant === "interview-practice-limit"
-                ? "interview_practice"
-                : "board_exam";
+            : variant === "adaptive-practice"
+              ? "adaptive"
+              : variant === "long-exam-mode"
+                ? "long_exam"
+                : variant === "interview-practice-limit"
+                  ? "interview_practice"
+                  : "board_exam";
       void trackAnalyticsEvent({
         eventType: "FEATURE_LOCKED_CLICKED",
         metadata: {
@@ -518,6 +528,7 @@ export default function ChallengeQuizPage() {
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
+    setNextStepResponse(null);
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
     setSelectedDifficulty(normalizePracticeDifficulty(started.selectedDifficulty));
     setBoardExamUsedThisMonth(started.boardExamUsedThisMonth ?? 0);
@@ -851,6 +862,10 @@ export default function ChallengeQuizPage() {
       if (persistResultToPage) {
         setResult(completed);
         setPhase("complete");
+        setNextStepResponse(null);
+        void getPostSessionNextStep(completed.studyPackId)
+          .then(setNextStepResponse)
+          .catch(() => setNextStepResponse(null));
         void trackAnalyticsEvent({
           eventType: "CHALLENGE_QUIZ_COMPLETED",
           entityId: completed.sessionId,
@@ -1050,6 +1065,7 @@ export default function ChallengeQuizPage() {
     setGeneratingMore(false);
     setNoMoreQuestions(false);
     setGenerateMoreToast(null);
+    setNextStepResponse(null);
     setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode));
     setPhase("prestart");
   };
@@ -2050,40 +2066,55 @@ export default function ChallengeQuizPage() {
             )}
           </div>
 
-          <div ref={weakConceptsRef} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Weak Concepts</h2>
-            {result.weakConcepts.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {result.weakConcepts.map((concept) => (
-                  <span key={concept}
-                        className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                    {concept}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-foreground/70">
-                No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.
-              </p>
-            )}
+          <div ref={weakConceptsRef} className="space-y-4">
+            <PostSessionNextStep
+              response={nextStepResponse}
+              currentPlan={currentPlan}
+              noteId={note?.id ?? null}
+              onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "board_exam_results_next_step")}
+            />
+            {nextStepResponse === null ? (
+              <>
+                <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Weak Concepts</h2>
+                  {result.weakConcepts.length > 0 ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {result.weakConcepts.map((concept) => (
+                        <span key={concept}
+                              className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                          {concept}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-foreground/70">
+                      No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {result.weakConcepts.length > 0 ? (
+                    <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+                      <Button type="button" className="w-full sm:w-auto">
+                        Practice Weak Concepts
+                      </Button>
+                    </Link>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant={result.weakConcepts.length > 0 ? "outline" : "default"}
+                    className="w-full sm:w-auto"
+                    onClick={handleRetry}
+                  >
+                    {retryButtonLabel}
+                  </Button>
+                </div>
+              </>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            {result.weakConcepts.length > 0 ? (
-              <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
-                <Button type="button" className="w-full sm:w-auto">
-                  Practice Weak Concepts
-                </Button>
-              </Link>
-            ) : null}
-            <Button
-              type="button"
-              variant={result.weakConcepts.length > 0 ? "outline" : "default"}
-              className="w-full sm:w-auto"
-              onClick={handleRetry}
-            >
-              {retryButtonLabel}
-            </Button>
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
@@ -2249,40 +2280,52 @@ export default function ChallengeQuizPage() {
               <p className="text-sm text-foreground/70">No concept breakdown is available for this session.</p>
             )}
           </Card>
-          <div ref={weakConceptsRef}>
-            <Card className="space-y-3 p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Weak Concepts</h2>
-              {result.weakConcepts.length > 0 ? (
-                <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
-                  {result.weakConcepts.map((concept) => (
-                    <li key={concept}>{concept}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-foreground/70">
-                  {isBoardExamMode
-                    ? "No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready."
-                    : "No weak concepts identified in this challenge. Review your answers or start another challenge when ready."}
-                </p>
-              )}
-            </Card>
+          <div ref={weakConceptsRef} className="space-y-4">
+            <PostSessionNextStep
+              response={nextStepResponse}
+              currentPlan={currentPlan}
+              noteId={note?.id ?? null}
+              onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "challenge_quiz_results_next_step")}
+            />
+            {nextStepResponse === null ? (
+              <>
+                <Card className="space-y-3 p-4">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Weak Concepts</h2>
+                  {result.weakConcepts.length > 0 ? (
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
+                      {result.weakConcepts.map((concept) => (
+                        <li key={concept}>{concept}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-foreground/70">
+                      {isBoardExamMode
+                        ? "No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready."
+                        : "No weak concepts identified in this challenge. Review your answers or start another challenge when ready."}
+                    </p>
+                  )}
+                </Card>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {result.weakConcepts.length > 0 ? (
+                    <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+                      <Button type="button" className="w-full sm:w-auto">
+                        Practice Weak Concepts
+                      </Button>
+                    </Link>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant={result.weakConcepts.length > 0 ? "outline" : "default"}
+                    className="w-full sm:w-auto"
+                    onClick={handleRetry}
+                  >
+                    {retryButtonLabel}
+                  </Button>
+                </div>
+              </>
+            ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            {result.weakConcepts.length > 0 ? (
-              <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
-                <Button type="button" className="w-full sm:w-auto">
-                  Practice Weak Concepts
-                </Button>
-              </Link>
-            ) : null}
-            <Button
-              type="button"
-              variant={result.weakConcepts.length > 0 ? "outline" : "default"}
-              className="w-full sm:w-auto"
-              onClick={handleRetry}
-            >
-              {retryButtonLabel}
-            </Button>
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>

@@ -14,6 +14,7 @@ import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-o
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -27,9 +28,11 @@ import {
   getInProgressAdaptivePracticeSession,
   getMyStudyPack,
   getNote,
+  getPostSessionNextStep,
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
   type NoteResponse,
+  type PostSessionNextStepResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
@@ -73,6 +76,7 @@ export default function AdaptivePracticePage() {
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showLimitReachedState, setShowLimitReachedState] = useState(false);
+  const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const { usageSummary } = useBillingUsageSummary();
 
   const noteId = useMemo(() => {
@@ -90,9 +94,11 @@ export default function AdaptivePracticePage() {
       usageSummary.remaining?.adaptivePracticeRemaining,
     )
     : null;
-  const hasReachedAdaptivePracticeLimit = currentPlan === "PRO"
+  const hasAdaptivePracticeQuota = (usageSummary?.limits.adaptivePracticePerMonth ?? 0) > 0;
+  const hasReachedAdaptivePracticeLimit = hasAdaptivePracticeQuota
     && adaptivePracticeRemaining !== null
     && adaptivePracticeRemaining <= 0;
+  const shouldUpgradeForAdaptivePracticeLimit = currentPlan !== "PRO" && hasReachedAdaptivePracticeLimit;
   const openAdaptivePracticePaywall = useCallback((source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -113,6 +119,7 @@ export default function AdaptivePracticePage() {
     setSelectedMultiChoices({});
     setCompletionTracked(false);
     setShowAnswerReview(false);
+    setNextStepResponse(null);
     if (response.status === "IN_PROGRESS" && response.quiz.length > 0) {
       setQuizStarted(true);
       setSessionStartedAt(Date.now());
@@ -167,7 +174,7 @@ export default function AdaptivePracticePage() {
         return;
       }
       setNote(detail);
-      if (currentPlan === "FREE" && !detail.adaptivePracticeAvailable) {
+      if (!detail.adaptivePracticeAvailable) {
         setAdaptiveQuiz(null);
         setPremiumLocked(true);
         setShowPremiumPaywall(true);
@@ -176,7 +183,11 @@ export default function AdaptivePracticePage() {
       const response = await getInProgressAdaptivePracticeSession(detail.id);
       if (!response.sessionId && hasReachedAdaptivePracticeLimit) {
         setAdaptiveQuiz(null);
-        setShowLimitReachedState(true);
+        if (shouldUpgradeForAdaptivePracticeLimit) {
+          setShowPremiumPaywall(true);
+        } else {
+          setShowLimitReachedState(true);
+        }
         return;
       }
       applyAdaptiveSession(response);
@@ -210,7 +221,7 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, noteId, pathname, router, searchParams]);
+  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, noteId, pathname, router, searchParams, shouldUpgradeForAdaptivePracticeLimit]);
 
   useEffect(() => {
     if (!noteId) {
@@ -223,13 +234,19 @@ export default function AdaptivePracticePage() {
   }, [loadAdaptiveQuiz, noteId]);
 
   useEffect(() => {
-    if (currentPlan !== "PRO" || !hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
+    if (!hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
+      return;
+    }
+    if (shouldUpgradeForAdaptivePracticeLimit) {
+      setPremiumLocked(false);
+      setShowLimitReachedState(false);
+      setShowPremiumPaywall(true);
       return;
     }
     setPremiumLocked(false);
     setShowPremiumPaywall(false);
     setShowLimitReachedState(true);
-  }, [adaptiveQuiz?.sessionId, currentPlan, hasReachedAdaptivePracticeLimit]);
+  }, [adaptiveQuiz?.sessionId, hasReachedAdaptivePracticeLimit, shouldUpgradeForAdaptivePracticeLimit]);
 
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
@@ -306,12 +323,16 @@ export default function AdaptivePracticePage() {
       setShowVerifyEmailModal(true);
       return;
     }
-    if (currentPlan === "FREE") {
+    if (!note.adaptivePracticeAvailable) {
       setPremiumLocked(true);
       openAdaptivePracticePaywall("adaptive_practice_start");
       return;
     }
     if (hasReachedAdaptivePracticeLimit) {
+      if (shouldUpgradeForAdaptivePracticeLimit) {
+        openAdaptivePracticePaywall("adaptive_practice_limit_reached");
+        return;
+      }
       setShowLimitReachedState(true);
       return;
     }
@@ -332,7 +353,11 @@ export default function AdaptivePracticePage() {
         setShowVerifyEmailModal(true);
       }
       if (message.toLowerCase().includes("monthly adaptive practice limit")) {
-        setShowLimitReachedState(true);
+        if (currentPlan !== "PRO") {
+          openAdaptivePracticePaywall("adaptive_practice_limit_reached");
+        } else {
+          setShowLimitReachedState(true);
+        }
       } else {
         setError(message);
       }
@@ -340,7 +365,7 @@ export default function AdaptivePracticePage() {
       requestInFlightRef.current = false;
       setStartingAdaptive(false);
     }
-  }, [applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall]);
+  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
   const adaptiveQuizActive = Boolean(
@@ -435,9 +460,14 @@ export default function AdaptivePracticePage() {
         if (correctConceptNames.length > 0) {
           completeRequest.correctConceptNames = correctConceptNames;
         }
-        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, completeRequest).catch(() => {
-          // Completion persistence should not block adaptive practice flow.
-        });
+        setNextStepResponse(null);
+        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, completeRequest)
+          .then(() => getPostSessionNextStep(adaptiveQuiz.studyPackId))
+          .then(setNextStepResponse)
+          .catch(() => {
+            // Completion and next-step persistence should not block adaptive practice flow.
+            setNextStepResponse(null);
+          });
       }
     }
     setCurrentIndex(nextIndex);
@@ -488,13 +518,13 @@ export default function AdaptivePracticePage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Adaptive Practice
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Pro feature</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">Adaptive Practice unavailable</h1>
           <p className="text-sm text-foreground/75">
-            This feature is available in the Pro plan.
+            Adaptive Practice is not available on your current plan.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" className="w-full sm:w-auto" onClick={() => openAdaptivePracticePaywall("adaptive_practice_page_card")}>
-              See Pro options
+              See upgrade options
             </Button>
           </div>
         </Card>
@@ -594,15 +624,23 @@ export default function AdaptivePracticePage() {
               </p>
             </div>
           )}
+          <PostSessionNextStep
+            response={nextStepResponse}
+            currentPlan={currentPlan}
+            noteId={note?.id ?? null}
+            onOpenPaywall={() => openAdaptivePracticePaywall("adaptive_practice_results_next_step")}
+          />
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              onClick={() => void handleStartAdaptivePractice()}
-              disabled={adaptiveGenerationLocked}
-            >
-              {adaptiveGenerationLocked ? "Starting..." : "Generate New Set"}
-            </Button>
+            {nextStepResponse === null ? (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleStartAdaptivePractice()}
+                disabled={adaptiveGenerationLocked}
+              >
+                {adaptiveGenerationLocked ? "Starting..." : "Generate New Set"}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"

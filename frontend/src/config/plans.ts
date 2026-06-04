@@ -35,15 +35,17 @@ export const PLANS: Record<AppPlanType, {
     title: "For getting started",
     description: "Create notes, generate Study Packs, and review basic concepts.",
     ctaLabel: "Get Started Free",
+    adaptivePracticeMessage: `Taste Adaptive Practice — ${pricingConfig.free.adaptivePracticePerMonth} sessions / month`,
     features: [
       { label: `${pricingConfig.free.studyPacksPerMonth} Study Packs / month` },
       { label: `${pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month` },
+      { label: `Adaptive Practice (${pricingConfig.free.adaptivePracticePerMonth} sessions / month)` },
       { label: `${pricingConfig.free.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
       { label: `${pricingConfig.free.quizShareLinksPerMonth} shareable quiz links / month` },
       { label: "Summary + Key Concepts" },
     ],
     upgradeHighlights: [
-      `Adaptive Practice (${pricingConfig.plus.adaptivePracticePerMonth} sessions / month)`,
+      `Adaptive Practice (${pricingConfig.free.adaptivePracticePerMonth} free sessions / month)`,
       "Difficulty selection",
       "Board Exam Mode",
       "Higher note generation limits",
@@ -137,7 +139,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
   {
     label: "Adaptive Practice",
     values: {
-      FREE: null,
+      FREE: `${pricingConfig.free.adaptivePracticePerMonth} sessions`,
       PLUS: `${pricingConfig.plus.adaptivePracticePerMonth} sessions`,
       PRO: `${pricingConfig.pro.adaptivePracticePerMonth} sessions`,
     },
@@ -251,7 +253,7 @@ export function getUpgradeCtas(
     }
     if (context === "adaptive-practice") {
       return {
-        primary: { label: "Unlock Adaptive Practice", targetPlan: "PLUS" },
+        primary: { label: "Get More Adaptive Practice", targetPlan: "PLUS" },
         secondary: { label: "Go Pro", targetPlan: "PRO" },
       };
     }

@@ -14,11 +14,13 @@ import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { getPaidPlanCtaLabel } from "@/src/config/plans";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
@@ -27,6 +29,7 @@ import {
   getMe,
   getMyStudyPack,
   getNote,
+  getPostSessionNextStep,
   saveQuickReviewConfidence,
   startQuickReviewSession,
   trackAnalyticsEvent,
@@ -34,6 +37,7 @@ import {
   updateQuickReviewSessionProgress,
   type LearnerLevel,
   type NoteResponse,
+  type PostSessionNextStepResponse,
   type QuickReviewConfidenceLevel,
   type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
@@ -185,11 +189,13 @@ export default function QuickReviewPage() {
   const [viewerProfileType, setViewerProfileType] = useState<string | null>(() => getAuthUser()?.profileType ?? null);
   const [viewerPlanType, setViewerPlanType] = useState<string | null>(() => getAuthUser()?.planType ?? null);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
+  const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
+  const { usageSummary } = useBillingUsageSummary();
   const loadedNoteIdRef = useRef<string | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
 
@@ -232,6 +238,7 @@ export default function QuickReviewPage() {
     setConfidenceAcknowledged(false);
     setConfidenceError(null);
     setShowAnswerReview(false);
+    setNextStepResponse(null);
   }, []);
 
   const loadNote = useCallback(async (force = false) => {
@@ -399,6 +406,7 @@ export default function QuickReviewPage() {
   const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const groupedLearnerLevels = useMemo(
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
     [viewerProfileType],
@@ -602,6 +610,7 @@ export default function QuickReviewPage() {
     const effectiveRetryCount = finalRetryCount ?? retryCount;
 
     try {
+      setNextStepResponse(null);
       const result = await completeQuickReviewSession(currentSessionId, {
         correctAnswers: score,
         totalQuestions,
@@ -612,6 +621,9 @@ export default function QuickReviewPage() {
         },
       });
       setPersistedResult(result);
+      void getPostSessionNextStep(result.studyPackId)
+        .then(setNextStepResponse)
+        .catch(() => setNextStepResponse(null));
     } catch {
       // Session persistence errors should not block the review experience.
     } finally {
@@ -1000,60 +1012,73 @@ export default function QuickReviewPage() {
             ) : null}
           </div>
 
-          {/* Section 2: Outcome guidance */}
-          {isPerfectScore ? (
-            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-              <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                <Trophy className="h-4 w-4" aria-hidden="true" />
-                <p className="font-medium">Excellent work! You mastered this topic.</p>
-              </div>
-              <p className="text-foreground/75">Try a challenge quiz to test yourself at a harder level.</p>
-            </div>
-          ) : displayedWeakConcepts.length > 0 ? (
-            <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                Weak Areas
-              </p>
-              <p className="text-foreground/75">Focus on these concepts to improve your score:</p>
-              <ul className="list-disc space-y-1 pl-5 text-foreground/85">
-                {displayedWeakConcepts.map((concept) => (
-                  <li key={concept}>{concept}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="text-sm text-foreground/75">{scoreFeedback}</p>
-          )}
+          <PostSessionNextStep
+            response={nextStepResponse}
+            currentPlan={currentPlan}
+            noteId={note?.id ?? null}
+            onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
+          />
 
-          {/* Section 3: Primary CTA */}
-          {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
-            <Link href={`/notes/${note.id}/adaptive-practice`} className="block">
-              <Button type="button" className="w-full">
-                Practice Weak Areas
-              </Button>
-            </Link>
-          ) : showChallengeGuidedCta ? (
-            <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
-              <Button type="button" className="w-full">
-                Take Another Challenge
-              </Button>
-            </Link>
-          ) : (
-            <Button type="button" className="w-full" onClick={handleRetry}>
-              Retry Quick Review
-            </Button>
-          )}
+          {nextStepResponse === null ? (
+            <>
+              {/* Fallback guidance when the server-resolved next step is unavailable. */}
+              {isPerfectScore ? (
+                <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+                  <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                    <Trophy className="h-4 w-4" aria-hidden="true" />
+                    <p className="font-medium">Excellent work! You mastered this topic.</p>
+                  </div>
+                  <p className="text-foreground/75">Try a challenge quiz to test yourself at a harder level.</p>
+                </div>
+              ) : displayedWeakConcepts.length > 0 ? (
+                <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    Weak Areas
+                  </p>
+                  <p className="text-foreground/75">Focus on these concepts to improve your score:</p>
+                  <ul className="list-disc space-y-1 pl-5 text-foreground/85">
+                    {displayedWeakConcepts.map((concept) => (
+                      <li key={concept}>{concept}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground/75">{scoreFeedback}</p>
+              )}
+
+              {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
+                <Link href={`/notes/${note.id}/adaptive-practice`} className="block">
+                  <Button type="button" className="w-full">
+                    Practice Weak Areas
+                  </Button>
+                </Link>
+              ) : showChallengeGuidedCta ? (
+                <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
+                  <Button type="button" className="w-full">
+                    Take Another Challenge
+                  </Button>
+                </Link>
+              ) : (
+                <Button type="button" className="w-full" onClick={handleRetry}>
+                  Retry Quick Review
+                </Button>
+              )}
+            </>
+          ) : null}
 
           {/* Section 4: Secondary actions */}
           <div className="flex flex-col gap-2 sm:flex-row">
-            {showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
+            {nextStepResponse === null && showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
               <Button
                 type="button"
                 variant="outline"
                 className="w-full sm:w-auto"
                 onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
               >
-                {getPaidPlanCtaLabel("PRO")} for Adaptive Practice
+                {getUpgradeCtas(
+                  (currentPlan === "PLUS" || currentPlan === "PRO" ? currentPlan : "FREE") as AppPlanType,
+                  "adaptive-practice",
+                ).primary?.label ?? "Get More Adaptive Practice"}
               </Button>
             ) : null}
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>

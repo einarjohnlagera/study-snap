@@ -41,7 +41,7 @@ Shared ownership rule:
 ### Adaptive Practice
 
 - weak-area follow-up mode
-- Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
+- Free = 3 sessions / month, Plus = 10 sessions / month, Pro = 30 sessions / month (per `PLANS.md`)
 - generated separately from Quick Review and Challenge Quiz
 - targets weak concepts from the latest Quick Review or Challenge Quiz, plus due concepts from `concept_health`
 - due threshold is fixed at 3 days: `last_correct_at` missing or 3+ days old is due
@@ -82,28 +82,26 @@ Current save toast:
 
 ## Result-screen rule
 
-Result screens should guide the next action instead of presenting many equal-weight controls.
+Result screens should guide the next action through the shared ConceptHealth-driven post-session handoff instead of each mode computing bespoke CTAs from the current session only.
 
-Current pattern:
+Shared pattern:
 
-- one dominant primary CTA
+- complete the session first
+- fetch `GET /study-packs/{studyPackId}/next-step`
+- render the shared `<PostSessionNextStep>` component when a response is available
+- keep existing fallback CTA UI available when the fetch fails or returns no usable response
 - answer review and other controls stay secondary
 - `← Back to Note` sits below the action group instead of becoming a primary button
 
-Quick Review:
+Server resolution priority:
 
-- `Practice Weak Areas` when weak concepts exist and Adaptive Practice is available
-- `Take Another Challenge` after strong/perfect results
-- `Practice Again` otherwise
+1. `PRACTICE_WEAK_CONCEPT` — due concepts from `ConceptHealthService.getDueConcepts(...)` route to Adaptive Practice.
+2. `RETRY_REVIEW` — only when no concepts are due, the latest completed session has weak concepts, and the completed mode is Quick Review.
+3. `REVIEW_PACK` — no due concepts and nothing retryable; route to Challenge Quiz or the source note.
 
-Challenge Quiz:
+Quota rule:
 
-- `Practice Weak Concepts` when weak concepts exist
-- otherwise retry / another challenge becomes the main next action
-
-Adaptive Practice:
-
-- `Generate New Set` remains the primary next action
+- when the server recommends `PRACTICE_WEAK_CONCEPT` and the learner has exhausted Adaptive Practice quota, `<PostSessionNextStep>` shows the targeted concepts plus the plan-aware upgrade CTA instead of routing into a limit wall
 
 ## Confidence and feedback
 

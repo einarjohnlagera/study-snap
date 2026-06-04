@@ -14,16 +14,17 @@ It should stay focused on:
 
 ## Current availability
 
-Adaptive Practice is available on Plus and Pro with a monthly quota per `PLANS.md` (canonical):
+Adaptive Practice is available on all learner plans with a monthly quota per `PLANS.md` (canonical):
 
-- Free: unavailable
+- Free: 3 sessions / month
 - Plus: 10 sessions / month
 - Pro: 30 sessions / month
 
 If the user cannot access it:
 
-- Free users: use the shared Plus/Pro upsell flow for locked access
+- Free users who have exhausted their monthly quota: use the shared upgrade flow with "upgrade for more sessions" framing
 - Plus or Pro users who have exhausted the monthly quota: use the dedicated limit-reached state
+- If the `adaptivePracticeProOnly` kill switch is enabled, lower plans should use the shared unavailable/upgrade flow without claiming the feature is normally Pro-only
 
 ## Generation behavior
 
@@ -36,14 +37,16 @@ If the user cannot access it:
 
 Primary CTA:
 
-- `Generate New Set`
+- after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
+- the shared `<PostSessionNextStep>` component renders the dominant next action from ConceptHealth
+- the previous `Generate New Set` action remains as fallback when the next-step fetch fails
 
 Secondary actions:
 
 - `Review Answers`
 - `← Back to Note`
 
-The result screen should stay focused and should not compete with unrelated actions.
+The result screen should stay focused and should not compete with unrelated actions. The targeted weak areas block remains mode-owned; only the primary next-action slot is replaced by the shared post-session component.
 
 ## Session rules
 

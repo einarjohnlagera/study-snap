@@ -153,10 +153,14 @@ export function resolvePaywallPresentation(
       };
     case "ADAPTIVE_PRACTICE_LOCKED":
       return {
-        headline: "Unlock Adaptive Practice",
-        body: "Train on your weak concepts and improve faster with targeted quizzes.",
+        headline: currentPlan === "FREE"
+          ? "You've used your free Adaptive Practice sessions"
+          : "You've used your Adaptive Practice sessions",
+        body: currentPlan === "FREE"
+          ? "Free includes a small monthly taste of targeted weak-area practice. Upgrade for more sessions and keep closing your learning loop."
+          : "Upgrade for more targeted weak-area practice sessions and keep improving without waiting for next month.",
         feature: "adaptive",
-        primaryPlanType: "PRO",
+        primaryPlanType: currentPlan === "FREE" ? "PLUS" : "PRO",
         secondaryPlanType: "PLUS",
         primaryCtaLabel: PRIMARY_CTA_LABEL,
         secondaryCtaLabel: SECONDARY_CTA_LABEL,

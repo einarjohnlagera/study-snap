@@ -103,6 +103,7 @@ public class StudySnapProperties {
         private int freeMonthlyChallengeQuizLimit = 5;
         private int plusMonthlyChallengeQuizLimit = 25;
         private int proMonthlyChallengeQuizLimit = 50;
+        private int freeMonthlyAdaptivePracticeLimit = 3;
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
         private int proMonthlyInterviewPracticeLimit = 10;
@@ -160,7 +161,7 @@ public class StudySnapProperties {
             return switch (normalizedPlanType) {
                 case PRO -> proMonthlyAdaptivePracticeLimit;
                 case PLUS -> plusMonthlyAdaptivePracticeLimit;
-                case FREE -> 0;
+                case FREE -> freeMonthlyAdaptivePracticeLimit;
             };
         }
 
@@ -231,11 +232,7 @@ public class StudySnapProperties {
         }
 
         public boolean isAdaptivePracticeAvailable(PlanType planType) {
-            PlanType normalizedPlanType = normalizePlanType(planType);
-            if (!adaptivePracticeProOnly) {
-                return normalizedPlanType != PlanType.FREE;
-            }
-            return normalizedPlanType == PlanType.PRO;
+            return resolveMonthlyAdaptivePracticeLimit(planType) > 0;
         }
 
         public boolean isDifficultySelectionAvailable(PlanType planType) {

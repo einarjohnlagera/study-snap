@@ -154,6 +154,32 @@ export type TodayFocusResponse = {
   actionLabel: string;
 };
 
+export type PostSessionNextStepResponse = {
+  type: Extract<TodayFocusType, "PRACTICE_WEAK_CONCEPT" | "RETRY_REVIEW" | "REVIEW_PACK">;
+  studyPackId: string;
+  noteId: string | null;
+  title: string;
+  message: string;
+  actionLabel: string;
+  actionHref: string;
+  concepts: string[];
+  adaptivePracticeAvailable: boolean;
+  adaptivePracticeRemaining: number | null;
+};
+
+export type SubjectProgressEntry = {
+  subject: string;
+  totalConcepts: number;
+  masteredConcepts: number;
+  dueConcepts: number;
+  notPracticedConcepts: number;
+  masteryPercentage: number;
+};
+
+export type ProgressReportResponse = {
+  subjects: SubjectProgressEntry[];
+};
+
 export type DashboardConceptInsightResponse = {
   conceptName: string;
   accuracyPercentage: number;
@@ -274,6 +300,7 @@ export type AnalyticsEventType =
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"
   | "LANDING_CTA_CLICKED"
+  | "GUARDIAN_INTEREST"
   | "DEMO_OPENED"
   | "SIGNUP_STARTED"
   | "SIGNUP_COMPLETED"
@@ -2140,6 +2167,30 @@ export async function getConceptHealth(studyPackId: string): Promise<ConceptHeal
   return parseApiResponse<ConceptHealthEntry[]>(response, "Could not load concept review signals.");
 }
 
+export async function getPostSessionNextStep(studyPackId: string): Promise<PostSessionNextStepResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/next-step`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<PostSessionNextStepResponse>(response, "Could not load the next study step.");
+}
+
+export async function getProgressReport(): Promise<ProgressReportResponse> {
+  const response = await fetchWithAuth(
+    "/me/progress",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ProgressReportResponse>(response, "Could not load your progress report.");
+}
+
 export async function updateStudyPackTags(studyPackId: string, tags: string[]): Promise<StudyPackResponse> {
   const response = await fetchWithAuth(
     `/study-packs/${studyPackId}/tags`,
@@ -3414,9 +3465,10 @@ export async function updateNoteVisibility(noteId: string, visibility: NoteVisib
   return parseApiResponse<NoteResponse>(response, "Could not update note visibility.");
 }
 
-export async function copyNote(noteId: string): Promise<NoteResponse> {
+export async function copyNote(noteId: string, options?: { includeStudyPack?: boolean }): Promise<NoteResponse> {
+  const params = options?.includeStudyPack === false ? "?includeStudyPack=false" : "";
   const response = await fetchWithAuth(
-    `/notes/${noteId}/copy`,
+    `/notes/${noteId}/copy${params}`,
     {
       method: "POST",
       headers: buildAuthHeaders(),

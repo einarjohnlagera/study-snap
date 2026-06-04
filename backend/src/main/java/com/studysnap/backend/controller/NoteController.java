@@ -159,10 +159,11 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteResponse copyNote(
             @PathVariable String id,
+            @RequestParam(required = false, defaultValue = "true") boolean includeStudyPack,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        return noteService.copyNote(id, userId);
+        return noteService.copyNote(id, userId, includeStudyPack);
     }
 
     @PostMapping("/copy-on-signup")
