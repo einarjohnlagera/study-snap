@@ -160,6 +160,7 @@ public class ChallengeQuizService {
     private final ActivityTrackingService activityTrackingService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final ConceptHealthService conceptHealthService;
 
     @Transactional
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
@@ -453,11 +454,16 @@ public class ChallengeQuizService {
         session.setScorePercentage(scorePercentage);
         session.setRetryCount(0);
         session.setDurationSeconds(request.durationSeconds());
-        session.setCompletedAt(OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        session.setCompletedAt(now);
         session.setSessionState(markSessionStateCompleted(session.getSessionState()));
         session.setSessionMetadata(buildCompletionSessionMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(statistics.conceptBreakdown());
+        if (!correctConcepts.isEmpty()) {
+            conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
+        }
         if (MODE_BOARD_EXAM.equals(extractMode(saved.getSessionState()))
                 && QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
             examQuestionPoolService.markServed(

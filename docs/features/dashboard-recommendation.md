@@ -94,8 +94,8 @@ Display:
 
 Behavior:
 
-- Pro users get `Practice Weak Concepts` → Adaptive Practice on the source note
-- Free and Plus users get `Revisit Note` → source note page, so they can review material for their weakest concept without an Adaptive Practice session
+- Users with Adaptive Practice access and remaining quota can get `Practice Weak Concepts` → Adaptive Practice on the source note
+- When Adaptive Practice is unavailable or quota is exhausted, recommendations should fall back to a safe note-review path or the shared upgrade flow rather than implying the user has no next step
 - The `Unlock Adaptive Practice` paywall button appears only when weak concepts exist but no source note can be resolved (`practiceNoteId` is null)
 
 ## This Week
@@ -183,5 +183,5 @@ Session-history alignment:
 
 - Keep copy calm and non-judgmental.
 - Keep actions explicit (`Resume Review`, `Practice Weak Areas`, `Open Note`).
-- For Free users, do not emit adaptive-practice recommendations as actionable starts.
+- Free users may receive Adaptive Practice recommendations while their monthly allowance remains; when quota is exhausted, route to the quota-aware fallback or upgrade flow instead of a dead-end start.
 - Keep recommendation logic non-blocking; dashboard still renders if recommendation data is unavailable.
