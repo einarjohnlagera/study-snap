@@ -10,6 +10,12 @@
 #     in real abuse.
 #   - Words that are only situationally offensive (e.g., "bobo" can be banter)
 #     are excluded. We block clearly inappropriate terms only.
+#
+# Removed false positives:
+#   - hayop/hayup  — means "animal" in Filipino; common in biology/science notes
+#   - puke         — English word for vomit; was incorrectly placed in this file
+#   - putang ina   — dead entry; tokenizer splits on spaces so this two-word
+#                    phrase never matches. "putang" as a standalone entry handles it.
 
 # explicit
 pota
@@ -18,21 +24,17 @@ putang
 putangina
 potangnia
 tangina
-putang ina
 puta
 tanginamo
 gago
 gaga
 ulol
 inutil
-hayop
-hayup
 kantot
 kantotan
 chupa
 titi
 pekpek
-puke
 burat
 bayag
 iyot
