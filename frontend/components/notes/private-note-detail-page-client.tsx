@@ -1671,6 +1671,21 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         >
                           <ResponsiveActionContent action="share" label={sharing ? "Sharing..." : "Share"} showTextOnMobile iconClassName="h-4 w-4" />
                         </button>
+                        {isStudyPackReady ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="motion-lift flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                            onClick={() => {
+                              setNoteActionsMenuOpen(false);
+                              handleOpenRegenerateConfirm();
+                            }}
+                            disabled={isGeneratingStudyPack || generating}
+                          >
+                            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                            <span>Regenerate Study Pack</span>
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           role="menuitem"
@@ -1848,6 +1863,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <GuidanceTip
                 tipId={copiedStudyPackGuidance.id}
                 message={copiedStudyPackGuidance.message}
+                action={{ label: "Regenerate", onClick: handleOpenRegenerateConfirm }}
               />
             ) : null}
             {!isInlineMetadataEditMode ? (
@@ -1915,16 +1931,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       {hasAdaptiveTargets ? (
                         <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />
                       ) : null}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="gap-2"
-                        onClick={handleOpenRegenerateConfirm}
-                        disabled={isGeneratingStudyPack || generating}
-                      >
-                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                        <span>Regenerate Study Pack</span>
-                      </Button>
                       {profileType === "PROFESSIONAL" && currentPlan === "PRO" ? (
                         <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/interview-practice`)} action="interviewPractice" label="Interview Practice" />
                       ) : null}
