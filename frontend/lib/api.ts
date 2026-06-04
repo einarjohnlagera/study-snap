@@ -167,6 +167,19 @@ export type PostSessionNextStepResponse = {
   adaptivePracticeRemaining: number | null;
 };
 
+export type SubjectProgressEntry = {
+  subject: string;
+  totalConcepts: number;
+  masteredConcepts: number;
+  dueConcepts: number;
+  notPracticedConcepts: number;
+  masteryPercentage: number;
+};
+
+export type ProgressReportResponse = {
+  subjects: SubjectProgressEntry[];
+};
+
 export type DashboardConceptInsightResponse = {
   conceptName: string;
   accuracyPercentage: number;
@@ -2163,6 +2176,18 @@ export async function getPostSessionNextStep(studyPackId: string): Promise<PostS
     true,
   );
   return parseApiResponse<PostSessionNextStepResponse>(response, "Could not load the next study step.");
+}
+
+export async function getProgressReport(): Promise<ProgressReportResponse> {
+  const response = await fetchWithAuth(
+    "/me/progress",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ProgressReportResponse>(response, "Could not load your progress report.");
 }
 
 export async function updateStudyPackTags(studyPackId: string, tags: string[]): Promise<StudyPackResponse> {

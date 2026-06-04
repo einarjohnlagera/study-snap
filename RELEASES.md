@@ -11,10 +11,10 @@ Theme: turn NoteLib into a study companion that shows direction and progress —
 - **Free Adaptive Practice allowance** — Free users now get `3` Adaptive Practice sessions per month, removing the paywall that broke the weak-area learning loop after Quick Review or Challenge Quiz. Backend plan limits, feature gates, plan comparison copy, paywall messaging, and mode-access surfaces now treat Adaptive Practice as quota-gated instead of Pro-only.
 - **Quick Review and Challenge Quiz ConceptHealth feeder** — Quick Review and Challenge Quiz, including Board Exam Mode, now feed ConceptHealth on completion; the mastery/due-concept spine and dashboard Today's Focus now reflect all practice modes, not just Adaptive Practice.
 - **ConceptHealth-driven post-session next-step handoff** — after Quick Review, Challenge Quiz (including Board Exam Mode), and Adaptive Practice, result screens resolve a spaced-repetition-aware next action from the concept mastery spine rather than client-side wrong-answer lists; the handoff is unified across all four completion surfaces.
+- **"My Progress" report** — per-subject ConceptHealth mastery view at `/progress`; shows mastered, due, and not-yet-practiced concept counts per subject across all owned Study Packs, with the dashboard Focus Areas card linking to the full report.
 
 ### 🔲 Pending
 
-- **"My Progress" report** — concept mastery aggregated by subject/topic (Phase 2)
 - **Full study-pack copying** — copies include generated content for instant value, with optional "tailor to my level" regenerate
 - **Guardian demand test** — landing CTA + `GUARDIAN_INTEREST` signal (waitlist, not the flow)
 
