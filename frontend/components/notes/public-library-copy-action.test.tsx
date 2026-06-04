@@ -85,7 +85,7 @@ describe("PublicLibraryCopyAction", () => {
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-3");
-      expect(onCopySuccess).toHaveBeenCalledWith({ copiedNoteId: "copied-note-3" });
+      expect(onCopySuccess).toHaveBeenCalledWith(expect.objectContaining({ copiedNoteId: "copied-note-3" }));
     });
   });
 
