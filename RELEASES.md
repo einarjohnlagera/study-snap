@@ -9,6 +9,7 @@ Theme: turn NoteLib into a study companion that shows direction and progress —
 ### ✅ Shipped
 
 - **Free Adaptive Practice allowance** — Free users now get `3` Adaptive Practice sessions per month, removing the paywall that broke the weak-area learning loop after Quick Review or Challenge Quiz. Backend plan limits, feature gates, plan comparison copy, paywall messaging, and mode-access surfaces now treat Adaptive Practice as quota-gated instead of Pro-only.
+- **Quick Review and Challenge Quiz ConceptHealth feeder** — Quick Review and Challenge Quiz, including Board Exam Mode, now feed ConceptHealth on completion; the mastery/due-concept spine and dashboard Today's Focus now reflect all practice modes, not just Adaptive Practice.
 
 ### 🔲 Pending
 

@@ -161,6 +161,13 @@ Secondary actions:
 
 If Adaptive Practice is not available for the user, the result flow should not silently route away; it should respect the current gated path.
 
+## ConceptHealth
+
+- on completion, Challenge Quiz records concepts answered fully correctly in the session to `ConceptHealth`
+- Board Exam Mode uses the same Challenge completion path and records fully correct concepts the same way
+- a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
+- weak or partially correct concepts are not recorded as mastered
+
 ## Learner level control
 
 Challenge Quiz result screens expose the same learner-level adjustment control used by Quick Review.

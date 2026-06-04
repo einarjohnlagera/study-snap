@@ -61,6 +61,8 @@ class QuickReviewSessionServiceTest {
     private AnalyticsService analyticsService;
     @Mock
     private SubscriptionService subscriptionService;
+    @Mock
+    private ConceptHealthService conceptHealthService;
 
     private QuickReviewSessionService quickReviewSessionService;
 
@@ -73,7 +75,8 @@ class QuickReviewSessionServiceTest {
                 activityTrackingService,
                 analyticsService,
                 subscriptionService,
-                featureGateService
+                featureGateService,
+                conceptHealthService
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -281,6 +284,45 @@ class QuickReviewSessionServiceTest {
         QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
 
         assertThat(response.weakConcepts()).containsExactly("Light Reactions", "Calvin Cycle", "Light Reactions");
+    }
+
+    @Test
+    void completeSession_recordsOnlyFullyCorrectConceptsToConceptHealth() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setTotalQuestions(3);
+        session.setSessionState(Map.of(
+                "selectedChoices",
+                Map.of(
+                        "0", "A",
+                        "1", "A",
+                        "2", "D"
+                )
+        ));
+        StudyPackEntity studyPack = StudyPackEntityBuilder.aStudyPack()
+                .withId(studyPackId)
+                .withOwnerUserId(userId)
+                .withQuiz(List.of(
+                        new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Cells", "Explanation 1"),
+                        new QuizItem("Q2", List.of("A", "B", "C", "D"), "B", "Cells", "Explanation 2"),
+                        new QuizItem("Q3", List.of("A", "B", "C", "D"), "D", "Genetics", "Explanation 3")
+                ))
+                .build();
+        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(2, 3, 0, 120, null);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("Genetics"),
+                session.getCompletedAt()
+        );
     }
 
     @Test

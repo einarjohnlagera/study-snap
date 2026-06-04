@@ -71,6 +71,12 @@ Meaning:
 - Adaptive Practice is available to Free users up to 3 sessions / month, then opens the shared upgrade flow for more sessions
 - when Adaptive Practice is unavailable, Quick Review falls back to `Practice Again` as the main next step
 
+## ConceptHealth
+
+- on completion, Quick Review records concepts answered fully correctly in the session to `ConceptHealth`
+- a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
+- weak or partially correct concepts are not recorded as mastered
+
 ## Review history
 
 - completed Quick Review sessions appear in Note Detail session history
