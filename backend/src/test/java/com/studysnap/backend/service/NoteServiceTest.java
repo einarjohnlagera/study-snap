@@ -10,9 +10,12 @@ import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
+import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
@@ -35,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -101,6 +105,8 @@ class NoteServiceTest {
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
         lenient().when(generatedQuizRepository.findByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(generatedQuizRepository.findLatestTargetLearnerLevelByNoteId(any())).thenReturn(Optional.empty());
+        lenient().when(studyPackRepository.findByNoteId(any())).thenReturn(Optional.empty());
+        lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());
@@ -310,24 +316,21 @@ class NoteServiceTest {
     }
 
     @Test
-    void update_generatedNote_rejectsContentChange() {
+    void update_generatedNote_allowsContentChange() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
-        NoteEntity generatedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "locked content");
+        NoteEntity generatedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "old content");
         UserEntity owner = buildUser(ownerUserId, "owner@example.com");
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(generatedNote));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
         UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", "Nursing", List.of("tag"), null, "edited content");
 
+        NoteResponse response = noteService.update(noteId.toString(), request, ownerUserId);
 
-        String id = noteId.toString();
-        assertThatThrownBy(() -> noteService.update(id, request, ownerUserId))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("NOTE_CONTENT_LOCKED");
-
-        verify(noteRepository, never()).save(any(NoteEntity.class));
+        assertThat(generatedNote.getContent()).isEqualTo("edited content");
+        assertThat(response.content()).isEqualTo("edited content");
+        verify(noteRepository).save(generatedNote);
     }
 
     @Test
@@ -355,6 +358,7 @@ class NoteServiceTest {
         assertThat(saved.getCopiedFromPublic()).isFalse();
         assertThat(copied.copiedFromUserId()).isNull();
         assertThat(copied.copiedFromPublic()).isFalse();
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
     }
 
     @Test
@@ -368,13 +372,16 @@ class NoteServiceTest {
         source.setCourseProgram("Humanities");
         source.setTags(new String[]{"ww2"});
         source.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
+        StudyPackEntity sourceStudyPack = buildSourceStudyPack(sourceNoteId);
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(studyPackRepository.findByNoteId(sourceNoteId)).thenReturn(Optional.of(sourceStudyPack));
 
         NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId);
 
         ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
         verify(noteRepository).save(captor.capture());
         NoteEntity saved = captor.getValue();
+        assertThat(saved.getStatus()).isEqualTo(NoteStatus.GENERATED);
         assertThat(saved.getCopiedFromNoteId()).isEqualTo(sourceNoteId);
         assertThat(saved.getCopiedFromUserId()).isEqualTo(sourceOwnerUserId);
         assertThat(saved.getCopiedFromTitle()).isEqualTo("Public source");
@@ -388,7 +395,53 @@ class NoteServiceTest {
         assertThat(copied.copiedFromTitle()).isEqualTo("Public source");
         assertThat(copied.copiedFromPublic()).isTrue();
         assertThat(copied.copiedAt()).isNotNull();
+        assertThat(copied.studyPackStatus()).isEqualTo("STUDY_PACK_READY");
+        assertThat(copied.summary()).isEqualTo("Copied summary");
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        StudyPackEntity copiedStudyPack = studyPackCaptor.getValue();
+        assertThat(copiedStudyPack.getId()).isNotEqualTo(sourceStudyPack.getId());
+        assertThat(copiedStudyPack.getOwnerUserId()).isEqualTo(ownerUserId);
+        assertThat(copiedStudyPack.getNoteId()).isEqualTo(saved.getId());
+        assertThat(copiedStudyPack.getInputType()).isEqualTo(sourceStudyPack.getInputType());
+        assertThat(copiedStudyPack.getTitle()).isEqualTo(sourceStudyPack.getTitle());
+        assertThat(copiedStudyPack.getSummary()).isEqualTo(sourceStudyPack.getSummary());
+        assertThat(copiedStudyPack.getSubject()).isEqualTo(sourceStudyPack.getSubject());
+        assertThat(copiedStudyPack.getKeyConcepts()).containsExactlyElementsOf(sourceStudyPack.getKeyConcepts());
+        assertThat(copiedStudyPack.getQuiz()).containsExactlyElementsOf(sourceStudyPack.getQuiz());
+        assertThat(copiedStudyPack.getTags()).containsExactly(sourceStudyPack.getTags());
+        assertThat(copiedStudyPack.getModelTier()).isEqualTo(sourceStudyPack.getModelTier());
+        assertThat(copiedStudyPack.getModelUsed()).isEqualTo(sourceStudyPack.getModelUsed());
+        assertThat(copiedStudyPack.getStatus()).isEqualTo(StudyPackStatus.DONE);
+        assertThat(copiedStudyPack.getAnonId()).isNull();
+        assertThat(copiedStudyPack.getShareToken()).isNull();
+        assertThat(copiedStudyPack.getSourceText()).isNull();
+        assertThat(copiedStudyPack.getInputTokens()).isNull();
+        assertThat(copiedStudyPack.getOutputTokens()).isNull();
+        assertThat(copiedStudyPack.getCachedInputTokens()).isNull();
+        assertThat(copiedStudyPack.getEstimatedCost()).isNull();
+        assertThat(copiedStudyPack.getOcrConfidence()).isNull();
+        assertThat(copiedStudyPack.getErrorCode()).isNull();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
+    }
+
+    @Test
+    void copyPublicNoteWithoutStudyPack_remainsDraft() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceOwnerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.DRAFT, NoteVisibility.PUBLIC, "source content");
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(studyPackRepository.findByNoteId(sourceNoteId)).thenReturn(Optional.empty());
+
+        NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(NoteStatus.DRAFT);
+        assertThat(copied.studyPackStatus()).isEqualTo("DRAFT");
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
     }
 
     @Test
@@ -1193,6 +1246,33 @@ class NoteServiceTest {
         studyPack.setNoteId(noteId);
         studyPack.setSummary(summary);
         studyPack.setQuiz(List.of(new QuizItem("Question", List.of("A", "B"), 0, "Concept", "Explanation")));
+        return studyPack;
+    }
+
+    private StudyPackEntity buildSourceStudyPack(UUID noteId) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(UUID.randomUUID());
+        studyPack.setOwnerUserId(UUID.randomUUID());
+        studyPack.setNoteId(noteId);
+        studyPack.setInputType(InputType.TEXT);
+        studyPack.setTitle("Copied title");
+        studyPack.setSummary("Copied summary");
+        studyPack.setSubject("Copied subject");
+        studyPack.setKeyConcepts(List.of("Concept A", "Concept B"));
+        studyPack.setQuiz(List.of(new QuizItem("Question", List.of("A", "B"), 0, "Concept A", "Explanation")));
+        studyPack.setTags(new String[]{"copied", "ready"});
+        studyPack.setModelTier(ModelTier.PREMIUM);
+        studyPack.setModelUsed("gpt-4.1");
+        studyPack.setStatus(StudyPackStatus.DONE);
+        studyPack.setAnonId("anon-source");
+        studyPack.setShareToken("share-source");
+        studyPack.setSourceText("source text");
+        studyPack.setInputTokens(10);
+        studyPack.setOutputTokens(20);
+        studyPack.setCachedInputTokens(5);
+        studyPack.setEstimatedCost(new BigDecimal("0.0100"));
+        studyPack.setOcrConfidence(0.9);
+        studyPack.setErrorCode("SOURCE_ERROR");
         return studyPack;
     }
 

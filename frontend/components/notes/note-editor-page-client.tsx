@@ -319,7 +319,6 @@ export function NoteEditorPageClient({
   }, []);
 
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
-  const contentLocked = isEditMode && studyPackStatus === "STUDY_PACK_READY";
   const hasGeneratedStudyPack = studyPackStatus === "STUDY_PACK_READY";
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
@@ -362,15 +361,6 @@ export function NoteEditorPageClient({
     const resetImportInput = () => {
       setImportFileInputKey((previous) => previous + 1);
     };
-
-    if (contentLocked) {
-      setImportFile(null);
-      resetImportInput();
-      setImportFlowState("failure");
-      setImportStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
-      showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
-      return;
-    }
 
     if (!file) {
       setImportFile(null);
@@ -450,7 +440,7 @@ export function NoteEditorPageClient({
       resetImportInput();
       showToast(resolvedMessage, "error");
     }
-  }, [appendExtractedTextToContent, contentLocked, currentPlan, openLockedFeaturePaywall, showToast]);
+  }, [appendExtractedTextToContent, currentPlan, openLockedFeaturePaywall, showToast]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -1001,13 +991,13 @@ export function NoteEditorPageClient({
         ? "Upload your material first. You can add details later, then generate a Study Pack to open quiz practice first."
         : "Start with your note content. You can add details now or later, then generate a Study Pack when you're ready.";
   const studyPackMessage = hasGeneratedStudyPack
-    ? "This note already has a Study Pack. Save metadata changes here, or make a copy to create a new editable version."
+    ? "This note already has a Study Pack. You can edit the source note, then regenerate the Study Pack from the note detail page."
     : isEditMode
       ? "Generate a Study Pack from this note when you are ready."
       : "Save your note for later, or generate immediately when the content is ready.";
   const actionLabel = hasGeneratedStudyPack ? "Make a Copy" : generateLabel;
   const actionHelperText = hasGeneratedStudyPack
-    ? "Make a copy to create a new editable version while keeping this Study Pack intact."
+    ? "Make a separate copy if you want to branch this note without changing the current source."
     : generateHelperText;
   const actionLoadingLabel = hasGeneratedStudyPack ? "Copying..." : generatingLabel;
   const showFirstStudyHint = !isEditMode && firstStudyStep === "create-note";
@@ -1132,8 +1122,7 @@ export function NoteEditorPageClient({
         contentSectionRef={generatedContentSectionRef}
         contentAnimationKey={generatedContentRefreshToken}
         contentStatusText={contentStatusText}
-        disableContentEditing={contentLocked}
-        contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
+        disableContentEditing={false}
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}
         firstStudyHintVisible={showFirstStudyHint}
         autoFocusContent={autoFocusContent}

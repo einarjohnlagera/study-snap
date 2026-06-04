@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
 import {
   completeProductOnboarding,
@@ -695,7 +695,6 @@ describe("NoteEditorPageClient", () => {
       target: { value: "Photosynthesis" },
     });
 
-    expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate Note" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
@@ -776,7 +775,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("option", { name: "Professional" })).toBeInTheDocument();
   });
 
-  it("locks content editing for generated notes but keeps metadata fields editable", async () => {
+  it("allows content editing for generated notes while keeping make-a-copy available", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -799,10 +798,9 @@ describe("NoteEditorPageClient", () => {
     expect(titleInput).not.toBeDisabled();
     expect(subjectInput).not.toBeDisabled();
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
-    expect(contentInput).toHaveAttribute("readonly");
-    expect(
-      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."),
-    ).toBeInTheDocument();
+    expect(contentInput).not.toHaveAttribute("readonly");
+    fireEvent.change(contentInput, { target: { value: "Edited ready-note content" } });
+    expect(contentInput).toHaveValue("Edited ready-note content");
     expect(screen.getByRole("button", { name: "Save Note" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
@@ -961,7 +959,8 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Saved before checkout" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
     fireEvent.click(await screen.findByRole("button", { name: /^Plus / }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue with Plus" }));
+    const paywall = await screen.findByRole("dialog", { name: "You've reached your Study Pack limit" });
+    fireEvent.click(within(paywall).getByRole("button", { name: "Get More Study Packs" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalled();

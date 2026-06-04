@@ -69,7 +69,7 @@ function VerifyEmailPageContent() {
           publicNoteId: copyIntentNoteId,
         },
       });
-      router.replace(buildCopiedNotePath(copied.noteId, "quick-review"));
+      router.replace(buildCopiedNotePath(copied.noteId, "quick-review", { skipGenerate: true }));
       return true;
     } catch {
       clearCopyIntentCookie();

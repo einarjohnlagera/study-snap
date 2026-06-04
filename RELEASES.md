@@ -12,10 +12,11 @@ Theme: turn NoteLib into a study companion that shows direction and progress —
 - **Quick Review and Challenge Quiz ConceptHealth feeder** — Quick Review and Challenge Quiz, including Board Exam Mode, now feed ConceptHealth on completion; the mastery/due-concept spine and dashboard Today's Focus now reflect all practice modes, not just Adaptive Practice.
 - **ConceptHealth-driven post-session next-step handoff** — after Quick Review, Challenge Quiz (including Board Exam Mode), and Adaptive Practice, result screens resolve a spaced-repetition-aware next action from the concept mastery spine rather than client-side wrong-answer lists; the handoff is unified across all four completion surfaces.
 - **"My Progress" report** — per-subject ConceptHealth mastery view at `/progress`; shows mastered, due, and not-yet-practiced concept counts per subject across all owned Study Packs, with the dashboard Focus Areas card linking to the full report.
+- **Full Study Pack copying** — copying a public note now includes the generated summary, key concepts, and quiz; the copied note arrives as Study Pack Ready when the source has a Study Pack.
+- **Study Pack regeneration** — users can now explicitly regenerate the Study Pack on any of their own notes; note content is editable again, and regeneration updates the existing pack in-place while preserving session history.
 
 ### 🔲 Pending
 
-- **Full study-pack copying** — copies include generated content for instant value, with optional "tailor to my level" regenerate
 - **Guardian demand test** — landing CTA + `GUARDIAN_INTEREST` signal (waitlist, not the flow)
 
 ---

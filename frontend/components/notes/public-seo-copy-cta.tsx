@@ -74,7 +74,9 @@ export function PublicSeoCopyCta({
       try {
         const copied = await copyNote(noteId);
         if (!cancelled) {
-          router.replace(buildCopiedNotePath(copied.id, requestedRedirectTarget));
+          router.replace(buildCopiedNotePath(copied.id, requestedRedirectTarget, {
+            skipGenerate: copied.studyPackStatus === "STUDY_PACK_READY",
+          }));
         }
       } catch (error) {
         if (!cancelled) {
@@ -111,7 +113,9 @@ export function PublicSeoCopyCta({
     setCopyError(null);
     try {
       const copied = await copyNote(noteId);
-      router.push(buildCopiedNotePath(copied.id, redirectTarget));
+      router.push(buildCopiedNotePath(copied.id, redirectTarget, {
+        skipGenerate: copied.studyPackStatus === "STUDY_PACK_READY",
+      }));
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : "Could not copy note.");
       setCopying(false);

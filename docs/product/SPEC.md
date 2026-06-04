@@ -70,11 +70,11 @@ Generated Study Pack outputs include:
 - Challenge Quiz
 - Adaptive Practice
 
-## Versioning Model (Copy)
+## Versioning Model (Copy + Regeneration)
 
-NoteLib does not overwrite existing generated content.
+The Study Pack is the generated version of a note. Regeneration is explicit and user-confirmed; NoteLib must never auto-regenerate a Study Pack after note edits.
 
-Users make a copy of a Note, edit that copy, and generate a new Study Pack from the copied Note.
+Users can edit the source note after a Study Pack exists. When they choose `Regenerate Study Pack` and confirm, NoteLib updates the existing Study Pack row in-place with a new summary, key concepts, and quiz. Existing quiz/session history remains linked through the same Study Pack id.
 
 Copy behavior:
 
@@ -84,14 +84,16 @@ Copy behavior:
   - subject
   - tags
   - note content
-- Copy does not include AI/generated history fields:
+- Owner self-copy does not include AI/generated history fields:
   - summary
   - key concepts
   - quizzes
   - performance history
   - quiz sessions
+- Public-note copy exception: copying a public note also copies the linked Study Pack when one exists. The copied note arrives as `Study Pack Ready` with the generated summary, key concepts, and quiz available immediately.
+- If the public source note has no Study Pack, the copy remains a Draft.
 
-This supports iterative learning and avoids accidental overwrites.
+This supports instant value from public notes while keeping regeneration explicit and user-controlled.
 
 ## User Flow
 
@@ -102,9 +104,9 @@ This supports iterative learning and avoids accidental overwrites.
 5. Note Detail shows `Generating`, then either `Study Pack Ready` or `Failed`.
 6. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice when the Study Pack is ready.
 7. Note Detail keeps recent completed quiz sessions so users can reopen a past attempt, review answers, and inspect concept performance over time.
-8. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
+8. If the user wants to improve the Study Pack, they edit the source note and explicitly confirm `Regenerate Study Pack`; the existing Study Pack is updated in-place.
 9. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
-10. Public notes can be copied into Library as new Draft notes.
+10. Public notes can be copied into Library; if the source has a Study Pack, the copy arrives as Study Pack Ready.
 
 ### Generate Note from topic
 

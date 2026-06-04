@@ -8,7 +8,7 @@ import { useRouteProgress } from "@/components/navigation/route-progress-provide
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
-import { copyNote, trackAnalyticsEvent } from "@/lib/api";
+import { copyNote, trackAnalyticsEvent, type NoteStudyPackStatus } from "@/lib/api";
 import { buildPublicCopyIntentQuery, setCopyIntentCookie } from "@/lib/public-note-copy";
 
 const SAVE_BUTTON_LABEL = "Save";
@@ -20,12 +20,13 @@ const AUTH_MODAL_TITLE = "Save this note";
 const AUTH_MODAL_BODY = "Create an account or log in to save notes to your library.";
 const AUTH_LOGIN_LABEL = "Log In";
 const AUTH_SIGNUP_LABEL = "Sign Up";
+const COPIED_NOTE_FALLBACK_STUDY_PACK_STATUS: NoteStudyPackStatus = "DRAFT";
 
 type PublicLibraryCopyActionProps = {
   noteId: string;
   isOwner: boolean;
   existingCopyNoteId?: string | null;
-  onCopySuccess: (payload: { copiedNoteId: string }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; studyPackStatus: NoteStudyPackStatus }) => void;
 };
 
 export function PublicLibraryCopyAction({
@@ -78,7 +79,10 @@ export function PublicLibraryCopyAction({
     setCopyError(null);
     try {
       const copied = await copyNote(noteId);
-      onCopySuccess({ copiedNoteId: copied.id });
+      onCopySuccess({
+        copiedNoteId: copied.id,
+        studyPackStatus: copied.studyPackStatus ?? COPIED_NOTE_FALLBACK_STUDY_PACK_STATUS,
+      });
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : COPY_ERROR_MESSAGE);
       setCopying(false);

@@ -206,7 +206,7 @@ function AuthPageContent() {
             },
           });
           startRouteProgress();
-          router.replace(buildCopiedNotePath(copied.noteId, "quick-review"));
+          router.replace(buildCopiedNotePath(copied.noteId, "quick-review", { skipGenerate: true }));
           router.refresh();
           return;
         } catch {

@@ -334,7 +334,9 @@ Interaction rules:
 - `Start Review` is the primary CTA in the modal
 - `View Note` is the secondary CTA
 - `View Note` replaces generic `Open` wording for copied-note navigation
-- `Start Review` may route through copied-note generation first when the copied note is still a draft
+- copying a public note with a linked Study Pack copies the generated summary, key concepts, and quiz; the copied note arrives as Study Pack Ready
+- `Start Review` routes directly to Quick Review for Study Pack Ready copies
+- `Start Review` may route through copied-note generation first only when the public source has no Study Pack and the copied note is still a draft
 - modal body copy should stay short:
   - `You can start reviewing now or come back later from your library.`
 - modal/sheet header should feel success-oriented but minimal:
@@ -439,14 +441,18 @@ Signed-in users see the full experience:
 - `View Full Notes →` CTA inside the Summary section that deep-links to `#full-notes`
 - the public note detail page should mount the shared App Router hash-scroll pattern so direct `#full-notes` visits auto-scroll after the page content mounts
 
-### Copy-and-generate funnel handoff (new-signup path)
+### Copy-and-review funnel handoff (new-signup path)
 
 When a guest clicks "Create your own Study Pack" on a public note, the intent is preserved through signup via URL query params:
 
 1. Guest clicks CTA → redirected to `/signup?redirectTo=/public/library/{subject}/{slug}?copy=1&intent=generate`
 2. After signup, the app returns to the public note page with `?copy=1&intent=generate`
-3. `PublicSeoCopyCta` auto-runs `copyNote` then redirects to `/notes/{copiedId}?copied=1&generate=1`
-4. The private note detail page reads `generate=1` and calls `handleGenerate`
+3. `PublicSeoCopyCta` auto-runs `copyNote`
+4. If the copied note is already Study Pack Ready, redirect without `generate=1`; Quick Review intents keep `startQuickReview=1`
+5. If the copied note is still a Draft, redirect to `/notes/{copiedId}?copied=1&generate=1`
+6. The private note detail page reads `generate=1` and calls `handleGenerate`
+
+`copy-on-signup` also delegates to the same backend copy behavior. It queues generation only for Draft copies; Study Pack Ready copies skip generation and keep the Quick Review handoff.
 
 **Email verification pending state:**
 

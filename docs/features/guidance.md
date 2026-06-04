@@ -65,6 +65,7 @@ Current active one-time tips:
 | tipId | Surface | Trigger | Message |
 |---|---|---|---|
 | `note-detail-generate-study-pack` | Note Detail draft state | always | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
+| `copied-study-pack-regenerate-hint` | Note Detail copied ready state | `copiedFromPublic === true` and `studyPackStatus === STUDY_PACK_READY` | `This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.` |
 | `note-detail-try-quiz` | Note Detail performance section | always | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
 | `sessions-export-hint` | Session History empty state | always | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
 | `public-library-intro` | Public Library | always | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |

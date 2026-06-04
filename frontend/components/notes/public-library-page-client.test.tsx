@@ -373,7 +373,7 @@ describe("PublicLibraryPageClient", () => {
         copyCount: 4,
       }),
     ]));
-    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9", studyPackStatus: "STUDY_PACK_READY" });
 
     render(<PublicLibraryPageClient />);
 
@@ -393,7 +393,7 @@ describe("PublicLibraryPageClient", () => {
 
     fireEvent.click(modal.getByRole("button", { name: "Start Review" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-9?copied=1&generate=1&startQuickReview=1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-9?copied=1&startQuickReview=1");
   });
 
   it("uses a bottom-sheet success surface on mobile", async () => {
