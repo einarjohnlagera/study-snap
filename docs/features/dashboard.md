@@ -115,9 +115,10 @@ Focus Areas should show weak concepts for all learners when data exists.
 
 Current action behavior:
 
-- Pro users can launch Adaptive Practice from the suggested note
-- Free and Plus users see the same weak concepts and get a `Revisit Note` link to the source note so they can review material even without Adaptive Practice access
+- Users whose plan allows Adaptive Practice can launch Adaptive Practice from the suggested note while quota remains
+- Users without an Adaptive Practice start path still see the same weak concepts and get a `Revisit Note` link to the source note so they can review material
 - The upgrade prompt (`Unlock Adaptive Practice`) is shown only when no source note is resolvable
+- When weak concepts are present, the card also links to `/progress` with `View full progress report ->` so learners can open the subject-level ConceptHealth report
 
 ## Community Notes Section
 

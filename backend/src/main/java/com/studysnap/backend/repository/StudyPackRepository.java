@@ -49,6 +49,7 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
             """;
 
     List<StudyPackEntity> findByOwnerUserIdOrderByCreatedAtDescIdDesc(UUID ownerUserId, Pageable pageable);
+    List<StudyPackEntity> findByOwnerUserId(UUID ownerUserId);
     @Query("""
             select s
             from StudyPackEntity s

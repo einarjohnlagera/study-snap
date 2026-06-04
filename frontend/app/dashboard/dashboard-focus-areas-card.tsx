@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import type { DashboardFocusAreasResponse } from "@/lib/api";
@@ -89,6 +90,11 @@ export function DashboardFocusAreasCard({
           ) : (
             <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="adaptivePractice" label={lockedActionLabel} />
           )
+        ) : null}
+        {hasConcepts ? (
+          <Link href="/progress" className="block text-sm text-foreground/60 hover:text-foreground/80">
+            View full progress report &rarr;
+          </Link>
         ) : null}
       </Card>
     </section>

@@ -1,10 +1,13 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MePlanResponse;
+import com.studysnap.backend.dto.ProgressReportResponse;
+import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.MePlanService;
+import com.studysnap.backend.service.ProgressReportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,9 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -24,11 +30,14 @@ class MeControllerTest {
     @Mock
     private MePlanService mePlanService;
 
+    @Mock
+    private ProgressReportService progressReportService;
+
     private MeController meController;
 
     @BeforeEach
     void setUp() {
-        meController = new MeController(mePlanService);
+        meController = new MeController(mePlanService, progressReportService);
     }
 
     @Test
@@ -52,5 +61,20 @@ class MeControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(mePlanService).getPlan(userId);
+    }
+
+    @Test
+    void getProgress_returnsProgressReportForAuthenticatedUser() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        ProgressReportResponse expected = new ProgressReportResponse(List.of(
+                new SubjectProgressEntry("Biology", 4, 2, 1, 1, 50)
+        ));
+        when(progressReportService.getProgressReport(eq(userId), any(OffsetDateTime.class))).thenReturn(expected);
+
+        ProgressReportResponse response = meController.getProgress(user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(progressReportService).getProgressReport(eq(userId), any(OffsetDateTime.class));
     }
 }
