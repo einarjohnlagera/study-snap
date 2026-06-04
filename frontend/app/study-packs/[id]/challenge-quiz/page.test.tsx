@@ -6,9 +6,12 @@ import {
   forfeitChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getNote,
+  getPostSessionNextStep,
+  listNotes,
   startChallengeQuizSession,
   updateChallengeQuizSessionProgress,
 } from "@/lib/api";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -41,6 +44,10 @@ jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-billing-usage-summary", () => ({
+  useBillingUsageSummary: jest.fn(),
+}));
+
 jest.mock("@/lib/api", () => ({
   completeChallengeQuizSession: jest.fn(),
   forfeitChallengeQuizSession: jest.fn(),
@@ -48,7 +55,9 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
+  getPostSessionNextStep: jest.fn(),
   isEmailNotVerifiedError: () => false,
+  listNotes: jest.fn(),
   startChallengeQuizSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateChallengeQuizSessionProgress: jest.fn(),
@@ -88,6 +97,8 @@ describe("ChallengeQuizPage", () => {
     Element.prototype.scrollIntoView = jest.fn();
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (listNotes as jest.Mock).mockReset();
+    (listNotes as jest.Mock).mockResolvedValue([]);
     (getInProgressChallengeQuizSession as jest.Mock).mockReset();
     (completeChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockReset();
@@ -95,6 +106,17 @@ describe("ChallengeQuizPage", () => {
     (startChallengeQuizSession as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
+    (getPostSessionNextStep as jest.Mock).mockReset();
+    (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
+    (useBillingUsageSummary as jest.Mock).mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PRO",
+        limits: { adaptivePracticePerMonth: 30 },
+        usage: { adaptivePracticeUsed: 0 },
+        remaining: { adaptivePracticeRemaining: 30 },
+      },
+    });
   });
 
   afterEach(() => {
@@ -219,6 +241,8 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: options.usedThisMonth ?? 0,
       monthlyLimit: options.monthlyLimit ?? (difficultySelectionAvailable ? 50 : 5),
+      boardExamUsedThisMonth: 0,
+      boardExamMonthlyLimit: 10,
       difficultySelectionAvailable,
       mode: "challenge",
       selectedDifficulty: "medium",
@@ -498,7 +522,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("Fullscreen recommended")).toBeInTheDocument();
     expect(screen.getByText("~1 minute per question")).toBeInTheDocument();
     expect(screen.getByText("Scored against every question")).toBeInTheDocument();
-    expect(screen.getByText("Counts toward your monthly Board Exam usage.")).toBeInTheDocument();
+    expect(screen.getByText(/Counts toward your monthly Board Exam usage\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
@@ -635,7 +659,11 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await getModeCard("Board Exam Mode"));
-    fireEvent.click(await screen.findByRole("button", { name: "Begin Board Exam" }));
+    const beginButton = await screen.findByRole("button", { name: "Begin Board Exam" });
+    await waitFor(() => {
+      expect(beginButton).toBeEnabled();
+    });
+    fireEvent.click(beginButton);
 
     expect(screen.getByRole("dialog", { name: "Start Board Exam Mode?" })).toBeInTheDocument();
     expect(screen.getByText("You are about to start a board exam simulation.")).toBeInTheDocument();
@@ -1164,6 +1192,50 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
   });
 
+  it("fetches and renders the server-resolved next step after regular Challenge completion", async () => {
+    setupInProgressChallengeQuiz("challenge");
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      performanceLevel: "Excellent",
+      conceptBreakdown: [
+        { concept: "Concept", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 },
+      ],
+      weakConcepts: [],
+      durationSeconds: 24,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+    (getPostSessionNextStep as jest.Mock).mockResolvedValue({
+      type: "REVIEW_PACK",
+      studyPackId: "sp-1",
+      noteId: "note-1",
+      title: "Challenge Note",
+      message: "You are in good shape here. Step up with a challenge or review the note when ready.",
+      actionLabel: "Take a Challenge",
+      actionHref: "/notes/note-1/challenge-quiz",
+      concepts: [],
+      adaptivePracticeAvailable: true,
+      adaptivePracticeRemaining: null,
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+
+    expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/challenge-quiz",
+    );
+    expect(getPostSessionNextStep).toHaveBeenCalledWith("sp-1");
+  });
+
   it('result screen shows "← Back to Note" navigation link', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
@@ -1343,9 +1415,9 @@ describe("ChallengeQuizPage", () => {
     expect(review).toHaveTextContent("Correct Answer");
     expect(review).toHaveTextContent(/Correct Answer[\s\S]*Mitochondria/);
     expect(review).toHaveTextContent("Nucleus");
-    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("Your Answer");
     expect(review).toHaveTextContent("Mitochondria");
-    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("Correct Answer");
     expect(screen.getByRole("button", { name: "Collapse Explanation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Expand All" })).toBeInTheDocument();
     expect(within(review).getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute("href", "/notes/note-1/adaptive-practice");

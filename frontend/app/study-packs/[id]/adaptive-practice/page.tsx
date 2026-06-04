@@ -14,6 +14,7 @@ import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-o
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -27,9 +28,11 @@ import {
   getInProgressAdaptivePracticeSession,
   getMyStudyPack,
   getNote,
+  getPostSessionNextStep,
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
   type NoteResponse,
+  type PostSessionNextStepResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
@@ -73,6 +76,7 @@ export default function AdaptivePracticePage() {
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showLimitReachedState, setShowLimitReachedState] = useState(false);
+  const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const { usageSummary } = useBillingUsageSummary();
 
   const noteId = useMemo(() => {
@@ -115,6 +119,7 @@ export default function AdaptivePracticePage() {
     setSelectedMultiChoices({});
     setCompletionTracked(false);
     setShowAnswerReview(false);
+    setNextStepResponse(null);
     if (response.status === "IN_PROGRESS" && response.quiz.length > 0) {
       setQuizStarted(true);
       setSessionStartedAt(Date.now());
@@ -455,9 +460,14 @@ export default function AdaptivePracticePage() {
         if (correctConceptNames.length > 0) {
           completeRequest.correctConceptNames = correctConceptNames;
         }
-        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, completeRequest).catch(() => {
-          // Completion persistence should not block adaptive practice flow.
-        });
+        setNextStepResponse(null);
+        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, completeRequest)
+          .then(() => getPostSessionNextStep(adaptiveQuiz.studyPackId))
+          .then(setNextStepResponse)
+          .catch(() => {
+            // Completion and next-step persistence should not block adaptive practice flow.
+            setNextStepResponse(null);
+          });
       }
     }
     setCurrentIndex(nextIndex);
@@ -614,15 +624,23 @@ export default function AdaptivePracticePage() {
               </p>
             </div>
           )}
+          <PostSessionNextStep
+            response={nextStepResponse}
+            currentPlan={currentPlan}
+            noteId={note?.id ?? null}
+            onOpenPaywall={() => openAdaptivePracticePaywall("adaptive_practice_results_next_step")}
+          />
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              onClick={() => void handleStartAdaptivePractice()}
-              disabled={adaptiveGenerationLocked}
-            >
-              {adaptiveGenerationLocked ? "Starting..." : "Generate New Set"}
-            </Button>
+            {nextStepResponse === null ? (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleStartAdaptivePractice()}
+                disabled={adaptiveGenerationLocked}
+              >
+                {adaptiveGenerationLocked ? "Starting..." : "Generate New Set"}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"

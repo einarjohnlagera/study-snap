@@ -37,14 +37,16 @@ If the user cannot access it:
 
 Primary CTA:
 
-- `Generate New Set`
+- after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
+- the shared `<PostSessionNextStep>` component renders the dominant next action from ConceptHealth
+- the previous `Generate New Set` action remains as fallback when the next-step fetch fails
 
 Secondary actions:
 
 - `Review Answers`
 - `← Back to Note`
 
-The result screen should stay focused and should not compete with unrelated actions.
+The result screen should stay focused and should not compete with unrelated actions. The targeted weak areas block remains mode-owned; only the primary next-action slot is replaced by the shared post-session component.
 
 ## Session rules
 
