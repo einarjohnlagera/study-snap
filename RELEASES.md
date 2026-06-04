@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.24.1 - Content Moderation Hotfix
+
+**Status: Released**
+
+Theme: patch false positives in the content moderation dictionary that blocked legitimate academic notes — removing terms with common proper-name, scientific, or engineering uses from the banned-word lists.
+
+### ✅ Shipped
+
+- **Content moderation false positive fix** — removed `dick`, `cock`, `bitch`, `tranny`, and `faggot` from the English banned-word list; all five have mainstream academic uses (surname, rooster/engineering tap, female dog, automotive transmission, bundle of sticks). Removed `hayop`/`hayup` (Filipino for "animal") and `puke` (English word misplaced in the Filipino file) from the Filipino list. Removed the dead `putang ina` two-word entry that could never match (tokenizer splits on spaces).
+
+---
+
 ## v0.24.0 - Guided Learning
 
 **Status: Released**

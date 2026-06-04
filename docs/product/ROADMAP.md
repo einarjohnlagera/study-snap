@@ -8,7 +8,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.25.0` is the next in-progress release (not yet kicked off).
 
-`v0.24.0 - Guided Learning` is complete and is the previous documentation baseline.
+`v0.24.1 - Content Moderation Hotfix` is complete and is the current documentation baseline.
+
+`v0.24.0 - Guided Learning` is the previous feature baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 

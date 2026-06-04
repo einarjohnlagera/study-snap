@@ -14,6 +14,13 @@
 #   - When in doubt, leave it out. False positives erode trust faster than a
 #     missed term costs us.
 #
+# Removed false positives:
+#   - dick    — common surname (Dick and Carey model, Philip K. Dick)
+#   - cock    — rooster (poultry), stopcock/petcock (engineering), firearm mechanism
+#   - bitch   — female dog; standard term in veterinary and animal science notes
+#   - tranny  — common engineering shorthand for transmission (automotive)
+#   - faggot  — bundle of sticks (forestry/history), British meat dish (cuisine)
+#
 # This list is intentionally small. Production deployments should expand it
 # via an admin-managed dictionary (see ContentModerationService extensibility).
 
@@ -24,11 +31,8 @@ fucking
 fucker
 shit
 asshole
-bitch
 cunt
-dick
 pussy
-cock
 porn
 pornography
 masturbate
@@ -37,10 +41,8 @@ masturbation
 # hate
 nigger
 nigga
-faggot
 fag
 retard
-tranny
 chink
 spic
 kike
