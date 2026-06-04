@@ -3464,9 +3464,10 @@ export async function updateNoteVisibility(noteId: string, visibility: NoteVisib
   return parseApiResponse<NoteResponse>(response, "Could not update note visibility.");
 }
 
-export async function copyNote(noteId: string): Promise<NoteResponse> {
+export async function copyNote(noteId: string, options?: { includeStudyPack?: boolean }): Promise<NoteResponse> {
+  const params = options?.includeStudyPack === false ? "?includeStudyPack=false" : "";
   const response = await fetchWithAuth(
-    `/notes/${noteId}/copy`,
+    `/notes/${noteId}/copy${params}`,
     {
       method: "POST",
       headers: buildAuthHeaders(),

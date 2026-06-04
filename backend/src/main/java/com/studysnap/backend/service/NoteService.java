@@ -178,6 +178,10 @@ public class NoteService {
     }
 
     public NoteResponse copyNote(String id, UUID ownerUserId) {
+        return copyNote(id, ownerUserId, true);
+    }
+
+    public NoteResponse copyNote(String id, UUID ownerUserId, boolean includeStudyPack) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity source = noteRepository.findById(noteId)
                 .orElseThrow(NoteNotFoundException::new);
@@ -219,9 +223,11 @@ public class NoteService {
             copy.setCopiedFromTitle(source.getTitle());
             copy.setCopiedFromPublic(Boolean.TRUE);
             copy.setCopiedAt(OffsetDateTime.now());
-            sourceStudyPack = studyPackRepository.findByNoteId(source.getId()).orElse(null);
-            if (sourceStudyPack != null) {
-                copy.setStatus(NoteStatus.GENERATED);
+            if (includeStudyPack) {
+                sourceStudyPack = studyPackRepository.findByNoteId(source.getId()).orElse(null);
+                if (sourceStudyPack != null) {
+                    copy.setStatus(NoteStatus.GENERATED);
+                }
             }
         }
         copy.setCreatedAt(OffsetDateTime.now());

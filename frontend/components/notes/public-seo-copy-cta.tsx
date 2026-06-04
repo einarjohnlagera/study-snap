@@ -26,6 +26,7 @@ type PublicSeoCopyCtaProps = {
   authModalTitle?: string;
   authModalBody?: string;
   variant?: "primary" | "outline";
+  includeStudyPack?: boolean;
 };
 
 export function PublicSeoCopyCta({
@@ -37,6 +38,7 @@ export function PublicSeoCopyCta({
   authModalTitle = DEFAULT_AUTH_MODAL_TITLE,
   authModalBody = DEFAULT_AUTH_MODAL_BODY,
   variant = "primary",
+  includeStudyPack = true,
 }: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -72,7 +74,7 @@ export function PublicSeoCopyCta({
       setCopying(true);
       setCopyError(null);
       try {
-        const copied = await copyNote(noteId);
+        const copied = await copyNote(noteId, { includeStudyPack });
         if (!cancelled) {
           router.replace(buildCopiedNotePath(copied.id, requestedRedirectTarget, {
             skipGenerate: copied.studyPackStatus === "STUDY_PACK_READY",
@@ -112,7 +114,7 @@ export function PublicSeoCopyCta({
     setCopying(true);
     setCopyError(null);
     try {
-      const copied = await copyNote(noteId);
+      const copied = await copyNote(noteId, { includeStudyPack });
       router.push(buildCopiedNotePath(copied.id, redirectTarget, {
         skipGenerate: copied.studyPackStatus === "STUDY_PACK_READY",
       }));
