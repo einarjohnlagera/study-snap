@@ -43,7 +43,7 @@ jest.mock("@/lib/api", () => ({
   getQuickReviewPerformanceSummary: jest.fn(),
   listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
-  setExamGoal: jest.fn(),
+  setStudyGoal: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
 

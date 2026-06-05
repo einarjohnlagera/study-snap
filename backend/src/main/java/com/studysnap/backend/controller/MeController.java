@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -33,9 +34,14 @@ public class MeController {
     @GetMapping("/progress")
     @PreAuthorize("isAuthenticated()")
     public ProgressReportResponse getProgress(@AuthenticationPrincipal AuthenticatedUser user) {
-        String examGoal = userRepository.findById(user.userId())
-                .orElseThrow(UserNotFoundException::new)
-                .getExamGoal();
-        return progressReportService.getProgressReport(user.userId(), examGoal, OffsetDateTime.now());
+        UserEntity userEntity = userRepository.findById(user.userId())
+                .orElseThrow(UserNotFoundException::new);
+        ProgressReportResponse response = progressReportService.getProgressReport(user.userId(), userEntity.getStudyGoal(), OffsetDateTime.now());
+        return new ProgressReportResponse(
+                response.subjects(),
+                response.goalSummary(),
+                response.userCoursePrograms(),
+                userEntity.getProfileType() == null ? null : userEntity.getProfileType().name()
+        );
     }
 }

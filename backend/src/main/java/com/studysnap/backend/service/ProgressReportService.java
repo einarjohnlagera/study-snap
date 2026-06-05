@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProgressReportService {
     private static final String OTHER_SUBJECT = "Other";
+    private static final String GOAL_TYPE_EXAM = "EXAM";
+    private static final String GOAL_TYPE_SUBJECT = "SUBJECT";
 
     private final StudyPackRepository studyPackRepository;
     private final ConceptHealthRepository conceptHealthRepository;
@@ -38,7 +40,7 @@ public class ProgressReportService {
     private final NoteRepository noteRepository;
 
     @Transactional(readOnly = true)
-    public ProgressReportResponse getProgressReport(UUID userId, String examGoal, OffsetDateTime now) {
+    public ProgressReportResponse getProgressReport(UUID userId, String studyGoal, OffsetDateTime now) {
         Map<String, List<StudyPackEntity>> packsBySubject = groupQualifyingPacksBySubject(userId);
         List<SubjectProgressEntry> subjects = packsBySubject.entrySet().stream()
             .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
@@ -47,8 +49,15 @@ public class ProgressReportService {
             .toList();
         return new ProgressReportResponse(
                 subjects,
-                buildGoalSummary(userId, normalizeExamGoal(examGoal), packsBySubject, now)
+                buildGoalSummary(userId, normalizeGoal(studyGoal), packsBySubject, now),
+                getUserCoursePrograms(userId),
+                null
         );
+    }
+
+    public List<String> getUserCoursePrograms(UUID userId) {
+        List<String> coursePrograms = noteRepository.findDistinctCourseProgramsByOwnerUserId(userId);
+        return coursePrograms == null ? List.of() : coursePrograms;
     }
 
     private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(UUID userId) {
@@ -104,25 +113,30 @@ public class ProgressReportService {
 
     private GoalSummaryResponse buildGoalSummary(
             UUID userId,
-            String examGoal,
+            String studyGoal,
             Map<String, List<StudyPackEntity>> packsBySubject,
             OffsetDateTime now
     ) {
-        if (examGoal == null || !ExamGoalConfig.isValidSlug(examGoal)) {
+        if (studyGoal == null) {
             return null;
         }
 
+        boolean studyGoalIsSlug = ExamGoalConfig.isValidSlug(studyGoal);
+        String goalType = studyGoalIsSlug ? GOAL_TYPE_EXAM : GOAL_TYPE_SUBJECT;
+        String goalName = studyGoalIsSlug ? ExamGoalConfig.getShortName(studyGoal) : studyGoal;
+        String goalLabel = studyGoalIsSlug ? ExamGoalConfig.getFullName(studyGoal) : goalName;
         List<StudyPackEntity> qualifyingPacks = packsBySubject.values().stream()
                 .flatMap(List::stream)
                 .toList();
-        List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, examGoal, qualifyingPacks);
+        List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, studyGoal, studyGoalIsSlug, qualifyingPacks);
         ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
         String weakestGoalSubject = resolveWeakestGoalSubject(goalPacks, userId, now);
 
         return new GoalSummaryResponse(
-                examGoal,
-                ExamGoalConfig.getShortName(examGoal),
-                ExamGoalConfig.getFullName(examGoal),
+                studyGoal,
+                goalType,
+                goalName,
+                goalLabel,
                 masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
                 counts.masteredConcepts(),
                 counts.totalConcepts(),
@@ -130,7 +144,12 @@ public class ProgressReportService {
         );
     }
 
-    private List<StudyPackEntity> filterGoalStudyPacks(UUID userId, String examGoal, List<StudyPackEntity> studyPacks) {
+    private List<StudyPackEntity> filterGoalStudyPacks(
+            UUID userId,
+            String studyGoal,
+            boolean studyGoalIsSlug,
+            List<StudyPackEntity> studyPacks
+    ) {
         if (studyPacks.isEmpty()) {
             return List.of();
         }
@@ -144,7 +163,8 @@ public class ProgressReportService {
             return List.of();
         }
 
-        Set<String> goalCoursePrograms = ExamGoalConfig.getCoursePrograms(examGoal).stream()
+        List<String> goalCourseProgramValues = studyGoalIsSlug ? ExamGoalConfig.getCoursePrograms(studyGoal) : List.of(studyGoal);
+        Set<String> goalCoursePrograms = goalCourseProgramValues.stream()
                 .map(this::normalizeCourseProgramKey)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -296,11 +316,12 @@ public class ProgressReportService {
         return courseProgram.trim().toLowerCase(Locale.ROOT);
     }
 
-    private String normalizeExamGoal(String examGoal) {
-        if (examGoal == null || examGoal.isBlank()) {
+    private String normalizeGoal(String studyGoal) {
+        if (studyGoal == null || studyGoal.isBlank()) {
             return null;
         }
-        return examGoal.trim().toLowerCase(Locale.ROOT);
+        String normalizedGoal = studyGoal.trim();
+        return ExamGoalConfig.isValidSlug(normalizedGoal) ? normalizedGoal.toLowerCase(Locale.ROOT) : normalizedGoal;
     }
 
     private record ConceptCounts(

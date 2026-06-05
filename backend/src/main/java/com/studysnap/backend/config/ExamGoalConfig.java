@@ -19,19 +19,19 @@ public final class ExamGoalConfig {
             ALE,
             new ExamGoalDefinition(
                     "ALE",
-                    "Architect Licensure Examination (ALE)",
+                    "Architect Licensure Examination",
                     List.of(ARCHITECTURE)
             ),
             PNLE,
             new ExamGoalDefinition(
                     "PNLE",
-                    "Philippine Nurse Licensure Examination (PNLE)",
+                    "Philippine Nurse Licensure Examination",
                     List.of(NURSING, MEDICAL_SURGICAL_NURSING)
             ),
             LET,
             new ExamGoalDefinition(
                     "LET",
-                    "Licensure Examination for Teachers (LET)",
+                    "Licensure Examination for Teachers",
                     List.of(EDUCATION)
             )
     );

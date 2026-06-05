@@ -1,12 +1,10 @@
 package com.studysnap.backend.controller;
 
-import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
-import com.studysnap.backend.dto.UpdateExamGoalRequest;
+import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
-import com.studysnap.backend.exception.InvalidExamGoalException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import jakarta.validation.Valid;
@@ -45,14 +43,11 @@ public class UserProfileController {
 
     @PutMapping("/profile/goal")
     @PreAuthorize("isAuthenticated()")
-    public MeResponse updateExamGoal(
+    public MeResponse updateStudyGoal(
             @AuthenticationPrincipal AuthenticatedUser user,
-            @RequestBody UpdateExamGoalRequest request
+            @RequestBody UpdateStudyGoalRequest request
     ) {
-        if (request.examGoal() != null && !request.examGoal().isBlank() && !ExamGoalConfig.isValidSlug(request.examGoal())) {
-            throw new InvalidExamGoalException();
-        }
-        return authService.updateExamGoal(user.userId(), request);
+        return authService.updateStudyGoal(user.userId(), request);
     }
 
     @PutMapping("/profile/public-visibility")

@@ -14,7 +14,7 @@ import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
-import com.studysnap.backend.dto.UpdateExamGoalRequest;
+import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
@@ -26,7 +26,7 @@ import com.studysnap.backend.entity.UserAuthProviderEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
-import com.studysnap.backend.exception.InvalidExamGoalException;
+import com.studysnap.backend.exception.InvalidGoalException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
@@ -804,17 +804,16 @@ class AuthServiceTest {
                 null
             ));
 
-        MeResponse response = authService.updateExamGoal(userId, new UpdateExamGoalRequest(" ALE "));
+        MeResponse response = authService.updateStudyGoal(userId, new UpdateStudyGoalRequest(" ALE "));
 
-        assertThat(response.examGoal()).isEqualTo("ale");
-        assertThat(user.getExamGoal()).isEqualTo("ale");
+        assertThat(response.studyGoal()).isEqualTo("ale");
+        assertThat(user.getStudyGoal()).isEqualTo("ale");
     }
 
     @Test
-    void updateExamGoal_acceptsNullAndClearsGoal() {
+    void updateExamGoal_acceptsCourseProgramGoal() {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
-        user.setExamGoal("pnle");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
             .thenReturn(new SubscriptionService.PlanSnapshot(
@@ -824,22 +823,54 @@ class AuthServiceTest {
                 null
             ));
 
-        MeResponse response = authService.updateExamGoal(userId, new UpdateExamGoalRequest(null));
+        MeResponse response = authService.updateStudyGoal(userId, new UpdateStudyGoalRequest(" Mathematics "));
 
-        assertThat(response.examGoal()).isNull();
-        assertThat(user.getExamGoal()).isNull();
+        assertThat(response.studyGoal()).isEqualTo("Mathematics");
+        assertThat(user.getStudyGoal()).isEqualTo("Mathematics");
     }
 
     @Test
-    void updateExamGoal_rejectsUnknownGoal() {
+    void updateExamGoal_acceptsNullAndClearsGoal() {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");
-        UpdateExamGoalRequest request = new UpdateExamGoalRequest("cpa");
+        user.setStudyGoal("pnle");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateStudyGoal(userId, new UpdateStudyGoalRequest(null));
+
+        assertThat(response.studyGoal()).isNull();
+        assertThat(user.getStudyGoal()).isNull();
+    }
+
+    @Test
+    void updateExamGoal_rejectsBlankGoal() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("  ");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> authService.updateExamGoal(userId, request))
-            .isInstanceOf(InvalidExamGoalException.class)
-            .hasMessage("Unknown exam goal. Valid values: ale, pnle, let.");
+        assertThatThrownBy(() -> authService.updateStudyGoal(userId, request))
+            .isInstanceOf(InvalidGoalException.class)
+            .hasMessage("Goal cannot be blank. Pass null to clear your goal.");
+    }
+
+    @Test
+    void updateExamGoal_rejectsTooLongGoal() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("A".repeat(101));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.updateStudyGoal(userId, request))
+            .isInstanceOf(InvalidGoalException.class)
+            .hasMessage("Goal value is too long.");
     }
 
     @Test

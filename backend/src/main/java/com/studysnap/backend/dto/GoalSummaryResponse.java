@@ -1,9 +1,10 @@
 package com.studysnap.backend.dto;
 
 public record GoalSummaryResponse(
-        String examGoal,
-        String examShortName,
-        String examFullName,
+        String studyGoal,
+        String goalType,
+        String goalName,
+        String goalLabel,
         int masteryPercentage,
         int masteredConcepts,
         int totalConcepts,

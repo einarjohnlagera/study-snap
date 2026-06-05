@@ -59,33 +59,58 @@ The current feature only preserves exam context. It does not pre-fill goals or c
 
 ## Exam Goals
 
-Track 2 lets authenticated users confirm one exam goal. The backend stores this as nullable `users.exam_goal`
-(`ale`, `pnle`, or `let`), separate from `courseProgram`. Clearing the goal stores `null`.
+Track 2 lets authenticated users confirm one study goal using the existing nullable `users.study_goal` field.
+Its scope is generalized:
+
+- `goalType = "EXAM"` when `studyGoal` is a configured exam slug (`ale`, `pnle`, `let`).
+- `goalType = "SUBJECT"` when `studyGoal` is any other non-blank `courseProgram` value.
+- Clearing the goal stores `null`.
+
+`PUT /users/profile/goal` accepts `null` or any non-blank goal string up to 100 characters. Known exam slugs keep
+the existing exam flow. Unknown non-slug strings are treated as subject/course-program goals, even if the user has
+not created matching notes yet.
 
 Goal suggestion on Dashboard follows this order:
 
-- Existing `examGoal` from `GET /auth/me` / `GET /me` suppresses the banner.
+- Existing `studyGoal` from `GET /auth/me` / `GET /me` suppresses the banner.
 - Valid `notelib-exam-intent` cookie value suggests that exam first.
 - If no valid cookie exists, the frontend infers from `courseProgram` using `getExamSlugForCourseProgram()`.
-- Unknown or malformed values render no banner.
+- If no exam slug resolves and the user is not `BOARD_EXAM`, a non-exam profile with `courseProgram` sees a softer
+  subject-focus banner: `Track your progress in {courseProgram}. Set it as your study focus.`
 
 Dashboard goal actions:
 
-- `Set as my goal` calls `PUT /users/profile/goal`, clears the intent cookie, fires `EXAM_GOAL_SET`, and hides the banner without a full reload.
-- `Dismiss` clears the intent cookie, fires `EXAM_GOAL_DISMISSED`, and hides the banner without changing the stored goal.
+- Exam path: `Set as my goal` calls `PUT /users/profile/goal`, clears the intent cookie, fires `STUDY_GOAL_SET`, and hides the banner without a full reload.
+- Subject path: `Set as my focus` calls the same endpoint with the raw `courseProgram`, fires `STUDY_GOAL_SET`, and hides the banner without a full reload.
+- `Dismiss` clears the intent cookie, fires `STUDY_GOAL_DISMISSED`, and hides the banner without changing the stored goal.
 - Goal setting is available to all authenticated profile types; there is no Exam Reviewer-only gate.
 
-When an exam goal is set, `/progress` adds a goal summary above the normal subject list. It does not filter the
-subject list; all subject progress remains visible. The goal summary is computed from owned Study Packs whose
-linked note `courseProgram` matches the configured exam aliases. Users with a goal but no matching Study Packs
-still receive a `0%` goal summary so the confirmed goal remains visible.
+When a goal is set, `/progress` adds a goal summary above the normal subject list. It does not filter the subject
+list; all subject progress remains visible. `GoalSummaryResponse` includes `goalType`, `goalName`, and `goalLabel`
+so the UI can render both paths without exam-specific DTO fields.
 
-The progress report also returns `weakestGoalSubject`, computed from the goal-relevant Study Packs by the largest
-`notPracticedConcepts + dueConcepts` count. The frontend shows this in a "What to study next" card linked to
-`/exam/{examGoal}`. If no weakest subject exists, the card links to the exam hub with generic community-note copy.
+Goal summary computation uses the same mastery aggregation for both paths:
 
-Users without a goal can still open `/progress`; Dashboard always shows `View full progress report →`, and progress
-pages with subjects but no goal show an `Explore exam hubs to set a goal →` link.
+- `EXAM` goals resolve matching `courseProgram` values through `ExamGoalConfig.getCoursePrograms(studyGoal)`.
+- `SUBJECT` goals use the raw `studyGoal` value as a single `courseProgram` filter.
+- Users with a goal but no matching Study Packs still receive a `0%` goal summary so the confirmed goal remains visible.
+
+The progress report also returns:
+
+- `weakestGoalSubject`, computed from goal-relevant Study Packs by the largest `notPracticedConcepts + dueConcepts` count.
+- `userCoursePrograms`, the authenticated user's distinct non-null note `courseProgram` values, ordered alphabetically.
+
+The frontend shows `weakestGoalSubject` in a "What to study next" card:
+
+- `EXAM` goals link to `/exam/{studyGoal}`.
+- `SUBJECT` goals link to `/public/library?courseProgram={studyGoal}` so users can browse community notes for that focus area.
+
+Users without a goal can still open `/progress`; Dashboard always shows `View full progress report →`. The progress
+page uses `SetGoalCallout`:
+
+- No `userCoursePrograms`: show `Create your first note to start tracking your progress.`
+- `BOARD_EXAM` profile or any course program that maps to an exam slug: show `Studying for a board exam? Explore exam hubs to set a goal →`.
+- Other profiles with course programs: show subject chips that call `PUT /users/profile/goal` with the selected value.
 
 ## Analytics
 
@@ -93,8 +118,8 @@ Exam hub analytics events are frontend-fired and non-blocking:
 
 - `EXAM_HUB_VIEWED` with metadata `{ slug }`.
 - `EXAM_HUB_CTA_CLICKED` with metadata `{ slug, destination }`.
-- `EXAM_GOAL_SET` with metadata `{ examGoal }`.
-- `EXAM_GOAL_DISMISSED` with metadata `{ examGoal }`.
+- `STUDY_GOAL_SET` with metadata `{ studyGoal }`.
+- `STUDY_GOAL_DISMISSED` with metadata `{ studyGoal }`.
 
 Event names must exist in both the frontend `AnalyticsEventType` union and backend `AnalyticsEventType` enum before use.
 

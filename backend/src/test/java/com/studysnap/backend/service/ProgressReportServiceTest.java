@@ -80,6 +80,7 @@ class ProgressReportServiceTest {
             new SubjectProgressEntry("Biology", 3, 1, 1, 1, 33)
         );
         assertThat(response.goalSummary()).isNull();
+        assertThat(response.userCoursePrograms()).isEmpty();
         verify(conceptHealthRepository).findByUserIdAndStudyPackId(userId, biologyPackOne.getId());
         verify(conceptHealthRepository).findByUserIdAndStudyPackId(userId, biologyPackTwo.getId());
         verify(conceptHealthRepository).findByUserIdAndStudyPackId(userId, chemistryPack.getId());
@@ -154,8 +155,9 @@ class ProgressReportServiceTest {
 
         assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
                 "ale",
+                "EXAM",
                 "ALE",
-                "Architect Licensure Examination (ALE)",
+                "Architect Licensure Examination",
                 50,
                 1,
                 2,
@@ -186,8 +188,9 @@ class ProgressReportServiceTest {
 
         assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
                 "pnle",
+                "EXAM",
                 "PNLE",
-                "Philippine Nurse Licensure Examination (PNLE)",
+                "Philippine Nurse Licensure Examination",
                 50,
                 1,
                 2,
@@ -209,8 +212,9 @@ class ProgressReportServiceTest {
 
         assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
                 "ale",
+                "EXAM",
                 "ALE",
-                "Architect Licensure Examination (ALE)",
+                "Architect Licensure Examination",
                 0,
                 0,
                 0,
@@ -243,6 +247,76 @@ class ProgressReportServiceTest {
         ProgressReportResponse response = progressReportService.getProgressReport(userId, "ale", NOW);
 
         assertThat(response.goalSummary().weakestGoalSubject()).isEqualTo("Structures");
+    }
+
+    @Test
+    void getProgressReport_computesSubjectGoalSummaryFromMatchingCourseProgramNotes() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals"));
+        studyPack.setNoteId(noteId);
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+                health(studyPack.getId(), "Fractions", NOW.minusDays(1))
+        ));
+
+        ProgressReportResponse response = progressReportService.getProgressReport(userId, "Mathematics", NOW);
+
+        assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
+                "Mathematics",
+                "SUBJECT",
+                "Mathematics",
+                "Mathematics",
+                50,
+                1,
+                2,
+                "Algebra"
+        ));
+    }
+
+    @Test
+    void getProgressReport_returnsZeroSubjectGoalSummaryWhenNoNotesMatch() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Biology", List.of("Cells"));
+        studyPack.setNoteId(noteId);
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Biology")));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of());
+
+        ProgressReportResponse response = progressReportService.getProgressReport(userId, "Mathematics", NOW);
+
+        assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
+                "Mathematics",
+                "SUBJECT",
+                "Mathematics",
+                "Mathematics",
+                0,
+                0,
+                0,
+                null
+        ));
+    }
+
+    @Test
+    void getUserCoursePrograms_returnsDistinctNonNullValuesOrderedAlphabetically() {
+        UUID userId = UUID.randomUUID();
+        when(noteRepository.findDistinctCourseProgramsByOwnerUserId(userId)).thenReturn(List.of("Biology", "Mathematics"));
+
+        List<String> coursePrograms = progressReportService.getUserCoursePrograms(userId);
+
+        assertThat(coursePrograms).containsExactly("Biology", "Mathematics");
+    }
+
+    @Test
+    void getUserCoursePrograms_returnsEmptyListWhenNoNotesHaveCoursePrograms() {
+        UUID userId = UUID.randomUUID();
+        when(noteRepository.findDistinctCourseProgramsByOwnerUserId(userId)).thenReturn(List.of());
+
+        List<String> coursePrograms = progressReportService.getUserCoursePrograms(userId);
+
+        assertThat(coursePrograms).isEmpty();
     }
 
     private StudyPackEntity studyPack(String subject, List<String> keyConcepts) {

@@ -10,6 +10,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 
 - **Exam hub pages** — added public, server-rendered exam hubs for `/exam/ale`, `/exam/pnle`, and `/exam/let`, curated from existing public notes through a frontend `courseProgram` alias map. Each hub has SEO metadata, CollectionPage structured data, featured/popular/recent discovery sections, an empty state, anonymous signup CTA with persisted `exam` intent, authenticated Public Library CTA, and `EXAM_HUB_VIEWED` / `EXAM_HUB_CTA_CLICKED` analytics events. Added the static `/exam` index and a public-footer entry point.
 - **Exam goal setting and progress framing** — added a confirmed exam goal field on users plus `PUT /users/profile/goal`, with dashboard suggestions sourced from the exam-intent cookie first and `courseProgram` fallback second. `/progress` now includes an exam goal summary, next-best-study card linked back to the relevant exam hub, and an exam-hub callout for users with progress but no goal; the Dashboard "View full progress report" link is always visible, even before weak concepts exist.
+- **Universal study goal** — goal setting now works for all profile types; students can pick any of their note subjects as a study focus, not just board-exam slugs; progress report shows mastery toward any `courseProgram` goal; subject chip picker on `/progress` and a dashboard banner for non-exam profiles.
 
 ### 🔲 Pending
 
@@ -24,6 +25,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **UI standards context file** — added `docs/ui-standards.md` documenting page header card pattern, back link rules, "view all" placement, and nav grouping for Codex and Claude anti-drift; fixed stale "muted text" description in `docs/features/navigation.md`
 - **Subject card priority hierarchy** — added mastery-keyed left border accent (gray = not started, rose < 40%, amber 40–60%, blue ≥ 60%) and matching mastery % text color to each subject card; added "Concept Mastery · N subjects" section header above the card grid for structural grouping
 - **Exam hub build fix** — `fetchPublicNotes` now catches network-level errors (ECONNREFUSED) and returns an empty array instead of crashing; exam hub pages prerender to their empty state at build time and populate via ISR on first live request
+- **Rename `exam_goal` → `study_goal`** — DB column, entity field, DTOs, service params, analytics event names (`STUDY_GOAL_SET` / `STUDY_GOAL_DISMISSED`), and all frontend types/functions renamed for clarity; V70 migration updated in-place (not yet applied)
 
 ---
 

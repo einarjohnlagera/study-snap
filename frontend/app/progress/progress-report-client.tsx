@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { PageHeader } from "@/components/page-header";
-import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { getProgressReport, setStudyGoal, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
+import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 type LoadState = "loading" | "ready" | "error";
@@ -92,10 +94,10 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            {goalSummary.examShortName} Goal
+            {goalSummary.goalName} Goal
           </p>
           <div className="space-y-1">
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.examFullName}</h2>
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.goalLabel}</h2>
             <p className="text-sm text-foreground/70">
               {goalSummary.masteredConcepts} of {goalSummary.totalConcepts} goal concepts mastered
             </p>
@@ -110,22 +112,17 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
   );
 }
 
-function ExploreExamHubsCallout() {
-  return (
-    <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
-      Studying for a board exam?{" "}
-      <Link href="/exam" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
-        Explore exam hubs to set a goal &rarr;
-      </Link>
-    </Card>
-  );
-}
-
 function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
-  const examHref = `/exam/${goalSummary.examGoal}`;
+  const isExamGoal = goalSummary.goalType === "EXAM";
+  const href = isExamGoal
+    ? `/exam/${goalSummary.studyGoal}`
+    : `/public/library?courseProgram=${encodeURIComponent(goalSummary.studyGoal)}`;
   const message = goalSummary.weakestGoalSubject
     ? `Focus on ${goalSummary.weakestGoalSubject} — you have concepts left to practice.`
-    : `Browse community ${goalSummary.examShortName} notes to build your knowledge.`;
+    : `Browse community ${goalSummary.goalName} notes to build your knowledge.`;
+  const linkLabel = isExamGoal
+    ? `Browse ${goalSummary.goalName} notes`
+    : `Browse ${goalSummary.goalName} notes in the community`;
 
   return (
     <Card className="space-y-3 p-4 sm:p-6">
@@ -133,14 +130,98 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
         <h2 className="text-lg font-semibold tracking-tight">What to study next</h2>
         <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
       </div>
-      <Link href={examHref} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
-        Browse {goalSummary.examShortName} notes &rarr;
+      <Link href={href} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+        {linkLabel} &rarr;
       </Link>
     </Card>
   );
 }
 
-function ProgressContent({ report, state }: Readonly<{ report: ProgressReportResponse | null; state: LoadState }>) {
+type SetGoalCalloutProps = {
+  userCoursePrograms: string[];
+  profileType: string | null;
+  onReportUpdated: (report: ProgressReportResponse) => void;
+};
+
+function SetGoalCallout({ userCoursePrograms, profileType, onReportUpdated }: Readonly<SetGoalCalloutProps>) {
+  const [savingCourseProgram, setSavingCourseProgram] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const shouldUseExamHubLink = profileType === "BOARD_EXAM" || userCoursePrograms.some((courseProgram) => getExamSlugForCourseProgram(courseProgram));
+
+  const handleSetSubjectGoal = async (courseProgram: string) => {
+    if (savingCourseProgram) {
+      return;
+    }
+
+    setSavingCourseProgram(courseProgram);
+    setError(null);
+    try {
+      await setStudyGoal(courseProgram);
+      const nextReport = await getProgressReport();
+      onReportUpdated(nextReport);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not set your study focus. Please try again.");
+    } finally {
+      setSavingCourseProgram(null);
+    }
+  };
+
+  if (userCoursePrograms.length === 0) {
+    return (
+      <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
+        Create your first note to start tracking your progress.
+      </Card>
+    );
+  }
+
+  if (shouldUseExamHubLink) {
+    return (
+      <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
+        Studying for a board exam?{" "}
+        <Link href="/exam" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
+          Explore exam hubs to set a goal &rarr;
+        </Link>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="space-y-3 border-dashed p-4 sm:p-5">
+      <p className="text-sm font-medium text-foreground">Pick a focus area to track your progress:</p>
+      <div className="flex flex-wrap gap-2">
+        {userCoursePrograms.map((courseProgram) => (
+          <Button
+            key={courseProgram}
+            type="button"
+            variant="outline"
+            size="sm"
+            loading={savingCourseProgram === courseProgram}
+            loadingText="Setting..."
+            disabled={savingCourseProgram !== null}
+            onClick={() => void handleSetSubjectGoal(courseProgram)}
+          >
+            {courseProgram}
+          </Button>
+        ))}
+      </div>
+      {error ? (
+        <p className="text-sm text-red-600 dark:text-red-300" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+function ProgressContent({
+  report,
+  state,
+  onReportUpdated,
+}: Readonly<{
+  report: ProgressReportResponse | null;
+  state: LoadState;
+  onReportUpdated: (report: ProgressReportResponse) => void;
+}>) {
   if (state === "error") {
     return (
       <Card className="p-4 text-sm text-foreground/75 sm:p-6">
@@ -159,10 +240,19 @@ function ProgressContent({ report, state }: Readonly<{ report: ProgressReportRes
 
   const subjects = report?.subjects ?? [];
   const goalSummary = report?.goalSummary ?? null;
+  const userCoursePrograms = report?.userCoursePrograms ?? [];
+  const profileType = report?.profileType ?? null;
 
   return (
     <div className="space-y-6">
       {goalSummary ? <GoalSummaryHeader goalSummary={goalSummary} /> : null}
+      {!goalSummary ? (
+        <SetGoalCallout
+          userCoursePrograms={userCoursePrograms}
+          profileType={profileType}
+          onReportUpdated={onReportUpdated}
+        />
+      ) : null}
 
       {subjects.length === 0 ? (
         <Card className="p-4 text-sm leading-relaxed text-foreground/75 sm:p-6">
@@ -176,7 +266,6 @@ function ProgressContent({ report, state }: Readonly<{ report: ProgressReportRes
             </h2>
             <span className="text-xs text-foreground/50">{subjects.length} {subjects.length === 1 ? "subject" : "subjects"}</span>
           </div>
-          {!goalSummary ? <ExploreExamHubsCallout /> : null}
           <div className="grid gap-4">
             {subjects.map((entry) => (
               <SubjectProgressCard key={entry.subject} entry={entry} />
@@ -224,7 +313,7 @@ export function ProgressReportClient() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <ProgressHeader />
-      <ProgressContent report={report} state={state} />
+      <ProgressContent report={report} state={state} onReportUpdated={setReport} />
     </main>
   );
 }
