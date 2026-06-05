@@ -22,6 +22,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **"View progress report" link placement** — moved from inside the Weak Concepts card to inline with the section header (right-aligned, blue), so it signals a full mastery report — not just weak-concept detail
 - **Back link label consistency** — corrected four `BackLink` usages across long-exam, adaptive-practice, and quick-review pages from `label="Back to Note"` to `label="Note"` per AGENTS.md rule
 - **UI standards context file** — added `docs/ui-standards.md` documenting page header card pattern, back link rules, "view all" placement, and nav grouping for Codex and Claude anti-drift; fixed stale "muted text" description in `docs/features/navigation.md`
+- **Subject card priority hierarchy** — added mastery-keyed left border accent (gray = not started, rose < 40%, amber 40–60%, blue ≥ 60%) and matching mastery % text color to each subject card; added "Concept Mastery · N subjects" section header above the card grid for structural grouping
 
 ---
 
