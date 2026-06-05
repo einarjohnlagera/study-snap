@@ -651,7 +651,7 @@ export default function AdaptivePracticePage() {
             </Button>
           </div>
           <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Back to Note" />
+            <BackLink href={noteDetailHref} label="Note" />
           </div>
           {showAnswerReview ? (
             <QuizAnswerReview

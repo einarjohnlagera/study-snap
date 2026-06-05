@@ -966,7 +966,7 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             This note does not have quiz questions yet. Generate a Study Pack to try Quick Review.
           </p>
-          <BackLink href={noteDetailHref} label="Back to Note" />
+          <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : note && !currentSessionId ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -974,7 +974,7 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             Start Quick Review from the note detail page to create a session.
           </p>
-          <BackLink href={noteDetailHref} label="Back to Note" />
+          <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : note && isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">

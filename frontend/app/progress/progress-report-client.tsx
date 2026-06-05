@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { BackLink } from "@/components/ui/back-link";
+import { PageHeader } from "@/components/page-header";
 import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
@@ -24,17 +26,14 @@ function getProgressTone(entry: SubjectProgressEntry): string {
 
 function ProgressHeader() {
   return (
-    <header className="space-y-3">
-      <Link href="/dashboard" className="text-sm text-foreground/60 hover:text-foreground/80">
-        &larr; Back to Dashboard
-      </Link>
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">My Progress</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-foreground/70 sm:text-base">
-          Concept mastery across your subjects, based on your recent practice.
-        </p>
-      </div>
-    </header>
+    <div className="space-y-4">
+      <BackLink href="/dashboard" label="Dashboard" />
+      <PageHeader
+        eyebrow="MY PROGRESS"
+        title="My Progress"
+        description="Concept mastery across your subjects, based on your recent practice."
+      />
+    </div>
   );
 }
 

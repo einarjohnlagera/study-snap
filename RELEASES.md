@@ -16,6 +16,13 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Track 1 — Exam Capture:** deferred curation/admin normalization for future exam waves.
 - **Track 2 — Goal + Milestones:** mastery-threshold milestone depth beyond the shipped exam goal summary and next-study suggestion.
 
+### Polish & Fixes
+
+- **Progress page nav + header** — added Progress to the MAIN sidebar nav (`BarChart2` icon); fixed `ProgressHeader` to use `BackLink` + `PageHeader` (eyebrow/card pattern matching Library and Profile); link now reads "Dashboard" not "Back to Dashboard"
+- **"View progress report" link placement** — moved from inside the Weak Concepts card to inline with the section header (right-aligned, blue), so it signals a full mastery report — not just weak-concept detail
+- **Back link label consistency** — corrected four `BackLink` usages across long-exam, adaptive-practice, and quick-review pages from `label="Back to Note"` to `label="Note"` per AGENTS.md rule
+- **UI standards context file** — added `docs/ui-standards.md` documenting page header card pattern, back link rules, "view all" placement, and nav grouping for Codex and Claude anti-drift; fixed stale "muted text" description in `docs/features/navigation.md`
+
 ---
 
 ## v0.24.1 - Content Moderation Hotfix

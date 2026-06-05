@@ -165,12 +165,13 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "campaigns" | "dashboard" | "help" | "library" | "profile" | "publicLibrary" | "settings";
+  action: "admin" | "campaigns" | "dashboard" | "help" | "library" | "profile" | "progress" | "publicLibrary" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard", action: "dashboard" },
   { href: "/library", label: "Library", action: "library" },
+  { href: "/progress", label: "Progress", action: "progress" },
   { href: "/public/library", label: "Public Library", action: "publicLibrary" },
 ];
 

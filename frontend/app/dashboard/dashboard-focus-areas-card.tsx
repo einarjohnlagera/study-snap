@@ -44,7 +44,12 @@ export function DashboardFocusAreasCard({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
+        <Link href="/progress" className="shrink-0 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          View progress report &rarr;
+        </Link>
+      </div>
       <Card className="space-y-4 p-4 sm:p-6">
         {hasConcepts ? (
           <div className="space-y-4">
@@ -91,9 +96,6 @@ export function DashboardFocusAreasCard({
             <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="adaptivePractice" label={lockedActionLabel} />
           )
         ) : null}
-        <Link href="/progress" className="block text-sm text-foreground/60 hover:text-foreground/80">
-          View full progress report &rarr;
-        </Link>
       </Card>
     </section>
   );
