@@ -184,7 +184,8 @@ class StudyPackControllerTest {
                 "/notes/" + noteId + "/adaptive-practice",
                 List.of("Cell Cycle", "Mitosis"),
                 true,
-                1
+                1,
+                null
         );
         when(postSessionNextStepService.getNextStep(userId, studyPackId)).thenReturn(expected);
 

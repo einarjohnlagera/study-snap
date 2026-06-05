@@ -113,6 +113,20 @@ Goal setting lives in two places only:
 - **Dashboard `GoalPromptBanner`**: one-time nudge (exam-intent cookie first, then `courseProgram` fallback); dismissed per session.
 - **Profile settings Study Focus card** (`/profile#study-focus`): inline chip picker for all profile types; shows current goal with Change/Clear buttons, or the chip picker when no goal is set or when editing. "Change goal" link on the Progress `GoalSummaryHeader` navigates here.
 
+Post-quiz goal nudges reinforce goals after off-goal practice:
+
+- The existing `GET /study-packs/{id}/next-step` response may include nullable `goalNudge`.
+- `goalNudge` is returned only when the authenticated user has a study goal and the completed session's linked note
+  `courseProgram` does not match that goal.
+- `EXAM` goal matching uses `ExamGoalConfig.getCoursePrograms(studyGoal)`.
+- `SUBJECT` goal matching uses direct `courseProgram == studyGoal` equality.
+- No nudge is returned when the user has no goal, the current note matches the goal, the Study Pack has no linked note,
+  or the nudge computation is unavailable.
+- The nudge shows `{goalName} Goal`, `{goalLabel}`, overall mastery percentage, and due goal-concept count.
+- The CTA is `View {goalName} progress →` and links to `/progress`.
+- v1 surfaces this card below `PostSessionNextStep` on Quick Review, Challenge Quiz, Board Exam Mode score reveal,
+  and Adaptive Practice result screens. Long Exam and public quiz flows are excluded.
+
 ## Analytics
 
 Exam hub analytics events are frontend-fired and non-blocking:

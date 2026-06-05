@@ -1,16 +1,21 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.TodayFocusType;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +33,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +53,12 @@ class PostSessionNextStepServiceTest {
     private SubscriptionService subscriptionService;
     @Mock
     private UserUsageService userUsageService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private NoteRepository noteRepository;
+    @Mock
+    private ProgressReportService progressReportService;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -59,7 +72,10 @@ class PostSessionNextStepServiceTest {
                 conceptHealthService,
                 subscriptionService,
                 userUsageService,
-                properties
+                properties,
+                userRepository,
+                noteRepository,
+                progressReportService
         );
     }
 
@@ -79,6 +95,7 @@ class PostSessionNextStepServiceTest {
         assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/adaptive-practice");
         assertThat(response.adaptivePracticeAvailable()).isTrue();
         assertThat(response.adaptivePracticeRemaining()).isEqualTo(2);
+        assertThat(response.goalNudge()).isNull();
     }
 
     @Test
@@ -121,6 +138,157 @@ class PostSessionNextStepServiceTest {
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
         assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/challenge-quiz");
         assertThat(response.concepts()).isEmpty();
+    }
+
+    @Test
+    void getNextStep_returnsNoGoalNudgeWhenUserHasNoGoal() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPack.getId()),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isNull();
+        verify(progressReportService, never()).buildGoalNudge(any(), any(), any());
+    }
+
+    @Test
+    void getNextStep_returnsNoGoalNudgeWhenExamGoalMatchesCurrentNoteCourseProgram() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubNote(userId, studyPack.getNoteId(), "Nursing");
+        stubReviewPackPath(userId, studyPack);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isNull();
+        verify(progressReportService, never()).buildGoalNudge(any(), any(), any());
+    }
+
+    @Test
+    void getNextStep_returnsExamGoalNudgeWhenCurrentNoteIsOutsideExamGoal() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        GoalNudgeResponse nudge = new GoalNudgeResponse(
+                "pnle",
+                "EXAM",
+                "PNLE",
+                "Philippine Nurse Licensure Examination",
+                42,
+                8
+        );
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubNote(userId, studyPack.getNoteId(), "Biochemistry");
+        stubReviewPackPath(userId, studyPack);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class))).thenReturn(nudge);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isEqualTo(nudge);
+        assertThat(response.goalNudge().goalName()).isEqualTo("PNLE");
+        assertThat(response.goalNudge().goalLabel()).isEqualTo("Philippine Nurse Licensure Examination");
+        assertThat(response.goalNudge().goalType()).isEqualTo("EXAM");
+    }
+
+    @Test
+    void getNextStep_returnsNoGoalNudgeWhenSubjectGoalMatchesCurrentNoteCourseProgram() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, "Biochemistry");
+        stubNote(userId, studyPack.getNoteId(), "Biochemistry");
+        stubReviewPackPath(userId, studyPack);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isNull();
+        verify(progressReportService, never()).buildGoalNudge(any(), any(), any());
+    }
+
+    @Test
+    void getNextStep_returnsSubjectGoalNudgeWhenCurrentNoteIsOutsideSubjectGoal() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        GoalNudgeResponse nudge = new GoalNudgeResponse(
+                "Biochemistry",
+                "SUBJECT",
+                "Biochemistry",
+                "Biochemistry",
+                25,
+                3
+        );
+        stubOwnedStudyPack(userId, studyPack, "Biochemistry");
+        stubNote(userId, studyPack.getNoteId(), "Nursing");
+        stubReviewPackPath(userId, studyPack);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("Biochemistry"), any(OffsetDateTime.class))).thenReturn(nudge);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isEqualTo(nudge);
+        assertThat(response.goalNudge().goalName()).isEqualTo("Biochemistry");
+        assertThat(response.goalNudge().goalType()).isEqualTo("SUBJECT");
+    }
+
+    @Test
+    void getNextStep_returnsNoGoalNudgeWhenStudyPackHasNoLinkedNote() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        studyPack.setNoteId(null);
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubReviewPackPath(userId, studyPack);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isNull();
+        verify(progressReportService, never()).buildGoalNudge(any(), any(), any());
+    }
+
+    @Test
+    void getNextStep_returnsZeroGoalNudgeWhenGoalHasNoMatchingStudyPacks() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        GoalNudgeResponse nudge = new GoalNudgeResponse(
+                "pnle",
+                "EXAM",
+                "PNLE",
+                "Philippine Nurse Licensure Examination",
+                0,
+                0
+        );
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubNote(userId, studyPack.getNoteId(), "Biochemistry");
+        stubReviewPackPath(userId, studyPack);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class))).thenReturn(nudge);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isEqualTo(nudge);
+        assertThat(response.goalNudge().masteryPercentage()).isZero();
+        assertThat(response.goalNudge().dueConcepts()).isZero();
+    }
+
+    @Test
+    void getNextStep_returnsNullGoalNudgeWhenGoalAggregationThrows() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubNote(userId, studyPack.getNoteId(), "Biochemistry");
+        stubReviewPackPath(userId, studyPack);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class)))
+                .thenThrow(new IllegalStateException("progress unavailable"));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.goalNudge()).isNull();
     }
 
     @Test
@@ -205,6 +373,38 @@ class PostSessionNextStepServiceTest {
 
     private void stubOwnedStudyPack(UUID userId, StudyPackEntity studyPack) {
         when(studyPackRepository.findByIdAndOwnerUserId(studyPack.getId(), userId)).thenReturn(Optional.of(studyPack));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId, null)));
+    }
+
+    private void stubOwnedStudyPack(UUID userId, StudyPackEntity studyPack, String studyGoal) {
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPack.getId(), userId)).thenReturn(Optional.of(studyPack));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId, studyGoal)));
+    }
+
+    private void stubNote(UUID userId, UUID noteId, String courseProgram) {
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setOwnerUserId(userId);
+        note.setCourseProgram(courseProgram);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+    }
+
+    private void stubReviewPackPath(UUID userId, StudyPackEntity studyPack) {
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPack.getId()),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+    }
+
+    private UserEntity user(UUID userId, String studyGoal) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setStudyGoal(studyGoal);
+        return user;
     }
 
     private void stubPlanAndUsage(UUID userId, PlanType planType, int adaptiveUsed) {

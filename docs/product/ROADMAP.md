@@ -79,7 +79,21 @@ The two tracks attack the same funnel at adjacent points: Track 1 captures the r
 **6. Next-best-subject suggestion**
    - Reuse `courseProgram` public-note discovery to point at community content for the learner's gaps — closing the loop back into the public library and the copy/quiz flywheel.
 
-### Kickoff audit & resolved decisions
+**7. Post-quiz goal nudge** *(pending)*
+   - After completing a quiz session on a subject that does not match the user's study goal, surface a nudge on the results screen: "Your [Goal] subject has X concepts due — study that next?" One-tap link to a Quick Review on the weakest goal concept.
+   - Frontend-only addition to the quiz results/completion screen. No new endpoint needed if `weakestGoalSubject` is already in the session response; otherwise a small extension to the session summary.
+   - Rationale: closes the tightest feedback loop — the user just practiced and is still in a learning mindset; the nudge is immediately actionable. Higher behavior-change value than a passive Dashboard widget.
+
+**8. Dashboard goal card** *(pending, lower priority than #7)*
+   - Replace the one-time `GoalPromptBanner` (which dismisses forever) with a persistent compact goal card on the Dashboard showing: goal name, current mastery %, and a "Study weakest concept" CTA.
+   - Turns the goal from a setup step into a daily destination — the Dashboard becomes goal-aware rather than goal-agnostic after the first session.
+   - Requires a lightweight goal summary available at Dashboard load time. Options: (a) extend `GET /auth/me` with mastery snapshot, or (b) a new `GET /users/goal/summary` endpoint. Option (b) is preferred — keeps `/auth/me` lean and lets the Dashboard fetch it independently (can be deferred or skeleton-loaded).
+
+### Resolved decisions
+
+- **Multi-subject study goal — explicitly out of scope.** Users set a single focus subject. The full Progress page already shows mastery across all subjects (the "see everything" view); the goal summary is the "my target" view — those are different jobs. A goal that covers everything is not a goal. Exam goals (ALE, PNLE, LET) already aggregate multiple `courseProgram` values behind one slug, giving board exam students multi-subject coverage without fragmenting the goal concept.
+
+### Kickoff audit & data decisions
 
 **Data audit (DONE).** 27 distinct `courseProgram` values across ~211 public notes — **clean and canonical**, not messy free-text variants. `courseProgram` is a *field of study*, not an exam name, so the mapping is **board exam → the program(s) whose graduates sit it.** The marketed channels are the three largest buckets:
 

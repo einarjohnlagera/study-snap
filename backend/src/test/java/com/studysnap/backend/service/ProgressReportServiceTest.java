@@ -319,6 +319,28 @@ class ProgressReportServiceTest {
         assertThat(coursePrograms).isEmpty();
     }
 
+    @Test
+    void buildGoalNudge_reusesGoalAggregationAndReturnsDueConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals"));
+        studyPack.setNoteId(noteId);
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+                health(studyPack.getId(), "Fractions", NOW.minusDays(1)),
+                health(studyPack.getId(), "Decimals", NOW.minusDays(5))
+        ));
+
+        var nudge = progressReportService.buildGoalNudge(userId, "Mathematics", NOW);
+
+        assertThat(nudge.studyGoal()).isEqualTo("Mathematics");
+        assertThat(nudge.goalType()).isEqualTo("SUBJECT");
+        assertThat(nudge.goalName()).isEqualTo("Mathematics");
+        assertThat(nudge.masteryPercentage()).isEqualTo(50);
+        assertThat(nudge.dueConcepts()).isEqualTo(1);
+    }
+
     private StudyPackEntity studyPack(String subject, List<String> keyConcepts) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(UUID.randomUUID());

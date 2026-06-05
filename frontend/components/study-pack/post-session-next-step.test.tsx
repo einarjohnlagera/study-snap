@@ -13,6 +13,7 @@ const baseResponse: PostSessionNextStepResponse = {
   concepts: ["Mitosis", "Meiosis"],
   adaptivePracticeAvailable: true,
   adaptivePracticeRemaining: 2,
+  goalNudge: null,
 };
 
 describe("PostSessionNextStep", () => {
