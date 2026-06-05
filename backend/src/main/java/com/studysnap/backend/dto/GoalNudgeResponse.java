@@ -6,6 +6,7 @@ public record GoalNudgeResponse(
         String goalName,
         String goalLabel,
         int masteryPercentage,
-        int dueConcepts
+        int dueConcepts,
+        String weakestGoalSubject
 ) {
 }

@@ -77,6 +77,7 @@ public class ProgressReportService {
                 .toList();
         List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, normalizedGoal, studyGoalIsSlug, qualifyingPacks);
         ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
+        String weakestGoalSubject = resolveWeakestGoalSubject(goalPacks, userId, now);
 
         return new GoalNudgeResponse(
                 normalizedGoal,
@@ -84,7 +85,8 @@ public class ProgressReportService {
                 goalName,
                 goalLabel,
                 masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
-                counts.dueConcepts()
+                counts.dueConcepts(),
+                weakestGoalSubject
         );
     }
 

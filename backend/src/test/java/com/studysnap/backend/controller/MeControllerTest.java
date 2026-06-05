@@ -110,7 +110,8 @@ class MeControllerTest {
                 "PNLE",
                 "Philippine Nurse Licensure Examination",
                 42,
-                8
+                8,
+                null
         );
         when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
         when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class))).thenReturn(expected);

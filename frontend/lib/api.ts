@@ -175,6 +175,7 @@ export type GoalNudgeResponse = {
   goalLabel: string;
   masteryPercentage: number;
   dueConcepts: number;
+  weakestGoalSubject: string | null;
 };
 
 export type SubjectProgressEntry = {
