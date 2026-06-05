@@ -1,15 +1,22 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.TodayFocusType;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
+import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -20,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -40,16 +48,22 @@ public class PostSessionNextStepService {
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
     private final StudySnapProperties properties;
+    private final UserRepository userRepository;
+    private final NoteRepository noteRepository;
+    private final ProgressReportService progressReportService;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(StudyPackNotFoundException::new);
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
 
         PlanType planType = resolvePlan(userId);
         AdaptivePracticeQuota adaptivePracticeQuota = resolveAdaptivePracticeQuota(userId, planType);
+        GoalNudgeResponse goalNudge = resolveGoalNudge(user, studyPack);
         try {
-            return resolveNextStep(userId, studyPack, adaptivePracticeQuota);
+            return resolveNextStep(userId, studyPack, adaptivePracticeQuota, goalNudge);
         } catch (RuntimeException ex) {
             log.warn(
                     "post_session_next_step_fallback userId={} studyPackId={} reason={}",
@@ -57,14 +71,15 @@ public class PostSessionNextStepService {
                     studyPackId,
                     ex.getMessage()
             );
-            return reviewPackResponse(studyPack, adaptivePracticeQuota);
+            return reviewPackResponse(studyPack, adaptivePracticeQuota, null);
         }
     }
 
     private NextStepResponse resolveNextStep(
             UUID userId,
             StudyPackEntity studyPack,
-            AdaptivePracticeQuota adaptivePracticeQuota
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge
     ) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         List<String> dueConcepts = capConcepts(conceptHealthService.getDueConcepts(
@@ -74,7 +89,7 @@ public class PostSessionNextStepService {
                 now
         ));
         if (!dueConcepts.isEmpty()) {
-            return practiceWeakConceptResponse(studyPack, dueConcepts, adaptivePracticeQuota);
+            return practiceWeakConceptResponse(studyPack, dueConcepts, adaptivePracticeQuota, goalNudge);
         }
 
         QuickReviewSessionEntity latestCompletedSession = findLatestCompletedSession(userId, studyPack.getId());
@@ -82,10 +97,10 @@ public class PostSessionNextStepService {
         if (!weakConcepts.isEmpty()
                 && latestCompletedSession != null
                 && latestCompletedSession.getSessionMode() == QuickReviewSessionMode.QUICK_REVIEW) {
-            return retryReviewResponse(studyPack, weakConcepts, adaptivePracticeQuota);
+            return retryReviewResponse(studyPack, weakConcepts, adaptivePracticeQuota, goalNudge);
         }
 
-        return reviewPackResponse(studyPack, adaptivePracticeQuota);
+        return reviewPackResponse(studyPack, adaptivePracticeQuota, goalNudge);
     }
 
     private QuickReviewSessionEntity findLatestCompletedSession(UUID userId, UUID studyPackId) {
@@ -102,7 +117,8 @@ public class PostSessionNextStepService {
     private NextStepResponse practiceWeakConceptResponse(
             StudyPackEntity studyPack,
             List<String> dueConcepts,
-            AdaptivePracticeQuota adaptivePracticeQuota
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge
     ) {
         int conceptCount = dueConcepts.size();
         String conceptLabel = conceptCount == 1 ? "concept is" : "concepts are";
@@ -116,14 +132,16 @@ public class PostSessionNextStepService {
                 pathOrFallback(studyPack.getNoteId(), ADAPTIVE_PRACTICE_PATH),
                 dueConcepts,
                 adaptivePracticeQuota.available(),
-                adaptivePracticeQuota.remaining()
+                adaptivePracticeQuota.remaining(),
+                goalNudge
         );
     }
 
     private NextStepResponse retryReviewResponse(
             StudyPackEntity studyPack,
             List<String> weakConcepts,
-            AdaptivePracticeQuota adaptivePracticeQuota
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge
     ) {
         return new NextStepResponse(
                 TodayFocusType.RETRY_REVIEW,
@@ -135,13 +153,15 @@ public class PostSessionNextStepService {
                 pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
                 weakConcepts,
                 adaptivePracticeQuota.available(),
-                adaptivePracticeQuota.remaining()
+                adaptivePracticeQuota.remaining(),
+                goalNudge
         );
     }
 
     private NextStepResponse reviewPackResponse(
             StudyPackEntity studyPack,
-            AdaptivePracticeQuota adaptivePracticeQuota
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge
     ) {
         UUID noteId = studyPack.getNoteId();
         return new NextStepResponse(
@@ -154,8 +174,45 @@ public class PostSessionNextStepService {
                 noteId == null ? FALLBACK_PATH : String.format(CHALLENGE_QUIZ_PATH, noteId),
                 List.of(),
                 adaptivePracticeQuota.available(),
-                adaptivePracticeQuota.remaining()
+                adaptivePracticeQuota.remaining(),
+                goalNudge
         );
+    }
+
+    private GoalNudgeResponse resolveGoalNudge(UserEntity user, StudyPackEntity studyPack) {
+        String studyGoal = user.getStudyGoal();
+        if (studyGoal == null || studyGoal.isBlank() || studyPack.getNoteId() == null) {
+            return null;
+        }
+
+        try {
+            NoteEntity note = noteRepository.findByIdAndOwnerUserId(studyPack.getNoteId(), user.getId())
+                    .orElse(null);
+            if (note == null || note.getCourseProgram() == null || note.getCourseProgram().isBlank()) {
+                return null;
+            }
+            if (isCurrentNoteInGoal(studyGoal, note.getCourseProgram())) {
+                return null;
+            }
+            return progressReportService.buildGoalNudge(user.getId(), studyGoal, OffsetDateTime.now(ZoneOffset.UTC));
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "goal_nudge_unavailable userId={} studyPackId={} studyGoal={} reason={}",
+                    user.getId(),
+                    studyPack.getId(),
+                    studyGoal,
+                    ex.getMessage()
+            );
+            return null;
+        }
+    }
+
+    private boolean isCurrentNoteInGoal(String studyGoal, String noteCourseProgram) {
+        if (ExamGoalConfig.isValidSlug(studyGoal)) {
+            return ExamGoalConfig.getCoursePrograms(studyGoal).stream()
+                    .anyMatch(courseProgram -> Objects.equals(courseProgram, noteCourseProgram));
+        }
+        return Objects.equals(studyGoal, noteCourseProgram);
     }
 
     private AdaptivePracticeQuota resolveAdaptivePracticeQuota(UUID userId, PlanType planType) {

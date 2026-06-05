@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.ExamGoalConfig;
+import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.GoalSummaryResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
@@ -58,6 +59,33 @@ public class ProgressReportService {
     public List<String> getUserCoursePrograms(UUID userId) {
         List<String> coursePrograms = noteRepository.findDistinctCourseProgramsByOwnerUserId(userId);
         return coursePrograms == null ? List.of() : coursePrograms;
+    }
+
+    public GoalNudgeResponse buildGoalNudge(UUID userId, String studyGoal, OffsetDateTime now) {
+        String normalizedGoal = normalizeGoal(studyGoal);
+        if (normalizedGoal == null) {
+            return null;
+        }
+
+        Map<String, List<StudyPackEntity>> packsBySubject = groupQualifyingPacksBySubject(userId);
+        boolean studyGoalIsSlug = ExamGoalConfig.isValidSlug(normalizedGoal);
+        String goalType = studyGoalIsSlug ? GOAL_TYPE_EXAM : GOAL_TYPE_SUBJECT;
+        String goalName = studyGoalIsSlug ? ExamGoalConfig.getShortName(normalizedGoal) : normalizedGoal;
+        String goalLabel = studyGoalIsSlug ? ExamGoalConfig.getFullName(normalizedGoal) : goalName;
+        List<StudyPackEntity> qualifyingPacks = packsBySubject.values().stream()
+                .flatMap(List::stream)
+                .toList();
+        List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, normalizedGoal, studyGoalIsSlug, qualifyingPacks);
+        ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
+
+        return new GoalNudgeResponse(
+                normalizedGoal,
+                goalType,
+                goalName,
+                goalLabel,
+                masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
+                counts.dueConcepts()
+        );
     }
 
     private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(UUID userId) {

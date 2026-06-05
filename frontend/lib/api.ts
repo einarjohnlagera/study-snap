@@ -165,6 +165,14 @@ export type PostSessionNextStepResponse = {
   concepts: string[];
   adaptivePracticeAvailable: boolean;
   adaptivePracticeRemaining: number | null;
+  goalNudge: {
+    studyGoal: string;
+    goalType: "EXAM" | "SUBJECT";
+    goalName: string;
+    goalLabel: string;
+    masteryPercentage: number;
+    dueConcepts: number;
+  } | null;
 };
 
 export type SubjectProgressEntry = {
@@ -310,6 +318,8 @@ export type AnalyticsEventType =
   | "EXAM_HUB_CTA_CLICKED"
   | "STUDY_GOAL_SET"
   | "STUDY_GOAL_DISMISSED"
+  | "GOAL_NUDGE_SHOWN"
+  | "GOAL_NUDGE_CTA_CLICKED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"

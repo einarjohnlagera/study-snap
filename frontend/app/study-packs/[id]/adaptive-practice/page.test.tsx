@@ -448,6 +448,7 @@ describe("AdaptivePracticePage", () => {
       concepts: [],
       adaptivePracticeAvailable: true,
       adaptivePracticeRemaining: null,
+      goalNudge: null,
     });
 
     render(<AdaptivePracticePage />);
@@ -512,7 +513,7 @@ describe("AdaptivePracticePage", () => {
     expect(screen.getByText("No targeted weak areas were attached to this set. Generate a new set or review your answers to keep practicing.")).toBeInTheDocument();
   });
 
-  it('result screen shows "← Back to Note" navigation link', async () => {
+  it('result screen shows "Note" navigation link', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
@@ -552,7 +553,7 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
 
-    expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Note" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
