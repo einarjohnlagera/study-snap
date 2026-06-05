@@ -166,7 +166,9 @@ function ProgressContent({
     );
   }
 
-  const subjects = report?.subjects ?? [];
+  const subjects = [...(report?.subjects ?? [])].sort(
+    (a, b) => a.masteryPercentage - b.masteryPercentage,
+  );
   const goalSummary = report?.goalSummary ?? null;
 
   return (
@@ -180,6 +182,8 @@ function ProgressContent({
           </Link>
         </Card>
       ) : null}
+
+      {goalSummary ? <NextStudyCard goalSummary={goalSummary} /> : null}
 
       {subjects.length === 0 ? (
         <Card className="p-4 text-sm leading-relaxed text-foreground/75 sm:p-6">
@@ -200,8 +204,6 @@ function ProgressContent({
           </div>
         </section>
       )}
-
-      {goalSummary ? <NextStudyCard goalSummary={goalSummary} /> : null}
     </div>
   );
 }

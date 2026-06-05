@@ -12,6 +12,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Exam goal setting and progress framing** — added a confirmed exam goal field on users plus `PUT /users/profile/goal`, with dashboard suggestions sourced from the exam-intent cookie first and `courseProgram` fallback second. `/progress` now includes an exam goal summary, next-best-study card linked back to the relevant exam hub, and an exam-hub callout for users with progress but no goal; the Dashboard "View full progress report" link is always visible, even before weak concepts exist.
 - **Universal study goal** — goal setting now works for all profile types; students can pick any of their note subjects as a study focus, not just board-exam slugs; progress report shows mastery toward any `courseProgram` goal; subject chip picker on `/progress` and a dashboard banner for non-exam profiles.
 - **Post-quiz goal nudge** — after any off-goal quiz session, a `GoalNudgeCard` appears below the primary next-step CTA showing goal mastery progress and linking to `/progress` (Quick Review, Challenge Quiz, Adaptive Practice, Board Exam Mode; Long Exam excluded from v1).
+- **Dashboard goal card** — persistent card replaces the empty slot when a study goal is set; shows goal name, mastery %, and CTA to browse notes or view full progress; `GoalPromptBanner` remains unchanged for the no-goal state.
 
 ### 🔲 Pending
 
@@ -28,6 +29,8 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Exam hub build fix** — `fetchPublicNotes` now catches network-level errors (ECONNREFUSED) and returns an empty array instead of crashing; exam hub pages prerender to their empty state at build time and populate via ISR on first live request
 - **Rename `exam_goal` → `study_goal`** — DB column, entity field, DTOs, service params, analytics event names (`STUDY_GOAL_SET` / `STUDY_GOAL_DISMISSED`), and all frontend types/functions renamed for clarity; V70 migration updated in-place (not yet applied)
 - **Goal UX consolidation** — goal setting now lives exclusively in Profile settings (Study Focus card with inline chip picker) and the Dashboard banner; Progress page is read-only mastery view with a "Change goal" link to `/profile#study-focus`; removed `SetGoalCallout` from Progress to eliminate the circular "set here → go there" loop; fixed exam hub CTA incorrectly appearing for non-BOARD_EXAM profiles whose `courseProgram` happened to map to an exam slug
+- **Dashboard goal card UX refinements** — card now shows `weakestGoalSubject` as a "Focus: [subject]" hint when available (requires `GoalNudgeResponse.weakestGoalSubject` from `buildGoalNudge()`); replaced the two inline browse/progress links with a single "View goal progress" outline button to `/progress`
+- **Progress page layout and sort** — subject mastery cards now sorted ascending by mastery % (weakest first) so the most actionable subjects surface at the top; "What to study next" card moved above the subject list (below the goal summary header) so the primary action is immediately visible without scrolling
 
 ---
 

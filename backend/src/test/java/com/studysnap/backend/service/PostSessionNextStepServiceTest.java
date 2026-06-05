@@ -184,7 +184,8 @@ class PostSessionNextStepServiceTest {
                 "PNLE",
                 "Philippine Nurse Licensure Examination",
                 42,
-                8
+                8,
+                null
         );
         stubOwnedStudyPack(userId, studyPack, "pnle");
         stubNote(userId, studyPack.getNoteId(), "Biochemistry");
@@ -223,7 +224,8 @@ class PostSessionNextStepServiceTest {
                 "Biochemistry",
                 "Biochemistry",
                 25,
-                3
+                3,
+                null
         );
         stubOwnedStudyPack(userId, studyPack, "Biochemistry");
         stubNote(userId, studyPack.getNoteId(), "Nursing");
@@ -261,7 +263,8 @@ class PostSessionNextStepServiceTest {
                 "PNLE",
                 "Philippine Nurse Licensure Examination",
                 0,
-                0
+                0,
+                null
         );
         stubOwnedStudyPack(userId, studyPack, "pnle");
         stubNote(userId, studyPack.getNoteId(), "Biochemistry");
