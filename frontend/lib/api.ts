@@ -1185,6 +1185,7 @@ export type SavedLibraryFilterState = {
   courseProgram?: string;
   tags?: string[];
   status?: string;
+  visibility?: string;
   sort?: string;
 };
 

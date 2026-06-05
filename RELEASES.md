@@ -31,6 +31,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Goal UX consolidation** — goal setting now lives exclusively in Profile settings (Study Focus card with inline chip picker) and the Dashboard banner; Progress page is read-only mastery view with a "Change goal" link to `/profile#study-focus`; removed `SetGoalCallout` from Progress to eliminate the circular "set here → go there" loop; fixed exam hub CTA incorrectly appearing for non-BOARD_EXAM profiles whose `courseProgram` happened to map to an exam slug
 - **Dashboard goal card UX refinements** — card now shows `weakestGoalSubject` as a "Focus: [subject]" hint when available (requires `GoalNudgeResponse.weakestGoalSubject` from `buildGoalNudge()`); replaced the two inline browse/progress links with a single "View goal progress" outline button to `/progress`
 - **Progress page layout and sort** — subject mastery cards now sorted ascending by mastery % (weakest first) so the most actionable subjects surface at the top; "What to study next" card moved above the subject list (below the goal summary header) so the primary action is immediately visible without scrolling
+- **Library visibility filter** — added a "Visibility" section (All / Public / Private chips) to the More Filters modal so users can quickly isolate their private or public notes; fully client-side, persisted in URL params and saved filter state
 
 ---
 
