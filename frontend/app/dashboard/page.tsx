@@ -43,6 +43,7 @@ import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
 import { DashboardCommunityNotesSection } from "./dashboard-community-notes-section";
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
+import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   clearFirstStudyOnboardingStep,
@@ -561,6 +562,10 @@ export default function DashboardPage() {
             />
           ) : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
+          <GoalPromptBanner
+            examGoal={profile?.examGoal ?? null}
+            courseProgram={profile?.courseProgram ?? null}
+          />
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">

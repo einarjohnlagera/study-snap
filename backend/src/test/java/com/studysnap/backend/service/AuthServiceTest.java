@@ -14,6 +14,7 @@ import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateExamGoalRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
@@ -25,6 +26,7 @@ import com.studysnap.backend.entity.UserAuthProviderEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
+import com.studysnap.backend.exception.InvalidExamGoalException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
@@ -787,6 +789,57 @@ class AuthServiceTest {
 
         assertThat(response.examDate()).isNull();
         assertThat(user.getExamDate()).isNull();
+    }
+
+    @Test
+    void updateExamGoal_savesValidGoalAndReturnsUpdatedProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateExamGoal(userId, new UpdateExamGoalRequest(" ALE "));
+
+        assertThat(response.examGoal()).isEqualTo("ale");
+        assertThat(user.getExamGoal()).isEqualTo("ale");
+    }
+
+    @Test
+    void updateExamGoal_acceptsNullAndClearsGoal() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setExamGoal("pnle");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateExamGoal(userId, new UpdateExamGoalRequest(null));
+
+        assertThat(response.examGoal()).isNull();
+        assertThat(user.getExamGoal()).isNull();
+    }
+
+    @Test
+    void updateExamGoal_rejectsUnknownGoal() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        UpdateExamGoalRequest request = new UpdateExamGoalRequest("cpa");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.updateExamGoal(userId, request))
+            .isInstanceOf(InvalidExamGoalException.class)
+            .hasMessage("Unknown exam goal. Valid values: ale, pnle, let.");
     }
 
     @Test

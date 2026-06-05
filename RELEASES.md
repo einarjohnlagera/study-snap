@@ -9,11 +9,21 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 ### ✅ Shipped
 
 - **Exam hub pages** — added public, server-rendered exam hubs for `/exam/ale`, `/exam/pnle`, and `/exam/let`, curated from existing public notes through a frontend `courseProgram` alias map. Each hub has SEO metadata, CollectionPage structured data, featured/popular/recent discovery sections, an empty state, anonymous signup CTA with persisted `exam` intent, authenticated Public Library CTA, and `EXAM_HUB_VIEWED` / `EXAM_HUB_CTA_CLICKED` analytics events. Added the static `/exam` index and a public-footer entry point.
+- **Exam goal setting and progress framing** — added a confirmed exam goal field on users plus `PUT /users/profile/goal`, with dashboard suggestions sourced from the exam-intent cookie first and `courseProgram` fallback second. `/progress` now includes an exam goal summary, next-best-study card linked back to the relevant exam hub, and an exam-hub callout for users with progress but no goal; the Dashboard "View full progress report" link is always visible, even before weak concepts exist.
 
 ### 🔲 Pending
 
-- **Track 1 — Exam Capture:** goal-setting handoff after exam-aware signup, plus deferred curation/admin normalization for future exam waves.
-- **Track 2 — Goal + Milestones:** set-your-goal (suggested from `courseProgram`/subjects), `/progress` reframed as progress-toward-goal, next-best-subject suggestion.
+- **Track 1 — Exam Capture:** deferred curation/admin normalization for future exam waves.
+- **Track 2 — Goal + Milestones:** mastery-threshold milestone depth beyond the shipped exam goal summary and next-study suggestion.
+
+### Polish & Fixes
+
+- **Progress page nav + header** — added Progress to the MAIN sidebar nav (`BarChart2` icon); fixed `ProgressHeader` to use `BackLink` + `PageHeader` (eyebrow/card pattern matching Library and Profile); link now reads "Dashboard" not "Back to Dashboard"
+- **"View progress report" link placement** — moved from inside the Weak Concepts card to inline with the section header (right-aligned, blue), so it signals a full mastery report — not just weak-concept detail
+- **Back link label consistency** — corrected four `BackLink` usages across long-exam, adaptive-practice, and quick-review pages from `label="Back to Note"` to `label="Note"` per AGENTS.md rule
+- **UI standards context file** — added `docs/ui-standards.md` documenting page header card pattern, back link rules, "view all" placement, and nav grouping for Codex and Claude anti-drift; fixed stale "muted text" description in `docs/features/navigation.md`
+- **Subject card priority hierarchy** — added mastery-keyed left border accent (gray = not started, rose < 40%, amber 40–60%, blue ≥ 60%) and matching mastery % text color to each subject card; added "Concept Mastery · N subjects" section header above the card grid for structural grouping
+- **Exam hub build fix** — `fetchPublicNotes` now catches network-level errors (ECONNREFUSED) and returns an empty array instead of crashing; exam hub pages prerender to their empty state at build time and populate via ISR on first live request
 
 ---
 

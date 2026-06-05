@@ -1,10 +1,14 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.config.ExamGoalConfig;
+import com.studysnap.backend.dto.GoalSummaryResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.ConceptHealthEntity;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.ConceptHealthRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +23,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,16 +35,20 @@ public class ProgressReportService {
     private final StudyPackRepository studyPackRepository;
     private final ConceptHealthRepository conceptHealthRepository;
     private final ConceptHealthService conceptHealthService;
+    private final NoteRepository noteRepository;
 
     @Transactional(readOnly = true)
-    public ProgressReportResponse getProgressReport(UUID userId, OffsetDateTime now) {
+    public ProgressReportResponse getProgressReport(UUID userId, String examGoal, OffsetDateTime now) {
         Map<String, List<StudyPackEntity>> packsBySubject = groupQualifyingPacksBySubject(userId);
         List<SubjectProgressEntry> subjects = packsBySubject.entrySet().stream()
             .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
             .filter(Objects::nonNull)
             .sorted(subjectProgressComparator())
             .toList();
-        return new ProgressReportResponse(subjects);
+        return new ProgressReportResponse(
+                subjects,
+                buildGoalSummary(userId, normalizeExamGoal(examGoal), packsBySubject, now)
+        );
     }
 
     private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(UUID userId) {
@@ -90,6 +100,104 @@ public class ProgressReportService {
             notPracticedConcepts,
             masteryPercentage(masteredConcepts, totalConcepts)
         );
+    }
+
+    private GoalSummaryResponse buildGoalSummary(
+            UUID userId,
+            String examGoal,
+            Map<String, List<StudyPackEntity>> packsBySubject,
+            OffsetDateTime now
+    ) {
+        if (examGoal == null || !ExamGoalConfig.isValidSlug(examGoal)) {
+            return null;
+        }
+
+        List<StudyPackEntity> qualifyingPacks = packsBySubject.values().stream()
+                .flatMap(List::stream)
+                .toList();
+        List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, examGoal, qualifyingPacks);
+        ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
+        String weakestGoalSubject = resolveWeakestGoalSubject(goalPacks, userId, now);
+
+        return new GoalSummaryResponse(
+                examGoal,
+                ExamGoalConfig.getShortName(examGoal),
+                ExamGoalConfig.getFullName(examGoal),
+                masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
+                counts.masteredConcepts(),
+                counts.totalConcepts(),
+                weakestGoalSubject
+        );
+    }
+
+    private List<StudyPackEntity> filterGoalStudyPacks(UUID userId, String examGoal, List<StudyPackEntity> studyPacks) {
+        if (studyPacks.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> noteIds = studyPacks.stream()
+                .map(StudyPackEntity::getNoteId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (noteIds.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> goalCoursePrograms = ExamGoalConfig.getCoursePrograms(examGoal).stream()
+                .map(this::normalizeCourseProgramKey)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<UUID> matchingNoteIds = noteRepository.findByOwnerUserIdAndIdIn(userId, noteIds).stream()
+                .filter(note -> goalCoursePrograms.contains(normalizeCourseProgramKey(note.getCourseProgram())))
+                .map(NoteEntity::getId)
+                .collect(Collectors.toSet());
+
+        return studyPacks.stream()
+                .filter(studyPack -> matchingNoteIds.contains(studyPack.getNoteId()))
+                .toList();
+    }
+
+    private ConceptCounts countConceptProgress(List<StudyPackEntity> studyPacks, UUID userId, OffsetDateTime now) {
+        Map<String, String> conceptNamesByKey = collectConceptNamesByKey(studyPacks);
+        int totalConcepts = conceptNamesByKey.size();
+        if (totalConcepts == 0) {
+            return new ConceptCounts(0, 0, 0, 0);
+        }
+
+        Map<String, List<OffsetDateTime>> reviewTimesByConceptKey = collectReviewTimesByConceptKey(studyPacks, userId);
+        int masteredConcepts = 0;
+        int dueConcepts = 0;
+        int notPracticedConcepts = 0;
+        for (String conceptKey : conceptNamesByKey.keySet()) {
+            ConceptProgressState state = resolveConceptState(reviewTimesByConceptKey.get(conceptKey), now);
+            if (state == ConceptProgressState.MASTERED) {
+                masteredConcepts++;
+            } else if (state == ConceptProgressState.DUE) {
+                dueConcepts++;
+            } else {
+                notPracticedConcepts++;
+            }
+        }
+        return new ConceptCounts(totalConcepts, masteredConcepts, dueConcepts, notPracticedConcepts);
+    }
+
+    private String resolveWeakestGoalSubject(List<StudyPackEntity> goalPacks, UUID userId, OffsetDateTime now) {
+        if (goalPacks.isEmpty()) {
+            return null;
+        }
+
+        return goalPacks.stream()
+                .collect(Collectors.groupingBy(this::resolveSubject, LinkedHashMap::new, Collectors.toList()))
+                .entrySet()
+                .stream()
+                .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
+                .filter(Objects::nonNull)
+                .max(Comparator
+                        .comparingInt((SubjectProgressEntry entry) -> entry.notPracticedConcepts() + entry.dueConcepts())
+                        .thenComparing(SubjectProgressEntry::subject, String.CASE_INSENSITIVE_ORDER.reversed()))
+                .map(SubjectProgressEntry::subject)
+                .orElse(null);
     }
 
     private Map<String, String> collectConceptNamesByKey(List<StudyPackEntity> studyPacks) {
@@ -179,6 +287,28 @@ public class ProgressReportService {
 
     private String normalizeConceptKey(String concept) {
         return concept.toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeCourseProgramKey(String courseProgram) {
+        if (courseProgram == null || courseProgram.isBlank()) {
+            return null;
+        }
+        return courseProgram.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeExamGoal(String examGoal) {
+        if (examGoal == null || examGoal.isBlank()) {
+            return null;
+        }
+        return examGoal.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private record ConceptCounts(
+            int totalConcepts,
+            int masteredConcepts,
+            int dueConcepts,
+            int notPracticedConcepts
+    ) {
     }
 
     private enum ConceptProgressState {

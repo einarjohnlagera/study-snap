@@ -49,6 +49,7 @@ describe("ProgressPage", () => {
           masteryPercentage: 70,
         },
       ],
+      goalSummary: null,
     });
 
     render(<ProgressPage />);
@@ -61,7 +62,7 @@ describe("ProgressPage", () => {
   });
 
   it("renders the empty state when there are no subjects", async () => {
-    (getProgressReport as jest.Mock).mockResolvedValue({ subjects: [] });
+    (getProgressReport as jest.Mock).mockResolvedValue({ subjects: [], goalSummary: null });
 
     render(<ProgressReportClient />);
 
@@ -80,6 +81,7 @@ describe("ProgressPage", () => {
           masteryPercentage: 0,
         },
       ],
+      goalSummary: null,
     });
 
     render(<ProgressReportClient />);
@@ -96,6 +98,97 @@ describe("ProgressPage", () => {
     render(<ProgressReportClient />);
 
     expect(await screen.findByText("Could not load your progress report. Try refreshing.")).toBeInTheDocument();
+  });
+
+  it("renders a goal summary header when goalSummary is present", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [
+        {
+          subject: "Design",
+          totalConcepts: 4,
+          masteredConcepts: 2,
+          dueConcepts: 1,
+          notPracticedConcepts: 1,
+          masteryPercentage: 50,
+        },
+      ],
+      goalSummary: {
+        examGoal: "ale",
+        examShortName: "ALE",
+        examFullName: "Architect Licensure Examination (ALE)",
+        masteryPercentage: 50,
+        masteredConcepts: 2,
+        totalConcepts: 4,
+        weakestGoalSubject: "Design",
+      },
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByRole("heading", { name: "Architect Licensure Examination (ALE)" })).toBeInTheDocument();
+    expect(screen.getByText("2 of 4 goal concepts mastered")).toBeInTheDocument();
+    expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders a next-study card with the weakest goal subject", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [],
+      goalSummary: {
+        examGoal: "pnle",
+        examShortName: "PNLE",
+        examFullName: "Philippine Nurse Licensure Examination (PNLE)",
+        masteryPercentage: 0,
+        masteredConcepts: 0,
+        totalConcepts: 0,
+        weakestGoalSubject: "Medical Surgical Nursing",
+      },
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByRole("heading", { name: "What to study next" })).toBeInTheDocument();
+    expect(screen.getByText("Focus on Medical Surgical Nursing — you have concepts left to practice.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse PNLE notes →" })).toHaveAttribute("href", "/exam/pnle");
+  });
+
+  it("renders a generic next-study card when weakest goal subject is null", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [],
+      goalSummary: {
+        examGoal: "let",
+        examShortName: "LET",
+        examFullName: "Licensure Examination for Teachers (LET)",
+        masteryPercentage: 0,
+        masteredConcepts: 0,
+        totalConcepts: 0,
+        weakestGoalSubject: null,
+      },
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByText("Browse community LET notes to build your knowledge.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse LET notes →" })).toHaveAttribute("href", "/exam/let");
+  });
+
+  it("renders an exam hub callout when subjects exist without a goal summary", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [
+        {
+          subject: "Biochemistry",
+          totalConcepts: 5,
+          masteredConcepts: 1,
+          dueConcepts: 1,
+          notPracticedConcepts: 3,
+          masteryPercentage: 20,
+        },
+      ],
+      goalSummary: null,
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByRole("link", { name: /Explore exam hubs to set a goal/ })).toHaveAttribute("href", "/exam");
   });
 
   it("does not fetch when the route guard redirects", async () => {
@@ -125,7 +218,7 @@ describe("DashboardFocusAreasCard progress link", () => {
     expect(screen.getByRole("link", { name: /View full progress report/ })).toHaveAttribute("href", "/progress");
   });
 
-  it("does not show the full progress report link in the empty state", () => {
+  it("shows the full progress report link in the empty state", () => {
     render(
       <DashboardFocusAreasCard
         focusAreas={{ concepts: [], practiceNoteId: null, adaptivePracticeAvailable: false }}
@@ -133,6 +226,6 @@ describe("DashboardFocusAreasCard progress link", () => {
       />,
     );
 
-    expect(screen.queryByRole("link", { name: /View full progress report/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /View full progress report/ })).toHaveAttribute("href", "/progress");
   });
 });

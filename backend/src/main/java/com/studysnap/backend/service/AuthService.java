@@ -17,11 +17,13 @@ import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateExamGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
+import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
@@ -36,6 +38,7 @@ import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidCurrentPasswordException;
+import com.studysnap.backend.exception.InvalidExamGoalException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
@@ -436,6 +439,16 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    @Transactional
+    public MeResponse updateExamGoal(UUID userId, UpdateExamGoalRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        String normalizedExamGoal = normalizeExamGoal(request.examGoal());
+
+        user.setExamGoal(normalizedExamGoal);
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
     public MeResponse updatePublicProfileVisibility(UUID userId, UpdatePublicProfileVisibilityRequest request) {
         UserEntity user = findUserOrThrow(userId);
         user.setPublicProfileVisible(Boolean.TRUE.equals(request.publicProfileVisible()));
@@ -457,6 +470,7 @@ public class AuthService {
                 user.getBio(),
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
+                user.getExamGoal(),
                 user.getSchoolName(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
@@ -475,6 +489,17 @@ public class AuthService {
                 planSnapshot.planType(),
                 planSnapshot.toResponse()
         );
+    }
+
+    private String normalizeExamGoal(String examGoal) {
+        if (examGoal == null || examGoal.isBlank()) {
+            return null;
+        }
+        String normalizedExamGoal = examGoal.trim().toLowerCase(Locale.ROOT);
+        if (!ExamGoalConfig.isValidSlug(normalizedExamGoal)) {
+            throw new InvalidExamGoalException();
+        }
+        return normalizedExamGoal;
     }
 
     @Transactional(readOnly = true)

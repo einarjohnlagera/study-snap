@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN exam_goal VARCHAR(10);

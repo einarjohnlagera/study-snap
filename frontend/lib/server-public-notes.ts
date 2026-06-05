@@ -28,13 +28,19 @@ async function fetchPublicNote(path: string): Promise<PublicNoteDetailResponse |
 }
 
 async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
-  const response = await fetch(buildApiUrl(path), {
-    method: "GET",
-    next: { revalidate: 300 },
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildApiUrl(path), {
+      method: "GET",
+      next: { revalidate: 300 },
+    });
+  } catch {
+    // Backend unreachable at build time — ISR will populate on first live request
+    return [];
+  }
 
   if (!response.ok) {
-    throw new Error("Could not load public notes.");
+    return [];
   }
   const payload = (await response.json()) as ServerPublicNoteListResponse;
   return payload.items ?? [];

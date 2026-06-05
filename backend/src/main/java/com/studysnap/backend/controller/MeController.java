@@ -2,6 +2,8 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
+import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.service.ProgressReportService;
@@ -20,6 +22,7 @@ import java.time.OffsetDateTime;
 public class MeController {
     private final MePlanService mePlanService;
     private final ProgressReportService progressReportService;
+    private final UserRepository userRepository;
 
     @GetMapping("/plan")
     @PreAuthorize("isAuthenticated()")
@@ -30,6 +33,9 @@ public class MeController {
     @GetMapping("/progress")
     @PreAuthorize("isAuthenticated()")
     public ProgressReportResponse getProgress(@AuthenticationPrincipal AuthenticatedUser user) {
-        return progressReportService.getProgressReport(user.userId(), OffsetDateTime.now());
+        String examGoal = userRepository.findById(user.userId())
+                .orElseThrow(UserNotFoundException::new)
+                .getExamGoal();
+        return progressReportService.getProgressReport(user.userId(), examGoal, OffsetDateTime.now());
     }
 }
