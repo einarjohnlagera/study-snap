@@ -87,6 +87,7 @@ const VISIBILITY_FILTER_LABELS: Record<LibraryVisibilityFilter, string> = {
   PUBLIC: "Public",
   PRIVATE: "Private",
 };
+const VISIBILITY_FILTER_KEYS = Object.keys(VISIBILITY_FILTER_LABELS) as LibraryVisibilityFilter[];
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -592,7 +593,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
-  }, [readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
+  }, [readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   useEffect(() => {
     if (!showQuizReadyIndicators && readinessFilter === "QUIZ_READY") {
@@ -898,10 +899,10 @@ export default function LibraryPage() {
   }, []);
 
   const handleNoteNavigate = useCallback((noteId: string) => {
-    const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy);
+    const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter);
     const params = new URLSearchParams({ from: "library", ref: returnUrl });
     router.push(`/notes/${noteId}?${params.toString()}`);
-  }, [readinessFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
+  }, [readinessFilter, visibilityFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
     if (!canIncludeInExam(item)) {
@@ -1439,7 +1440,7 @@ export default function LibraryPage() {
           <div className="space-y-3">
             <p className="text-sm font-medium">Visibility</p>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(VISIBILITY_FILTER_LABELS) as LibraryVisibilityFilter[]).map((filterKey) => (
+              {VISIBILITY_FILTER_KEYS.map((filterKey) => (
                 <button
                   key={filterKey}
                   type="button"

@@ -2,7 +2,7 @@
 
 ## v0.25.0 - Exam Capture & Goal Setting
 
-**Status: In progress**
+**Status: Released**
 
 Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …) into signed-up, activated learners with exam-specific landing pages, and give every new learner a goal that turns the progress report into a destination. Two tracks, one funnel — exam page → signup → goal → progress → back to community notes. App stays universal; an exam is a curated view over existing public notes (no new entity), and a goal is mastery-derived (no generated curriculum). See `docs/product/ROADMAP.md` for full scope and open kickoff questions.
 
@@ -32,6 +32,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Dashboard goal card UX refinements** — card now shows `weakestGoalSubject` as a "Focus: [subject]" hint when available (requires `GoalNudgeResponse.weakestGoalSubject` from `buildGoalNudge()`); replaced the two inline browse/progress links with a single "View goal progress" outline button to `/progress`
 - **Progress page layout and sort** — subject mastery cards now sorted ascending by mastery % (weakest first) so the most actionable subjects surface at the top; "What to study next" card moved above the subject list (below the goal summary header) so the primary action is immediately visible without scrolling
 - **Library visibility filter** — added a "Visibility" section (All / Public / Private chips) to the More Filters modal so users can quickly isolate their private or public notes; fully client-side, persisted in URL params and saved filter state
+- **Library visibility filter compilation fix** — fixed three exhaustive-deps violations in the visibility filter hooks (`setVisibleCount` effect, `handleNoteNavigate` callback, inline `Object.keys()` cast in JSX) that caused Turbopack to hang on `/library`; also ensures navigating to a note now preserves the active visibility filter in the return URL
 
 ---
 
