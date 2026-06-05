@@ -9,11 +9,12 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 ### ✅ Shipped
 
 - **Exam hub pages** — added public, server-rendered exam hubs for `/exam/ale`, `/exam/pnle`, and `/exam/let`, curated from existing public notes through a frontend `courseProgram` alias map. Each hub has SEO metadata, CollectionPage structured data, featured/popular/recent discovery sections, an empty state, anonymous signup CTA with persisted `exam` intent, authenticated Public Library CTA, and `EXAM_HUB_VIEWED` / `EXAM_HUB_CTA_CLICKED` analytics events. Added the static `/exam` index and a public-footer entry point.
+- **Exam goal setting and progress framing** — added a confirmed exam goal field on users plus `PUT /users/profile/goal`, with dashboard suggestions sourced from the exam-intent cookie first and `courseProgram` fallback second. `/progress` now includes an exam goal summary, next-best-study card linked back to the relevant exam hub, and an exam-hub callout for users with progress but no goal; the Dashboard "View full progress report" link is always visible, even before weak concepts exist.
 
 ### 🔲 Pending
 
-- **Track 1 — Exam Capture:** goal-setting handoff after exam-aware signup, plus deferred curation/admin normalization for future exam waves.
-- **Track 2 — Goal + Milestones:** set-your-goal (suggested from `courseProgram`/subjects), `/progress` reframed as progress-toward-goal, next-best-subject suggestion.
+- **Track 1 — Exam Capture:** deferred curation/admin normalization for future exam waves.
+- **Track 2 — Goal + Milestones:** mastery-threshold milestone depth beyond the shipped exam goal summary and next-study suggestion.
 
 ---
 

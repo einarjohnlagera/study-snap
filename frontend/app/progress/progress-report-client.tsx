@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { getProgressReport, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
+import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 type LoadState = "loading" | "ready" | "error";
@@ -75,6 +75,60 @@ function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }
   );
 }
 
+function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  return (
+    <Card className="overflow-hidden border-blue-500/25 bg-linear-to-br from-blue-500/10 via-background to-emerald-500/10 p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+            {goalSummary.examShortName} Goal
+          </p>
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.examFullName}</h2>
+            <p className="text-sm text-foreground/70">
+              {goalSummary.masteredConcepts} of {goalSummary.totalConcepts} goal concepts mastered
+            </p>
+          </div>
+        </div>
+        <div className="text-left sm:text-right">
+          <p className="text-4xl font-semibold tracking-tight text-foreground">{goalSummary.masteryPercentage}%</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">mastered</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ExploreExamHubsCallout() {
+  return (
+    <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
+      Studying for a board exam?{" "}
+      <Link href="/exam" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
+        Explore exam hubs to set a goal &rarr;
+      </Link>
+    </Card>
+  );
+}
+
+function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  const examHref = `/exam/${goalSummary.examGoal}`;
+  const message = goalSummary.weakestGoalSubject
+    ? `Focus on ${goalSummary.weakestGoalSubject} — you have concepts left to practice.`
+    : `Browse community ${goalSummary.examShortName} notes to build your knowledge.`;
+
+  return (
+    <Card className="space-y-3 p-4 sm:p-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">What to study next</h2>
+        <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
+      </div>
+      <Link href={examHref} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+        Browse {goalSummary.examShortName} notes &rarr;
+      </Link>
+    </Card>
+  );
+}
+
 function ProgressContent({ report, state }: Readonly<{ report: ProgressReportResponse | null; state: LoadState }>) {
   if (state === "error") {
     return (
@@ -93,20 +147,27 @@ function ProgressContent({ report, state }: Readonly<{ report: ProgressReportRes
   }
 
   const subjects = report?.subjects ?? [];
-  if (subjects.length === 0) {
-    return (
-      <Card className="p-4 text-sm leading-relaxed text-foreground/75 sm:p-6">
-        No study packs with concepts yet. Generate a Study Pack to start tracking your progress.
-      </Card>
-    );
-  }
+  const goalSummary = report?.goalSummary ?? null;
 
   return (
-    <section className="grid gap-4">
-      {subjects.map((entry) => (
-        <SubjectProgressCard key={entry.subject} entry={entry} />
-      ))}
-    </section>
+    <div className="space-y-6">
+      {goalSummary ? <GoalSummaryHeader goalSummary={goalSummary} /> : null}
+
+      {subjects.length === 0 ? (
+        <Card className="p-4 text-sm leading-relaxed text-foreground/75 sm:p-6">
+          No study packs with concepts yet. Generate a Study Pack to start tracking your progress.
+        </Card>
+      ) : (
+        <section className="grid gap-4">
+          {!goalSummary ? <ExploreExamHubsCallout /> : null}
+          {subjects.map((entry) => (
+            <SubjectProgressCard key={entry.subject} entry={entry} />
+          ))}
+        </section>
+      )}
+
+      {goalSummary ? <NextStudyCard goalSummary={goalSummary} /> : null}
+    </div>
   );
 }
 

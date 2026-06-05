@@ -4,7 +4,9 @@ import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.MePlanService;
 import com.studysnap.backend.service.ProgressReportService;
@@ -16,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,11 +36,14 @@ class MeControllerTest {
     @Mock
     private ProgressReportService progressReportService;
 
+    @Mock
+    private UserRepository userRepository;
+
     private MeController meController;
 
     @BeforeEach
     void setUp() {
-        meController = new MeController(mePlanService, progressReportService);
+        meController = new MeController(mePlanService, progressReportService, userRepository);
     }
 
     @Test
@@ -67,14 +73,18 @@ class MeControllerTest {
     void getProgress_returnsProgressReportForAuthenticatedUser() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UserEntity userEntity = new UserEntity();
+        userEntity.setId(userId);
+        userEntity.setExamGoal("ale");
         ProgressReportResponse expected = new ProgressReportResponse(List.of(
                 new SubjectProgressEntry("Biology", 4, 2, 1, 1, 50)
-        ));
-        when(progressReportService.getProgressReport(eq(userId), any(OffsetDateTime.class))).thenReturn(expected);
+        ), null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
+        when(progressReportService.getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class))).thenReturn(expected);
 
         ProgressReportResponse response = meController.getProgress(user);
 
         assertThat(response).isEqualTo(expected);
-        verify(progressReportService).getProgressReport(eq(userId), any(OffsetDateTime.class));
+        verify(progressReportService).getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class));
     }
 }

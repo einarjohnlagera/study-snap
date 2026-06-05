@@ -22,6 +22,7 @@ public record MeResponse(
         String bio,
         LearnerLevel learnerLevel,
         String courseProgram,
+        String examGoal,
         String schoolName,
         boolean publicProfileVisible,
         String countryCode,

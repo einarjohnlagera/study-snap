@@ -176,8 +176,19 @@ export type SubjectProgressEntry = {
   masteryPercentage: number;
 };
 
+export type GoalSummaryResponse = {
+  examGoal: string;
+  examShortName: string;
+  examFullName: string;
+  masteryPercentage: number;
+  masteredConcepts: number;
+  totalConcepts: number;
+  weakestGoalSubject: string | null;
+};
+
 export type ProgressReportResponse = {
   subjects: SubjectProgressEntry[];
+  goalSummary?: GoalSummaryResponse | null;
 };
 
 export type DashboardConceptInsightResponse = {
@@ -294,6 +305,8 @@ export type AnalyticsEventType =
   | "PUBLIC_PROFILE_SHARED"
   | "EXAM_HUB_VIEWED"
   | "EXAM_HUB_CTA_CLICKED"
+  | "EXAM_GOAL_SET"
+  | "EXAM_GOAL_DISMISSED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
@@ -537,6 +550,7 @@ export type MeResponse = {
   bio: string | null;
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
+  examGoal?: string | null;
   schoolName: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
@@ -1634,6 +1648,21 @@ export async function updateExamDate(examDate: string | null): Promise<MeRespons
     true,
   );
   const me = await parseApiResponse<MeResponse>(response, "Could not update exam date. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function setExamGoal(examGoal: string | null): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile/goal",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ examGoal: examGoal ?? null }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update exam goal. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

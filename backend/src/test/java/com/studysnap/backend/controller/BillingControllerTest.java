@@ -145,6 +145,7 @@ class BillingControllerTest {
                 LearnerLevel.COLLEGE,
                 "Nursing",
                 null,
+                null,
                 true,
                 null,
                 ProfileType.STUDENT,

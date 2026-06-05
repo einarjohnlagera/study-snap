@@ -91,11 +91,9 @@ export function DashboardFocusAreasCard({
             <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="adaptivePractice" label={lockedActionLabel} />
           )
         ) : null}
-        {hasConcepts ? (
-          <Link href="/progress" className="block text-sm text-foreground/60 hover:text-foreground/80">
-            View full progress report &rarr;
-          </Link>
-        ) : null}
+        <Link href="/progress" className="block text-sm text-foreground/60 hover:text-foreground/80">
+          View full progress report &rarr;
+        </Link>
       </Card>
     </section>
   );
