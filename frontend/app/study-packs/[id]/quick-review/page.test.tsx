@@ -259,6 +259,7 @@ describe("QuickReviewPage post-quiz UX", () => {
       concepts: ["Cell organelles"],
       adaptivePracticeAvailable: true,
       adaptivePracticeRemaining: 2,
+      goalNudge: null,
     });
     render(<QuickReviewPage />);
 
@@ -302,7 +303,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeInTheDocument();
   });
 
-  it('result screen shows "← Back to Note" navigation link', async () => {
+  it('result screen shows "Note" navigation link', async () => {
     setupCompleteState();
     render(<QuickReviewPage />);
 
@@ -310,12 +311,12 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
-    expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Note" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
-  it("uses Back to Note as a text link in empty quiz edge states", async () => {
+  it("uses Note as a text link in empty quiz edge states", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -330,7 +331,7 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     await screen.findByText("No quiz questions available");
 
-    expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Note" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Back to Note" })).not.toBeInTheDocument();
   });
 

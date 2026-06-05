@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   ArrowUpRight,
+  BarChart2,
   BookOpen,
   Briefcase,
   Copy,
@@ -45,6 +46,7 @@ export type ActionIconName =
   | "open"
   | "private"
   | "profile"
+  | "progress"
   | "publicLibrary"
   | "public"
   | "quickReview"
@@ -72,6 +74,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   open: ArrowUpRight,
   private: Lock,
   profile: User,
+  progress: BarChart2,
   publicLibrary: Globe,
   public: Globe,
   quickReview: Zap,

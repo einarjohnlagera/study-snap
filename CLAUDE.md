@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.24.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.25.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -191,6 +191,8 @@ type: concise subject
 
 Always update `RELEASES.md` with a bullet under the current version section when shipping any change.
 
+When closing a release (marking it Released), write a release notes file to `docs/releases/v{X.Y.Z}.md` using the Write tool. Follow the structure of existing files there: `# Release Notes: vX.Y.Z — Theme`, `## Release Theme` (one-sentence), `## Key Features` (bold emoji-prefixed titles with bullet points), `## Polish & Fixes` (flat bullet list). Do not output release notes as plain conversation text.
+
 **Release kickoff checklist** (do this when opening a new version, before the first feature commit):
 1. Add new version section to `RELEASES.md` and mark prior version Released.
 2. Add new version section to `ROADMAP.md` and update "Current Release Baseline".
@@ -198,3 +200,4 @@ Always update `RELEASES.md` with a bullet under the current version section when
 4. Bump `version` in `frontend/package.json` and `backend/pom.xml` to match the new version number.
 5. Update documentation baseline and version reference in `AGENTS.md`.
 6. Update release baseline line in `README.md`.
+7. Write release notes to `docs/releases/v{X.Y.Z}.md` for the version just closed.

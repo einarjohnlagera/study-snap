@@ -26,8 +26,12 @@ import {
   clearCopyIntentCookie,
   getCopyIntentCookie,
 } from "@/lib/public-note-copy";
+import { setExamIntentCookie } from "@/lib/exam-intent";
+import { getExamHubConfig } from "@/lib/exam-hub-config";
 
 type Mode = "login" | "signup";
+
+const EXAM_AUTH_INTENT = "exam";
 
 function resolveModeFromLocation(): Mode {
   if (globalThis.window === undefined) {
@@ -85,6 +89,17 @@ function AuthPageContent() {
   useEffect(() => {
     setMode(searchMode === "signup" ? "signup" : "login");
   }, [searchKey, searchMode]);
+
+  useEffect(() => {
+    if (searchParams.get("intent") !== EXAM_AUTH_INTENT) {
+      return;
+    }
+    const examSlug = searchParams.get("exam");
+    if (!examSlug || !getExamHubConfig(examSlug)) {
+      return;
+    }
+    setExamIntentCookie(examSlug);
+  }, [searchKey, searchParams]);
 
   useEffect(() => {
     const syncAuthenticatedUser = () => {

@@ -37,7 +37,7 @@ Rules:
 - Back link uses explicit routing (not `router.back()`), so the destination is always predictable.
 - Back link label is the destination page name only — no "Back to" prefix.
 - Back link is positioned above the page header card, left-aligned.
-- Style: small muted text (`text-foreground/70`), brightens on hover, no button border.
+- Style: blue link color (`text-blue-600 dark:text-blue-400`), underlines on hover, no button border — uses `BackLink` component, never a raw `Link` or `<a>` tag.
 
 | Sub-page | Destination | Label |
 |----------|-------------|-------|
@@ -46,6 +46,7 @@ Rules:
 | Quiz pages (Quick Review, Challenge Quiz, Adaptive Practice) | Note Details | Note |
 | Create Note | Library | Library |
 | Edit Note | Note Details | Note |
+| My Progress | Dashboard | Dashboard |
 | Profile (Edit Profile) | My Profile (public) | Profile |
 | Public Profile (non-owner) | Public Library | Public Library |
 | Learn articles | Learn index | Learn |

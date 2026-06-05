@@ -1,5 +1,41 @@
 # RELEASES.md - NoteLib
 
+## v0.25.0 - Exam Capture & Goal Setting
+
+**Status: Released**
+
+Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …) into signed-up, activated learners with exam-specific landing pages, and give every new learner a goal that turns the progress report into a destination. Two tracks, one funnel — exam page → signup → goal → progress → back to community notes. App stays universal; an exam is a curated view over existing public notes (no new entity), and a goal is mastery-derived (no generated curriculum). See `docs/product/ROADMAP.md` for full scope and open kickoff questions.
+
+### ✅ Shipped
+
+- **Exam hub pages** — added public, server-rendered exam hubs for `/exam/ale`, `/exam/pnle`, and `/exam/let`, curated from existing public notes through a frontend `courseProgram` alias map. Each hub has SEO metadata, CollectionPage structured data, featured/popular/recent discovery sections, an empty state, anonymous signup CTA with persisted `exam` intent, authenticated Public Library CTA, and `EXAM_HUB_VIEWED` / `EXAM_HUB_CTA_CLICKED` analytics events. Added the static `/exam` index and a public-footer entry point.
+- **Exam goal setting and progress framing** — added a confirmed exam goal field on users plus `PUT /users/profile/goal`, with dashboard suggestions sourced from the exam-intent cookie first and `courseProgram` fallback second. `/progress` now includes an exam goal summary, next-best-study card linked back to the relevant exam hub, and an exam-hub callout for users with progress but no goal; the Dashboard "View full progress report" link is always visible, even before weak concepts exist.
+- **Universal study goal** — goal setting now works for all profile types; students can pick any of their note subjects as a study focus, not just board-exam slugs; progress report shows mastery toward any `courseProgram` goal; subject chip picker on `/progress` and a dashboard banner for non-exam profiles.
+- **Post-quiz goal nudge** — after any off-goal quiz session, a `GoalNudgeCard` appears below the primary next-step CTA showing goal mastery progress and linking to `/progress` (Quick Review, Challenge Quiz, Adaptive Practice, Board Exam Mode; Long Exam excluded from v1).
+- **Dashboard goal card** — persistent card replaces the empty slot when a study goal is set; shows goal name, mastery %, and CTA to browse notes or view full progress; `GoalPromptBanner` remains unchanged for the no-goal state.
+
+### 🔲 Pending
+
+- **Track 1 — Exam Capture:** deferred curation/admin normalization for future exam waves.
+- **Track 2 — Goal + Milestones:** mastery-threshold milestone depth beyond the shipped exam goal summary and next-study suggestion.
+
+### Polish & Fixes
+
+- **Progress page nav + header** — added Progress to the MAIN sidebar nav (`BarChart2` icon); fixed `ProgressHeader` to use `BackLink` + `PageHeader` (eyebrow/card pattern matching Library and Profile); link now reads "Dashboard" not "Back to Dashboard"
+- **"View progress report" link placement** — moved from inside the Weak Concepts card to inline with the section header (right-aligned, blue), so it signals a full mastery report — not just weak-concept detail
+- **Back link label consistency** — corrected four `BackLink` usages across long-exam, adaptive-practice, and quick-review pages from `label="Back to Note"` to `label="Note"` per AGENTS.md rule
+- **UI standards context file** — added `docs/ui-standards.md` documenting page header card pattern, back link rules, "view all" placement, and nav grouping for Codex and Claude anti-drift; fixed stale "muted text" description in `docs/features/navigation.md`
+- **Subject card priority hierarchy** — added mastery-keyed left border accent (gray = not started, rose < 40%, amber 40–60%, blue ≥ 60%) and matching mastery % text color to each subject card; added "Concept Mastery · N subjects" section header above the card grid for structural grouping
+- **Exam hub build fix** — `fetchPublicNotes` now catches network-level errors (ECONNREFUSED) and returns an empty array instead of crashing; exam hub pages prerender to their empty state at build time and populate via ISR on first live request
+- **Rename `exam_goal` → `study_goal`** — DB column, entity field, DTOs, service params, analytics event names (`STUDY_GOAL_SET` / `STUDY_GOAL_DISMISSED`), and all frontend types/functions renamed for clarity; V70 migration updated in-place (not yet applied)
+- **Goal UX consolidation** — goal setting now lives exclusively in Profile settings (Study Focus card with inline chip picker) and the Dashboard banner; Progress page is read-only mastery view with a "Change goal" link to `/profile#study-focus`; removed `SetGoalCallout` from Progress to eliminate the circular "set here → go there" loop; fixed exam hub CTA incorrectly appearing for non-BOARD_EXAM profiles whose `courseProgram` happened to map to an exam slug
+- **Dashboard goal card UX refinements** — card now shows `weakestGoalSubject` as a "Focus: [subject]" hint when available (requires `GoalNudgeResponse.weakestGoalSubject` from `buildGoalNudge()`); replaced the two inline browse/progress links with a single "View goal progress" outline button to `/progress`
+- **Progress page layout and sort** — subject mastery cards now sorted ascending by mastery % (weakest first) so the most actionable subjects surface at the top; "What to study next" card moved above the subject list (below the goal summary header) so the primary action is immediately visible without scrolling
+- **Library visibility filter** — added a "Visibility" section (All / Public / Private chips) to the More Filters modal so users can quickly isolate their private or public notes; fully client-side, persisted in URL params and saved filter state
+- **Library visibility filter compilation fix** — fixed three exhaustive-deps violations in the visibility filter hooks (`setVisibleCount` effect, `handleNoteNavigate` callback, inline `Object.keys()` cast in JSX) that caused Turbopack to hang on `/library`; also ensures navigating to a note now preserves the active visibility filter in the return URL
+
+---
+
 ## v0.24.1 - Content Moderation Hotfix
 
 **Status: Released**

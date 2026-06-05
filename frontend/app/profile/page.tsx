@@ -18,6 +18,7 @@ import {
   getMe,
   getSignInMethods,
   listCoursePrograms,
+  setStudyGoal,
   type SignInMethodsResponse,
   type LearnerLevel,
   type MeResponse,
@@ -40,10 +41,12 @@ import {
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 import {
   PROFILE_LEARNING_PROFILE_SECTION_ID,
+  PROFILE_STUDY_FOCUS_SECTION_ID,
   PROFILE_TOP_PERFORMANCE_SECTION_ID,
   PROFILE_TYPE_SECTION_ID,
 } from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
+import { getExamHubConfig } from "@/lib/exam-hub-config";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { ProfileNotePerformance } from "@/components/profile/profile-note-performance";
 
@@ -230,6 +233,10 @@ export default function ProfilePage() {
   const [changePwError, setChangePwError] = useState<string | null>(null);
   const [changePwSuccess, setChangePwSuccess] = useState<string | null>(null);
   const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
+  const [clearingStudyGoal, setClearingStudyGoal] = useState(false);
+  const [savingStudyGoal, setSavingStudyGoal] = useState<string | null>(null);
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [studyGoalMessage, setStudyGoalMessage] = useState<string | null>(null);
 
   const scrollToRequestedSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -239,6 +246,7 @@ export default function ProfilePage() {
       PROFILE_TOP_PERFORMANCE_SECTION_ID,
       PROFILE_LEARNING_PROFILE_SECTION_ID,
       PROFILE_TYPE_SECTION_ID,
+      PROFILE_STUDY_FOCUS_SECTION_ID,
     ];
     const hash = globalThis.location.hash.slice(1);
     if (!knownSectionIds.includes(hash)) {
@@ -654,6 +662,37 @@ export default function ProfilePage() {
     }
   };
 
+  const handleClearStudyGoal = async () => {
+    setClearingStudyGoal(true);
+    setStudyGoalMessage(null);
+    try {
+      const updated = await setStudyGoal(null);
+      setProfile(updated);
+      setIsEditingGoal(true);
+    } catch (err) {
+      setStudyGoalMessage(err instanceof Error ? err.message : "Could not clear study focus. Please try again.");
+    } finally {
+      setClearingStudyGoal(false);
+    }
+  };
+
+  const handleSetStudyGoal = async (courseProgram: string) => {
+    if (savingStudyGoal) {
+      return;
+    }
+    setSavingStudyGoal(courseProgram);
+    setStudyGoalMessage(null);
+    try {
+      const updated = await setStudyGoal(courseProgram);
+      setProfile(updated);
+      setIsEditingGoal(false);
+    } catch (err) {
+      setStudyGoalMessage(err instanceof Error ? err.message : "Could not set study focus. Please try again.");
+    } finally {
+      setSavingStudyGoal(null);
+    }
+  };
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       {loading ? (
@@ -1059,6 +1098,83 @@ export default function ProfilePage() {
                 label="Save Learning Profile"
               />
             </div>
+          </Card>
+
+          <Card
+            id={PROFILE_STUDY_FOCUS_SECTION_ID}
+            className={`space-y-4 p-4 sm:p-6 transition-all${highlightedSectionId === PROFILE_STUDY_FOCUS_SECTION_ID ? " ring-2 ring-blue-500/40" : ""}`}
+          >
+            <h2 className="text-lg font-semibold sm:text-xl">Study Focus</h2>
+            {profile?.studyGoal && !isEditingGoal ? (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    {getExamHubConfig(profile.studyGoal)?.fullName ?? profile.studyGoal}
+                  </p>
+                  <p className="text-xs text-foreground/60">Your progress report tracks mastery toward this goal.</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditingGoal(true)}
+                  >
+                    Change
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleClearStudyGoal()}
+                    loading={clearingStudyGoal}
+                    loadingText="Clearing..."
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-foreground/70">
+                  {courseProgramSuggestions.length === 0
+                    ? "Create some notes first — your subjects will appear here as focus options."
+                    : "Pick a subject to track mastery toward:"}
+                </p>
+                {courseProgramSuggestions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {courseProgramSuggestions.map((courseProgram) => (
+                      <Button
+                        key={courseProgram}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        loading={savingStudyGoal === courseProgram}
+                        loadingText="Setting..."
+                        disabled={savingStudyGoal !== null || clearingStudyGoal}
+                        onClick={() => void handleSetStudyGoal(courseProgram)}
+                      >
+                        {courseProgram}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+                {isEditingGoal ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingGoal(false)}
+                    disabled={savingStudyGoal !== null}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+              </div>
+            )}
+            {studyGoalMessage ? (
+              <p className="text-xs text-red-600 dark:text-red-400">{studyGoalMessage}</p>
+            ) : null}
           </Card>
 
           <ProfileNotePerformance />

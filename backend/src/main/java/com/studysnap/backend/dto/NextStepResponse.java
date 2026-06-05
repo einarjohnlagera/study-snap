@@ -12,6 +12,7 @@ public record NextStepResponse(
         String actionHref,
         List<String> concepts,
         boolean adaptivePracticeAvailable,
-        Integer adaptivePracticeRemaining
+        Integer adaptivePracticeRemaining,
+        GoalNudgeResponse goalNudge
 ) {
 }

@@ -28,13 +28,19 @@ async function fetchPublicNote(path: string): Promise<PublicNoteDetailResponse |
 }
 
 async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
-  const response = await fetch(buildApiUrl(path), {
-    method: "GET",
-    next: { revalidate: 300 },
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildApiUrl(path), {
+      method: "GET",
+      next: { revalidate: 300 },
+    });
+  } catch {
+    // Backend unreachable at build time — ISR will populate on first live request
+    return [];
+  }
 
   if (!response.ok) {
-    throw new Error("Could not load public notes.");
+    return [];
   }
   const payload = (await response.json()) as ServerPublicNoteListResponse;
   return payload.items ?? [];
@@ -94,5 +100,23 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
 
 export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
   const notes = await getServerPublicNotes();
-  return notes.filter((note) => note.courseProgram === courseProgram);
+  const normalizedCourseProgram = courseProgram.trim().toLowerCase();
+  return notes.filter((note) => note.courseProgram?.trim().toLowerCase() === normalizedCourseProgram);
+}
+
+export async function getServerPublicNotesByCoursePrograms(coursePrograms: readonly string[]) {
+  const normalizedCoursePrograms = new Set(
+    coursePrograms
+      .map((courseProgram) => courseProgram.trim().toLowerCase())
+      .filter((courseProgram) => courseProgram.length > 0),
+  );
+  if (normalizedCoursePrograms.size === 0) {
+    return [];
+  }
+
+  const notes = await getServerPublicNotes();
+  return notes.filter((note) => {
+    const courseProgram = note.courseProgram?.trim().toLowerCase();
+    return courseProgram ? normalizedCoursePrograms.has(courseProgram) : false;
+  });
 }

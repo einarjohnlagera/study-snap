@@ -750,7 +750,7 @@ export default function LongExamPage() {
     if (loading) {
         return (
             <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-                <BackLink href={noteDetailHref} label="Back to Note"/>
+                <BackLink href={noteDetailHref} label="Note" />
                 <Card className="space-y-4 p-4 sm:p-6">
                     <div className="h-4 w-36 animate-pulse rounded bg-foreground/10"/>
                     <div className="h-8 w-3/4 animate-pulse rounded bg-foreground/10"/>

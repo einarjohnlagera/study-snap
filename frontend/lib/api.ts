@@ -165,6 +165,17 @@ export type PostSessionNextStepResponse = {
   concepts: string[];
   adaptivePracticeAvailable: boolean;
   adaptivePracticeRemaining: number | null;
+  goalNudge: GoalNudgeResponse | null;
+};
+
+export type GoalNudgeResponse = {
+  studyGoal: string;
+  goalType: "EXAM" | "SUBJECT";
+  goalName: string;
+  goalLabel: string;
+  masteryPercentage: number;
+  dueConcepts: number;
+  weakestGoalSubject: string | null;
 };
 
 export type SubjectProgressEntry = {
@@ -176,8 +187,22 @@ export type SubjectProgressEntry = {
   masteryPercentage: number;
 };
 
+export type GoalSummaryResponse = {
+  studyGoal: string;
+  goalType: "EXAM" | "SUBJECT";
+  goalName: string;
+  goalLabel: string;
+  masteryPercentage: number;
+  masteredConcepts: number;
+  totalConcepts: number;
+  weakestGoalSubject: string | null;
+};
+
 export type ProgressReportResponse = {
   subjects: SubjectProgressEntry[];
+  goalSummary?: GoalSummaryResponse | null;
+  userCoursePrograms?: string[] | null;
+  profileType?: ProfileType | null;
 };
 
 export type DashboardConceptInsightResponse = {
@@ -292,6 +317,14 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED"
   | "PUBLIC_NOTE_SHARED"
   | "PUBLIC_PROFILE_SHARED"
+  | "EXAM_HUB_VIEWED"
+  | "EXAM_HUB_CTA_CLICKED"
+  | "STUDY_GOAL_SET"
+  | "STUDY_GOAL_DISMISSED"
+  | "GOAL_NUDGE_SHOWN"
+  | "GOAL_NUDGE_CTA_CLICKED"
+  | "DASHBOARD_GOAL_CARD_VIEWED"
+  | "DASHBOARD_GOAL_CARD_CTA_CLICKED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
@@ -535,6 +568,7 @@ export type MeResponse = {
   bio: string | null;
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
+  studyGoal?: string | null;
   schoolName: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
@@ -1151,6 +1185,7 @@ export type SavedLibraryFilterState = {
   courseProgram?: string;
   tags?: string[];
   status?: string;
+  visibility?: string;
   sort?: string;
 };
 
@@ -1632,6 +1667,21 @@ export async function updateExamDate(examDate: string | null): Promise<MeRespons
     true,
   );
   const me = await parseApiResponse<MeResponse>(response, "Could not update exam date. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function setStudyGoal(studyGoal: string | null): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile/goal",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ studyGoal: studyGoal ?? null }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update study goal. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }
@@ -2177,6 +2227,28 @@ export async function getPostSessionNextStep(studyPackId: string): Promise<PostS
     true,
   );
   return parseApiResponse<PostSessionNextStepResponse>(response, "Could not load the next study step.");
+}
+
+export async function getGoalSummary(): Promise<GoalNudgeResponse | null> {
+  const response = await fetchWithAuth(
+    "/me/goal",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not load your study goal.");
+  }
+  if (response.status === 204) {
+    return null;
+  }
+  const body = await response.text();
+  if (!body.trim()) {
+    return null;
+  }
+  return JSON.parse(body) as GoalNudgeResponse | null;
 }
 
 export async function getProgressReport(): Promise<ProgressReportResponse> {

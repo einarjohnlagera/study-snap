@@ -1221,6 +1221,7 @@ describe("ChallengeQuizPage", () => {
       concepts: [],
       adaptivePracticeAvailable: true,
       adaptivePracticeRemaining: null,
+      goalNudge: null,
     });
 
     render(<ChallengeQuizPage />);

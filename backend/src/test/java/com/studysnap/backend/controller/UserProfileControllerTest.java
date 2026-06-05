@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.EngagementMode;
@@ -70,6 +71,7 @@ class UserProfileControllerTest {
                 "Reviewing pathology one note at a time.",
                 LearnerLevel.COLLEGE,
                 "Nursing",
+                null,
                 "NoteLib Academy",
                 true,
                 null,
@@ -155,6 +157,7 @@ class UserProfileControllerTest {
                 LearnerLevel.COLLEGE,
                 "Nursing",
                 null,
+                null,
                 false,
                 null,
                 ProfileType.STUDENT,
@@ -196,6 +199,7 @@ class UserProfileControllerTest {
                 "Reviewing pathology one note at a time.",
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Nursing",
+                "pnle",
                 null,
                 true,
                 null,
@@ -220,5 +224,134 @@ class UserProfileControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(authService).updateExamDate(userId, request);
+    }
+
+    @Test
+    void updateStudyGoal_delegatesValidGoalToAuthService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("ale");
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Architecture",
+                "ale",
+                null,
+                true,
+                null,
+                ProfileType.STUDENT,
+                null,
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updateStudyGoal(userId, request)).thenReturn(expected);
+
+        MeResponse response = controller.updateStudyGoal(user, request);
+
+        assertThat(response).isEqualTo(expected);
+        verify(authService).updateStudyGoal(userId, request);
+    }
+
+    @Test
+    void updateStudyGoal_allowsNullGoalToClearGoal() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest(null);
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Architecture",
+                null,
+                null,
+                true,
+                null,
+                ProfileType.STUDENT,
+                null,
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updateStudyGoal(userId, request)).thenReturn(expected);
+
+        MeResponse response = controller.updateStudyGoal(user, request);
+
+        assertThat(response.studyGoal()).isNull();
+        verify(authService).updateStudyGoal(userId, request);
+    }
+
+    @Test
+    void updateStudyGoal_allowsCourseProgramGoal() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("Mathematics");
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Mathematics",
+                "Mathematics",
+                null,
+                true,
+                null,
+                ProfileType.STUDENT,
+                null,
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updateStudyGoal(userId, request)).thenReturn(expected);
+
+        MeResponse response = controller.updateStudyGoal(user, request);
+
+        assertThat(response.studyGoal()).isEqualTo("Mathematics");
+        verify(authService).updateStudyGoal(userId, request);
     }
 }

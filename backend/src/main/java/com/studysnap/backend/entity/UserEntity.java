@@ -55,6 +55,9 @@ public class UserEntity {
     @Column(name = "course_program", length = 120)
     private String courseProgram;
 
+    @Column(name = "study_goal", columnDefinition = "text")
+    private String studyGoal;
+
     @Column(name = "school_name", length = 120)
     private String schoolName;
 

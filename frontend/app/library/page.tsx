@@ -50,6 +50,7 @@ type LibrarySortOption =
   | "OLDEST";
 
 type LibraryReadinessFilter = "ALL" | "DRAFT" | "QUIZ_READY" | "STUDY_PACK_READY";
+type LibraryVisibilityFilter = "ALL" | "PUBLIC" | "PRIVATE";
 
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -81,6 +82,12 @@ const READINESS_FILTER_LABELS: Record<LibraryReadinessFilter, string> = {
   QUIZ_READY: "Quiz Ready",
   STUDY_PACK_READY: "Study Pack Ready",
 };
+const VISIBILITY_FILTER_LABELS: Record<LibraryVisibilityFilter, string> = {
+  ALL: "All",
+  PUBLIC: "Public",
+  PRIVATE: "Private",
+};
+const VISIBILITY_FILTER_KEYS = Object.keys(VISIBILITY_FILTER_LABELS) as LibraryVisibilityFilter[];
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -210,6 +217,12 @@ function parseReadinessFilter(value: string | null): LibraryReadinessFilter {
   return "ALL";
 }
 
+function parseVisibilityFilter(value: string | null): LibraryVisibilityFilter {
+  if (value === "public") return "PUBLIC";
+  if (value === "private") return "PRIVATE";
+  return "ALL";
+}
+
 function parseSortOption(value: string | null): LibrarySortOption {
   if (value === "reviewed") return "RECENTLY_REVIEWED";
   if (value === "newest") return "NEWEST";
@@ -242,6 +255,7 @@ function buildLibraryUrl(
   tags: string[],
   status: LibraryReadinessFilter,
   sort: LibrarySortOption,
+  visibility: LibraryVisibilityFilter = "ALL",
 ): string {
   const params = new URLSearchParams();
   const trimmedQ = q.trim();
@@ -251,6 +265,8 @@ function buildLibraryUrl(
   if (tags.length > 0) params.set("tags", tags.join(","));
   const statusParam = readinessFilterToParam(status);
   if (statusParam) params.set("status", statusParam);
+  if (visibility === "PUBLIC") params.set("visibility", "public");
+  if (visibility === "PRIVATE") params.set("visibility", "private");
   const sortParam = sortOptionToParam(sort);
   if (sortParam) params.set("sort", sortParam);
   const qs = params.toString();
@@ -264,6 +280,7 @@ function buildSavedFilterState(
   tags: string[],
   status: LibraryReadinessFilter,
   sort: LibrarySortOption,
+  visibility: LibraryVisibilityFilter = "ALL",
 ): SavedLibraryFilterState {
   const filterState: SavedLibraryFilterState = {};
   const trimmedSearch = q.trim();
@@ -272,6 +289,7 @@ function buildSavedFilterState(
   if (cp !== ALL_COURSE_PROGRAMS) filterState.courseProgram = cp;
   if (tags.length > 0) filterState.tags = tags;
   if (status !== "ALL") filterState.status = status;
+  if (visibility !== "ALL") filterState.visibility = visibility;
   if (sort !== "RECENTLY_UPDATED") filterState.sort = sort;
   return filterState;
 }
@@ -293,6 +311,11 @@ function readSavedReadinessFilter(value: unknown): LibraryReadinessFilter {
   if (value === "DRAFT" || value === "QUIZ_READY" || value === "STUDY_PACK_READY") {
     return value;
   }
+  return "ALL";
+}
+
+function readSavedVisibilityFilter(value: unknown): LibraryVisibilityFilter {
+  if (value === "PUBLIC" || value === "PRIVATE") return value;
   return "ALL";
 }
 
@@ -363,6 +386,7 @@ export default function LibraryPage() {
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [readinessFilter, setReadinessFilter] = useState<LibraryReadinessFilter>(() => parseReadinessFilter(searchParams.get("status")));
+  const [visibilityFilter, setVisibilityFilter] = useState<LibraryVisibilityFilter>(() => parseVisibilityFilter(searchParams.get("visibility")));
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -454,12 +478,12 @@ export default function LibraryPage() {
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
       router.replace(
-        buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy),
+        buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter),
         { scroll: false },
       );
     }, LIBRARY_FILTER_SYNC_DEBOUNCE_MS);
     return () => globalThis.clearTimeout(timeoutId);
-  }, [searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, router]);
+  }, [searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter, router]);
 
   const hasItems = items.length > 0;
 
@@ -569,7 +593,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
-  }, [readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
+  }, [readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   useEffect(() => {
     if (!showQuizReadyIndicators && readinessFilter === "QUIZ_READY") {
@@ -587,6 +611,7 @@ export default function LibraryPage() {
     setCourseProgramSearchQuery("");
     setTagSearchQuery("");
     setReadinessFilter("ALL");
+    setVisibilityFilter("ALL");
   }, []);
 
   const toggleDraftTag = useCallback((tag: string) => {
@@ -649,6 +674,7 @@ export default function LibraryPage() {
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || readinessFilter !== "ALL"
+    || visibilityFilter !== "ALL"
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0;
@@ -659,7 +685,8 @@ export default function LibraryPage() {
     selectedTags,
     readinessFilter,
     sortBy,
-  ), [readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
+    visibilityFilter,
+  ), [readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
   const hasSavableFilter = Object.keys(currentSavedFilterState).length > 0;
 
   const applySavedFilter = useCallback((filterState: SavedLibraryFilterState) => {
@@ -668,6 +695,7 @@ export default function LibraryPage() {
     const nextCourseProgram = readSavedString(filterState.courseProgram) ?? ALL_COURSE_PROGRAMS;
     const nextTags = readSavedTags(filterState.tags);
     const nextReadinessFilter = readSavedReadinessFilter(filterState.status);
+    const nextVisibilityFilter = readSavedVisibilityFilter(filterState.visibility);
     const nextSort = readSavedSortOption(filterState.sort);
 
     setSearchQuery(nextSearch);
@@ -676,10 +704,11 @@ export default function LibraryPage() {
     setSelectedTags(nextTags);
     setTagDraft(nextTags);
     setReadinessFilter(nextReadinessFilter);
+    setVisibilityFilter(nextVisibilityFilter);
     setSortBy(nextSort);
     setSavedFiltersOpen(false);
     router.replace(
-      buildLibraryUrl(nextSearch, nextSubject, nextCourseProgram, nextTags, nextReadinessFilter, nextSort),
+      buildLibraryUrl(nextSearch, nextSubject, nextCourseProgram, nextTags, nextReadinessFilter, nextSort, nextVisibilityFilter),
       { scroll: false },
     );
   }, [router]);
@@ -755,8 +784,11 @@ export default function LibraryPage() {
         || itemCourseProgram === selectedCourseProgram;
       const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
+      const visibilityMatch = visibilityFilter === "ALL"
+        || (visibilityFilter === "PUBLIC" && item.visibility === "PUBLIC")
+        || (visibilityFilter === "PRIVATE" && item.visibility === "PRIVATE");
 
-      return searchMatch && readinessMatch && courseProgramMatch && subjectMatch && tagMatch;
+      return searchMatch && readinessMatch && courseProgramMatch && subjectMatch && tagMatch && visibilityMatch;
     });
 
     const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
@@ -796,7 +828,7 @@ export default function LibraryPage() {
           return byDateDesc(left.updatedAt, right.updatedAt);
       }
     });
-  }, [items, readinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
+  }, [items, readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
 
   const visibleItems = useMemo(
     () => sortedFilteredItems.slice(0, visibleCount),
@@ -829,7 +861,10 @@ export default function LibraryPage() {
       const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
         || itemCourseProgram === selectedCourseProgram;
       const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
-      if (!(searchMatch && readinessMatch && courseProgramMatch && tagMatch)) {
+      const visibilityMatch = visibilityFilter === "ALL"
+        || (visibilityFilter === "PUBLIC" && item.visibility === "PUBLIC")
+        || (visibilityFilter === "PRIVATE" && item.visibility === "PRIVATE");
+      if (!(searchMatch && readinessMatch && courseProgramMatch && tagMatch && visibilityMatch)) {
         continue;
       }
       total += 1;
@@ -842,7 +877,7 @@ export default function LibraryPage() {
     const topSubjects = sorted.slice(0, SUBJECT_FACET_LIMIT).map(([subject, count]) => ({ subject, count }));
     const otherSubjectsCount = sorted.slice(SUBJECT_FACET_LIMIT).reduce((sum, [, count]) => sum + count, 0);
     return { topSubjects, otherSubjectsCount, total };
-  }, [items, readinessFilter, searchQuery, selectedCourseProgram, selectedTags, showQuizReadyIndicators]);
+  }, [items, readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedTags, showQuizReadyIndicators]);
 
   const showSubjectStatsStrip = !loading
     && selectedSubject === ALL_SUBJECTS
@@ -853,10 +888,10 @@ export default function LibraryPage() {
     setSelectedSubject(subject);
     setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
     router.replace(
-      buildLibraryUrl(searchQuery, subject, selectedCourseProgram, selectedTags, readinessFilter, sortBy),
+      buildLibraryUrl(searchQuery, subject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter),
       { scroll: false },
     );
-  }, [readinessFilter, router, searchQuery, selectedCourseProgram, selectedTags, sortBy]);
+  }, [readinessFilter, visibilityFilter, router, searchQuery, selectedCourseProgram, selectedTags, sortBy]);
 
   const resetSelectionMode = useCallback(() => {
     setSelectionMode(false);
@@ -864,10 +899,10 @@ export default function LibraryPage() {
   }, []);
 
   const handleNoteNavigate = useCallback((noteId: string) => {
-    const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy);
+    const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter);
     const params = new URLSearchParams({ from: "library", ref: returnUrl });
     router.push(`/notes/${noteId}?${params.toString()}`);
-  }, [readinessFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
+  }, [readinessFilter, visibilityFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
     if (!canIncludeInExam(item)) {
@@ -1125,6 +1160,16 @@ export default function LibraryPage() {
                     <span aria-hidden="true">×</span>
                   </button>
                 ) : null}
+                {visibilityFilter !== "ALL" ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
+                    onClick={() => setVisibilityFilter("ALL")}
+                  >
+                    {VISIBILITY_FILTER_LABELS[visibilityFilter]}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ) : null}
                 {selectedSubject !== ALL_SUBJECTS ? (
                   <button
                     type="button"
@@ -1376,7 +1421,7 @@ export default function LibraryPage() {
       >
         <div className="space-y-6">
           <div className="space-y-3">
-            <p className="text-sm font-medium">Filter</p>
+            <p className="text-sm font-medium">Status</p>
             <div className="flex flex-wrap gap-2">
               {visibleReadinessFilters.map((filterKey) => (
                 <button
@@ -1387,6 +1432,23 @@ export default function LibraryPage() {
                   aria-pressed={readinessFilter === filterKey}
                 >
                   {READINESS_FILTER_LABELS[filterKey]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Visibility</p>
+            <div className="flex flex-wrap gap-2">
+              {VISIBILITY_FILTER_KEYS.map((filterKey) => (
+                <button
+                  key={filterKey}
+                  type="button"
+                  className={getFilterChipClassName(visibilityFilter === filterKey)}
+                  onClick={() => setVisibilityFilter(filterKey)}
+                  aria-pressed={visibilityFilter === filterKey}
+                >
+                  {VISIBILITY_FILTER_LABELS[filterKey]}
                 </button>
               ))}
             </div>

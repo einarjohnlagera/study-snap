@@ -2,5 +2,10 @@ package com.studysnap.backend.dto;
 
 import java.util.List;
 
-public record ProgressReportResponse(List<SubjectProgressEntry> subjects) {
+public record ProgressReportResponse(
+        List<SubjectProgressEntry> subjects,
+        GoalSummaryResponse goalSummary,
+        List<String> userCoursePrograms,
+        String profileType
+) {
 }

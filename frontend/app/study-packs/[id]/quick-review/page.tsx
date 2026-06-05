@@ -14,6 +14,7 @@ import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -966,7 +967,7 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             This note does not have quiz questions yet. Generate a Study Pack to try Quick Review.
           </p>
-          <BackLink href={noteDetailHref} label="Back to Note" />
+          <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : note && !currentSessionId ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -974,7 +975,7 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             Start Quick Review from the note detail page to create a session.
           </p>
-          <BackLink href={noteDetailHref} label="Back to Note" />
+          <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : note && isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -1018,6 +1019,9 @@ export default function QuickReviewPage() {
             noteId={note?.id ?? null}
             onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
           />
+          {nextStepResponse?.goalNudge ? (
+            <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+          ) : null}
 
           {nextStepResponse === null ? (
             <>

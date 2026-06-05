@@ -14,6 +14,7 @@ import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-o
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
+import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -365,7 +366,7 @@ export default function AdaptivePracticePage() {
       requestInFlightRef.current = false;
       setStartingAdaptive(false);
     }
-  }, [applyAdaptiveSession, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
   const adaptiveQuizActive = Boolean(
@@ -630,6 +631,9 @@ export default function AdaptivePracticePage() {
             noteId={note?.id ?? null}
             onOpenPaywall={() => openAdaptivePracticePaywall("adaptive_practice_results_next_step")}
           />
+          {nextStepResponse?.goalNudge ? (
+            <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             {nextStepResponse === null ? (
               <Button
@@ -651,7 +655,7 @@ export default function AdaptivePracticePage() {
             </Button>
           </div>
           <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Back to Note" />
+            <BackLink href={noteDetailHref} label="Note" />
           </div>
           {showAnswerReview ? (
             <QuizAnswerReview

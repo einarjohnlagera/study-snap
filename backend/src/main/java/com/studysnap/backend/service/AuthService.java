@@ -17,11 +17,13 @@ import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
+import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
@@ -36,6 +38,7 @@ import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidCurrentPasswordException;
+import com.studysnap.backend.exception.InvalidGoalException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
@@ -61,6 +64,8 @@ import java.util.UUID;
 @Transactional
 @RequiredArgsConstructor
 public class AuthService {
+    private static final int MAX_GOAL_LENGTH = 100;
+
     private static final String RESERVED_DISPLAY_NAME_MESSAGE = "This display name is reserved. Please choose another name.";
     private static final String GOOGLE_EMAIL_NOT_VERIFIED_MESSAGE = "Google email must be verified before signing in.";
     private static final String GOOGLE_EMAIL_MISMATCH_MESSAGE = "This Google account uses a different email. Please use the same email as your NoteLib account.";
@@ -436,6 +441,16 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    @Transactional
+    public MeResponse updateStudyGoal(UUID userId, UpdateStudyGoalRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        String normalizedStudyGoal = normalizeStudyGoal(request.studyGoal());
+
+        user.setStudyGoal(normalizedStudyGoal);
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
     public MeResponse updatePublicProfileVisibility(UUID userId, UpdatePublicProfileVisibilityRequest request) {
         UserEntity user = findUserOrThrow(userId);
         user.setPublicProfileVisible(Boolean.TRUE.equals(request.publicProfileVisible()));
@@ -457,6 +472,7 @@ public class AuthService {
                 user.getBio(),
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
+                user.getStudyGoal(),
                 user.getSchoolName(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
@@ -475,6 +491,23 @@ public class AuthService {
                 planSnapshot.planType(),
                 planSnapshot.toResponse()
         );
+    }
+
+    private String normalizeStudyGoal(String studyGoal) {
+        if (studyGoal == null) {
+            return null;
+        }
+        String normalizedStudyGoal = studyGoal.trim();
+        if (normalizedStudyGoal.isBlank()) {
+            throw InvalidGoalException.blank();
+        }
+        if (normalizedStudyGoal.length() > MAX_GOAL_LENGTH) {
+            throw InvalidGoalException.tooLong();
+        }
+        if (ExamGoalConfig.isValidSlug(normalizedStudyGoal)) {
+            return normalizedStudyGoal.toLowerCase(Locale.ROOT);
+        }
+        return normalizedStudyGoal;
     }
 
     @Transactional(readOnly = true)

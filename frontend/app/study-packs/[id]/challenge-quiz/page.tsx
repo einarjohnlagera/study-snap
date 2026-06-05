@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { AppModal } from "@/components/ui/app-modal";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
+import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
@@ -1761,7 +1762,7 @@ export default function ChallengeQuizPage() {
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             {boardExamLimitReached ? (
               <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/25 dark:text-amber-100">
-                <p className="font-medium">You've used all {boardExamMonthlyLimit} Board Exam sessions for this month.</p>
+                <p className="font-medium">You&apos;ve used all {boardExamMonthlyLimit} Board Exam sessions for this month.</p>
                 <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
                   You can still review existing results. Start a new Board Exam when your quota resets.
                 </p>
@@ -2073,6 +2074,9 @@ export default function ChallengeQuizPage() {
               noteId={note?.id ?? null}
               onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "board_exam_results_next_step")}
             />
+            {nextStepResponse?.goalNudge ? (
+              <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+            ) : null}
             {nextStepResponse === null ? (
               <>
                 <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -2287,6 +2291,9 @@ export default function ChallengeQuizPage() {
               noteId={note?.id ?? null}
               onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "challenge_quiz_results_next_step")}
             />
+            {nextStepResponse?.goalNudge ? (
+              <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+            ) : null}
             {nextStepResponse === null ? (
               <>
                 <Card className="space-y-3 p-4">
