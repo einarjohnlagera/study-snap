@@ -85,6 +85,24 @@ Dashboard goal actions:
 - `Dismiss` clears the intent cookie, fires `STUDY_GOAL_DISMISSED`, and hides the banner without changing the stored goal.
 - Goal setting is available to all authenticated profile types; there is no Exam Reviewer-only gate.
 
+When a goal is already set, Dashboard replaces the prompt slot with `DashboardGoalCard` instead of leaving the area
+empty. The card loads independently from `GET /me/goal`, which reuses `ProgressReportService.buildGoalNudge()` and
+returns nullable `GoalNudgeResponse` data. Dashboard shows a skeleton while this request is pending; if the request
+fails or the backend cannot compute the summary, the slot collapses quietly and the rest of Dashboard remains usable.
+
+`DashboardGoalCard` shows:
+
+- `{goalName} Goal`.
+- `{goalLabel}`.
+- Overall mastery percentage.
+- Due goal-concept count, or `All caught up — keep practicing!` when `dueConcepts == 0`.
+
+Dashboard card CTAs:
+
+- `EXAM` goals: `Browse {goalName} notes →` links to `/exam/{studyGoal}`.
+- `SUBJECT` goals: `Browse {goalName} notes →` links to `/public/library?courseProgram={studyGoal}`.
+- Secondary `View full progress →` always links to `/progress`.
+
 When a goal is set, `/progress` adds a goal summary above the normal subject list. It does not filter the subject
 list; all subject progress remains visible. `GoalSummaryResponse` includes `goalType`, `goalName`, and `goalLabel`
 so the UI can render both paths without exam-specific DTO fields.
@@ -135,6 +153,8 @@ Exam hub analytics events are frontend-fired and non-blocking:
 - `EXAM_HUB_CTA_CLICKED` with metadata `{ slug, destination }`.
 - `STUDY_GOAL_SET` with metadata `{ studyGoal }`.
 - `STUDY_GOAL_DISMISSED` with metadata `{ studyGoal }`.
+- `DASHBOARD_GOAL_CARD_VIEWED` with metadata `{ studyGoal }`.
+- `DASHBOARD_GOAL_CARD_CTA_CLICKED` with metadata `{ studyGoal, destination }`.
 
 Event names must exist in both the frontend `AnalyticsEventType` union and backend `AnalyticsEventType` enum before use.
 

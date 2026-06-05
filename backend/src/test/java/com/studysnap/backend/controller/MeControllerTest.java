@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,5 +95,61 @@ class MeControllerTest {
                 "STUDENT"
         ));
         verify(progressReportService).getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void getGoal_returnsGoalSummaryWhenStudyGoalIsSet() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UserEntity userEntity = new UserEntity();
+        userEntity.setId(userId);
+        userEntity.setStudyGoal("pnle");
+        GoalNudgeResponse expected = new GoalNudgeResponse(
+                "pnle",
+                "EXAM",
+                "PNLE",
+                "Philippine Nurse Licensure Examination",
+                42,
+                8
+        );
+        when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
+        when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class))).thenReturn(expected);
+
+        GoalNudgeResponse response = meController.getGoal(user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(progressReportService).buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void getGoal_returnsNullWhenStudyGoalIsMissing() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UserEntity userEntity = new UserEntity();
+        userEntity.setId(userId);
+        userEntity.setStudyGoal(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
+
+        GoalNudgeResponse response = meController.getGoal(user);
+
+        assertThat(response).isNull();
+        verify(progressReportService, never()).buildGoalNudge(any(), any(), any());
+    }
+
+    @Test
+    void getGoal_returnsNullWhenGoalSummaryCannotBeComputed() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UserEntity userEntity = new UserEntity();
+        userEntity.setId(userId);
+        userEntity.setStudyGoal("Biochemistry");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
+        when(progressReportService.buildGoalNudge(eq(userId), eq("Biochemistry"), any(OffsetDateTime.class)))
+                .thenThrow(new IllegalStateException("summary unavailable"));
+
+        GoalNudgeResponse response = meController.getGoal(user);
+
+        assertThat(response).isNull();
+        verify(progressReportService).buildGoalNudge(eq(userId), eq("Biochemistry"), any(OffsetDateTime.class));
     }
 }

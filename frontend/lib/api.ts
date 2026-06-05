@@ -165,14 +165,16 @@ export type PostSessionNextStepResponse = {
   concepts: string[];
   adaptivePracticeAvailable: boolean;
   adaptivePracticeRemaining: number | null;
-  goalNudge: {
-    studyGoal: string;
-    goalType: "EXAM" | "SUBJECT";
-    goalName: string;
-    goalLabel: string;
-    masteryPercentage: number;
-    dueConcepts: number;
-  } | null;
+  goalNudge: GoalNudgeResponse | null;
+};
+
+export type GoalNudgeResponse = {
+  studyGoal: string;
+  goalType: "EXAM" | "SUBJECT";
+  goalName: string;
+  goalLabel: string;
+  masteryPercentage: number;
+  dueConcepts: number;
 };
 
 export type SubjectProgressEntry = {
@@ -320,6 +322,8 @@ export type AnalyticsEventType =
   | "STUDY_GOAL_DISMISSED"
   | "GOAL_NUDGE_SHOWN"
   | "GOAL_NUDGE_CTA_CLICKED"
+  | "DASHBOARD_GOAL_CARD_VIEWED"
+  | "DASHBOARD_GOAL_CARD_CTA_CLICKED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
@@ -2221,6 +2225,28 @@ export async function getPostSessionNextStep(studyPackId: string): Promise<PostS
     true,
   );
   return parseApiResponse<PostSessionNextStepResponse>(response, "Could not load the next study step.");
+}
+
+export async function getGoalSummary(): Promise<GoalNudgeResponse | null> {
+  const response = await fetchWithAuth(
+    "/me/goal",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not load your study goal.");
+  }
+  if (response.status === 204) {
+    return null;
+  }
+  const body = await response.text();
+  if (!body.trim()) {
+    return null;
+  }
+  return JSON.parse(body) as GoalNudgeResponse | null;
 }
 
 export async function getProgressReport(): Promise<ProgressReportResponse> {

@@ -4,6 +4,7 @@ import {
   completeProductOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
+  getGoalSummary,
   getMe,
   getNote,
   getQuickReviewPerformanceSummary,
@@ -37,6 +38,7 @@ jest.mock("@/lib/api", () => ({
   createPremiumCheckoutSession: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
+  getGoalSummary: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
@@ -137,6 +139,7 @@ describe("DashboardPage profile variants", () => {
     (getMe as jest.Mock).mockReset();
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
+    (getGoalSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
@@ -158,6 +161,7 @@ describe("DashboardPage profile variants", () => {
       resumeState: "QUESTION_IN_PROGRESS",
     });
     (getDashboardOverview as jest.Mock).mockResolvedValue(overview);
+    (getGoalSummary as jest.Mock).mockResolvedValue(null);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });
   });
@@ -249,13 +253,195 @@ describe("DashboardPage profile variants", () => {
     await waitFor(() => {
       expect(screen.queryByText("Too easy or too hard?")).not.toBeInTheDocument();
     });
-    expect(window.localStorage.getItem("notelib-dashboard-personalization-prompt:user-1")).toBe("1");
+    expect(globalThis.localStorage.getItem("notelib-dashboard-personalization-prompt:user-1")).toBe("1");
 
     unmount();
     render(<DashboardPage />);
 
     await screen.findByText("Continue Studying");
     expect(screen.queryByText("Too easy or too hard?")).not.toBeInTheDocument();
+  });
+
+  it("shows a dashboard goal card for an exam goal", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      studyGoal: "pnle",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getGoalSummary as jest.Mock).mockResolvedValue({
+      studyGoal: "pnle",
+      goalType: "EXAM",
+      goalName: "PNLE",
+      goalLabel: "Philippine Nurse Licensure Examination",
+      masteryPercentage: 42,
+      dueConcepts: 8,
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PRO",
+        limits: { studyPacksPerMonth: 100, challengeQuizzesPerMonth: 50, adaptivePracticePerMonth: 30 },
+        usage: { studyPacksUsed: 12, challengeQuizzesUsed: 8, adaptivePracticeUsed: 3 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("PNLE Goal")).toBeInTheDocument();
+    expect(screen.getByText("Philippine Nurse Licensure Examination")).toBeInTheDocument();
+    expect(screen.getByText("42%")).toBeInTheDocument();
+    expect(screen.getByText("8 concepts due for review")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse PNLE notes →" })).toHaveAttribute("href", "/exam/pnle");
+    expect(screen.getByRole("link", { name: "View full progress →" })).toHaveAttribute("href", "/progress");
+    expect(getGoalSummary).toHaveBeenCalled();
+  });
+
+  it("shows a skeleton while the dashboard goal summary loads", async () => {
+    let resolveGoalSummary: (summary: unknown) => void = () => undefined;
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      studyGoal: "pnle",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getGoalSummary as jest.Mock).mockReturnValue(new Promise((resolve) => {
+      resolveGoalSummary = resolve;
+    }));
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PRO",
+        limits: { studyPacksPerMonth: 100, challengeQuizzesPerMonth: 50, adaptivePracticePerMonth: 30 },
+        usage: { studyPacksUsed: 12, challengeQuizzesUsed: 8, adaptivePracticeUsed: 3 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByLabelText("Loading study goal")).toBeInTheDocument();
+
+    resolveGoalSummary({
+      studyGoal: "pnle",
+      goalType: "EXAM",
+      goalName: "PNLE",
+      goalLabel: "Philippine Nurse Licensure Examination",
+      masteryPercentage: 42,
+      dueConcepts: 8,
+    });
+
+    expect(await screen.findByText("PNLE Goal")).toBeInTheDocument();
+  });
+
+  it("shows a dashboard goal card for a subject goal", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "Biochemistry",
+      studyGoal: "Biochemistry",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getGoalSummary as jest.Mock).mockResolvedValue({
+      studyGoal: "Biochemistry",
+      goalType: "SUBJECT",
+      goalName: "Biochemistry",
+      goalLabel: "Biochemistry",
+      masteryPercentage: 64,
+      dueConcepts: 0,
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Biochemistry Goal")).toBeInTheDocument();
+    expect(screen.getByText("All caught up — keep practicing!")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse Biochemistry notes →" }))
+      .toHaveAttribute("href", "/public/library?courseProgram=Biochemistry");
+    expect(getGoalSummary).toHaveBeenCalled();
+  });
+
+  it("does not fetch the dashboard goal summary when no goal is set", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "Mathematics",
+      studyGoal: null,
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Track your progress in Mathematics.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set as my focus" })).toBeInTheDocument();
+    expect(getGoalSummary).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Loading study goal")).not.toBeInTheDocument();
+  });
+
+  it("hides the dashboard goal slot when goal summary loading fails", async () => {
+    let rejectGoalSummary: (error: Error) => void = () => undefined;
+    const warnSpy = jest.spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      studyGoal: "pnle",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getGoalSummary as jest.Mock).mockReturnValue(new Promise((_, reject) => {
+      rejectGoalSummary = reject;
+    }));
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PRO",
+        limits: { studyPacksPerMonth: 100, challengeQuizzesPerMonth: 50, adaptivePracticePerMonth: 30 },
+        usage: { studyPacksUsed: 12, challengeQuizzesUsed: 8, adaptivePracticeUsed: 3 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByLabelText("Loading study goal")).toBeInTheDocument();
+    rejectGoalSummary(new Error("offline"));
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Loading study goal")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("PNLE Goal")).not.toBeInTheDocument();
+    expect(screen.queryByText("Studying for a board exam?")).not.toBeInTheDocument();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("renders the board exam dashboard with countdown and challenge-quiz CTA", async () => {

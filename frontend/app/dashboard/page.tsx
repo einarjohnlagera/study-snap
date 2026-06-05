@@ -16,12 +16,14 @@ import {
   completeProductOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
+  getGoalSummary,
   getMe,
   getNote,
   getQuickReviewPerformanceSummary,
   listNotes,
   type ContinueStudyingResponse,
   type DashboardOverviewResponse,
+  type GoalNudgeResponse,
   type MeResponse,
   type NoteListItemResponse,
   type ProfileType,
@@ -43,6 +45,7 @@ import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
 import { DashboardCommunityNotesSection } from "./dashboard-community-notes-section";
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
+import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
 import { AppModal } from "@/components/ui/app-modal";
 import {
@@ -268,6 +271,25 @@ function TeacherTipsCard() {
   );
 }
 
+function DashboardGoalCardSkeleton() {
+  return (
+    <Card
+      aria-label="Loading study goal"
+      className="overflow-hidden border-blue-500/15 bg-linear-to-br from-blue-500/5 via-background to-emerald-500/5 p-4 sm:p-6"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-3">
+          <div className="h-3 w-24 animate-pulse rounded bg-foreground/10" />
+          <div className="h-5 w-64 max-w-full animate-pulse rounded bg-foreground/10" />
+          <div className="h-4 w-40 animate-pulse rounded bg-foreground/10" />
+        </div>
+        <div className="h-10 w-20 animate-pulse rounded bg-foreground/10" />
+      </div>
+      <div className="mt-4 h-4 w-48 animate-pulse rounded bg-foreground/10" />
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
@@ -275,6 +297,8 @@ export default function DashboardPage() {
   const [teacherGeneratedQuizzes, setTeacherGeneratedQuizzes] = useState<TeacherGeneratedQuizSummary[]>([]);
   const [greetingName, setGreetingName] = useState("there");
   const [profile, setProfile] = useState<MeResponse | null>(null);
+  const [goalSummary, setGoalSummary] = useState<GoalNudgeResponse | null>(null);
+  const [goalSummaryLoading, setGoalSummaryLoading] = useState(false);
   const [continueStudying, setContinueStudying] = useState<ContinueStudyingResponse | null>(null);
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
@@ -311,6 +335,24 @@ export default function DashboardPage() {
       if (meResult.status === "fulfilled") {
         const me = meResult.value;
         setProfile(me);
+        if (me.studyGoal) {
+          setGoalSummary(null);
+          setGoalSummaryLoading(true);
+          void getGoalSummary()
+            .then((summary) => {
+              setGoalSummary(summary);
+            })
+            .catch((goalErr) => {
+              globalThis.console.warn("Could not load dashboard goal summary.", goalErr);
+              setGoalSummary(null);
+            })
+            .finally(() => {
+              setGoalSummaryLoading(false);
+            });
+        } else {
+          setGoalSummary(null);
+          setGoalSummaryLoading(false);
+        }
         const preferredName = me.firstName?.trim()
           || me.displayName?.trim()
           || "there";
@@ -371,6 +413,8 @@ export default function DashboardPage() {
           setTeacherGeneratedQuizzes([]);
         }
       } else {
+        setGoalSummary(null);
+        setGoalSummaryLoading(false);
         setTeacherGeneratedQuizzes([]);
         setRecentNoteMetaById({});
       }
@@ -562,11 +606,19 @@ export default function DashboardPage() {
             />
           ) : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
-          <GoalPromptBanner
-            studyGoal={profile?.studyGoal ?? null}
-            courseProgram={profile?.courseProgram ?? null}
-            profileType={profile?.profileType ?? null}
-          />
+          {profile?.studyGoal ? (
+            goalSummary ? (
+              <DashboardGoalCard goalSummary={goalSummary} />
+            ) : goalSummaryLoading ? (
+              <DashboardGoalCardSkeleton />
+            ) : null
+          ) : (
+            <GoalPromptBanner
+              studyGoal={profile?.studyGoal ?? null}
+              courseProgram={profile?.courseProgram ?? null}
+              profileType={profile?.profileType ?? null}
+            />
+          )}
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">
