@@ -860,7 +860,10 @@ export default function LibraryPage() {
       const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
         || itemCourseProgram === selectedCourseProgram;
       const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
-      if (!(searchMatch && readinessMatch && courseProgramMatch && tagMatch)) {
+      const visibilityMatch = visibilityFilter === "ALL"
+        || (visibilityFilter === "PUBLIC" && item.visibility === "PUBLIC")
+        || (visibilityFilter === "PRIVATE" && item.visibility === "PRIVATE");
+      if (!(searchMatch && readinessMatch && courseProgramMatch && tagMatch && visibilityMatch)) {
         continue;
       }
       total += 1;
