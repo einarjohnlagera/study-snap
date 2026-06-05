@@ -23,6 +23,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Back link label consistency** — corrected four `BackLink` usages across long-exam, adaptive-practice, and quick-review pages from `label="Back to Note"` to `label="Note"` per AGENTS.md rule
 - **UI standards context file** — added `docs/ui-standards.md` documenting page header card pattern, back link rules, "view all" placement, and nav grouping for Codex and Claude anti-drift; fixed stale "muted text" description in `docs/features/navigation.md`
 - **Subject card priority hierarchy** — added mastery-keyed left border accent (gray = not started, rose < 40%, amber 40–60%, blue ≥ 60%) and matching mastery % text color to each subject card; added "Concept Mastery · N subjects" section header above the card grid for structural grouping
+- **Exam hub build fix** — `fetchPublicNotes` now catches network-level errors (ECONNREFUSED) and returns an empty array instead of crashing; exam hub pages prerender to their empty state at build time and populate via ISR on first live request
 
 ---
 
