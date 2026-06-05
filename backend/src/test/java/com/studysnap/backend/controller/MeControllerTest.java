@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.MePlanResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.repository.UserRepository;
@@ -75,16 +76,22 @@ class MeControllerTest {
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         UserEntity userEntity = new UserEntity();
         userEntity.setId(userId);
-        userEntity.setExamGoal("ale");
+        userEntity.setStudyGoal("ale");
+        userEntity.setProfileType(ProfileType.STUDENT);
         ProgressReportResponse expected = new ProgressReportResponse(List.of(
                 new SubjectProgressEntry("Biology", 4, 2, 1, 1, 50)
-        ), null);
+        ), null, List.of("Biology"), null);
         when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
         when(progressReportService.getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class))).thenReturn(expected);
 
         ProgressReportResponse response = meController.getProgress(user);
 
-        assertThat(response).isEqualTo(expected);
+        assertThat(response).isEqualTo(new ProgressReportResponse(
+                expected.subjects(),
+                expected.goalSummary(),
+                expected.userCoursePrograms(),
+                "STUDENT"
+        ));
         verify(progressReportService).getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class));
     }
 }

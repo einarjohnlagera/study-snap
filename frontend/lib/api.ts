@@ -177,9 +177,10 @@ export type SubjectProgressEntry = {
 };
 
 export type GoalSummaryResponse = {
-  examGoal: string;
-  examShortName: string;
-  examFullName: string;
+  studyGoal: string;
+  goalType: "EXAM" | "SUBJECT";
+  goalName: string;
+  goalLabel: string;
   masteryPercentage: number;
   masteredConcepts: number;
   totalConcepts: number;
@@ -189,6 +190,8 @@ export type GoalSummaryResponse = {
 export type ProgressReportResponse = {
   subjects: SubjectProgressEntry[];
   goalSummary?: GoalSummaryResponse | null;
+  userCoursePrograms?: string[] | null;
+  profileType?: ProfileType | null;
 };
 
 export type DashboardConceptInsightResponse = {
@@ -305,8 +308,8 @@ export type AnalyticsEventType =
   | "PUBLIC_PROFILE_SHARED"
   | "EXAM_HUB_VIEWED"
   | "EXAM_HUB_CTA_CLICKED"
-  | "EXAM_GOAL_SET"
-  | "EXAM_GOAL_DISMISSED"
+  | "STUDY_GOAL_SET"
+  | "STUDY_GOAL_DISMISSED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
@@ -550,7 +553,7 @@ export type MeResponse = {
   bio: string | null;
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
-  examGoal?: string | null;
+  studyGoal?: string | null;
   schoolName: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
@@ -1652,17 +1655,17 @@ export async function updateExamDate(examDate: string | null): Promise<MeRespons
   return me;
 }
 
-export async function setExamGoal(examGoal: string | null): Promise<MeResponse> {
+export async function setStudyGoal(studyGoal: string | null): Promise<MeResponse> {
   const response = await fetchWithAuth(
     "/users/profile/goal",
     {
       method: "PUT",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ examGoal: examGoal ?? null }),
+      body: JSON.stringify({ studyGoal: studyGoal ?? null }),
     },
     true,
   );
-  const me = await parseApiResponse<MeResponse>(response, "Could not update exam goal. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update study goal. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

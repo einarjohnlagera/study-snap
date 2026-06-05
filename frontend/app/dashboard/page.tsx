@@ -563,8 +563,9 @@ export default function DashboardPage() {
           ) : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
           <GoalPromptBanner
-            examGoal={profile?.examGoal ?? null}
+            studyGoal={profile?.studyGoal ?? null}
             courseProgram={profile?.courseProgram ?? null}
+            profileType={profile?.profileType ?? null}
           />
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">

@@ -92,40 +92,43 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            {goalSummary.examShortName} Goal
+            {goalSummary.goalName} Goal
           </p>
           <div className="space-y-1">
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.examFullName}</h2>
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.goalLabel}</h2>
             <p className="text-sm text-foreground/70">
               {goalSummary.masteredConcepts} of {goalSummary.totalConcepts} goal concepts mastered
             </p>
           </div>
         </div>
-        <div className="text-left sm:text-right">
-          <p className="text-4xl font-semibold tracking-tight text-foreground">{goalSummary.masteryPercentage}%</p>
-          <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">mastered</p>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="text-left sm:text-right">
+            <p className="text-4xl font-semibold tracking-tight text-foreground">{goalSummary.masteryPercentage}%</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">mastered</p>
+          </div>
+          <Link
+            href="/profile#study-focus"
+            className="text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+          >
+            Change goal
+          </Link>
         </div>
       </div>
     </Card>
   );
 }
 
-function ExploreExamHubsCallout() {
-  return (
-    <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
-      Studying for a board exam?{" "}
-      <Link href="/exam" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
-        Explore exam hubs to set a goal &rarr;
-      </Link>
-    </Card>
-  );
-}
-
 function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
-  const examHref = `/exam/${goalSummary.examGoal}`;
+  const isExamGoal = goalSummary.goalType === "EXAM";
+  const href = isExamGoal
+    ? `/exam/${goalSummary.studyGoal}`
+    : `/public/library?courseProgram=${encodeURIComponent(goalSummary.studyGoal)}`;
   const message = goalSummary.weakestGoalSubject
     ? `Focus on ${goalSummary.weakestGoalSubject} — you have concepts left to practice.`
-    : `Browse community ${goalSummary.examShortName} notes to build your knowledge.`;
+    : `Browse community ${goalSummary.goalName} notes to build your knowledge.`;
+  const linkLabel = isExamGoal
+    ? `Browse ${goalSummary.goalName} notes`
+    : `Browse ${goalSummary.goalName} notes in the community`;
 
   return (
     <Card className="space-y-3 p-4 sm:p-6">
@@ -133,14 +136,20 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
         <h2 className="text-lg font-semibold tracking-tight">What to study next</h2>
         <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
       </div>
-      <Link href={examHref} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
-        Browse {goalSummary.examShortName} notes &rarr;
+      <Link href={href} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+        {linkLabel} &rarr;
       </Link>
     </Card>
   );
 }
 
-function ProgressContent({ report, state }: Readonly<{ report: ProgressReportResponse | null; state: LoadState }>) {
+function ProgressContent({
+  report,
+  state,
+}: Readonly<{
+  report: ProgressReportResponse | null;
+  state: LoadState;
+}>) {
   if (state === "error") {
     return (
       <Card className="p-4 text-sm text-foreground/75 sm:p-6">
@@ -163,6 +172,14 @@ function ProgressContent({ report, state }: Readonly<{ report: ProgressReportRes
   return (
     <div className="space-y-6">
       {goalSummary ? <GoalSummaryHeader goalSummary={goalSummary} /> : null}
+      {!goalSummary ? (
+        <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
+          No study focus set.{" "}
+          <Link href="/profile#study-focus" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
+            Set one in Profile settings →
+          </Link>
+        </Card>
+      ) : null}
 
       {subjects.length === 0 ? (
         <Card className="p-4 text-sm leading-relaxed text-foreground/75 sm:p-6">
@@ -176,7 +193,6 @@ function ProgressContent({ report, state }: Readonly<{ report: ProgressReportRes
             </h2>
             <span className="text-xs text-foreground/50">{subjects.length} {subjects.length === 1 ? "subject" : "subjects"}</span>
           </div>
-          {!goalSummary ? <ExploreExamHubsCallout /> : null}
           <div className="grid gap-4">
             {subjects.map((entry) => (
               <SubjectProgressCard key={entry.subject} entry={entry} />

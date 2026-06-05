@@ -3,7 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
-import com.studysnap.backend.dto.UpdateExamGoalRequest;
+import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.EngagementMode;
@@ -13,7 +13,6 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
-import com.studysnap.backend.exception.InvalidExamGoalException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import jakarta.validation.ConstraintViolation;
@@ -30,7 +29,6 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -229,10 +227,10 @@ class UserProfileControllerTest {
     }
 
     @Test
-    void updateExamGoal_delegatesValidGoalToAuthService() {
+    void updateStudyGoal_delegatesValidGoalToAuthService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateExamGoalRequest request = new UpdateExamGoalRequest("ale");
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("ale");
         MeResponse expected = new MeResponse(
                 userId.toString(),
                 "[email protected]",
@@ -263,19 +261,19 @@ class UserProfileControllerTest {
                 PlanType.FREE,
                 new SubscriptionPlanStatusResponse(false, null, null)
         );
-        when(authService.updateExamGoal(userId, request)).thenReturn(expected);
+        when(authService.updateStudyGoal(userId, request)).thenReturn(expected);
 
-        MeResponse response = controller.updateExamGoal(user, request);
+        MeResponse response = controller.updateStudyGoal(user, request);
 
         assertThat(response).isEqualTo(expected);
-        verify(authService).updateExamGoal(userId, request);
+        verify(authService).updateStudyGoal(userId, request);
     }
 
     @Test
-    void updateExamGoal_allowsNullGoalToClearGoal() {
+    void updateStudyGoal_allowsNullGoalToClearGoal() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateExamGoalRequest request = new UpdateExamGoalRequest(null);
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest(null);
         MeResponse expected = new MeResponse(
                 userId.toString(),
                 "[email protected]",
@@ -306,22 +304,54 @@ class UserProfileControllerTest {
                 PlanType.FREE,
                 new SubscriptionPlanStatusResponse(false, null, null)
         );
-        when(authService.updateExamGoal(userId, request)).thenReturn(expected);
+        when(authService.updateStudyGoal(userId, request)).thenReturn(expected);
 
-        MeResponse response = controller.updateExamGoal(user, request);
+        MeResponse response = controller.updateStudyGoal(user, request);
 
-        assertThat(response.examGoal()).isNull();
-        verify(authService).updateExamGoal(userId, request);
+        assertThat(response.studyGoal()).isNull();
+        verify(authService).updateStudyGoal(userId, request);
     }
 
     @Test
-    void updateExamGoal_rejectsUnknownGoal() {
+    void updateStudyGoal_allowsCourseProgramGoal() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateExamGoalRequest request = new UpdateExamGoalRequest("cpa");
+        UpdateStudyGoalRequest request = new UpdateStudyGoalRequest("Mathematics");
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Mathematics",
+                "Mathematics",
+                null,
+                true,
+                null,
+                ProfileType.STUDENT,
+                null,
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updateStudyGoal(userId, request)).thenReturn(expected);
 
-        assertThatThrownBy(() -> controller.updateExamGoal(user, request))
-                .isInstanceOf(InvalidExamGoalException.class)
-                .hasMessage("Unknown exam goal. Valid values: ale, pnle, let.");
+        MeResponse response = controller.updateStudyGoal(user, request);
+
+        assertThat(response.studyGoal()).isEqualTo("Mathematics");
+        verify(authService).updateStudyGoal(userId, request);
     }
 }
