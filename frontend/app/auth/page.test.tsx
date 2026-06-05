@@ -70,6 +70,7 @@ describe("AuthPage", () => {
     currentAuthUser = null;
     window.localStorage.clear();
     document.cookie = "notelib-copy-intent=; path=/; max-age=0; SameSite=Strict";
+    document.cookie = "notelib-exam-intent=; path=/; max-age=0; SameSite=Strict";
     setAuthUserMock.mockClear();
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
@@ -105,6 +106,17 @@ describe("AuthPage", () => {
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email or username")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
+  });
+
+  it("persists exam intent from the auth query for signup continuation", async () => {
+    window.history.replaceState({}, "", "/auth?mode=signup&intent=exam&exam=ale");
+
+    render(<AuthPage />);
+
+    await waitFor(() => {
+      expect(document.cookie).toContain("notelib-exam-intent=ale");
+    });
+    expect(screen.getByRole("heading", { name: "Create your NoteLib account" })).toBeInTheDocument();
   });
 
   it("disables Google login when it is not configured", () => {
