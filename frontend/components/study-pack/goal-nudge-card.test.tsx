@@ -13,6 +13,7 @@ const goalNudge = {
   goalLabel: "Philippine Nurse Licensure Examination",
   masteryPercentage: 42,
   dueConcepts: 8,
+  weakestGoalSubject: null,
 };
 
 describe("GoalNudgeCard", () => {
