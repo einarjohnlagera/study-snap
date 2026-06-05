@@ -94,5 +94,23 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
 
 export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
   const notes = await getServerPublicNotes();
-  return notes.filter((note) => note.courseProgram === courseProgram);
+  const normalizedCourseProgram = courseProgram.trim().toLowerCase();
+  return notes.filter((note) => note.courseProgram?.trim().toLowerCase() === normalizedCourseProgram);
+}
+
+export async function getServerPublicNotesByCoursePrograms(coursePrograms: readonly string[]) {
+  const normalizedCoursePrograms = new Set(
+    coursePrograms
+      .map((courseProgram) => courseProgram.trim().toLowerCase())
+      .filter((courseProgram) => courseProgram.length > 0),
+  );
+  if (normalizedCoursePrograms.size === 0) {
+    return [];
+  }
+
+  const notes = await getServerPublicNotes();
+  return notes.filter((note) => {
+    const courseProgram = note.courseProgram?.trim().toLowerCase();
+    return courseProgram ? normalizedCoursePrograms.has(courseProgram) : false;
+  });
 }

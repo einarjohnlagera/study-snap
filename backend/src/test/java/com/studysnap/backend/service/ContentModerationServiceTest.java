@@ -63,7 +63,7 @@ class ContentModerationServiceTest {
 
     @Test
     void validateOrThrow_throwsAppExceptionWithStandardCode() {
-        assertThatThrownBy(() -> service.validateOrThrow("you stupid bitch"))
+        assertThatThrownBy(() -> service.validateOrThrow("you fucking idiot"))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> {
                     AppException ex = (AppException) e;

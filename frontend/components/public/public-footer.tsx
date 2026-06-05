@@ -30,6 +30,9 @@ function FooterLinks() {
       <Link href="/pricing" className="transition hover:text-foreground">
         Pricing
       </Link>
+      <Link href="/exam" className="transition hover:text-foreground">
+        Exam Hubs
+      </Link>
       <Link href="/privacy" className="transition hover:text-foreground">
         Privacy Policy
       </Link>
