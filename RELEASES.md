@@ -26,6 +26,7 @@ Theme: convert the marketing traffic from exam communities (PNLE, LET, ALE, …)
 - **Subject card priority hierarchy** — added mastery-keyed left border accent (gray = not started, rose < 40%, amber 40–60%, blue ≥ 60%) and matching mastery % text color to each subject card; added "Concept Mastery · N subjects" section header above the card grid for structural grouping
 - **Exam hub build fix** — `fetchPublicNotes` now catches network-level errors (ECONNREFUSED) and returns an empty array instead of crashing; exam hub pages prerender to their empty state at build time and populate via ISR on first live request
 - **Rename `exam_goal` → `study_goal`** — DB column, entity field, DTOs, service params, analytics event names (`STUDY_GOAL_SET` / `STUDY_GOAL_DISMISSED`), and all frontend types/functions renamed for clarity; V70 migration updated in-place (not yet applied)
+- **Goal UX consolidation** — goal setting now lives exclusively in Profile settings (Study Focus card with inline chip picker) and the Dashboard banner; Progress page is read-only mastery view with a "Change goal" link to `/profile#study-focus`; removed `SetGoalCallout` from Progress to eliminate the circular "set here → go there" loop; fixed exam hub CTA incorrectly appearing for non-BOARD_EXAM profiles whose `courseProgram` happened to map to an exam slug
 
 ---
 

@@ -6,9 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { getProgressReport, setStudyGoal, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
-import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
+import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 type LoadState = "loading" | "ready" | "error";
@@ -103,9 +101,17 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
             </p>
           </div>
         </div>
-        <div className="text-left sm:text-right">
-          <p className="text-4xl font-semibold tracking-tight text-foreground">{goalSummary.masteryPercentage}%</p>
-          <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">mastered</p>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="text-left sm:text-right">
+            <p className="text-4xl font-semibold tracking-tight text-foreground">{goalSummary.masteryPercentage}%</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">mastered</p>
+          </div>
+          <Link
+            href="/profile#study-focus"
+            className="text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+          >
+            Change goal
+          </Link>
         </div>
       </div>
     </Card>
@@ -137,90 +143,12 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
   );
 }
 
-type SetGoalCalloutProps = {
-  userCoursePrograms: string[];
-  profileType: string | null;
-  onReportUpdated: (report: ProgressReportResponse) => void;
-};
-
-function SetGoalCallout({ userCoursePrograms, profileType, onReportUpdated }: Readonly<SetGoalCalloutProps>) {
-  const [savingCourseProgram, setSavingCourseProgram] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const shouldUseExamHubLink = profileType === "BOARD_EXAM" || userCoursePrograms.some((courseProgram) => getExamSlugForCourseProgram(courseProgram));
-
-  const handleSetSubjectGoal = async (courseProgram: string) => {
-    if (savingCourseProgram) {
-      return;
-    }
-
-    setSavingCourseProgram(courseProgram);
-    setError(null);
-    try {
-      await setStudyGoal(courseProgram);
-      const nextReport = await getProgressReport();
-      onReportUpdated(nextReport);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not set your study focus. Please try again.");
-    } finally {
-      setSavingCourseProgram(null);
-    }
-  };
-
-  if (userCoursePrograms.length === 0) {
-    return (
-      <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
-        Create your first note to start tracking your progress.
-      </Card>
-    );
-  }
-
-  if (shouldUseExamHubLink) {
-    return (
-      <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
-        Studying for a board exam?{" "}
-        <Link href="/exam" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
-          Explore exam hubs to set a goal &rarr;
-        </Link>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="space-y-3 border-dashed p-4 sm:p-5">
-      <p className="text-sm font-medium text-foreground">Pick a focus area to track your progress:</p>
-      <div className="flex flex-wrap gap-2">
-        {userCoursePrograms.map((courseProgram) => (
-          <Button
-            key={courseProgram}
-            type="button"
-            variant="outline"
-            size="sm"
-            loading={savingCourseProgram === courseProgram}
-            loadingText="Setting..."
-            disabled={savingCourseProgram !== null}
-            onClick={() => void handleSetSubjectGoal(courseProgram)}
-          >
-            {courseProgram}
-          </Button>
-        ))}
-      </div>
-      {error ? (
-        <p className="text-sm text-red-600 dark:text-red-300" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
 function ProgressContent({
   report,
   state,
-  onReportUpdated,
 }: Readonly<{
   report: ProgressReportResponse | null;
   state: LoadState;
-  onReportUpdated: (report: ProgressReportResponse) => void;
 }>) {
   if (state === "error") {
     return (
@@ -240,18 +168,17 @@ function ProgressContent({
 
   const subjects = report?.subjects ?? [];
   const goalSummary = report?.goalSummary ?? null;
-  const userCoursePrograms = report?.userCoursePrograms ?? [];
-  const profileType = report?.profileType ?? null;
 
   return (
     <div className="space-y-6">
       {goalSummary ? <GoalSummaryHeader goalSummary={goalSummary} /> : null}
       {!goalSummary ? (
-        <SetGoalCallout
-          userCoursePrograms={userCoursePrograms}
-          profileType={profileType}
-          onReportUpdated={onReportUpdated}
-        />
+        <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
+          No study focus set.{" "}
+          <Link href="/profile#study-focus" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
+            Set one in Profile settings →
+          </Link>
+        </Card>
       ) : null}
 
       {subjects.length === 0 ? (
@@ -313,7 +240,7 @@ export function ProgressReportClient() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <ProgressHeader />
-      <ProgressContent report={report} state={state} onReportUpdated={setReport} />
+      <ProgressContent report={report} state={state} />
     </main>
   );
 }

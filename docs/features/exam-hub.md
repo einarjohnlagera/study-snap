@@ -106,11 +106,12 @@ The frontend shows `weakestGoalSubject` in a "What to study next" card:
 - `SUBJECT` goals link to `/public/library?courseProgram={studyGoal}` so users can browse community notes for that focus area.
 
 Users without a goal can still open `/progress`; Dashboard always shows `View full progress report →`. The progress
-page uses `SetGoalCallout`:
+page is a read-only mastery view — it does not offer goal-setting UI. Users without a goal see only the subject
+mastery cards and a prompt to set a goal from Profile settings.
 
-- No `userCoursePrograms`: show `Create your first note to start tracking your progress.`
-- `BOARD_EXAM` profile or any course program that maps to an exam slug: show `Studying for a board exam? Explore exam hubs to set a goal →`.
-- Other profiles with course programs: show subject chips that call `PUT /users/profile/goal` with the selected value.
+Goal setting lives in two places only:
+- **Dashboard `GoalPromptBanner`**: one-time nudge (exam-intent cookie first, then `courseProgram` fallback); dismissed per session.
+- **Profile settings Study Focus card** (`/profile#study-focus`): inline chip picker for all profile types; shows current goal with Change/Clear buttons, or the chip picker when no goal is set or when editing. "Change goal" link on the Progress `GoalSummaryHeader` navigates here.
 
 ## Analytics
 
