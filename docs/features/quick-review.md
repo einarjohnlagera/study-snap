@@ -20,10 +20,24 @@ It should feel:
 
 Study Pack-ready note
 -> Quick Review
--> immediate answer feedback
+-> answer feedback (see CTA rules below)
 -> one retry round for incorrect questions
 -> result screen
 -> session history / next-step guidance
+
+## CTA behavior per question type
+
+Single-select and matching questions:
+- answer reveals immediately on selection
+- explanation shows immediately
+- button label: "Next" (or "Finish Quick Review" / "Finish Retry" on last question)
+
+Multi-select questions (MULTI_SELECT format):
+- choices remain in a selectable state until user explicitly submits
+- button label: "Submit" (disabled until at least one choice is selected)
+- clicking "Submit" reveals answer highlight and explanation
+- button then changes to "Next" / "Finish Quick Review" / "Finish Retry"
+- this two-step pattern applies regardless of question position
 
 ## Session model
 

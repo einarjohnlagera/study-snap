@@ -6,19 +6,27 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.25.0 - Exam Capture & Goal Setting` is the current in-progress release.
+`v0.25.1 - Polish & Quick Review Fixes` is the current in-progress release.
 
-`v0.24.1 - Content Moderation Hotfix` is the current documentation baseline.
+`v0.25.0 - Exam Capture & Goal Setting` is the current documentation baseline.
 
-`v0.24.0 - Guided Learning` is the previous feature baseline.
+`v0.24.1 - Content Moderation Hotfix` is the previous baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
 
-## v0.25.0 - Exam Capture & Goal Setting
+## v0.25.1 - Polish & Quick Review Fixes
 
 **Status: In progress**
+
+Theme: targeted polish pass — theme picker z-index, library filter label consistency, Quick Review last-question Submit/Finish two-step UX, and multi-select answer-review label mismatch.
+
+---
+
+## v0.25.0 - Exam Capture & Goal Setting
+
+**Status: Released**
 
 Theme: turn the marketing traffic NoteLib already earns into signed-up, activated learners — give the exam communities we post into (PNLE, LET, ALE, and beyond) a destination that says *"here's everything for your board exam,"* and give every new learner a **goal** that turns the progress report into a place they're trying to reach. Two tracks, one funnel: **exam page → signup → goal → progress toward goal → back to the community notes.**
 

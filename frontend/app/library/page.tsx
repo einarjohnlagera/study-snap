@@ -1414,7 +1414,7 @@ export default function LibraryPage() {
               Clear all
             </Button>
             <Button type="button" onClick={() => setMoreFiltersOpen(false)}>
-              Done
+              Apply
             </Button>
           </div>
         )}

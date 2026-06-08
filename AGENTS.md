@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.25.0` (in progress); previous: `v0.24.1 - Content Moderation Hotfix`
+- `v0.25.1` (in progress); previous: `v0.25.0 - Exam Capture & Goal Setting`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 

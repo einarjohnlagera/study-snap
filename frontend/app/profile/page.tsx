@@ -237,6 +237,7 @@ export default function ProfilePage() {
   const [savingStudyGoal, setSavingStudyGoal] = useState<string | null>(null);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [studyGoalMessage, setStudyGoalMessage] = useState<string | null>(null);
+  const [showAllStudyFocusPrograms, setShowAllStudyFocusPrograms] = useState(false);
 
   const scrollToRequestedSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -1142,21 +1143,32 @@ export default function ProfilePage() {
                     : "Pick a subject to track mastery toward:"}
                 </p>
                 {courseProgramSuggestions.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {courseProgramSuggestions.map((courseProgram) => (
-                      <Button
-                        key={courseProgram}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {(showAllStudyFocusPrograms ? courseProgramSuggestions : courseProgramSuggestions.slice(0, 8)).map((courseProgram) => (
+                        <Button
+                          key={courseProgram}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          loading={savingStudyGoal === courseProgram}
+                          loadingText="Setting..."
+                          disabled={savingStudyGoal !== null || clearingStudyGoal}
+                          onClick={() => void handleSetStudyGoal(courseProgram)}
+                        >
+                          {courseProgram}
+                        </Button>
+                      ))}
+                    </div>
+                    {courseProgramSuggestions.length > 8 && !showAllStudyFocusPrograms ? (
+                      <button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        loading={savingStudyGoal === courseProgram}
-                        loadingText="Setting..."
-                        disabled={savingStudyGoal !== null || clearingStudyGoal}
-                        onClick={() => void handleSetStudyGoal(courseProgram)}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                        onClick={() => setShowAllStudyFocusPrograms(true)}
                       >
-                        {courseProgram}
-                      </Button>
-                    ))}
+                        Show {courseProgramSuggestions.length - 8} more
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 {isEditingGoal ? (

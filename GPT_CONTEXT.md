@@ -2,7 +2,7 @@
 
 > Paste the block below as your **first message** in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.15.1 (in progress) — 2026-05-21
+> Last updated: v0.25.0 — 2026-06-05
 
 ---
 
@@ -73,15 +73,103 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 
 ## Release History
 
-### v0.15.1 — Current Release (In Progress)
+### v0.25.0 — Current Release (Released)
+
+**Theme:** Exam Capture & Goal Setting — exam community landing pages funnel anonymous visitors through signup into a confirmed study goal, closing the capture-to-retention loop.
+
+**Key shipped:** Public exam hubs (`/exam/ale`, `/exam/pnle`, `/exam/let`) with SEO + CollectionPage structured data and signup CTA that persists exam intent through auth; goal setting for all profile types (`PUT /users/profile/goal`); `/progress` goal summary card with mastery % and next-study suggestion linked to the relevant exam hub; post-quiz `GoalNudgeCard` after off-goal sessions (Quick Review, Challenge, Adaptive, Board Exam); persistent Dashboard goal card with weakest-subject focus hint; progress page subject cards sorted weakest-first; library Visibility filter (All / Public / Private).
+
+---
+
+### v0.24.1 — Released
+
+**Theme:** Content Moderation Hotfix — targeted patch to banned-word lists incorrectly blocking legitimate academic notes with common proper names, scientific terms, and engineering vocabulary.
+
+---
+
+### v0.24.0 — Released
+
+**Theme:** Guided Learning — closes the study loop; every quiz mode feeds concept mastery data, result screens suggest the actual next step, and the Progress report shows where users stand.
+
+**Key shipped:** `/progress` per-subject mastery report; concept-driven post-session next-step handoff across all modes; Adaptive Practice free tier (3 sessions/mo, removes the full paywall); Full Study Pack copying (copy-with-pack + copy-only option); Study Pack regeneration in-place.
+
+---
+
+### v0.23.1 — Released
+
+**Theme:** Quiz Format Fix — assertion-style questions ("Which is correct?", multi-statement) no longer generate True/False answer choices; format validation added at generation layer across all quiz modes.
+
+---
+
+### v0.23.0 — Released
+
+**Theme:** From Readers to Learners — public note traffic converted to active learners via a quiz-first CTA and dynamic share cards.
+
+**Key shipped:** Quiz-yourself CTA on public notes; dynamic per-note Open Graph images; free note generation raised 5→10/mo; faceted private-library subject strip.
+
+---
+
+### v0.22.0 — Released
+
+**Theme:** Course & Subject Discovery — Course/Program and Subject become first-class discovery signals across the public library, private library, and public profiles.
+
+**Key shipped:** Course-first public library (audience pre-filter removed); concurrent token refresh race fix; library and public library note counts; public profile subject breakdown with chips; private library subject stats strip.
+
+---
+
+### v0.21.0 — Released
+
+**Theme:** Personalized Discovery & Library Organization — the app feels personal from day one; users can save and reuse their own filter shortcuts.
+
+**Key shipped:** Community notes on the dashboard filtered by user's study track; saved library filters (named, reusable); public profile → full note catalog direct link.
+
+---
+
+### v0.20.0 — Released
+
+**Theme:** Conversion & Re-engagement — close account security gaps, give admins a re-engagement tool, enrich AI summaries.
+
+**Key shipped:** Forgot Password flow; enriched AI-generated summaries with structured insight; public profile polish.
+
+---
+
+### v0.19.0 — Released
+
+**Theme:** Multi-Note Depth & Simulation Parity — Board Exam Mode reaches feature parity with Long Exam across multi-note sources.
+
+**Key shipped:** Multi-note Board Exam (Pro, up to 3 same-subject notes); simulation paywall quota gate surfaces before setup; scaled question coverage and quota economics.
+
+---
+
+### v0.18.0 — Released
+
+**Theme:** Profile Completeness & Communication — completes the Professional profile with multi-note Interview Practice, adds subscription expiry emails, and introduces concept-level spaced repetition signals.
+
+**Key shipped:** Multi-note Interview Practice (Pro, Professional profile); subscription expiry notification emails; KaTeX math rendering in working solutions; concept-level spaced repetition signals in Adaptive Practice.
+
+---
+
+### v0.17.0 — Released
+
+**Theme:** Quiz Quality & Depth — richer question format variety and computational questions with step-by-step working solutions.
+
+**Key shipped:** True/False, multi-select, and matching question formats; computational questions with step-by-step working solutions for engineering and sciences.
+
+---
+
+### v0.16.0 — Released
+
+**Theme:** Conversion & Growth — close the gap between social traffic and signed-up users; make teachers a distribution channel.
+
+**Key shipped:** Shareable student quiz links (Free 3/mo, Plus 10/mo, Pro unlimited); PWA installable on mobile.
+
+---
+
+### v0.15.1 — Released
 
 **Theme:** Teacher Power Features — concrete classroom controls on top of v0.15.0's teacher flow foundation.
 
-| Item | Status |
-|---|---|
-| Question count control on Generate Quiz (10/20/30; Plus+ unlocks 20/30) | Planned |
-| Custom DOCX header (school name, class/section, date — profile + per-export) | Planned |
-| Multiple exam versions A/B/C (single DOCX, deterministic shuffle; Plus+ only) | Planned |
+**Key shipped:** Question count control on Generate Quiz (10/20/30; Plus+ unlocks 20/30); custom DOCX header (school name, class/section, date — profile + per-export); multiple exam versions A/B/C (single DOCX, deterministic shuffle; Plus+ only).
 
 ---
 
@@ -89,15 +177,7 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 
 **Theme:** Premium Mode Uplift + Cost-Control Quota Refactor
 
-**Key shipped:**
-- Long Exam and Board Exam simulation-grade experience: in-session focus mode (app chrome hides, dedicated top bar + tabular timer), pre-generated question pools (instant exam start), ScoreReveal result screen, Question Navigator added to Long Exam, pre-session redesign
-- Monthly caps: Long Exam 10/mo Pro, Board Exam 5/mo Pro; counters visible in Settings → Plan & Billing
-- Teacher plan accessibility: Free Teacher 10 DOCX/mo, Plus Teacher unlimited DOCX; PDF limits unchanged; billing page shows resolved DOCX/PDF quotas separately
-- Exam Builder UX: add notes without leaving the builder (target-section picker), balance controls relocated below section list with distinct icons, section summary as chips
-- Per-note learner level override: teachers set difficulty per class note independently of their profile default
-- Learner Level and Course/Program required on notes (asterisks, aggregate amber toast)
-- Landing page repositioned: workspace-first hero, profile showcase, "Five study modes" section
-- Fix: Long Exam/Board Exam generation timeout + multi-note INVALID_LONG_EXAM_SOURCE false positive
+**Key shipped:** Long Exam and Board Exam simulation-grade experience (focus mode, pre-generated question pools, ScoreReveal result screen, Question Navigator); monthly caps (Long Exam 10/mo, Board Exam 5/mo); Teacher plan accessibility (Free 10 DOCX/mo, Plus unlimited DOCX); Exam Builder UX improvements; per-note learner level override; Learner Level and Course/Program required on notes.
 
 ---
 
@@ -113,7 +193,7 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 
 **Theme:** Complete the Promise, Reach New Audiences
 
-**Key shipped:** Long Exam Mode v1 (Pro, single note); Professional Profile activated; Pro plan / quota infrastructure; Proration design doc.
+**Key shipped:** Long Exam Mode v1 (Pro, single note); Professional Profile activated; Pro plan / quota infrastructure.
 
 ---
 
@@ -121,17 +201,16 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 
 **Theme:** Learning Experience, Discovery, and Retention
 
-**Key shipped:** Progressive Challenge Quiz (5→20); Google social login; Public Library conversion funnel; Retention loops; Guidance Foundation System; conversion funnel polish (PaywallModal, PostSuccessUpgradeNudge, getUpgradeCtas); Public creator attribution (@usernames); Adaptive Practice tier reconciliation (Plus=10/mo, Pro=30/mo).
+**Key shipped:** Progressive Challenge Quiz (5→20); Google social login; Public Library conversion funnel; Guidance Foundation System; conversion funnel polish; Public creator attribution (@usernames); Adaptive Practice tier reconciliation (Plus=10/mo, Pro=30/mo).
 
 ---
 
-## Future Roadmap (post v0.15.1)
+## Future Roadmap (post v0.25.0)
 
-- **Multi-note Board Exam** — Pro users span Board Exam across up to 3 same-subject notes; blocked on single-note Board Exam usage data
-- **Premium mode quota surfacing** — per-mode caps shown more prominently in Settings; honest framing as "monthly plan inclusions"
+- **Goal milestones** — mastery-threshold milestone depth beyond the shipped exam goal summary and next-study suggestion
+- **Exam hub wave 2** — additional exam slugs beyond ALE / PNLE / LET; admin-side courseProgram normalization
 - **Board Exam advanced result analytics** — domain trend, percentile framing
 - **Long Exam tier promotion to Plus** — only if usage data justifies LLM cost
-- **Authenticated redirect on marketing pages** — signed-in users go to `/dashboard` from `/`, `/pricing`, `/learn`
 - **Public Library trending section** — blocked on windowed engagement fields in backend
 - **Cross-profile mode unlock** — Student opts into Board Exam without changing profile
 - **Recurring billing / auto-renewal**
@@ -152,7 +231,7 @@ Rule: adding a sixth mode requires updating `docs/product/EXAM_MODES.md` and `RO
 - Plan override: Free=10 DOCX/mo, Plus=unlimited DOCX, PDF stays standard
 - Exam Builder: multi-note combined DOCX with editable sections, Even/Smart Balance, in-builder Add Notes
 - Per-note learner level: teachers calibrate difficulty per class note for Study Pack and question pool generation
-- v0.15.1 adds: question count control (10/20/30), custom DOCX header, multiple exam versions (A/B/C)
+- Question count control (10/20/30; Plus+ unlocks 20/30), custom DOCX header (school/class/date), multiple exam versions A/B/C (shipped v0.15.1)
 - Do NOT mix teacher preview with student session logic; teacher flow uses `generatedQuiz` only
 
 **Parent Profile (`PARENT` enum exists, zero implementation):**
@@ -238,6 +317,7 @@ Use the following docs as the source of truth:
 - `docs/features/` — per-feature behavior rules
 - `RELEASES.md` — release history and in-progress scope
 - `docs/codex-prompts/` — ready-to-run Codex prompts for active work
+- `docs/releases/` — per-version release notes files (v0.16.0 onward)
 - `docs/skills/codex-prompt-generator.md` — how to write Codex prompts
 - `docs/skills/README.md` — model/effort philosophy
 

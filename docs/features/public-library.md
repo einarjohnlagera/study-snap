@@ -196,6 +196,14 @@ Density improvements should come from tighter section limits and focused section
 
 ## Filters
 
+Public Library More Filters modal order (canonical):
+
+1. For (audience)
+2. Course / Program
+3. Subjects
+4. Popular Tags
+5. Source
+
 Public Library filters:
 
 - `Audience` / note target profile
@@ -206,6 +214,14 @@ Public Library filters:
 - `By You`
 - `Official`
 - `Community`
+
+Cascading Course / Program filter (v0.25.1):
+
+- Selecting a Course / Program in the More Filters modal narrows the Subjects dropdown and Popular Tags chips to only those associated with notes in that program
+- Cascade is computed client-side from already-loaded notes — no extra network request
+- If the current Subjects draft is not in the narrowed set, it auto-clears to "All"
+- Tags draft entries not in the narrowed set are removed
+- Clearing Course / Program back to "All" restores the full Subjects and Tags lists
 
 Public Library browsing rails:
 

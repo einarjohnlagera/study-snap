@@ -667,6 +667,32 @@ export function PublicLibraryPageClient() {
     return Array.from(tagSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
 
+  const subjectsForCourseProgram = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const item of items) {
+      const cp = normalizeCourseProgram(item.courseProgram);
+      const subject = normalizeSubject(item.subject);
+      if (cp && subject) {
+        if (!map.has(cp)) map.set(cp, new Set());
+        map.get(cp)!.add(subject);
+      }
+    }
+    return map;
+  }, [items]);
+
+  const tagsForCourseProgram = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const item of items) {
+      const cp = normalizeCourseProgram(item.courseProgram);
+      if (!cp) continue;
+      for (const tag of normalizeTags(item.tags)) {
+        if (!map.has(cp)) map.set(cp, new Set());
+        map.get(cp)!.add(tag);
+      }
+    }
+    return map;
+  }, [items]);
+
   useEffect(() => {
     setSearchQuery(parsedUrlFilters.search ?? "");
     setSelectedTargetProfile(effectiveAudience);
@@ -760,6 +786,18 @@ export function PublicLibraryPageClient() {
       setCourseProgramComboOpen(false);
     }
   }, [filterSheetOpen, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile]);
+
+  useEffect(() => {
+    if (courseProgramDraft === ALL_COURSE_PROGRAMS) return;
+    const programSubjects = subjectsForCourseProgram.get(courseProgramDraft);
+    if (programSubjects && subjectFilterDraft !== ALL_SUBJECTS && !programSubjects.has(subjectFilterDraft)) {
+      setSubjectFilterDraft(ALL_SUBJECTS);
+    }
+    const programTags = tagsForCourseProgram.get(courseProgramDraft);
+    if (programTags) {
+      setTagsFilterDraft((previous) => previous.filter((tag) => programTags.has(tag)));
+    }
+  }, [courseProgramDraft, subjectFilterDraft, subjectsForCourseProgram, tagsForCourseProgram]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -906,10 +944,14 @@ export function PublicLibraryPageClient() {
 
   const filteredModalSubjects = useMemo(() => {
     const query = subjectSearchQuery.trim().toLowerCase();
+    const programSubjects = courseProgramDraft !== ALL_COURSE_PROGRAMS
+      ? subjectsForCourseProgram.get(courseProgramDraft)
+      : null;
     return displayedSubjects.filter((subject) => (
-      query.length === 0 || subject.toLowerCase().includes(query)
+      (programSubjects === null || programSubjects === undefined || programSubjects.has(subject))
+      && (query.length === 0 || subject.toLowerCase().includes(query))
     ));
-  }, [displayedSubjects, subjectSearchQuery]);
+  }, [courseProgramDraft, displayedSubjects, subjectSearchQuery, subjectsForCourseProgram]);
 
   const displayedCoursePrograms = useMemo(() => {
     return [...availableCoursePrograms].sort(courseProgramPriorityComparator);
@@ -938,12 +980,18 @@ export function PublicLibraryPageClient() {
     : POPULAR_TAG_LIMIT_DESKTOP;
 
   const visiblePopularTags = useMemo(() => {
+    const programTags = courseProgramDraft !== ALL_COURSE_PROGRAMS
+      ? tagsForCourseProgram.get(courseProgramDraft)
+      : null;
+    const sourceTags = programTags
+      ? displayedTags.filter((tag) => programTags.has(tag))
+      : displayedTags;
     const ordered = [
-      ...selectedTags,
-      ...displayedTags.filter((tag) => !selectedTags.includes(tag)),
+      ...tagsFilterDraft.filter((tag) => sourceTags.includes(tag)),
+      ...sourceTags.filter((tag) => !tagsFilterDraft.includes(tag)),
     ];
-    return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, selectedTags.length));
-  }, [displayedTags, selectedTags, visibleTagLimit]);
+    return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, tagsFilterDraft.length));
+  }, [courseProgramDraft, displayedTags, tagsFilterDraft, tagsForCourseProgram, visibleTagLimit]);
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
@@ -1612,6 +1660,53 @@ export function PublicLibraryPageClient() {
             </div>
           </div>
 
+          {availableCoursePrograms.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Course / Program</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  aria-label="Course / Program"
+                  value={courseProgramComboOpen ? courseProgramSearchQuery : (courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : "")}
+                  onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                  placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}
+                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramSearchQuery(""); }}
+                  onBlur={() => globalThis.setTimeout(() => setCourseProgramComboOpen(false), 150)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                />
+                <ChevronDown
+                  className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${courseProgramComboOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </div>
+              {courseProgramComboOpen ? (
+                <div ref={courseProgramDropdownRef} className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
+                  <button
+                    type="button"
+                    className={getComboboxItemClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
+                    onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(ALL_COURSE_PROGRAMS); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
+                  >
+                    All
+                  </button>
+                  {filteredModalCoursePrograms.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-foreground/65">No course/programs match your search.</p>
+                  ) : (
+                    filteredModalCoursePrograms.map((courseProgram) => (
+                      <button
+                        key={courseProgram}
+                        type="button"
+                        className={getComboboxItemClassName(courseProgramDraft === courseProgram)}
+                        onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(courseProgram); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
+                      >
+                        {courseProgram}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {availableSubjects.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">Subjects</p>
@@ -1688,53 +1783,6 @@ export function PublicLibraryPageClient() {
                   </button>
                 ))}
               </div>
-            </div>
-          ) : null}
-
-          {availableCoursePrograms.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Course / Program</p>
-              <div className="relative">
-                <input
-                  type="text"
-                  aria-label="Course / Program"
-                  value={courseProgramComboOpen ? courseProgramSearchQuery : (courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : "")}
-                  onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
-                  placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}
-                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramSearchQuery(""); }}
-                  onBlur={() => globalThis.setTimeout(() => setCourseProgramComboOpen(false), 150)}
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
-                />
-                <ChevronDown
-                  className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${courseProgramComboOpen ? "rotate-180" : ""}`}
-                  aria-hidden="true"
-                />
-              </div>
-              {courseProgramComboOpen ? (
-                <div ref={courseProgramDropdownRef} className="max-h-44 overflow-y-auto rounded-md border border-border shadow-sm">
-                  <button
-                    type="button"
-                    className={getComboboxItemClassName(courseProgramDraft === ALL_COURSE_PROGRAMS)}
-                    onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(ALL_COURSE_PROGRAMS); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
-                  >
-                    All
-                  </button>
-                  {filteredModalCoursePrograms.length === 0 ? (
-                    <p className="px-3 py-2.5 text-sm text-foreground/65">No course/programs match your search.</p>
-                  ) : (
-                    filteredModalCoursePrograms.map((courseProgram) => (
-                      <button
-                        key={courseProgram}
-                        type="button"
-                        className={getComboboxItemClassName(courseProgramDraft === courseProgram)}
-                        onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(courseProgram); setCourseProgramSearchQuery(""); setCourseProgramComboOpen(false); }}
-                      >
-                        {courseProgram}
-                      </button>
-                    ))
-                  )}
-                </div>
-              ) : null}
             </div>
           ) : null}
 
