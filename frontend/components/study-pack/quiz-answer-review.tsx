@@ -58,7 +58,7 @@ export function QuizAnswerReview({
 
   const reviewItems = useMemo(() => {
     return quiz.map((item, originalIndex) => {
-      const displayedChoices = getDisplayedQuizChoices(item);
+      const displayedChoices = getDisplayedQuizChoices({ ...item, question: `${item.question}-${originalIndex}` });
       const selectedChoiceIndex = selectedChoices[originalIndex] ?? null;
       const selectedMultiChoiceIndices = selectedMultiChoices[originalIndex] ?? [];
       const correctIndex = resolveQuizCorrectIndex(item);

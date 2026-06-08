@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.25.1 - Polish & Quick Review Fixes
+
+**Status: Released**
+
+Theme: targeted polish pass for issues observed in Quick Review and the private library after v0.25.0 shipped.
+
+### Polish & Fixes
+
+- **Theme picker z-index** — raised `<header>` from `z-40` to `z-50` so the mobile theme-picker dropdown always layers above page body content
+- **Library More Filters "Done" → "Apply"** — standardized the private-library More Filters modal close-button label to "Apply" (matches public library)
+- **Quick Review multi-select Submit flow** — multi-select questions now always show "Submit" as the CTA regardless of position; clicking Submit reveals the answer highlight and explanation; button then becomes "Next" / "Finish Quick Review" / "Finish Retry"
+- **Multi-select answer-review label mismatch** — fixed the choice shuffle seed in `QuizAnswerReview` to match `QuizChoiceList`; the "Correct answer: C and D" summary text now names the same letters shown in the rendered choice list
+- **Public Library filter reorder** — More Filters modal reordered to For → Course/Program → Subjects → Tags → Source so users can narrow by program before drilling into subjects/tags
+- **Public Library cascading Course/Program filter** — selecting a Course/Program in the More Filters modal narrows the available Subjects and Tags to only those associated with notes in that program; stale subject/tag drafts auto-clear when a program is selected
+- **Study Focus chip cap** — profile Study Focus section now shows at most 8 program chips with a "Show N more" toggle; prevents the chip grid from overflowing on accounts with many note programs or on mobile
+- **Quiz question newline rendering** — `QuizQuestionText` now renders `\n` characters in question text as visible line breaks in both the Statement N: path and the plain-text fallback; fixes statement-list questions that appeared as one continuous run-on line
+
+---
+
 ## v0.25.0 - Exam Capture & Goal Setting
 
 **Status: Released**

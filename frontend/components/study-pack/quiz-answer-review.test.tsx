@@ -38,8 +38,8 @@ describe("QuizAnswerReview", () => {
     expect(screen.getByLabelText("Answer review")).toHaveTextContent(/Correct Answer[\s\S]*Mitochondria/);
     expect(screen.getByText("Nucleus")).toBeInTheDocument();
     expect(screen.getByText("Mitochondria")).toBeInTheDocument();
-    expect(screen.getByText("Your answer")).toBeInTheDocument();
-    expect(screen.getByText("Correct answer")).toBeInTheDocument();
+    expect(screen.getByText("Your Answer")).toBeInTheDocument();
+    expect(screen.getByText("Correct Answer")).toBeInTheDocument();
     expect(screen.getByText("Why this is correct")).toBeInTheDocument();
     expect(screen.getByTestId("quiz-answer-review-explanation")).toHaveAttribute("data-state", "expanded");
     expect(screen.getByText("Mitochondria produce ATP for the cell.")).toBeInTheDocument();
@@ -54,8 +54,8 @@ describe("QuizAnswerReview", () => {
     expect(screen.getByText("Concept: Genetics")).toBeInTheDocument();
     expect(screen.getByText("DNA stores hereditary information.")).toBeInTheDocument();
     expect(screen.getByText("DNA")).toBeInTheDocument();
-    expect(screen.getByText("Your answer")).toBeInTheDocument();
-    expect(screen.getByText("Correct answer")).toBeInTheDocument();
+    expect(screen.getByText("Your Answer")).toBeInTheDocument();
+    expect(screen.getByText("Correct Answer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Previous Question" }));
 

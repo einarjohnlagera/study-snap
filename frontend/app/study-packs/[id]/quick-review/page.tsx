@@ -193,6 +193,7 @@ export default function QuickReviewPage() {
   const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
+  const [multiSelectSubmitted, setMultiSelectSubmitted] = useState(false);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
@@ -239,6 +240,7 @@ export default function QuickReviewPage() {
     setConfidenceAcknowledged(false);
     setConfidenceError(null);
     setShowAnswerReview(false);
+    setMultiSelectSubmitted(false);
     setNextStepResponse(null);
   }, []);
 
@@ -757,6 +759,7 @@ export default function QuickReviewPage() {
     if (!hasAnsweredCurrent) {
       return;
     }
+    setMultiSelectSubmitted(false);
     const questionStep = activeMatchingGroup?.items.length ?? 1;
     const isLastInRound = currentRoundIndex + questionStep >= activeQuestionIndexes.length;
     if (!isLastInRound) {
@@ -817,6 +820,7 @@ export default function QuickReviewPage() {
     setPhase("retry");
     setActiveQuestionIndexes(retryQuestionIndexes);
     setCurrentRoundIndex(0);
+    setMultiSelectSubmitted(false);
     setRoundSelections({});
     setRoundMultiSelections({});
     persistProgress({
@@ -1257,14 +1261,14 @@ export default function QuickReviewPage() {
                   questionFormat={currentQuestion.questionFormat}
                   selectedChoiceIndex={selectedChoiceIndex}
                   selectedMultiChoiceIndices={selectedMultiChoiceIndices}
-                  revealAnswer={hasAnsweredCurrent && !currentQuestionIsMultiSelect}
+                  revealAnswer={hasAnsweredCurrent && (!currentQuestionIsMultiSelect || multiSelectSubmitted)}
                   onSelectChoice={handleSelectChoice}
                   onSelectMultiChoices={handleSelectMultiChoices}
                 />
               </>
             )}
 
-            {hasAnsweredCurrent && !currentQuestionIsMultiSelect && !activeMatchingGroup ? (
+            {hasAnsweredCurrent && !activeMatchingGroup && (!currentQuestionIsMultiSelect || multiSelectSubmitted) ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
@@ -1284,12 +1288,19 @@ export default function QuickReviewPage() {
             className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
           >
             <div className="mx-auto flex w-full max-w-3xl">
-              <Button type="button" className="w-full sm:w-auto" onClick={handleNext} disabled={!hasAnsweredCurrent}>
-                {currentRoundIndex + 1 === activeQuestionIndexes.length
-                  ? phase === "retry"
-                    ? "Finish Retry"
-                    : "Finish Quick Review"
-                  : "Next"}
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={currentQuestionIsMultiSelect && !multiSelectSubmitted ? () => setMultiSelectSubmitted(true) : handleNext}
+                disabled={!hasAnsweredCurrent}
+              >
+                {currentQuestionIsMultiSelect && !multiSelectSubmitted
+                  ? "Submit"
+                  : currentRoundIndex + 1 === activeQuestionIndexes.length
+                    ? phase === "retry"
+                      ? "Finish Retry"
+                      : "Finish Quick Review"
+                    : "Next"}
               </Button>
             </div>
           </div>
