@@ -1,5 +1,11 @@
 # RELEASES.md - NoteLib
 
+## v0.26.0 - TBD
+
+**Status: In progress**
+
+---
+
 ## v0.25.1 - Polish & Quick Review Fixes
 
 **Status: Released**

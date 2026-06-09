@@ -6,21 +6,31 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.25.1 - Polish & Quick Review Fixes` is the current in-progress release.
+`v0.26.0` is the current in-progress release.
 
-`v0.25.0 - Exam Capture & Goal Setting` is the current documentation baseline.
+`v0.25.1 - Polish & Quick Review Fixes` is the current documentation baseline.
 
-`v0.24.1 - Content Moderation Hotfix` is the previous baseline.
+`v0.25.0 - Exam Capture & Goal Setting` is the previous baseline.
+
+`v0.24.1 - Content Moderation Hotfix` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
 
-## v0.25.1 - Polish & Quick Review Fixes
+## v0.26.0 - TBD
 
 **Status: In progress**
 
-Theme: targeted polish pass — theme picker z-index, library filter label consistency, Quick Review last-question Submit/Finish two-step UX, and multi-select answer-review label mismatch.
+Theme: TBD.
+
+---
+
+## v0.25.1 - Polish & Quick Review Fixes
+
+**Status: Released**
+
+Theme: targeted polish pass covering Quick Review multi-select UX (two-step Submit/reveal flow), Public Library filter hierarchy and cascading (For → Course/Program → Subjects → Tags → Source), quiz question newline rendering, profile Study Focus chip cap, and minor label/layering issues.
 
 ---
 
@@ -1410,6 +1420,7 @@ Potential expansion areas after `v0.8.0`:
 
 ### Billing Improvements (Future)
 
+- **Exam-cycle pass (90-day Pro unlock)** — a one-time seasonal pass priced below 3× monthly (e.g. ₱599 PH vs ₱747 monthly); full Pro feature unlock including Board Exam simulation; `EXAM_CYCLE` billing cycle enum + `duration-days: 90` config + checkout UI option; no integration change required (system is already `PREPAID` / `endAt`-based); monthly quota reset by `BillingUsageResetJob` still applies so LLM cost exposure is bounded; rationale: exam reviewers are seasonal (3–6 month window), a time-scoped pass matches their intent and eliminates bait-and-switch churn risk when pricing changes later
 - recurring subscription support
 - coupon-code entry UI
 - cancel subscription flow
