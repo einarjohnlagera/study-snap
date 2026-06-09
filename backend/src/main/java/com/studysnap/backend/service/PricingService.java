@@ -177,7 +177,8 @@ public class PricingService {
         return new BillingPricingResponse.PlanPricing(
                 planType,
                 toCyclePricing(user, context, planType, BillingCycle.MONTHLY, paidPlanPricing.getMonthly()),
-                toCyclePricing(user, context, planType, BillingCycle.YEARLY, paidPlanPricing.getYearly())
+                toCyclePricing(user, context, planType, BillingCycle.YEARLY, paidPlanPricing.getYearly()),
+                toCyclePricing(user, context, planType, BillingCycle.EXAM_CYCLE, paidPlanPricing.getExamCycle())
         );
     }
 
@@ -314,9 +315,11 @@ public class PricingService {
     ) {
         PlanType normalizedPlanType = normalizeRequestedPlan(planType);
         StudySnapProperties.PaidPlanPricing paidPlanPricing = regionPricing.resolvePlanPricing(normalizedPlanType);
-        StudySnapProperties.BillingCyclePricing cyclePricing = billingCycle == BillingCycle.YEARLY
-                ? paidPlanPricing.getYearly()
-                : paidPlanPricing.getMonthly();
+        StudySnapProperties.BillingCyclePricing cyclePricing = switch (billingCycle) {
+            case YEARLY -> paidPlanPricing.getYearly();
+            case EXAM_CYCLE -> paidPlanPricing.getExamCycle();
+            case MONTHLY -> paidPlanPricing.getMonthly();
+        };
         if (cyclePricing == null || !cyclePricing.isActive() || normalizeAmount(cyclePricing.getAmount()).compareTo(BigDecimal.ZERO) <= 0) {
             throw new AppException(
                     ERROR_CHECKOUT_BILLING_CYCLE_UNAVAILABLE,
@@ -351,7 +354,8 @@ public class PricingService {
     private boolean matchesCycle(VoucherBillingCycleScope scope, BillingCycle billingCycle) {
         return scope == VoucherBillingCycleScope.ANY
                 || (scope == VoucherBillingCycleScope.MONTHLY && billingCycle == BillingCycle.MONTHLY)
-                || (scope == VoucherBillingCycleScope.YEARLY && billingCycle == BillingCycle.YEARLY);
+                || (scope == VoucherBillingCycleScope.YEARLY && billingCycle == BillingCycle.YEARLY)
+                || (scope == VoucherBillingCycleScope.EXAM_CYCLE && billingCycle == BillingCycle.EXAM_CYCLE);
     }
 
     private boolean matchesPlan(VoucherPlanScope scope, PlanType planType) {

@@ -251,7 +251,7 @@ export type LearnerLevel =
   | "PERSONAL_LEARNING";
 export type PlanType = "FREE" | PaidPlanType;
 export type TeacherQuizQuestionCount = 10 | 20 | 30;
-export type BillingCycle = "MONTHLY" | "YEARLY";
+export type BillingCycle = "MONTHLY" | "YEARLY" | "EXAM_CYCLE";
 export type UserRole = "USER" | "ADMIN";
 export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
 export type SubscriptionCancellationReason =
@@ -281,6 +281,7 @@ export type BillingPlanPricingResponse = {
   planType: PaidPlanType;
   monthly: BillingPricingCycleResponse;
   yearly: BillingPricingCycleResponse;
+  examCycle: BillingPricingCycleResponse;
 };
 
 export type BillingPricingResponse = {

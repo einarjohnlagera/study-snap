@@ -99,11 +99,13 @@ const proBillingPricing = {
     planType: "PLUS",
     monthly: { amount: 179, durationDays: 30, introAmount: 149, introEligible: true, available: true },
     yearly: { amount: null, durationDays: null, introAmount: null, introEligible: false, available: false },
+    examCycle: { amount: null, durationDays: null, introAmount: null, introEligible: false, available: false },
   },
   pro: {
     planType: "PRO",
     monthly: { amount: 249, durationDays: 30, introAmount: 199, introEligible: true, available: true },
     yearly: { amount: 1999, durationDays: 365, introAmount: null, introEligible: false, available: true },
+    examCycle: { amount: 599, durationDays: 90, introAmount: null, introEligible: false, available: true },
   },
 };
 
@@ -293,6 +295,70 @@ describe("Settings page cancellation flow", () => {
     });
   });
 
+  it("starts Pro exam-cycle checkout from Settings for a free user", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...proProfile,
+      planType: "FREE",
+      subscription: { cancelAtPeriodEnd: false, premiumEndsAt: null, cancelledAt: null },
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue(freeUsageSummary);
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "FREE",
+      subscriptionStatus: null,
+      billingType: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("90-Day Exam Pass: ₱599 for 90 days")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go Pro — 90-Day Exam Pass" }));
+
+    await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
+        planType: "PRO",
+        billingCycle: "EXAM_CYCLE",
+        returnUrl: "/settings",
+      });
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
+  });
+
+  it("hides the Pro exam-cycle checkout when live pricing marks it unavailable", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...proProfile,
+      planType: "FREE",
+      subscription: { cancelAtPeriodEnd: false, premiumEndsAt: null, cancelledAt: null },
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue(freeUsageSummary);
+    (getBillingPricing as jest.Mock).mockResolvedValue({
+      ...proBillingPricing,
+      pro: {
+        ...proBillingPricing.pro,
+        examCycle: { amount: null, durationDays: null, introAmount: null, introEligible: false, available: false },
+      },
+    });
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "FREE",
+      subscriptionStatus: null,
+      billingType: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
+
+    render(<SettingsPage />);
+
+    await screen.findByRole("button", { name: "Go Pro" });
+    expect(screen.queryByRole("button", { name: "Go Pro — 90-Day Exam Pass" })).not.toBeInTheDocument();
+  });
+
   it("starts Pro annual checkout after switching to Annual tab", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...proProfile,
@@ -337,6 +403,23 @@ describe("Settings page cancellation flow", () => {
     expect(cycleCells.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("shows exam-pass billing cycle wording for active exam-cycle access", async () => {
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "PRO",
+      subscriptionStatus: "ACTIVE",
+      billingType: "EXAM_CYCLE",
+      currentPeriodStart: "2026-03-01T00:00:00Z",
+      currentPeriodEnd: "2026-05-30T00:00:00Z",
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("90-Day Exam Pass · Manual renewal")).toBeInTheDocument();
+  });
+
   it("shows cancel plan link for active Pro subscription", async () => {
     render(<SettingsPage />);
 
@@ -358,7 +441,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    expect(await screen.findByText("Cancellation scheduled")).toBeInTheDocument();
+    expect(await screen.findByText("Access ends Apr 20, 2026")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel plan" })).not.toBeInTheDocument();
   });
 

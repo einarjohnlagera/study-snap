@@ -13,7 +13,8 @@ public record BillingPricingResponse(
     public record PlanPricing(
             PlanType planType,
             CyclePricing monthly,
-            CyclePricing yearly
+            CyclePricing yearly,
+            CyclePricing examCycle
     ) {
     }
 
