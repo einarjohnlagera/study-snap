@@ -48,7 +48,7 @@ Add a prominent exam hubs entry point to the marketing landing page (`/app/page.
 
 Extend `/exam/[slug]` to the next exam tier. The v0.25.0 page template reuses unchanged; implementation is new entries in `frontend/lib/exam-hub-config.ts`.
 
-**Content gate (required before launching any wave-2 hub):** pull current per-`courseProgram` public note counts from admin overview. Target: ~30+ notes per exam (same as LET at wave-1). Partial launch allowed.
+**Content gate (required before launching any wave-2 hub):** 20+ public notes per exam. High School/SHS excluded — not licensure exams. Partial launch allowed (add each hub independently as it clears the threshold). Currently deferred — no wave-2 candidate meets the threshold.
 
 | Exam | `courseProgram` mapping | Status |
 |---|---|---|

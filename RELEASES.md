@@ -16,7 +16,7 @@ Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal pr
 ### Planned
 
 **Track 1 — Exam Hub Surface (remaining)**
-- **Wave-2 exam hubs** — extend `/exam/[slug]` to CPALE, Engineering (Civil/Electrical/Mechanical), Pharmacy, Physical Therapy, and CSE. Gate: verify current per-exam note depth before launch (target ~30+ notes; partial launch allowed).
+- **Wave-2 exam hubs** — extend `/exam/[slug]` to CPALE, Engineering (Civil/Electrical/Mechanical), Pharmacy, Physical Therapy, and CSE. Gate: 20+ public notes per exam required before launch; High School/SHS excluded (not licensure exams). Deferred — no wave-2 candidate currently meets the threshold.
 
 **Track 2 — Mastery-Threshold Milestones**
 - **Mastery-threshold milestones** — deepen the `/progress` goal view with milestone markers derived from ConceptHealth mastery (e.g. "70% of Pharmacology concepts mastered") beyond the shipped goal summary and next-study card. Anti-drift: milestones stay mastery-derived, never a generated syllabus.
