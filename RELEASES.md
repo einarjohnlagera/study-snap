@@ -12,6 +12,7 @@ Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal pr
 - **`/exam` index redesign** — restyled exam hub index cards to the Help page card pattern: icon badge (PenTool/Heart/GraduationCap), `CardTitle` + `CardDescription`, "Browse [Exam] notes" + ArrowRight CTA with hover translate; replaced inline back link with `BackLink` component.
 - **Progress page link fix** — `NextStudyCard` now resolves exam hub slug via `getExamSlugForCourseProgram()` as a fallback when `goalType !== "EXAM"`, so Architecture/Nursing/Education goals set from the Profile chip picker correctly route to `/exam/ale` etc. instead of the filtered public library.
 - **Public note contextual callout** — when a public note's `courseProgram` maps to an exam hub, a compact callout strip appears after the practice mode teaser ("Preparing for the ALE? Browse curated notes, summaries, and practice quizzes. → Browse ALE hub"); the "View all →" link in the "More notes" section also upgrades to the exam hub destination. Replaces the originally planned landing page section (most traffic arrives via direct note links, not the homepage).
+- **Exam Hubs nav link** — added "Exam Hubs" to the public navbar (`PUBLIC_NAV`), placed between "Public Library" and "Learn", linking to `/exam`. Replaces the footer-only placement for discoverability.
 
 **Track 3 — Exam-Cycle Pass**
 - **90-day Pro exam-cycle pass** — added `EXAM_CYCLE` as a config-driven billing cycle, exposing a PH Pro-only 90-day pass at ₱599 while keeping Plus and non-PH exam-cycle pricing inactive by default. Settings and shared pricing cards show `Go Pro — 90-Day Exam Pass` only when live backend pricing marks the cycle available; checkout still uses the existing prepaid Xendit flow and monthly quota reset model.
@@ -23,6 +24,12 @@ Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal pr
 
 **Track 2 — Mastery-Threshold Milestones** *(Codex prompt ready: `docs/codex-prompts/v0.26.0-mastery-threshold-milestones.md`)*
 - **Goal milestone markers** — add six fixed ConceptHealth-derived checkpoints to the `/progress` goal view (between goal summary and next-study card): first concept mastered, 25%, all reviewed, 50%, 70%, and all mastered. Requires adding `notPracticedConcepts` to `GoalSummaryResponse` DTO.
+
+**Track 4 — Subject-Level Focus & Profile-Aware "What's Next"** *(Codex prompt ready: `docs/codex-prompts/v0.26.0-subject-focus-multi-select.md`)*
+- **Subject multi-select Study Focus** — replaces the course-program chip picker with AI-inferred subject chips from the user's own notes (`/subjects?scope=mine`); multi-select saves to a new `focusSubjects text[]` column (V71 migration); mutual exclusion with `studyGoal` (exam hub intent still sets `studyGoal` unchanged).
+- **Profile-type-adaptive framing** — Study Focus section hidden for TEACHER profile; BOARD_EXAM shows "Exam Focus" header; STUDENT shows "Study Focus — subjects you're preparing for this term"; PARENT/PROFESSIONAL shows generic copy.
+- **`SUBJECT_FOCUS` goal type** — when `studyGoal` is null and `focusSubjects` is non-empty, `ProgressReportService` computes a combined goal summary over the selected subjects; `goalName` is single subject or "N subjects in focus"; `NextStudyCard` routes to `/public/library?subject=weakestGoalSubject`.
+- **Actionable Progress empty state** — when no goal is set but subject mastery data exists, the Progress page shows the weakest 5 subjects as one-click chips linking to Profile settings, replacing the passive "No study focus set" link.
 
 ---
 

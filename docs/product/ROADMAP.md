@@ -81,6 +81,24 @@ Implementation lift is small — the system is already PREPAID with `endAt`-base
 - New checkout option in frontend billing UI
 - Xendit integration unchanged (creates fresh invoices, not subscription objects)
 
+### Track 4 — Subject-Level Focus & Profile-Aware "What's Next"
+
+Deepen the goal-setting and progress loop by letting learners set focus at the *subject* level (e.g. "History of Architecture", "Pharmacology") rather than the broad course-program level — removing the confusing redundancy with the Learning Profile section and giving the Progress report a more precise target.
+
+**Why this fits v0.26.0:** subject infrastructure already fully exists (`NoteEntity.subject` is AI-inferred, `SubjectProgressEntry` is already returned and rendered on the Progress page, `/subjects?scope=mine` endpoint already live). This track surfaces it through the Study Focus UX and makes it multi-select.
+
+**Key design decisions:**
+- **New `focusSubjects text[]` column** (V71 migration) alongside the existing `studyGoal` text column — they are not merged.
+- **Mutual exclusivity from the Profile UI** — setting subjects via the picker clears `studyGoal`; the exam hub intent flow still sets `studyGoal` directly (unchanged).
+- **Goal priority** in `ProgressReportService`: `studyGoal` (exam slug or course program) takes precedence; `focusSubjects` is used as goal source only when `studyGoal` is null.
+- **Combined rollup model** — multi-subject focus aggregates mastery across all selected subjects into one goal summary (no independent per-subject goal tracks).
+- **Profile-type-adaptive framing** — hidden for TEACHER; "Exam Focus" for BOARD_EXAM; "Study Focus — subjects you're preparing for this term" for STUDENT.
+- **No K-12 curated subject lists** — the Progress page reflects only what the user has notes for; prescribing subjects they haven't studied yet (from a DepEd/PRC reference list) is deferred to v0.27.
+
+**Retention hypothesis being tested:** learners who don't know what to study next churn. The actionable empty state (weakest subjects surfaced as one-click chips) and the `weakestGoalSubject` CTA in `NextStudyCard` test that hypothesis without a curated curriculum.
+
+Codex prompt: `docs/codex-prompts/v0.26.0-subject-focus-multi-select.md`
+
 ---
 
 ## v0.25.1 - Polish & Quick Review Fixes
