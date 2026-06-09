@@ -161,6 +161,7 @@ class ProgressReportServiceTest {
                 50,
                 1,
                 2,
+                1,
                 "Design"
         ));
     }
@@ -194,6 +195,7 @@ class ProgressReportServiceTest {
                 50,
                 1,
                 2,
+                1,
                 "Medical Surgical Nursing"
         ));
     }
@@ -215,6 +217,7 @@ class ProgressReportServiceTest {
                 "EXAM",
                 "ALE",
                 "Architect Licensure Examination",
+                0,
                 0,
                 0,
                 0,
@@ -250,6 +253,27 @@ class ProgressReportServiceTest {
     }
 
     @Test
+    void getProgressReport_includesGoalNotPracticedConceptsWhenGoalHasMixedConceptStates() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals", "Whole Numbers"));
+        studyPack.setNoteId(noteId);
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+                health(studyPack.getId(), "Fractions", NOW.minusDays(1)),
+                health(studyPack.getId(), "Decimals", NOW.minusDays(5))
+        ));
+
+        ProgressReportResponse response = progressReportService.getProgressReport(userId, "Mathematics", NOW);
+
+        assertThat(response.goalSummary()).isNotNull();
+        assertThat(response.goalSummary().masteredConcepts()).isEqualTo(1);
+        assertThat(response.goalSummary().notPracticedConcepts()).isEqualTo(1);
+        assertThat(response.goalSummary().masteryPercentage()).isEqualTo(33);
+    }
+
+    @Test
     void getProgressReport_computesSubjectGoalSummaryFromMatchingCourseProgramNotes() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -271,6 +295,7 @@ class ProgressReportServiceTest {
                 50,
                 1,
                 2,
+                1,
                 "Algebra"
         ));
     }
@@ -292,6 +317,7 @@ class ProgressReportServiceTest {
                 "SUBJECT",
                 "Mathematics",
                 "Mathematics",
+                0,
                 0,
                 0,
                 0,
