@@ -8,6 +8,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { PageHeader } from "@/components/page-header";
 import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -119,14 +120,16 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
 }
 
 function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
-  const isExamGoal = goalSummary.goalType === "EXAM";
-  const href = isExamGoal
-    ? `/exam/${goalSummary.studyGoal}`
+  const examSlug = goalSummary.goalType === "EXAM"
+    ? goalSummary.studyGoal
+    : getExamSlugForCourseProgram(goalSummary.studyGoal);
+  const href = examSlug
+    ? `/exam/${examSlug}`
     : `/public/library?courseProgram=${encodeURIComponent(goalSummary.studyGoal)}`;
   const message = goalSummary.weakestGoalSubject
     ? `Focus on ${goalSummary.weakestGoalSubject} — you have concepts left to practice.`
     : `Browse community ${goalSummary.goalName} notes to build your knowledge.`;
-  const linkLabel = isExamGoal
+  const linkLabel = examSlug
     ? `Browse ${goalSummary.goalName} notes`
     : `Browse ${goalSummary.goalName} notes in the community`;
 
