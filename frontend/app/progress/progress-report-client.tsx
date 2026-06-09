@@ -12,6 +12,43 @@ import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
 
 type LoadState = "loading" | "ready" | "error";
 
+const MASTERY_QUARTER_THRESHOLD = 25;
+const MASTERY_HALF_THRESHOLD = 50;
+const MASTERY_STRONG_THRESHOLD = 70;
+const MASTERY_COMPLETE_THRESHOLD = 100;
+
+type GoalMilestone = {
+  label: string;
+  reached: (goalSummary: GoalSummaryResponse) => boolean;
+};
+
+export const MILESTONES: GoalMilestone[] = [
+  {
+    label: "First concept mastered",
+    reached: (goalSummary) => goalSummary.masteredConcepts >= 1,
+  },
+  {
+    label: "25% mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_QUARTER_THRESHOLD,
+  },
+  {
+    label: "All concepts reviewed",
+    reached: (goalSummary) => (goalSummary.notPracticedConcepts ?? 1) === 0 && goalSummary.totalConcepts > 0,
+  },
+  {
+    label: "50% mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_HALF_THRESHOLD,
+  },
+  {
+    label: "70% mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_STRONG_THRESHOLD,
+  },
+  {
+    label: "All concepts mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_COMPLETE_THRESHOLD,
+  },
+];
+
 function isNotStarted(entry: SubjectProgressEntry): boolean {
   return entry.masteryPercentage === 0 && entry.notPracticedConcepts === entry.totalConcepts;
 }
@@ -119,6 +156,68 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
   );
 }
 
+function getMilestoneMarkerClasses(reached: boolean, isNext: boolean): string {
+  if (reached) {
+    return "border-blue-600 bg-blue-600";
+  }
+  if (isNext) {
+    return "border-blue-600 bg-background ring-2 ring-blue-500 ring-offset-2 ring-offset-background";
+  }
+  return "border-muted bg-muted";
+}
+
+function GoalMilestonesCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  const milestoneStates = MILESTONES.map((milestone) => ({
+    ...milestone,
+    reached: milestone.reached(goalSummary),
+  }));
+  const nextMilestoneIndex = milestoneStates.findIndex((milestone) => !milestone.reached);
+  const reachedCount = milestoneStates.filter((milestone) => milestone.reached).length;
+  const progressWidth = (reachedCount / MILESTONES.length) * 100;
+
+  return (
+    <Card className="space-y-5 p-4 sm:p-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">Goal Milestones</h2>
+        <p className="text-sm text-foreground/65">
+          Track the next checkpoint on your path to goal mastery.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {milestoneStates.map((milestone, index) => {
+          const isNext = index === nextMilestoneIndex;
+          return (
+            <div key={milestone.label} className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className={`size-3.5 shrink-0 rounded-full border ${getMilestoneMarkerClasses(milestone.reached, isNext)}`}
+              />
+              <span className={`text-sm ${milestone.reached || isNext ? "text-foreground" : "text-foreground/50"}`}>
+                {milestone.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        role="progressbar"
+        aria-label="Goal milestone progress"
+        aria-valuemin={0}
+        aria-valuemax={MILESTONES.length}
+        aria-valuenow={reachedCount}
+        className="h-3 overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+          style={{ width: `${progressWidth}%` }}
+        />
+      </div>
+    </Card>
+  );
+}
+
 function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
   const examSlug = goalSummary.goalType === "EXAM"
     ? goalSummary.studyGoal
@@ -186,6 +285,7 @@ function ProgressContent({
         </Card>
       ) : null}
 
+      {goalSummary && goalSummary.totalConcepts > 0 ? <GoalMilestonesCard goalSummary={goalSummary} /> : null}
       {goalSummary ? <NextStudyCard goalSummary={goalSummary} /> : null}
 
       {subjects.length === 0 ? (

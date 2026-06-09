@@ -195,6 +195,7 @@ export type GoalSummaryResponse = {
   masteryPercentage: number;
   masteredConcepts: number;
   totalConcepts: number;
+  notPracticedConcepts: number;
   weakestGoalSubject: string | null;
 };
 

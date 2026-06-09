@@ -170,6 +170,7 @@ public class ProgressReportService {
                 masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
                 counts.masteredConcepts(),
                 counts.totalConcepts(),
+                counts.notPracticedConcepts(),
                 weakestGoalSubject
         );
     }

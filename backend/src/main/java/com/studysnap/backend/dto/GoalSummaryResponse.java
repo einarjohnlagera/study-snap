@@ -8,6 +8,7 @@ public record GoalSummaryResponse(
         int masteryPercentage,
         int masteredConcepts,
         int totalConcepts,
+        int notPracticedConcepts,
         String weakestGoalSubject
 ) {
 }
