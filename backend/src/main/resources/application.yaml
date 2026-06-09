@@ -141,6 +141,10 @@ studysnap:
             amount: ${PRICING_US_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_US_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_US_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_US_PRO_MONTHLY_PRICE:${PRICING_US_MONTHLY_PRICE:4.99}}
@@ -150,6 +154,10 @@ studysnap:
             amount: ${PRICING_US_PRO_YEARLY_PRICE:${PRICING_US_YEARLY_PRICE:39.99}}
             duration-days: ${PRICING_US_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_US_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: ${PRICING_US_PRO_EXAM_CYCLE_PRICE:13.99}
+            duration-days: 90
+            active: ${PRICING_US_PRO_EXAM_CYCLE_ACTIVE:false}
       PH:
         currency: PHP
         active: ${PRICING_PH_ACTIVE:true}
@@ -162,6 +170,10 @@ studysnap:
             amount: ${PRICING_PH_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_PH_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_PH_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_PH_PRO_MONTHLY_PRICE:${PRICING_PH_MONTHLY_PRICE:249}}
@@ -171,6 +183,10 @@ studysnap:
             amount: ${PRICING_PH_PRO_YEARLY_PRICE:${PRICING_PH_YEARLY_PRICE:1999}}
             duration-days: ${PRICING_PH_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_PH_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: ${PRICING_PH_PRO_EXAM_CYCLE_PRICE:599}
+            duration-days: ${PRICING_PH_PRO_EXAM_CYCLE_DURATION_DAYS:90}
+            active: ${PRICING_PH_PRO_EXAM_CYCLE_ACTIVE:true}
       GB:
         currency: GBP
         active: ${PRICING_GB_ACTIVE:true}
@@ -183,6 +199,10 @@ studysnap:
             amount: ${PRICING_GB_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_GB_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_GB_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_GB_PRO_MONTHLY_PRICE:${PRICING_GB_MONTHLY_PRICE:4.49}}
@@ -192,6 +212,10 @@ studysnap:
             amount: ${PRICING_GB_PRO_YEARLY_PRICE:${PRICING_GB_YEARLY_PRICE:35.99}}
             duration-days: ${PRICING_GB_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_GB_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: ${PRICING_GB_PRO_EXAM_CYCLE_PRICE:11.99}
+            duration-days: 90
+            active: ${PRICING_GB_PRO_EXAM_CYCLE_ACTIVE:false}
       EU:
         currency: EUR
         active: ${PRICING_EU_ACTIVE:true}
@@ -204,6 +228,10 @@ studysnap:
             amount: ${PRICING_EU_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_EU_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_EU_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_EU_PRO_MONTHLY_PRICE:${PRICING_EU_MONTHLY_PRICE:4.99}}
@@ -213,6 +241,10 @@ studysnap:
             amount: ${PRICING_EU_PRO_YEARLY_PRICE:${PRICING_EU_YEARLY_PRICE:39.99}}
             duration-days: ${PRICING_EU_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_EU_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
       AU:
         currency: AUD
         active: ${PRICING_AU_ACTIVE:true}
@@ -225,6 +257,10 @@ studysnap:
             amount: ${PRICING_AU_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_AU_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_AU_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_AU_PRO_MONTHLY_PRICE:${PRICING_AU_MONTHLY_PRICE:7.49}}
@@ -234,6 +270,10 @@ studysnap:
             amount: ${PRICING_AU_PRO_YEARLY_PRICE:${PRICING_AU_YEARLY_PRICE:59.99}}
             duration-days: ${PRICING_AU_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_AU_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
       CA:
         currency: CAD
         active: ${PRICING_CA_ACTIVE:true}
@@ -246,6 +286,10 @@ studysnap:
             amount: ${PRICING_CA_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_CA_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_CA_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_CA_PRO_MONTHLY_PRICE:${PRICING_CA_MONTHLY_PRICE:6.49}}
@@ -255,6 +299,10 @@ studysnap:
             amount: ${PRICING_CA_PRO_YEARLY_PRICE:${PRICING_CA_YEARLY_PRICE:51.99}}
             duration-days: ${PRICING_CA_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_CA_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
       SG:
         currency: SGD
         active: ${PRICING_SG_ACTIVE:true}
@@ -267,6 +315,10 @@ studysnap:
             amount: ${PRICING_SG_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_SG_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_SG_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_SG_PRO_MONTHLY_PRICE:${PRICING_SG_MONTHLY_PRICE:6.49}}
@@ -276,6 +328,10 @@ studysnap:
             amount: ${PRICING_SG_PRO_YEARLY_PRICE:${PRICING_SG_YEARLY_PRICE:51.99}}
             duration-days: ${PRICING_SG_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_SG_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
       IN:
         currency: INR
         active: ${PRICING_IN_ACTIVE:true}
@@ -288,6 +344,10 @@ studysnap:
             amount: ${PRICING_IN_PLUS_YEARLY_PRICE:0}
             duration-days: ${PRICING_IN_PLUS_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_IN_PLUS_YEARLY_ACTIVE:false}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
         pro:
           monthly:
             amount: ${PRICING_IN_PRO_MONTHLY_PRICE:${PRICING_IN_MONTHLY_PRICE:399}}
@@ -297,6 +357,10 @@ studysnap:
             amount: ${PRICING_IN_PRO_YEARLY_PRICE:${PRICING_IN_YEARLY_PRICE:3199}}
             duration-days: ${PRICING_IN_PRO_YEARLY_DURATION_DAYS:365}
             active: ${PRICING_IN_PRO_YEARLY_ACTIVE:true}
+          exam-cycle:
+            amount: 0
+            duration-days: 90
+            active: false
     xendit:
       base-url: ${XENDIT_BASE_URL:https://api.xendit.co}
       secret-key: ${XENDIT_SECRET_KEY:}

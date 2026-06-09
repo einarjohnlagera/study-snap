@@ -40,6 +40,9 @@ export function resolveCyclePricing(
   if (!planPricing) {
     return null;
   }
+  if (billingCycle === "EXAM_CYCLE") {
+    return planPricing.examCycle;
+  }
   return billingCycle === "YEARLY" ? planPricing.yearly : planPricing.monthly;
 }
 
@@ -65,6 +68,9 @@ export function getBillingCyclePriceLabel(
   const cyclePricing = resolveCyclePricing(pricing, planType, billingCycle);
   const currency = pricing?.currency ?? "PHP";
   if (!cyclePricing || !cyclePricing.available || cyclePricing.amount === null) {
+    if (billingCycle === "EXAM_CYCLE") {
+      return "Exam pass pricing unavailable";
+    }
     return billingCycle === "MONTHLY" ? "Monthly pricing unavailable" : "Yearly pricing unavailable";
   }
 
@@ -77,10 +83,27 @@ export function getBillingCyclePriceLabel(
     return `${monthlyAmount}/month`;
   }
 
+  if (billingCycle === "EXAM_CYCLE") {
+    return getExamCyclePriceLabel(pricing, planType);
+  }
+
   const yearlyAmount = formatBillingAmount(cyclePricing.amount, currency);
   const yearlySavings = getYearlySavings(pricing, planType);
   if (yearlySavings > 0) {
     return `${yearlyAmount}/year (Save ${formatBillingAmount(yearlySavings, currency)})`;
   }
   return `${yearlyAmount}/year`;
+}
+
+export function getExamCyclePriceLabel(
+  pricing: BillingPricingResponse | null,
+  planType: PaidPlanType,
+) {
+  const cyclePricing = resolveCyclePricing(pricing, planType, "EXAM_CYCLE");
+  const currency = pricing?.currency ?? "PHP";
+  if (!cyclePricing || !cyclePricing.available || cyclePricing.amount === null) {
+    return "Exam pass pricing unavailable";
+  }
+  const durationDays = cyclePricing.durationDays ?? 90;
+  return `${formatBillingAmount(cyclePricing.amount, currency)} for ${durationDays} days`;
 }

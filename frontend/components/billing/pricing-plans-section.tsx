@@ -7,7 +7,7 @@ import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-butto
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
-import { formatBillingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
+import { formatBillingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import {
   type ComparisonValue,
@@ -86,6 +86,7 @@ function PlanCard({
   description,
   monthlyLabel,
   yearlyLabel,
+  examCycleLabel,
   introHint,
   highlights,
   ctaLabel,
@@ -99,6 +100,7 @@ function PlanCard({
   description: string;
   monthlyLabel: string;
   yearlyLabel?: string | null;
+  examCycleLabel?: string | null;
   introHint?: string | null;
   highlights: ReadonlyArray<{ label: string; helper?: string }>;
   ctaLabel: string;
@@ -125,6 +127,7 @@ function PlanCard({
       <div className="space-y-1">
         <p className="text-xl font-semibold text-foreground">{monthlyLabel}</p>
         {yearlyLabel ? <p className="text-sm text-foreground/70">{yearlyLabel}</p> : null}
+        {examCycleLabel ? <p className="text-sm text-foreground/70">{examCycleLabel}</p> : null}
         {introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
       </div>
       <FeatureList features={highlights} />
@@ -147,6 +150,16 @@ function PlanCard({
             source={`pricing_plans_section_${planType.toLowerCase()}_yearly`}
             planType={planType}
             billingCycle="YEARLY"
+            variant="outline"
+            className="w-full"
+          />
+        ) : null}
+        {examCycleLabel ? (
+          <PremiumUpgradeButton
+            label="Go Pro — 90-Day Exam Pass"
+            source="pricing_plans_section_pro_exam_cycle"
+            planType="PRO"
+            billingCycle="EXAM_CYCLE"
             variant="outline"
             className="w-full"
           />
@@ -178,6 +191,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
   const proYearlyLabel = billingPricing
     ? (resolveCyclePricing(billingPricing, "PRO", "YEARLY")?.available ? getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY") : null)
     : proFallback.yearly;
+  const proExamCycleLabel = billingPricing && resolveCyclePricing(billingPricing, "PRO", "EXAM_CYCLE")?.available
+    ? getExamCyclePriceLabel(billingPricing, "PRO")
+    : null;
 
   const plusIntroHint = billingPricing?.plus.monthly.introEligible && billingPricing.plus.monthly.introAmount !== null
     ? `Intro offer: ${formatBillingAmount(billingPricing.plus.monthly.introAmount, billingPricing.currency)} for your first monthly checkout.`
@@ -249,6 +265,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           description={proPlan.description}
           monthlyLabel={proMonthlyLabel}
           yearlyLabel={proYearlyLabel}
+          examCycleLabel={proExamCycleLabel}
           introHint={proIntroHint}
           highlights={proPlan.features}
           ctaLabel={getPaidPlanCtaLabel("PRO")}

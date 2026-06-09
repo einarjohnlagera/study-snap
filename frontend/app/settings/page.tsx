@@ -36,7 +36,7 @@ import {
   type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
-import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
+import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -461,6 +461,10 @@ export default function SettingsPage() {
   const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
   const plusAnnualPricing = resolveCyclePricing(billingPricing, "PLUS", "YEARLY");
   const proAnnualPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
+  const proExamCyclePricing = resolveCyclePricing(billingPricing, "PRO", "EXAM_CYCLE");
+  const proExamCyclePriceLabel = proExamCyclePricing?.available
+    ? getExamCyclePriceLabel(billingPricing, "PRO")
+    : null;
   const billingTransactions = billingHistory?.transactions ?? [];
 
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
@@ -520,6 +524,16 @@ export default function SettingsPage() {
     }
   };
 
+  const formatSubscriptionBillingCycle = (billingType: BillingCycle | null | undefined) => {
+    if (billingType === "EXAM_CYCLE") {
+      return "90-Day Exam Pass";
+    }
+    if (billingType === "YEARLY") {
+      return "Yearly";
+    }
+    return "Monthly";
+  };
+
   const getTransactionStatusLabel = (status: BillingHistoryItemResponse["status"]) => {
     switch (status) {
       case "SUCCESS":
@@ -568,7 +582,7 @@ export default function SettingsPage() {
       ? "Valid until"
       : "Status";
   const subscriptionBillingCycleLabel = isPaidPlanType(subscriptionSummaryPlan)
-    ? `${billingHistory?.billingType === "YEARLY" ? "Yearly" : "Monthly"} · Manual renewal`
+    ? `${formatSubscriptionBillingCycle(billingHistory?.billingType)} · Manual renewal`
     : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
   const cancellationAccessEndsAt = billingHistory?.cancellationEffectiveAt ?? billingHistory?.currentPeriodEnd ?? null;
@@ -942,20 +956,39 @@ export default function SettingsPage() {
                         ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
                         : proMonthlyPriceLabel}
                     </p>
+                    {proExamCyclePriceLabel ? (
+                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                        90-Day Exam Pass: {proExamCyclePriceLabel}
+                      </p>
+                    ) : null}
                   </div>
                   <PlanFeatureList features={proPlanConfig.features} />
                   <p className="mb-5 text-xs text-foreground/55">{proPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan !== "PRO" ? (
-                      <ResponsiveActionButton
-                        type="button"
-                        className="w-full"
-                        onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
-                        loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
-                        loadingText="Redirecting..."
-                        action="studyPack"
-                        label={getPaidPlanCtaLabel("PRO")}
-                      />
+                      <>
+                        <ResponsiveActionButton
+                          type="button"
+                          className="w-full"
+                          onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
+                          loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
+                          loadingText="Redirecting..."
+                          action="studyPack"
+                          label={getPaidPlanCtaLabel("PRO")}
+                        />
+                        {proExamCyclePriceLabel ? (
+                          <ResponsiveActionButton
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => void handleStartCheckout("PRO", "EXAM_CYCLE")}
+                            loading={startingCheckoutKey === "PRO-EXAM_CYCLE"}
+                            loadingText="Redirecting..."
+                            action="studyPack"
+                            label="Go Pro — 90-Day Exam Pass"
+                          />
+                        ) : null}
+                      </>
                     ) : (
                       <>
                         <Button variant="outline" className="w-full" disabled>Current Plan</Button>

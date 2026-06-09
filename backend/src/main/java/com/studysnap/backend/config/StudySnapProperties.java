@@ -341,6 +341,7 @@ public class StudySnapProperties {
     public static class PaidPlanPricing {
         private final BillingCyclePricing monthly = new BillingCyclePricing();
         private final BillingCyclePricing yearly = new BillingCyclePricing();
+        private final BillingCyclePricing examCycle = new BillingCyclePricing();
     }
 
     @Getter
