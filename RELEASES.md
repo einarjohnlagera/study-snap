@@ -1,8 +1,16 @@
 # RELEASES.md - NoteLib
 
-## v0.26.0 - TBD
+## v0.26.0 - Exam Depth
 
 **Status: In progress**
+
+Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, and give board exam takers a pricing commitment that matches how they prep — a 90-day exam-cycle pass.
+
+### Planned
+
+- **Wave-2 exam hubs** — extend `/exam/[slug]` to CPALE, Engineering (Civil/Electrical/Mechanical), Pharmacy, Physical Therapy, and CSE using the existing config-alias-map + page template from v0.25.0. Gate: verify current per-exam note depth before launch (target ~30+ notes; partial launch allowed if some candidates are ready and others aren't).
+- **Mastery-threshold milestones** — deepen the `/progress` goal view with milestone markers derived from ConceptHealth mastery (e.g. "70% of Pharmacology concepts mastered") beyond the shipped goal summary and next-study card. Anti-drift: milestones stay mastery-derived, never a generated syllabus.
+- **Exam-cycle pass (Pro season pass)** — new 90-day Pro access tier at ₱599 PH (vs ₱747 for 3× monthly), for board exam takers committing to a prep cycle. Requires: `EXAM_CYCLE` in `BillingCycle`, new config entry, new checkout option. Xendit integration and monthly quota resets unchanged.
 
 ---
 

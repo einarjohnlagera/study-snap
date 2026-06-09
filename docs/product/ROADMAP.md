@@ -18,11 +18,52 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ---
 
-## v0.26.0 - TBD
+## v0.26.0 - Exam Depth
 
 **Status: In progress**
 
-Theme: TBD.
+Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, and give board exam takers a pricing commitment that matches how they actually prep — a 90-day exam-cycle pass. All three reinforce the same user: a board exam taker preparing for a specific cycle.
+
+### Track 1 — Wave-2 Exam Hubs
+
+Extend the exam hub surface beyond wave-1 (ALE/PNLE/LET) to the next tier of exam communities with sufficient note depth. Launch only exams comfortably above the thin-content line (target: ~30+ notes, same threshold as LET at wave-1 launch). Partial launch is allowed — some exams may clear the threshold while others wait for wave 3.
+
+**Wave-2 candidates (per v0.25.0 data audit at 211 notes; counts have grown to ~252+ since then):**
+
+| Exam | `courseProgram` mapping | Status |
+|---|---|---|
+| **CPALE** | Accountancy | Verify current count |
+| **Engineering** | Civil / Electrical / Mechanical Engineering | Verify current count per discipline |
+| **Pharmacy** | Pharmacy | Verify current count |
+| **Physical Therapy** | Physical Therapy | Verify current count |
+| **CSE** | Civil Service / Computer Science | Verify current count |
+
+**Content gate (required before launch):** pull current per-`courseProgram` public note counts from admin overview. Promote any candidate at ~30+ notes; hold the rest for wave 3.
+
+Implementation: new entries in `frontend/lib/exam-hub-config.ts` alias map. The v0.25.0 page template reused unchanged; no new infrastructure needed.
+
+### Track 2 — Mastery-Threshold Milestones
+
+Deepen the `/progress` goal view beyond the v0.25.0 shipped goal summary and next-study suggestion. Add visible milestone markers tied to mastery thresholds (e.g. "70% of Pharmacology concepts mastered", "All key concepts reviewed at least once") inside the goal progress section.
+
+**Anti-drift (locked from v0.24.0/v0.25.0):** milestones must be derived from `ConceptHealth` mastery data — never a generated syllabus, never a progression system not rooted in actual quiz performance.
+
+Backend aggregation required → Codex prompt.
+
+### Track 3 — Exam-Cycle Pass (Pro Season Pass)
+
+New 90-day Pro access tier targeted at board exam takers committing to a specific prep cycle.
+
+- **Price:** ₱599 PH (vs ₱747 for 3× monthly — a meaningful seasonal discount for the review window)
+- **Duration:** 90 days from purchase date (`endAt`-based, same as existing PREPAID grants)
+- **Access:** full Pro entitlements for the duration
+- **Monthly quotas:** still apply and reset monthly regardless of billing cycle (`BillingUsageResetJob` is billing-cycle-agnostic; LLM cost exposure stays bounded at 100 packs/month)
+
+Implementation lift is small — the system is already PREPAID with `endAt`-based grants:
+- New `EXAM_CYCLE` value in `BillingCycle` enum
+- New pricing config entry in `application.yaml` (`duration-days: 90`, `amount: 599`)
+- New checkout option in frontend billing UI
+- Xendit integration unchanged (creates fresh invoices, not subscription objects)
 
 ---
 
@@ -1420,7 +1461,7 @@ Potential expansion areas after `v0.8.0`:
 
 ### Billing Improvements (Future)
 
-- **Exam-cycle pass (90-day Pro unlock)** — a one-time seasonal pass priced below 3× monthly (e.g. ₱599 PH vs ₱747 monthly); full Pro feature unlock including Board Exam simulation; `EXAM_CYCLE` billing cycle enum + `duration-days: 90` config + checkout UI option; no integration change required (system is already `PREPAID` / `endAt`-based); monthly quota reset by `BillingUsageResetJob` still applies so LLM cost exposure is bounded; rationale: exam reviewers are seasonal (3–6 month window), a time-scoped pass matches their intent and eliminates bait-and-switch churn risk when pricing changes later
+- **Exam-cycle pass** — promoted to v0.26.0 Track 3. See v0.26.0 section.
 - recurring subscription support
 - coupon-code entry UI
 - cancel subscription flow
