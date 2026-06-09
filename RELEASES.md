@@ -6,10 +6,22 @@
 
 Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, and give board exam takers a pricing commitment that matches how they prep — a 90-day exam-cycle pass.
 
+### Shipped
+
+**Track 1 — Exam Hub Surface**
+- **`/exam` index redesign** — restyled exam hub index cards to the Help page card pattern: icon badge (PenTool/Heart/GraduationCap), `CardTitle` + `CardDescription`, "Browse [Exam] notes" + ArrowRight CTA with hover translate; replaced inline back link with `BackLink` component.
+- **Progress page link fix** — `NextStudyCard` now resolves exam hub slug via `getExamSlugForCourseProgram()` as a fallback when `goalType !== "EXAM"`, so Architecture/Nursing/Education goals set from the Profile chip picker correctly route to `/exam/ale` etc. instead of the filtered public library.
+
 ### Planned
 
-- **Wave-2 exam hubs** — extend `/exam/[slug]` to CPALE, Engineering (Civil/Electrical/Mechanical), Pharmacy, Physical Therapy, and CSE using the existing config-alias-map + page template from v0.25.0. Gate: verify current per-exam note depth before launch (target ~30+ notes; partial launch allowed if some candidates are ready and others aren't).
+**Track 1 — Exam Hub Surface (remaining)**
+- **Public note contextual callout** — when a public note's `courseProgram` maps to an exam hub, show a lightweight callout ("Preparing for the ALE? See the full ALE hub →") on the note detail page; replaces the originally planned landing page section.
+- **Wave-2 exam hubs** — extend `/exam/[slug]` to CPALE, Engineering (Civil/Electrical/Mechanical), Pharmacy, Physical Therapy, and CSE. Gate: verify current per-exam note depth before launch (target ~30+ notes; partial launch allowed).
+
+**Track 2 — Mastery-Threshold Milestones**
 - **Mastery-threshold milestones** — deepen the `/progress` goal view with milestone markers derived from ConceptHealth mastery (e.g. "70% of Pharmacology concepts mastered") beyond the shipped goal summary and next-study card. Anti-drift: milestones stay mastery-derived, never a generated syllabus.
+
+**Track 3 — Exam-Cycle Pass**
 - **Exam-cycle pass (Pro season pass)** — new 90-day Pro access tier at ₱599 PH (vs ₱747 for 3× monthly), for board exam takers committing to a prep cycle. Requires: `EXAM_CYCLE` in `BillingCycle`, new config entry, new checkout option. Xendit integration and monthly quota resets unchanged.
 
 ---

@@ -24,11 +24,31 @@ Older milestone labels below are preserved as planning history only. They are no
 
 Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, and give board exam takers a pricing commitment that matches how they actually prep — a 90-day exam-cycle pass. All three reinforce the same user: a board exam taker preparing for a specific cycle.
 
-### Track 1 — Wave-2 Exam Hubs
+### Track 1 — Exam Hub Surface
 
-Extend the exam hub surface beyond wave-1 (ALE/PNLE/LET) to the next tier of exam communities with sufficient note depth. Launch only exams comfortably above the thin-content line (target: ~30+ notes, same threshold as LET at wave-1 launch). Partial launch is allowed — some exams may clear the threshold while others wait for wave 3.
+Four pieces, all Claude Code–sized (no Codex prompt needed):
 
-**Wave-2 candidates (per v0.25.0 data audit at 211 notes; counts have grown to ~252+ since then):**
+**1. `/exam` index redesign**
+
+Restyle the exam hub index cards to match the Help page card pattern: icon badge (top-left) + title/description beside it + "Browse [Exam] notes →" link at the bottom (ArrowRight icon). Icon map defined locally in the page (not in `exam-hub-config.ts`):
+- ALE → `PenTool`
+- PNLE → `Heart`
+- LET → `GraduationCap`
+- Wave-2 additions get a relevant icon when added.
+
+**2. Landing page exam hub entry**
+
+Add a prominent exam hubs entry point to the marketing landing page (`/app/page.tsx`) so `/exam` is discoverable without scrolling to the footer. Exact placement and form TBD at implementation time.
+
+**3. Progress page link fix**
+
+`NextStudyCard` in `progress-report-client.tsx` only routes to `/exam/[slug]` when `goalType === "EXAM"`. Goals set from the Profile chip picker are `SUBJECT` type — so Architecture → public library instead of `/exam/ale`. Fix: call `getExamSlugForCourseProgram(goalSummary.studyGoal)` as a fallback; if it returns a slug, route to `/exam/[slug]` regardless of `goalType`.
+
+**4. Wave-2 exam hubs**
+
+Extend `/exam/[slug]` to the next exam tier. The v0.25.0 page template reuses unchanged; implementation is new entries in `frontend/lib/exam-hub-config.ts`.
+
+**Content gate (required before launching any wave-2 hub):** pull current per-`courseProgram` public note counts from admin overview. Target: ~30+ notes per exam (same as LET at wave-1). Partial launch allowed.
 
 | Exam | `courseProgram` mapping | Status |
 |---|---|---|
@@ -37,10 +57,6 @@ Extend the exam hub surface beyond wave-1 (ALE/PNLE/LET) to the next tier of exa
 | **Pharmacy** | Pharmacy | Verify current count |
 | **Physical Therapy** | Physical Therapy | Verify current count |
 | **CSE** | Civil Service / Computer Science | Verify current count |
-
-**Content gate (required before launch):** pull current per-`courseProgram` public note counts from admin overview. Promote any candidate at ~30+ notes; hold the rest for wave 3.
-
-Implementation: new entries in `frontend/lib/exam-hub-config.ts` alias map. The v0.25.0 page template reused unchanged; no new infrastructure needed.
 
 ### Track 2 — Mastery-Threshold Milestones
 
