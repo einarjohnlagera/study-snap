@@ -11,11 +11,11 @@ Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal pr
 **Track 1 — Exam Hub Surface**
 - **`/exam` index redesign** — restyled exam hub index cards to the Help page card pattern: icon badge (PenTool/Heart/GraduationCap), `CardTitle` + `CardDescription`, "Browse [Exam] notes" + ArrowRight CTA with hover translate; replaced inline back link with `BackLink` component.
 - **Progress page link fix** — `NextStudyCard` now resolves exam hub slug via `getExamSlugForCourseProgram()` as a fallback when `goalType !== "EXAM"`, so Architecture/Nursing/Education goals set from the Profile chip picker correctly route to `/exam/ale` etc. instead of the filtered public library.
+- **Public note contextual callout** — when a public note's `courseProgram` maps to an exam hub, a compact callout strip appears after the practice mode teaser ("Preparing for the ALE? Browse curated notes, summaries, and practice quizzes. → Browse ALE hub"); the "View all →" link in the "More notes" section also upgrades to the exam hub destination. Replaces the originally planned landing page section (most traffic arrives via direct note links, not the homepage).
 
 ### Planned
 
 **Track 1 — Exam Hub Surface (remaining)**
-- **Public note contextual callout** — when a public note's `courseProgram` maps to an exam hub, show a lightweight callout ("Preparing for the ALE? See the full ALE hub →") on the note detail page; replaces the originally planned landing page section.
 - **Wave-2 exam hubs** — extend `/exam/[slug]` to CPALE, Engineering (Civil/Electrical/Mechanical), Pharmacy, Physical Therapy, and CSE. Gate: verify current per-exam note depth before launch (target ~30+ notes; partial launch allowed).
 
 **Track 2 — Mastery-Threshold Milestones**

@@ -16,6 +16,7 @@ import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } f
 import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
+import { getExamSlugForCourseProgram, EXAM_HUBS } from "@/lib/exam-hub-config";
 
 type PublicLibrarySeoPageProps = {
   params: Promise<{
@@ -88,6 +89,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     .map((n) => ({ id: n.id, title: n.title, subject: n.subject, summaryPreview: n.summaryPreview, contentPreview: n.contentPreview }));
 
   const courseProgram = allSubjectNotes.find((n) => n.id === note.id)?.courseProgram ?? null;
+  const examSlug = getExamSlugForCourseProgram(courseProgram);
   const moreByCourseProgram = courseProgram
     ? (await getServerPublicNotesByCourseProgram(courseProgram))
         .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")
@@ -268,6 +270,21 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
         {/* Practice mode teaser — before ownership actions */}
         {!isDraft ? <PublicPracticeModeTeaser /> : null}
 
+        {/* Exam hub contextual callout — only when this note's courseProgram maps to a hub */}
+        {examSlug ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+            <p className="text-sm text-foreground/80">
+              Preparing for the <strong>{EXAM_HUBS[examSlug].shortName}</strong>? Browse curated notes, summaries, and practice quizzes.
+            </p>
+            <Link
+              href={`/exam/${examSlug}`}
+              className="shrink-0 text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+            >
+              Browse {EXAM_HUBS[examSlug].shortName} hub →
+            </Link>
+          </div>
+        ) : null}
+
         {/* More notes in the same Course/Program */}
         {moreByCourseProgram.length > 0 ? (
           <section aria-labelledby="more-course-program-heading">
@@ -277,10 +294,10 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                   More {courseProgram} notes
                 </h2>
                 <Link
-                  href={buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
+                  href={examSlug ? `/exam/${examSlug}` : buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
                   className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
                 >
-                  View all →
+                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : "View all →"}
                 </Link>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
