@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.26.1 - Guidance System` is the current in-progress release.
+`v0.26.1` has been released. No active release in progress.
 
 `v0.26.1 - Guidance System` is the current documentation baseline.
 
@@ -20,7 +20,7 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.26.1 - Guidance System
 
-**Status: In progress**
+**Status: Released**
 
 Theme: make NoteLib's most useful — but least self-explanatory — features teach themselves. The Goal / Study Focus / Milestones loop and the Exam Hubs shipped in v0.25–v0.26 with strong mechanics but no in-app explanation. This release builds a reusable guidance mechanism and applies it to those two highest-pain gaps. Guidance only — no behavioral or feature changes (in particular, no term-reset feature: current behavior is documented honestly).
 

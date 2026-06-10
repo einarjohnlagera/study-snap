@@ -2,7 +2,7 @@
 
 ## v0.26.1 - Guidance System
 
-**Status: In progress**
+**Status: Released**
 
 Theme: make NoteLib's most useful — but least self-explanatory — features teach themselves. Build a reusable in-app guidance mechanism (deep-linkable Help guides + an inline "gist + How this works →" pattern), then apply it to the two highest-pain gaps: the Progress / Study Focus / Milestones loop and the Exam Hubs. Reference material lives where the feature lives; the Help guide is the depth path, not the only explanation.
 
