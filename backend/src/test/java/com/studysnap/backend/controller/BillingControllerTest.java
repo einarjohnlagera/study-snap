@@ -147,6 +147,7 @@ class BillingControllerTest {
                 LearnerLevel.COLLEGE,
                 "Nursing",
                 null,
+                java.util.List.of(),
                 null,
                 true,
                 null,

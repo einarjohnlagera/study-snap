@@ -222,18 +222,60 @@ describe("ProgressPage", () => {
       .toHaveAttribute("href", "/public/library?courseProgram=Medical%20Surgical%20Nursing");
   });
 
-  it("renders the profile study-focus link when no goal summary is set", async () => {
+  it("renders an actionable study-focus card when no goal summary is set but subjects exist", async () => {
     (getProgressReport as jest.Mock).mockResolvedValue({
-      subjects: [],
+      subjects: [
+        {
+          subject: "Pharmacology",
+          totalConcepts: 10,
+          masteredConcepts: 2,
+          dueConcepts: 3,
+          notPracticedConcepts: 5,
+          masteryPercentage: 20,
+        },
+        {
+          subject: "Anatomy",
+          totalConcepts: 5,
+          masteredConcepts: 3,
+          dueConcepts: 1,
+          notPracticedConcepts: 1,
+          masteryPercentage: 60,
+        },
+      ],
       goalSummary: null,
-      userCoursePrograms: ["Mathematics"],
-      profileType: "STUDENT",
     });
 
     render(<ProgressReportClient />);
 
-    expect(await screen.findByText("No study focus set.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Set one in Profile settings →" })).toHaveAttribute("href", "/profile#study-focus");
+    expect(await screen.findByRole("heading", { name: "Set your study focus" })).toBeInTheDocument();
+    expect(screen.getByText("Pick subjects to track mastery toward. Your current subjects:")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pharmacology" })).toHaveAttribute("href", "/profile#study-focus");
+    expect(screen.getByRole("link", { name: "Anatomy" })).toHaveAttribute("href", "/profile#study-focus");
+    expect(screen.getByRole("link", { name: "Or set from Profile →" })).toHaveAttribute("href", "/profile#study-focus");
+  });
+
+  it("routes subject-focus next study by weakest subject", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [],
+      goalSummary: {
+        studyGoal: "Pharmacology, Anatomy",
+        goalType: "SUBJECT_FOCUS",
+        goalName: "2 subjects in focus",
+        goalLabel: "2 subjects in focus",
+        masteryPercentage: 33,
+        masteredConcepts: 1,
+        totalConcepts: 3,
+        notPracticedConcepts: 1,
+        weakestGoalSubject: "Medical Surgical Nursing",
+      },
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByText("Focus on Medical Surgical Nursing — you have concepts left to practice.")).toBeInTheDocument();
+    expect(screen.getByText("FOCUS Goal")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse Medical Surgical Nursing notes in the community →" }))
+      .toHaveAttribute("href", "/public/library?subject=Medical%20Surgical%20Nursing");
   });
 
   it("does not fetch when the route guard redirects", async () => {

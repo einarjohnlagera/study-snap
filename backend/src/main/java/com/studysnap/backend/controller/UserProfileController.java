@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
@@ -48,6 +49,15 @@ public class UserProfileController {
             @RequestBody UpdateStudyGoalRequest request
     ) {
         return authService.updateStudyGoal(user.userId(), request);
+    }
+
+    @PutMapping("/profile/focus-subjects")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateFocusSubjects(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody UpdateFocusSubjectsRequest request
+    ) {
+        return authService.updateFocusSubjects(user.userId(), request);
     }
 
     @PutMapping("/profile/public-visibility")

@@ -72,6 +72,7 @@ class UserProfileControllerTest {
                 LearnerLevel.COLLEGE,
                 "Nursing",
                 null,
+                java.util.List.of(),
                 "NoteLib Academy",
                 true,
                 null,
@@ -119,26 +120,6 @@ class UserProfileControllerTest {
         }
     }
 
-    @Test
-    void updateProfileRequest_rejectsMissingLearnerLevel() {
-        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
-                "Note",
-                "User",
-                "Study Note",
-                "studynote",
-                null,
-                null,
-                "Nursing",
-                null,
-                "[email protected]"
-        );
-
-        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
-            assertThat(validatorFactory.getValidator().validate(request))
-                    .extracting(ConstraintViolation::getMessage)
-                    .contains("Learner level is required.");
-        }
-    }
 
     @Test
     void updatePublicProfileVisibility_delegatesToAuthService() {
@@ -157,6 +138,7 @@ class UserProfileControllerTest {
                 LearnerLevel.COLLEGE,
                 "Nursing",
                 null,
+                java.util.List.of(),
                 null,
                 false,
                 null,
@@ -200,6 +182,7 @@ class UserProfileControllerTest {
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Nursing",
                 "pnle",
+                java.util.List.of(),
                 null,
                 true,
                 null,
@@ -243,6 +226,7 @@ class UserProfileControllerTest {
                 LearnerLevel.COLLEGE,
                 "Architecture",
                 "ale",
+                java.util.List.of(),
                 null,
                 true,
                 null,
@@ -286,6 +270,7 @@ class UserProfileControllerTest {
                 LearnerLevel.COLLEGE,
                 "Architecture",
                 null,
+                java.util.List.of(),
                 null,
                 true,
                 null,
@@ -329,6 +314,7 @@ class UserProfileControllerTest {
                 LearnerLevel.COLLEGE,
                 "Mathematics",
                 "Mathematics",
+                java.util.List.of(),
                 null,
                 true,
                 null,

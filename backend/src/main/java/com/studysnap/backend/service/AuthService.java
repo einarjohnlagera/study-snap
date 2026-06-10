@@ -19,6 +19,7 @@ import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
+import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
@@ -45,6 +46,7 @@ import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserAuthProviderRepository;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
@@ -55,8 +57,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -65,6 +71,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthService {
     private static final int MAX_GOAL_LENGTH = 100;
+    private static final int MAX_FOCUS_SUBJECT_LENGTH = 120;
 
     private static final String RESERVED_DISPLAY_NAME_MESSAGE = "This display name is reserved. Please choose another name.";
     private static final String GOOGLE_EMAIL_NOT_VERIFIED_MESSAGE = "Google email must be verified before signing in.";
@@ -74,6 +81,10 @@ public class AuthService {
     private static final String USERNAME_TAKEN_MESSAGE = "Username is already taken.";
     private static final String USERNAME_FORMAT_MESSAGE = "Username can only contain letters, numbers, underscores, or hyphens.";
     private static final String USERNAME_LENGTH_MESSAGE = "Username must be 3-30 characters.";
+    private static final String FIRST_NAME_REQUIRED_MESSAGE = "First name is required.";
+    private static final String EMAIL_REQUIRED_MESSAGE = "Email is required.";
+    private static final String LEARNER_LEVEL_REQUIRED_MESSAGE = "Learner level is required.";
+    private static final String FOCUS_SUBJECT_LENGTH_MESSAGE = "Focus subjects must be 120 characters or less.";
     private static final int USERNAME_MIN_LENGTH = 3;
     private static final int USERNAME_MAX_LENGTH = 30;
     private static final Set<String> RESERVED_USERNAMES = Set.of(
@@ -398,16 +409,32 @@ public class AuthService {
 
     public MeResponse updateUserProfile(UUID userId, UpdateUserProfileRequest request) {
         UserEntity user = findUserOrThrow(userId);
+        updateProfileFields(user, request);
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
 
-        String normalizedFirstName = normalizeRequiredText(request.firstName());
+    public MeResponse updateFocusSubjects(UUID userId, UpdateFocusSubjectsRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        List<String> focusSubjects = normalizeFocusSubjects(request.subjects() != null ? request.subjects() : List.of());
+        user.setFocusSubjects(focusSubjects.toArray(String[]::new));
+        if (!focusSubjects.isEmpty()) {
+            user.setStudyGoal(null);
+        }
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
+    private void updateProfileFields(UserEntity user, UpdateUserProfileRequest request) {
+        String normalizedFirstName = normalizeRequiredProfileText(request.firstName(), FIRST_NAME_REQUIRED_MESSAGE);
         String normalizedLastName = normalizeOptionalText(request.lastName());
         String normalizedDisplayName = normalizeOptionalText(request.displayName());
         String normalizedUsername = normalizeUsername(request.username());
         String normalizedBio = normalizeOptionalText(request.bio());
-        LearnerLevel normalizedLearnerLevel = request.learnerLevel();
+        LearnerLevel normalizedLearnerLevel = requireLearnerLevel(request.learnerLevel());
         String normalizedCourseProgram = normalizeOptionalCourseProgram(request.courseProgram());
         String normalizedSchoolName = normalizeOptionalText(request.schoolName());
-        String normalizedEmail = normalizeEmail(request.email());
+        String normalizedEmail = normalizeRequiredProfileText(request.email(), EMAIL_REQUIRED_MESSAGE).toLowerCase(Locale.ROOT);
 
         user.setFirstName(normalizedFirstName);
         user.setLastName(normalizedLastName);
@@ -428,9 +455,6 @@ public class AuthService {
             user.setPendingEmail(normalizedEmail);
             emailVerificationService.sendVerificationEmail(user, false);
         }
-
-        user.setUpdatedAt(OffsetDateTime.now());
-        return toMeResponse(user);
     }
 
     public MeResponse updateExamDate(UUID userId, UpdateExamDateRequest request) {
@@ -473,6 +497,7 @@ public class AuthService {
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
                 user.getStudyGoal(),
+                toFocusSubjectResponse(user),
                 user.getSchoolName(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
@@ -544,6 +569,61 @@ public class AuthService {
             );
         }
         return normalized;
+    }
+
+    private List<String> normalizeFocusSubjects(List<String> focusSubjects) {
+        Map<String, String> subjectsByLookupKey = new LinkedHashMap<>();
+        for (String rawSubject : focusSubjects) {
+            String normalizedSubject = SubjectNormalizationUtils.normalizeForStorage(rawSubject);
+            if (normalizedSubject == null) {
+                continue;
+            }
+            if (normalizedSubject.length() > MAX_FOCUS_SUBJECT_LENGTH) {
+                throw new AppException(
+                        "INVALID_FOCUS_SUBJECT",
+                        FOCUS_SUBJECT_LENGTH_MESSAGE,
+                        HttpStatus.BAD_REQUEST
+                );
+            }
+            subjectsByLookupKey.putIfAbsent(
+                    SubjectNormalizationUtils.normalizeForLookup(normalizedSubject),
+                    normalizedSubject
+            );
+        }
+        return List.copyOf(subjectsByLookupKey.values());
+    }
+
+    private List<String> toFocusSubjectResponse(UserEntity user) {
+        String[] focusSubjects = user.getFocusSubjects();
+        if (focusSubjects == null || focusSubjects.length == 0) {
+            return List.of();
+        }
+        return Arrays.stream(focusSubjects)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private String normalizeRequiredProfileText(String value, String message) {
+        String normalized = normalizeOptionalText(value);
+        if (normalized == null) {
+            throw new AppException(
+                    "INVALID_PROFILE",
+                    message,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return normalized;
+    }
+
+    private LearnerLevel requireLearnerLevel(LearnerLevel learnerLevel) {
+        if (learnerLevel == null) {
+            throw new AppException(
+                    "INVALID_PROFILE",
+                    LEARNER_LEVEL_REQUIRED_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return learnerLevel;
     }
 
     private AuthResponse buildAuthResponse(

@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.List;
 
 @RestController
 @RequestMapping("/me")
@@ -39,7 +41,15 @@ public class MeController {
     public ProgressReportResponse getProgress(@AuthenticationPrincipal AuthenticatedUser user) {
         UserEntity userEntity = userRepository.findById(user.userId())
                 .orElseThrow(UserNotFoundException::new);
-        ProgressReportResponse response = progressReportService.getProgressReport(user.userId(), userEntity.getStudyGoal(), OffsetDateTime.now());
+        List<String> focusSubjects = userEntity.getFocusSubjects() == null
+                ? List.of()
+                : Arrays.asList(userEntity.getFocusSubjects());
+        ProgressReportResponse response = progressReportService.getProgressReport(
+                user.userId(),
+                userEntity.getStudyGoal(),
+                focusSubjects,
+                OffsetDateTime.now()
+        );
         return new ProgressReportResponse(
                 response.subjects(),
                 response.goalSummary(),

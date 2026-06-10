@@ -6,6 +6,8 @@ import {
   getMe,
   getSignInMethods,
   listCoursePrograms,
+  listSubjects,
+  setFocusSubjects,
   updateExamDate,
   updateUserProfile,
 } from "@/lib/api";
@@ -35,6 +37,9 @@ jest.mock("@/lib/api", () => ({
   getSignInMethods: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   listCoursePrograms: jest.fn(),
+  listSubjects: jest.fn(),
+  setFocusSubjects: jest.fn(),
+  setStudyGoal: jest.fn(),
   updateExamDate: jest.fn(),
   updateUserProfile: jest.fn(),
 }));
@@ -50,6 +55,8 @@ const profileResponse = {
   bio: "Reviewing pathology one note at a time.",
   learnerLevel: "COLLEGE",
   courseProgram: "Nursing",
+  studyGoal: null,
+  focusSubjects: [],
   schoolName: null,
   publicProfileVisible: true,
   countryCode: null,
@@ -79,6 +86,8 @@ describe("Profile page", () => {
     (getMe as jest.Mock).mockReset();
     (getSignInMethods as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockReset();
+    (setFocusSubjects as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
     (connectGoogle as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
@@ -91,6 +100,11 @@ describe("Profile page", () => {
       googleEmail: null,
     });
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Computer Science"]);
+    (listSubjects as jest.Mock).mockResolvedValue(["Pharmacology", "Anatomy", "Biochemistry"]);
+    (setFocusSubjects as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      focusSubjects: ["Pharmacology"],
+    });
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
     (updateExamDate as jest.Mock).mockResolvedValue(profileResponse);
   });
@@ -494,5 +508,71 @@ describe("Profile page", () => {
     expect(updateUserProfile).not.toHaveBeenCalled();
     expect(await screen.findByText("Please select your learner level.")).toBeInTheDocument();
     expect(await screen.findByText("Please select or enter your course / program.")).toBeInTheDocument();
+  });
+
+  it("hides Study Focus for teacher profiles", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "TEACHER",
+    });
+
+    render(<ProfilePage />);
+
+    await screen.findByText("Profile Type");
+    expect(screen.queryByText("Study Focus")).not.toBeInTheDocument();
+    expect(screen.queryByText("Exam Focus")).not.toBeInTheDocument();
+  });
+
+  it("uses Exam Focus copy for board exam profiles", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "BOARD_EXAM",
+    });
+
+    render(<ProfilePage />);
+
+    expect(await screen.findByRole("heading", { name: "Exam Focus" })).toBeInTheDocument();
+    expect(screen.getByText("Pick the specific subjects you want to track readiness for.")).toBeInTheDocument();
+  });
+
+  it("uses Study Focus copy for student profiles", async () => {
+    render(<ProfilePage />);
+
+    expect(await screen.findByRole("heading", { name: "Study Focus" })).toBeInTheDocument();
+    expect(screen.getByText("Pick the subjects you're preparing for this term.")).toBeInTheDocument();
+  });
+
+  it("selects multiple subject chips and saves focus subjects", async () => {
+    (setFocusSubjects as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      focusSubjects: ["Pharmacology", "Anatomy"],
+    });
+
+    render(<ProfilePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Pharmacology" }));
+    fireEvent.click(screen.getByRole("button", { name: "Anatomy" }));
+
+    const saveButton = screen.getByRole("button", { name: "Save Focus" });
+    expect(saveButton).toBeInTheDocument();
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(setFocusSubjects).toHaveBeenCalledWith(["Pharmacology", "Anatomy"]);
+    });
+  });
+
+  it("shows the Study Focus empty state when no subjects exist", async () => {
+    (listSubjects as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      studyGoal: null,
+      focusSubjects: [],
+    });
+
+    render(<ProfilePage />);
+
+    expect(await screen.findByText("Create some notes first — your subjects will appear here as focus options.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save Focus" })).not.toBeInTheDocument();
   });
 });
