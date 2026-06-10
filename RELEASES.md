@@ -1,5 +1,31 @@
 # RELEASES.md - NoteLib
 
+## v0.26.1 - Guidance System
+
+**Status: Released**
+
+Theme: make NoteLib's most useful — but least self-explanatory — features teach themselves. Build a reusable in-app guidance mechanism (deep-linkable Help guides + an inline "gist + How this works →" pattern), then apply it to the two highest-pain gaps: the Progress / Study Focus / Milestones loop and the Exam Hubs. Reference material lives where the feature lives; the Help guide is the depth path, not the only explanation.
+
+### Shipped
+
+**Mechanism — reusable guidance primitives**
+- **Deep-linkable Help guides** — Help page opens a specific guide from a URL hash (e.g. `/help#progress-focus`); reads `location.hash` on mount and `hashchange`, syncs via `history.replaceState`. Hash (not query param) keeps `/help` statically prerendered, avoiding a Next.js `useSearchParams` Suspense build de-opt.
+- **`HelpLink` inline reference link** — `components/ui/help-link.tsx`: a small, persistent "How this works →" link co-located with complex features, paired with a one-sentence inline gist. Reference-grade (always present, re-readable), distinct from the one-time dismissible `GuidanceTip` (reserved for "this feature exists" discovery nudges).
+
+**Progress & Study Focus guide**
+- New Help guide (`progress-focus`) covering the three concept-mastery states (mastered / due for review / not started), spaced-repetition decay, the six goal milestones, Study Focus (profile-type-aware: STUDENT = "Study Focus", BOARD_EXAM = "Exam Focus", TEACHER has none), goal vs. subject mutual exclusion, and the honest "starting a new term" answer (no reset button; new subjects start fresh, kept subjects carry mastery forward).
+- Inline gist + "How milestones work →" deep-link on the Progress Goal Milestones card.
+- Inline "How this works →" deep-link on the Profile Study Focus / Exam Focus section.
+
+**Exam Hubs guide**
+- New Help guide (`exam-hubs`) covering what `/exam/ale`, `/exam/pnle`, `/exam/let` are, how they curate existing public notes, and the three ways to reach them (nav, public-note callout, exam goal) — previously zero Help coverage.
+
+### Deferred to v0.26.2+
+
+- Discovery tips / guidance coverage for the remaining surfaces (quiz modes, study packs, export & sharing, exam-cycle pass, post-quiz nudges). The mechanism built here extends to them in later versions; this release intentionally scopes to the two highest-pain gaps.
+
+---
+
 ## v0.26.0 - Exam Depth
 
 **Status: Released**

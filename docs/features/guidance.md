@@ -4,11 +4,14 @@
 
 Keep product guidance contextual, lightweight, and non-blocking.
 
-NoteLib guidance currently uses three layers:
+NoteLib guidance currently uses four layers:
 
 1. always-visible micro copy
 2. one-time dismissible tips
 3. Help Center guide cards + modals
+4. persistent inline reference links (`HelpLink`) that deep-link into a specific Help guide
+
+Reference vs. discovery: layers 1 and 4 are **reference-grade** — always present, re-readable (e.g. a user re-learning Milestones next term). Layer 2 (`GuidanceTip`) is **discovery-grade** — a one-time "this feature exists" nudge that never returns once dismissed. Use a dismissible tip only for discovery, never for material users need to re-read.
 
 ## Rules
 
@@ -93,18 +96,49 @@ Current guide cards:
 
 1. `Getting Started`
 2. `Creating Notes`
-3. `Study Packs & Quizzes`
-4. `Export & Sharing`
-5. `Student Guide`
-6. `Board Exam Guide`
-7. `Teacher Guide`
-8. `Professional Guide`
+3. `Study Packs`
+4. `Quiz Modes`
+5. `Progress & Study Focus`
+6. `Exam Hubs`
+7. `Export & Sharing`
+8. `Student Guide`
+9. `Board Exam Guide`
+10. `Teacher Guide`
+11. `Professional Guide`
+
+Deep-linking:
+
+- a guide opens directly from the URL hash, e.g. `/help#progress-focus` opens the Progress & Study Focus guide
+- the Help page reads `location.hash` on mount and on `hashchange`; opening/closing a card syncs the hash via `history.replaceState` (no scroll jump, no `hashchange` loop)
+- hash (not a query param) is deliberate — it avoids the Next.js `useSearchParams` Suspense build de-opt and keeps `/help` statically prerendered
+- card ids are the hash targets; the `progress-focus` and `exam-hubs` guides are the deep-link destinations for inline `HelpLink`s
 
 Profile-specific guide footers use a shared convention:
 
 - primary CTA stays workflow-specific, usually `Create Note`
 - secondary CTA is `Switch Profile` and deep-links to `/profile#profile-type`
 - hide `Switch Profile` when the viewer's current profile type already matches the guide
+
+## Layer 4 — HelpLink (inline reference links)
+
+Component:
+
+- `frontend/components/ui/help-link.tsx`
+
+Behavior:
+
+- renders a small persistent "How this works →" link that deep-links to `/help#{guideId}`
+- co-located with a complex feature, paired with a one-sentence inline gist on the surface itself — the link is the depth path, not the only explanation
+- never dismissible; reference-grade
+
+Current `HelpLink` placements:
+
+| Surface | guideId | Label |
+|---|---|---|
+| Progress — Goal Milestones card | `progress-focus` | `How milestones work` |
+| Profile — Study Focus / Exam Focus section | `progress-focus` | `How this works` (default) |
+
+The Progress & Study Focus guide documents the three concept-mastery states (mastered / due for review / not started), the six goal milestones, and the honest new-term answer (no reset button; new subjects start fresh, kept subjects carry mastery forward). Mastery is not permanent — a mastered concept decays to "due for review" via spaced repetition, so the mastery % can dip without practice. Keep the guide consistent with the `MILESTONES` predicates in `app/progress/progress-report-client.tsx` and the state logic in `ProgressReportService.resolveConceptState`.
 
 ## Maintenance rule
 

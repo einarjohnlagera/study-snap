@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Award, BookOpen, Brain, Briefcase, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
+import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -16,6 +16,8 @@ import { QuizModesGuide } from "@/components/help/quiz-modes-guide";
 import { StudentGuide } from "@/components/help/student-guide";
 import { TeacherGuide } from "@/components/help/teacher-guide";
 import { ProfessionalGuide } from "@/components/help/professional-guide";
+import { ProgressFocusGuide } from "@/components/help/progress-focus-guide";
+import { ExamHubsGuide } from "@/components/help/exam-hubs-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { getAuthUser } from "@/lib/auth";
 import type { ProfileType } from "@/lib/api";
@@ -55,6 +57,20 @@ const HELP_CARDS: HelpCard[] = [
     description: "All five quiz modes explained — from Quick Review to Board Exam.",
   },
   {
+    id: "progress-focus",
+    icon: BarChart2,
+    title: "Progress & Study Focus",
+    description: "How mastery, goals, and milestones work — and what to do at the start of a new term.",
+    modalDescription: "Track what you know and what to study next.",
+  },
+  {
+    id: "exam-hubs",
+    icon: Compass,
+    title: "Exam Hubs",
+    description: "Curated note collections for the ALE, PNLE, and LET licensure exams.",
+    modalDescription: "Find review material for major licensure exams.",
+  },
+  {
     id: "export-sharing",
     icon: Download,
     title: "Export & Sharing",
@@ -90,6 +106,8 @@ const HELP_CARDS: HelpCard[] = [
   },
 ];
 
+const HELP_CARD_IDS = new Set(HELP_CARDS.map((card) => card.id));
+
 const GUIDE_PROFILE_TYPES: Partial<Record<string, ProfileType>> = {
   "student-guide": "STUDENT",
   "board-exam-guide": "BOARD_EXAM",
@@ -121,6 +139,10 @@ function GuideContent({
       return <StudyPacksGuide />;
     case "quiz-modes":
       return <QuizModesGuide />;
+    case "progress-focus":
+      return <ProgressFocusGuide />;
+    case "exam-hubs":
+      return <ExamHubsGuide />;
     case "export-sharing":
       return <ExportSharingGuide />;
     case "board-exam-guide":
@@ -158,6 +180,34 @@ export default function HelpPage() {
     };
   }, []);
 
+  // Deep-link support: open a specific guide from the URL hash (e.g. /help#progress-focus).
+  // Handles both fresh navigations (mount) and hash changes while already on the page.
+  useEffect(() => {
+    const openFromHash = () => {
+      const hashId = globalThis.location?.hash?.replace(/^#/, "") ?? "";
+      if (hashId && HELP_CARD_IDS.has(hashId)) {
+        setOpenCardId(hashId);
+      }
+    };
+    openFromHash();
+    globalThis.addEventListener("hashchange", openFromHash);
+    return () => {
+      globalThis.removeEventListener("hashchange", openFromHash);
+    };
+  }, []);
+
+  const handleOpenCard = (cardId: string) => {
+    setOpenCardId(cardId);
+    // replaceState (not location.hash) keeps the deep link shareable without
+    // firing hashchange or scroll-jumping to an anchor.
+    globalThis.history.replaceState(null, "", `#${cardId}`);
+  };
+
+  const handleCloseCard = () => {
+    setOpenCardId(null);
+    globalThis.history.replaceState(null, "", globalThis.location.pathname + globalThis.location.search);
+  };
+
   const openCard = HELP_CARDS.find((c) => c.id === openCardId) ?? null;
 
   return (
@@ -175,7 +225,7 @@ export default function HelpPage() {
             <button
               key={card.id}
               type="button"
-              onClick={() => setOpenCardId(card.id)}
+              onClick={() => handleOpenCard(card.id)}
               className="group w-full text-left"
             >
               <Card className="flex h-full flex-col gap-4 p-5 transition-colors hover:bg-highlight sm:p-6">
@@ -222,7 +272,7 @@ export default function HelpPage() {
           isOpen={openCardId !== null}
           title={openCard.title}
           description={openCard.modalDescription}
-          onClose={() => setOpenCardId(null)}
+          onClose={handleCloseCard}
           panelClassName="sm:max-w-lg"
         >
           <GuideContent cardId={openCard.id} currentProfileType={currentProfileType} />

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { HelpLink } from "@/components/ui/help-link";
 import { Card } from "@/components/ui/card";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1178,9 +1179,12 @@ export default function ProfilePage() {
               id={PROFILE_STUDY_FOCUS_SECTION_ID}
               className={`space-y-4 p-4 sm:p-6 transition-all${highlightedSectionId === PROFILE_STUDY_FOCUS_SECTION_ID ? " ring-2 ring-blue-500/40" : ""}`}
             >
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold sm:text-xl">{studyFocusCopy.header}</h2>
-                <p className="text-sm text-foreground/70">{studyFocusCopy.description}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold sm:text-xl">{studyFocusCopy.header}</h2>
+                  <p className="text-sm text-foreground/70">{studyFocusCopy.description}</p>
+                </div>
+                <HelpLink guideId="progress-focus" className="mt-1 shrink-0" />
               </div>
 
               {profile.studyGoal && !isEditingGoal ? (

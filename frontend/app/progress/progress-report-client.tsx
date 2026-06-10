@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
+import { HelpLink } from "@/components/ui/help-link";
 import { PageHeader } from "@/components/page-header";
 import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -179,11 +180,15 @@ function GoalMilestonesCard({ goalSummary }: Readonly<{ goalSummary: GoalSummary
 
   return (
     <Card className="space-y-5 p-4 sm:p-6">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">Goal Milestones</h2>
-        <p className="text-sm text-foreground/65">
-          Track the next checkpoint on your path to goal mastery.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Goal Milestones</h2>
+          <p className="text-sm text-foreground/65">
+            Checkpoints toward goal mastery. They fill as you master concepts — and a concept stays mastered only
+            while it&apos;s fresh, so review keeps your progress up.
+          </p>
+        </div>
+        <HelpLink guideId="progress-focus" label="How milestones work" className="mt-1 shrink-0" />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

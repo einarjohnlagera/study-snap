@@ -6,15 +6,42 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.26.0` has been released. No active release in progress.
+`v0.26.1` has been released. No active release in progress.
 
-`v0.26.0 - Exam Depth` is the current documentation baseline.
+`v0.26.1 - Guidance System` is the current documentation baseline.
 
-`v0.25.0 - Exam Capture & Goal Setting` is the previous baseline.
+`v0.26.0 - Exam Depth` is the previous baseline.
 
-`v0.24.1 - Content Moderation Hotfix` is the release before that.
+`v0.25.0 - Exam Capture & Goal Setting` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.26.1 - Guidance System
+
+**Status: Released**
+
+Theme: make NoteLib's most useful — but least self-explanatory — features teach themselves. The Goal / Study Focus / Milestones loop and the Exam Hubs shipped in v0.25–v0.26 with strong mechanics but no in-app explanation. This release builds a reusable guidance mechanism and applies it to those two highest-pain gaps. Guidance only — no behavioral or feature changes (in particular, no term-reset feature: current behavior is documented honestly).
+
+### Scope
+
+**Mechanism (reusable):**
+- Deep-linkable Help guides via URL hash (`/help#<guide-id>`); hash over query param to avoid a Next.js `useSearchParams` Suspense build de-opt.
+- Inline "gist + How this works →" pattern: a one-sentence inline explanation co-located with a complex feature, plus a persistent deep-link into the relevant Help guide. Reference-grade and re-readable — distinct from the one-time dismissible `GuidanceTip` (kept for "this feature exists" discovery nudges only).
+
+**Two highest-pain gaps:**
+1. **Progress & Study Focus guide** — Goals, Study Focus (subject multi-select), Milestones, mastery calculation, and the honest new-term answer. Profile-type aware (TEACHER has no Study Focus; BOARD_EXAM = "Exam Focus"; STUDENT = "Study Focus"). Inline gist + deep-link on the Progress Milestones card and the Profile Study Focus section.
+2. **Exam Hubs guide** — what `/exam/ale|pnle|let` are, how they curate public notes, and how to reach them.
+
+### Deferred to v0.26.2+
+
+Guidance coverage for the remaining surfaces (quiz modes, study packs, export & sharing, exam-cycle pass, post-quiz nudges). The mechanism built here extends to them later; this release intentionally scopes to the two confirmed gaps.
+
+### Task routing
+
+- **Claude Code:** authors both Help guide components (info-design), the Help-page hash deep-link, and the two inline gist + link placements (Progress Milestones card, Profile Study Focus section).
+- **Codex:** only if inline-link placement sprawls beyond those two known slots (dashboard / library / note-detail), in which case the placement pass crosses the >5-file / >100-LOC threshold and gets a Codex prompt.
 
 ---
 
