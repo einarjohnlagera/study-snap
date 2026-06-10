@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.27.0 - Material Import & Collections
+
+**Status: In Progress**
+
+Theme: lower the cold-start barrier for getting existing material *into* NoteLib (bulk multi-file import) and let any learner group notes into a reusable, ordered **collection**. Triggered by preparing an effortless teacher path before we recruit teachers, but built profile-agnostic at the core — students, board reviewers, and professionals get the same import-and-organize speed. The teacher payoff (combined exam packet + shareable links) is a profile-aware terminal action on a universal `NoteCollection` spine, not a separate system. A collection is a playlist over existing notes — no collection-level AI synthesis, no new quota. See `docs/product/ROADMAP.md` for full scope, the profile-label table, and anti-drift rules.
+
+### Planned
+
+- **Track 1 — Bulk material import (universal, P0)** — select multiple files at once; each becomes one `DRAFT` note via the existing per-file OCR/import pipeline. All profile types; per-file success/failure; no auto-generation on import. *(Codex)*
+- **Track 2 — Note Collections (universal entity, P1)** — new `NoteCollection` entity + ordering join table: title, optional description, ordered note refs with optional per-item label. Owner-private; notes stay independently owned and may belong to multiple collections; deleting a collection never deletes notes. Profile-aware label/CTA (TEACHER "Lesson Plan", STUDENT "Study Plan", BOARD_EXAM "Review Set", PROFESSIONAL "Collection") via the existing Study/Exam Focus copy mechanism. *(Codex for entity/API; Claude Code for the profile-aware UI layer)*
+- **Track 3 — Teacher terminal path** — wire a collection into the existing Exam Builder so a Lesson Plan pre-populates sections → sectioned DOCX + shareable `/quiz/[token]` links in a couple of clicks. DOCX/share stay Teacher/Admin only. *(Claude Code, pending Track 2)*
+- **Track 4 — Profile-aware first-run / activation** — empty states that teach the loop for that profile (teacher: bring material → generate → export/share; student: bring notes → generate → study/quiz) via existing `GuidanceTip` surfaces; no new tips framework. *(Claude Code)*
+
+### Deferred
+
+- Lesson-plan / syllabus document parsing as quiz source (scaffold references content, doesn't contain it — weak quiz source).
+- Collection-level AI synthesis (Option B), public/shareable collections, per-profile structured presets beyond Exam Builder's existing ones.
+
+---
+
 ## v0.26.1 - Guidance System
 
 **Status: Released**

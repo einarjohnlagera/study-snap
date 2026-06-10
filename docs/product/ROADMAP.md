@@ -6,15 +6,114 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.26.1` has been released. No active release in progress.
+`v0.27.0 - Material Import & Collections` is the active release in progress.
 
-`v0.26.1 - Guidance System` is the current documentation baseline.
+`v0.26.1 - Guidance System` is the current documentation baseline (last released).
 
 `v0.26.0 - Exam Depth` is the previous baseline.
 
 `v0.25.0 - Exam Capture & Goal Setting` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.27.0 - Material Import & Collections
+
+**Status: In Progress**
+
+Theme: lower the cold-start barrier for getting existing study material *into* NoteLib, and let any learner group notes into a reusable, ordered **collection**. The trigger was preparing the app for teachers (we have none yet, and want the teacher path to be effortless before we recruit them) — but every capability here is built profile-agnostic at the core, so students, board exam reviewers, and professionals get the same import-and-organize speed. The teacher-specific payoff (combined exam packet + shareable links) is a profile-aware terminal action layered on a universal spine, not a separate system.
+
+### Why this release
+
+Today a new user — teacher or otherwise — who already has material (lecture notes, reviewers, textbook chapters, handouts) must create notes one file at a time, and has no way to group related notes into a unit they can return to. Two gaps:
+
+1. **Import is single-file.** A teacher with a unit's worth of material, or a student with a semester of lecture notes, must repeat the import flow per file. The OCR/import pipeline already handles any one file well; the friction is purely the one-at-a-time loop.
+2. **There is no way to group notes into a reusable, ordered set.** Exam Builder (teacher/admin) already combines multiple notes into a sectioned DOCX *ad hoc*, but the selection is throwaway — nothing is saved, named, or reusable. Students and board reviewers have no grouping concept at all beyond filters.
+
+### Design principle (anti-drift — governs the whole release)
+
+**One universal spine, profile-aware framing. A collection is a playlist over existing notes — never an AI-synthesized document.**
+
+- **Bulk import and collections are profile-agnostic.** No profile gate on either. The teacher payoff is an *additional* terminal action, not a fork of the data model.
+- **A `NoteCollection` is a saved, named, ordered grouping of existing notes** — title, optional description, ordered note references with an optional per-item label (week / topic / section). It is *not* a new content type and carries no generated content of its own.
+- **No collection-level AI generation, no new quota category.** Study Pack and Quiz generation stay per-note on existing quotas. A collection never synthesizes across its notes (Option B from the prior "Lesson Plan for Teachers" planning stays deferred — risk of low-quality synthesis and higher LLM cost with no proven demand).
+- **Notes stay independently owned and editable.** A note may belong to multiple collections; deleting a collection never deletes its notes; one note can appear in many collections.
+- **Profile-aware label + terminal action follow the existing Study Focus / Exam Focus pattern** (one mechanism, profile-typed copy) — do not fork the entity per profile:
+
+  | Profile | Collection label | Primary terminal action |
+  |---|---|---|
+  | TEACHER | "Lesson Plan" | Combined sectioned DOCX (Exam Builder) + shareable student quiz links |
+  | STUDENT | "Study Plan" | Study the set; generate a quiz per note on existing quota |
+  | BOARD_EXAM | "Review Set" | Practice across the set (feeds existing multi-note Long/Board Exam) |
+  | PROFESSIONAL | "Collection" | Study the set; generate per-note |
+
+- **Uploading a lesson-plan *document* as quiz source is explicitly out of scope.** A lesson plan is a teaching scaffold (objectives, activities, standards) that *references* content rather than containing it — it is a weak quiz source. The quizzable material is the teacher's notes/handouts, which bulk import + per-note generation already serve. If a lesson plan / syllabus is ever used, it is as a *structure outline* (section labels), never as the content the quiz is generated from. Deferred until a real teacher asks.
+
+### Track 1 — Bulk material import (universal, P0)
+
+Let a user select multiple files at once; each file becomes one note (`DRAFT`). Reuse the existing per-file OCR/import pipeline unchanged — this is a batch wrapper and an import UX change, not a new ingestion path.
+
+- Available to **all** profile types; no gate.
+- Each imported file → one `NoteEntity` (`DRAFT`), titled from filename/heading, ready for the normal Generate flow.
+- Per-file success/failure surfaced individually (one bad file must not fail the batch); failed files are skippable/retryable.
+- No automatic Study Pack generation on import — import creates notes only; generation stays an explicit, quota-consuming user action (preserves the "never auto-regenerate / explicit generation" rule).
+
+**Routing:** multi-file import touches the upload pipeline + note creation across several files → **Codex prompt**.
+
+### Track 2 — Note Collections (universal entity, profile-aware framing, P1)
+
+New lightweight grouping entity with profile-typed presentation.
+
+- New `NoteCollection` entity + ordering join table (migration): `id`, `user_id` (owner), `title`, `description?`, and an ordered list of `(note_id, label?)` items.
+- CRUD: create, rename, reorder items, add/remove notes, delete collection (owner-only; never cascades to notes).
+- Collections surface in the app shell for every profile; label and the primary CTA resolve from profile type per the table above (reuse the profile-aware copy mechanism, do not hardcode profile checks in components — mirror `exam-mode-visibility.ts` / Study Focus framing).
+- No new quota category; no collection-level generation.
+
+**Routing:** new entity + migration + endpoints → **Codex prompt**. Profile-aware labels/CTAs and the collection list UI shell are Claude Code-sized once the API exists.
+
+### Track 3 — Teacher terminal path (profile-specific, builds on shipped infra)
+
+Wire a Collection into the existing **Exam Builder** so a teacher converts a saved Lesson Plan into a sectioned DOCX packet + shareable student quiz links in a couple of clicks — instead of re-selecting notes each time.
+
+- Collection items pre-populate Exam Builder sections (the per-item label seeds the section title).
+- Everything downstream is already built: sectioned DOCX, answer keys, 1–3 anti-cheat versions, `/quiz/[token]` shareable links. This track is wiring, not new export logic.
+- DOCX export and shareable-link generation stay **Teacher/Admin only** (unchanged plan/profile gating).
+
+**Routing:** mostly wiring an existing builder to a new data source → Claude Code, pending the Track 2 entity.
+
+### Track 4 — Profile-aware first-run / activation (cross-profile)
+
+Make the empty state teach the loop for *that* profile instead of a generic "create a note."
+
+- Teacher: *Bring your unit's material → Generate quizzes → Export or share to students.*
+- Student: *Bring your notes → Generate a Study Pack → Study & quiz yourself.*
+- Board exam: *Bring your reviewers → Generate → Practice & track mastery.*
+- Reuse the existing `GuidanceTip` / onboarding surfaces — no new tips framework (`pickActiveGuidance()` stays the single entry point).
+
+**Routing:** frontend empty-state + copy, profile-gated via existing mechanism → Claude Code.
+
+### Deferred
+
+- **Lesson-plan / syllabus document parsing as quiz source** — scaffold-vs-source problem above; revisit only if a real teacher requests it.
+- **Collection-level AI synthesis (Option B)** — one synthesized document across all notes in a collection; deferred for quality/cost reasons, unchanged from prior planning.
+- **Collection sharing / public collections** — a collection is owner-private in v1; shareable collections (a "course pack" a teacher publishes) is a later bet once collections see use.
+- **Per-profile structured presets beyond Exam Builder's existing ones.**
+
+### Task routing summary
+
+- **Codex:** Track 1 (multi-file import), Track 2 (`NoteCollection` entity + migration + endpoints). Both cross the new-infrastructure / multi-file thresholds.
+- **Claude Code:** Track 3 (wire collection → Exam Builder), Track 4 (profile-aware empty states), and the profile-aware label/CTA layer on the collection UI once the API exists.
+
+### Anti-drift notes
+
+- A collection is a **playlist over existing notes** — never a synthesized document and never a new content type. No generation at the collection level.
+- **No new quota category** — generation stays per-note on existing Study Pack / quiz quotas.
+- Profile-aware label/CTA via the existing profile-typed copy mechanism (like Study Focus → Exam Focus) — **do not hardcode profile checks in components** and do not fork the entity per profile.
+- Bulk import creates notes only — **never auto-generates** Study Packs (preserves the explicit-generation rule).
+- DOCX export and shareable quiz links stay **Teacher/Admin only** — bulk import and collections being universal does not widen those gates.
+- Deleting a collection must never delete its notes; a note may belong to multiple collections.
+- Use `globalThis` for browser globals; add any new analytics events to the `AnalyticsEventType` enum (Java + frontend) before firing.
 
 ---
 
