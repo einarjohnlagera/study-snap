@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.26.0` is the current in-progress release.
+`v0.26.0` has been released. No active release in progress.
 
-`v0.25.1 - Polish & Quick Review Fixes` is the current documentation baseline.
+`v0.26.0 - Exam Depth` is the current documentation baseline.
 
 `v0.25.0 - Exam Capture & Goal Setting` is the previous baseline.
 
@@ -20,7 +20,7 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ## v0.26.0 - Exam Depth
 
-**Status: In progress**
+**Status: Released**
 
 Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, and give board exam takers a pricing commitment that matches how they actually prep — a 90-day exam-cycle pass. All three reinforce the same user: a board exam taker preparing for a specific cycle.
 
