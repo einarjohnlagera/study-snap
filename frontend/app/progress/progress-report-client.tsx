@@ -125,12 +125,14 @@ function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }
 }
 
 function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  const eyebrow = goalSummary.goalType === "SUBJECT_FOCUS" ? "FOCUS" : goalSummary.goalName;
+
   return (
     <Card className="overflow-hidden border-blue-500/25 bg-linear-to-br from-blue-500/10 via-background to-emerald-500/10 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            {goalSummary.goalName} Goal
+            {eyebrow} Goal
           </p>
           <div className="space-y-1">
             <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.goalLabel}</h2>
@@ -219,6 +221,31 @@ function GoalMilestonesCard({ goalSummary }: Readonly<{ goalSummary: GoalSummary
 }
 
 function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  if (goalSummary.goalType === "SUBJECT_FOCUS") {
+    const weakestGoalSubject = goalSummary.weakestGoalSubject;
+    const href = weakestGoalSubject
+      ? `/public/library?subject=${encodeURIComponent(weakestGoalSubject)}`
+      : "/public/library";
+    const message = weakestGoalSubject
+      ? `Focus on ${weakestGoalSubject} — you have concepts left to practice.`
+      : "Browse community notes to build your knowledge.";
+    const linkLabel = weakestGoalSubject
+      ? `Browse ${weakestGoalSubject} notes in the community`
+      : "Browse notes in the community";
+
+    return (
+      <Card className="space-y-3 p-4 sm:p-6">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">What to study next</h2>
+          <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
+        </div>
+        <Link href={href} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+          {linkLabel} &rarr;
+        </Link>
+      </Card>
+    );
+  }
+
   const examSlug = goalSummary.goalType === "EXAM"
     ? goalSummary.studyGoal
     : getExamSlugForCourseProgram(goalSummary.studyGoal);
@@ -240,6 +267,35 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
       </div>
       <Link href={href} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
         {linkLabel} &rarr;
+      </Link>
+    </Card>
+  );
+}
+
+function SetStudyFocusCard({ subjects }: Readonly<{ subjects: SubjectProgressEntry[] }>) {
+  const focusSubjects = subjects.slice(0, 5);
+
+  return (
+    <Card className="space-y-4 border-dashed p-4 sm:p-5">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">Set your study focus</h2>
+        <p className="text-sm text-foreground/70">
+          Pick subjects to track mastery toward. Your current subjects:
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {focusSubjects.map((subject) => (
+          <Link
+            key={subject.subject}
+            href="/profile#study-focus"
+            className="rounded-full border border-blue-500/30 bg-blue-600/10 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-600/15 dark:text-blue-300"
+          >
+            {subject.subject}
+          </Link>
+        ))}
+      </div>
+      <Link href="/profile#study-focus" className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+        Or set from Profile &rarr;
       </Link>
     </Card>
   );
@@ -276,14 +332,7 @@ function ProgressContent({
   return (
     <div className="space-y-6">
       {goalSummary ? <GoalSummaryHeader goalSummary={goalSummary} /> : null}
-      {!goalSummary ? (
-        <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
-          No study focus set.{" "}
-          <Link href="/profile#study-focus" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
-            Set one in Profile settings →
-          </Link>
-        </Card>
-      ) : null}
+      {!goalSummary && subjects.length > 0 ? <SetStudyFocusCard subjects={subjects} /> : null}
 
       {goalSummary && goalSummary.totalConcepts > 0 ? <GoalMilestonesCard goalSummary={goalSummary} /> : null}
       {goalSummary ? <NextStudyCard goalSummary={goalSummary} /> : null}

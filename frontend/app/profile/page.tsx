@@ -18,6 +18,8 @@ import {
   getMe,
   getSignInMethods,
   listCoursePrograms,
+  listSubjects,
+  setFocusSubjects,
   setStudyGoal,
   type SignInMethodsResponse,
   type LearnerLevel,
@@ -224,6 +226,7 @@ export default function ProfilePage() {
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [focusSubjectSuggestions, setFocusSubjectSuggestions] = useState<string[]>([]);
   const [signInMethods, setSignInMethods] = useState<SignInMethodsResponse | null>(null);
   const [signInMethodsMessage, setSignInMethodsMessage] = useState<string | null>(null);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
@@ -234,10 +237,11 @@ export default function ProfilePage() {
   const [changePwSuccess, setChangePwSuccess] = useState<string | null>(null);
   const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
   const [clearingStudyGoal, setClearingStudyGoal] = useState(false);
-  const [savingStudyGoal, setSavingStudyGoal] = useState<string | null>(null);
+  const [savingStudyFocus, setSavingStudyFocus] = useState(false);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [studyGoalMessage, setStudyGoalMessage] = useState<string | null>(null);
-  const [showAllStudyFocusPrograms, setShowAllStudyFocusPrograms] = useState(false);
+  const [showAllStudyFocusSubjects, setShowAllStudyFocusSubjects] = useState(false);
+  const [selectedFocusSubjects, setSelectedFocusSubjects] = useState<string[]>([]);
 
   const scrollToRequestedSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -281,9 +285,10 @@ export default function ProfilePage() {
     setSignInMethodsMessage(null);
     setLearningProfileErrors({});
     try {
-      const [meResult, courseProgramsResult, signInMethodsResult] = await Promise.allSettled([
+      const [meResult, courseProgramsResult, subjectsResult, signInMethodsResult] = await Promise.allSettled([
         getMe(),
         listCoursePrograms("mine"),
+        listSubjects("mine"),
         getSignInMethods(),
       ]);
       if (meResult.status !== "fulfilled") {
@@ -308,7 +313,9 @@ export default function ProfilePage() {
       });
       setSelectedProfileType(me.profileType ?? "");
       setExamDateInput(me.examDate ?? "");
+      setSelectedFocusSubjects(me.focusSubjects ?? []);
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+      setFocusSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setSignInMethods(signInMethodsResult.status === "fulfilled" ? signInMethodsResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
@@ -316,7 +323,9 @@ export default function ProfilePage() {
       setProfile(null);
       setSelectedProfileType("");
       setExamDateInput("");
+      setSelectedFocusSubjects([]);
       setCourseProgramSuggestions([]);
+      setFocusSubjectSuggestions([]);
       setSignInMethods(null);
     } finally {
       setLoading(false);
@@ -400,6 +409,40 @@ export default function ProfilePage() {
   const examCountdown = useMemo(
     () => formatExamCountdown(profile?.examDate ?? null),
     [profile?.examDate],
+  );
+
+  const studyFocusCopy = useMemo(() => {
+    if (profile?.profileType === "BOARD_EXAM") {
+      return {
+        header: "Exam Focus",
+        description: "Pick the specific subjects you want to track readiness for.",
+      };
+    }
+    if (profile?.profileType === "STUDENT") {
+      return {
+        header: "Study Focus",
+        description: "Pick the subjects you're preparing for this term.",
+      };
+    }
+    return {
+      header: "Study Focus",
+      description: "Pick a subject to track mastery toward.",
+    };
+  }, [profile?.profileType]);
+
+  const currentFocusSubjects = useMemo(
+    () => profile?.focusSubjects?.filter((subject) => subject.trim().length > 0) ?? [],
+    [profile?.focusSubjects],
+  );
+
+  const visibleFocusSubjects = useMemo(
+    () => showAllStudyFocusSubjects ? focusSubjectSuggestions : focusSubjectSuggestions.slice(0, 8),
+    [focusSubjectSuggestions, showAllStudyFocusSubjects],
+  );
+
+  const selectedFocusSubjectSet = useMemo(
+    () => new Set(selectedFocusSubjects.map((subject) => subject.toLowerCase())),
+    [selectedFocusSubjects],
   );
 
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
@@ -667,9 +710,11 @@ export default function ProfilePage() {
     setClearingStudyGoal(true);
     setStudyGoalMessage(null);
     try {
-      const updated = await setStudyGoal(null);
+      await setStudyGoal(null);
+      const updated = await setFocusSubjects([]);
       setProfile(updated);
       setIsEditingGoal(true);
+      setSelectedFocusSubjects([]);
     } catch (err) {
       setStudyGoalMessage(err instanceof Error ? err.message : "Could not clear study focus. Please try again.");
     } finally {
@@ -677,20 +722,46 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSetStudyGoal = async (courseProgram: string) => {
-    if (savingStudyGoal) {
+  const handleBeginEditStudyFocus = () => {
+    setSelectedFocusSubjects(currentFocusSubjects);
+    setShowAllStudyFocusSubjects(false);
+    setStudyGoalMessage(null);
+    setIsEditingGoal(true);
+  };
+
+  const handleCancelStudyFocusEdit = () => {
+    setSelectedFocusSubjects(currentFocusSubjects);
+    setShowAllStudyFocusSubjects(false);
+    setStudyGoalMessage(null);
+    setIsEditingGoal(false);
+  };
+
+  const handleToggleFocusSubject = (subject: string) => {
+    setStudyGoalMessage(null);
+    setSelectedFocusSubjects((current) => {
+      const selected = current.some((value) => value.toLowerCase() === subject.toLowerCase());
+      if (selected) {
+        return current.filter((value) => value.toLowerCase() !== subject.toLowerCase());
+      }
+      return [...current, subject];
+    });
+  };
+
+  const handleSaveFocusSubjects = async () => {
+    if (savingStudyFocus || selectedFocusSubjects.length === 0) {
       return;
     }
-    setSavingStudyGoal(courseProgram);
+    setSavingStudyFocus(true);
     setStudyGoalMessage(null);
     try {
-      const updated = await setStudyGoal(courseProgram);
+      const updated = await setFocusSubjects(selectedFocusSubjects);
       setProfile(updated);
+      setSelectedFocusSubjects(updated.focusSubjects ?? []);
       setIsEditingGoal(false);
     } catch (err) {
       setStudyGoalMessage(err instanceof Error ? err.message : "Could not set study focus. Please try again.");
     } finally {
-      setSavingStudyGoal(null);
+      setSavingStudyFocus(false);
     }
   };
 
@@ -761,6 +832,7 @@ export default function ProfilePage() {
                 <span className="text-sm font-medium">Display Name</span>
                 <input
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  aria-label="Display Name"
                   value={identityForm.displayName}
                   onChange={(event) => handleIdentityFieldChange("displayName", event.target.value)}
                 />
@@ -1101,93 +1173,150 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          <Card
-            id={PROFILE_STUDY_FOCUS_SECTION_ID}
-            className={`space-y-4 p-4 sm:p-6 transition-all${highlightedSectionId === PROFILE_STUDY_FOCUS_SECTION_ID ? " ring-2 ring-blue-500/40" : ""}`}
-          >
-            <h2 className="text-lg font-semibold sm:text-xl">Study Focus</h2>
-            {profile?.studyGoal && !isEditingGoal ? (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">
-                    {getExamHubConfig(profile.studyGoal)?.fullName ?? profile.studyGoal}
-                  </p>
-                  <p className="text-xs text-foreground/60">Your progress report tracks mastery toward this goal.</p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingGoal(true)}
-                  >
-                    Change
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleClearStudyGoal()}
-                    loading={clearingStudyGoal}
-                    loadingText="Clearing..."
-                  >
-                    Clear
-                  </Button>
-                </div>
+          {profile.profileType !== "TEACHER" ? (
+            <Card
+              id={PROFILE_STUDY_FOCUS_SECTION_ID}
+              className={`space-y-4 p-4 sm:p-6 transition-all${highlightedSectionId === PROFILE_STUDY_FOCUS_SECTION_ID ? " ring-2 ring-blue-500/40" : ""}`}
+            >
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold sm:text-xl">{studyFocusCopy.header}</h2>
+                <p className="text-sm text-foreground/70">{studyFocusCopy.description}</p>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-foreground/70">
-                  {courseProgramSuggestions.length === 0
-                    ? "Create some notes first — your subjects will appear here as focus options."
-                    : "Pick a subject to track mastery toward:"}
-                </p>
-                {courseProgramSuggestions.length > 0 ? (
+
+              {profile.studyGoal && !isEditingGoal ? (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {getExamHubConfig(profile.studyGoal)?.fullName ?? profile.studyGoal}
+                    </p>
+                    <p className="text-xs text-foreground/60">Your progress report tracks mastery toward this goal.</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBeginEditStudyFocus}
+                    >
+                      Change
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleClearStudyGoal()}
+                      loading={clearingStudyGoal}
+                      loadingText="Clearing..."
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              ) : currentFocusSubjects.length > 0 && !isEditingGoal ? (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-2">
+                    <p className="text-sm font-medium">Focusing on:</p>
                     <div className="flex flex-wrap gap-2">
-                      {(showAllStudyFocusPrograms ? courseProgramSuggestions : courseProgramSuggestions.slice(0, 8)).map((courseProgram) => (
-                        <Button
-                          key={courseProgram}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          loading={savingStudyGoal === courseProgram}
-                          loadingText="Setting..."
-                          disabled={savingStudyGoal !== null || clearingStudyGoal}
-                          onClick={() => void handleSetStudyGoal(courseProgram)}
+                      {currentFocusSubjects.map((subject) => (
+                        <span
+                          key={subject}
+                          className="rounded-full bg-blue-600/10 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-400/10 dark:text-blue-300"
                         >
-                          {courseProgram}
-                        </Button>
+                          {subject}
+                        </span>
                       ))}
                     </div>
-                    {courseProgramSuggestions.length > 8 && !showAllStudyFocusPrograms ? (
-                      <button
+                    <p className="text-xs text-foreground/60">Your progress report combines mastery across these subjects.</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBeginEditStudyFocus}
+                    >
+                      Change
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleClearStudyGoal()}
+                      loading={clearingStudyGoal}
+                      loadingText="Clearing..."
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground/70">
+                    {focusSubjectSuggestions.length === 0
+                      ? "Create some notes first — your subjects will appear here as focus options."
+                      : "Choose one or more subjects from your notes:"}
+                  </p>
+                  {focusSubjectSuggestions.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {visibleFocusSubjects.map((subject) => {
+                          const selected = selectedFocusSubjectSet.has(subject.toLowerCase());
+                          return (
+                            <Button
+                              key={subject}
+                              type="button"
+                              variant={selected ? "default" : "outline"}
+                              size="sm"
+                              disabled={savingStudyFocus || clearingStudyGoal}
+                              onClick={() => handleToggleFocusSubject(subject)}
+                            >
+                              {subject}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      {focusSubjectSuggestions.length > 8 && !showAllStudyFocusSubjects ? (
+                        <button
+                          type="button"
+                          className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                          onClick={() => setShowAllStudyFocusSubjects(true)}
+                        >
+                          Show {focusSubjectSuggestions.length - 8} more
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {selectedFocusSubjects.length > 0 ? (
+                      <Button
                         type="button"
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                        onClick={() => setShowAllStudyFocusPrograms(true)}
+                        size="sm"
+                        onClick={() => void handleSaveFocusSubjects()}
+                        loading={savingStudyFocus}
+                        loadingText="Saving..."
                       >
-                        Show {courseProgramSuggestions.length - 8} more
-                      </button>
+                        Save Focus
+                      </Button>
+                    ) : null}
+                    {isEditingGoal ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancelStudyFocusEdit}
+                        disabled={savingStudyFocus}
+                      >
+                        Cancel
+                      </Button>
                     ) : null}
                   </div>
-                ) : null}
-                {isEditingGoal ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditingGoal(false)}
-                    disabled={savingStudyGoal !== null}
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
-              </div>
-            )}
-            {studyGoalMessage ? (
-              <p className="text-xs text-red-600 dark:text-red-400">{studyGoalMessage}</p>
-            ) : null}
-          </Card>
+                </div>
+              )}
+              {studyGoalMessage ? (
+                <p className="text-xs text-red-600 dark:text-red-400">{studyGoalMessage}</p>
+              ) : null}
+            </Card>
+          ) : null}
 
           <ProfileNotePerformance />
         </div>

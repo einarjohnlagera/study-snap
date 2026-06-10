@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.UserStatus;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public record MeResponse(
         String id,
@@ -23,6 +24,7 @@ public record MeResponse(
         LearnerLevel learnerLevel,
         String courseProgram,
         String studyGoal,
+        List<String> focusSubjects,
         String schoolName,
         boolean publicProfileVisible,
         String countryCode,

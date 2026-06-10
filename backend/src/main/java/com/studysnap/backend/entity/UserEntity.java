@@ -9,6 +9,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -57,6 +59,10 @@ public class UserEntity {
 
     @Column(name = "study_goal", columnDefinition = "text")
     private String studyGoal;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "focus_subjects", columnDefinition = "text[]", nullable = false)
+    private String[] focusSubjects = new String[0];
 
     @Column(name = "school_name", length = 120)
     private String schoolName;
