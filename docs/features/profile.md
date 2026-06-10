@@ -72,6 +72,33 @@ Important product rule:
 
 For Board Taker profile, an Exam Date field is shown in the Profile Type card and saved independently. Clearing the date removes the dashboard countdown.
 
+## Study Focus
+
+Study Focus is the profile-owned setup surface for progress goals that are not set by the exam hub intent flow.
+
+Stored fields:
+
+- `studyGoal`: legacy/current single goal string. It may contain an exam slug such as `ale` or an older course-program goal.
+- `focusSubjects`: subject-level multi-select saved as `users.focus_subjects text[]`.
+
+Rules:
+
+- The Study Focus picker loads subject chips from `GET /subjects?scope=mine`.
+- Subject chips come from the user's own AI-inferred note / Study Pack subjects, not course-program suggestions.
+- Users can select multiple subjects and save them as `focusSubjects`.
+- Saving a non-empty `focusSubjects` list clears `studyGoal`; the two are mutually exclusive when changed from Profile.
+- The exam hub intent flow may still set `studyGoal` directly and does not need to touch `focusSubjects`.
+- If `studyGoal` already exists, Profile shows the current goal with `Change` and `Clear`; `Change` moves the user into the subject multi-select.
+- If `focusSubjects` exists and `studyGoal` is empty, Profile shows `Focusing on:` plus subject pills with `Change` and `Clear`.
+- If there are no user subjects yet, Profile shows: `Create some notes first — your subjects will appear here as focus options.`
+
+Profile-type visibility and copy:
+
+- `BOARD_EXAM`: section header `Exam Focus`; copy `Pick the specific subjects you want to track readiness for.`
+- `STUDENT`: section header `Study Focus`; copy `Pick the subjects you're preparing for this term.`
+- `TEACHER`: section hidden.
+- `PARENT`, `PROFESSIONAL`, or null profile type: section header `Study Focus`; copy `Pick a subject to track mastery toward.`
+
 ## Learning Profile UX
 
 - `Course / Program` uses the shared combobox pattern also used by note metadata inputs

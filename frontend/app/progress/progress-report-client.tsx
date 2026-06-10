@@ -8,8 +8,46 @@ import { BackLink } from "@/components/ui/back-link";
 import { PageHeader } from "@/components/page-header";
 import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
 
 type LoadState = "loading" | "ready" | "error";
+
+const MASTERY_QUARTER_THRESHOLD = 25;
+const MASTERY_HALF_THRESHOLD = 50;
+const MASTERY_STRONG_THRESHOLD = 70;
+const MASTERY_COMPLETE_THRESHOLD = 100;
+
+type GoalMilestone = {
+  label: string;
+  reached: (goalSummary: GoalSummaryResponse) => boolean;
+};
+
+export const MILESTONES: GoalMilestone[] = [
+  {
+    label: "First concept mastered",
+    reached: (goalSummary) => goalSummary.masteredConcepts >= 1,
+  },
+  {
+    label: "25% mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_QUARTER_THRESHOLD,
+  },
+  {
+    label: "All concepts reviewed",
+    reached: (goalSummary) => (goalSummary.notPracticedConcepts ?? 1) === 0 && goalSummary.totalConcepts > 0,
+  },
+  {
+    label: "50% mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_HALF_THRESHOLD,
+  },
+  {
+    label: "70% mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_STRONG_THRESHOLD,
+  },
+  {
+    label: "All concepts mastered",
+    reached: (goalSummary) => goalSummary.masteryPercentage >= MASTERY_COMPLETE_THRESHOLD,
+  },
+];
 
 function isNotStarted(entry: SubjectProgressEntry): boolean {
   return entry.masteryPercentage === 0 && entry.notPracticedConcepts === entry.totalConcepts;
@@ -87,12 +125,14 @@ function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }
 }
 
 function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  const eyebrow = goalSummary.goalType === "SUBJECT_FOCUS" ? "FOCUS" : goalSummary.goalName;
+
   return (
     <Card className="overflow-hidden border-blue-500/25 bg-linear-to-br from-blue-500/10 via-background to-emerald-500/10 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            {goalSummary.goalName} Goal
+            {eyebrow} Goal
           </p>
           <div className="space-y-1">
             <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.goalLabel}</h2>
@@ -118,15 +158,104 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
   );
 }
 
+function getMilestoneMarkerClasses(reached: boolean, isNext: boolean): string {
+  if (reached) {
+    return "border-blue-600 bg-blue-600";
+  }
+  if (isNext) {
+    return "border-blue-600 bg-background ring-2 ring-blue-500 ring-offset-2 ring-offset-background";
+  }
+  return "border-muted bg-muted";
+}
+
+function GoalMilestonesCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
+  const milestoneStates = MILESTONES.map((milestone) => ({
+    ...milestone,
+    reached: milestone.reached(goalSummary),
+  }));
+  const nextMilestoneIndex = milestoneStates.findIndex((milestone) => !milestone.reached);
+  const reachedCount = milestoneStates.filter((milestone) => milestone.reached).length;
+  const progressWidth = (reachedCount / MILESTONES.length) * 100;
+
+  return (
+    <Card className="space-y-5 p-4 sm:p-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">Goal Milestones</h2>
+        <p className="text-sm text-foreground/65">
+          Track the next checkpoint on your path to goal mastery.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {milestoneStates.map((milestone, index) => {
+          const isNext = index === nextMilestoneIndex;
+          return (
+            <div key={milestone.label} className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className={`size-3.5 shrink-0 rounded-full border ${getMilestoneMarkerClasses(milestone.reached, isNext)}`}
+              />
+              <span className={`text-sm ${milestone.reached || isNext ? "text-foreground" : "text-foreground/50"}`}>
+                {milestone.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        role="progressbar"
+        aria-label="Goal milestone progress"
+        aria-valuemin={0}
+        aria-valuemax={MILESTONES.length}
+        aria-valuenow={reachedCount}
+        className="h-3 overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+          style={{ width: `${progressWidth}%` }}
+        />
+      </div>
+    </Card>
+  );
+}
+
 function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
-  const isExamGoal = goalSummary.goalType === "EXAM";
-  const href = isExamGoal
-    ? `/exam/${goalSummary.studyGoal}`
+  if (goalSummary.goalType === "SUBJECT_FOCUS") {
+    const weakestGoalSubject = goalSummary.weakestGoalSubject;
+    const href = weakestGoalSubject
+      ? `/public/library?subject=${encodeURIComponent(weakestGoalSubject)}`
+      : "/public/library";
+    const message = weakestGoalSubject
+      ? `Focus on ${weakestGoalSubject} — you have concepts left to practice.`
+      : "Browse community notes to build your knowledge.";
+    const linkLabel = weakestGoalSubject
+      ? `Browse ${weakestGoalSubject} notes in the community`
+      : "Browse notes in the community";
+
+    return (
+      <Card className="space-y-3 p-4 sm:p-6">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">What to study next</h2>
+          <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
+        </div>
+        <Link href={href} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+          {linkLabel} &rarr;
+        </Link>
+      </Card>
+    );
+  }
+
+  const examSlug = goalSummary.goalType === "EXAM"
+    ? goalSummary.studyGoal
+    : getExamSlugForCourseProgram(goalSummary.studyGoal);
+  const href = examSlug
+    ? `/exam/${examSlug}`
     : `/public/library?courseProgram=${encodeURIComponent(goalSummary.studyGoal)}`;
   const message = goalSummary.weakestGoalSubject
     ? `Focus on ${goalSummary.weakestGoalSubject} — you have concepts left to practice.`
     : `Browse community ${goalSummary.goalName} notes to build your knowledge.`;
-  const linkLabel = isExamGoal
+  const linkLabel = examSlug
     ? `Browse ${goalSummary.goalName} notes`
     : `Browse ${goalSummary.goalName} notes in the community`;
 
@@ -138,6 +267,35 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
       </div>
       <Link href={href} className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
         {linkLabel} &rarr;
+      </Link>
+    </Card>
+  );
+}
+
+function SetStudyFocusCard({ subjects }: Readonly<{ subjects: SubjectProgressEntry[] }>) {
+  const focusSubjects = subjects.slice(0, 5);
+
+  return (
+    <Card className="space-y-4 border-dashed p-4 sm:p-5">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">Set your study focus</h2>
+        <p className="text-sm text-foreground/70">
+          Pick subjects to track mastery toward. Your current subjects:
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {focusSubjects.map((subject) => (
+          <Link
+            key={subject.subject}
+            href="/profile#study-focus"
+            className="rounded-full border border-blue-500/30 bg-blue-600/10 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-600/15 dark:text-blue-300"
+          >
+            {subject.subject}
+          </Link>
+        ))}
+      </div>
+      <Link href="/profile#study-focus" className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+        Or set from Profile &rarr;
       </Link>
     </Card>
   );
@@ -174,15 +332,9 @@ function ProgressContent({
   return (
     <div className="space-y-6">
       {goalSummary ? <GoalSummaryHeader goalSummary={goalSummary} /> : null}
-      {!goalSummary ? (
-        <Card className="border-dashed p-4 text-sm text-foreground/75 sm:p-5">
-          No study focus set.{" "}
-          <Link href="/profile#study-focus" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
-            Set one in Profile settings →
-          </Link>
-        </Card>
-      ) : null}
+      {!goalSummary && subjects.length > 0 ? <SetStudyFocusCard subjects={subjects} /> : null}
 
+      {goalSummary && goalSummary.totalConcepts > 0 ? <GoalMilestonesCard goalSummary={goalSummary} /> : null}
       {goalSummary ? <NextStudyCard goalSummary={goalSummary} /> : null}
 
       {subjects.length === 0 ? (

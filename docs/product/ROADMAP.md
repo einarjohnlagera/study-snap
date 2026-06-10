@@ -6,21 +6,106 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.25.1 - Polish & Quick Review Fixes` is the current in-progress release.
+`v0.26.0` has been released. No active release in progress.
 
-`v0.25.0 - Exam Capture & Goal Setting` is the current documentation baseline.
+`v0.26.0 - Exam Depth` is the current documentation baseline.
 
-`v0.24.1 - Content Moderation Hotfix` is the previous baseline.
+`v0.25.0 - Exam Capture & Goal Setting` is the previous baseline.
+
+`v0.24.1 - Content Moderation Hotfix` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
 
+## v0.26.0 - Exam Depth
+
+**Status: Released**
+
+Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, and give board exam takers a pricing commitment that matches how they actually prep — a 90-day exam-cycle pass. All three reinforce the same user: a board exam taker preparing for a specific cycle.
+
+### Track 1 — Exam Hub Surface
+
+Four pieces, all Claude Code–sized (no Codex prompt needed):
+
+**1. `/exam` index redesign**
+
+Restyle the exam hub index cards to match the Help page card pattern: icon badge (top-left) + title/description beside it + "Browse [Exam] notes →" link at the bottom (ArrowRight icon). Icon map defined locally in the page (not in `exam-hub-config.ts`):
+- ALE → `PenTool`
+- PNLE → `Heart`
+- LET → `GraduationCap`
+- Wave-2 additions get a relevant icon when added.
+
+**2. Landing page exam hub entry**
+
+Add a prominent exam hubs entry point to the marketing landing page (`/app/page.tsx`) so `/exam` is discoverable without scrolling to the footer. Exact placement and form TBD at implementation time.
+
+**3. Progress page link fix**
+
+`NextStudyCard` in `progress-report-client.tsx` only routes to `/exam/[slug]` when `goalType === "EXAM"`. Goals set from the Profile chip picker are `SUBJECT` type — so Architecture → public library instead of `/exam/ale`. Fix: call `getExamSlugForCourseProgram(goalSummary.studyGoal)` as a fallback; if it returns a slug, route to `/exam/[slug]` regardless of `goalType`.
+
+**4. Wave-2 exam hubs**
+
+Extend `/exam/[slug]` to the next exam tier. The v0.25.0 page template reuses unchanged; implementation is new entries in `frontend/lib/exam-hub-config.ts`.
+
+**Content gate (required before launching any wave-2 hub):** 20+ public notes per exam. High School/SHS excluded — not licensure exams. Partial launch allowed (add each hub independently as it clears the threshold). Currently deferred — no wave-2 candidate meets the threshold.
+
+| Exam | `courseProgram` mapping | Status |
+|---|---|---|
+| **CPALE** | Accountancy | Verify current count |
+| **Engineering** | Civil / Electrical / Mechanical Engineering | Verify current count per discipline |
+| **Pharmacy** | Pharmacy | Verify current count |
+| **Physical Therapy** | Physical Therapy | Verify current count |
+| **CSE** | Civil Service / Computer Science | Verify current count |
+
+### Track 2 — Mastery-Threshold Milestones
+
+Deepen the `/progress` goal view beyond the v0.25.0 shipped goal summary and next-study suggestion. Add visible milestone markers tied to mastery thresholds (e.g. "70% of Pharmacology concepts mastered", "All key concepts reviewed at least once") inside the goal progress section.
+
+**Anti-drift (locked from v0.24.0/v0.25.0):** milestones must be derived from `ConceptHealth` mastery data — never a generated syllabus, never a progression system not rooted in actual quiz performance.
+
+Backend aggregation required → Codex prompt.
+
+### Track 3 — Exam-Cycle Pass (Pro Season Pass)
+
+New 90-day Pro access tier targeted at board exam takers committing to a specific prep cycle.
+
+- **Price:** ₱599 PH (vs ₱747 for 3× monthly — a meaningful seasonal discount for the review window)
+- **Duration:** 90 days from purchase date (`endAt`-based, same as existing PREPAID grants)
+- **Access:** full Pro entitlements for the duration
+- **Monthly quotas:** still apply and reset monthly regardless of billing cycle (`BillingUsageResetJob` is billing-cycle-agnostic; LLM cost exposure stays bounded at 100 packs/month)
+
+Implementation lift is small — the system is already PREPAID with `endAt`-based grants:
+- New `EXAM_CYCLE` value in `BillingCycle` enum
+- New pricing config entry in `application.yaml` (`duration-days: 90`, `amount: 599`)
+- New checkout option in frontend billing UI
+- Xendit integration unchanged (creates fresh invoices, not subscription objects)
+
+### Track 4 — Subject-Level Focus & Profile-Aware "What's Next"
+
+Deepen the goal-setting and progress loop by letting learners set focus at the *subject* level (e.g. "History of Architecture", "Pharmacology") rather than the broad course-program level — removing the confusing redundancy with the Learning Profile section and giving the Progress report a more precise target.
+
+**Why this fits v0.26.0:** subject infrastructure already fully exists (`NoteEntity.subject` is AI-inferred, `SubjectProgressEntry` is already returned and rendered on the Progress page, `/subjects?scope=mine` endpoint already live). This track surfaces it through the Study Focus UX and makes it multi-select.
+
+**Key design decisions:**
+- **New `focusSubjects text[]` column** (V71 migration) alongside the existing `studyGoal` text column — they are not merged.
+- **Mutual exclusivity from the Profile UI** — setting subjects via the picker clears `studyGoal`; the exam hub intent flow still sets `studyGoal` directly (unchanged).
+- **Goal priority** in `ProgressReportService`: `studyGoal` (exam slug or course program) takes precedence; `focusSubjects` is used as goal source only when `studyGoal` is null.
+- **Combined rollup model** — multi-subject focus aggregates mastery across all selected subjects into one goal summary (no independent per-subject goal tracks).
+- **Profile-type-adaptive framing** — hidden for TEACHER; "Exam Focus" for BOARD_EXAM; "Study Focus — subjects you're preparing for this term" for STUDENT.
+- **No K-12 curated subject lists** — the Progress page reflects only what the user has notes for; prescribing subjects they haven't studied yet (from a DepEd/PRC reference list) is deferred to v0.27.
+
+**Retention hypothesis being tested:** learners who don't know what to study next churn. The actionable empty state (weakest subjects surfaced as one-click chips) and the `weakestGoalSubject` CTA in `NextStudyCard` test that hypothesis without a curated curriculum.
+
+Codex prompt: `docs/codex-prompts/v0.26.0-subject-focus-multi-select.md`
+
+---
+
 ## v0.25.1 - Polish & Quick Review Fixes
 
-**Status: In progress**
+**Status: Released**
 
-Theme: targeted polish pass — theme picker z-index, library filter label consistency, Quick Review last-question Submit/Finish two-step UX, and multi-select answer-review label mismatch.
+Theme: targeted polish pass covering Quick Review multi-select UX (two-step Submit/reveal flow), Public Library filter hierarchy and cascading (For → Course/Program → Subjects → Tags → Source), quiz question newline rendering, profile Study Focus chip cap, and minor label/layering issues.
 
 ---
 
@@ -1410,6 +1495,7 @@ Potential expansion areas after `v0.8.0`:
 
 ### Billing Improvements (Future)
 
+- **Exam-cycle pass** — promoted to v0.26.0 Track 3. See v0.26.0 section.
 - recurring subscription support
 - coupon-code entry UI
 - cancel subscription flow

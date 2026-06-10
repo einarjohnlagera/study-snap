@@ -161,6 +161,7 @@ class ProgressReportServiceTest {
                 50,
                 1,
                 2,
+                1,
                 "Design"
         ));
     }
@@ -194,6 +195,7 @@ class ProgressReportServiceTest {
                 50,
                 1,
                 2,
+                1,
                 "Medical Surgical Nursing"
         ));
     }
@@ -215,6 +217,7 @@ class ProgressReportServiceTest {
                 "EXAM",
                 "ALE",
                 "Architect Licensure Examination",
+                0,
                 0,
                 0,
                 0,
@@ -250,6 +253,27 @@ class ProgressReportServiceTest {
     }
 
     @Test
+    void getProgressReport_includesGoalNotPracticedConceptsWhenGoalHasMixedConceptStates() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals", "Whole Numbers"));
+        studyPack.setNoteId(noteId);
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+                health(studyPack.getId(), "Fractions", NOW.minusDays(1)),
+                health(studyPack.getId(), "Decimals", NOW.minusDays(5))
+        ));
+
+        ProgressReportResponse response = progressReportService.getProgressReport(userId, "Mathematics", NOW);
+
+        assertThat(response.goalSummary()).isNotNull();
+        assertThat(response.goalSummary().masteredConcepts()).isEqualTo(1);
+        assertThat(response.goalSummary().notPracticedConcepts()).isEqualTo(1);
+        assertThat(response.goalSummary().masteryPercentage()).isEqualTo(33);
+    }
+
+    @Test
     void getProgressReport_computesSubjectGoalSummaryFromMatchingCourseProgramNotes() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -271,8 +295,109 @@ class ProgressReportServiceTest {
                 50,
                 1,
                 2,
+                1,
                 "Algebra"
         ));
+    }
+
+    @Test
+    void getProgressReport_computesSubjectFocusGoalSummaryFromSelectedSubject() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pharmacologyPack = studyPack("Pharmacology", List.of("Beta Blockers", "ACE Inhibitors"));
+        StudyPackEntity anatomyPack = studyPack("Anatomy", List.of("Bones"));
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(pharmacologyPack, anatomyPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, pharmacologyPack.getId())).thenReturn(List.of(
+                health(pharmacologyPack.getId(), "Beta Blockers", NOW.minusDays(1))
+        ));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, anatomyPack.getId())).thenReturn(List.of());
+
+        ProgressReportResponse response = progressReportService.getProgressReport(
+                userId,
+                null,
+                List.of("Pharmacology"),
+                NOW
+        );
+
+        assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
+                "Pharmacology",
+                "SUBJECT_FOCUS",
+                "Pharmacology",
+                "Pharmacology",
+                50,
+                1,
+                2,
+                1,
+                "Pharmacology"
+        ));
+    }
+
+    @Test
+    void getProgressReport_aggregatesMultipleSubjectFocusSubjects() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pharmacologyPack = studyPack("Pharmacology", List.of("Beta Blockers", "ACE Inhibitors"));
+        StudyPackEntity anatomyPack = studyPack("Anatomy", List.of("Bones"));
+        StudyPackEntity chemistryPack = studyPack("Chemistry", List.of("Bonds"));
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(pharmacologyPack, anatomyPack, chemistryPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, pharmacologyPack.getId())).thenReturn(List.of(
+                health(pharmacologyPack.getId(), "Beta Blockers", NOW.minusDays(1))
+        ));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, anatomyPack.getId())).thenReturn(List.of(
+                health(anatomyPack.getId(), "Bones", NOW.minusDays(5))
+        ));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, chemistryPack.getId())).thenReturn(List.of());
+
+        ProgressReportResponse response = progressReportService.getProgressReport(
+                userId,
+                null,
+                List.of("Pharmacology", "Anatomy"),
+                NOW
+        );
+
+        assertThat(response.goalSummary()).isEqualTo(new GoalSummaryResponse(
+                "Pharmacology, Anatomy",
+                "SUBJECT_FOCUS",
+                "2 subjects in focus",
+                "2 subjects in focus",
+                33,
+                1,
+                3,
+                1,
+                "Anatomy"
+        ));
+    }
+
+    @Test
+    void getProgressReport_returnsNullGoalSummaryWhenSubjectFocusIsEmpty() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity pharmacologyPack = studyPack("Pharmacology", List.of("Beta Blockers"));
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(pharmacologyPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, pharmacologyPack.getId())).thenReturn(List.of());
+
+        ProgressReportResponse response = progressReportService.getProgressReport(userId, null, List.of(), NOW);
+
+        assertThat(response.goalSummary()).isNull();
+    }
+
+    @Test
+    void getProgressReport_usesStudyGoalBeforeSubjectFocus() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Design", List.of("Site Planning"));
+        studyPack.setNoteId(noteId);
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Architecture")));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of());
+
+        ProgressReportResponse response = progressReportService.getProgressReport(
+                userId,
+                "ale",
+                List.of("Pharmacology"),
+                NOW
+        );
+
+        assertThat(response.goalSummary()).isNotNull();
+        assertThat(response.goalSummary().goalType()).isEqualTo("EXAM");
+        assertThat(response.goalSummary().goalName()).isEqualTo("ALE");
     }
 
     @Test
@@ -292,6 +417,7 @@ class ProgressReportServiceTest {
                 "SUBJECT",
                 "Mathematics",
                 "Mathematics",
+                0,
                 0,
                 0,
                 0,

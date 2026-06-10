@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BillingHistoryService {
+    private static final long EXAM_CYCLE_SUBSCRIPTION_DAYS = 90;
+    private static final long EXAM_CYCLE_SUBSCRIPTION_DAYS_TOLERANCE = 1;
     private static final long YEARLY_SUBSCRIPTION_DAYS_THRESHOLD = 330;
     private static final String DISCOUNT_SUFFIX = " (Discount applied)";
     private static final String RENEWAL_SUFFIX = " Renewal";
@@ -97,7 +99,11 @@ public class BillingHistoryService {
         boolean discounted = transaction.getDiscountAmount() != null
                 && transaction.getDiscountAmount().signum() > 0;
         String planLabel = (transaction.getPlanType() == null ? PlanType.PRO : transaction.getPlanType()).getDisplayName();
-        String cycleLabel = billingCycle == BillingCycle.YEARLY ? "Annual" : "Monthly";
+        String cycleLabel = switch (billingCycle) {
+            case YEARLY -> "Annual";
+            case EXAM_CYCLE -> "90-Day Exam Pass";
+            case MONTHLY -> "Monthly";
+        };
         if (firstSuccessfulTransactionId != null && firstSuccessfulTransactionId.equals(transaction.getId())) {
             return discounted
                     ? planLabel + " " + cycleLabel + DISCOUNT_SUFFIX
@@ -121,6 +127,9 @@ public class BillingHistoryService {
             return null;
         }
         long durationDays = Duration.between(subscription.getStartAt(), subscription.getEndAt()).toDays();
+        if (Math.abs(durationDays - EXAM_CYCLE_SUBSCRIPTION_DAYS) <= EXAM_CYCLE_SUBSCRIPTION_DAYS_TOLERANCE) {
+            return BillingCycle.EXAM_CYCLE;
+        }
         return durationDays >= YEARLY_SUBSCRIPTION_DAYS_THRESHOLD ? BillingCycle.YEARLY : BillingCycle.MONTHLY;
     }
 

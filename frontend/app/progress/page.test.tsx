@@ -1,14 +1,33 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import ProgressPage, { metadata } from "./page";
-import { ProgressReportClient } from "./progress-report-client";
+import { MILESTONES, ProgressReportClient } from "./progress-report-client";
 import { DashboardFocusAreasCard } from "../dashboard/dashboard-focus-areas-card";
-import { getProgressReport, setStudyGoal } from "@/lib/api";
+import { getProgressReport, type GoalSummaryResponse } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 const routerMock = {
   replace: jest.fn(),
   push: jest.fn(),
 };
+
+function goalSummary(overrides: Partial<GoalSummaryResponse>): GoalSummaryResponse {
+  return {
+    studyGoal: "Mathematics",
+    goalType: "SUBJECT",
+    goalName: "Mathematics",
+    goalLabel: "Mathematics",
+    masteryPercentage: 0,
+    masteredConcepts: 0,
+    totalConcepts: 0,
+    notPracticedConcepts: 0,
+    weakestGoalSubject: null,
+    ...overrides,
+  };
+}
+
+function reachedMilestones(summary: GoalSummaryResponse): boolean[] {
+  return MILESTONES.map((milestone) => milestone.reached(summary));
+}
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -20,7 +39,6 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/api", () => ({
   getProgressReport: jest.fn(),
-  setStudyGoal: jest.fn(),
 }));
 
 describe("ProgressPage", () => {
@@ -28,8 +46,6 @@ describe("ProgressPage", () => {
     routerMock.replace.mockReset();
     routerMock.push.mockReset();
     (getProgressReport as jest.Mock).mockReset();
-    (setStudyGoal as jest.Mock).mockReset();
-    (setStudyGoal as jest.Mock).mockResolvedValue({ studyGoal: "Mathematics" });
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
   });
@@ -123,6 +139,7 @@ describe("ProgressPage", () => {
         masteryPercentage: 50,
         masteredConcepts: 2,
         totalConcepts: 4,
+        notPracticedConcepts: 1,
         weakestGoalSubject: "Design",
       },
     });
@@ -133,6 +150,7 @@ describe("ProgressPage", () => {
     expect(screen.getByText("ALE Goal")).toBeInTheDocument();
     expect(screen.getByText("2 of 4 goal concepts mastered")).toBeInTheDocument();
     expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("heading", { name: "Goal Milestones" })).toBeInTheDocument();
   });
 
   it("renders a next-study card with the weakest goal subject", async () => {
@@ -146,6 +164,7 @@ describe("ProgressPage", () => {
         masteryPercentage: 0,
         masteredConcepts: 0,
         totalConcepts: 0,
+        notPracticedConcepts: 0,
         weakestGoalSubject: "Medical Surgical Nursing",
       },
     });
@@ -153,6 +172,7 @@ describe("ProgressPage", () => {
     render(<ProgressReportClient />);
 
     expect(await screen.findByRole("heading", { name: "What to study next" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Goal Milestones" })).not.toBeInTheDocument();
     expect(screen.getByText("Focus on Medical Surgical Nursing — you have concepts left to practice.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse PNLE notes →" })).toHaveAttribute("href", "/exam/pnle");
   });
@@ -168,6 +188,7 @@ describe("ProgressPage", () => {
         masteryPercentage: 0,
         masteredConcepts: 0,
         totalConcepts: 0,
+        notPracticedConcepts: 0,
         weakestGoalSubject: null,
       },
     });
@@ -189,6 +210,7 @@ describe("ProgressPage", () => {
         masteryPercentage: 0,
         masteredConcepts: 0,
         totalConcepts: 0,
+        notPracticedConcepts: 0,
         weakestGoalSubject: null,
       },
     });
@@ -200,113 +222,60 @@ describe("ProgressPage", () => {
       .toHaveAttribute("href", "/public/library?courseProgram=Medical%20Surgical%20Nursing");
   });
 
-  it("renders an exam hub callout when course programs map to an exam without a goal summary", async () => {
+  it("renders an actionable study-focus card when no goal summary is set but subjects exist", async () => {
     (getProgressReport as jest.Mock).mockResolvedValue({
       subjects: [
         {
-          subject: "Biochemistry",
-          totalConcepts: 5,
-          masteredConcepts: 1,
-          dueConcepts: 1,
-          notPracticedConcepts: 3,
+          subject: "Pharmacology",
+          totalConcepts: 10,
+          masteredConcepts: 2,
+          dueConcepts: 3,
+          notPracticedConcepts: 5,
           masteryPercentage: 20,
+        },
+        {
+          subject: "Anatomy",
+          totalConcepts: 5,
+          masteredConcepts: 3,
+          dueConcepts: 1,
+          notPracticedConcepts: 1,
+          masteryPercentage: 60,
         },
       ],
       goalSummary: null,
-      userCoursePrograms: ["Architecture"],
-      profileType: "STUDENT",
     });
 
     render(<ProgressReportClient />);
 
-    expect(await screen.findByRole("link", { name: /Explore exam hubs to set a goal/ })).toHaveAttribute("href", "/exam");
+    expect(await screen.findByRole("heading", { name: "Set your study focus" })).toBeInTheDocument();
+    expect(screen.getByText("Pick subjects to track mastery toward. Your current subjects:")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pharmacology" })).toHaveAttribute("href", "/profile#study-focus");
+    expect(screen.getByRole("link", { name: "Anatomy" })).toHaveAttribute("href", "/profile#study-focus");
+    expect(screen.getByRole("link", { name: "Or set from Profile →" })).toHaveAttribute("href", "/profile#study-focus");
   });
 
-  it("renders an exam hub callout for board exam profiles without mapped course programs", async () => {
+  it("routes subject-focus next study by weakest subject", async () => {
     (getProgressReport as jest.Mock).mockResolvedValue({
       subjects: [],
-      goalSummary: null,
-      userCoursePrograms: ["Mathematics"],
-      profileType: "BOARD_EXAM",
+      goalSummary: {
+        studyGoal: "Pharmacology, Anatomy",
+        goalType: "SUBJECT_FOCUS",
+        goalName: "2 subjects in focus",
+        goalLabel: "2 subjects in focus",
+        masteryPercentage: 33,
+        masteredConcepts: 1,
+        totalConcepts: 3,
+        notPracticedConcepts: 1,
+        weakestGoalSubject: "Medical Surgical Nursing",
+      },
     });
 
     render(<ProgressReportClient />);
 
-    expect(await screen.findByRole("link", { name: /Explore exam hubs to set a goal/ })).toHaveAttribute("href", "/exam");
-  });
-
-  it("renders create-first-note copy when user course programs are empty", async () => {
-    (getProgressReport as jest.Mock).mockResolvedValue({
-      subjects: [],
-      goalSummary: null,
-      userCoursePrograms: [],
-      profileType: "STUDENT",
-    });
-
-    render(<ProgressReportClient />);
-
-    expect(await screen.findByText("Create your first note to start tracking your progress.")).toBeInTheDocument();
-  });
-
-  it("renders subject chips and updates the report when a chip sets the goal", async () => {
-    (getProgressReport as jest.Mock)
-      .mockResolvedValueOnce({
-        subjects: [
-          {
-            subject: "Algebra",
-            totalConcepts: 2,
-            masteredConcepts: 1,
-            dueConcepts: 0,
-            notPracticedConcepts: 1,
-            masteryPercentage: 50,
-          },
-        ],
-        goalSummary: null,
-        userCoursePrograms: ["Mathematics"],
-        profileType: "STUDENT",
-      })
-      .mockResolvedValueOnce({
-        subjects: [],
-        goalSummary: {
-          studyGoal: "Mathematics",
-          goalType: "SUBJECT",
-          goalName: "Mathematics",
-          goalLabel: "Mathematics",
-          masteryPercentage: 50,
-          masteredConcepts: 1,
-          totalConcepts: 2,
-          weakestGoalSubject: "Algebra",
-        },
-        userCoursePrograms: ["Mathematics"],
-        profileType: "STUDENT",
-      });
-
-    render(<ProgressReportClient />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Mathematics" }));
-
-    await waitFor(() => {
-      expect(setStudyGoal).toHaveBeenCalledWith("Mathematics");
-    });
-    expect(await screen.findByText("Mathematics Goal")).toBeInTheDocument();
-    expect(screen.queryByText("Pick a focus area to track your progress:")).not.toBeInTheDocument();
-  });
-
-  it("shows an inline error and re-enables subject chips when setting a goal fails", async () => {
-    (setStudyGoal as jest.Mock).mockRejectedValue(new Error("Could not update goal."));
-    (getProgressReport as jest.Mock).mockResolvedValue({
-      subjects: [],
-      goalSummary: null,
-      userCoursePrograms: ["Mathematics"],
-      profileType: "STUDENT",
-    });
-
-    render(<ProgressReportClient />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Mathematics" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not update goal.");
-    expect(screen.getByRole("button", { name: "Mathematics" })).toBeEnabled();
+    expect(await screen.findByText("Focus on Medical Surgical Nursing — you have concepts left to practice.")).toBeInTheDocument();
+    expect(screen.getByText("FOCUS Goal")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse Medical Surgical Nursing notes in the community →" }))
+      .toHaveAttribute("href", "/public/library?subject=Medical%20Surgical%20Nursing");
   });
 
   it("does not fetch when the route guard redirects", async () => {
@@ -317,6 +286,44 @@ describe("ProgressPage", () => {
     await waitFor(() => {
       expect(getProgressReport).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("Progress goal milestones", () => {
+  it("keeps the first milestone unreached when no concepts are mastered", () => {
+    expect(reachedMilestones(goalSummary({
+      masteredConcepts: 0,
+      totalConcepts: 0,
+      notPracticedConcepts: 0,
+      masteryPercentage: 0,
+    }))).toEqual([false, false, false, false, false, false]);
+  });
+
+  it("marks only the first concept milestone reached after one mastered concept", () => {
+    expect(reachedMilestones(goalSummary({
+      masteredConcepts: 1,
+      totalConcepts: 10,
+      notPracticedConcepts: 9,
+      masteryPercentage: 10,
+    }))).toEqual([true, false, false, false, false, false]);
+  });
+
+  it("marks milestones one through four reached at 50 percent with all concepts reviewed", () => {
+    expect(reachedMilestones(goalSummary({
+      masteredConcepts: 5,
+      totalConcepts: 10,
+      notPracticedConcepts: 0,
+      masteryPercentage: 50,
+    }))).toEqual([true, true, true, true, false, false]);
+  });
+
+  it("marks all milestones reached when the goal is fully mastered", () => {
+    expect(reachedMilestones(goalSummary({
+      masteredConcepts: 10,
+      totalConcepts: 10,
+      notPracticedConcepts: 0,
+      masteryPercentage: 100,
+    }))).toEqual([true, true, true, true, true, true]);
   });
 });
 

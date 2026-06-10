@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ public class ProgressReportService {
     private static final String OTHER_SUBJECT = "Other";
     private static final String GOAL_TYPE_EXAM = "EXAM";
     private static final String GOAL_TYPE_SUBJECT = "SUBJECT";
+    private static final String GOAL_TYPE_SUBJECT_FOCUS = "SUBJECT_FOCUS";
 
     private final StudyPackRepository studyPackRepository;
     private final ConceptHealthRepository conceptHealthRepository;
@@ -42,6 +44,16 @@ public class ProgressReportService {
 
     @Transactional(readOnly = true)
     public ProgressReportResponse getProgressReport(UUID userId, String studyGoal, OffsetDateTime now) {
+        return getProgressReport(userId, studyGoal, List.of(), now);
+    }
+
+    @Transactional(readOnly = true)
+    public ProgressReportResponse getProgressReport(
+            UUID userId,
+            String studyGoal,
+            List<String> focusSubjects,
+            OffsetDateTime now
+    ) {
         Map<String, List<StudyPackEntity>> packsBySubject = groupQualifyingPacksBySubject(userId);
         List<SubjectProgressEntry> subjects = packsBySubject.entrySet().stream()
             .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
@@ -50,7 +62,7 @@ public class ProgressReportService {
             .toList();
         return new ProgressReportResponse(
                 subjects,
-                buildGoalSummary(userId, normalizeGoal(studyGoal), packsBySubject, now),
+                buildGoalSummary(userId, normalizeGoal(studyGoal), normalizeFocusSubjects(focusSubjects), packsBySubject, now),
                 getUserCoursePrograms(userId),
                 null
         );
@@ -144,11 +156,16 @@ public class ProgressReportService {
     private GoalSummaryResponse buildGoalSummary(
             UUID userId,
             String studyGoal,
+            List<String> focusSubjects,
             Map<String, List<StudyPackEntity>> packsBySubject,
             OffsetDateTime now
     ) {
-        if (studyGoal == null) {
+        if (studyGoal == null && focusSubjects.isEmpty()) {
             return null;
+        }
+
+        if (studyGoal == null) {
+            return buildSubjectFocusGoalSummary(userId, focusSubjects, packsBySubject, now);
         }
 
         boolean studyGoalIsSlug = ExamGoalConfig.isValidSlug(studyGoal);
@@ -170,7 +187,45 @@ public class ProgressReportService {
                 masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
                 counts.masteredConcepts(),
                 counts.totalConcepts(),
+                counts.notPracticedConcepts(),
                 weakestGoalSubject
+        );
+    }
+
+    private GoalSummaryResponse buildSubjectFocusGoalSummary(
+            UUID userId,
+            List<String> focusSubjects,
+            Map<String, List<StudyPackEntity>> packsBySubject,
+            OffsetDateTime now
+    ) {
+        Set<String> focusSubjectKeys = focusSubjects.stream()
+                .map(SubjectNormalizationUtils::normalizeForLookup)
+                .filter(key -> !key.isBlank())
+                .collect(Collectors.toSet());
+        List<StudyPackEntity> goalPacks = packsBySubject.entrySet().stream()
+                .filter(entry -> focusSubjectKeys.contains(SubjectNormalizationUtils.normalizeForLookup(entry.getKey())))
+                .flatMap(entry -> entry.getValue().stream())
+                .toList();
+        ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
+        if (counts.totalConcepts() == 0) {
+            return null;
+        }
+
+        String goalName = focusSubjects.size() == 1
+                ? focusSubjects.getFirst()
+                : focusSubjects.size() + " subjects in focus";
+        String studyGoalDisplay = String.join(", ", focusSubjects);
+
+        return new GoalSummaryResponse(
+                studyGoalDisplay,
+                GOAL_TYPE_SUBJECT_FOCUS,
+                goalName,
+                goalName,
+                masteryPercentage(counts.masteredConcepts(), counts.totalConcepts()),
+                counts.masteredConcepts(),
+                counts.totalConcepts(),
+                counts.notPracticedConcepts(),
+                resolveWeakestGoalSubject(goalPacks, userId, now)
         );
     }
 
@@ -344,6 +399,24 @@ public class ProgressReportService {
             return null;
         }
         return courseProgram.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private List<String> normalizeFocusSubjects(List<String> focusSubjects) {
+        if (focusSubjects == null || focusSubjects.isEmpty()) {
+            return List.of();
+        }
+        Map<String, String> subjectsByLookupKey = new LinkedHashMap<>();
+        for (String focusSubject : focusSubjects) {
+            String normalizedSubject = SubjectNormalizationUtils.normalizeForStorage(focusSubject);
+            if (normalizedSubject == null) {
+                continue;
+            }
+            subjectsByLookupKey.putIfAbsent(
+                    SubjectNormalizationUtils.normalizeForLookup(normalizedSubject),
+                    normalizedSubject
+            );
+        }
+        return List.copyOf(subjectsByLookupKey.values());
     }
 
     private String normalizeGoal(String studyGoal) {

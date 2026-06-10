@@ -23,11 +23,35 @@ Returns:
       "notPracticedConcepts": 1,
       "masteryPercentage": 70
     }
-  ]
+  ],
+  "goalSummary": {
+    "studyGoal": "Pharmacology",
+    "goalType": "SUBJECT_FOCUS",
+    "goalName": "Pharmacology",
+    "goalLabel": "Pharmacology",
+    "masteryPercentage": 70,
+    "masteredConcepts": 7,
+    "totalConcepts": 10,
+    "notPracticedConcepts": 1,
+    "weakestGoalSubject": "Cardiovascular Pharmacology"
+  }
 }
 ```
 
 The response is `200` with an empty `subjects` list when the user has no owned Study Packs with key concepts.
+
+`goalSummary.goalType` values:
+
+- `EXAM`: `studyGoal` is an exam slug such as `ale`, `pnle`, or `let`.
+- `SUBJECT`: `studyGoal` is a course-program goal from the older Profile picker flow.
+- `SUBJECT_FOCUS`: `studyGoal` is null and `focusSubjects` contains one or more saved subjects.
+
+Goal priority:
+
+1. Exam slug in `studyGoal`.
+2. Course-program value in `studyGoal`.
+3. Subject-level `focusSubjects`.
+4. No goal summary when both are empty or no selected focus subject matches tracked Study Packs.
 
 ## Data Source
 
@@ -69,17 +93,57 @@ The page renders:
 
 - Header: `My Progress`
 - Subtitle: `Concept mastery across your subjects, based on your recent practice.`
+- Goal summary header when a study goal is set.
+- Goal milestone card between the goal summary header and `What to study next` card when `goalSummary.totalConcepts > 0`.
+- `What to study next` routes `SUBJECT_FOCUS` goals to `/public/library?subject={weakestGoalSubject}` when a weakest subject exists, otherwise `/public/library`.
 - A per-subject card with mastery percentage, progress bar, and counts for mastered, due, and not started concepts.
 - Empty state: `No study packs with concepts yet. Generate a Study Pack to start tracking your progress.`
+- No-goal actionable state: when `goalSummary` is null but subject progress exists, show `Set your study focus`, up to 5 weakest subject chips linking to `/profile#study-focus`, and an `Or set from Profile →` link.
 - Inline load failure state: `Could not load your progress report. Try refreshing.`
 - Back link to `/dashboard`.
 
 The dashboard Focus Areas card links to `/progress` when it has concept rows. The card's existing weak-concept logic and action CTA remain unchanged.
 
+## Goal Milestones
+
+Goal milestones are fixed checkpoints computed from `goalSummary` only. They are not persisted and do not require a separate endpoint, service method, generated syllabus, AI target list, or curriculum progression model.
+
+The milestone card renders only when:
+
+- `goalSummary` is present.
+- `goalSummary.totalConcepts > 0`.
+
+Milestones render in this order:
+
+1. `First concept mastered` — `masteredConcepts >= 1`
+2. `25% mastered` — `masteryPercentage >= 25`
+3. `All concepts reviewed` — `notPracticedConcepts === 0 && totalConcepts > 0`
+4. `50% mastered` — `masteryPercentage >= 50`
+5. `70% mastered` — `masteryPercentage >= 70`
+6. `All concepts mastered` — `masteryPercentage >= 100`
+
+The first unreached milestone is the active next target. Completed milestones use a filled marker, the next target uses an outlined marker with a ring highlight, and future milestones use muted styling. The milestone progress bar fills by reached checkpoint count out of the six fixed milestones.
+
+## Subject Focus Goals
+
+Subject focus goals are combined rollups over the selected subjects in `focusSubjects`.
+
+Rules:
+
+- They are computed only when `studyGoal` is null and `focusSubjects` is non-empty.
+- Matching uses normalized subject lookup values, not generated syllabus or AI target lists.
+- `goalName` and `goalLabel` are the single subject name when one subject is selected.
+- For multiple subjects, `goalName` and `goalLabel` are `{N} subjects in focus`.
+- `studyGoal` in the response is a comma-joined display string of the selected subjects.
+- Concept counts and `weakestGoalSubject` use the same ConceptHealth aggregation path as other goal summaries.
+- If the selected subjects no longer match any tracked Study Packs, `goalSummary` is null and the Progress page shows the no-goal actionable state.
+
 ## Out Of Scope
 
 - No per-concept drill-down.
-- No goal setting or next-subject recommendation.
+- No per-subject milestone breakdown.
+- No persisted milestone state.
+- No independent goal tracks per subject.
 - No plan gating.
 - No session-accuracy aggregation.
 - No changes to ConceptHealth recording or quiz completion flows.

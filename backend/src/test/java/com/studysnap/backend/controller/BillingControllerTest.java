@@ -76,12 +76,14 @@ class BillingControllerTest {
                 new BillingPricingResponse.PlanPricing(
                         PlanType.PLUS,
                         new BillingPricingResponse.CyclePricing(new BigDecimal("179.00"), 30, new BigDecimal("149.00"), true, true),
+                        new BillingPricingResponse.CyclePricing(null, null, null, false, false),
                         new BillingPricingResponse.CyclePricing(null, null, null, false, false)
                 ),
                 new BillingPricingResponse.PlanPricing(
                         PlanType.PRO,
                         new BillingPricingResponse.CyclePricing(new BigDecimal("249.00"), 30, new BigDecimal("199.00"), true, true),
-                        new BillingPricingResponse.CyclePricing(new BigDecimal("1999.00"), 365, null, false, true)
+                        new BillingPricingResponse.CyclePricing(new BigDecimal("1999.00"), 365, null, false, true),
+                        new BillingPricingResponse.CyclePricing(new BigDecimal("599.00"), 90, null, false, true)
                 )
         );
         when(pricingService.getPricing(userId, "PH")).thenReturn(expected);
@@ -145,6 +147,7 @@ class BillingControllerTest {
                 LearnerLevel.COLLEGE,
                 "Nursing",
                 null,
+                java.util.List.of(),
                 null,
                 true,
                 null,

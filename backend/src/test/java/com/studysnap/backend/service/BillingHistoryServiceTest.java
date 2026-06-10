@@ -129,6 +129,45 @@ class BillingHistoryServiceTest {
         assertThat(history.transactions()).isEmpty();
     }
 
+    @Test
+    void getHistory_labelsNinetyDaySubscriptionAsExamCycle() {
+        BillingHistoryService service = new BillingHistoryService(
+                paymentTransactionRepository,
+                subscriptionService,
+                Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
+        );
+
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime startAt = OffsetDateTime.parse("2026-03-01T00:00:00Z");
+        OffsetDateTime endAt = OffsetDateTime.parse("2026-05-30T00:00:00Z");
+        SubscriptionEntity subscription = new SubscriptionEntity();
+        subscription.setId(UUID.randomUUID());
+        subscription.setPlanType(PlanType.PRO);
+        subscription.setStatus(SubscriptionStatus.ACTIVE);
+        subscription.setStartAt(startAt);
+        subscription.setEndAt(endAt);
+        PaymentTransactionEntity transaction = buildTransaction(
+                "evt_exam_cycle",
+                new BigDecimal("599.00"),
+                PaymentTransactionStatus.SUCCESS,
+                startAt
+        );
+        transaction.setBillingCycle(BillingCycle.EXAM_CYCLE);
+        transaction.setCurrency("PHP");
+
+        when(subscriptionService.getPlanSnapshot(userId)).thenReturn(
+                new SubscriptionService.PlanSnapshot(PlanType.PRO, false, endAt, null)
+        );
+        when(subscriptionService.findActiveSubscription(userId, PlanType.PRO)).thenReturn(Optional.of(subscription));
+        when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of(transaction));
+
+        BillingHistoryResponse history = service.getHistory(userId);
+
+        assertThat(history.billingType()).isEqualTo(BillingCycle.EXAM_CYCLE);
+        assertThat(history.transactions()).extracting(BillingHistoryItemResponse::description)
+                .containsExactly("Pro 90-Day Exam Pass");
+    }
+
     private PaymentTransactionEntity buildTransaction(
             String referenceId,
             BigDecimal amount,

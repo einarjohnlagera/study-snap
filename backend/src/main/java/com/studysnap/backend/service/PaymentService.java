@@ -50,6 +50,7 @@ public class PaymentService {
     private static final String DESCRIPTION_INTRO_SUFFIX = " - Intro offer applied";
     private static final String BILLING_CYCLE_MONTHLY_LABEL = "Monthly";
     private static final String BILLING_CYCLE_ANNUAL_LABEL = "Annual";
+    private static final String BILLING_CYCLE_EXAM_PASS_LABEL = "90-Day Exam Pass";
     private static final String SUCCESS_REDIRECT_PATH = "/billing/success";
     private static final String FAILURE_REDIRECT_PATH = "/billing/failed";
     private static final String RETURN_URL_QUERY_KEY = "returnUrl";
@@ -399,7 +400,14 @@ public class PaymentService {
     }
 
     private int resolveFallbackAccessDurationDays(BillingCycle billingCycle) {
-        return billingCycle == BillingCycle.YEARLY ? 365 : 30;
+        if (billingCycle == null) {
+            return 30;
+        }
+        return switch (billingCycle) {
+            case YEARLY -> 365;
+            case EXAM_CYCLE -> 90;
+            case MONTHLY -> 30;
+        };
     }
 
     private String buildInvoiceDescription(PricingService.CheckoutSelection checkoutSelection) {
@@ -416,9 +424,11 @@ public class PaymentService {
     }
 
     private String resolveBillingCycleLabel(BillingCycle billingCycle) {
-        return billingCycle == BillingCycle.YEARLY
-                ? BILLING_CYCLE_ANNUAL_LABEL
-                : BILLING_CYCLE_MONTHLY_LABEL;
+        return switch (billingCycle) {
+            case YEARLY -> BILLING_CYCLE_ANNUAL_LABEL;
+            case EXAM_CYCLE -> BILLING_CYCLE_EXAM_PASS_LABEL;
+            case MONTHLY -> BILLING_CYCLE_MONTHLY_LABEL;
+        };
     }
 
     private String buildExternalId(UUID userId, OffsetDateTime now) {

@@ -189,12 +189,13 @@ export type SubjectProgressEntry = {
 
 export type GoalSummaryResponse = {
   studyGoal: string;
-  goalType: "EXAM" | "SUBJECT";
+  goalType: "EXAM" | "SUBJECT" | "SUBJECT_FOCUS";
   goalName: string;
   goalLabel: string;
   masteryPercentage: number;
   masteredConcepts: number;
   totalConcepts: number;
+  notPracticedConcepts: number;
   weakestGoalSubject: string | null;
 };
 
@@ -250,7 +251,7 @@ export type LearnerLevel =
   | "PERSONAL_LEARNING";
 export type PlanType = "FREE" | PaidPlanType;
 export type TeacherQuizQuestionCount = 10 | 20 | 30;
-export type BillingCycle = "MONTHLY" | "YEARLY";
+export type BillingCycle = "MONTHLY" | "YEARLY" | "EXAM_CYCLE";
 export type UserRole = "USER" | "ADMIN";
 export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
 export type SubscriptionCancellationReason =
@@ -280,6 +281,7 @@ export type BillingPlanPricingResponse = {
   planType: PaidPlanType;
   monthly: BillingPricingCycleResponse;
   yearly: BillingPricingCycleResponse;
+  examCycle: BillingPricingCycleResponse;
 };
 
 export type BillingPricingResponse = {
@@ -569,6 +571,7 @@ export type MeResponse = {
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
   studyGoal?: string | null;
+  focusSubjects?: string[] | null;
   schoolName: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
@@ -609,15 +612,15 @@ export type UpdateThemePreferenceRequest = {
 };
 
 export type UpdateUserProfileRequest = {
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  username: string;
-  bio: string;
-  learnerLevel: LearnerLevel | null;
-  courseProgram: string;
-  schoolName: string;
-  email: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  username?: string;
+  bio?: string;
+  learnerLevel?: LearnerLevel | null;
+  courseProgram?: string;
+  schoolName?: string;
+  email?: string;
 };
 
 export type UpdatePublicProfileVisibilityRequest = {
@@ -1682,6 +1685,21 @@ export async function setStudyGoal(studyGoal: string | null): Promise<MeResponse
     true,
   );
   const me = await parseApiResponse<MeResponse>(response, "Could not update study goal. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function setFocusSubjects(subjects: string[]): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile/focus-subjects",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ subjects }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update focus subjects. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

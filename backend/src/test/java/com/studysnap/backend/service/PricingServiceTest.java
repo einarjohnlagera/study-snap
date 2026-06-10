@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -62,11 +63,33 @@ class PricingServiceTest {
         phPricing.getPlus().getMonthly().setAmount(new BigDecimal("179.00"));
         phPricing.getPlus().getMonthly().setDurationDays(30);
         phPricing.getPlus().getYearly().setActive(false);
+        phPricing.getPlus().getExamCycle().setAmount(BigDecimal.ZERO);
+        phPricing.getPlus().getExamCycle().setDurationDays(90);
+        phPricing.getPlus().getExamCycle().setActive(false);
         phPricing.getPro().getMonthly().setAmount(new BigDecimal("249.00"));
         phPricing.getPro().getMonthly().setDurationDays(30);
         phPricing.getPro().getYearly().setAmount(new BigDecimal("1999.00"));
         phPricing.getPro().getYearly().setDurationDays(365);
-        properties.getBilling().setPricingRegions(Map.of("PH", phPricing));
+        phPricing.getPro().getExamCycle().setAmount(new BigDecimal("599.00"));
+        phPricing.getPro().getExamCycle().setDurationDays(90);
+        phPricing.getPro().getExamCycle().setActive(true);
+        StudySnapProperties.RegionPricing usPricing = new StudySnapProperties.RegionPricing();
+        usPricing.setCurrency("USD");
+        usPricing.setActive(true);
+        usPricing.getPlus().getMonthly().setAmount(new BigDecimal("3.99"));
+        usPricing.getPlus().getMonthly().setDurationDays(30);
+        usPricing.getPlus().getYearly().setActive(false);
+        usPricing.getPlus().getExamCycle().setAmount(BigDecimal.ZERO);
+        usPricing.getPlus().getExamCycle().setDurationDays(90);
+        usPricing.getPlus().getExamCycle().setActive(false);
+        usPricing.getPro().getMonthly().setAmount(new BigDecimal("4.99"));
+        usPricing.getPro().getMonthly().setDurationDays(30);
+        usPricing.getPro().getYearly().setAmount(new BigDecimal("39.99"));
+        usPricing.getPro().getYearly().setDurationDays(365);
+        usPricing.getPro().getExamCycle().setAmount(new BigDecimal("13.99"));
+        usPricing.getPro().getExamCycle().setDurationDays(90);
+        usPricing.getPro().getExamCycle().setActive(false);
+        properties.getBilling().setPricingRegions(Map.of("PH", phPricing, "US", usPricing));
 
         pricingService = new PricingService(
                 properties,
@@ -117,12 +140,31 @@ class PricingServiceTest {
         assertThat(response.plus().monthly().introAmount()).isEqualByComparingTo("149.00");
         assertThat(response.plus().monthly().introEligible()).isTrue();
         assertThat(response.plus().yearly().available()).isFalse();
+        assertThat(response.plus().examCycle().available()).isFalse();
         assertThat(response.pro().planType()).isEqualTo(PlanType.PRO);
         assertThat(response.pro().monthly().amount()).isEqualByComparingTo("249.00");
         assertThat(response.pro().monthly().introAmount()).isEqualByComparingTo("199.00");
         assertThat(response.pro().yearly().amount()).isEqualByComparingTo("1999.00");
         assertThat(response.pro().yearly().durationDays()).isEqualTo(365);
+        assertThat(response.pro().examCycle().amount()).isEqualByComparingTo("599.00");
+        assertThat(response.pro().examCycle().durationDays()).isEqualTo(90);
+        assertThat(response.pro().examCycle().available()).isTrue();
         assertThat(user.getCountryCode()).isEqualTo("PH");
+    }
+
+    @Test
+    void getPricing_returnsInactiveExamCycleForUsRegion() {
+        when(pricingRegionResolver.normalizeCountryCode("US")).thenReturn("US");
+        when(pricingRegionResolver.resolveRegion("US")).thenReturn("US");
+        when(discountVoucherRepository.findByIsActiveTrue()).thenReturn(List.of());
+
+        BillingPricingResponse response = pricingService.getPricing(null, "US");
+
+        assertThat(response.region()).isEqualTo("US");
+        assertThat(response.currency()).isEqualTo("USD");
+        assertThat(response.pro().examCycle().available()).isFalse();
+        assertThat(response.pro().examCycle().amount()).isNull();
+        assertThat(response.pro().examCycle().durationDays()).isNull();
     }
 
     @Test
@@ -237,6 +279,52 @@ class PricingServiceTest {
         assertThat(selection.basePrice()).isEqualByComparingTo("1999.00");
         assertThat(selection.discountAmount()).isEqualByComparingTo("199.90");
         assertThat(selection.effectivePrice()).isEqualByComparingTo("1799.10");
+    }
+
+    @Test
+    void resolveCheckoutSelection_returnsProExamCycleAccessWindow() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(pricingRegionResolver.normalizeCountryCode("PH")).thenReturn("PH");
+        when(pricingRegionResolver.resolveRegion("PH")).thenReturn("PH");
+        when(discountVoucherRepository.findByIsActiveTrue()).thenReturn(List.of());
+
+        PricingService.CheckoutSelection selection = pricingService.resolveCheckoutSelection(
+                userId,
+                PlanType.PRO,
+                BillingCycle.EXAM_CYCLE,
+                null,
+                "PH"
+        );
+
+        assertThat(selection.planType()).isEqualTo(PlanType.PRO);
+        assertThat(selection.billingCycle()).isEqualTo(BillingCycle.EXAM_CYCLE);
+        assertThat(selection.accessDurationDays()).isEqualTo(90);
+        assertThat(selection.basePrice()).isEqualByComparingTo("599.00");
+        assertThat(selection.effectivePrice()).isEqualByComparingTo("599.00");
+    }
+
+    @Test
+    void resolveCheckoutSelection_rejectsInactivePlusExamCycle() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(pricingRegionResolver.normalizeCountryCode("PH")).thenReturn("PH");
+        when(pricingRegionResolver.resolveRegion("PH")).thenReturn("PH");
+
+        assertThatThrownBy(() -> pricingService.resolveCheckoutSelection(
+                userId,
+                PlanType.PLUS,
+                BillingCycle.EXAM_CYCLE,
+                null,
+                "PH"
+        ))
+                .hasMessage("That billing cycle is not available for the selected plan.")
+                .extracting("code")
+                .isEqualTo("CHECKOUT_BILLING_CYCLE_UNAVAILABLE");
     }
 
     @Test
