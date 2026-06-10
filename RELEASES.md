@@ -2,7 +2,7 @@
 
 ## v0.26.0 - Exam Depth
 
-**Status: In progress**
+**Status: Released**
 
 Theme: expand the exam capture surface with wave-2 exam hubs, deepen the goal progression loop with mastery-threshold milestones, give board exam takers a pricing commitment that matches how they prep — a 90-day exam-cycle pass — and replace broad study-focus picks with subject-level focus.
 
