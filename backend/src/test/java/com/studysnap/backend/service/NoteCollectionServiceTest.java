@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -37,6 +38,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,7 +46,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,6 +80,9 @@ class NoteCollectionServiceTest {
     @Mock
     private GeneratedQuizRepository generatedQuizRepository;
 
+    @Mock
+    private AnalyticsService analyticsService;
+
     private NoteCollectionService service;
 
     @BeforeEach
@@ -85,7 +92,8 @@ class NoteCollectionServiceTest {
                 itemRepository,
                 noteRepository,
                 studyPackRepository,
-                generatedQuizRepository
+                generatedQuizRepository,
+                analyticsService
         );
     }
 
@@ -146,6 +154,33 @@ class NoteCollectionServiceTest {
         ));
 
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(noteId);
+    }
+
+    @Test
+    void create_tracksCollectionCreatedOnceWithInitialItemCount() {
+        UUID userId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        NoteEntity firstNote = buildNote(firstNoteId, userId, NOTE_TITLE_ONE);
+        NoteEntity secondNote = buildNote(secondNoteId, userId, NOTE_TITLE_TWO);
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(firstNoteId, secondNoteId)))
+                .thenReturn(List.of(firstNote, secondNote));
+        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(firstNoteId, secondNoteId), List.of(firstNote, secondNote));
+
+        NoteCollectionDetailResponse result = service.create(userId, new CreateNoteCollectionRequest(
+                COLLECTION_TITLE,
+                null,
+                List.of(firstNoteId, secondNoteId)
+        ));
+
+        verify(analyticsService, times(1)).trackEvent(
+                userId,
+                AnalyticsEventType.COLLECTION_CREATED,
+                result.id(),
+                Map.of("itemCount", 2)
+        );
     }
 
     @Test
@@ -227,6 +262,7 @@ class NoteCollectionServiceTest {
         assertThat(result.title()).isEqualTo("Updated");
         assertThat(result.description()).isEqualTo("Updated description");
         assertThat(result.updatedAt()).isAfter(previousUpdatedAt);
+        verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
     }
 
     @Test
@@ -266,6 +302,7 @@ class NoteCollectionServiceTest {
 
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(existingNoteId, newNoteId);
         assertThat(result.items()).extracting(item -> item.position()).containsExactly(0, 1);
+        verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
     }
 
     @Test
@@ -349,6 +386,7 @@ class NoteCollectionServiceTest {
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(secondNoteId, firstNoteId);
         assertThat(result.items()).extracting(item -> item.label()).containsExactly(WEEK_TWO_LABEL, WEEK_ONE_LABEL);
         assertThat(result.items()).extracting(item -> item.position()).containsExactly(0, 1);
+        verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
     }
 
     @Test

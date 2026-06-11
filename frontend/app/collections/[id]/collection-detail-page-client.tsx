@@ -14,7 +14,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
-import { getCollectionLabels } from "@/lib/collection-labels";
+import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
 import {
   addCollectionItems,
   ApiRequestError,
@@ -67,6 +67,10 @@ function getQuizReadinessHint(item: Pick<NoteCollectionItem, "studyPackStatus" |
     return "Generation failed";
   }
   return "Draft";
+}
+
+function canIncludeCollectionItemInExam(item: Pick<NoteCollectionItem, "generatedQuizId">): boolean {
+  return Boolean(item.generatedQuizId);
 }
 
 function normalizeNoteSearch(value: string): string {
@@ -440,7 +444,9 @@ function SortableCollectionItemRow({
 
 export function CollectionDetailPageClient({ collectionId }: Readonly<{ collectionId: string }>) {
   const router = useRouter();
-  const labels = useMemo(() => getCollectionLabels(getAuthUser()?.profileType), []);
+  const authUser = getAuthUser();
+  const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
+  const terminalAction = useMemo(() => getCollectionTerminalAction(authUser?.profileType), [authUser?.profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [items, setItems] = useState<NoteCollectionItem[]>([]);
@@ -583,7 +589,20 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
   const presentNoteIds = useMemo(() => new Set(items.map((item) => item.noteId)), [items]);
   const itemIds = useMemo(() => items.map((item) => item.noteId), [items]);
+  const quizReadyNoteIds = useMemo(
+    () => items.filter(canIncludeCollectionItemInExam).map((item) => item.noteId),
+    [items],
+  );
+  const hasNonQuizReadyItems = quizReadyNoteIds.length < items.length;
   const mutationInProgress = mutationKind !== null;
+
+  const openCollectionExamBuilder = useCallback(() => {
+    if (quizReadyNoteIds.length === 0) {
+      return;
+    }
+    const params = new URLSearchParams({ notes: quizReadyNoteIds.join(",") });
+    router.push(`/library/exam-builder?${params.toString()}`);
+  }, [quizReadyNoteIds, router]);
 
   if (loadState === "loading") {
     return (
@@ -635,7 +654,25 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         description={collection.description || `Organize the notes in this ${labels.singular.toLowerCase()}.`}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            {/* Prompt B: profile-aware terminal CTA (teacher -> Exam Builder, board/student -> practice) */}
+            {terminalAction?.kind === "exam-builder" ? (
+              <div className="max-w-xs space-y-1">
+                <ResponsiveActionButton
+                  action="open"
+                  label={terminalAction.label}
+                  disabled={quizReadyNoteIds.length === 0}
+                  onClick={openCollectionExamBuilder}
+                />
+                {quizReadyNoteIds.length === 0 ? (
+                  <p className="text-xs text-foreground/60">
+                    Generate a quiz for at least one note to build an exam.
+                  </p>
+                ) : hasNonQuizReadyItems ? (
+                  <p className="text-xs text-foreground/60">
+                    Only quiz-ready notes will be included.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <ResponsiveActionButton action="edit" label="Edit" variant="outline" onClick={() => setEditOpen(true)} />
           </div>
         )}

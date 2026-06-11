@@ -261,20 +261,29 @@ Core UI behavior:
 - Delete is confirm-gated and must state that deleting a collection does not delete its notes.
 - Load failures show retry states; a `404` detail response shows a not-found state with a link back to the collections list.
 
+### Profile-aware terminal actions & Library integration
+
+The shipped Prompt B integrations make collections useful from both entry points:
+
+- Library Select mode is universal. Every authenticated profile can multi-select notes and use `Add to {singular}` to populate an existing collection or create a new one inline.
+- Library selection accepts any owned note, including `DRAFT` notes without a generated quiz. Quiz readiness is not a collection membership requirement.
+- The Library teacher-only `Build exam` action remains gated to Teacher/Admin exam workflows. If the selection mixes ready and non-ready notes, the action proceeds with the selected note IDs and the Exam Builder filters to quiz-ready notes; if zero selected notes are quiz-ready, the action is disabled with recovery copy.
+- The collection detail terminal action resolves through the profile-aware terminal-action resolver. `TEACHER` receives `Build exam from this Lesson Plan`; all other profiles receive no terminal CTA for now.
+- The teacher terminal CTA preserves the collection's current note order, passes quiz-ready note IDs to `/library/exam-builder?notes=...`, shows a partial-readiness hint when some notes are skipped, and disables with `Generate a quiz for at least one note to build an exam.` when none are quiz-ready.
+- Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing Long Exam flow is same-subject scoped and meters quota per source note, while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
+- `COLLECTION_CREATED` fires server-side from `NoteCollectionService.create(...)` only, with `itemCount` metadata for the number of initial notes. Add-items, update, remove, and reorder do not fire a creation event.
+
 Deferred Prompt B slots:
 
-- Profile-aware terminal CTAs are intentionally not wired yet.
-- Teacher collection -> Exam Builder / DOCX / shareable quiz links remains a follow-up.
-- Student or board-exam multi-note practice actions remain a follow-up.
-- Library multi-select "Add to collection" remains a follow-up.
+- Student, board-exam, and professional multi-note practice actions remain a follow-up for the Long Exam same-subject/per-note-quota reason above.
 
 ## Out Of Scope
 
 Do not add these under the collection CRUD spine unless explicitly scoped later:
 
 - profile-aware labels or CTAs in the backend
-- teacher Exam Builder wiring
-- DOCX/shareable quiz-link generation from collections
+- collection item label prefill inside Exam Builder
+- DOCX/shareable quiz-link generation directly from collections
 - collection-level AI synthesis
 - bulk generate across a collection
 - public/shareable collections

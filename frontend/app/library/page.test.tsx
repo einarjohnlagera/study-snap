@@ -2,9 +2,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
 import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
+  addCollectionItems,
+  createCollection,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
   getSavedLibraryFilters,
+  listCollections,
   listNotes,
   listSubjects,
 } from "@/lib/api";
@@ -28,10 +31,13 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  addCollectionItems: jest.fn(),
+  createCollection: jest.fn(),
   createSavedLibraryFilter: jest.fn(),
   deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
+  listCollections: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
 }));
@@ -53,6 +59,11 @@ function selectSubjectFilter(subject: string) {
 async function openTagSelectorFromFilters() {
   fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
   await screen.findByRole("heading", { name: "Select tags" });
+}
+
+function applyTopModal() {
+  const applyButtons = screen.getAllByRole("button", { name: "Apply" });
+  fireEvent.click(applyButtons[applyButtons.length - 1]);
 }
 
 // Minimal note builder for driving the (client-computed) subject stats strip.
@@ -94,8 +105,37 @@ describe("Library page", () => {
     pushMock.mockReset();
     replaceMock.mockReset();
     currentSearch = "";
+    (addCollectionItems as jest.Mock).mockReset();
+    (createCollection as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockReset();
+    (addCollectionItems as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      title: "Midterm Plan",
+      description: null,
+      createdAt: "2026-03-24T00:00:00Z",
+      updatedAt: "2026-03-24T00:00:00Z",
+      items: [],
+    });
+    (createCollection as jest.Mock).mockResolvedValue({
+      id: "created-collection",
+      title: "New Plan",
+      description: null,
+      createdAt: "2026-03-24T00:00:00Z",
+      updatedAt: "2026-03-24T00:00:00Z",
+      items: [],
+    });
     (getAuthUser as jest.Mock).mockReturnValue(null);
     (getSavedLibraryFilters as jest.Mock).mockResolvedValue([]);
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "collection-1",
+        title: "Midterm Plan",
+        description: null,
+        itemCount: 2,
+        createdAt: "2026-03-24T00:00:00Z",
+        updatedAt: "2026-03-24T00:00:00Z",
+      },
+    ]);
     (createSavedLibraryFilter as jest.Mock).mockResolvedValue({
       id: "saved-filter-1",
       name: "Review Notes",
@@ -312,7 +352,7 @@ describe("Library page", () => {
     )).toEqual(["note-77", "note-99", "note-42"]);
   });
 
-  it("hides teacher exam actions for student profiles", async () => {
+  it("renders Select for student profiles and allows selecting draft notes", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "student-1",
       role: "USER",
@@ -323,8 +363,89 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+
+    expect(screen.getByText("1 note selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Build exam" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Generate a quiz for this note before adding it to an exam.")).not.toBeInTheDocument();
+  });
+
+  it("adds selected notes to an existing collection and clears selection", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Study Plan" }));
+
+    expect(await screen.findByRole("heading", { name: "Add to a Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add here" }));
+
+    await waitFor(() => {
+      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-42"]);
+    });
+    expect(screen.queryByText("1 note selected")).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "View Study Plan" })).toHaveAttribute("href", "/collections/collection-1");
+  });
+
+  it("creates a new collection from selected notes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review"));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Study Plan" }));
+
+    expect(await screen.findByText("Create your first study plan and add these notes to it.")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Study Plan title"), {
+      target: { value: "Finals Plan" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create new Study Plan" }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalledWith({
+        title: "Finals Plan",
+        noteIds: ["note-42", "note-99"],
+      });
+    });
+    expect(screen.queryByText("2 notes selected")).not.toBeInTheDocument();
+  });
+
+  it("shows retry instead of an empty state when collection loading fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    (listCollections as jest.Mock).mockRejectedValueOnce(new Error("Network down"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Study Plan" }));
+
+    expect(await screen.findByText("Network down")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Create your first study plan and add these notes to it.")).not.toBeInTheDocument();
   });
 
   it("hides Quiz Ready filter and badges for student profiles", async () => {
@@ -654,7 +775,7 @@ describe("Library page", () => {
       target: { value: "energy" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "energy" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -676,7 +797,7 @@ describe("Library page", () => {
       target: { value: "med" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "medication" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -698,7 +819,7 @@ describe("Library page", () => {
       target: { value: "exam" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "exam" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
@@ -717,7 +838,7 @@ describe("Library page", () => {
       target: { value: "cells" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "cells" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -738,7 +859,7 @@ describe("Library page", () => {
       target: { value: "review" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -763,7 +884,7 @@ describe("Library page", () => {
     expect(screen.queryByText("Selected tags")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getAllByRole("button", { name: "mitochondria" })[0]).toBeInTheDocument();
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
@@ -783,7 +904,7 @@ describe("Library page", () => {
       target: { value: "review" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("No notes match these filters")).toBeInTheDocument();
     expect(screen.getByText("Try adjusting your filters")).toBeInTheDocument();
@@ -844,7 +965,7 @@ describe("Library page", () => {
     expect(screen.queryByRole("link", { name: "Try Demo" })).not.toBeInTheDocument();
   });
 
-  it("enables teacher selection mode only for quiz-ready notes", async () => {
+  it("shows teacher Build exam with mixed-readiness selected notes", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
       role: "USER",
@@ -856,17 +977,18 @@ describe("Library page", () => {
     await screen.findByText("Cell Respiration");
 
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review"));
 
-    const disabledCheckbox = screen.getByLabelText("Select Cell Respiration for exam export");
-    expect(disabledCheckbox).toBeDisabled();
-    expect(screen.getByText("Generate a quiz first to include this note in an exam.")).toBeInTheDocument();
+    expect(screen.getByText("2 notes selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to Lesson Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Only quiz-ready notes will be added to the exam.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Build exam" }));
 
-    fireEvent.click(screen.getByLabelText("Select Zygote Review for exam export"));
-
-    expect(screen.getByText("1 note selected")).toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-42%2Cnote-99");
   });
 
-  it("routes teacher selections into the dedicated exam builder page", async () => {
+  it("disables teacher Build exam when no selected notes are quiz-ready", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
       role: "USER",
@@ -878,12 +1000,10 @@ describe("Library page", () => {
     await screen.findByText("Cell Respiration");
 
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
-    fireEvent.click(screen.getByLabelText("Select Zygote Review for exam export"));
-    fireEvent.click(screen.getByLabelText("Select Dosage Calculations for exam export"));
-    fireEvent.click(screen.getByRole("button", { name: "Create Exam" }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
 
-    await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-99%2Cnote-77");
-    });
+    expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build exam" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
   });
 });

@@ -10,6 +10,11 @@ export type CollectionLabels = {
   listDescription: string;
 };
 
+export type CollectionTerminalAction = {
+  kind: "exam-builder";
+  label: string;
+};
+
 const DEFAULT_LABELS: CollectionLabels = {
   singular: "Collection",
   plural: "Collections",
@@ -53,4 +58,15 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
 
 export function getCollectionLabels(profileType: ProfileType | null | undefined): CollectionLabels {
   return LABELS_BY_PROFILE[profileType ?? "PROFESSIONAL"] ?? DEFAULT_LABELS;
+}
+
+export function getCollectionTerminalAction(profileType: ProfileType | null | undefined): CollectionTerminalAction | null {
+  if (profileType !== "TEACHER") {
+    return null;
+  }
+  const labels = getCollectionLabels(profileType);
+  return {
+    kind: "exam-builder",
+    label: `Build exam from this ${labels.singular}`,
+  };
 }

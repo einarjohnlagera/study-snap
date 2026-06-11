@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -49,12 +50,14 @@ public class NoteCollectionService {
     private static final String LABEL_TOO_LONG_MESSAGE = "Collection item label must be 120 characters or fewer.";
     private static final String NOTE_ID_REQUIRED_MESSAGE = "Collection item note id is required.";
     private static final String ORDER_SET_MISMATCH_MESSAGE = "Collection order must include exactly the current collection notes.";
+    private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
 
     private final NoteCollectionRepository collectionRepository;
     private final NoteCollectionItemRepository itemRepository;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
+    private final AnalyticsService analyticsService;
 
     @Transactional(readOnly = true)
     public List<NoteCollectionSummaryResponse> list(UUID userId) {
@@ -90,6 +93,12 @@ public class NoteCollectionService {
 
         List<NoteCollectionItemEntity> items = buildItems(saved.getId(), orderedNoteIds, 0, now);
         itemRepository.saveAll(items);
+        analyticsService.trackEvent(
+                userId,
+                AnalyticsEventType.COLLECTION_CREATED,
+                saved.getId(),
+                Map.of(ITEM_COUNT_METADATA_KEY, items.size())
+        );
         return toDetailResponse(saved, items);
     }
 
