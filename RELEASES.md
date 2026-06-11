@@ -10,18 +10,19 @@ Theme: lower the cold-start barrier for getting existing material *into* NoteLib
 
 - **Track 1 backend — Bulk material import API** — added `POST /notes/import-batch` for profile-agnostic multi-file import. The endpoint reuses the existing per-file extraction pipeline, creates one owned `DRAFT` note per successful file, reports per-file failures without rolling back earlier successes, enforces a configurable max-files cap, and fires `NOTES_BULK_IMPORTED` once per successful batch. It never triggers Study Pack generation, LLM calls, or a new quota category.
 - **Track 2 backend — Note Collections API** — added the universal, owner-private `NoteCollection` entity and ordered item join table, plus CRUD endpoints under `/collections`. Collections group only the caller's own existing notes, allow one note in multiple collections, dedupe repeats within a collection, support reorder/relabel, and delete only collection/item rows. No profile gate, profile-aware labels, LLM calls, or quota logic were added.
-- **Track 2 frontend core — Collections UI** — added the profile-aware Collections / Study Plans / Review Sets / Lesson Plans nav entry, `/collections` list page, and `/collections/[id]` detail page. Users can create, edit, delete, add notes through an in-detail picker, remove notes, relabel items, and reorder with drag-and-drop plus Move up/down fallback. Terminal CTAs and Library multi-select integration remain deferred.
+- **Track 2 frontend core — Collections UI** — added the profile-aware Collections / Study Plans / Review Sets / Lesson Plans nav entry, `/collections` list page, and `/collections/[id]` detail page. Users can create, edit, delete, add notes through an in-detail picker, remove notes, relabel items, and reorder with drag-and-drop plus Move up/down fallback.
+- **Track 2 integrations — Collections entry/exit points** — added universal Library multi-select `Add to {collection}` for any note readiness, wired the Teacher Lesson Plan terminal CTA into Exam Builder with quiz-ready filtering and disabled empty-state copy, and added server-side `COLLECTION_CREATED` analytics on collection create only.
 
 ### Planned
 
 - **Track 1 frontend — Multi-file uploader UI (P0)** — add the user-facing multi-file uploader that consumes the shipped bulk import API, surfaces per-file success/failure, and routes users to review the created drafts. *(Claude Code)*
-- **Track 2 integrations — Collections Prompt B (P1)** — add profile-specific terminal CTAs (Teacher -> Exam Builder, Student/Board -> practice flows) and Library multi-select "Add to collection" entry points on top of the shipped core UI. *(Claude Code)*
-- **Track 3 — Teacher terminal path** — wire a collection into the existing Exam Builder so a Lesson Plan pre-populates sections → sectioned DOCX + shareable `/quiz/[token]` links in a couple of clicks. DOCX/share stay Teacher/Admin only. *(Claude Code, pending Track 2 UI)*
+- **Track 3 — Teacher terminal path remaining** — deepen the existing Lesson Plan -> Exam Builder entry so collection item labels can pre-populate sections and continue into sectioned DOCX + shareable `/quiz/[token]` links. DOCX/share stay Teacher/Admin only. *(Claude Code)*
 - **Track 4 — Profile-aware first-run / activation** — empty states that teach the loop for that profile (teacher: bring material → generate → export/share; student: bring notes → generate → study/quiz) via existing `GuidanceTip` surfaces; no new tips framework. *(Claude Code)*
 
 ### Deferred
 
 - Lesson-plan / syllabus document parsing as quiz source (scaffold references content, doesn't contain it — weak quiz source).
+- Student/board/professional multi-note practice terminal CTA from collections; the existing Long Exam is same-subject scoped and meters quota per source note, which does not fit cross-subject, mixed-readiness collections without a separate practice-flow design.
 - Collection-level AI synthesis (Option B), public/shareable collections, per-profile structured presets beyond Exam Builder's existing ones.
 
 ---

@@ -3,6 +3,7 @@ package com.studysnap.backend.entity;
 public enum AnalyticsEventType {
     NOTE_CREATED,
     NOTES_BULK_IMPORTED,
+    COLLECTION_CREATED,
     STUDY_PACK_GENERATED,
     QUICK_REVIEW_STARTED,
     QUICK_REVIEW_COMPLETED,

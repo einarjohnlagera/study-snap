@@ -1,4 +1,4 @@
-import { getCollectionLabels } from "./collection-labels";
+import { getCollectionLabels, getCollectionTerminalAction } from "./collection-labels";
 
 describe("getCollectionLabels", () => {
   it("returns teacher lesson-plan labels", () => {
@@ -41,5 +41,21 @@ describe("getCollectionLabels", () => {
       navLabel: "Collections",
       newCtaLabel: "New Collection",
     });
+  });
+});
+
+describe("getCollectionTerminalAction", () => {
+  it("returns the teacher Exam Builder action", () => {
+    expect(getCollectionTerminalAction("TEACHER")).toEqual({
+      kind: "exam-builder",
+      label: "Build exam from this Lesson Plan",
+    });
+  });
+
+  it("returns null for non-teacher and default profiles", () => {
+    expect(getCollectionTerminalAction("STUDENT")).toBeNull();
+    expect(getCollectionTerminalAction("BOARD_EXAM")).toBeNull();
+    expect(getCollectionTerminalAction("PROFESSIONAL")).toBeNull();
+    expect(getCollectionTerminalAction(null)).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import {
   removeCollectionItem,
   setCollectionItemOrder,
 } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -25,7 +26,7 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/auth", () => ({
-  getAuthUser: () => ({ profileType: "STUDENT" }),
+  getAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => {
@@ -123,6 +124,7 @@ describe("CollectionDetailPageClient", () => {
     (listNotes as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
   });
 
@@ -140,6 +142,49 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+  });
+
+  it("routes teacher collections to Exam Builder with quiz-ready note ids in order", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const buildExamButton = await screen.findByRole("button", { name: "Build exam from this Lesson Plan" });
+    expect(buildExamButton).toBeEnabled();
+    expect(screen.getByText("Only quiz-ready notes will be included.")).toBeInTheDocument();
+
+    fireEvent.click(buildExamButton);
+
+    expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-2");
+  });
+
+  it("disables the teacher terminal action when no collection notes are quiz-ready", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "DRAFT",
+        generatedQuizId: null,
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const buildExamButton = await screen.findByRole("button", { name: "Build exam from this Lesson Plan" });
+    expect(buildExamButton).toBeDisabled();
+    expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
+
+    fireEvent.click(buildExamButton);
+
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("does not render a terminal CTA for non-teacher profiles", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    expect(screen.queryByRole("button", { name: /Build exam from this/i })).not.toBeInTheDocument();
   });
 
   it("reorders by move button using the full ordered set", async () => {
