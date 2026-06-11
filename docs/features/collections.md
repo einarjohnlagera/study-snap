@@ -229,11 +229,49 @@ Behavior:
 - Remove item for a note not in the collection -> `CollectionItemNotFoundException` / `404`.
 - `setOrder` adds, drops, or duplicates a note -> `InvalidCollectionRequestException` / `400`.
 
+## Frontend Core UI
+
+The core Collections UI ships as the universal organization surface:
+
+- `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
+- `/collections/[id]` shows one collection, its ordered note items, item labels, and note readiness hints.
+- The detail page loads from `GET /collections/{id}` on mount, so a hard refresh renders the persisted order.
+- The detail page can edit metadata, delete the collection, add notes, remove notes, relabel items, and reorder items through the shipped CRUD API.
+
+Profile-aware labels are resolved only through `frontend/lib/collection-labels.ts`.
+
+| Profile | Singular | Plural / nav |
+|---|---|---|
+| `TEACHER` | `Lesson Plan` | `Lesson Plans` |
+| `STUDENT` | `Study Plan` | `Study Plans` |
+| `BOARD_EXAM` | `Review Set` | `Review Sets` |
+| `PROFESSIONAL` / default | `Collection` | `Collections` |
+
+Do not hardcode those profile-specific names in page or component code. Components should ask the resolver for `singular`, `plural`, `navLabel`, empty-state copy, and CTA copy.
+
+Core UI behavior:
+
+- The app shell shows the profile-aware Collections nav item directly after Library.
+- `/collections` uses the authenticated page header pattern and opens a create modal with title max length `150`.
+- `/collections/[id]` uses `BackLink href="/collections"` with the profile-aware plural label.
+- Item labels are editable text inputs with max length `120`.
+- Reorder uses drag-and-drop plus `Move up` / `Move down` buttons for accessibility.
+- Reorder/relabel persists through `PUT /collections/{id}/items/order` with the full ordered item set.
+- The in-detail note picker uses the user's own notes from the Library note-list API and excludes notes already in the collection.
+- Delete is confirm-gated and must state that deleting a collection does not delete its notes.
+- Load failures show retry states; a `404` detail response shows a not-found state with a link back to the collections list.
+
+Deferred Prompt B slots:
+
+- Profile-aware terminal CTAs are intentionally not wired yet.
+- Teacher collection -> Exam Builder / DOCX / shareable quiz links remains a follow-up.
+- Student or board-exam multi-note practice actions remain a follow-up.
+- Library multi-select "Add to collection" remains a follow-up.
+
 ## Out Of Scope
 
 Do not add these under the collection CRUD spine unless explicitly scoped later:
 
-- frontend collection UI
 - profile-aware labels or CTAs in the backend
 - teacher Exam Builder wiring
 - DOCX/shareable quiz-link generation from collections
