@@ -293,6 +293,7 @@ export type BillingPricingResponse = {
 
 export type AnalyticsEventType =
   | "NOTE_CREATED"
+  | "NOTES_BULK_IMPORTED"
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"

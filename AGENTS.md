@@ -1019,6 +1019,14 @@ Required behavior:
 - If extracted import text exceeds the configured maximum, return:
   - `This file is too large to process. Please upload a smaller file.`
 
+## Bulk Material Import Rule
+
+- `POST /notes/import-batch` is the deliberate auto-save exception to the single-file import flow.
+- Bulk import creates one owned `DRAFT` note per successfully extracted file and must never auto-generate a Study Pack, set `GENERATING`, call an LLM, or add a new quota category.
+- Bulk import must reuse the existing per-file extraction pipeline and its verification, file-size, page/text, OCR usage, and OCR rate-limit enforcement.
+- Bulk import orchestration must not run inside a batch-wide transaction; one file failure must be recorded in the response and must not roll back notes already created from other files.
+- Bulk import is universal and profile-agnostic; do not add `ProfileType` branching or teacher-only gates to the backend endpoint.
+
 
 
 ## User Access Model
