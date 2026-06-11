@@ -1200,6 +1200,41 @@ export type SavedLibraryFilterResponse = {
   createdAt: string;
 };
 
+export type NoteCollectionSummary = {
+  id: string;
+  title: string;
+  description: string | null;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NoteCollectionItem = {
+  noteId: string;
+  label: string | null;
+  position: number;
+  title: string | null;
+  subject: string | null;
+  courseProgram: string | null;
+  studyPackStatus: NoteStudyPackStatus;
+  generatedQuizId: string | null;
+  updatedAt: string;
+};
+
+export type NoteCollectionDetail = {
+  id: string;
+  title: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: NoteCollectionItem[];
+};
+
+export type SetCollectionItemOrderRequestItem = {
+  noteId: string;
+  label?: string | null;
+};
+
 export type MultiNoteQuizDocxExportRequest = {
   sections: Array<{
     title: string;
@@ -3352,6 +3387,122 @@ export async function deleteSavedLibraryFilter(id: string): Promise<void> {
     return;
   }
   await parseApiResponse<never>(response, "Could not delete filter.");
+}
+
+export async function listCollections(): Promise<NoteCollectionSummary[]> {
+  const response = await fetchWithAuth(
+    "/collections",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionSummary[]>(response, "Could not load collections.");
+}
+
+export async function createCollection(request: {
+  title: string;
+  description?: string | null;
+  noteIds?: string[];
+}): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    "/collections",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not create this collection.");
+}
+
+export async function getCollection(id: string): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not load this collection.");
+}
+
+export async function updateCollection(
+  id: string,
+  request: { title?: string; description?: string | null },
+): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not update this collection.");
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/collections/${id}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.ok) {
+    return;
+  }
+  await parseApiResponse<never>(response, "Could not delete this collection.");
+}
+
+export async function addCollectionItems(id: string, noteIds: string[]): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/items`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ noteIds }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not add notes to this collection.");
+}
+
+export async function removeCollectionItem(id: string, noteId: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/items/${noteId}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.ok) {
+    return;
+  }
+  await parseApiResponse<never>(response, "Could not remove this note from the collection.");
+}
+
+export async function setCollectionItemOrder(
+  id: string,
+  items: SetCollectionItemOrderRequestItem[],
+): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/items/order`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ items }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not save this collection order.");
 }
 
 export async function listPublicNotes(params?: {

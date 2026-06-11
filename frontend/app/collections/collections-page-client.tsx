@@ -1,0 +1,255 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { AppModal } from "@/components/ui/app-modal";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
+import { ResponsiveActionButton } from "@/components/ui/action-button";
+import { getAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
+import { createCollection, listCollections, type NoteCollectionSummary } from "@/lib/api";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+
+type LoadState = "loading" | "ready" | "error";
+
+const TITLE_MAX_LENGTH = 150;
+
+function formatRelativeUpdatedAt(value: string): string {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return "Updated recently";
+  }
+
+  const diffMs = Math.max(0, Date.now() - timestamp);
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+  if (diffMs < minuteMs) {
+    return "Updated just now";
+  }
+  if (diffMs < hourMs) {
+    const minutes = Math.floor(diffMs / minuteMs);
+    return `Updated ${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  }
+  if (diffMs < dayMs) {
+    const hours = Math.floor(diffMs / hourMs);
+    return `Updated ${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  }
+  const days = Math.floor(diffMs / dayMs);
+  if (days < 30) {
+    return `Updated ${days} ${days === 1 ? "day" : "days"} ago`;
+  }
+  return `Updated ${new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
+function formatItemCount(count: number): string {
+  return `${count} ${count === 1 ? "note" : "notes"}`;
+}
+
+function CollectionSkeletonGrid() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Loading collections">
+      {Array.from({ length: 3 }, (_, index) => (
+        <Card key={index} className="space-y-4 p-5">
+          <div className="h-5 w-2/3 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-full animate-pulse rounded bg-muted" />
+          <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function CreateCollectionModal({
+  isOpen,
+  singular,
+  onClose,
+  onCreated,
+}: Readonly<{
+  isOpen: boolean;
+  singular: string;
+  onClose: () => void;
+  onCreated: (collection: NoteCollectionSummary | { id: string }) => void;
+}>) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTitle("");
+      setDescription("");
+      setSubmitting(false);
+      setError(null);
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setError("Title is required.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const created = await createCollection({
+        title: trimmedTitle,
+        description: description.trim() || null,
+      });
+      onCreated(created);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not create this collection.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AppModal
+      isOpen={isOpen}
+      title={`New ${singular}`}
+      description={`Name this ${singular.toLowerCase()} so you can return to it later.`}
+      onClose={onClose}
+      actions={(
+        <>
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" form="create-collection-form" loading={submitting} loadingText="Creating...">
+            Create
+          </Button>
+        </>
+      )}
+    >
+      <form id="create-collection-form" className="space-y-4" onSubmit={handleSubmit}>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Title</span>
+          <input
+            data-autofocus="true"
+            value={title}
+            maxLength={TITLE_MAX_LENGTH}
+            onChange={(event) => setTitle(event.target.value)}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            placeholder={`${singular} title`}
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Description</span>
+          <textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            placeholder="Optional context for this set of notes"
+          />
+        </label>
+        {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+      </form>
+    </AppModal>
+  );
+}
+
+export function CollectionsPageClient() {
+  const router = useRouter();
+  const labels = useMemo(() => getCollectionLabels(getAuthUser()?.profileType), []);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const loadCollections = useCallback(async () => {
+    setLoadState("loading");
+    setLoadError(null);
+    try {
+      const result = await listCollections();
+      setCollections(result);
+      setLoadState("ready");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not load collections.");
+      setLoadState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!requireAuthenticatedOnboardedUser(router)) {
+      return;
+    }
+    void Promise.resolve().then(loadCollections);
+  }, [loadCollections, router]);
+
+  const headerAction = (
+    <ResponsiveActionButton
+      action="create"
+      label={labels.newCtaLabel}
+      className="w-full sm:w-auto"
+      onClick={() => setCreateOpen(true)}
+    />
+  );
+
+  return (
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        eyebrow="WORKSPACE"
+        title={`Your ${labels.plural}`}
+        description={labels.listDescription}
+        actions={headerAction}
+      />
+
+      {loadState === "loading" ? <CollectionSkeletonGrid /> : null}
+
+      {loadState === "error" ? (
+        <Card className="space-y-4 p-6">
+          <CardTitle>Could not load {labels.plural.toLowerCase()}</CardTitle>
+          <CardDescription>{loadError ?? "Please try again."}</CardDescription>
+          <Button type="button" variant="outline" onClick={() => void loadCollections()}>
+            Retry
+          </Button>
+        </Card>
+      ) : null}
+
+      {loadState === "ready" && collections.length === 0 ? (
+        <Card className="space-y-4 p-6 text-center">
+          <CardTitle>{labels.emptyTitle}</CardTitle>
+          <CardDescription>{labels.emptyBody}</CardDescription>
+          <div>
+            <ResponsiveActionButton action="create" label={labels.newCtaLabel} onClick={() => setCreateOpen(true)} />
+          </div>
+        </Card>
+      ) : null}
+
+      {loadState === "ready" && collections.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {collections.map((collection) => (
+            <Link key={collection.id} href={`/collections/${collection.id}`} className="group block">
+              <Card className="flex min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
+                <div className="space-y-2">
+                  <CardTitle className="line-clamp-2">{collection.title}</CardTitle>
+                  {collection.description ? (
+                    <CardDescription className="line-clamp-2 text-sm">{collection.description}</CardDescription>
+                  ) : (
+                    <p className="text-sm text-foreground/55">No description yet.</p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-sm text-foreground/60">
+                  <span>{formatItemCount(collection.itemCount)}</span>
+                  <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+
+      <CreateCollectionModal
+        isOpen={createOpen}
+        singular={labels.singular}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(collection) => router.push(`/collections/${collection.id}`)}
+      />
+    </main>
+  );
+}

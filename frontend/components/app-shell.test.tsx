@@ -123,6 +123,7 @@ describe("AppShell", () => {
       emailVerifiedAt: "2026-03-31T00:00:00Z",
       onboardingCompletedAt: "2026-03-31T00:05:00Z",
       role: "USER",
+      profileType: "STUDENT",
     };
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
@@ -200,6 +201,21 @@ describe("AppShell", () => {
     settingsLinks.forEach((link) => {
       expect(link).toHaveAttribute("href", "/settings");
     });
+  });
+
+  it("shows the profile-aware collections nav label", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...meResponse,
+      profileType: "TEACHER",
+    });
+
+    render(
+      <AppShell>
+        <div>Dashboard content</div>
+      </AppShell>,
+    );
+
+    expect(await screen.findByRole("link", { name: "Lesson Plans" })).toHaveAttribute("href", "/collections");
   });
 
   it("uses the header feedback icon on note editor routes", async () => {

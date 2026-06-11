@@ -12,6 +12,7 @@ import {
   HelpCircle,
   House,
   Link2,
+  Layers,
   LogOut,
   Mail,
   Pencil,
@@ -39,6 +40,7 @@ export type ActionIconName =
   | "dashboard"
   | "delete"
   | "edit"
+  | "collections"
   | "library"
   | "admin"
   | "campaigns"
@@ -67,6 +69,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   dashboard: House,
   delete: Trash2,
   edit: Pencil,
+  collections: Layers,
   library: BookOpen,
   admin: Shield,
   campaigns: Mail,
