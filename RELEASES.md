@@ -8,11 +8,12 @@ Theme: lower the cold-start barrier for getting existing material *into* NoteLib
 
 ### Shipped
 
+- **Track 1 backend — Bulk material import API** — added `POST /notes/import-batch` for profile-agnostic multi-file import. The endpoint reuses the existing per-file extraction pipeline, creates one owned `DRAFT` note per successful file, reports per-file failures without rolling back earlier successes, enforces a configurable max-files cap, and fires `NOTES_BULK_IMPORTED` once per successful batch. It never triggers Study Pack generation, LLM calls, or a new quota category.
 - **Track 2 backend — Note Collections API** — added the universal, owner-private `NoteCollection` entity and ordered item join table, plus CRUD endpoints under `/collections`. Collections group only the caller's own existing notes, allow one note in multiple collections, dedupe repeats within a collection, support reorder/relabel, and delete only collection/item rows. No profile gate, profile-aware labels, LLM calls, or quota logic were added.
 
 ### Planned
 
-- **Track 1 — Bulk material import (universal, P0)** — select multiple files at once; each becomes one `DRAFT` note via the existing per-file OCR/import pipeline. All profile types; per-file success/failure; no auto-generation on import. *(Codex)*
+- **Track 1 frontend — Multi-file uploader UI (P0)** — add the user-facing multi-file uploader that consumes the shipped bulk import API, surfaces per-file success/failure, and routes users to review the created drafts. *(Claude Code)*
 - **Track 2 frontend — Profile-aware collections UI (P1)** — surface collections in the app shell for every profile; resolve labels/CTAs in the frontend (TEACHER "Lesson Plan", STUDENT "Study Plan", BOARD_EXAM "Review Set", PROFESSIONAL "Collection") via the existing Study/Exam Focus copy mechanism. *(Claude Code)*
 - **Track 3 — Teacher terminal path** — wire a collection into the existing Exam Builder so a Lesson Plan pre-populates sections → sectioned DOCX + shareable `/quiz/[token]` links in a couple of clicks. DOCX/share stay Teacher/Admin only. *(Claude Code, pending Track 2 UI)*
 - **Track 4 — Profile-aware first-run / activation** — empty states that teach the loop for that profile (teacher: bring material → generate → export/share; student: bring notes → generate → study/quiz) via existing `GuidanceTip` surfaces; no new tips framework. *(Claude Code)*

@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
+import com.studysnap.backend.dto.BulkImportResultResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
@@ -20,6 +21,7 @@ import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
+import com.studysnap.backend.service.NoteBulkImportService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
@@ -35,7 +37,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.prepost.PreAuthorize;
 
+import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -51,11 +55,16 @@ import static org.mockito.Mockito.when;
 class NoteControllerTest {
 
     private static final String CREATOR_USERNAME = "einarjohn";
+    private static final String USER_ADMIN_ROLE_GATE = "hasAnyRole('USER','ADMIN')";
+    private static final String MULTIPART_FIELD_NAME = "files";
+    private static final String TEXT_PLAIN_CONTENT_TYPE = "text/plain";
 
     @Mock
     private AuthService authService;
     @Mock
     private NoteService noteService;
+    @Mock
+    private NoteBulkImportService noteBulkImportService;
     @Mock
     private NoteGenerationService noteGenerationService;
     @Mock
@@ -82,6 +91,7 @@ class NoteControllerTest {
         noteController = new NoteController(
                 authService,
                 noteService,
+                noteBulkImportService,
                 noteGenerationService,
                 noteTextExtractionService,
                 studyPackService,
@@ -92,6 +102,36 @@ class NoteControllerTest {
                 generatedQuizService,
                 quizSessionHistoryService
         );
+    }
+
+    @Test
+    void importBatch_delegatesToBulkImportService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        MockMultipartFile file = new MockMultipartFile(
+                MULTIPART_FIELD_NAME,
+                "biology.txt",
+                TEXT_PLAIN_CONTENT_TYPE,
+                "content".getBytes()
+        );
+        UUID noteId = UUID.randomUUID();
+        BulkImportResultResponse expected = new BulkImportResultResponse(
+                List.of(new BulkImportResultResponse.ImportedNoteResult(noteId, "biology", "biology.txt", false)),
+                List.of()
+        );
+        when(noteBulkImportService.importBatch(userId, List.of(file))).thenReturn(expected);
+
+        BulkImportResultResponse response = noteController.importBatch(List.of(file), user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteBulkImportService).importBatch(userId, List.of(file));
+    }
+
+    @Test
+    void importBatch_requiresUserOrAdminRole() throws NoSuchMethodException {
+        Method method = NoteController.class.getMethod("importBatch", List.class, AuthenticatedUser.class);
+
+        assertThat(method.getAnnotation(PreAuthorize.class).value()).isEqualTo(USER_ADMIN_ROLE_GATE);
     }
 
     @Test
