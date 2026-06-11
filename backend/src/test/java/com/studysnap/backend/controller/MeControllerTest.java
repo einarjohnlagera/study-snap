@@ -84,7 +84,7 @@ class MeControllerTest {
                 new SubjectProgressEntry("Biology", 4, 2, 1, 1, 50)
         ), null, List.of("Biology"), null);
         when(userRepository.findById(userId)).thenReturn(Optional.of(userEntity));
-        when(progressReportService.getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class))).thenReturn(expected);
+        when(progressReportService.getProgressReport(eq(userId), eq("ale"), eq(List.of()), any(OffsetDateTime.class))).thenReturn(expected);
 
         ProgressReportResponse response = meController.getProgress(user);
 
@@ -94,7 +94,7 @@ class MeControllerTest {
                 expected.userCoursePrograms(),
                 "STUDENT"
         ));
-        verify(progressReportService).getProgressReport(eq(userId), eq("ale"), any(OffsetDateTime.class));
+        verify(progressReportService).getProgressReport(eq(userId), eq("ale"), eq(List.of()), any(OffsetDateTime.class));
     }
 
     @Test

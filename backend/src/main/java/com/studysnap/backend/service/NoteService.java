@@ -63,10 +63,6 @@ import java.util.UUID;
 public class NoteService {
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
     private static final int SUMMARY_PREVIEW_MAX_LENGTH = 180;
-    private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
-    private static final String STUDY_PACK_STATUS_GENERATING = "GENERATING";
-    private static final String STUDY_PACK_STATUS_FAILED = "FAILED";
-    private static final String STUDY_PACK_STATUS_READY = "STUDY_PACK_READY";
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
@@ -167,7 +163,7 @@ public class NoteService {
     @Transactional(readOnly = true)
     public String getOwnedStudyPackIdOrThrow(String noteIdRaw, UUID ownerUserId) {
         NoteResponse note = getById(noteIdRaw, ownerUserId);
-        if (note.studyPackId() == null || STUDY_PACK_STATUS_DRAFT.equals(note.studyPackStatus())) {
+        if (note.studyPackId() == null || NoteStudyPackStatusResolver.DRAFT.equals(note.studyPackStatus())) {
             throw new AppException(
                     "NOTE_STUDY_PACK_NOT_READY",
                     "Generate a Study Pack for this note first.",
@@ -790,7 +786,7 @@ public class NoteService {
                 Boolean.TRUE.equals(entity.getCopiedFromPublic()),
                 entity.getCopiedAt(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                resolveStudyPackStatus(entity, studyPack),
+                NoteStudyPackStatusResolver.resolve(entity, studyPack),
                 studyPack == null ? null : studyPack.getSummary(),
                 keyConcepts,
                 quiz,
@@ -838,7 +834,7 @@ public class NoteService {
                 studyPack == null ? "" : SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), SUMMARY_PREVIEW_MAX_LENGTH),
                 resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                resolveStudyPackStatus(note, studyPack),
+                NoteStudyPackStatusResolver.resolve(note, studyPack),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
                 copyCount,
                 likeCount,
@@ -871,7 +867,7 @@ public class NoteService {
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 note.getContent(),
                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
-                resolveStudyPackStatus(note, studyPack),
+                NoteStudyPackStatusResolver.resolve(note, studyPack),
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
@@ -908,23 +904,6 @@ public class NoteService {
 
     private boolean isCurrentUser(UUID ownerUserId, UUID viewerUserId) {
         return ownerUserId != null && ownerUserId.equals(viewerUserId);
-    }
-
-    private String resolveStudyPackStatus(NoteEntity note, StudyPackEntity studyPack) {
-        NoteStatus noteStatus = resolveStatus(note);
-        if (noteStatus == NoteStatus.GENERATED) {
-            return STUDY_PACK_STATUS_READY;
-        }
-        if (noteStatus == NoteStatus.GENERATING) {
-            return STUDY_PACK_STATUS_GENERATING;
-        }
-        if (noteStatus == NoteStatus.FAILED) {
-            return STUDY_PACK_STATUS_FAILED;
-        }
-        if (studyPack == null) {
-            return STUDY_PACK_STATUS_DRAFT;
-        }
-        return STUDY_PACK_STATUS_READY;
     }
 
     private StudyPackEntity findLinkedStudyPack(UUID noteId) {
@@ -1033,9 +1012,4 @@ public class NoteService {
             metadata.put(key, value);
         }
     }
-
-    private NoteStatus resolveStatus(NoteEntity note) {
-        return note.getStatus() == null ? NoteStatus.DRAFT : note.getStatus();
-    }
-
 }
