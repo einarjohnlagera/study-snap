@@ -6,10 +6,10 @@ describe("TermsPage", () => {
     render(<TermsPage />);
 
     expect(screen.getByRole("heading", { name: "Terms of Service" })).toBeInTheDocument();
-    expect(screen.getByText("Last updated: March 25, 2026")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "3. Acceptable Use" })).toBeInTheDocument();
+    expect(screen.getByText("Last updated: May 26, 2026")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "4. Acceptable Use" })).toBeInTheDocument();
     expect(screen.getByText(/NoteLib offers manual-renewal paid plans/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "support@mail.notelib.app" })).toHaveAttribute("href", "mailto:support@mail.notelib.app");
+    expect(screen.getAllByRole("link", { name: "support@mail.notelib.app" })[0]).toHaveAttribute("href", "mailto:support@mail.notelib.app");
   });
 
   it("exports terms metadata", () => {

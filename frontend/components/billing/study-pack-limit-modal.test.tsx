@@ -57,7 +57,7 @@ describe("StudyPackLimitModal", () => {
     );
 
     expect(screen.getByText("You’ve reached your study pack limit for Plus")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Get More Study Packs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upgrade to Pro" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Go Pro" })).not.toBeInTheDocument();
   });
 

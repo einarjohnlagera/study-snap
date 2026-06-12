@@ -296,8 +296,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByText("Philippine Nurse Licensure Examination")).toBeInTheDocument();
     expect(screen.getByText("42%")).toBeInTheDocument();
     expect(screen.getByText("8 concepts due for review")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Browse PNLE notes →" })).toHaveAttribute("href", "/exam/pnle");
-    expect(screen.getByRole("link", { name: "View full progress →" })).toHaveAttribute("href", "/progress");
+    expect(screen.getByRole("link", { name: "View goal progress" })).toHaveAttribute("href", "/progress");
     expect(getGoalSummary).toHaveBeenCalled();
   });
 
@@ -373,8 +372,7 @@ describe("DashboardPage profile variants", () => {
 
     expect(await screen.findByText("Biochemistry Goal")).toBeInTheDocument();
     expect(screen.getByText("All caught up — keep practicing!")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Browse Biochemistry notes →" }))
-      .toHaveAttribute("href", "/public/library?courseProgram=Biochemistry");
+    expect(screen.getByRole("link", { name: "View goal progress" })).toHaveAttribute("href", "/progress");
     expect(getGoalSummary).toHaveBeenCalled();
   });
 
