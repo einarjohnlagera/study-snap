@@ -681,6 +681,7 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText("Start studying smarter")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Import files" })).toHaveAttribute("href", "/notes/import");
+    expect(screen.getByRole("link", { name: "Create a note" })).toHaveAttribute("href", "/notes/new");
   });
 });

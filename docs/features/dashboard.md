@@ -145,3 +145,12 @@ Applies to STUDENT, BOARD_EXAM, TEACHER, and PROFESSIONAL profile types.
 Dashboard may also show first-study guidance for verified users who still have `studyPackCount == 0` and have not completed the separate product-onboarding tracker.
 
 That flow is separate from `/onboarding` and is tracked with `productOnboardingCompletedAt`.
+
+When a user has zero notes, the dashboard renders a profile-aware first-run empty state (`DashboardEmpty`) that teaches the loop for that profile rather than a single generic prompt:
+
+- TEACHER → import lecture material → generate quizzes → group into a Lesson Plan to export/share
+- STUDENT → import or create notes → generate a Study Pack → quiz and track weak topics
+- BOARD_EXAM → import reviewers → generate Study Packs → practice across a Review Set
+- PROFESSIONAL → import or create materials → generate → scenario-based practice
+
+The profile-specific collection term (Lesson Plan / Review Set) is resolved through `lib/collection-labels.ts`, not hardcoded. Every variant surfaces both entry points — `Import files` (`/notes/import`) and `Create a note` (`/notes/new`) — to make the new bulk-import on-ramp the first thing a new user sees.
