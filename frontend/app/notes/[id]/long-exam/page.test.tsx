@@ -70,7 +70,15 @@ describe("LongExamPage", () => {
       studyPackId: "sp-1",
       studyPackStatus: "STUDY_PACK_READY",
     });
-    (getActiveLongExamSession as jest.Mock).mockResolvedValue(null);
+    // No active session, but the endpoint still returns the caller's Long Exam quota
+    // (mirrors the backend's buildEmptyStartResponse). monthlyLimit must be high enough
+    // that selecting extra source notes does not trip the per-note quota gate.
+    (getActiveLongExamSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      usedThisMonth: 0,
+      monthlyLimit: 10,
+    });
     (listNotes as jest.Mock).mockResolvedValue([]);
     (startLongExam as jest.Mock).mockResolvedValue({
       sessionId: "session-1",

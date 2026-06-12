@@ -217,7 +217,7 @@ describe("OnboardingPage", () => {
     expect(getMe).not.toHaveBeenCalled();
   });
 
-  it("keeps step two Continue disabled until learner level is selected", async () => {
+  it("disables step two Continue when the learner level is cleared", async () => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByLabelText("Student"));
@@ -227,6 +227,8 @@ describe("OnboardingPage", () => {
     fireEvent.change(screen.getByLabelText("Course / Program"), {
       target: { value: "Nursing" },
     });
+    // Selecting a profile now pre-defaults the learner level; clearing it re-triggers the required gate.
+    fireEvent.change(screen.getByLabelText("Learner Level"), { target: { value: "" } });
 
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
     expect(screen.getByText("Please select your learner level.")).toBeInTheDocument();

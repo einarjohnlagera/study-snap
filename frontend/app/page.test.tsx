@@ -52,15 +52,13 @@ describe("LandingPage", () => {
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
 
-    expect(screen.getByText("Learning Loop")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "How NoteLib helps you study" })).toBeInTheDocument();
-    expect(screen.getByText("Create - Understand - Practice - Challenge - Improve")).toBeInTheDocument();
+    expect(screen.getByText("Who It's For")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built for your study workflow" })).toBeInTheDocument();
     expect(screen.getByText("Create")).toBeInTheDocument();
     expect(screen.getByText("Understand")).toBeInTheDocument();
     expect(screen.getByText("Practice")).toBeInTheDocument();
     expect(screen.getByText("Challenge")).toBeInTheDocument();
     expect(screen.getByText("Improve")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View the full walkthrough" })).toHaveAttribute("href", "/how-it-works");
 
     expect(screen.getAllByText("Why NoteLib")).not.toHaveLength(0);
     expect(screen.getByRole("heading", { name: "Built for serious study" })).toBeInTheDocument();
@@ -91,13 +89,10 @@ describe("LandingPage", () => {
     expect(screen.getByText("Built around your own notes")).toBeInTheDocument();
     expect(screen.getByText("Designed for active recall")).toBeInTheDocument();
 
-    expect(screen.getByText("Who It's For")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Built for every kind of learner" })).toBeInTheDocument();
-    expect(screen.getByText("Pick your role and see the flow that's built for you.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Students" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Exam Reviewers" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Teachers" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Professionals" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Students" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Exam Reviewers" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Teachers" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Professionals" })).toBeInTheDocument();
 
     expect(screen.getByText("Study Modes")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Five study modes, one workspace" })).toBeInTheDocument();

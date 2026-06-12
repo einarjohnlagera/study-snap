@@ -28,6 +28,11 @@ jest.mock("@/lib/api", () => ({
   trackAnalyticsEvent: jest.fn(),
   exportGeneratedQuizDocx: jest.fn(),
   isMultipleExamVersionsNotAllowedError: jest.fn(() => false),
+  getQuizShareLinkByQuizId: jest.fn(() => Promise.resolve(null)),
+  createQuizShareLink: jest.fn(),
+  toggleQuizShareLink: jest.fn(),
+  isExportLimitReachedError: jest.fn(() => false),
+  isQuizShareLinkLimitExceededError: jest.fn(() => false),
 }));
 
 jest.mock("@/lib/auth", () => ({
