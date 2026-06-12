@@ -20,9 +20,9 @@ import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
-const IMPORT_ACCEPT_VALUE = "image/png,image/jpeg,image/webp,.txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export type NoteEditorDraft = {
     title: string;

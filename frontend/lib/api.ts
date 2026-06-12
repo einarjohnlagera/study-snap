@@ -99,6 +99,24 @@ export type NoteTextExtractionResponse = {
   };
 };
 
+export type BulkImportedNote = {
+  noteId: string;
+  title: string;
+  fileName: string;
+  lowConfidence: boolean;
+};
+
+export type BulkImportFailure = {
+  fileName: string;
+  errorCode: string;
+  message: string;
+};
+
+export type BulkImportResult = {
+  created: BulkImportedNote[];
+  failed: BulkImportFailure[];
+};
+
 export type StudyPackListItemResponse = {
   id: string;
   title: string;
@@ -2160,6 +2178,25 @@ export async function extractNoteTextFromFile(file: File): Promise<NoteTextExtra
   return parseApiResponse<NoteTextExtractionResponse>(
     response,
     "We could not import text from this file right now. Please try again.",
+  );
+}
+
+export async function importNotesBatch(files: File[]): Promise<BulkImportResult> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+
+  const response = await fetchWithAuth(
+    "/notes/import-batch",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body: formData,
+    },
+    true,
+  );
+  return parseApiResponse<BulkImportResult>(
+    response,
+    "We could not import these files right now. Please try again.",
   );
 }
 

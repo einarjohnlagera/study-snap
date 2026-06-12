@@ -15,6 +15,7 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 **Frontend**
 - `frontend/app/notes/new/page.tsx` — Create Note route (write / generate-from-topic / import start options)
+- `frontend/app/notes/import/page.tsx` — profile-agnostic bulk import route; creates one reviewable `DRAFT` per successful file without generation
 - `frontend/app/notes/[id]/page.tsx` — Note Detail route (server component entry)
 - `frontend/app/notes/[id]/edit/page.tsx` — Edit Note route
 - `frontend/components/notes/note-editor-page-client.tsx` — shared editor client for create and edit modes
@@ -112,7 +113,7 @@ Create mode:
 - actions: `Save`, `Generate Study Pack`
 - optional topic-first helper: `Generate Note`
 - the `Import notes` start option reuses the existing OCR/file-extraction flow and inserts extracted text into the main editor before save or Study Pack generation.
-- bulk material import (`POST /notes/import-batch`) is a separate backend entry point for importing multiple files at once. It creates one `DRAFT` note per successfully extracted file directly, is profile-agnostic, and never triggers Study Pack generation or LLM calls.
+- `/notes/import` is the separate bulk note-creation entry point, linked from the Library header for every profile. It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
 - note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
 - Target Audience is required on every note. For Student, Board Exam, and Professional profiles the field is hidden and auto-prefilled from profile type at save time (Student -> Student, Board Exam -> Board Taker, Professional -> Professional). For Teacher and Admin profiles the field is visible and user-picked, with all audience values selectable.
 - create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
@@ -124,12 +125,15 @@ Create mode:
 
 Bulk import behavior:
 
+- route: `/notes/import`
+- available to every authenticated, onboarded profile through the Library header
 - accepts multiple uploaded files in one request through `POST /notes/import-batch`
 - reuses the existing single-file extraction pipeline once per file
 - creates one owned `DRAFT` note per successful file using the extracted text as content and a filename-derived title
 - leaves `subject`, `courseProgram`, `tags`, and target audience unset/defaulted for later user review
 - records per-file failures in the response while continuing with the remaining files
 - does not auto-generate, does not create Study Packs, and does not add a new quota category
+- may offer a skippable post-import action to add the created drafts to an existing or new collection; this action is always user-initiated and never automatic
 - is not idempotent; submitting the same files again creates new draft notes
 
 Edit mode for draft notes:

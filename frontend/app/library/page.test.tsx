@@ -203,6 +203,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Import files" })).toHaveAttribute("href", "/notes/import");
     expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
     expect(screen.getByText("3 notes")).toBeInTheDocument();
     expect(screen.getByText("Nursing")).toBeInTheDocument();

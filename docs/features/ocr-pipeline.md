@@ -68,6 +68,8 @@ When extracted text exceeds the configured maximum, return:
 
 `POST /notes/import-batch` is the batch wrapper around the same per-file extraction pipeline used by `POST /notes/extract-text`.
 
+The authenticated uploader UI lives at `/notes/import` and is linked from the Library header. It sends the selected files in one batch request, shows created and failed files separately, and links each created note to its draft review page.
+
 This endpoint deliberately relaxes the single-file editor rule that import must not auto-save. The batch path creates one `DRAFT` note per successfully extracted file directly, because requiring a review-before-save step for each file would defeat the purpose of importing a unit's worth of material in one action.
 
 Locked behavior:
@@ -81,6 +83,8 @@ Locked behavior:
 - Per-file OCR/import limits, page limits, text-length limits, OCR usage limits, and OCR rate limits are reused unchanged.
 - There is no aggregate bulk-import quota category.
 - Bulk import never auto-generates, never sets `GENERATING`, never calls an LLM, and never creates a Study Pack.
+- The uploader creates one `DRAFT` per successful file and offers a skippable, user-initiated post-import step to add the created drafts to an existing or new collection.
+- Imported drafts are never added to a collection automatically.
 
 The single-file editor path remains extract-for-review only: `POST /notes/extract-text` returns text for insertion into the editor and must not auto-save.
 

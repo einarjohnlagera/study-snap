@@ -1158,6 +1158,13 @@ export default function LibraryPage() {
               {selectionMode ? <CheckSquare className="h-4 w-4" aria-hidden="true" /> : <Square className="h-4 w-4" aria-hidden="true" />}
               <span>Select</span>
             </Button>
+            <ResponsiveActionLink
+              href="/notes/import"
+              action="import"
+              label="Import files"
+              variant="outline"
+              className="block w-full sm:w-auto"
+            />
             <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="block w-full sm:w-auto" />
           </div>
         )}
