@@ -68,7 +68,7 @@ When extracted text exceeds the configured maximum, return:
 
 `POST /notes/import-batch` is the batch wrapper around the same per-file extraction pipeline used by `POST /notes/extract-text`.
 
-The authenticated uploader UI lives at `/notes/import` and is linked from the Library header. It sends the selected files in one batch request, shows created and failed files separately, and links each created note to its draft review page.
+The authenticated uploader UI lives at `/notes/import`, reached from the Create-note flow's `Import notes` panel ("Bulk import multiple files"). It sends the selected files in one batch request, shows created and failed files separately, and links each created note to its draft review page.
 
 This endpoint deliberately relaxes the single-file editor rule that import must not auto-save. The batch path creates one `DRAFT` note per successfully extracted file directly, because requiring a review-before-save step for each file would defeat the purpose of importing a unit's worth of material in one action.
 

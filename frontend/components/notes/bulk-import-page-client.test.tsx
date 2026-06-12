@@ -10,8 +10,11 @@ import { getAuthUser } from "@/lib/auth";
 
 const replaceMock = jest.fn();
 
+let bulkSearchParams = new URLSearchParams();
+
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ replace: replaceMock }),
+  useSearchParams: () => bulkSearchParams,
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -95,6 +98,16 @@ describe("BulkImportPageClient", () => {
     (listCollections as jest.Mock).mockResolvedValue([]);
     (createCollection as jest.Mock).mockResolvedValue({ id: "collection-new", title: "Unit One" });
     (addCollectionItems as jest.Mock).mockResolvedValue({ id: "collection-1", title: "Existing Plan" });
+    bulkSearchParams = new URLSearchParams();
+  });
+
+  it("points the back link to Library by default and to New Note when from=new", () => {
+    render(<BulkImportPageClient />);
+    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
+
+    bulkSearchParams = new URLSearchParams("from=new");
+    render(<BulkImportPageClient />);
+    expect(screen.getByRole("link", { name: "New Note" })).toHaveAttribute("href", "/notes/new");
   });
 
   it("renders partial success, low-confidence guidance, failures, and draft links", async () => {

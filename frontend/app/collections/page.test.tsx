@@ -10,8 +10,11 @@ const routerMock = {
   replace: replaceMock,
 };
 
+let searchParamsMock = new URLSearchParams();
+
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  useSearchParams: () => searchParamsMock,
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -33,6 +36,16 @@ describe("CollectionsPage", () => {
     replaceMock.mockReset();
     (createCollection as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
+    searchParamsMock = new URLSearchParams();
+  });
+
+  it("auto-opens the create modal when arriving with ?new=1", async () => {
+    searchParamsMock = new URLSearchParams("new=1");
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByRole("heading", { name: "New Study Plan" })).toBeInTheDocument();
   });
 
   it("exports page metadata", () => {

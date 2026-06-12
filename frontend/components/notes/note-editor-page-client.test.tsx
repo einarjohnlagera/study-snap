@@ -980,6 +980,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(document.getElementById("note-import-file")).toBeInTheDocument();
     expect(screen.getByText("Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Bulk import multiple files" })).toHaveAttribute("href", "/notes/import?from=new");
 
     fireEvent.click(screen.getByRole("button", { name: /Write your own note/i }));
 
