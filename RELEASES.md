@@ -13,11 +13,8 @@ Theme: lower the cold-start barrier for getting existing material *into* NoteLib
 - **Track 2 backend — Note Collections API** — added the universal, owner-private `NoteCollection` entity and ordered item join table, plus CRUD endpoints under `/collections`. Collections group only the caller's own existing notes, allow one note in multiple collections, dedupe repeats within a collection, support reorder/relabel, and delete only collection/item rows. No profile gate, profile-aware labels, LLM calls, or quota logic were added.
 - **Track 2 frontend core — Collections UI** — added the profile-aware Collections / Study Plans / Review Sets / Lesson Plans nav entry, `/collections` list page, and `/collections/[id]` detail page. Users can create, edit, delete, add notes through an in-detail picker, remove notes, relabel items, and reorder with drag-and-drop plus Move up/down fallback.
 - **Track 2 integrations — Collections entry/exit points** — added universal Library multi-select `Add to {collection}` for any note readiness, wired the Teacher Lesson Plan terminal CTA into Exam Builder with quiz-ready filtering and disabled empty-state copy, and added server-side `COLLECTION_CREATED` analytics on collection create only.
+- **Track 3 — Label-driven Teacher Exam Builder handoff** — completed the frontend-only Lesson Plan terminal path by passing `collectionId` into Exam Builder and pre-seeding editable sections from distinct trimmed collection item labels. Quiz-ready notes retain collection order, unlabeled notes share one trailing default section, and non-ready notes are excluded without creating empty sections. Existing Teacher/Admin DOCX, anti-cheating versions, shareable quiz links, quotas, and generation behavior remain unchanged.
 - **Track 4 — Profile-aware first-run / activation** — replaced the generic zero-notes dashboard empty state with a profile-aware `DashboardEmpty` that teaches the loop per profile (teacher: import material → generate → group into a Lesson Plan to export/share; student/board/professional: import or create → generate → study/quiz). Every variant surfaces both the `Import files` and `Create a note` entry points; the collection term resolves through `lib/collection-labels.ts`. No new tips framework.
-
-### Planned
-
-- **Track 3 — Teacher terminal path remaining** — deepen the existing Lesson Plan -> Exam Builder entry so collection item labels can pre-populate sections and continue into sectioned DOCX + shareable `/quiz/[token]` links. DOCX/share stay Teacher/Admin only. *(Claude Code)*
 
 ### Deferred
 

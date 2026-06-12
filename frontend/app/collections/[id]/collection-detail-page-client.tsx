@@ -600,9 +600,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     if (quizReadyNoteIds.length === 0) {
       return;
     }
-    const params = new URLSearchParams({ notes: quizReadyNoteIds.join(",") });
+    const params = new URLSearchParams({
+      collectionId: collectionId,
+      notes: quizReadyNoteIds.join(","),
+    });
     router.push(`/library/exam-builder?${params.toString()}`);
-  }, [quizReadyNoteIds, router]);
+  }, [collectionId, quizReadyNoteIds, router]);
 
   if (loadState === "loading") {
     return (

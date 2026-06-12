@@ -36,6 +36,11 @@ export type ExamBuilderSection = {
   entries: ExamBuilderEntry[];
 };
 
+export type LabeledExamSectionItem = {
+  noteId: string;
+  label?: string | null;
+};
+
 const SECTION_PREFIX = "Section ";
 const EVEN_BALANCE_MODE: ExamBalanceMode = "EVEN";
 const FLEXIBLE_SECTION_INTENT: ExamBalanceSectionIntent = "FLEXIBLE";
@@ -153,6 +158,44 @@ export function createDefaultExamSections(
   questionCountsByNoteId: Record<string, number>,
 ): ExamBuilderSection[] {
   return [createExamSection(0, buildWholeNoteEntries(noteIds, questionCountsByNoteId))];
+}
+
+export function buildLabeledExamSections(
+  orderedItems: LabeledExamSectionItem[],
+  questionCountsByNoteId: Record<string, number>,
+): ExamBuilderSection[] {
+  const labeledNoteIds = new Map<string, string[]>();
+  const unlabeledNoteIds: string[] = [];
+
+  orderedItems.forEach((item) => {
+    const label = item.label?.trim() ?? "";
+    if (!label) {
+      unlabeledNoteIds.push(item.noteId);
+      return;
+    }
+    const noteIds = labeledNoteIds.get(label) ?? [];
+    noteIds.push(item.noteId);
+    labeledNoteIds.set(label, noteIds);
+  });
+
+  const sections: ExamBuilderSection[] = [];
+  labeledNoteIds.forEach((noteIds, label) => {
+    const entries = buildWholeNoteEntries(noteIds, questionCountsByNoteId);
+    if (entries.length === 0) {
+      return;
+    }
+    sections.push({
+      ...createExamSection(sections.length, entries),
+      title: label,
+    });
+  });
+
+  const unlabeledEntries = buildWholeNoteEntries(unlabeledNoteIds, questionCountsByNoteId);
+  if (unlabeledEntries.length > 0) {
+    sections.push(createExamSection(sections.length, unlabeledEntries));
+  }
+
+  return sections;
 }
 
 export function flattenExamSectionQuestionRefs(sections: ExamBuilderSection[]): ExamQuestionRef[] {

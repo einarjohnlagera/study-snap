@@ -111,6 +111,12 @@ Do not mix these models.
   - keep note-level `Move up` / `Move down` controls as the accessibility fallback
   - export one combined DOCX with optional `Answer Key` and `Explanations`
   - combined DOCX export preserves the section titles, section order, and question-level balanced grouping chosen in the builder
+- Teachers can also open Exam Builder from a Lesson Plan collection:
+  - the terminal CTA passes `collectionId` so Exam Builder reloads the owned collection on direct load or refresh
+  - each distinct trimmed item label becomes an initial section containing that label's quiz-ready notes in collection order
+  - unlabeled quiz-ready notes are placed in one trailing default section; labels containing only non-quiz-ready notes are skipped
+  - the seeded sections remain fully editable and continue through the existing combined DOCX and shareable-quiz workflow
+  - this is frontend structure reuse only; it does not generate questions, call an LLM, or widen Teacher/Admin export access
 
 ## Plan Accessibility
 

@@ -42,7 +42,7 @@ Each item stores:
 - `position`
 - `createdAt`
 
-Item labels are neutral backend data. A future Teacher UI may use labels as section/week/topic names, but the backend does not interpret them.
+Item labels are neutral backend data. The Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
 
 ## Profile-Agnostic Spine
 
@@ -269,7 +269,11 @@ The shipped Prompt B integrations make collections useful from both entry points
 - Library selection accepts any owned note, including `DRAFT` notes without a generated quiz. Quiz readiness is not a collection membership requirement.
 - The Library teacher-only `Build exam` action remains gated to Teacher/Admin exam workflows. If the selection mixes ready and non-ready notes, the action proceeds with the selected note IDs and the Exam Builder filters to quiz-ready notes; if zero selected notes are quiz-ready, the action is disabled with recovery copy.
 - The collection detail terminal action resolves through the profile-aware terminal-action resolver. `TEACHER` receives `Build exam from this Lesson Plan`; all other profiles receive no terminal CTA for now.
-- The teacher terminal CTA preserves the collection's current note order, passes quiz-ready note IDs to `/library/exam-builder?notes=...`, shows a partial-readiness hint when some notes are skipped, and disables with `Generate a quiz for at least one note to build an exam.` when none are quiz-ready.
+- The teacher terminal CTA passes the collection identity through `/library/exam-builder?collectionId={id}` and may also include ordered quiz-ready note IDs as a resilience fallback. The collection ID is the source of truth for initial sectioning.
+- Exam Builder fetches the collection and pre-seeds one section per distinct trimmed item label, in first-occurrence order. Only quiz-ready notes are included, notes keep collection position order, and unlabeled quiz-ready notes collapse into one trailing default section. Labels with no quiz-ready notes create no empty section.
+- Collections with only unlabeled quiz-ready notes seed one default section. Teachers can still rename, reorder, add, rebalance, and replace the initial structure with an existing Exam Builder template.
+- The terminal CTA keeps the existing partial-readiness hint when some notes are skipped and disables with `Generate a quiz for at least one note to build an exam.` when none are quiz-ready.
+- This handoff is frontend-only. DOCX export and shareable quiz links remain Teacher/Admin-only, and no collection-level generation, analytics, quota, backend, or AI behavior is added.
 - Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing Long Exam flow is same-subject scoped and meters quota per source note, while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
 - `COLLECTION_CREATED` fires server-side from `NoteCollectionService.create(...)` only, with `itemCount` metadata for the number of initial notes. Add-items, update, remove, and reorder do not fire a creation event.
 
@@ -282,7 +286,6 @@ Deferred Prompt B slots:
 Do not add these under the collection CRUD spine unless explicitly scoped later:
 
 - profile-aware labels or CTAs in the backend
-- collection item label prefill inside Exam Builder
 - DOCX/shareable quiz-link generation directly from collections
 - collection-level AI synthesis
 - bulk generate across a collection

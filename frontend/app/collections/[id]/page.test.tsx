@@ -144,7 +144,7 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
   });
 
-  it("routes teacher collections to Exam Builder with quiz-ready note ids in order", async () => {
+  it("routes teacher collections to Exam Builder with the collection id and quiz-ready note ids", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER" });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
@@ -155,7 +155,9 @@ describe("CollectionDetailPageClient", () => {
 
     fireEvent.click(buildExamButton);
 
-    expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-2");
+    expect(pushMock).toHaveBeenCalledWith(
+      "/library/exam-builder?collectionId=collection-1&notes=note-2",
+    );
   });
 
   it("disables the teacher terminal action when no collection notes are quiz-ready", async () => {

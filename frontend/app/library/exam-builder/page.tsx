@@ -34,6 +34,7 @@ import { PageHeader } from "@/components/page-header";
 import { getAuthUser } from "@/lib/auth";
 import {
   exportCombinedGeneratedQuizDocx,
+  getCollection,
   getGeneratedQuiz,
   getMe,
   isExportLimitReachedError,
@@ -49,6 +50,7 @@ import { normalizeSubject } from "@/lib/subjects";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import {
   buildDefaultSectionTitle,
+  buildLabeledExamSections,
   buildWholeNoteEntries,
   countExamSectionQuestions,
   createExamSection,
@@ -441,6 +443,7 @@ export default function ExamBuilderPage() {
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
   const notesParam = searchParams.get("notes");
+  const collectionId = searchParams.get("collectionId")?.trim() || null;
   const selectedNoteIdsFromQuery = useMemo(() => parseSelectedNoteIds(notesParam), [notesParam]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>(selectedNoteIdsFromQuery);
   const internalNotesQueryRef = useRef<string | null>(null);
@@ -485,11 +488,11 @@ export default function ExamBuilderPage() {
 
   useEffect(() => {
     const selectedNotesQuery = selectedNoteIdsFromQuery.join(",");
-    if (internalNotesQueryRef.current === selectedNotesQuery) {
+    if (!collectionId && internalNotesQueryRef.current === selectedNotesQuery) {
       internalNotesQueryRef.current = null;
       return;
     }
-    setSelectedNoteIds(selectedNoteIdsFromQuery);
+    setSelectedNoteIds(collectionId ? [] : selectedNoteIdsFromQuery);
     setExamSections([]);
     setGeneratedQuizByNoteId({});
     setNextSectionIndex(1);
@@ -503,7 +506,7 @@ export default function ExamBuilderPage() {
     setShowAddNotesModal(false);
     setPendingAddNoteIds([]);
     setAddNotesError(null);
-  }, [selectedNoteIdsFromQuery]);
+  }, [collectionId, selectedNoteIdsFromQuery]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router) || !isTeacherExamBuilderEnabled) {
@@ -515,12 +518,23 @@ export default function ExamBuilderPage() {
       setLoading(true);
       setError(null);
       try {
-        const [notes, me] = await Promise.all([
+        const [notes, me, collection] = await Promise.all([
           listNotes(),
           getMe().catch(() => null),
+          collectionId ? getCollection(collectionId) : Promise.resolve(null),
         ]);
-        const selectedQuizReadyNotes = notes
-          .filter((item) => selectedNoteIds.includes(item.id) && canIncludeInExam(item));
+        const orderedCollectionItems = collection
+          ? [...collection.items].sort((left, right) => left.position - right.position)
+          : [];
+        const sourceNoteIds = collection
+          ? orderedCollectionItems
+              .filter((item) => Boolean(item.generatedQuizId))
+              .map((item) => item.noteId)
+          : selectedNoteIdsFromQuery;
+        const notesById = new Map(notes.map((item) => [item.id, item]));
+        const selectedQuizReadyNotes = sourceNoteIds
+          .map((noteId) => notesById.get(noteId))
+          .filter((item): item is NoteListItemResponse => Boolean(item && canIncludeInExam(item)));
         const generatedQuizzes = await Promise.all(
           selectedQuizReadyNotes.map(async (item) => [item.id, await getGeneratedQuiz(item.id)] as const),
         );
@@ -530,6 +544,23 @@ export default function ExamBuilderPage() {
         setItems(notes);
         setProfileSchoolName(me?.schoolName ?? null);
         setGeneratedQuizByNoteId(Object.fromEntries(generatedQuizzes));
+        setSelectedNoteIds(collection ? selectedQuizReadyNotes.map((item) => item.id) : selectedNoteIdsFromQuery);
+        if (collection) {
+          const questionCounts = Object.fromEntries(
+            generatedQuizzes.map(([noteId, generatedQuiz]) => [noteId, generatedQuiz.questions.length]),
+          ) as Record<string, number>;
+          const sections = buildLabeledExamSections(
+            orderedCollectionItems
+              .filter((item) => Boolean(item.generatedQuizId))
+              .map((item) => ({ noteId: item.noteId, label: item.label })),
+            questionCounts,
+          );
+          setExamSections(sections);
+          setNextSectionIndex(Math.max(1, sections.length));
+          setSelectedTemplateId(null);
+          setTemplateDirty(false);
+          setShowTemplateSelector(sections.length === 0);
+        }
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Could not load selected quizzes.");
@@ -545,7 +576,7 @@ export default function ExamBuilderPage() {
     return () => {
       cancelled = true;
     };
-  }, [isTeacherExamBuilderEnabled, router, selectedNoteIds]);
+  }, [collectionId, isTeacherExamBuilderEnabled, router, selectedNoteIdsFromQuery]);
 
   useEffect(() => {
     if (!toast) {
@@ -615,6 +646,8 @@ export default function ExamBuilderPage() {
     [selectedTemplateId],
   );
 
+  const hasExamStructure = examSections.length > 0;
+
   const builderQuestionCount = useMemo(
     () => countExamSectionQuestions(exportableExamSections),
     [exportableExamSections],
@@ -656,8 +689,7 @@ export default function ExamBuilderPage() {
     );
   }, [generatedQuizByNoteId]);
 
-  const canBalanceSections = selectedTemplate !== null
-    && examSections.length > 1
+  const canBalanceSections = examSections.length > 1
     && countExamSectionQuestions(examSections) > 0;
 
   const updateExamSections = useCallback((nextSections: ExamBuilderSection[]) => {
@@ -741,12 +773,12 @@ export default function ExamBuilderPage() {
   ]);
 
   const handleTemplateSelection = useCallback((templateId: ExamTemplateId) => {
-    if (selectedTemplateId && templateDirty) {
+    if (hasExamStructure && templateDirty) {
       setPendingTemplateId(templateId);
       return;
     }
     applyTemplate(templateId);
-  }, [applyTemplate, selectedTemplateId, templateDirty]);
+  }, [applyTemplate, hasExamStructure, templateDirty]);
 
   const handleAddSectionBelow = useCallback((sectionId: string) => {
     setExamSections((previous) => {
@@ -985,12 +1017,12 @@ export default function ExamBuilderPage() {
         </Card>
       ) : (
         <>
-          {showTemplateSelector || !selectedTemplate ? (
+          {showTemplateSelector || !hasExamStructure ? (
             <section className="space-y-4">
               <Card className="space-y-4 p-4 sm:p-6">
                 <div className="space-y-1">
                   <h2 className="text-xl font-semibold">
-                    {selectedTemplate ? "Change template" : "Choose a template"}
+                    {hasExamStructure ? "Change template" : "Choose a template"}
                   </h2>
                   <p className="text-sm text-foreground/75">
                     Pick a section preset to structure this exam. You can rename, reorder, add, or remove sections anytime after applying it.
@@ -1019,13 +1051,19 @@ export default function ExamBuilderPage() {
             </section>
           ) : null}
 
-          {selectedTemplate ? (
+          {hasExamStructure ? (
             <Card className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Template</p>
-                  <h2 className="text-base font-semibold text-foreground sm:text-lg">{selectedTemplate.title}</h2>
-                  <p className="text-sm text-foreground/70">{selectedTemplate.description}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
+                    {selectedTemplate ? "Template" : "Collection outline"}
+                  </p>
+                  <h2 className="text-base font-semibold text-foreground sm:text-lg">
+                    {selectedTemplate?.title ?? "Sections from collection labels"}
+                  </h2>
+                  <p className="text-sm text-foreground/70">
+                    {selectedTemplate?.description ?? "Quiz-ready notes are grouped by their saved collection labels."}
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -1038,7 +1076,7 @@ export default function ExamBuilderPage() {
             </Card>
           ) : null}
 
-          {selectedTemplate ? (
+          {hasExamStructure ? (
             <section className="w-full space-y-3 rounded-2xl border border-border bg-muted/20 p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">
@@ -1174,13 +1212,13 @@ export default function ExamBuilderPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">
-              {selectedTemplate === null
+              {!hasExamStructure
                 ? "Choose a template to start building this exam."
                 : builderQuestionCount === 0
                   ? "Select notes from your library to start building an exam."
                   : `${builderQuestionCount} question${builderQuestionCount === 1 ? "" : "s"} from ${builderUniqueNoteCount} note${builderUniqueNoteCount === 1 ? "" : "s"} across ${exportableExamSections.length} section${exportableExamSections.length === 1 ? "" : "s"}`}
             </p>
-            {selectedTemplate !== null && builderQuestionCount > 0 ? (
+            {hasExamStructure && builderQuestionCount > 0 ? (
               <div className="flex flex-wrap gap-1.5 text-xs text-foreground/60">
                 {examSectionQuestionBreakdown.map((section) => (
                   <span
@@ -1206,7 +1244,7 @@ export default function ExamBuilderPage() {
               onClick={() => setShowExportModal(true)}
               loading={exportingExam}
               loadingText="Exporting..."
-              disabled={builderQuestionCount === 0 || selectedTemplate === null}
+              disabled={builderQuestionCount === 0 || !hasExamStructure}
             >
               Export Exam
             </Button>
