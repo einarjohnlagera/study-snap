@@ -25,6 +25,7 @@ import {
   Target,
   Trophy,
   Trash2,
+  Upload,
   User,
   Lock,
   Zap,
@@ -45,6 +46,7 @@ export type ActionIconName =
   | "admin"
   | "campaigns"
   | "help"
+  | "import"
   | "open"
   | "private"
   | "profile"
@@ -74,6 +76,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   admin: Shield,
   campaigns: Mail,
   help: HelpCircle,
+  import: Upload,
   open: ArrowUpRight,
   private: Lock,
   profile: User,
