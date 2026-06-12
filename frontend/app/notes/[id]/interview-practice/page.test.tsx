@@ -26,6 +26,7 @@ jest.mock("@/lib/api", () => ({
   forfeitInterviewPracticeSession: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
+  listNotes: jest.fn(() => Promise.resolve([])),
   startInterviewPractice: jest.fn(),
 }));
 
