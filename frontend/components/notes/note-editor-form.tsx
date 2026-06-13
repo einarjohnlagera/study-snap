@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {type ReactNode, type RefObject, useEffect, useRef, useState} from "react";
 import {
     AlertCircle,
@@ -523,6 +524,12 @@ export function NoteEditorForm({
             ) : null}
             <p className="text-xs text-foreground/60">
                 Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.
+            </p>
+            <p className="text-xs text-foreground/65">
+                Importing several files at once?{" "}
+                <Link href="/notes/import?from=new" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                    Bulk import multiple files
+                </Link>
             </p>
         </div>
     );

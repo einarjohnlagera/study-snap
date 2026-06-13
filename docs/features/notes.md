@@ -113,7 +113,7 @@ Create mode:
 - actions: `Save`, `Generate Study Pack`
 - optional topic-first helper: `Generate Note`
 - the `Import notes` start option reuses the existing OCR/file-extraction flow and inserts extracted text into the main editor before save or Study Pack generation.
-- `/notes/import` is the separate bulk note-creation entry point, linked from the Library header for every profile. It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
+- `/notes/import` is the separate bulk note-creation entry point, reached from the Create-note flow's `Import notes` panel (a "Bulk import multiple files" link). It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
 - note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
 - Target Audience is required on every note. For Student, Board Exam, and Professional profiles the field is hidden and auto-prefilled from profile type at save time (Student -> Student, Board Exam -> Board Taker, Professional -> Professional). For Teacher and Admin profiles the field is visible and user-picked, with all audience values selectable.
 - create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
@@ -126,7 +126,7 @@ Create mode:
 Bulk import behavior:
 
 - route: `/notes/import`
-- available to every authenticated, onboarded profile through the Library header
+- available to every authenticated, onboarded profile through the Create-note flow's Import notes panel
 - accepts multiple uploaded files in one request through `POST /notes/import-batch`
 - reuses the existing single-file extraction pipeline once per file
 - creates one owned `DRAFT` note per successful file using the extracted text as content and a filename-derived title

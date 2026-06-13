@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -155,11 +155,12 @@ function CreateCollectionModal({
 
 export function CollectionsPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const labels = useMemo(() => getCollectionLabels(getAuthUser()?.profileType), []);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(searchParams.get("new") === "1");
 
   const loadCollections = useCallback(async () => {
     setLoadState("loading");

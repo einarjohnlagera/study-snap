@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Trash2, Upload } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -223,6 +223,11 @@ function AddImportedDraftsModal({
 
 export function BulkImportPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const cameFromNewNote = searchParams.get("from") === "new";
+  const backLink = cameFromNewNote
+    ? { href: "/notes/new", label: "New Note" }
+    : { href: "/library", label: "Library" };
   const [files, setFiles] = useState<File[]>([]);
   const [importing, setImporting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -267,7 +272,7 @@ export function BulkImportPageClient() {
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <BackLink href="/library" label="Library" />
+      <BackLink href={backLink.href} label={backLink.label} />
       <PageHeader
         eyebrow="Workspace"
         title="Import files"
