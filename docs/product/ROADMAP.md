@@ -6,11 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.27.0 - Material Import & Collections` is the active release in progress.
+`v0.27.0 - Material Import & Collections` is the current documentation baseline (last released).
 
-`v0.26.1 - Guidance System` is the current documentation baseline (last released).
+`v0.26.1 - Guidance System` is the previous baseline.
 
-`v0.26.0 - Exam Depth` is the previous baseline.
+`v0.26.0 - Exam Depth` is the release before that.
 
 `v0.25.0 - Exam Capture & Goal Setting` is the release before that.
 
@@ -18,9 +18,29 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ---
 
+## Next Release (candidate) - Feature Discoverability & Activation
+
+Theme: close the gap between **signup conversion** (strong) and **feature activation** (weak). Observed symptoms: quiz-session **export is unused**, **Challenge Quiz is underused**, and new surfaces like **Study Plans** need adoption. The headline insight is that this is an *activation* problem, not a *docs* problem — quiz-session export is **already documented in Help** ("Export & Sharing") and still goes unused, which proves pull-docs do not drive discovery. The fix is **in-flow push** through the systems we already have, not new help pages.
+
+Locked direction:
+
+- **Contextual nudges are the primary lever (push).** Reuse the existing `GuidanceTip` / `pickActiveGuidance` one-time-tip system (`lib/guidance-engine.ts`, `lib/guidance.ts`) — **do not build a new tips framework.** Surface each underused feature at its moment of relevance:
+  - **Export** → one-time tip on the quiz **review screen** ("Export this review as PDF to study offline / share").
+  - **Challenge Quiz** → one-time tip right after a **Quick Review completes** or when a note becomes quiz-ready ("Ready to go deeper? Try a Challenge Quiz").
+  - **Study Plans** → one-time tip once a user has *N* notes ("Group related notes into a Study Plan").
+- **Smarter Dashboard recommendation, not a static promo.** Strengthen the existing `ContinueSpotlight` / `continueStudying` recommendation to push underused modes when contextually appropriate (e.g., a user with quiz-ready notes who hasn't tried Challenge Quiz). A permanent top-of-Dashboard "Try Challenge Quiz" banner was **explicitly rejected** — banner-blindness, and the Dashboard already recommends Challenge Quiz.
+- **Help reference completeness (table-stakes pull).** Add the missing **Study Plans / Collections** Help topic and audit Help for other gaps. Necessary for completeness, but not the adoption driver — bundled here, not shipped separately.
+- **Instrument the adoption funnel.** An activation initiative without measurement is guessing. Track tip impression → click → feature use via the existing `AnalyticsEventType` enum (e.g., around `CHALLENGE_QUIZ_STARTED`) so we can tell what moves the needle.
+- **Study Plan progress rollup** (see v0.27.0 → Deferred) pairs with this theme — it turns a plan from a folder into a *trackable unit* (read-only aggregation of per-note signals), making an existing surface more valuable. Candidate pillar for this release.
+- **Optional / later bet:** an onboarding-style **activation checklist** ("Create a note ✓ · Generate a Study Pack ✓ · Take a Challenge Quiz ☐ · Export a review ☐") to drive multi-feature activation.
+
+Anti-drift: one-time, dismissible, contextual tips only — route every new tip through `pickActiveGuidance` (do not add ad-hoc one-time tips); no new infrastructure; add any new analytics events to the `AnalyticsEventType` enum (Java + frontend) before firing.
+
+---
+
 ## v0.27.0 - Material Import & Collections
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: lower the cold-start barrier for getting existing study material *into* NoteLib, and let any learner group notes into a reusable, ordered **collection**. The trigger was preparing the app for teachers (we have none yet, and want the teacher path to be effortless before we recruit them) — but every capability here is built profile-agnostic at the core, so students, board exam reviewers, and professionals get the same import-and-organize speed. The teacher-specific payoff (combined exam packet + shareable links) is a profile-aware terminal action layered on a universal spine, not a separate system.
 

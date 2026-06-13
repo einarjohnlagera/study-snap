@@ -2,7 +2,7 @@
 
 ## v0.27.0 - Material Import & Collections
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: lower the cold-start barrier for getting existing material *into* NoteLib (bulk multi-file import) and let any learner group notes into a reusable, ordered **collection**. Triggered by preparing an effortless teacher path before we recruit teachers, but built profile-agnostic at the core — students, board reviewers, and professionals get the same import-and-organize speed. The teacher payoff (combined exam packet + shareable links) is a profile-aware terminal action on a universal `NoteCollection` spine, not a separate system. A collection is a playlist over existing notes — no collection-level AI synthesis, no new quota. See `docs/product/ROADMAP.md` for full scope, the profile-label table, and anti-drift rules.
 
