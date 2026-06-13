@@ -95,6 +95,7 @@ Make the empty state teach the loop for *that* profile instead of a generic "cre
 
 ### Deferred
 
+- **Study Plan progress rollup (next-release lead candidate)** — let a Study Plan surface *aggregate* progress over its own notes (e.g., "4 of 6 notes have Study Packs · avg mastery 62% · 3 weak concepts across this plan"), turning a plan from a folder into a trackable unit. This is **read-only aggregation of existing per-note signals** — not collection-level AI, not a new quota, not mastery *generation*; the underlying tracking stays the Study Goal / Progress system. Out of scope for v0.27.0 (needs a backend rollup); flagged as the top candidate for the next release. Keeps the "a collection is a playlist" rule — the plan displays progress, it does not own a new mastery model.
 - **Lesson-plan / syllabus document parsing as quiz source** — scaffold-vs-source problem above; revisit only if a real teacher requests it.
 - **Collection-level AI synthesis (Option B)** — one synthesized document across all notes in a collection; deferred for quality/cost reasons, unchanged from prior planning.
 - **Collection sharing / public collections** — a collection is owner-private in v1; shareable collections (a "course pack" a teacher publishes) is a later bet once collections see use.

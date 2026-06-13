@@ -75,21 +75,6 @@ function isProtectedAppRoute(pathname: string): boolean {
   );
 }
 
-function isCoreLearningRoute(pathname: string): boolean {
-  return (
-    pathname === "/notes/new"
-    || /^\/notes\/[^/]+\/edit$/.test(pathname)
-    || /^\/notes\/[^/]+$/.test(pathname)
-    || /^\/study-packs\/[^/]+$/.test(pathname)
-    || pathname === "/study"
-    || pathname.startsWith("/study/")
-    || pathname.includes("/quick-review")
-    || pathname.includes("/challenge-quiz")
-    || pathname.includes("/adaptive-practice")
-  );
-}
-
-
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/p/")) {
     return "Shared Study Pack";
@@ -548,13 +533,11 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            {isCoreLearningRoute(pathname || "") ? (
-              <SendFeedbackWidget
-                variant="icon"
-                triggerLabel="Send Feedback"
-                iconButtonClassName="border-border/80 bg-background/80"
-              />
-            ) : null}
+            <SendFeedbackWidget
+              variant="icon"
+              triggerLabel="Send Feedback"
+              iconButtonClassName="border-border/80 bg-background/80"
+            />
             <div className="relative" ref={avatarMenuRef}>
               <button
                 type="button"
@@ -633,7 +616,6 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         ) : null}
 
         <main>{children}</main>
-        {!isExamFocusActive && !isCoreLearningRoute(pathname || "") ? <SendFeedbackWidget /> : null}
       </div>
 
       {!isExamFocusActive && drawerOpen ? (
