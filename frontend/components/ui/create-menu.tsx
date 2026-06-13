@@ -59,6 +59,7 @@ export function CreateMenu({
       <div className="inline-flex w-full">
         <Button
           type="button"
+          size="sm"
           className="flex-1 gap-2 rounded-r-none sm:flex-none"
           onClick={onPrimary}
         >
@@ -67,6 +68,7 @@ export function CreateMenu({
         </Button>
         <Button
           type="button"
+          size="sm"
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={menuLabel}

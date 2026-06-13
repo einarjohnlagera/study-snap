@@ -256,7 +256,7 @@ describe("AppShell", () => {
     });
   });
 
-  it("keeps the floating feedback widget on safe dashboard routes", async () => {
+  it("uses the header feedback icon on dashboard routes and never the floating widget", async () => {
     currentPathname = "/dashboard";
 
     render(
@@ -267,10 +267,10 @@ describe("AppShell", () => {
 
     await waitFor(() => {
       expect(
-        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
       ).toBe(true);
       expect(
-        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
       ).toBe(false);
     });
   });
