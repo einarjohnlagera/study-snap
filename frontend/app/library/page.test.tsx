@@ -1,10 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import LibraryPage from "./page";
 import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
+  addCollectionItems,
+  createCollection,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
   getSavedLibraryFilters,
+  listCollections,
   listNotes,
   listSubjects,
 } from "@/lib/api";
@@ -28,10 +31,13 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  addCollectionItems: jest.fn(),
+  createCollection: jest.fn(),
   createSavedLibraryFilter: jest.fn(),
   deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
+  listCollections: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
 }));
@@ -53,6 +59,11 @@ function selectSubjectFilter(subject: string) {
 async function openTagSelectorFromFilters() {
   fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
   await screen.findByRole("heading", { name: "Select tags" });
+}
+
+function applyTopModal() {
+  const applyButtons = screen.getAllByRole("button", { name: "Apply" });
+  fireEvent.click(applyButtons[applyButtons.length - 1]);
 }
 
 // Minimal note builder for driving the (client-computed) subject stats strip.
@@ -94,8 +105,37 @@ describe("Library page", () => {
     pushMock.mockReset();
     replaceMock.mockReset();
     currentSearch = "";
+    (addCollectionItems as jest.Mock).mockReset();
+    (createCollection as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockReset();
+    (addCollectionItems as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      title: "Midterm Plan",
+      description: null,
+      createdAt: "2026-03-24T00:00:00Z",
+      updatedAt: "2026-03-24T00:00:00Z",
+      items: [],
+    });
+    (createCollection as jest.Mock).mockResolvedValue({
+      id: "created-collection",
+      title: "New Plan",
+      description: null,
+      createdAt: "2026-03-24T00:00:00Z",
+      updatedAt: "2026-03-24T00:00:00Z",
+      items: [],
+    });
     (getAuthUser as jest.Mock).mockReturnValue(null);
     (getSavedLibraryFilters as jest.Mock).mockResolvedValue([]);
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "collection-1",
+        title: "Midterm Plan",
+        description: null,
+        itemCount: 2,
+        createdAt: "2026-03-24T00:00:00Z",
+        updatedAt: "2026-03-24T00:00:00Z",
+      },
+    ]);
     (createSavedLibraryFilter as jest.Mock).mockResolvedValue({
       id: "saved-filter-1",
       name: "Review Notes",
@@ -163,7 +203,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Create/ })).toBeInTheDocument();
     expect(screen.getByText("3 notes")).toBeInTheDocument();
     expect(screen.getByText("Nursing")).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
@@ -312,7 +352,7 @@ describe("Library page", () => {
     )).toEqual(["note-77", "note-99", "note-42"]);
   });
 
-  it("hides teacher exam actions for student profiles", async () => {
+  it("offers a split Create menu (Note / Import files / Study Plan) and no standalone Select", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "student-1",
       role: "USER",
@@ -324,7 +364,89 @@ describe("Library page", () => {
     await screen.findByText("Cell Respiration");
 
     expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /New Note/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    expect(screen.getByRole("menuitem", { name: /^Note/ })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Import files/ })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Study Plan/ })).toBeInTheDocument();
+  });
+
+  it("creates a Study Plan from notes selected in the Library", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    (createCollection as jest.Mock).mockResolvedValue({ id: "collection-1", title: "Finals Plan" });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Study Plan/ }));
+
+    expect(await screen.findByText("Pick notes for your new Study Plan")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Study Plan" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("Study Plan title"), {
+      target: { value: "Finals Plan" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalledWith({
+        title: "Finals Plan",
+        noteIds: ["note-42", "note-99"],
+      });
+    });
+    expect(pushMock).toHaveBeenCalledWith("/collections/collection-1");
+  });
+
+  it("allows creating an empty Study Plan with no notes selected", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    (createCollection as jest.Mock).mockResolvedValue({ id: "collection-2", title: "Empty Plan" });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Study Plan/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create Study Plan" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("Study Plan title"), {
+      target: { value: "Empty Plan" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalledWith({ title: "Empty Plan", noteIds: [] });
+    });
+  });
+
+  it("lets teachers build an exam from the same selection", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Lesson Plan/ }));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review"));
+    fireEvent.click(screen.getByRole("button", { name: "Build exam" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-99");
   });
 
   it("hides Quiz Ready filter and badges for student profiles", async () => {
@@ -654,7 +776,7 @@ describe("Library page", () => {
       target: { value: "energy" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "energy" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -676,7 +798,7 @@ describe("Library page", () => {
       target: { value: "med" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "medication" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -698,7 +820,7 @@ describe("Library page", () => {
       target: { value: "exam" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "exam" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
@@ -717,7 +839,7 @@ describe("Library page", () => {
       target: { value: "cells" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "cells" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -738,7 +860,7 @@ describe("Library page", () => {
       target: { value: "review" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
@@ -763,7 +885,7 @@ describe("Library page", () => {
     expect(screen.queryByText("Selected tags")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getAllByRole("button", { name: "mitochondria" })[0]).toBeInTheDocument();
     expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
@@ -783,7 +905,7 @@ describe("Library page", () => {
       target: { value: "review" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    applyTopModal();
 
     expect(screen.getByText("No notes match these filters")).toBeInTheDocument();
     expect(screen.getByText("Try adjusting your filters")).toBeInTheDocument();
@@ -844,7 +966,7 @@ describe("Library page", () => {
     expect(screen.queryByRole("link", { name: "Try Demo" })).not.toBeInTheDocument();
   });
 
-  it("enables teacher selection mode only for quiz-ready notes", async () => {
+  it("shows teacher Build exam with mixed-readiness selected notes", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
       role: "USER",
@@ -855,18 +977,20 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Lesson Plan/ }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review"));
 
-    const disabledCheckbox = screen.getByLabelText("Select Cell Respiration for exam export");
-    expect(disabledCheckbox).toBeDisabled();
-    expect(screen.getByText("Generate a quiz first to include this note in an exam.")).toBeInTheDocument();
+    expect(screen.getByText(/2 notes selected/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Lesson Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Only quiz-ready notes will be added to the exam.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Build exam" }));
 
-    fireEvent.click(screen.getByLabelText("Select Zygote Review for exam export"));
-
-    expect(screen.getByText("1 note selected")).toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-42%2Cnote-99");
   });
 
-  it("routes teacher selections into the dedicated exam builder page", async () => {
+  it("disables teacher Build exam when no selected notes are quiz-ready", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
       role: "USER",
@@ -877,13 +1001,12 @@ describe("Library page", () => {
 
     await screen.findByText("Cell Respiration");
 
-    fireEvent.click(screen.getByRole("button", { name: "Select" }));
-    fireEvent.click(screen.getByLabelText("Select Zygote Review for exam export"));
-    fireEvent.click(screen.getByLabelText("Select Dosage Calculations for exam export"));
-    fireEvent.click(screen.getByRole("button", { name: "Create Exam" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Lesson Plan/ }));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
 
-    await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-99%2Cnote-77");
-    });
+    expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build exam" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
   });
 });

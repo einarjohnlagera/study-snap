@@ -123,6 +123,7 @@ describe("AppShell", () => {
       emailVerifiedAt: "2026-03-31T00:00:00Z",
       onboardingCompletedAt: "2026-03-31T00:05:00Z",
       role: "USER",
+      profileType: "STUDENT",
     };
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
@@ -202,6 +203,21 @@ describe("AppShell", () => {
     });
   });
 
+  it("shows the profile-aware collections nav label", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...meResponse,
+      profileType: "TEACHER",
+    });
+
+    render(
+      <AppShell>
+        <div>Dashboard content</div>
+      </AppShell>,
+    );
+
+    expect(await screen.findByRole("link", { name: "Lesson Plans" })).toHaveAttribute("href", "/collections");
+  });
+
   it("uses the header feedback icon on note editor routes", async () => {
     currentPathname = "/notes/new";
 
@@ -240,7 +256,7 @@ describe("AppShell", () => {
     });
   });
 
-  it("keeps the floating feedback widget on safe dashboard routes", async () => {
+  it("uses the header feedback icon on dashboard routes and never the floating widget", async () => {
     currentPathname = "/dashboard";
 
     render(
@@ -251,10 +267,10 @@ describe("AppShell", () => {
 
     await waitFor(() => {
       expect(
-        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
       ).toBe(true);
       expect(
-        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
       ).toBe(false);
     });
   });

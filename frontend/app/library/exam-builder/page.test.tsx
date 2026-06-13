@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ExamBuilderPage from "./page";
 import {
   exportCombinedGeneratedQuizDocx,
+  getCollection,
   getGeneratedQuiz,
   getMe,
   listNotes,
@@ -14,12 +15,17 @@ const routerMock = {
   replace: pushMock,
 };
 let notesParam = "note-99,note-77";
+let collectionIdParam: string | null = null;
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
   usePathname: () => "/library/exam-builder",
   useSearchParams: () => ({
-    get: (key: string) => (key === "notes" ? notesParam : null),
+    get: (key: string) => {
+      if (key === "notes") return notesParam;
+      if (key === "collectionId") return collectionIdParam;
+      return null;
+    },
   }),
 }));
 
@@ -29,6 +35,7 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/api", () => ({
   exportCombinedGeneratedQuizDocx: jest.fn(),
+  getCollection: jest.fn(),
   getGeneratedQuiz: jest.fn(),
   getMe: jest.fn(),
   isMultipleExamVersionsNotAllowedError: jest.fn(() => false),
@@ -42,6 +49,7 @@ jest.mock("@/lib/auth", () => ({
 describe("Exam Builder page", () => {
   beforeEach(() => {
     notesParam = "note-99,note-77";
+    collectionIdParam = null;
     pushMock.mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
@@ -52,6 +60,7 @@ describe("Exam Builder page", () => {
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockReset();
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "combined-exam-with-answers.docx" });
     (getGeneratedQuiz as jest.Mock).mockReset();
+    (getCollection as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({
       schoolName: "NoteLib Academy",
@@ -67,6 +76,14 @@ describe("Exam Builder page", () => {
       })),
       generatedAt: "2026-03-24T10:00:00Z",
     }));
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      title: "Unit One",
+      description: null,
+      createdAt: "2026-06-01T00:00:00Z",
+      updatedAt: "2026-06-02T00:00:00Z",
+      items: [],
+    });
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -137,6 +154,98 @@ describe("Exam Builder page", () => {
         updatedAt: "2026-03-20T10:00:00Z",
       },
     ]);
+  });
+
+  it("keeps the plain notes query on the existing template-first path", async () => {
+    render(<ExamBuilderPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose a template" })).toBeInTheDocument();
+    expect(getCollection).not.toHaveBeenCalled();
+  });
+
+  it("seeds collection sections from trimmed labels in collection order", async () => {
+    collectionIdParam = "collection-1";
+    notesParam = "note-77,note-99,note-55";
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      title: "Unit One",
+      description: null,
+      createdAt: "2026-06-01T00:00:00Z",
+      updatedAt: "2026-06-02T00:00:00Z",
+      items: [
+        {
+          noteId: "note-77",
+          label: null,
+          position: 3,
+          generatedQuizId: "generated-77",
+        },
+        {
+          noteId: "note-55",
+          label: " Week 1 ",
+          position: 1,
+          generatedQuizId: "generated-55",
+        },
+        {
+          noteId: "note-42",
+          label: "Week 2",
+          position: 2,
+          generatedQuizId: null,
+        },
+        {
+          noteId: "note-99",
+          label: "Week 1",
+          position: 0,
+          generatedQuizId: "generated-99",
+        },
+      ],
+    });
+
+    render(<ExamBuilderPage />);
+
+    expect(await screen.findByDisplayValue("Week 1")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Section B")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Week 2")).not.toBeInTheDocument();
+    expect(screen.getByText("Sections from collection labels")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Choose a template" })).not.toBeInTheDocument();
+    expect(getGeneratedQuiz).toHaveBeenNthCalledWith(1, "note-99");
+    expect(getGeneratedQuiz).toHaveBeenNthCalledWith(2, "note-55");
+    expect(getGeneratedQuiz).toHaveBeenNthCalledWith(3, "note-77");
+  });
+
+  it("shows the existing load error state when the collection cannot be loaded", async () => {
+    collectionIdParam = "missing-collection";
+    notesParam = "";
+    (getCollection as jest.Mock).mockRejectedValue(new Error("Collection not found."));
+
+    render(<ExamBuilderPage />);
+
+    expect(await screen.findByRole("heading", { name: "Could not load exam builder" })).toBeInTheDocument();
+    expect(screen.getByText("Collection not found.")).toBeInTheDocument();
+  });
+
+  it("shows the existing empty state for a collection with no quiz-ready notes", async () => {
+    collectionIdParam = "collection-1";
+    notesParam = "";
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      title: "Draft Unit",
+      description: null,
+      createdAt: "2026-06-01T00:00:00Z",
+      updatedAt: "2026-06-02T00:00:00Z",
+      items: [
+        {
+          noteId: "note-42",
+          label: "Week 1",
+          position: 0,
+          generatedQuizId: null,
+        },
+      ],
+    });
+
+    render(<ExamBuilderPage />);
+
+    expect(await screen.findByRole("heading", { name: "No quiz-ready notes selected" })).toBeInTheDocument();
+    expect(getGeneratedQuiz).not.toHaveBeenCalled();
   });
 
   it("renders selected notes on the dedicated page and exports sectioned exams", async () => {

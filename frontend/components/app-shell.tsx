@@ -21,8 +21,10 @@ import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
 import { useAppShellTitleContext } from "@/components/app-shell-title-context";
 import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 import { cn } from "@/lib/utils";
+import type { ProfileType } from "@/lib/api";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -37,6 +39,7 @@ type ShellUser = {
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   role: "USER" | "ADMIN" | null;
+  profileType: ProfileType | null;
 };
 
 function isMarketingPublicRoute(pathname: string): boolean {
@@ -61,6 +64,7 @@ function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): bo
 function isProtectedAppRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
+    || pathname.startsWith("/collections")
     || pathname.startsWith("/library")
     || pathname.startsWith("/notes")
     || pathname.startsWith("/profile")
@@ -70,21 +74,6 @@ function isProtectedAppRoute(pathname: string): boolean {
     || pathname.startsWith("/admin")
   );
 }
-
-function isCoreLearningRoute(pathname: string): boolean {
-  return (
-    pathname === "/notes/new"
-    || /^\/notes\/[^/]+\/edit$/.test(pathname)
-    || /^\/notes\/[^/]+$/.test(pathname)
-    || /^\/study-packs\/[^/]+$/.test(pathname)
-    || pathname === "/study"
-    || pathname.startsWith("/study/")
-    || pathname.includes("/quick-review")
-    || pathname.includes("/challenge-quiz")
-    || pathname.includes("/adaptive-practice")
-  );
-}
-
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/p/")) {
@@ -101,6 +90,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/library")) {
     return "Library";
+  }
+  if (pathname.startsWith("/collections")) {
+    return getCollectionLabels(getAuthUser()?.profileType).plural;
   }
   if (pathname.startsWith("/public/notes/")) {
     return "Public Note";
@@ -165,12 +157,13 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "campaigns" | "dashboard" | "help" | "library" | "profile" | "progress" | "publicLibrary" | "settings";
+  action: "admin" | "campaigns" | "collections" | "dashboard" | "help" | "library" | "profile" | "progress" | "publicLibrary" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard", action: "dashboard" },
   { href: "/library", label: "Library", action: "library" },
+  { href: "/collections", label: "Collections", action: "collections" },
   { href: "/progress", label: "Progress", action: "progress" },
   { href: "/public/library", label: "Public Library", action: "publicLibrary" },
 ];
@@ -178,10 +171,12 @@ const MAIN_NAV: NavLinkItem[] = [
 
 function NavLinks({
   pathname,
+  mainNav,
   secondaryNav,
   onNavigate,
 }: Readonly<{
   pathname: string;
+  mainNav: NavLinkItem[];
   secondaryNav: NavLinkItem[];
   onNavigate?: () => void;
 }>) {
@@ -211,7 +206,7 @@ function NavLinks({
     <>
       <div className="space-y-1.5">
         <p className="px-3 text-xs font-semibold uppercase tracking-wide text-foreground/50">Main</p>
-        {MAIN_NAV.map(renderLink)}
+        {mainNav.map(renderLink)}
       </div>
       <div className="space-y-1.5">
         <p className="px-3 text-xs font-semibold uppercase tracking-wide text-foreground/50">Account</p>
@@ -237,6 +232,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     emailVerifiedAt: null,
     onboardingCompletedAt: null,
     role: null,
+    profileType: null,
   });
   const [resendingVerification, setResendingVerification] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -257,6 +253,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           emailVerifiedAt: null,
           onboardingCompletedAt: null,
           role: null,
+          profileType: null,
         });
         return;
       }
@@ -269,6 +266,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         emailVerifiedAt: authUser.emailVerifiedAt,
         onboardingCompletedAt: authUser.onboardingCompletedAt ?? previous.onboardingCompletedAt,
         role: authUser.role,
+        profileType: authUser.profileType ?? previous.profileType,
       }));
     };
 
@@ -333,6 +331,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       emailVerifiedAt: authUser?.emailVerifiedAt ?? null,
       onboardingCompletedAt: authUser?.onboardingCompletedAt ?? null,
       role: authUser?.role ?? null,
+      profileType: authUser?.profileType ?? null,
     });
   }, [shouldUseShell, pathname]);
 
@@ -358,6 +357,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           emailVerifiedAt: me.emailVerifiedAt,
           onboardingCompletedAt: me.onboardingCompletedAt,
           role: me.role,
+          profileType: me.profileType,
         });
         const authUser = getAuthUser();
         if (authUser) {
@@ -393,6 +393,13 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     }
     return nav;
   }, [user.role]);
+
+  const mainNav = useMemo<NavLinkItem[]>(() => {
+    const labels = getCollectionLabels(user.profileType);
+    return MAIN_NAV.map((item) => (
+      item.href === "/collections" ? { ...item, label: labels.navLabel } : item
+    ));
+  }, [user.profileType]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -504,7 +511,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
             <span className="text-sm font-semibold">NoteLib</span>
           </div>
           <nav className="flex-1 space-y-6 p-4">
-            <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} />
+            <NavLinks pathname={pathname || ""} mainNav={mainNav} secondaryNav={secondaryNav} />
           </nav>
         </aside>
       ) : null}
@@ -637,7 +644,12 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
               </button>
             </div>
             <nav className="flex-1 space-y-6 p-4">
-              <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} onNavigate={() => setDrawerOpen(false)} />
+                <NavLinks
+                  pathname={pathname || ""}
+                  mainNav={mainNav}
+                  secondaryNav={secondaryNav}
+                  onNavigate={() => setDrawerOpen(false)}
+                />
             </nav>
             <div className="border-t border-border p-4">
               <ResponsiveActionButton

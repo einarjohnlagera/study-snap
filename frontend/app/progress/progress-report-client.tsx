@@ -126,14 +126,14 @@ function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }
 }
 
 function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryResponse }>) {
-  const eyebrow = goalSummary.goalType === "SUBJECT_FOCUS" ? "FOCUS" : goalSummary.goalName;
+  const eyebrowLabel = goalSummary.goalType === "SUBJECT_FOCUS" ? "Study Focus" : `${goalSummary.goalName} Goal`;
 
   return (
     <Card className="overflow-hidden border-blue-500/25 bg-linear-to-br from-blue-500/10 via-background to-emerald-500/10 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            {eyebrow} Goal
+            {eyebrowLabel}
           </p>
           <div className="space-y-1">
             <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{goalSummary.goalLabel}</h2>
@@ -151,7 +151,7 @@ function GoalSummaryHeader({ goalSummary }: Readonly<{ goalSummary: GoalSummaryR
             href="/profile#study-focus"
             className="text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
           >
-            Change goal
+            Edit in Profile
           </Link>
         </div>
       </div>

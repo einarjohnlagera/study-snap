@@ -273,7 +273,8 @@ describe("ProgressPage", () => {
     render(<ProgressReportClient />);
 
     expect(await screen.findByText("Focus on Medical Surgical Nursing — you have concepts left to practice.")).toBeInTheDocument();
-    expect(screen.getByText("FOCUS Goal")).toBeInTheDocument();
+    expect(screen.getByText("Study Focus")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit in Profile" })).toHaveAttribute("href", "/profile#study-focus");
     expect(screen.getByRole("link", { name: "Browse Medical Surgical Nursing notes in the community →" }))
       .toHaveAttribute("href", "/public/library?subject=Medical%20Surgical%20Nursing");
   });

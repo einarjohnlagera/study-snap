@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
+import com.studysnap.backend.dto.BulkImportResultResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.GenerateGeneratedQuizRequest;
@@ -31,6 +32,7 @@ import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
+import com.studysnap.backend.service.NoteBulkImportService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
@@ -70,6 +72,7 @@ public class NoteController {
 
     private final AuthService authService;
     private final NoteService noteService;
+    private final NoteBulkImportService noteBulkImportService;
     private final NoteGenerationService noteGenerationService;
     private final NoteTextExtractionService noteTextExtractionService;
     private final StudyPackService studyPackService;
@@ -109,6 +112,16 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteTextExtractionService.extractText(file, userId);
+    }
+
+    @PostMapping(value = "/import-batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public BulkImportResultResponse importBatch(
+            @RequestPart("files") List<MultipartFile> files,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return noteBulkImportService.importBatch(userId, files);
     }
 
     @PutMapping("/{id}")

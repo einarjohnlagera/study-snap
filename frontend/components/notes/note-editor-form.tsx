@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {type ReactNode, type RefObject, useEffect, useRef, useState} from "react";
 import {
     AlertCircle,
@@ -20,9 +21,9 @@ import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
-const IMPORT_ACCEPT_VALUE = "image/png,image/jpeg,image/webp,.txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export type NoteEditorDraft = {
     title: string;
@@ -523,6 +524,12 @@ export function NoteEditorForm({
             ) : null}
             <p className="text-xs text-foreground/60">
                 Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.
+            </p>
+            <p className="text-xs text-foreground/65">
+                Importing several files at once?{" "}
+                <Link href="/notes/import?from=new" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                    Bulk import multiple files
+                </Link>
             </p>
         </div>
     );

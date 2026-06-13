@@ -9,11 +9,13 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 **Backend**
 - `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint); subject/courseProgram suggestion endpoints
 - `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — note CRUD, `listMine(userId)`, `listPublic(...)`, visibility change, note copy, subject/courseProgram autocomplete
+- `backend/src/main/java/com/studysnap/backend/service/NoteBulkImportService.java` — bulk material import orchestration; one extracted file becomes one `DRAFT` note without Study Pack generation
 - `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `tags`, `visibility`, `studyPackStatus`, `targetProfileType`, `ownerUserId`
 - `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL queries for private/public note lists, subject/courseProgram suggestion queries
 
 **Frontend**
 - `frontend/app/notes/new/page.tsx` — Create Note route (write / generate-from-topic / import start options)
+- `frontend/app/notes/import/page.tsx` — profile-agnostic bulk import route; creates one reviewable `DRAFT` per successful file without generation
 - `frontend/app/notes/[id]/page.tsx` — Note Detail route (server component entry)
 - `frontend/app/notes/[id]/edit/page.tsx` — Edit Note route
 - `frontend/components/notes/note-editor-page-client.tsx` — shared editor client for create and edit modes
@@ -111,6 +113,7 @@ Create mode:
 - actions: `Save`, `Generate Study Pack`
 - optional topic-first helper: `Generate Note`
 - the `Import notes` start option reuses the existing OCR/file-extraction flow and inserts extracted text into the main editor before save or Study Pack generation.
+- `/notes/import` is the separate bulk note-creation entry point, reached from the Create-note flow's `Import notes` panel (a "Bulk import multiple files" link). It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
 - note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
 - Target Audience is required on every note. For Student, Board Exam, and Professional profiles the field is hidden and auto-prefilled from profile type at save time (Student -> Student, Board Exam -> Board Taker, Professional -> Professional). For Teacher and Admin profiles the field is visible and user-picked, with all audience values selectable.
 - create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
@@ -119,6 +122,19 @@ Create mode:
 - `Generate Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
 - `Generate Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
 - topic note generation is plan-gated separately from Study Pack generation and OCR.
+
+Bulk import behavior:
+
+- route: `/notes/import`
+- available to every authenticated, onboarded profile through the Create-note flow's Import notes panel
+- accepts multiple uploaded files in one request through `POST /notes/import-batch`
+- reuses the existing single-file extraction pipeline once per file
+- creates one owned `DRAFT` note per successful file using the extracted text as content and a filename-derived title
+- leaves `subject`, `courseProgram`, `tags`, and target audience unset/defaulted for later user review
+- records per-file failures in the response while continuing with the remaining files
+- does not auto-generate, does not create Study Packs, and does not add a new quota category
+- may offer a skippable post-import action to add the created drafts to an existing or new collection; this action is always user-initiated and never automatic
+- is not idempotent; submitting the same files again creates new draft notes
 
 Edit mode for draft notes:
 

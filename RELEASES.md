@@ -1,5 +1,32 @@
 # RELEASES.md - NoteLib
 
+## v0.27.0 - Material Import & Collections
+
+**Status: Released**
+
+Theme: lower the cold-start barrier for getting existing material *into* NoteLib (bulk multi-file import) and let any learner group notes into a reusable, ordered **collection**. Triggered by preparing an effortless teacher path before we recruit teachers, but built profile-agnostic at the core — students, board reviewers, and professionals get the same import-and-organize speed. The teacher payoff (combined exam packet + shareable links) is a profile-aware terminal action on a universal `NoteCollection` spine, not a separate system. A collection is a playlist over existing notes — no collection-level AI synthesis, no new quota. See `docs/product/ROADMAP.md` for full scope, the profile-label table, and anti-drift rules.
+
+### Shipped
+
+- **Track 1 backend — Bulk material import API** — added `POST /notes/import-batch` for profile-agnostic multi-file import. The endpoint reuses the existing per-file extraction pipeline, creates one owned `DRAFT` note per successful file, reports per-file failures without rolling back earlier successes, enforces a configurable max-files cap, and fires `NOTES_BULK_IMPORTED` once per successful batch. It never triggers Study Pack generation, LLM calls, or a new quota category.
+- **Track 1 frontend — Multi-file uploader UI** — added the guarded `/notes/import` workspace page and a universal Library header entry point. Users can select up to 20 supported files, submit one batch request, review per-file created/failed results and low-confidence warnings, retry whole-request failures without losing their selection, and optionally add the created drafts to an existing or new profile-labeled collection. The flow never auto-generates Study Packs or auto-assigns collections.
+- **Track 2 backend — Note Collections API** — added the universal, owner-private `NoteCollection` entity and ordered item join table, plus CRUD endpoints under `/collections`. Collections group only the caller's own existing notes, allow one note in multiple collections, dedupe repeats within a collection, support reorder/relabel, and delete only collection/item rows. No profile gate, profile-aware labels, LLM calls, or quota logic were added.
+- **Track 2 frontend core — Collections UI** — added the profile-aware Collections / Study Plans / Review Sets / Lesson Plans nav entry, `/collections` list page, and `/collections/[id]` detail page. Users can create, edit, delete, add notes through an in-detail picker, remove notes, relabel items, and reorder with drag-and-drop plus Move up/down fallback.
+- **Track 2 integrations — Collections entry/exit points** — added universal Library multi-select `Add to {collection}` for any note readiness, wired the Teacher Lesson Plan terminal CTA into Exam Builder with quiz-ready filtering and disabled empty-state copy, and added server-side `COLLECTION_CREATED` analytics on collection create only.
+- **Track 3 — Label-driven Teacher Exam Builder handoff** — completed the frontend-only Lesson Plan terminal path by passing `collectionId` into Exam Builder and pre-seeding editable sections from distinct trimmed collection item labels. Quiz-ready notes retain collection order, unlabeled notes share one trailing default section, and non-ready notes are excluded without creating empty sections. Existing Teacher/Admin DOCX, anti-cheating versions, shareable quiz links, quotas, and generation behavior remain unchanged.
+- **Track 4 — Profile-aware first-run / activation** — replaced the generic zero-notes dashboard empty state with a profile-aware `DashboardEmpty` that teaches the loop per profile (teacher: import material → generate → group into a Lesson Plan to export/share; student/board/professional: import or create → generate → study/quiz). Every variant surfaces both the `Import files` and `Create a note` entry points; the collection term resolves through `lib/collection-labels.ts`. No new tips framework.
+- **IA refinement — Library Create split-button & import placement** — replaced the Library header's `Create Note` + standalone `Select` with one split button: primary **New Note** (one click) plus a caret menu (`Note` / `Import files` / `{Study Plan}`). The standalone `Select` button is gone; **`{Study Plan}` enters Library selection mode** ("Pick notes for your new plan" — filter + multi-select → **Create {plan}**, empty allowed), and teachers reach **Build exam** from the same selection. The Study Plan detail's "Add notes" picker still handles adding to an existing plan. Bulk import moved off the Library header into the Create-note flow's `Import notes` panel ("Bulk import multiple files"); the `/notes/import` back link is referrer-aware (`from=new` → New Note, default → Library). `COLLECTION_CREATED` is unaffected.
+- **IA refinement — Progress goal card clarity** — the Progress goal summary was already read-only (Profile is the single Study Focus/Goal editor); aligned its naming with Profile (subject-focus header `FOCUS Goal` → `Study Focus`) and made the edit affordance explicit (`Change goal` → `Edit in Profile`). Documented that Study Plans (durable organizer) and saved library filters (transient quick lens) are distinct and both intentionally kept.
+- **Polish — Create CTA sizing & Send Feedback placement** — slimmed the Library `New Note` split button to the compact (`sm`) size to match the app's other CTAs. Fixed a regression where Send Feedback appeared as a floating widget on non-learning routes (Library, Study Plans, Dashboard…): feedback now lives in the header on every page (auto-hidden only in distraction-free exam focus, where the header itself is hidden), matching production. Removed the route-split (`isCoreLearningRoute`) and the floating widget; locked the header placement with an updated app-shell test.
+
+### Deferred
+
+- Lesson-plan / syllabus document parsing as quiz source (scaffold references content, doesn't contain it — weak quiz source).
+- Student/board/professional multi-note practice terminal CTA from collections; the existing Long Exam is same-subject scoped and meters quota per source note, which does not fit cross-subject, mixed-readiness collections without a separate practice-flow design.
+- Collection-level AI synthesis (Option B), public/shareable collections, per-profile structured presets beyond Exam Builder's existing ones.
+
+---
+
 ## v0.26.1 - Guidance System
 
 **Status: Released**

@@ -969,7 +969,7 @@ export default function LongExamPage() {
 
                             {longExamLimitReached ? (
                                 <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/25 dark:text-amber-100">
-                                    <p className="font-medium">You've used all {longExamMonthlyLimit} Long Exam sessions for this month.</p>
+                                    <p className="font-medium">You&apos;ve used all {longExamMonthlyLimit} Long Exam sessions for this month.</p>
                                     <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
                                         You can still review existing results. Start a new Long Exam when your quota resets.
                                     </p>

@@ -1,21 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
 import {
   ArrowUpDown,
   Bookmark,
-  CheckSquare,
   ChevronDown,
   Filter,
   Globe,
   Lock,
-  Square,
   Trash2,
 } from "lucide-react";
 import {AppModal} from "@/components/ui/app-modal";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
+import {CreateMenu} from "@/components/ui/create-menu";
 import {SharedNoteCard} from "@/components/notes/shared-note-card";
 import {PageHeader} from "@/components/page-header";
 import {LibrarySheetModal} from "@/components/notes/library-sheet-modal";
@@ -24,6 +24,7 @@ import {ResponsiveActionButton, ResponsiveActionLink} from "@/components/ui/acti
 import {getAuthUser} from "@/lib/auth";
 import {
   ApiRequestError,
+  createCollection,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
   getSavedLibraryFilters,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/api";
 import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickable-card";
 import {normalizeCourseProgram} from "@/lib/learning-profile";
+import {getCollectionLabels} from "@/lib/collection-labels";
 import {shouldShowQuizReadyIndicator} from "@/lib/profile-mode";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
@@ -63,6 +65,7 @@ const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const MORE_FILTERS_TITLE = "More Filters";
 const SAVE_FILTER_NAME_MAX_LENGTH = 100;
+const COLLECTION_TITLE_MAX_LENGTH = 150;
 const FILTER_SAVED_TOAST = "Filter saved";
 const FILTER_DELETED_TOAST = "Filter deleted";
 const FILTER_SAVE_ERROR_TOAST = "Could not save filter";
@@ -88,6 +91,12 @@ const VISIBILITY_FILTER_LABELS: Record<LibraryVisibilityFilter, string> = {
   PRIVATE: "Private",
 };
 const VISIBILITY_FILTER_KEYS = Object.keys(VISIBILITY_FILTER_LABELS) as LibraryVisibilityFilter[];
+
+type ToastMessage = string | {
+  message: string;
+  href: string;
+  linkLabel: string;
+};
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -356,6 +365,98 @@ function canIncludeInExam(item: NoteListItemResponse): boolean {
   return Boolean(item.generatedQuizId);
 }
 
+function CreatePlanModal({
+  isOpen,
+  selectedNoteIds,
+  singularLabel,
+  onClose,
+  onCreated,
+}: Readonly<{
+  isOpen: boolean;
+  selectedNoteIds: string[];
+  singularLabel: string;
+  onClose: () => void;
+  onCreated: (collectionId: string) => void;
+}>) {
+  const [title, setTitle] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTitle("");
+      setCreating(false);
+      setSubmitError(null);
+    }
+  }, [isOpen]);
+
+  const handleCreate = async () => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setSubmitError("Title is required.");
+      return;
+    }
+    setCreating(true);
+    setSubmitError(null);
+    try {
+      const saved = await createCollection({ title: trimmedTitle, noteIds: selectedNoteIds });
+      onCreated(saved.id);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : `Could not create this ${singularLabel.toLowerCase()}.`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const noteCountLabel = selectedNoteIds.length === 0
+    ? `an empty ${singularLabel.toLowerCase()} you can fill later`
+    : `${selectedNoteIds.length} selected note${selectedNoteIds.length === 1 ? "" : "s"}`;
+
+  return (
+    <AppModal
+      isOpen={isOpen}
+      title={`New ${singularLabel}`}
+      description={`Create a ${singularLabel.toLowerCase()} with ${noteCountLabel}.`}
+      onClose={onClose}
+      panelClassName="sm:max-w-lg"
+      actions={(
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      )}
+    >
+      <div className="space-y-4">
+        {submitError ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
+            {submitError}
+          </p>
+        ) : null}
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Title</span>
+          <input
+            value={title}
+            maxLength={COLLECTION_TITLE_MAX_LENGTH}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setSubmitError(null);
+            }}
+            placeholder={`${singularLabel} title`}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+          />
+        </label>
+        <Button
+          type="button"
+          loading={creating}
+          loadingText="Creating..."
+          onClick={() => void handleCreate()}
+        >
+          Create {singularLabel}
+        </Button>
+      </div>
+    </AppModal>
+  );
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -389,7 +490,8 @@ export default function LibraryPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<LibraryVisibilityFilter>(() => parseVisibilityFilter(searchParams.get("visibility")));
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
+  const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const [savedFilters, setSavedFilters] = useState<SavedLibraryFilterResponse[]>([]);
   const [savedFiltersLoading, setSavedFiltersLoading] = useState(true);
   const [savedFiltersUnavailable, setSavedFiltersUnavailable] = useState(false);
@@ -403,6 +505,7 @@ export default function LibraryPage() {
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
   const isTeacherProfile = authUser?.profileType === "TEACHER";
+  const collectionLabels = getCollectionLabels(authUser?.profileType);
   const showQuizReadyIndicators = shouldShowQuizReadyIndicator(
     authUser?.profileType,
     "PRIVATE_LIBRARY",
@@ -688,6 +791,17 @@ export default function LibraryPage() {
     visibilityFilter,
   ), [readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
   const hasSavableFilter = Object.keys(currentSavedFilterState).length > 0;
+  const selectedNotes = useMemo(
+    () => selectedNoteIds
+      .map((noteId) => items.find((item) => item.id === noteId))
+      .filter((item): item is NoteListItemResponse => Boolean(item)),
+    [items, selectedNoteIds],
+  );
+  const selectedQuizReadyCount = useMemo(
+    () => selectedNotes.filter(canIncludeInExam).length,
+    [selectedNotes],
+  );
+  const selectedHasNonQuizReadyNotes = selectedNotes.length > selectedQuizReadyCount;
 
   const applySavedFilter = useCallback((filterState: SavedLibraryFilterState) => {
     const nextSearch = readSavedString(filterState.search) ?? "";
@@ -898,6 +1012,11 @@ export default function LibraryPage() {
     setSelectedNoteIds([]);
   }, []);
 
+  const startPlanSelection = useCallback(() => {
+    setSelectedNoteIds([]);
+    setSelectionMode(true);
+  }, []);
+
   const handleNoteNavigate = useCallback((noteId: string) => {
     const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter);
     const params = new URLSearchParams({ from: "library", ref: returnUrl });
@@ -905,10 +1024,6 @@ export default function LibraryPage() {
   }, [readinessFilter, visibilityFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
-    if (!canIncludeInExam(item)) {
-      setToast("Generate a quiz for this note before adding it to an exam.");
-      return;
-    }
     setSelectedNoteIds((previous) => (
       previous.includes(item.id)
         ? previous.filter((noteId) => noteId !== item.id)
@@ -917,14 +1032,20 @@ export default function LibraryPage() {
   }, []);
 
   const openExamBuilder = useCallback(() => {
-    if (selectedNoteIds.length === 0) {
+    if (selectedNoteIds.length === 0 || selectedQuizReadyCount === 0) {
       return;
     }
     const params = new URLSearchParams({
       notes: selectedNoteIds.join(","),
     });
     router.push(`/library/exam-builder?${params.toString()}`);
-  }, [router, selectedNoteIds]);
+  }, [router, selectedNoteIds, selectedQuizReadyCount]);
+
+  const handlePlanCreated = useCallback((collectionId: string) => {
+    setCreatePlanOpen(false);
+    resetSelectionMode();
+    router.push(`/collections/${collectionId}`);
+  }, [resetSelectionMode, router]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -934,24 +1055,16 @@ export default function LibraryPage() {
         description="Browse and revisit all of your saved notes."
         actions={(
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            {isTeacherExamBuilderEnabled ? (
-              <Button
-                type="button"
-                variant={selectionMode ? "default" : "outline"}
-                className="gap-2"
-                onClick={() => {
-                  if (selectionMode) {
-                    resetSelectionMode();
-                    return;
-                  }
-                  setSelectionMode(true);
-                }}
-              >
-                {selectionMode ? <CheckSquare className="h-4 w-4" aria-hidden="true" /> : <Square className="h-4 w-4" aria-hidden="true" />}
-                <span>Select</span>
-              </Button>
-            ) : null}
-            <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="block w-full sm:w-auto" />
+            <CreateMenu
+              className="w-full sm:w-auto"
+              primaryLabel="New Note"
+              onPrimary={() => router.push("/notes/new")}
+              items={[
+                { key: "note", label: "Note", description: "Write, import, or generate a note", onSelect: () => router.push("/notes/new") },
+                { key: "import", label: "Import files", description: "Upload several files as draft notes", onSelect: () => router.push("/notes/import?from=library") },
+                { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },
+              ]}
+            />
           </div>
         )}
       />
@@ -996,17 +1109,27 @@ export default function LibraryPage() {
           {isTeacherProfile && !selectionMode && items.length >= 1 ? (
             <GuidanceTip
               tipId="teacher-library-multi-note-select"
-              message="Select multiple notes with the checkboxes, then use 'Generate Quiz' from the toolbar."
+              message="Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes."
             />
           ) : null}
           {selectionMode ? (
             <Card className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">{selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected</h2>
+                  <h2 className="text-lg font-semibold">Pick notes for your new {collectionLabels.singular}</h2>
                   <p className="text-sm text-foreground/70">
-                    Select quiz-ready notes to build one combined exam. Notes without generated quizzes stay disabled.
+                    {selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected · filter and select, or create an empty {collectionLabels.singular.toLowerCase()}.
                   </p>
+                  {isTeacherExamBuilderEnabled && selectedHasNonQuizReadyNotes && selectedQuizReadyCount > 0 ? (
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Only quiz-ready notes will be added to the exam.
+                    </p>
+                  ) : null}
+                  {isTeacherExamBuilderEnabled && selectedNoteIds.length > 0 && selectedQuizReadyCount === 0 ? (
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Generate a quiz for at least one note to build an exam.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button type="button" variant="outline" onClick={resetSelectionMode}>
@@ -1014,11 +1137,20 @@ export default function LibraryPage() {
                   </Button>
                   <Button
                     type="button"
-                    onClick={openExamBuilder}
-                    disabled={selectedNoteIds.length === 0}
+                    onClick={() => setCreatePlanOpen(true)}
                   >
-                    Create Exam
+                    Create {collectionLabels.singular}
                   </Button>
+                  {isTeacherExamBuilderEnabled ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={openExamBuilder}
+                      disabled={selectedNoteIds.length === 0 || selectedQuizReadyCount === 0}
+                    >
+                      Build exam
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </Card>
@@ -1284,12 +1416,10 @@ export default function LibraryPage() {
                     aria-pressed={selectionMode ? isSelected : undefined}
                     className={`flex h-full flex-col justify-between space-y-4 p-4 sm:p-6 ${
                       selectionMode
-                        ? examReady
-                          ? getSelectionCardClassName({
-                              selected: isSelected,
-                              className: "h-full rounded-2xl",
-                            })
-                          : "cursor-not-allowed opacity-70"
+                        ? getSelectionCardClassName({
+                            selected: isSelected,
+                            className: "h-full rounded-2xl",
+                          })
                         : getBrowsingCardClassName("h-full")
                     }`}
                   >
@@ -1307,9 +1437,8 @@ export default function LibraryPage() {
                             checked={isSelected}
                             onChange={() => toggleNoteSelection(item)}
                             onClick={(event) => event.stopPropagation()}
-                            disabled={!examReady}
-                            aria-label={`Select ${item.title?.trim() || "Untitled note"} for exam export`}
-                            className="h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600 disabled:cursor-not-allowed"
+                            aria-label={`Select ${item.title?.trim() || "Untitled note"}`}
+                            className="h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
                           />
                         </span>
                       ) : renderVisibilityIcon(item.visibility)}
@@ -1321,11 +1450,6 @@ export default function LibraryPage() {
                       ) : null}
                       footer={(
                         <div className="space-y-1">
-                          {selectionMode && !examReady ? (
-                            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                              Generate a quiz first to include this note in an exam.
-                            </p>
-                          ) : null}
                           <p className="text-xs text-foreground/65">
                             Updated {new Date(item.updatedAt).toLocaleString()}
                           </p>
@@ -1704,9 +1828,24 @@ export default function LibraryPage() {
         </div>
       </LibrarySheetModal>
 
+      <CreatePlanModal
+        isOpen={createPlanOpen}
+        selectedNoteIds={selectedNoteIds}
+        singularLabel={collectionLabels.singular}
+        onClose={() => setCreatePlanOpen(false)}
+        onCreated={handlePlanCreated}
+      />
+
       {toast ? (
         <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
-          {toast}
+          {typeof toast === "string" ? toast : (
+            <span className="inline-flex items-center gap-2">
+              <span>{toast.message}</span>
+              <Link href={toast.href} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                {toast.linkLabel}
+              </Link>
+            </span>
+          )}
         </div>
       ) : null}
     </main>

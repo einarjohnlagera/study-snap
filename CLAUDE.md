@@ -6,7 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.26.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.27.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+
+## Active release: v0.27.0 — Material Import & Collections (anti-drift)
+
+Base branch for this release: `releases/v0.27.0`. Full scope in `ROADMAP.md`; locked rules:
+
+- **One universal spine, profile-aware framing.** Bulk import and the `NoteCollection` entity are profile-agnostic (no profile gate). Profile type only changes the collection's *label* and *terminal action* (TEACHER "Lesson Plan" → DOCX + shareable links; STUDENT "Study Plan"; BOARD_EXAM "Review Set"; PROFESSIONAL "Collection") via the existing Study/Exam Focus copy mechanism — **never fork the entity per profile, never hardcode profile checks in components.**
+- **A collection is a playlist over existing notes** — not a new content type, not an AI-synthesized document. **No collection-level AI generation, no new quota category.** Generation stays per-note on existing Study Pack / quiz quotas.
+- **Notes stay independently owned.** A note may belong to multiple collections; deleting a collection never deletes its notes.
+- **Bulk import creates `DRAFT` notes only — never auto-generates** Study Packs (preserves the explicit-generation rule).
+- **DOCX export and shareable quiz links stay Teacher/Admin only** — import + collections being universal does not widen those gates.
+- **Out of scope (do not build without explicit ask):** uploading a lesson-plan *document* as quiz source (scaffold references content, doesn't contain it); collection-level AI synthesis (Option B); public/shareable collections.
 
 ## Source-of-truth docs (read before implementing anything)
 

@@ -676,7 +676,7 @@ export default function DashboardPage() {
                 onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
               />
               {items.length === 0 ? (
-                <DashboardEmpty />
+                <DashboardEmpty profileType={dashboardProfileType} />
               ) : (
                 <StudyPackGrid
                   notes={recentNotes}

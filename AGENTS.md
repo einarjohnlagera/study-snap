@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.26.1` (in progress); previous: `v0.26.0 - Exam Depth`
+- `v0.27.0` (in progress); previous: `v0.26.1 - Guidance System`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1019,6 +1019,14 @@ Required behavior:
 - If extracted import text exceeds the configured maximum, return:
   - `This file is too large to process. Please upload a smaller file.`
 
+## Bulk Material Import Rule
+
+- `POST /notes/import-batch` is the deliberate auto-save exception to the single-file import flow.
+- Bulk import creates one owned `DRAFT` note per successfully extracted file and must never auto-generate a Study Pack, set `GENERATING`, call an LLM, or add a new quota category.
+- Bulk import must reuse the existing per-file extraction pipeline and its verification, file-size, page/text, OCR usage, and OCR rate-limit enforcement.
+- Bulk import orchestration must not run inside a batch-wide transaction; one file failure must be recorded in the response and must not roll back notes already created from other files.
+- Bulk import is universal and profile-agnostic; do not add `ProfileType` branching or teacher-only gates to the backend endpoint.
+
 
 
 ## User Access Model
@@ -1474,7 +1482,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.26.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.27.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
