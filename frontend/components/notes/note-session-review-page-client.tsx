@@ -6,11 +6,13 @@ import { BackLink } from "@/components/ui/back-link";
 import { Card } from "@/components/ui/card";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { QuizSessionReviewContent } from "@/components/notes/quiz-session-review-content";
 import {
   getNote,
   getChallengeQuizSessionReview,
   getQuickReviewSessionReview,
+  trackAnalyticsEvent,
   type NoteResponse,
   type QuizSessionReviewResponse,
 } from "@/lib/api";
@@ -156,6 +158,11 @@ export function NoteSessionReviewPageClient({
       });
       setToastTone("success");
       setToastMessage("PDF ready");
+      void trackAnalyticsEvent({
+        eventType: "QUIZ_REVIEW_EXPORTED",
+        entityId: noteId,
+        metadata: { exportType, sessionMode: review.sessionMode },
+      });
     } catch (exportError) {
       setToastTone("error");
       setToastMessage(exportError instanceof Error ? exportError.message : "Could not export PDF.");
@@ -196,6 +203,11 @@ export function NoteSessionReviewPageClient({
 
       {!loading && review ? (
         <div className="space-y-4">
+          <GuidanceTip
+            tipId="quiz-review-export"
+            message="Export this review as a PDF to study offline or share it — use the Export button on this page."
+            trackAnalytics
+          />
           <Card className="space-y-3 p-4 sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">

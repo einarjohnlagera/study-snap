@@ -8,7 +8,7 @@ Theme: close the gap between strong signup conversion and weak feature activatio
 
 ### Planned scope
 
-- **Contextual activation nudges** — one-time tips at the moment of relevance: Export (quiz review screen), Challenge Quiz (after a Quick Review completes / note becomes quiz-ready), Study Plans (once a user has *N* notes). All routed through `pickActiveGuidance`.
+- **Contextual activation nudges** — one-time tips at the moment of relevance: Export (quiz review screen) and Study Plans (once a user has *N* notes), routed through `pickActiveGuidance`. (Challenge Quiz already has strong in-flow push via `PostSessionNextStep` on the Quick Review completion screen, so no extra tip was added.)
 - **Smarter Dashboard recommendation** — strengthen the existing `ContinueSpotlight` / `continueStudying` recommendation to push underused modes when contextually appropriate. No permanent promo banner.
 - **Help reference completeness** — add the missing Study Plans / Collections Help topic and audit Help for other gaps.
 - **Adoption funnel instrumentation** — track tip impression → click → feature use via the `AnalyticsEventType` enum (Java + frontend), added before firing.
@@ -16,7 +16,7 @@ Theme: close the gap between strong signup conversion and weak feature activatio
 
 ### Shipped
 
-_(none yet)_
+- **Activation nudges (track 1) — contextual tips + funnel instrumentation** — added two new one-time tips at their moment of relevance: an **Export** tip on the quiz session review screen ("export this review as a PDF…"), and a profile-aware **Study Plans** grouping tip in the Library (`library-study-plan-grouping`, non-teacher, ≥3 notes, with a `Create {Study Plan/Review Set/Collection}` CTA). The Library's existing tips were consolidated into a single `pickActiveGuidance` selection so nudges never stack, with Study Plan grouping prioritized for non-teachers. `GuidanceTip` gained an **opt-in `trackAnalytics`** flag that fires `GUIDANCE_TIP_SHOWN` (impression) and `GUIDANCE_TIP_CTA_CLICKED`, and the review screen fires `QUIZ_REVIEW_EXPORTED` on a successful export — completing an impression → click → use funnel via the existing `AnalyticsEventType` enum (Java + frontend). No Challenge Quiz tip was added: the Quick Review completion screen already drives it through `PostSessionNextStep` plus a fallback CTA, so a one-time tip would be redundant.
 
 ---
 

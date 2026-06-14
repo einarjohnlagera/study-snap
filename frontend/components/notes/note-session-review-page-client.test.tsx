@@ -24,6 +24,7 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   getChallengeQuizSessionReview: jest.fn(),
   getQuickReviewSessionReview: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 jest.mock("@/lib/quiz-session-export", () => ({
