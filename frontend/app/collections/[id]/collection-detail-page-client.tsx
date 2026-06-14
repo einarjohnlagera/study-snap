@@ -392,6 +392,7 @@ function SortableCollectionItemRow({
   index,
   itemCount,
   disabled,
+  collectionId,
   onMove,
   onRemove,
   onLabelChange,
@@ -400,6 +401,7 @@ function SortableCollectionItemRow({
   index: number;
   itemCount: number;
   disabled: boolean;
+  collectionId: string;
   onMove: (noteId: string, direction: "up" | "down") => void;
   onRemove: (noteId: string) => void;
   onLabelChange: (noteId: string, label: string) => void;
@@ -440,7 +442,7 @@ function SortableCollectionItemRow({
         </button>
 
         <div className="space-y-3">
-          <Link href={`/notes/${item.noteId}`} className="block rounded-lg p-1 -m-1 hover:bg-highlight">
+          <Link href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`} className="block rounded-lg p-1 -m-1 hover:bg-highlight">
             <h2 className="text-base font-semibold text-foreground">{getNoteTitle(item)}</h2>
             <p className="text-sm text-foreground/60">{getNoteMeta(item)}</p>
             <p className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300">{getQuizReadinessHint(item)}</p>
@@ -758,6 +760,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     index={index}
                     itemCount={items.length}
                     disabled={mutationInProgress}
+                    collectionId={collectionId}
                     onMove={handleMove}
                     onRemove={(noteId) => void handleRemove(noteId)}
                     onLabelChange={handleLabelChange}

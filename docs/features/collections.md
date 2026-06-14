@@ -254,6 +254,7 @@ The core Collections UI ships as the universal organization surface:
 - Empty collections show a neutral no-progress state and never calculate a percentage from `0/0`.
 - The detail page loads from `GET /collections/{id}` on mount, so a hard refresh renders the persisted order.
 - The detail page can edit metadata, delete the collection, add notes, remove notes, relabel items, and reorder items through the shipped CRUD API.
+- Opening a note from the detail page passes `ref=/collections/{id}`, so the note's back link returns to the collection with the profile-aware label (via `getCollectionLabels`) instead of falling back to Library.
 
 Profile-aware labels are resolved only through `frontend/lib/collection-labels.ts`.
 

@@ -23,6 +23,7 @@ import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   formatStudyPackResetDate,
@@ -262,9 +263,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const awaitingGeneratedMetadataSuggestionRef = useRef(false);
   const suggestedStudyPackIdRef = useRef<string | null>(null);
 
-  const libraryReturnHref = useMemo(() => {
+  const backHref = useMemo(() => {
     const ref = searchParams.get("ref");
-    return ref && ref.startsWith("/library") ? ref : "/library";
+    return ref && (ref.startsWith("/library") || ref.startsWith("/collections/")) ? ref : "/library";
   }, [searchParams]);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
@@ -1464,7 +1465,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <BackLink href={libraryReturnHref} label="Library" />
+      <BackLink
+        href={backHref}
+        label={backHref.startsWith("/collections/") ? getCollectionLabels(profileType).singular : "Library"}
+      />
 
       {loading ? (
         <Card className="p-6">Loading note...</Card>
