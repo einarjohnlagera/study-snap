@@ -42,6 +42,7 @@ import {shouldShowQuizReadyIndicator} from "@/lib/profile-mode";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
 import {GuidanceTip} from "@/components/ui/guidance-tip";
+import {pickActiveGuidance, type GuidanceRule} from "@/lib/guidance-engine";
 
 type LibrarySortOption =
   | "RECENTLY_UPDATED"
@@ -1047,6 +1048,36 @@ export default function LibraryPage() {
     router.push(`/collections/${collectionId}`);
   }, [resetSelectionMode, router]);
 
+  // Single-tip selection so library nudges never stack; Study Plan grouping is
+  // prioritized for non-teachers as the v0.28.0 activation lever.
+  const libraryGuidanceRules: GuidanceRule[] = [
+    {
+      id: "teacher-library-multi-note-select",
+      priority: 1,
+      condition: () => isTeacherProfile && !selectionMode && items.length >= 1,
+      message: "Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes.",
+    },
+    {
+      id: "library-study-plan-grouping",
+      priority: 2,
+      condition: () => !isTeacherProfile && !selectionMode && items.length >= 3,
+      message: `Group related notes into a ${collectionLabels.singular} you can study as one set.`,
+    },
+    {
+      id: "library-organization-habits",
+      priority: 3,
+      condition: () => items.length >= 5,
+      message: "You're building a solid library. Try filtering by subject to find related notes quickly.",
+    },
+    {
+      id: "library-first-note-organization",
+      priority: 4,
+      condition: () => items.length >= 1 && items.length <= 3,
+      message: "Add a subject and tags when editing a note — it makes filtering your library much easier as it grows.",
+    },
+  ];
+  const activeLibraryTip = pickActiveGuidance(libraryGuidanceRules);
+
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <PageHeader
@@ -1094,22 +1125,16 @@ export default function LibraryPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {items.length >= 1 && items.length <= 3 ? (
+          {activeLibraryTip ? (
             <GuidanceTip
-              tipId="library-first-note-organization"
-              message="Add a subject and tags when editing a note — it makes filtering your library much easier as it grows."
-            />
-          ) : null}
-          {items.length >= 5 ? (
-            <GuidanceTip
-              tipId="library-organization-habits"
-              message="You're building a solid library. Try filtering by subject to find related notes quickly."
-            />
-          ) : null}
-          {isTeacherProfile && !selectionMode && items.length >= 1 ? (
-            <GuidanceTip
-              tipId="teacher-library-multi-note-select"
-              message="Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes."
+              tipId={activeLibraryTip.id}
+              message={activeLibraryTip.message}
+              trackAnalytics
+              action={
+                activeLibraryTip.id === "library-study-plan-grouping"
+                  ? { label: `Create ${collectionLabels.singular}`, onClick: startPlanSelection }
+                  : undefined
+              }
             />
           ) : null}
           {selectionMode ? (

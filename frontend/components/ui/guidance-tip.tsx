@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { hasSeenTip, markTipSeen } from "@/lib/guidance";
+import { trackAnalyticsEvent } from "@/lib/api";
 
 type GuidanceTipProps = Readonly<{
   tipId: string;
   message: string;
   className?: string;
   action?: { label: string; onClick: () => void };
+  /**
+   * When true, fire `GUIDANCE_TIP_SHOWN` once on first impression and
+   * `GUIDANCE_TIP_CTA_CLICKED` when the action is used (tipId in metadata).
+   * Opt-in so existing tips don't emit analytics noise.
+   */
+  trackAnalytics?: boolean;
 }>;
 
 /**
@@ -16,18 +23,23 @@ type GuidanceTipProps = Readonly<{
  * Once dismissed, it never appears again (tracked via localStorage).
  * Fades in on first render, fades out on dismiss.
  */
-export function GuidanceTip({ tipId, message, className, action }: GuidanceTipProps) {
+export function GuidanceTip({ tipId, message, className, action, trackAnalytics = false }: GuidanceTipProps) {
   const [visible, setVisible] = useState(() => !hasSeenTip(tipId));
   const [fading, setFading] = useState(false);
+  const impressionTrackedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!hasSeenTip(tipId)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
+      if (trackAnalytics && impressionTrackedFor.current !== tipId) {
+        impressionTrackedFor.current = tipId;
+        void trackAnalyticsEvent({ eventType: "GUIDANCE_TIP_SHOWN", metadata: { tipId } });
+      }
     } else {
       setVisible(false);
     }
-  }, [tipId]);
+  }, [tipId, trackAnalytics]);
 
   if (!visible) {
     return null;
@@ -56,7 +68,13 @@ export function GuidanceTip({ tipId, message, className, action }: GuidanceTipPr
         {action ? (
           <button
             type="button"
-            onClick={() => { action.onClick(); handleDismiss(); }}
+            onClick={() => {
+              if (trackAnalytics) {
+                void trackAnalyticsEvent({ eventType: "GUIDANCE_TIP_CTA_CLICKED", metadata: { tipId } });
+              }
+              action.onClick();
+              handleDismiss();
+            }}
             className="rounded text-xs font-medium text-blue-700 underline-offset-2 hover:underline dark:text-blue-300"
           >
             {action.label}

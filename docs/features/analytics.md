@@ -65,6 +65,14 @@ Top-of-funnel and acquisition events:
 - `EMAIL_VERIFICATION_SENT`
 - `EMAIL_VERIFIED`
 
+Feature-activation funnel events (v0.28.0):
+
+- `GUIDANCE_TIP_SHOWN` — a `trackAnalytics` `GuidanceTip` became visible (impression); `metadata.tipId` identifies the tip
+- `GUIDANCE_TIP_CTA_CLICKED` — the tip's action button was used; `metadata.tipId` identifies the tip
+- `QUIZ_REVIEW_EXPORTED` — a session review PDF was successfully exported; `entity_id` is the note id, `metadata` carries `exportType` and `sessionMode`
+
+These form an impression → click → use funnel: tip shown → CTA click → feature use (an existing `*_STARTED` event, or `QUIZ_REVIEW_EXPORTED` for export). The events are browser-emitted via the analytics API and are fire-and-forget.
+
 ## Tracking Sources
 
 Backend-owned events should be emitted from the services that complete the action, including:

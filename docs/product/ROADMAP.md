@@ -50,9 +50,9 @@ Theme: close the gap between **signup conversion** (strong) and **feature activa
 Locked direction:
 
 - **Contextual nudges are the primary lever (push).** Reuse the existing `GuidanceTip` / `pickActiveGuidance` one-time-tip system (`lib/guidance-engine.ts`, `lib/guidance.ts`) — **do not build a new tips framework.** Surface each underused feature at its moment of relevance:
-  - **Export** → one-time tip on the quiz **review screen** ("Export this review as PDF to study offline / share").
-  - **Challenge Quiz** → one-time tip right after a **Quick Review completes** or when a note becomes quiz-ready ("Ready to go deeper? Try a Challenge Quiz").
-  - **Study Plans** → one-time tip once a user has *N* notes ("Group related notes into a Study Plan").
+  - **Export** → one-time tip on the quiz **review screen** ("Export this review as PDF to study offline / share"). _(shipped)_
+  - **Study Plans** → one-time tip once a user has *N* notes ("Group related notes into a Study Plan"). _(shipped)_
+  - **Challenge Quiz** → no dedicated tip. The Quick Review completion screen already drives it via `PostSessionNextStep` + a fallback "Take Another Challenge" CTA (context-aware and not one-time), so a tip would be redundant — Challenge Quiz adoption is left to the Dashboard-recommendation lever below.
 - **Smarter Dashboard recommendation, not a static promo.** Strengthen the existing `ContinueSpotlight` / `continueStudying` recommendation to push underused modes when contextually appropriate (e.g., a user with quiz-ready notes who hasn't tried Challenge Quiz). A permanent top-of-Dashboard "Try Challenge Quiz" banner was **explicitly rejected** — banner-blindness, and the Dashboard already recommends Challenge Quiz.
 - **Help reference completeness (table-stakes pull).** Add the missing **Study Plans / Collections** Help topic and audit Help for other gaps. Necessary for completeness, but not the adoption driver — bundled here, not shipped separately.
 - **Instrument the adoption funnel.** An activation initiative without measurement is guessing. Track tip impression → click → feature use via the existing `AnalyticsEventType` enum (e.g., around `CHALLENGE_QUIZ_STARTED`) so we can tell what moves the needle.
