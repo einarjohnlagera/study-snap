@@ -64,6 +64,8 @@ class NoteCollectionServiceTest {
     private static final String COURSE_PROGRAM = "STEM";
     private static final String WEEK_ONE_LABEL = "Week 1";
     private static final String WEEK_TWO_LABEL = "Week 2";
+    private static final OffsetDateTime FIRST_PRACTICED_AT = OffsetDateTime.parse("2026-04-02T01:00:00Z");
+    private static final OffsetDateTime SECOND_PRACTICED_AT = OffsetDateTime.parse("2026-04-03T01:00:00Z");
 
     @Mock
     private NoteCollectionRepository collectionRepository;
@@ -81,6 +83,9 @@ class NoteCollectionServiceTest {
     private GeneratedQuizRepository generatedQuizRepository;
 
     @Mock
+    private QuizSessionHistoryService quizSessionHistoryService;
+
+    @Mock
     private AnalyticsService analyticsService;
 
     private NoteCollectionService service;
@@ -93,6 +98,7 @@ class NoteCollectionServiceTest {
                 noteRepository,
                 studyPackRepository,
                 generatedQuizRepository,
+                quizSessionHistoryService,
                 analyticsService
         );
     }
@@ -235,13 +241,104 @@ class NoteCollectionServiceTest {
         when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId, secondNoteId))).thenReturn(List.of(studyPack));
         when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(firstNoteId, secondNoteId)))
                 .thenReturn(List.of(generatedQuiz));
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                userId,
+                List.of(firstNoteId, secondNoteId)
+        )).thenReturn(Map.of(secondNoteId, FIRST_PRACTICED_AT));
 
         NoteCollectionDetailResponse result = service.get(collectionId, userId);
 
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(firstNoteId, secondNoteId);
         assertThat(result.items().get(0).studyPackStatus()).isEqualTo(NoteStudyPackStatusResolver.DRAFT);
+        assertThat(result.items().get(0).lastSessionCompletedAt()).isNull();
         assertThat(result.items().get(1).studyPackStatus()).isEqualTo(NoteStudyPackStatusResolver.STUDY_PACK_READY);
         assertThat(result.items().get(1).generatedQuizId()).isEqualTo(generatedQuiz.getId().toString());
+        assertThat(result.items().get(1).lastSessionCompletedAt()).isEqualTo(FIRST_PRACTICED_AT);
+        assertThat(result.progress().totalNotes()).isEqualTo(2);
+        assertThat(result.progress().notesWithStudyPack()).isEqualTo(1);
+        assertThat(result.progress().notesPracticed()).isEqualTo(1);
+        verify(quizSessionHistoryService, times(1))
+                .findLatestSessionCompletedAtByNoteIds(userId, List.of(firstNoteId, secondNoteId));
+    }
+
+    @Test
+    void get_returnsMixedCollectionProgressFromAssembledItems() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        List<NoteCollectionItemEntity> items = List.of(
+                buildItem(collectionId, firstNoteId, 0, null),
+                buildItem(collectionId, secondNoteId, 1, null),
+                buildItem(collectionId, thirdNoteId, 2, null)
+        );
+        List<NoteEntity> notes = List.of(
+                buildNote(firstNoteId, userId, NOTE_TITLE_ONE),
+                buildNote(secondNoteId, userId, NOTE_TITLE_TWO),
+                buildNote(thirdNoteId, userId, NOTE_TITLE_THREE)
+        );
+        List<UUID> noteIds = List.of(firstNoteId, secondNoteId, thirdNoteId);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
+        when(noteRepository.findAllById(noteIds)).thenReturn(notes);
+        when(studyPackRepository.findByNoteIdIn(noteIds))
+                .thenReturn(List.of(buildStudyPack(firstNoteId), buildStudyPack(thirdNoteId)));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds))
+                .thenReturn(Map.of(
+                        firstNoteId, FIRST_PRACTICED_AT,
+                        secondNoteId, SECOND_PRACTICED_AT
+                ));
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.progress().totalNotes()).isEqualTo(3);
+        assertThat(result.progress().notesWithStudyPack()).isEqualTo(2);
+        assertThat(result.progress().notesPracticed()).isEqualTo(2);
+        assertThat(result.items()).extracting(item -> item.lastSessionCompletedAt())
+                .containsExactly(FIRST_PRACTICED_AT, SECOND_PRACTICED_AT, null);
+        verify(quizSessionHistoryService, times(1)).findLatestSessionCompletedAtByNoteIds(userId, noteIds);
+    }
+
+    @Test
+    void get_returnsZeroProgressForEmptyCollectionWithoutLoadingPracticeSignals() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.progress().totalNotes()).isZero();
+        assertThat(result.progress().notesWithStudyPack()).isZero();
+        assertThat(result.progress().notesPracticed()).isZero();
+        assertThat(result.items()).isEmpty();
+        verify(quizSessionHistoryService, never()).findLatestSessionCompletedAtByNoteIds(any(), any());
+    }
+
+    @Test
+    void get_degradesPracticeSignalFailureToNotPracticed() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId)))
+                .thenThrow(new IllegalStateException("session history unavailable"));
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.progress().notesPracticed()).isZero();
+        assertThat(result.items().getFirst().lastSessionCompletedAt()).isNull();
     }
 
     @Test
@@ -503,6 +600,7 @@ class NoteCollectionServiceTest {
         when(noteRepository.findAllById(noteIds)).thenReturn(notes);
         when(studyPackRepository.findByNoteIdIn(noteIds)).thenReturn(List.of());
         when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
     }
 
     private NoteCollectionEntity buildCollection(UUID id, UUID userId, String title, Instant updatedAt) {

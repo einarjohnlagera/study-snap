@@ -60,6 +60,11 @@ function collection(overrides: Record<string, unknown> = {}) {
     description: "Weeks 1-4",
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
+    progress: {
+      totalNotes: 2,
+      notesWithStudyPack: 1,
+      notesPracticed: 1,
+    },
     items: [
       {
         noteId: "note-1",
@@ -70,6 +75,7 @@ function collection(overrides: Record<string, unknown> = {}) {
         courseProgram: "Nursing",
         studyPackStatus: "DRAFT",
         generatedQuizId: null,
+        lastSessionCompletedAt: null,
         updatedAt: "2026-06-01T00:00:00Z",
       },
       {
@@ -81,6 +87,7 @@ function collection(overrides: Record<string, unknown> = {}) {
         courseProgram: "Nursing",
         studyPackStatus: "STUDY_PACK_READY",
         generatedQuizId: "quiz-2",
+        lastSessionCompletedAt: "2026-06-02T00:00:00Z",
         updatedAt: "2026-06-01T00:00:00Z",
       },
     ],
@@ -142,6 +149,32 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+  });
+
+  it("renders the collection progress rollup", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("1 of 2 Study Packs ready · 1 of 2 practiced")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "1");
+    expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuemax", "2");
+  });
+
+  it("renders neutral progress for an empty collection without an invalid percentage", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("No progress yet")).toBeInTheDocument();
+    expect(screen.getByText("Add notes to track Study Pack readiness and practice.")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "0");
+    expect(document.body.textContent).not.toContain("NaN");
   });
 
   it("routes teacher collections to Exam Builder with the collection id and quiz-ready note ids", async () => {
@@ -242,6 +275,7 @@ describe("CollectionDetailPageClient", () => {
         courseProgram: null,
         studyPackStatus: "DRAFT",
         generatedQuizId: null,
+        lastSessionCompletedAt: null,
         updatedAt: "2026-06-01T00:00:00Z",
       }],
     }));

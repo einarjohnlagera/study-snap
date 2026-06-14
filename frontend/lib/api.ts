@@ -1247,7 +1247,14 @@ export type NoteCollectionItem = {
   courseProgram: string | null;
   studyPackStatus: NoteStudyPackStatus;
   generatedQuizId: string | null;
+  lastSessionCompletedAt: string | null;
   updatedAt: string;
+};
+
+export type NoteCollectionProgress = {
+  totalNotes: number;
+  notesWithStudyPack: number;
+  notesPracticed: number;
 };
 
 export type NoteCollectionDetail = {
@@ -1256,6 +1263,7 @@ export type NoteCollectionDetail = {
   description: string | null;
   createdAt: string;
   updatedAt: string;
+  progress: NoteCollectionProgress;
   items: NoteCollectionItem[];
 };
 

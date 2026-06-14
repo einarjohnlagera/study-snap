@@ -12,6 +12,7 @@ public record NoteCollectionItemResponse(
         String courseProgram,
         String studyPackStatus,
         String generatedQuizId,
+        OffsetDateTime lastSessionCompletedAt,
         OffsetDateTime updatedAt
 ) {
 }

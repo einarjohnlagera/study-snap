@@ -138,6 +138,7 @@ Item response is intentionally lean and private-owner focused:
 - `courseProgram`
 - `studyPackStatus`
 - `generatedQuizId`
+- `lastSessionCompletedAt`
 - `updatedAt`
 
 `studyPackStatus` uses the same note readiness rule as the Note API:
@@ -147,6 +148,18 @@ Item response is intentionally lean and private-owner focused:
 - note `FAILED` -> `FAILED`
 - no linked Study Pack -> `DRAFT`
 - linked Study Pack otherwise -> `STUDY_PACK_READY`
+
+The detail response also includes a read-only `progress` summary:
+
+- `totalNotes` — number of notes in the collection
+- `notesWithStudyPack` — items whose resolved `studyPackStatus` is `STUDY_PACK_READY`
+- `notesPracticed` — items whose `lastSessionCompletedAt` is not null
+
+`lastSessionCompletedAt` uses the same batched per-note completed-session source as the private Library note list. It covers completed supported quiz modes, including participating notes from multi-note sessions, without issuing one query per collection item. If session history cannot be resolved, item timestamps degrade to null and the notes count as not practiced rather than failing the collection response.
+
+The progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards remain lightweight and do not run progress aggregation.
+
+The rollup is profile-agnostic and presentation-neutral. Frontend profile labels still come only from `getCollectionLabels`; the backend returns the same counts for Study Plans, Review Sets, Lesson Plans, and Collections. It adds no persisted progress field, generated content, AI call, or quota category.
 
 ### Update Metadata
 
@@ -237,6 +250,8 @@ The core Collections UI ships as the universal organization surface:
 
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
 - `/collections/[id]` shows one collection, its ordered note items, item labels, and note readiness hints.
+- `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
+- Empty collections show a neutral no-progress state and never calculate a percentage from `0/0`.
 - The detail page loads from `GET /collections/{id}` on mount, so a hard refresh renders the persisted order.
 - The detail page can edit metadata, delete the collection, add notes, remove notes, relabel items, and reorder items through the shipped CRUD API.
 

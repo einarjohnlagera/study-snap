@@ -10,6 +10,7 @@ public record NoteCollectionDetailResponse(
         String description,
         Instant createdAt,
         Instant updatedAt,
+        NoteCollectionProgressResponse progress,
         List<NoteCollectionItemResponse> items
 ) {
 }
