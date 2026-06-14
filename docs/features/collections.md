@@ -139,6 +139,8 @@ Item response is intentionally lean and private-owner focused:
 - `studyPackStatus`
 - `generatedQuizId`
 - `lastSessionCompletedAt`
+- `dueConceptCount`
+- `dueConcepts` (up to 3 ordered names for display)
 - `updatedAt`
 
 `studyPackStatus` uses the same note readiness rule as the Note API:
@@ -160,6 +162,15 @@ The detail response also includes a read-only `progress` summary:
 The progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards remain lightweight and do not run progress aggregation.
 
 The rollup is profile-agnostic and presentation-neutral. Frontend profile labels still come only from `getCollectionLabels`; the backend returns the same counts for Study Plans, Review Sets, Lesson Plans, and Collections. It adds no persisted progress field, generated content, AI call, or quota category.
+
+Collection detail items also expose a read-only weak-area signal from the existing `ConceptHealthService` due-concept model:
+
+- `dueConceptCount` is the full number of due key concepts for the note's Study Pack.
+- `dueConcepts` contains the first 3 concepts in the existing deterministic due order.
+- Concept health is loaded once for all Study Packs in the collection; the read path must not issue one query per item.
+- The signal is populated only when the user has a Plus or Pro plan and the existing `Feature.ADAPTIVE_QUIZ` entitlement is available, matching the Note Detail concept-health surface.
+- Free users and notes without a Study Pack receive `0` and an empty list. Lookup failures also degrade to empty weak-area data without failing collection detail.
+- The backend remains profile-agnostic and does not branch on `ProfileType`.
 
 ### Update Metadata
 
@@ -251,12 +262,22 @@ The core Collections UI ships as the universal organization surface:
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
 - `/collections/[id]` shows one collection, its ordered note items, item labels, and note readiness hints.
 - `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
+- Entitled users see per-note due-concept counts and up to 3 concept names. Free users see no fabricated counts and may see one plan-aware upgrade affordance resolved through `getUpgradeCtas(currentPlan)`.
+- A frontend-only `Next in this plan` card derives one action from the already-returned ordered items. It never calls a recommendation endpoint or persists recommendation state.
+- The next-action phases are evaluated globally in this order, choosing the first matching note in saved order within each phase:
+  1. First note without `STUDY_PACK_READY` -> `Generate Study Pack`.
+  2. When all Study Packs are ready, first note with no completed practice -> `Study this note`.
+  3. When all notes are practiced, first note with due concepts -> `Review due concepts` for entitled users only.
+  4. Otherwise -> `All caught up in this plan`.
+- The Next card links to `/notes/{noteId}` with `ref=/collections/{collectionId}` so Note Detail returns to the current plan.
 - Empty collections show a neutral no-progress state and never calculate a percentage from `0/0`.
 - The detail page loads from `GET /collections/{id}` on mount, so a hard refresh renders the persisted order.
 - The detail page can edit metadata, delete the collection, add notes, remove notes, relabel items, and reorder items through the shipped CRUD API.
 - Opening a note from the detail page passes `ref=/collections/{id}`, so the note's back link returns to the collection with the profile-aware label (via `getCollectionLabels`) instead of falling back to Library.
 
 Profile-aware labels are resolved only through `frontend/lib/collection-labels.ts`.
+
+The Study Plan remains an execution surface for one curated, ordered set. It does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on collection detail.
 
 | Profile | Singular | Plural / nav |
 |---|---|---|

@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -49,6 +50,7 @@ public class NoteCollectionService {
 
     private static final int TITLE_MAX_LENGTH = 150;
     private static final int LABEL_MAX_LENGTH = 120;
+    private static final int DUE_CONCEPT_DISPLAY_LIMIT = 3;
     private static final String TITLE_REQUIRED_MESSAGE = "Collection title is required.";
     private static final String TITLE_TOO_LONG_MESSAGE = "Collection title must be 150 characters or fewer.";
     private static final String LABEL_TOO_LONG_MESSAGE = "Collection item label must be 120 characters or fewer.";
@@ -62,6 +64,7 @@ public class NoteCollectionService {
     private final StudyPackRepository studyPackRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
     private final QuizSessionHistoryService quizSessionHistoryService;
+    private final ConceptHealthService conceptHealthService;
     private final AnalyticsService analyticsService;
 
     @Transactional(readOnly = true)
@@ -394,6 +397,10 @@ public class NoteCollectionService {
                 .filter(generatedQuiz -> generatedQuiz.getNoteId() != null)
                 .collect(Collectors.toMap(GeneratedQuizEntity::getNoteId, Function.identity(), (left, right) -> left));
         Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = loadLastSessionCompletedAt(userId, noteIds);
+        Map<UUID, List<String>> dueConceptsByStudyPackId = loadDueConceptsByStudyPackId(
+                userId,
+                studyPacksByNoteId.values()
+        );
 
         return items.stream()
                 .map(item -> toItemResponse(
@@ -401,9 +408,38 @@ public class NoteCollectionService {
                         notesById.get(item.getNoteId()),
                         studyPacksByNoteId.get(item.getNoteId()),
                         generatedQuizzesByNoteId.get(item.getNoteId()),
-                        lastSessionCompletedAtByNoteId.get(item.getNoteId())
+                        lastSessionCompletedAtByNoteId.get(item.getNoteId()),
+                        dueConceptsByStudyPackId
                 ))
                 .toList();
+    }
+
+    private Map<UUID, List<String>> loadDueConceptsByStudyPackId(
+            UUID userId,
+            Collection<StudyPackEntity> studyPacks
+    ) {
+        if (studyPacks.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            if (!conceptHealthService.canViewConceptHealth(userId)) {
+                return Map.of();
+            }
+            Map<UUID, List<String>> conceptsByStudyPackId = studyPacks.stream()
+                    .collect(Collectors.toMap(
+                            StudyPackEntity::getId,
+                            studyPack -> studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
+                            (left, right) -> left
+                    ));
+            return conceptHealthService.getDueConceptsByStudyPackIds(
+                    userId,
+                    conceptsByStudyPackId,
+                    OffsetDateTime.now()
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Could not load collection due concepts for user {}", userId, exception);
+            return Map.of();
+        }
     }
 
     private Map<UUID, OffsetDateTime> loadLastSessionCompletedAt(UUID userId, List<UUID> noteIds) {
@@ -422,11 +458,15 @@ public class NoteCollectionService {
             NoteEntity note,
             StudyPackEntity studyPack,
             GeneratedQuizEntity generatedQuiz,
-            OffsetDateTime lastSessionCompletedAt
+            OffsetDateTime lastSessionCompletedAt,
+            Map<UUID, List<String>> dueConceptsByStudyPackId
     ) {
         if (note == null) {
             throw new NoteNotFoundException();
         }
+        List<String> dueConcepts = studyPack == null
+                ? List.of()
+                : dueConceptsByStudyPackId.getOrDefault(studyPack.getId(), List.of());
         return new NoteCollectionItemResponse(
                 item.getNoteId(),
                 item.getLabel(),
@@ -437,6 +477,8 @@ public class NoteCollectionService {
                 NoteStudyPackStatusResolver.resolve(note, studyPack),
                 generatedQuiz == null ? null : generatedQuiz.getId().toString(),
                 lastSessionCompletedAt,
+                dueConcepts.size(),
+                dueConcepts.stream().limit(DUE_CONCEPT_DISPLAY_LIMIT).toList(),
                 note.getUpdatedAt()
         );
     }
