@@ -1,7 +1,17 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ContinueSpotlight } from "./continue-spotlight";
+import { trackAnalyticsEvent } from "@/lib/api";
+
+jest.mock("@/lib/api", () => ({
+  trackAnalyticsEvent: jest.fn(),
+}));
 
 describe("ContinueSpotlight", () => {
+  beforeEach(() => {
+    (trackAnalyticsEvent as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
+  });
+
   it("shows the note title, metadata, and quick-review resume route", () => {
     render(
       <ContinueSpotlight
@@ -116,5 +126,54 @@ describe("ContinueSpotlight", () => {
       "href",
       "/notes/note-3/long-exam",
     );
+  });
+
+  it("uses try-it framing and tracks the suggested Challenge Quiz funnel", () => {
+    render(
+      <ContinueSpotlight
+        recommendation={{
+          studyPackId: "pack-4",
+          noteId: "note-4",
+          noteTitle: "Cardiology Review",
+          subject: "Cardiology",
+          courseProgram: "Nursing",
+          summaryPreview: null,
+          resumeType: "CHALLENGE",
+          reason: "SUGGESTED_CHALLENGE",
+          lastScorePercentage: null,
+          lastReviewedAt: null,
+          lastOpenedAt: "2026-04-04T09:00:00Z",
+          createdAt: "2026-04-01T09:00:00Z",
+          currentQuestionIndex: null,
+          totalQuestions: null,
+          currentRound: null,
+          remainingQuestions: null,
+          resumeState: null,
+        }}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "Try Challenge Quiz" });
+    expect(link).toHaveAttribute("href", "/notes/note-4/challenge-quiz");
+    expect(screen.queryByText("Resume Challenge Quiz")).not.toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "DASHBOARD_RECOMMENDATION_SHOWN",
+      entityId: "note-4",
+      metadata: {
+        reason: "SUGGESTED_CHALLENGE",
+        resumeType: "CHALLENGE",
+      },
+    });
+
+    fireEvent.click(link);
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "DASHBOARD_RECOMMENDATION_CTA_CLICKED",
+      entityId: "note-4",
+      metadata: {
+        reason: "SUGGESTED_CHALLENGE",
+        resumeType: "CHALLENGE",
+      },
+    });
   });
 });
