@@ -17,6 +17,7 @@ import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -73,6 +74,13 @@ public class ConceptHealthService {
     }
 
     @Transactional(readOnly = true)
+    public boolean canViewConceptHealth(UUID userId) {
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        boolean hasPaidPlan = planType == PlanType.PLUS || planType == PlanType.PRO;
+        return hasPaidPlan && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
+    }
+
+    @Transactional(readOnly = true)
     public List<ConceptHealthEntryResponse> getConceptHealth(
         UUID userId,
         UUID studyPackId,
@@ -103,6 +111,49 @@ public class ConceptHealthService {
         }
 
         Map<String, ConceptHealthEntity> healthByConcept = healthByConcept(userId, studyPackId);
+        return getDueConcepts(allConcepts, healthByConcept, now);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, List<String>> getDueConceptsByStudyPackIds(
+        UUID userId,
+        Map<UUID, List<String>> conceptsByStudyPackId,
+        OffsetDateTime now
+    ) {
+        if (conceptsByStudyPackId == null || conceptsByStudyPackId.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, Map<String, ConceptHealthEntity>> healthByStudyPackId = new HashMap<>();
+        List<UUID> studyPackIds = List.copyOf(conceptsByStudyPackId.keySet());
+        for (ConceptHealthEntity entity : conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, studyPackIds)) {
+            String concept = normalizeConcept(entity.getConcept());
+            if (concept != null) {
+                healthByStudyPackId
+                    .computeIfAbsent(entity.getStudyPackId(), ignored -> new HashMap<>())
+                    .put(concept, entity);
+            }
+        }
+
+        Map<UUID, List<String>> dueConceptsByStudyPackId = new LinkedHashMap<>();
+        for (Map.Entry<UUID, List<String>> entry : conceptsByStudyPackId.entrySet()) {
+            dueConceptsByStudyPackId.put(
+                entry.getKey(),
+                getDueConcepts(
+                    entry.getValue(),
+                    healthByStudyPackId.getOrDefault(entry.getKey(), Map.of()),
+                    now
+                )
+            );
+        }
+        return Map.copyOf(dueConceptsByStudyPackId);
+    }
+
+    private List<String> getDueConcepts(
+        List<String> allConcepts,
+        Map<String, ConceptHealthEntity> healthByConcept,
+        OffsetDateTime now
+    ) {
         return allConcepts.stream()
             .map(this::normalizeConcept)
             .filter(Objects::nonNull)

@@ -30,9 +30,15 @@ import {
 } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 type MutationKind = "add" | "delete" | "edit" | "remove" | "reorder" | null;
+type NextPlanAction = {
+  item: NoteCollectionItem;
+  actionLabel: "Generate Study Pack" | "Study this note" | "Review due concepts";
+  description: string;
+};
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
@@ -73,6 +79,43 @@ function canIncludeCollectionItemInExam(item: Pick<NoteCollectionItem, "generate
   return Boolean(item.generatedQuizId);
 }
 
+function canViewConceptHealth(currentPlan: AppPlanType): boolean {
+  return currentPlan === "PLUS" || currentPlan === "PRO";
+}
+
+function getNextPlanAction(items: NoteCollectionItem[], canReviewDueConcepts: boolean): NextPlanAction | null {
+  const needsStudyPack = items.find((item) => item.studyPackStatus !== "STUDY_PACK_READY");
+  if (needsStudyPack) {
+    return {
+      item: needsStudyPack,
+      actionLabel: "Generate Study Pack",
+      description: "Turn this note into a Study Pack before moving to the next step.",
+    };
+  }
+
+  const needsPractice = items.find((item) => item.lastSessionCompletedAt === null);
+  if (needsPractice) {
+    return {
+      item: needsPractice,
+      actionLabel: "Study this note",
+      description: "Practice this Study Pack before continuing through the plan.",
+    };
+  }
+
+  if (canReviewDueConcepts) {
+    const needsReview = items.find((item) => item.dueConceptCount > 0);
+    if (needsReview) {
+      return {
+        item: needsReview,
+        actionLabel: "Review due concepts",
+        description: "Revisit the concepts that are due in this note.",
+      };
+    }
+  }
+
+  return null;
+}
+
 function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCollectionDetail }>) {
   const { totalNotes, notesWithStudyPack, notesPracticed } = collection.progress;
   const practicedPercentage = totalNotes > 0
@@ -107,6 +150,48 @@ function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCo
           style={{ width: `${practicedPercentage}%` }}
         />
       </div>
+    </Card>
+  );
+}
+
+function NextInPlanCard({
+  items,
+  collectionId,
+  canReviewDueConcepts,
+}: Readonly<{
+  items: NoteCollectionItem[];
+  collectionId: string;
+  canReviewDueConcepts: boolean;
+}>) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  const nextAction = getNextPlanAction(items, canReviewDueConcepts);
+  if (!nextAction) {
+    return (
+      <Card className="space-y-2 border-emerald-500/25 bg-emerald-500/5 p-4 sm:p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Next in this plan</p>
+        <CardTitle>All caught up in this plan</CardTitle>
+        <CardDescription>Every note has a Study Pack and has been practiced.</CardDescription>
+      </Card>
+    );
+  }
+
+  const noteHref = `/notes/${nextAction.item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`;
+  return (
+    <Card className="space-y-3 border-blue-500/25 bg-blue-500/5 p-4 sm:p-5">
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Next in this plan</p>
+        <CardTitle>{getNoteTitle(nextAction.item)}</CardTitle>
+        <CardDescription>{nextAction.description}</CardDescription>
+      </div>
+      <Link
+        href={noteHref}
+        className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+      >
+        {nextAction.actionLabel}
+      </Link>
     </Card>
   );
 }
@@ -393,6 +478,7 @@ function SortableCollectionItemRow({
   itemCount,
   disabled,
   collectionId,
+  showWeakAreas,
   onMove,
   onRemove,
   onLabelChange,
@@ -402,6 +488,7 @@ function SortableCollectionItemRow({
   itemCount: number;
   disabled: boolean;
   collectionId: string;
+  showWeakAreas: boolean;
   onMove: (noteId: string, direction: "up" | "down") => void;
   onRemove: (noteId: string) => void;
   onLabelChange: (noteId: string, label: string) => void;
@@ -447,6 +534,16 @@ function SortableCollectionItemRow({
             <p className="text-sm text-foreground/60">{getNoteMeta(item)}</p>
             <p className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300">{getQuizReadinessHint(item)}</p>
           </Link>
+          {showWeakAreas && item.dueConceptCount > 0 ? (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                {item.dueConceptCount} {item.dueConceptCount === 1 ? "concept" : "concepts"} due
+              </p>
+              {item.dueConcepts.length > 0 ? (
+                <p className="mt-1 text-xs text-foreground/65">{item.dueConcepts.join(" · ")}</p>
+              ) : null}
+            </div>
+          ) : null}
           <label className="block space-y-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Label</span>
             <input
@@ -485,6 +582,9 @@ function SortableCollectionItemRow({
 export function CollectionDetailPageClient({ collectionId }: Readonly<{ collectionId: string }>) {
   const router = useRouter();
   const authUser = getAuthUser();
+  const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
+  const showWeakAreas = canViewConceptHealth(currentPlan);
+  const upgradeCtas = useMemo(() => getUpgradeCtas(currentPlan), [currentPlan]);
   const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
   const terminalAction = useMemo(() => getCollectionTerminalAction(authUser?.profileType), [authUser?.profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -723,6 +823,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
       <CollectionProgressSummary collection={collection} />
 
+      <NextInPlanCard
+        items={items}
+        collectionId={collectionId}
+        canReviewDueConcepts={showWeakAreas}
+      />
+
       <div className="flex justify-end">
         <ResponsiveActionButton action="delete" label={`Delete ${labels.singular}`} variant="ghost" onClick={() => setDeleteOpen(true)} />
       </div>
@@ -745,6 +851,18 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           <ResponsiveActionButton action="create" label="Add notes" onClick={() => setAddOpen(true)} />
         </div>
 
+        {!showWeakAreas && items.length > 0 && upgradeCtas.primary ? (
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-foreground/65">See which concepts are due for review in each note.</p>
+            <Link
+              href="/settings?section=plans"
+              className="text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+            >
+              {upgradeCtas.primary.label}
+            </Link>
+          </div>
+        ) : null}
+
         {items.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-6 text-center">
             <p className="text-sm text-foreground/70">Add notes to start organizing this {labels.singular.toLowerCase()}.</p>
@@ -761,6 +879,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     itemCount={items.length}
                     disabled={mutationInProgress}
                     collectionId={collectionId}
+                    showWeakAreas={showWeakAreas}
                     onMove={handleMove}
                     onRemove={(noteId) => void handleRemove(noteId)}
                     onLabelChange={handleLabelChange}

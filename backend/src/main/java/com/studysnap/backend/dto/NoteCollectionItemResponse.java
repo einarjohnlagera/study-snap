@@ -1,6 +1,7 @@
 package com.studysnap.backend.dto;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record NoteCollectionItemResponse(
@@ -13,6 +14,8 @@ public record NoteCollectionItemResponse(
         String studyPackStatus,
         String generatedQuizId,
         OffsetDateTime lastSessionCompletedAt,
+        int dueConceptCount,
+        List<String> dueConcepts,
         OffsetDateTime updatedAt
 ) {
 }

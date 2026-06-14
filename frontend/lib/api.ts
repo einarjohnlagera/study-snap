@@ -1248,6 +1248,8 @@ export type NoteCollectionItem = {
   studyPackStatus: NoteStudyPackStatus;
   generatedQuizId: string | null;
   lastSessionCompletedAt: string | null;
+  dueConceptCount: number;
+  dueConcepts: string[];
   updatedAt: string;
 };
 
