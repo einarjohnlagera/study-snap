@@ -47,6 +47,15 @@ describe("HelpPage", () => {
     expect(screen.getByRole("link", { name: /Switch Profile/i })).toHaveAttribute("href", "/profile#profile-type");
   });
 
+  it("opens a profile-aware Study Plans guide linking to Collections", () => {
+    render(<HelpPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Study Plans & Collections/i }));
+
+    expect(screen.getByText(/What Study Plans are/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Study Plans/i })).toHaveAttribute("href", "/collections");
+  });
+
   it("hides Switch Profile on the matching profile guide and shows it on other profile guides", () => {
     render(<HelpPage />);
 
