@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.28.0 - Feature Discoverability & Activation` is the current in-progress release.
+
 `v0.27.0 - Material Import & Collections` is the current documentation baseline (last released).
 
 `v0.26.1 - Guidance System` is the previous baseline.
@@ -18,7 +20,30 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ---
 
-## Next Release (candidate) - Feature Discoverability & Activation
+## Next Release (candidate) - v0.29.0 Bulk Generation & Teacher-Flow Polish
+
+Theme: reduce the friction of turning material into quizzes. Builds directly on the v0.27.0 collections spine. Bundles three teacher-flow quiz-preview polish fixes with the two-part generation effort — make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+
+Locked direction:
+
+- **The universal spine is preserved.** Every profile still generates a Study Pack before a quiz — this is intentional, not a funnel to remove (consistency across easy profile switching + uniform quota). Bulk solves the friction by *batching* the same pipeline, never by forking a profile-specific shortcut.
+- **Profile-aware framing, not a fork.** Teacher emphasizes quizzes, Student study packs, via the existing Study/Exam Focus copy mechanism — never per-profile pipeline branches or hardcoded `if (TEACHER)` checks.
+- **No new quota category, no collection-level AI synthesis.** Each note spends one existing per-note credit per artifact; bulk is a fan-out of per-note generation, not a synthesized collection document (Option B stays deferred).
+- **Bulk is explicit, not an import side-effect.** One deliberate user click for the batch; preserves the explicit-generation rule. DOCX export and shareable quiz links stay Teacher/Admin only.
+
+Scope:
+
+- **Teacher quiz-preview polish** — move the ⋯ context menu to the top-right of the note title; remove the redundant "Correct Answer" panel (the choice already shows a ✓ Correct badge + highlight, no a11y loss); render the question stem through `QuizQuestionText` so `Statement N:` lines break onto separate lines (the teacher preview is the only quiz view rendering raw stem text).
+- **Async quiz generation** — mirror the Note → Study Pack pipeline: status field (`GENERATING` / `READY` / `FAILED`), task-executor enqueue, frontend polling. `GeneratedQuizService.generate()` is currently synchronous. Prerequisite for bulk.
+- **Collection-level bulk generation** — batch the universal per-note pipeline across a collection. The hard part is **quota-aware partial execution**: generate as many as quota allows, report completed vs. blocked, upsell — never fail the whole batch.
+
+---
+
+## v0.28.0 - Feature Discoverability & Activation
+
+**Status: In Progress**
+
+Base branch for this release: `releases/v0.28.0`.
 
 Theme: close the gap between **signup conversion** (strong) and **feature activation** (weak). Observed symptoms: quiz-session **export is unused**, **Challenge Quiz is underused**, and new surfaces like **Study Plans** need adoption. The headline insight is that this is an *activation* problem, not a *docs* problem — quiz-session export is **already documented in Help** ("Export & Sharing") and still goes unused, which proves pull-docs do not drive discovery. The fix is **in-flow push** through the systems we already have, not new help pages.
 

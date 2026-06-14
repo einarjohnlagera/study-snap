@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.28.0 - Feature Discoverability & Activation
+
+**Status: In Progress**
+
+Theme: close the gap between strong signup conversion and weak feature activation. Underused surfaces — quiz-session export, Challenge Quiz, and the new Study Plans — get surfaced *in flow* through systems we already have (one-time contextual tips, the Dashboard recommendation), not new help pages. This is an activation problem, not a docs problem: quiz-session export is already documented in Help and still goes unused. Reuse `GuidanceTip` / `pickActiveGuidance` — no new tips framework, no new infrastructure. See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
+
+### Planned scope
+
+- **Contextual activation nudges** — one-time tips at the moment of relevance: Export (quiz review screen), Challenge Quiz (after a Quick Review completes / note becomes quiz-ready), Study Plans (once a user has *N* notes). All routed through `pickActiveGuidance`.
+- **Smarter Dashboard recommendation** — strengthen the existing `ContinueSpotlight` / `continueStudying` recommendation to push underused modes when contextually appropriate. No permanent promo banner.
+- **Help reference completeness** — add the missing Study Plans / Collections Help topic and audit Help for other gaps.
+- **Adoption funnel instrumentation** — track tip impression → click → feature use via the `AnalyticsEventType` enum (Java + frontend), added before firing.
+- **Study Plan progress rollup** (candidate pillar) — read-only aggregation of per-note signals so a plan becomes a trackable unit.
+
+### Shipped
+
+_(none yet)_
+
+---
+
 ## v0.27.0 - Material Import & Collections
 
 **Status: Released**
