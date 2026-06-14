@@ -6,23 +6,43 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.28.0 - Feature Discoverability & Activation` is the current in-progress release.
+No release is currently in progress. `v0.29.0 - Readiness Signals` is the next candidate (not yet started).
 
-`v0.27.0 - Material Import & Collections` is the current documentation baseline (last released).
+`v0.28.0 - Feature Discoverability & Activation` is the current documentation baseline (last released).
 
-`v0.26.1 - Guidance System` is the previous baseline.
+`v0.27.0 - Material Import & Collections` is the previous baseline.
+
+`v0.26.1 - Guidance System` is the release before that.
 
 `v0.26.0 - Exam Depth` is the release before that.
-
-`v0.25.0 - Exam Capture & Goal Setting` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
 
-## Next Release (candidate) - v0.29.0 Bulk Generation & Teacher-Flow Polish
+## Next Release (candidate) - v0.29.0 Readiness Signals
 
-Theme: reduce the friction of turning material into quizzes. Builds directly on the v0.27.0 collections spine. Bundles three teacher-flow quiz-preview polish fixes with the two-part generation effort — make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers — and make sure personalization actually fires for every account. Two gaps surfaced after v0.28.0: practice in the exam modes never moves the Progress page, and a cohort of accounts has no profile type at all.
+
+Why now (over Bulk/Teacher): we still have **no teacher users**, so teacher-flow polish and bulk generation are deferred to v0.30.0. The leverage today is the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced, and they need the personalization their profile type drives.
+
+Locked direction:
+
+- **Read-time fallbacks stay; fix the source.** Today only Quick Review, Challenge, and Adaptive Practice write `ConceptHealth` (via `recordCorrectAnswers`), and `ConceptHealth` is the **only** thing the Progress page reads. Long Exam, Board Exam, and Interview Practice produce rich per-session reports (`LongExamMasteryReportResponse` domain breakdown, `InterviewReadinessReportResponse` gaps) that are **ephemeral** (`sessionMetadata` JSON) and never persist — so an exam-taker can grind Board Exams and see a flat Progress page. Wire these results into `ConceptHealth` so they count.
+- **Two write-paths, not three.** Board Exam *is* `LONG_EXAM` session mode (no separate enum) and runs through `LongExamService`; Interview Practice runs through `InterviewPracticeService`. So the recording work lives in those two services, mirroring the existing `recordCorrectAnswers` contract — no new entity, no new quota, no new artifact.
+- **Reconcile two "mastery" grains.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is built on per-**concept** `ConceptHealth`. The mapping (domain/result → concept records) is the hard part and must be designed before writing — don't invent a parallel mastery store.
+- **Profile-type integrity = re-prompt, not silent default.** Root cause of null `profileType`: both signup paths set it null (`AuthService.signup`, `createGoogleUser`); only `completeOnboarding` (email-verification-gated) / `updateProfileType` set it, both `@NotNull`-validated. So **null = abandoned onboarding** (never completed), not completed-but-null. All readers null-handle gracefully (treat null as non-teacher/student) — no crash, so this is a **personalization-quality gap**, not a bug. The fix is to instrument the profile-type step, quantify the null cohort, and **re-prompt** abandoned users — *not* a silent default-backfill (a wrong default mis-personalizes undetectably; null is at least detectable).
+
+Scope:
+
+- **Exam-mode results feed Progress** — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, so Progress reflects all practice. Define the domain→concept mapping first.
+- **Profile-type integrity** — onboarding profile-type-step instrumentation, null-cohort sizing, and a re-prompt path for abandoned-onboarding accounts (no silent default).
+
+---
+
+## v0.30.0 (candidate, gated on teacher users) - Bulk Generation & Teacher-Flow Polish
+
+Theme: reduce the friction of turning material into quizzes. Builds directly on the v0.27.0 collections spine. **Deferred from v0.29.0** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. Bundles three teacher-flow quiz-preview polish fixes with the two-part generation effort — make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 
@@ -41,7 +61,7 @@ Scope:
 
 ## v0.28.0 - Feature Discoverability & Activation
 
-**Status: In Progress**
+**Status: Released**
 
 Base branch for this release: `releases/v0.28.0`.
 
