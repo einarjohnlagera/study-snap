@@ -48,6 +48,23 @@ In-progress session priority (when multiple modes have an active session):
 
 Within the same mode, recency is the tiebreaker.
 
+Overall Continue Studying recommendation priority:
+
+1. `RESUME_REVIEW` — resume the highest-priority unfinished session
+2. `LOW_SCORE_RECENT` — revisit the weakest recently reviewed Study Pack
+3. `SUGGESTED_CHALLENGE` — invite an eligible idle user to try Challenge Quiz
+4. `RECENTLY_OPENED` — return to the most recently opened Study Pack
+5. `RECENTLY_CREATED` — start with the most recently created Study Pack
+
+`SUGGESTED_CHALLENGE` is returned only when all of these hold:
+
+- the profile is `STUDENT` or `BOARD_EXAM`
+- at least one owned Study Pack is quiz-ready and linked to a note
+- no Challenge-mode session exists for the user, regardless of whether it was started, completed, failed, or forfeited
+- the effective monthly Challenge Quiz usage is below the backend pricing limit for the resolved plan
+
+The target is deterministic: prefer the most recently opened eligible Study Pack, otherwise the most recently created eligible Study Pack. The response uses `resumeType = CHALLENGE`, but the frontend renders try-it copy (`Try Challenge Quiz`) rather than resume copy. Eligibility/query failures fall through to the existing passive recommendation chain and never break Dashboard rendering.
+
 ## Dashboard Overview
 
 Endpoint:

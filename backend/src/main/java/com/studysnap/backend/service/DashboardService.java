@@ -18,11 +18,13 @@ import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
@@ -32,7 +34,9 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +46,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Stream;
@@ -49,8 +54,18 @@ import java.util.stream.Stream;
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
+@Slf4j
 public class DashboardService {
     private static final BigDecimal PERFECT_SCORE = BigDecimal.valueOf(100);
+    private static final Set<ProfileType> CHALLENGE_SUGGESTION_PROFILE_TYPES = EnumSet.of(
+            ProfileType.STUDENT,
+            ProfileType.BOARD_EXAM
+    );
+    private static final List<QuickReviewSessionStatus> CHALLENGE_USAGE_COUNTED_STATUSES = List.of(
+            QuickReviewSessionStatus.IN_PROGRESS,
+            QuickReviewSessionStatus.COMPLETED,
+            QuickReviewSessionStatus.FORFEITED
+    );
 
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
@@ -59,6 +74,8 @@ public class DashboardService {
     private final ActivityEventRepository activityEventRepository;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
+    private final UserUsageService userUsageService;
+    private final BillingUsagePeriodService billingUsagePeriodService;
 
     public ContinueStudyingResponse getContinueStudyingRecommendation(UUID userId) {
         // Priority 1: resume the latest unfinished review session when available.
@@ -73,13 +90,23 @@ public class DashboardService {
             return lowScoreRecent.get();
         }
 
-        // Priority 3: otherwise use the most recently opened Study Pack.
+        // Priority 3: suggest Challenge Quiz when it is a valid, unused next step.
+        try {
+            Optional<ContinueStudyingResponse> suggestedChallenge = resolveSuggestedChallengeRecommendation(userId);
+            if (suggestedChallenge.isPresent()) {
+                return suggestedChallenge.get();
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Could not resolve Challenge Quiz dashboard recommendation for user {}", userId, exception);
+        }
+
+        // Priority 4: otherwise use the most recently opened Study Pack.
         Optional<ContinueStudyingResponse> recentlyOpened = resolveRecentlyOpenedRecommendation(userId);
         if (recentlyOpened.isPresent()) {
             return recentlyOpened.get();
         }
 
-        // Priority 4: otherwise use the most recently created Study Pack.
+        // Priority 5: otherwise use the most recently created Study Pack.
         Optional<StudyPackEntity> recentlyCreated = studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId);
         if (recentlyCreated.isPresent()) {
             StudyPackEntity studyPack = recentlyCreated.get();
@@ -487,6 +514,87 @@ public class DashboardService {
 
     private BigDecimal scorePercentageOrZero(QuickReviewSessionEntity session) {
         return session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
+    }
+
+    private Optional<ContinueStudyingResponse> resolveSuggestedChallengeRecommendation(UUID userId) {
+        ProfileType profileType = userRepository.findById(userId)
+                .map(UserEntity::getProfileType)
+                .orElse(null);
+        if (!CHALLENGE_SUGGESTION_PROFILE_TYPES.contains(profileType)) {
+            return Optional.empty();
+        }
+
+        if (quickReviewSessionRepository.existsByUserIdAndSessionMode(userId, QuickReviewSessionMode.CHALLENGE)) {
+            return Optional.empty();
+        }
+
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        long usedThisMonth = countChallengeQuizUsedThisMonth(userId);
+        if (!featureGateService.canStartChallengeQuiz(planType, usedThisMonth)) {
+            return Optional.empty();
+        }
+
+        return findSuggestedChallengeStudyPack(userId)
+                .map(studyPack -> toResponse(
+                        studyPack,
+                        ContinueStudyingReason.SUGGESTED_CHALLENGE,
+                        null,
+                        null,
+                        findLastOpenedAt(userId, studyPack.getId()),
+                        studyPack.getCreatedAt(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        ContinueStudyingResumeType.CHALLENGE
+                ));
+    }
+
+    private long countChallengeQuizUsedThisMonth(UUID userId) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
+        long usedFromCountedSessions = quickReviewSessionRepository
+                .countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        userId,
+                        QuickReviewSessionMode.CHALLENGE,
+                        CHALLENGE_USAGE_COUNTED_STATUSES,
+                        usagePeriod.periodStart(),
+                        usagePeriod.periodEnd()
+                );
+        long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).challengeQuizGenerations();
+        return Math.max(usedFromCountedSessions, usedFromUsage);
+    }
+
+    private Optional<StudyPackEntity> findSuggestedChallengeStudyPack(UUID userId) {
+        List<UserActivityEventEntity> recentOpened = activityEventRepository
+                .findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                        userId,
+                        ActivityType.OPENED_STUDY_PACK,
+                        PageRequest.of(0, 30)
+                );
+        for (UserActivityEventEntity openedEvent : recentOpened) {
+            UUID studyPackId = openedEvent.getStudyPackId();
+            if (studyPackId == null) {
+                continue;
+            }
+            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId);
+            if (studyPack.filter(this::isQuizReadyForChallenge).isPresent()) {
+                return studyPack;
+            }
+        }
+
+        return studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged())
+                .stream()
+                .filter(this::isQuizReadyForChallenge)
+                .findFirst();
+    }
+
+    private boolean isQuizReadyForChallenge(StudyPackEntity studyPack) {
+        return studyPack.getNoteId() != null
+                && studyPack.getStatus() == StudyPackStatus.DONE
+                && studyPack.getQuiz() != null
+                && !studyPack.getQuiz().isEmpty();
     }
 
     private DashboardPerformanceSummaryResponse buildPerformanceSummary(

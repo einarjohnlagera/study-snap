@@ -133,7 +133,12 @@ export type StudyPackListPageResponse = {
   hasMore: boolean;
 };
 
-export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
+export type ContinueStudyingReason =
+  | "RESUME_REVIEW"
+  | "LOW_SCORE_RECENT"
+  | "SUGGESTED_CHALLENGE"
+  | "RECENTLY_OPENED"
+  | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
 export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
 export type TodayFocusType =
@@ -347,6 +352,8 @@ export type AnalyticsEventType =
   | "GOAL_NUDGE_CTA_CLICKED"
   | "DASHBOARD_GOAL_CARD_VIEWED"
   | "DASHBOARD_GOAL_CARD_CTA_CLICKED"
+  | "DASHBOARD_RECOMMENDATION_SHOWN"
+  | "DASHBOARD_RECOMMENDATION_CTA_CLICKED"
   | "GUIDANCE_TIP_SHOWN"
   | "GUIDANCE_TIP_CTA_CLICKED"
   | "QUIZ_REVIEW_EXPORTED"

@@ -17,4 +17,13 @@ class FeatureGateServiceTest {
 
         assertThat(featureGateService.hasFeatureAccess(PlanType.FREE, Feature.ADAPTIVE_QUIZ)).isTrue();
     }
+
+    @Test
+    void challengeQuizCanStartOnlyWhileUsageIsBelowThePlanLimit() {
+        StudySnapProperties properties = new StudySnapProperties();
+        FeatureGateService featureGateService = new FeatureGateService(mock(SubscriptionService.class), properties);
+
+        assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 4)).isTrue();
+        assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 5)).isFalse();
+    }
 }

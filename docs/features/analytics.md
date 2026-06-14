@@ -70,8 +70,10 @@ Feature-activation funnel events (v0.28.0):
 - `GUIDANCE_TIP_SHOWN` — a `trackAnalytics` `GuidanceTip` became visible (impression); `metadata.tipId` identifies the tip
 - `GUIDANCE_TIP_CTA_CLICKED` — the tip's action button was used; `metadata.tipId` identifies the tip
 - `QUIZ_REVIEW_EXPORTED` — a session review PDF was successfully exported; `entity_id` is the note id, `metadata` carries `exportType` and `sessionMode`
+- `DASHBOARD_RECOMMENDATION_SHOWN` — the Continue Studying card rendered; `entity_id` is the note id and `metadata` carries `reason` and `resumeType`
+- `DASHBOARD_RECOMMENDATION_CTA_CLICKED` — the Continue Studying CTA was clicked; `entity_id` is the note id and `metadata` carries `reason` and `resumeType`
 
-These form an impression → click → use funnel: tip shown → CTA click → feature use (an existing `*_STARTED` event, or `QUIZ_REVIEW_EXPORTED` for export). The events are browser-emitted via the analytics API and are fire-and-forget.
+These form impression → click → use funnels: tip/recommendation shown → CTA click → feature use (an existing `*_STARTED` event, or `QUIZ_REVIEW_EXPORTED` for export). The events are browser-emitted via the analytics API and are fire-and-forget. The Challenge Quiz activation path is `DASHBOARD_RECOMMENDATION_SHOWN` → `DASHBOARD_RECOMMENDATION_CTA_CLICKED` → `CHALLENGE_QUIZ_STARTED`.
 
 ## Tracking Sources
 
