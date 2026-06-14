@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
+import com.studysnap.backend.dto.NoteCollectionProgressResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
@@ -24,10 +25,12 @@ import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,6 +44,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NoteCollectionService {
 
     private static final int TITLE_MAX_LENGTH = 150;
@@ -57,6 +61,7 @@ public class NoteCollectionService {
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
+    private final QuizSessionHistoryService quizSessionHistoryService;
     private final AnalyticsService analyticsService;
 
     @Transactional(readOnly = true)
@@ -352,14 +357,26 @@ public class NoteCollectionService {
             NoteCollectionEntity collection,
             List<NoteCollectionItemEntity> items
     ) {
+        List<NoteCollectionItemResponse> itemResponses = toItemResponses(collection.getOwnerUserId(), items);
         return new NoteCollectionDetailResponse(
                 collection.getId(),
                 collection.getTitle(),
                 collection.getDescription(),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
-                toItemResponses(collection.getOwnerUserId(), items)
+                toProgressResponse(itemResponses),
+                itemResponses
         );
+    }
+
+    private NoteCollectionProgressResponse toProgressResponse(List<NoteCollectionItemResponse> items) {
+        int notesWithStudyPack = (int) items.stream()
+                .filter(item -> NoteStudyPackStatusResolver.STUDY_PACK_READY.equals(item.studyPackStatus()))
+                .count();
+        int notesPracticed = (int) items.stream()
+                .filter(item -> item.lastSessionCompletedAt() != null)
+                .count();
+        return new NoteCollectionProgressResponse(items.size(), notesWithStudyPack, notesPracticed);
     }
 
     private List<NoteCollectionItemResponse> toItemResponses(UUID userId, List<NoteCollectionItemEntity> items) {
@@ -376,22 +393,36 @@ public class NoteCollectionService {
                 .findByOwnerUserIdAndNoteIdIn(userId, noteIds).stream()
                 .filter(generatedQuiz -> generatedQuiz.getNoteId() != null)
                 .collect(Collectors.toMap(GeneratedQuizEntity::getNoteId, Function.identity(), (left, right) -> left));
+        Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = loadLastSessionCompletedAt(userId, noteIds);
 
         return items.stream()
                 .map(item -> toItemResponse(
                         item,
                         notesById.get(item.getNoteId()),
                         studyPacksByNoteId.get(item.getNoteId()),
-                        generatedQuizzesByNoteId.get(item.getNoteId())
+                        generatedQuizzesByNoteId.get(item.getNoteId()),
+                        lastSessionCompletedAtByNoteId.get(item.getNoteId())
                 ))
                 .toList();
+    }
+
+    private Map<UUID, OffsetDateTime> loadLastSessionCompletedAt(UUID userId, List<UUID> noteIds) {
+        try {
+            Map<UUID, OffsetDateTime> resolved = quizSessionHistoryService
+                    .findLatestSessionCompletedAtByNoteIds(userId, noteIds);
+            return resolved == null ? Map.of() : resolved;
+        } catch (RuntimeException exception) {
+            log.warn("Could not load collection practice timestamps for user {}", userId, exception);
+            return Map.of();
+        }
     }
 
     private NoteCollectionItemResponse toItemResponse(
             NoteCollectionItemEntity item,
             NoteEntity note,
             StudyPackEntity studyPack,
-            GeneratedQuizEntity generatedQuiz
+            GeneratedQuizEntity generatedQuiz,
+            OffsetDateTime lastSessionCompletedAt
     ) {
         if (note == null) {
             throw new NoteNotFoundException();
@@ -405,6 +436,7 @@ public class NoteCollectionService {
                 note.getCourseProgram(),
                 NoteStudyPackStatusResolver.resolve(note, studyPack),
                 generatedQuiz == null ? null : generatedQuiz.getId().toString(),
+                lastSessionCompletedAt,
                 note.getUpdatedAt()
         );
     }
