@@ -106,15 +106,18 @@ Current guide cards:
 
 1. `Getting Started`
 2. `Creating Notes`
-3. `Study Packs`
-4. `Quiz Modes`
-5. `Progress & Study Focus`
-6. `Exam Hubs`
-7. `Export & Sharing`
-8. `Student Guide`
-9. `Board Exam Guide`
-10. `Teacher Guide`
-11. `Professional Guide`
+3. `Study Plans & Collections`
+4. `Study Packs`
+5. `Quiz Modes`
+6. `Progress & Study Focus`
+7. `Exam Hubs`
+8. `Export & Sharing`
+9. `Student Guide`
+10. `Board Exam Guide`
+11. `Teacher Guide`
+12. `Professional Guide`
+
+The `Study Plans & Collections` guide (`study-plans` card / `/help#study-plans`) is profile-aware: its labels resolve through `getCollectionLabels` (Study Plan / Review Set / Lesson Plan / Collection) and the terminal-action copy branches for Teacher (build exam — DOCX + shareable links) vs. other profiles (study / generate per note). It is universal — shown for all profile types, not gated.
 
 Deep-linking:
 

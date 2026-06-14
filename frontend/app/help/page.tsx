@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
+import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Layers, Lightbulb, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
 import { GettingStartedGuide } from "@/components/help/getting-started-guide";
 import { CreatingNotesGuide } from "@/components/help/creating-notes-guide";
+import { StudyPlansGuide } from "@/components/help/study-plans-guide";
 import { StudyPacksGuide } from "@/components/help/study-packs-guide";
 import { ExportSharingGuide } from "@/components/help/export-sharing-guide";
 import { BoardExamGuide } from "@/components/help/board-exam-guide";
@@ -43,6 +44,13 @@ const HELP_CARDS: HelpCard[] = [
     icon: FileText,
     title: "Creating Notes",
     description: "How to write, organize, and manage notes effectively.",
+  },
+  {
+    id: "study-plans",
+    icon: Layers,
+    title: "Study Plans & Collections",
+    description: "Group related notes into a saved, ordered set you can study, review, or teach from.",
+    modalDescription: "Organize your notes into reusable, ordered sets.",
   },
   {
     id: "study-packs",
@@ -135,6 +143,8 @@ function GuideContent({
       return <GettingStartedGuide />;
     case "creating-notes":
       return <CreatingNotesGuide />;
+    case "study-plans":
+      return <StudyPlansGuide profileType={currentProfileType} />;
     case "study-packs":
       return <StudyPacksGuide />;
     case "quiz-modes":
