@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.TodayFocusType;
@@ -41,6 +42,8 @@ import static org.mockito.Mockito.when;
 class PostSessionNextStepServiceTest {
     private static final String FIRST_CONCEPT = "Cardiac Output";
     private static final String SECOND_CONCEPT = "Renal Clearance";
+    private static final String CHALLENGE_PATH_SUFFIX = "/challenge-quiz";
+    private static final String ADAPTIVE_PATH_SUFFIX = "/adaptive-practice";
     private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 6, 4, 7, 0, 0, 0, ZoneOffset.UTC);
 
     @Mock
@@ -80,64 +83,64 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
-    void getNextStep_returnsPracticeWeakConceptWhenDueConceptsExist() {
-        UUID userId = UUID.randomUUID();
-        StudyPackEntity studyPack = buildStudyPack(userId);
-        stubOwnedStudyPack(userId, studyPack);
-        stubPlanAndUsage(userId, PlanType.FREE, 1);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of(FIRST_CONCEPT, SECOND_CONCEPT));
-
-        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
-
-        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
-        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
-        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/adaptive-practice");
-        assertThat(response.adaptivePracticeAvailable()).isTrue();
-        assertThat(response.adaptivePracticeRemaining()).isEqualTo(2);
-        assertThat(response.goalNudge()).isNull();
-    }
-
-    @Test
-    void getNextStep_returnsRetryReviewForQuickReviewMissesWhenNothingDue() {
+    void getNextStep_returnsChallengeAfterPerfectQuickReviewWhenOnlyNeverReviewedConceptsAreDue() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of());
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                eq(studyPack.getId()),
-                any(Pageable.class)
-        )).thenReturn(List.of(buildCompletedSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of(FIRST_CONCEPT))));
-
-        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
-
-        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
-        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/quick-review");
-        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
-    }
-
-    @Test
-    void getNextStep_doesNotReturnRetryReviewForChallengeMisses() {
-        UUID userId = UUID.randomUUID();
-        StudyPackEntity studyPack = buildStudyPack(userId);
-        stubOwnedStudyPack(userId, studyPack);
-        stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of());
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                eq(studyPack.getId()),
-                any(Pageable.class)
-        )).thenReturn(List.of(buildCompletedSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of(FIRST_CONCEPT))));
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of());
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, null, true),
+                conceptHealth(SECOND_CONCEPT, null, true)
+        ));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
-        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/challenge-quiz");
+        assertThat(response.actionLabel()).isEqualTo("Take a Challenge");
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.concepts()).isEmpty();
+        assertThat(response.secondaryAction()).isNull();
+    }
+
+    @Test
+    void getNextStep_keepsGenuineWeakPracticeSecondaryAfterPerfectQuickReview() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of());
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, NOW.minusDays(5), true),
+                conceptHealth(SECOND_CONCEPT, NOW.minusDays(1), false)
+        ));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
+        assertThat(response.secondaryAction()).isNotNull();
+        assertThat(response.secondaryAction().actionHref()).endsWith(ADAPTIVE_PATH_SUFFIX);
+        assertThat(response.secondaryAction().adaptivePractice()).isTrue();
+    }
+
+    @Test
+    void getNextStep_returnsRetryReviewForQuickReviewMissesWithChallengeSecondary() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of(FIRST_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of());
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
+        assertThat(response.secondaryAction()).isNotNull();
+        assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.secondaryAction().adaptivePractice()).isFalse();
     }
 
     @Test
@@ -146,8 +149,6 @@ class PostSessionNextStepServiceTest {
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of());
         when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 eq(userId),
                 eq(studyPack.getId()),
@@ -295,38 +296,101 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
-    void getNextStep_returnsReviewPackWhenNothingDueAndNothingRetryable() {
+    void getNextStep_returnsPracticeWeakConceptsAfterChallengeWithGenuineWeakness() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of());
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                eq(studyPack.getId()),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of(SECOND_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, NOW.minusDays(7), true),
+                conceptHealth(SECOND_CONCEPT, null, true)
+        ));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
+        assertThat(response.actionHref()).endsWith(ADAPTIVE_PATH_SUFFIX);
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
+    }
+
+    @Test
+    void getNextStep_returnsChallengeAfterChallengeWhenNoGenuineWeaknessRemains() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of());
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, NOW.minusDays(1), false),
+                conceptHealth(SECOND_CONCEPT, null, true)
+        ));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
-        assertThat(response.actionLabel()).isEqualTo("Take a Challenge");
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.concepts()).isEmpty();
     }
 
     @Test
-    void getNextStep_capsConceptsAtFive() {
+    void getNextStep_stepsUpToChallengeAfterAdaptivePracticeWithRemainingWeakness() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of("One", "Two", "Three", "Four", "Five", "Six"));
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.ADAPTIVE, List.of(SECOND_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, NOW.minusDays(5), true)
+        ));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
-        assertThat(response.concepts()).containsExactly("One", "Two", "Three", "Four", "Five");
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
+        assertThat(response.secondaryAction()).isNull();
+    }
+
+    @Test
+    void getNextStep_stepsUpToChallengeAfterAdaptivePracticeWhenWeaknessIsCleared() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.ADAPTIVE, List.of());
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, NOW.minusDays(1), false)
+        ));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.concepts()).isEmpty();
+    }
+
+    @Test
+    void resolveGenuineWeakConcepts_excludesNeverReviewedAndCapsStableUnion() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        QuickReviewSessionEntity session = buildCompletedSession(
+                userId,
+                studyPack,
+                QuickReviewSessionMode.CHALLENGE,
+                List.of("Four", "Five", "Six", FIRST_CONCEPT)
+        );
+
+        List<String> genuineWeakConcepts = postSessionNextStepService.resolveGenuineWeakConcepts(
+                List.of(
+                        conceptHealth(FIRST_CONCEPT, NOW.minusDays(4), true),
+                        conceptHealth(SECOND_CONCEPT, null, true),
+                        conceptHealth("Three", NOW.minusDays(8), true)
+                ),
+                session
+        );
+
+        assertThat(genuineWeakConcepts).containsExactly(FIRST_CONCEPT, "Three", "Four", "Five", "Six");
     }
 
     @Test
@@ -335,13 +399,44 @@ class PostSessionNextStepServiceTest {
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of());
+        when(conceptHealthService.getConceptHealth(eq(userId), eq(studyPack.getId()), any(), any()))
                 .thenThrow(new IllegalStateException("database unavailable"));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
-        assertThat(response.actionHref()).isEqualTo("/notes/" + studyPack.getNoteId() + "/challenge-quiz");
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+    }
+
+    @Test
+    void getNextStep_returnsSafeProgressionWhenNoCompletedSessionExists() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubReviewPackPath(userId, studyPack);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        verify(conceptHealthService, never()).getConceptHealth(any(), any(), any(), any());
+    }
+
+    @Test
+    void getNextStep_preservesAdaptiveQuotaForWeakAreaRecommendation() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 3);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of(FIRST_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of());
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
+        assertThat(response.adaptivePracticeAvailable()).isTrue();
+        assertThat(response.adaptivePracticeRemaining()).isZero();
     }
 
     @Test
@@ -350,28 +445,13 @@ class PostSessionNextStepServiceTest {
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.PRO, 12);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of(FIRST_CONCEPT));
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of(FIRST_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of());
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
         assertThat(response.adaptivePracticeAvailable()).isTrue();
         assertThat(response.adaptivePracticeRemaining()).isNull();
-    }
-
-    @Test
-    void getNextStep_returnsZeroAdaptiveRemainingForExhaustedFreeUser() {
-        UUID userId = UUID.randomUUID();
-        StudyPackEntity studyPack = buildStudyPack(userId);
-        stubOwnedStudyPack(userId, studyPack);
-        stubPlanAndUsage(userId, PlanType.FREE, 3);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of(FIRST_CONCEPT));
-
-        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
-
-        assertThat(response.adaptivePracticeAvailable()).isTrue();
-        assertThat(response.adaptivePracticeRemaining()).isZero();
     }
 
     private void stubOwnedStudyPack(UUID userId, StudyPackEntity studyPack) {
@@ -394,13 +474,44 @@ class PostSessionNextStepServiceTest {
 
     private void stubReviewPackPath(UUID userId, StudyPackEntity studyPack) {
         stubPlanAndUsage(userId, PlanType.FREE, 0);
-        when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPack.getId()), any(), any()))
-                .thenReturn(List.of());
         when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 eq(userId),
                 eq(studyPack.getId()),
                 any(Pageable.class)
         )).thenReturn(List.of());
+    }
+
+    private void stubLatestSession(
+            UUID userId,
+            StudyPackEntity studyPack,
+            QuickReviewSessionMode mode,
+            List<String> weakConcepts
+    ) {
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPack.getId()),
+                any(Pageable.class)
+        )).thenReturn(List.of(buildCompletedSession(userId, studyPack, mode, weakConcepts)));
+    }
+
+    private void stubConceptHealth(
+            UUID userId,
+            StudyPackEntity studyPack,
+            List<ConceptHealthEntryResponse> conceptHealth
+    ) {
+        when(conceptHealthService.getConceptHealth(eq(userId), eq(studyPack.getId()), any(), any()))
+                .thenReturn(conceptHealth);
+    }
+
+    private ConceptHealthEntryResponse conceptHealth(
+            String concept,
+            OffsetDateTime lastCorrectAt,
+            boolean due
+    ) {
+        Integer daysSinceReview = lastCorrectAt == null
+                ? null
+                : Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(lastCorrectAt, NOW));
+        return new ConceptHealthEntryResponse(concept, lastCorrectAt, due, daysSinceReview);
     }
 
     private UserEntity user(UUID userId, String studyGoal) {
@@ -454,7 +565,7 @@ class PostSessionNextStepServiceTest {
         session.setCurrentQuestionIndex(2);
         session.setCurrentRound(QuickReviewRound.INITIAL);
         session.setTotalQuestions(2);
-        session.setCorrectAnswers(1);
+        session.setCorrectAnswers(weakConcepts.isEmpty() ? 2 : 1);
         session.setRetryCount(0);
         session.setCreatedAt(NOW.minusMinutes(10));
         session.setCompletedAt(NOW);

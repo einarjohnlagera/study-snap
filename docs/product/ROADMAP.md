@@ -6,32 +6,77 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.27.0 - Material Import & Collections` is the current documentation baseline (last released).
+No release is currently in progress. `v0.29.0 - Readiness Signals` is the next candidate (not yet started).
 
-`v0.26.1 - Guidance System` is the previous baseline.
+`v0.28.0 - Feature Discoverability & Activation` is the current documentation baseline (last released).
+
+`v0.27.0 - Material Import & Collections` is the previous baseline.
+
+`v0.26.1 - Guidance System` is the release before that.
 
 `v0.26.0 - Exam Depth` is the release before that.
-
-`v0.25.0 - Exam Capture & Goal Setting` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
 
-## Next Release (candidate) - Feature Discoverability & Activation
+## Next Release (candidate) - v0.29.0 Readiness Signals
+
+Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers — and make sure personalization actually fires for every account. Two gaps surfaced after v0.28.0: practice in the exam modes never moves the Progress page, and a cohort of accounts has no profile type at all.
+
+Why now (over Bulk/Teacher): we still have **no teacher users**, so teacher-flow polish and bulk generation are deferred to v0.30.0. The leverage today is the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced, and they need the personalization their profile type drives.
+
+Locked direction:
+
+- **Read-time fallbacks stay; fix the source.** Today only Quick Review, Challenge, and Adaptive Practice write `ConceptHealth` (via `recordCorrectAnswers`), and `ConceptHealth` is the **only** thing the Progress page reads. Long Exam, Board Exam, and Interview Practice produce rich per-session reports (`LongExamMasteryReportResponse` domain breakdown, `InterviewReadinessReportResponse` gaps) that are **ephemeral** (`sessionMetadata` JSON) and never persist — so an exam-taker can grind Board Exams and see a flat Progress page. Wire these results into `ConceptHealth` so they count.
+- **Two write-paths, not three.** Board Exam *is* `LONG_EXAM` session mode (no separate enum) and runs through `LongExamService`; Interview Practice runs through `InterviewPracticeService`. So the recording work lives in those two services, mirroring the existing `recordCorrectAnswers` contract — no new entity, no new quota, no new artifact.
+- **Reconcile two "mastery" grains.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is built on per-**concept** `ConceptHealth`. The mapping (domain/result → concept records) is the hard part and must be designed before writing — don't invent a parallel mastery store.
+- **Profile-type integrity = re-prompt, not silent default.** Root cause of null `profileType`: both signup paths set it null (`AuthService.signup`, `createGoogleUser`); only `completeOnboarding` (email-verification-gated) / `updateProfileType` set it, both `@NotNull`-validated. So **null = abandoned onboarding** (never completed), not completed-but-null. All readers null-handle gracefully (treat null as non-teacher/student) — no crash, so this is a **personalization-quality gap**, not a bug. The fix is to instrument the profile-type step, quantify the null cohort, and **re-prompt** abandoned users — *not* a silent default-backfill (a wrong default mis-personalizes undetectably; null is at least detectable).
+
+Scope:
+
+- **Exam-mode results feed Progress** — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, so Progress reflects all practice. Define the domain→concept mapping first.
+- **Profile-type integrity** — onboarding profile-type-step instrumentation, null-cohort sizing, and a re-prompt path for abandoned-onboarding accounts (no silent default).
+
+---
+
+## v0.30.0 (candidate, gated on teacher users) - Bulk Generation & Teacher-Flow Polish
+
+Theme: reduce the friction of turning material into quizzes. Builds directly on the v0.27.0 collections spine. **Deferred from v0.29.0** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. Bundles three teacher-flow quiz-preview polish fixes with the two-part generation effort — make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+
+Locked direction:
+
+- **The universal spine is preserved.** Every profile still generates a Study Pack before a quiz — this is intentional, not a funnel to remove (consistency across easy profile switching + uniform quota). Bulk solves the friction by *batching* the same pipeline, never by forking a profile-specific shortcut.
+- **Profile-aware framing, not a fork.** Teacher emphasizes quizzes, Student study packs, via the existing Study/Exam Focus copy mechanism — never per-profile pipeline branches or hardcoded `if (TEACHER)` checks.
+- **No new quota category, no collection-level AI synthesis.** Each note spends one existing per-note credit per artifact; bulk is a fan-out of per-note generation, not a synthesized collection document (Option B stays deferred).
+- **Bulk is explicit, not an import side-effect.** One deliberate user click for the batch; preserves the explicit-generation rule. DOCX export and shareable quiz links stay Teacher/Admin only.
+
+Scope:
+
+- **Teacher quiz-preview polish** — move the ⋯ context menu to the top-right of the note title; remove the redundant "Correct Answer" panel (the choice already shows a ✓ Correct badge + highlight, no a11y loss); render the question stem through `QuizQuestionText` so `Statement N:` lines break onto separate lines (the teacher preview is the only quiz view rendering raw stem text).
+- **Async quiz generation** — mirror the Note → Study Pack pipeline: status field (`GENERATING` / `READY` / `FAILED`), task-executor enqueue, frontend polling. `GeneratedQuizService.generate()` is currently synchronous. Prerequisite for bulk.
+- **Collection-level bulk generation** — batch the universal per-note pipeline across a collection. The hard part is **quota-aware partial execution**: generate as many as quota allows, report completed vs. blocked, upsell — never fail the whole batch.
+
+---
+
+## v0.28.0 - Feature Discoverability & Activation
+
+**Status: Released**
+
+Base branch for this release: `releases/v0.28.0`.
 
 Theme: close the gap between **signup conversion** (strong) and **feature activation** (weak). Observed symptoms: quiz-session **export is unused**, **Challenge Quiz is underused**, and new surfaces like **Study Plans** need adoption. The headline insight is that this is an *activation* problem, not a *docs* problem — quiz-session export is **already documented in Help** ("Export & Sharing") and still goes unused, which proves pull-docs do not drive discovery. The fix is **in-flow push** through the systems we already have, not new help pages.
 
 Locked direction:
 
 - **Contextual nudges are the primary lever (push).** Reuse the existing `GuidanceTip` / `pickActiveGuidance` one-time-tip system (`lib/guidance-engine.ts`, `lib/guidance.ts`) — **do not build a new tips framework.** Surface each underused feature at its moment of relevance:
-  - **Export** → one-time tip on the quiz **review screen** ("Export this review as PDF to study offline / share").
-  - **Challenge Quiz** → one-time tip right after a **Quick Review completes** or when a note becomes quiz-ready ("Ready to go deeper? Try a Challenge Quiz").
-  - **Study Plans** → one-time tip once a user has *N* notes ("Group related notes into a Study Plan").
+  - **Export** → one-time tip on the quiz **review screen** ("Export this review as PDF to study offline / share"). _(shipped)_
+  - **Study Plans** → one-time tip once a user has *N* notes ("Group related notes into a Study Plan"). _(shipped)_
+  - **Challenge Quiz** → no dedicated tip. The Quick Review completion screen already drives it via `PostSessionNextStep` + a fallback "Take Another Challenge" CTA (context-aware and not one-time), so a tip would be redundant — Challenge Quiz adoption is left to the Dashboard-recommendation lever below.
 - **Smarter Dashboard recommendation, not a static promo.** Strengthen the existing `ContinueSpotlight` / `continueStudying` recommendation to push underused modes when contextually appropriate (e.g., a user with quiz-ready notes who hasn't tried Challenge Quiz). A permanent top-of-Dashboard "Try Challenge Quiz" banner was **explicitly rejected** — banner-blindness, and the Dashboard already recommends Challenge Quiz.
 - **Help reference completeness (table-stakes pull).** Add the missing **Study Plans / Collections** Help topic and audit Help for other gaps. Necessary for completeness, but not the adoption driver — bundled here, not shipped separately.
 - **Instrument the adoption funnel.** An activation initiative without measurement is guessing. Track tip impression → click → feature use via the existing `AnalyticsEventType` enum (e.g., around `CHALLENGE_QUIZ_STARTED`) so we can tell what moves the needle.
-- **Study Plan progress rollup** (see v0.27.0 → Deferred) pairs with this theme — it turns a plan from a folder into a *trackable unit* (read-only aggregation of per-note signals), making an existing surface more valuable. Candidate pillar for this release.
+- **Study Plan progress rollup** (see v0.27.0 → Deferred) pairs with this theme — it turns a plan from a folder into a *trackable unit* through detail-only, read-only aggregation of Study Pack readiness and completed-practice signals. _(shipped)_
 - **Optional / later bet:** an onboarding-style **activation checklist** ("Create a note ✓ · Generate a Study Pack ✓ · Take a Challenge Quiz ☐ · Export a review ☐") to drive multi-feature activation.
 
 Anti-drift: one-time, dismissible, contextual tips only — route every new tip through `pickActiveGuidance` (do not add ad-hoc one-time tips); no new infrastructure; add any new analytics events to the `AnalyticsEventType` enum (Java + frontend) before firing.

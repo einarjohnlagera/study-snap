@@ -40,6 +40,7 @@ jest.mock("@/lib/api", () => ({
   listCollections: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 jest.mock("@/lib/auth", () => ({

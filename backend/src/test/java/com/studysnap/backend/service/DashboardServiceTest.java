@@ -10,9 +10,11 @@ import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -64,6 +66,10 @@ class DashboardServiceTest {
     private UserRepository userRepository;
     @Mock
     private SubscriptionService subscriptionService;
+    @Mock
+    private UserUsageService userUsageService;
+    @Mock
+    private BillingUsagePeriodService billingUsagePeriodService;
 
     private DashboardService dashboardService;
 
@@ -77,9 +83,26 @@ class DashboardServiceTest {
                 quickReviewSessionRepository,
                 activityEventRepository,
                 subscriptionService,
-                featureGateService
+                featureGateService,
+                userUsageService,
+                billingUsagePeriodService
         );
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
+        OffsetDateTime periodStart = OffsetDateTime.now().minusDays(10);
+        OffsetDateTime periodEnd = periodStart.plusMonths(1);
+        lenient().when(billingUsagePeriodService.resolveUsagePeriod(
+                        any(UUID.class),
+                        any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PRO,
+                        BillingCycle.MONTHLY,
+                        periodStart,
+                        periodEnd,
+                        periodStart.getYear(),
+                        periodStart.getMonthValue()
+                ));
+        lenient().when(userUsageService.getMonthlyUsage(any(UUID.class), any(OffsetDateTime.class)))
+                .thenReturn(UserUsageService.MonthlyUsage.zero(periodStart, periodEnd));
         lenient().when(activityEventRepository.findTopByUserIdAndStudyPackIdAndActivityTypeOrderByCreatedAtDesc(
                         any(UUID.class),
                         any(UUID.class),
@@ -606,6 +629,131 @@ class DashboardServiceTest {
     }
 
     @Test
+    void getContinueStudyingRecommendation_suggestsChallengeForEligibleStudentUsingMostRecentlyOpenedReadyPack() {
+        UUID userId = UUID.randomUUID();
+        UUID newestPackId = UUID.randomUUID();
+        UUID olderPackId = UUID.randomUUID();
+        UUID newestNoteId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity newestPack = buildStudyPack(userId, newestPackId, "Biology Challenge");
+        newestPack.setNoteId(newestNoteId);
+        StudyPackEntity olderPack = buildStudyPack(userId, olderPackId, "Older Chemistry Challenge");
+        olderPack.setNoteId(UUID.randomUUID());
+        UserActivityEventEntity newestOpened = buildOpenedEvent(userId, newestPackId, now.minusMinutes(2));
+        UserActivityEventEntity olderOpened = buildOpenedEvent(userId, olderPackId, now.minusMinutes(20));
+
+        stubChallengeSuggestionCandidate(userId, ProfileType.STUDENT);
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of(newestOpened, olderOpened));
+        when(studyPackRepository.findByIdAndOwnerUserId(newestPackId, userId)).thenReturn(Optional.of(newestPack));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.SUGGESTED_CHALLENGE);
+        assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.CHALLENGE);
+        assertThat(response.studyPackId()).isEqualTo(newestPackId.toString());
+        assertThat(response.noteId()).isEqualTo(newestNoteId.toString());
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_usesMostRecentlyCreatedReadyPackWhenNoneWasOpened() {
+        UUID userId = UUID.randomUUID();
+        UUID newestPackId = UUID.randomUUID();
+        UUID olderPackId = UUID.randomUUID();
+        StudyPackEntity newestPack = buildStudyPack(userId, newestPackId, "Newest Ready Pack");
+        newestPack.setNoteId(UUID.randomUUID());
+        StudyPackEntity olderPack = buildStudyPack(userId, olderPackId, "Older Ready Pack");
+        olderPack.setNoteId(UUID.randomUUID());
+
+        stubChallengeSuggestionCandidate(userId, ProfileType.BOARD_EXAM);
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of(newestPack, olderPack));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.SUGGESTED_CHALLENGE);
+        assertThat(response.studyPackId()).isEqualTo(newestPackId.toString());
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_fallsBackWhenChallengeWasAlreadyStarted() {
+        UUID userId = UUID.randomUUID();
+        UUID openedPackId = UUID.randomUUID();
+        StudyPackEntity openedPack = buildStudyPack(userId, openedPackId, "Geometry");
+        openedPack.setNoteId(UUID.randomUUID());
+        UserActivityEventEntity openedEvent = buildOpenedEvent(userId, openedPackId, OffsetDateTime.now());
+
+        stubChallengeSuggestionCandidate(userId, ProfileType.STUDENT);
+        when(quickReviewSessionRepository.existsByUserIdAndSessionMode(userId, QuickReviewSessionMode.CHALLENGE))
+                .thenReturn(true);
+        stubRecentlyOpenedFallback(userId, openedPack, openedEvent);
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RECENTLY_OPENED);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_fallsBackForTeacherAndProfessionalProfiles() {
+        for (ProfileType profileType : List.of(ProfileType.TEACHER, ProfileType.PROFESSIONAL)) {
+            UUID userId = UUID.randomUUID();
+            UUID openedPackId = UUID.randomUUID();
+            StudyPackEntity openedPack = buildStudyPack(userId, openedPackId, profileType + " Pack");
+            openedPack.setNoteId(UUID.randomUUID());
+            UserActivityEventEntity openedEvent = buildOpenedEvent(userId, openedPackId, OffsetDateTime.now());
+
+            stubChallengeSuggestionCandidate(userId, profileType);
+            stubRecentlyOpenedFallback(userId, openedPack, openedEvent);
+
+            ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+            assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RECENTLY_OPENED);
+        }
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_fallsBackWhenChallengeMonthlyLimitIsReached() {
+        UUID userId = UUID.randomUUID();
+        UUID openedPackId = UUID.randomUUID();
+        StudyPackEntity openedPack = buildStudyPack(userId, openedPackId, "Quota Fallback");
+        openedPack.setNoteId(UUID.randomUUID());
+        UserActivityEventEntity openedEvent = buildOpenedEvent(userId, openedPackId, OffsetDateTime.now());
+        OffsetDateTime periodStart = OffsetDateTime.now().minusDays(5);
+        OffsetDateTime periodEnd = periodStart.plusMonths(1);
+
+        stubChallengeSuggestionCandidate(userId, ProfileType.STUDENT);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        periodStart,
+                        periodEnd,
+                        0,
+                        50,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                ));
+        stubRecentlyOpenedFallback(userId, openedPack, openedEvent);
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RECENTLY_OPENED);
+    }
+
+    @Test
     void getContinueStudyingRecommendation_fallsBackToRecentlyOpened() {
         UUID userId = UUID.randomUUID();
         UUID openedPackId = UUID.randomUUID();
@@ -1093,6 +1241,30 @@ class DashboardServiceTest {
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
         )).thenReturn(sessions);
+    }
+
+    private void stubChallengeSuggestionCandidate(UUID userId, ProfileType profileType) {
+        UserEntity user = UserEntityBuilder.aUser().withId(userId).build();
+        user.setProfileType(profileType);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
+        lenient().when(quickReviewSessionRepository.existsByUserIdAndSessionMode(userId, QuickReviewSessionMode.CHALLENGE))
+                .thenReturn(false);
+    }
+
+    private void stubRecentlyOpenedFallback(
+            UUID userId,
+            StudyPackEntity studyPack,
+            UserActivityEventEntity openedEvent
+    ) {
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of(openedEvent));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPack.getId(), userId)).thenReturn(Optional.of(studyPack));
+        stubRecentQuickReviewSessionsForPack(userId, studyPack.getId(), List.of());
     }
 
     private NoteEntity buildNote(UUID userId, UUID noteId, String title, String subject, String courseProgram) {

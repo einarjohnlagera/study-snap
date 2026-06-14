@@ -63,6 +63,11 @@ Persistence:
 - `frontend/lib/guidance.ts`
 - localStorage key prefix: `notelib-guidance-dismissed-`
 
+Analytics (opt-in):
+
+- pass `trackAnalytics` to `GuidanceTip` to fire `GUIDANCE_TIP_SHOWN` once on first impression and `GUIDANCE_TIP_CTA_CLICKED` when the tip's action is used (both carry `{ tipId }` metadata)
+- opt-in by design so existing tips emit no analytics noise; used for the v0.28.0 activation funnel (tip impression → CTA click → feature use, where feature use is an existing `*_STARTED` event or `QUIZ_REVIEW_EXPORTED`)
+
 Current active one-time tips:
 
 | tipId | Surface | Trigger | Message |
@@ -71,9 +76,14 @@ Current active one-time tips:
 | `copied-study-pack-regenerate-hint` | Note Detail copied ready state | `copiedFromPublic === true` and `studyPackStatus === STUDY_PACK_READY` | `This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.` |
 | `note-detail-try-quiz` | Note Detail performance section | always | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
 | `sessions-export-hint` | Session History empty state | always | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
+| `quiz-review-export` | Session Review screen (review loaded) | always | `Export this review as a PDF to study offline or share it — use the Export button on this page.` (trackAnalytics) |
 | `public-library-intro` | Public Library | always | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |
+| `library-study-plan-grouping` | Library | non-teacher, notes ≥ 3 | `Group related notes into a {Study Plan} you can study as one set.` (CTA: `Create {Study Plan}`, trackAnalytics) |
 | `library-first-note-organization` | Library | notes 1–3 | `Add a subject and tags when editing a note — it makes filtering your library much easier as it grows.` |
 | `library-organization-habits` | Library | notes ≥ 5 | `You're building a solid library. Try filtering by subject to find related notes quickly.` |
+| `teacher-library-multi-note-select` | Library | teacher, not in selection mode, notes ≥ 1 | `Select multiple notes with the checkboxes, then add them to a lesson plan or build an exam from quiz-ready notes.` |
+
+The Library tips (`teacher-library-multi-note-select`, `library-study-plan-grouping`, `library-organization-habits`, `library-first-note-organization`) are selected by a single `pickActiveGuidance` rule set so only one shows at a time; Study Plan grouping is prioritized for non-teachers as the v0.28.0 activation lever. The `{Study Plan}` label is profile-aware via `getCollectionLabels` (STUDENT → Study Plan, BOARD_EXAM → Review Set, PROFESSIONAL → Collection).
 
 ## Layer 3 — Help Center
 
@@ -96,15 +106,18 @@ Current guide cards:
 
 1. `Getting Started`
 2. `Creating Notes`
-3. `Study Packs`
-4. `Quiz Modes`
-5. `Progress & Study Focus`
-6. `Exam Hubs`
-7. `Export & Sharing`
-8. `Student Guide`
-9. `Board Exam Guide`
-10. `Teacher Guide`
-11. `Professional Guide`
+3. `Study Plans & Collections`
+4. `Study Packs`
+5. `Quiz Modes`
+6. `Progress & Study Focus`
+7. `Exam Hubs`
+8. `Export & Sharing`
+9. `Student Guide`
+10. `Board Exam Guide`
+11. `Teacher Guide`
+12. `Professional Guide`
+
+The `Study Plans & Collections` guide (`study-plans` card / `/help#study-plans`) is profile-aware: its labels resolve through `getCollectionLabels` (Study Plan / Review Set / Lesson Plan / Collection) and the terminal-action copy branches for Teacher (build exam — DOCX + shareable links) vs. other profiles (study / generate per note). It is universal — shown for all profile types, not gated.
 
 Deep-linking:
 

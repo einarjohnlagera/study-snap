@@ -52,6 +52,10 @@ public class FeatureGateService {
         };
     }
 
+    public boolean canStartChallengeQuiz(PlanType planType, long usedThisMonth) {
+        return usedThisMonth < properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
+    }
+
     public Integer resolveMonthlyDocxExportLimit(PlanType planType, ProfileType profileType) {
         return properties.getPricing().resolveMonthlyDocxExportLimit(planType, profileType);
     }

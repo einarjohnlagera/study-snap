@@ -151,9 +151,11 @@ Current result screen sections:
 Primary CTA rules:
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
-- the shared `<PostSessionNextStep>` component renders the dominant next action for both Challenge Quiz and Board Exam Mode
+- the shared `<PostSessionNextStep>` component renders the dominant next action for Challenge Quiz
+- when genuine weak concepts remain, `Practice Weak Concepts` is primary because Challenge Quiz provides the diagnostic signal for targeted Adaptive Practice
+- when no genuine weak concepts remain, the primary action stays progression-oriented with another Challenge
 - fallback UI keeps the previous weak-concepts card plus retry/practice actions when the next-step fetch fails
-- Board Exam Mode keeps its rich report (`ScoreReveal`, concept breakdown, weak-concept tags) and only replaces the bottom CTA group
+- Board Exam Mode and Long Exam do not consume this recommendation service; their report and next-step flows remain mode-owned
 
 Secondary actions:
 
@@ -169,6 +171,8 @@ If Adaptive Practice quota is exhausted, the shared component shows the targeted
 - a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
 - weak or partially correct concepts are not recorded as mastered
 - the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved
+- genuine weak concepts are the capped union of reviewed-and-decayed ConceptHealth entries plus concepts actually missed in the completed Challenge session
+- never-reviewed concepts are treated as not started and cannot trigger Adaptive Practice by themselves
 
 ## Learner level control
 

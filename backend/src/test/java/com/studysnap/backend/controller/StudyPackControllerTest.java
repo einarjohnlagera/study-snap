@@ -185,6 +185,7 @@ class StudyPackControllerTest {
                 List.of("Cell Cycle", "Mitosis"),
                 true,
                 1,
+                null,
                 null
         );
         when(postSessionNextStepService.getNextStep(userId, studyPackId)).thenReturn(expected);

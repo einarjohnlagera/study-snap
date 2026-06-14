@@ -1,9 +1,13 @@
-import { CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
+"use client";
+
+import { useEffect } from "react";
+import { CheckCircle2, Sparkles, TrendingUp, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionLink, type ActionIconName } from "@/components/ui/action-button";
-import type {
-  ContinueStudyingResponse,
-  ContinueStudyingResumeType,
+import {
+  trackAnalyticsEvent,
+  type ContinueStudyingResponse,
+  type ContinueStudyingResumeType,
 } from "@/lib/api";
 
 type ContinueSpotlightProps = {
@@ -62,6 +66,14 @@ function resolveResumePresentation(
 }
 
 function getCardTone(recommendation: ContinueStudyingResponse) {
+  if (recommendation.reason === "SUGGESTED_CHALLENGE") {
+    return {
+      label: "Try Challenge Quiz",
+      icon: Trophy,
+      body: "Put this note to the test with a focused Challenge Quiz.",
+    };
+  }
+
   if (recommendation.reason === "RESUME_REVIEW") {
     if (recommendation.resumeState === "RETRY_TRANSITION") {
       return {
@@ -125,6 +137,20 @@ function getCardTone(recommendation: ContinueStudyingResponse) {
 }
 
 export function ContinueSpotlight({ recommendation, profileType }: Readonly<ContinueSpotlightProps>) {
+  useEffect(() => {
+    if (!recommendation.noteId || !recommendation.reason) {
+      return;
+    }
+    void trackAnalyticsEvent({
+      eventType: "DASHBOARD_RECOMMENDATION_SHOWN",
+      entityId: recommendation.noteId,
+      metadata: {
+        reason: recommendation.reason,
+        resumeType: recommendation.resumeType,
+      },
+    });
+  }, [recommendation.noteId, recommendation.reason, recommendation.resumeType]);
+
   if (!recommendation.noteId) {
     return null;
   }
@@ -132,6 +158,9 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
   const cardTone = getCardTone(recommendation);
   const ToneIcon = cardTone.icon;
   const resumePresentation = resolveResumePresentation(recommendation.resumeType, profileType);
+  const actionLabel = recommendation.reason === "SUGGESTED_CHALLENGE"
+    ? "Try Challenge Quiz"
+    : resumePresentation.label;
   const noteTitle = recommendation.noteTitle?.trim() || "Untitled note";
   const metadataLine = formatMetadataLine(recommendation.subject, recommendation.courseProgram);
   const resumeHref = `/notes/${recommendation.noteId}/${resumePresentation.hrefSuffix}`;
@@ -149,7 +178,7 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
               {cardTone.label}
             </span>
             <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-              {resumePresentation.label}
+              {actionLabel}
             </span>
           </div>
 
@@ -177,8 +206,18 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
       <ResponsiveActionLink
         href={resumeHref}
         action={resumePresentation.action}
-        label={resumePresentation.label}
+        label={actionLabel}
         className="w-full sm:w-auto"
+        onClick={() => {
+          void trackAnalyticsEvent({
+            eventType: "DASHBOARD_RECOMMENDATION_CTA_CLICKED",
+            entityId: recommendation.noteId,
+            metadata: {
+              reason: recommendation.reason,
+              resumeType: recommendation.resumeType,
+            },
+          });
+        }}
       />
     </Card>
   );

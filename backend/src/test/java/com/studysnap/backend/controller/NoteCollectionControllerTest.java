@@ -234,6 +234,14 @@ class NoteCollectionControllerTest {
 
     private NoteCollectionDetailResponse detailResponse() {
         Instant now = Instant.parse("2026-04-01T00:00:00Z");
-        return new NoteCollectionDetailResponse(UUID.fromString(COLLECTION_ID), COLLECTION_TITLE, null, now, now, List.of());
+        return new NoteCollectionDetailResponse(
+                UUID.fromString(COLLECTION_ID),
+                COLLECTION_TITLE,
+                null,
+                now,
+                now,
+                new com.studysnap.backend.dto.NoteCollectionProgressResponse(0, 0, 0),
+                List.of()
+        );
     }
 }

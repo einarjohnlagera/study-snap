@@ -10,6 +10,8 @@ import java.util.UUID;
 public interface ConceptHealthRepository extends JpaRepository<ConceptHealthEntity, UUID> {
     List<ConceptHealthEntity> findByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
 
+    List<ConceptHealthEntity> findByUserIdAndStudyPackIdIn(UUID userId, List<UUID> studyPackIds);
+
     Optional<ConceptHealthEntity> findByUserIdAndStudyPackIdAndConcept(
         UUID userId,
         UUID studyPackId,

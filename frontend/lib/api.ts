@@ -133,7 +133,12 @@ export type StudyPackListPageResponse = {
   hasMore: boolean;
 };
 
-export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
+export type ContinueStudyingReason =
+  | "RESUME_REVIEW"
+  | "LOW_SCORE_RECENT"
+  | "SUGGESTED_CHALLENGE"
+  | "RECENTLY_OPENED"
+  | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
 export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
 export type TodayFocusType =
@@ -184,6 +189,11 @@ export type PostSessionNextStepResponse = {
   adaptivePracticeAvailable: boolean;
   adaptivePracticeRemaining: number | null;
   goalNudge: GoalNudgeResponse | null;
+  secondaryAction: {
+    actionLabel: string;
+    actionHref: string;
+    adaptivePractice: boolean;
+  } | null;
 };
 
 export type GoalNudgeResponse = {
@@ -347,6 +357,11 @@ export type AnalyticsEventType =
   | "GOAL_NUDGE_CTA_CLICKED"
   | "DASHBOARD_GOAL_CARD_VIEWED"
   | "DASHBOARD_GOAL_CARD_CTA_CLICKED"
+  | "DASHBOARD_RECOMMENDATION_SHOWN"
+  | "DASHBOARD_RECOMMENDATION_CTA_CLICKED"
+  | "GUIDANCE_TIP_SHOWN"
+  | "GUIDANCE_TIP_CTA_CLICKED"
+  | "QUIZ_REVIEW_EXPORTED"
   | "COPY_ON_SIGNUP_COMPLETED"
   | "QUIZ_SHARE_LINK_CREATED"
   | "QUIZ_SHARE_LINK_TOGGLED"
@@ -1237,7 +1252,16 @@ export type NoteCollectionItem = {
   courseProgram: string | null;
   studyPackStatus: NoteStudyPackStatus;
   generatedQuizId: string | null;
+  lastSessionCompletedAt: string | null;
+  dueConceptCount: number;
+  dueConcepts: string[];
   updatedAt: string;
+};
+
+export type NoteCollectionProgress = {
+  totalNotes: number;
+  notesWithStudyPack: number;
+  notesPracticed: number;
 };
 
 export type NoteCollectionDetail = {
@@ -1246,6 +1270,7 @@ export type NoteCollectionDetail = {
   description: string | null;
   createdAt: string;
   updatedAt: string;
+  progress: NoteCollectionProgress;
   items: NoteCollectionItem[];
 };
 

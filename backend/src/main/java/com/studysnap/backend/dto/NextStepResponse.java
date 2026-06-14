@@ -13,6 +13,7 @@ public record NextStepResponse(
         List<String> concepts,
         boolean adaptivePracticeAvailable,
         Integer adaptivePracticeRemaining,
-        GoalNudgeResponse goalNudge
+        GoalNudgeResponse goalNudge,
+        NextStepSecondaryActionResponse secondaryAction
 ) {
 }

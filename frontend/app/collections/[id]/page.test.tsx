@@ -60,6 +60,11 @@ function collection(overrides: Record<string, unknown> = {}) {
     description: "Weeks 1-4",
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
+    progress: {
+      totalNotes: 2,
+      notesWithStudyPack: 1,
+      notesPracticed: 1,
+    },
     items: [
       {
         noteId: "note-1",
@@ -70,6 +75,9 @@ function collection(overrides: Record<string, unknown> = {}) {
         courseProgram: "Nursing",
         studyPackStatus: "DRAFT",
         generatedQuizId: null,
+        lastSessionCompletedAt: null,
+        dueConceptCount: 0,
+        dueConcepts: [],
         updatedAt: "2026-06-01T00:00:00Z",
       },
       {
@@ -81,6 +89,9 @@ function collection(overrides: Record<string, unknown> = {}) {
         courseProgram: "Nursing",
         studyPackStatus: "STUDY_PACK_READY",
         generatedQuizId: "quiz-2",
+        lastSessionCompletedAt: "2026-06-02T00:00:00Z",
+        dueConceptCount: 0,
+        dueConcepts: [],
         updatedAt: "2026-06-01T00:00:00Z",
       },
     ],
@@ -124,7 +135,7 @@ describe("CollectionDetailPageClient", () => {
     (listNotes as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
-    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
   });
 
@@ -144,8 +155,167 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
   });
 
+  it("renders the collection progress rollup", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("1 of 2 Study Packs ready · 1 of 2 practiced")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "1");
+    expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuemax", "2");
+  });
+
+  it("renders neutral progress for an empty collection without an invalid percentage", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("No progress yet")).toBeInTheDocument();
+    expect(screen.getByText("Add notes to track Study Pack readiness and practice.")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.queryByText("Next in this plan")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("NaN");
+  });
+
+  it("shows due concepts for entitled users and omits rows without due concepts", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        {
+          ...collection().items[0],
+          studyPackStatus: "STUDY_PACK_READY",
+          dueConceptCount: 2,
+          dueConcepts: ["Cell membrane", "ATP synthesis"],
+        },
+        {
+          ...collection().items[1],
+          dueConceptCount: 0,
+          dueConcepts: [],
+        },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("2 concepts due")).toBeInTheDocument();
+    expect(screen.getByText("Cell membrane · ATP synthesis")).toBeInTheDocument();
+    expect(screen.queryByText("0 concepts due")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Upgrade to Plus" })).not.toBeInTheDocument();
+  });
+
+  it("shows one shared upgrade affordance for Free users without exposing due counts", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item, index) => ({
+        ...item,
+        dueConceptCount: index === 0 ? 2 : 0,
+        dueConcepts: index === 0 ? ["Hidden concept", "Another hidden concept"] : [],
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const upgradeLink = await screen.findByRole("link", { name: "Upgrade to Plus" });
+    expect(upgradeLink).toHaveAttribute("href", "/settings?section=plans");
+    expect(screen.queryByText("2 concepts due")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hidden concept · Another hidden concept")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Upgrade to Plus" })).toHaveLength(1);
+  });
+
+  it("chooses the first note without a Study Pack in saved order", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const nextLink = await screen.findByRole("link", { name: "Generate Study Pack" });
+    expect(screen.getByText("Next in this plan")).toBeInTheDocument();
+    expect(nextLink).toHaveAttribute("href", "/notes/note-1?ref=%2Fcollections%2Fcollection-1");
+  });
+
+  it("chooses the first unpracticed note after every Study Pack is ready", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        {
+          ...collection().items[0],
+          studyPackStatus: "STUDY_PACK_READY",
+          lastSessionCompletedAt: "2026-06-03T00:00:00Z",
+        },
+        {
+          ...collection().items[1],
+          lastSessionCompletedAt: null,
+        },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const nextLink = await screen.findByRole("link", { name: "Study this note" });
+    expect(nextLink).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
+  });
+
+  it("chooses the first due-concept note for entitled users after all notes are practiced", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PRO" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        {
+          ...collection().items[0],
+          studyPackStatus: "STUDY_PACK_READY",
+          lastSessionCompletedAt: "2026-06-03T00:00:00Z",
+          dueConceptCount: 0,
+        },
+        {
+          ...collection().items[1],
+          dueConceptCount: 2,
+          dueConcepts: ["Dosage ratios", "Unit conversion"],
+        },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const nextLink = await screen.findByRole("link", { name: "Review due concepts" });
+    expect(nextLink).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
+  });
+
+  it("shows caught up when no action remains", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "STUDY_PACK_READY",
+        lastSessionCompletedAt: "2026-06-03T00:00:00Z",
+        dueConceptCount: 0,
+        dueConcepts: [],
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Study this note|Review due concepts|Generate Study Pack/ })).not.toBeInTheDocument();
+  });
+
+  it("never uses due concepts as the next action for Free users", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item, index) => ({
+        ...item,
+        studyPackStatus: "STUDY_PACK_READY",
+        lastSessionCompletedAt: "2026-06-03T00:00:00Z",
+        dueConceptCount: index === 0 ? 2 : 0,
+        dueConcepts: index === 0 ? ["Hidden concept", "Another hidden concept"] : [],
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review due concepts" })).not.toBeInTheDocument();
+  });
+
   it("routes teacher collections to Exam Builder with the collection id and quiz-ready note ids", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER" });
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER", planType: "FREE" });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
@@ -161,7 +331,7 @@ describe("CollectionDetailPageClient", () => {
   });
 
   it("disables the teacher terminal action when no collection notes are quiz-ready", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER" });
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: collection().items.map((item) => ({
         ...item,
@@ -200,7 +370,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    await screen.findByText("Cell Respiration");
+    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
     fireEvent.click(screen.getAllByRole("button", { name: "Move down" })[0]);
 
     await waitFor(() => {
@@ -219,7 +389,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    await screen.findByText("Cell Respiration");
+    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
     fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
 
     await waitFor(() => {
@@ -242,6 +412,9 @@ describe("CollectionDetailPageClient", () => {
         courseProgram: null,
         studyPackStatus: "DRAFT",
         generatedQuizId: null,
+        lastSessionCompletedAt: null,
+        dueConceptCount: 0,
+        dueConcepts: [],
         updatedAt: "2026-06-01T00:00:00Z",
       }],
     }));

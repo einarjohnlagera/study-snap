@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -64,6 +65,21 @@ class NoteCollectionServiceTest {
     private static final String COURSE_PROGRAM = "STEM";
     private static final String WEEK_ONE_LABEL = "Week 1";
     private static final String WEEK_TWO_LABEL = "Week 2";
+    private static final String WHITESPACE = "  ";
+    private static final String REPEATED_CHARACTER = "a";
+    private static final String NEWER_COLLECTION_TITLE = "Newer";
+    private static final String EARLIER_COLLECTION_TITLE = "Earlier";
+    private static final String UPDATED_COLLECTION_TITLE = "Updated";
+    private static final String UPDATED_COLLECTION_DESCRIPTION = "Updated description";
+    private static final String OLDEST_CONCEPT = "Oldest";
+    private static final String OLDER_CONCEPT = "Older";
+    private static final String NEVER_SEEN_CONCEPT = "Never Seen";
+    private static final String NEWEST_DUE_CONCEPT = "Newest Due";
+    private static final String CURRENT_CONCEPT = "Current";
+    private static final String BASE_TIMESTAMP = "2026-04-01T00:00:00Z";
+    private static final String QUIZ_TIMESTAMP = "2026-04-01T02:00:00Z";
+    private static final OffsetDateTime FIRST_PRACTICED_AT = OffsetDateTime.parse("2026-04-02T01:00:00Z");
+    private static final OffsetDateTime SECOND_PRACTICED_AT = OffsetDateTime.parse("2026-04-03T01:00:00Z");
 
     @Mock
     private NoteCollectionRepository collectionRepository;
@@ -81,6 +97,12 @@ class NoteCollectionServiceTest {
     private GeneratedQuizRepository generatedQuizRepository;
 
     @Mock
+    private QuizSessionHistoryService quizSessionHistoryService;
+
+    @Mock
+    private ConceptHealthService conceptHealthService;
+
+    @Mock
     private AnalyticsService analyticsService;
 
     private NoteCollectionService service;
@@ -93,6 +115,8 @@ class NoteCollectionServiceTest {
                 noteRepository,
                 studyPackRepository,
                 generatedQuizRepository,
+                quizSessionHistoryService,
+                conceptHealthService,
                 analyticsService
         );
     }
@@ -104,8 +128,8 @@ class NoteCollectionServiceTest {
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         NoteCollectionDetailResponse result = service.create(userId, new CreateNoteCollectionRequest(
-                "  " + COLLECTION_TITLE + "  ",
-                "  " + COLLECTION_DESCRIPTION + "  ",
+                WHITESPACE + COLLECTION_TITLE + WHITESPACE,
+                WHITESPACE + COLLECTION_DESCRIPTION + WHITESPACE,
                 null
         ));
 
@@ -203,15 +227,16 @@ class NoteCollectionServiceTest {
     @Test
     void list_returnsCallerCollectionsOnlyNewestUpdatedFirst() {
         UUID userId = UUID.randomUUID();
-        NoteCollectionEntity newer = buildCollection(UUID.randomUUID(), userId, "Newer", Instant.parse("2026-04-02T00:00:00Z"));
-        NoteCollectionEntity older = buildCollection(UUID.randomUUID(), userId, "Older", Instant.parse("2026-04-01T00:00:00Z"));
+        NoteCollectionEntity newer = buildCollection(UUID.randomUUID(), userId, NEWER_COLLECTION_TITLE, Instant.parse("2026-04-02T00:00:00Z"));
+        NoteCollectionEntity older = buildCollection(UUID.randomUUID(), userId, EARLIER_COLLECTION_TITLE, Instant.parse(BASE_TIMESTAMP));
         when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(newer, older));
         when(itemRepository.countItemsByCollectionIds(List.of(newer.getId(), older.getId())))
                 .thenReturn(List.of(countProjection(newer.getId(), 2), countProjection(older.getId(), 1)));
 
         List<NoteCollectionSummaryResponse> result = service.list(userId);
 
-        assertThat(result).extracting(NoteCollectionSummaryResponse::title).containsExactly("Newer", "Older");
+        assertThat(result).extracting(NoteCollectionSummaryResponse::title)
+                .containsExactly(NEWER_COLLECTION_TITLE, EARLIER_COLLECTION_TITLE);
         assertThat(result).extracting(NoteCollectionSummaryResponse::itemCount).containsExactly(2, 1);
         verify(collectionRepository).findByOwnerUserIdOrderByUpdatedAtDesc(userId);
     }
@@ -235,32 +260,227 @@ class NoteCollectionServiceTest {
         when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId, secondNoteId))).thenReturn(List.of(studyPack));
         when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(firstNoteId, secondNoteId)))
                 .thenReturn(List.of(generatedQuiz));
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                userId,
+                List.of(firstNoteId, secondNoteId)
+        )).thenReturn(Map.of(secondNoteId, FIRST_PRACTICED_AT));
 
         NoteCollectionDetailResponse result = service.get(collectionId, userId);
 
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(firstNoteId, secondNoteId);
         assertThat(result.items().get(0).studyPackStatus()).isEqualTo(NoteStudyPackStatusResolver.DRAFT);
+        assertThat(result.items().get(0).lastSessionCompletedAt()).isNull();
         assertThat(result.items().get(1).studyPackStatus()).isEqualTo(NoteStudyPackStatusResolver.STUDY_PACK_READY);
         assertThat(result.items().get(1).generatedQuizId()).isEqualTo(generatedQuiz.getId().toString());
+        assertThat(result.items().get(1).lastSessionCompletedAt()).isEqualTo(FIRST_PRACTICED_AT);
+        assertThat(result.progress().totalNotes()).isEqualTo(2);
+        assertThat(result.progress().notesWithStudyPack()).isEqualTo(1);
+        assertThat(result.progress().notesPracticed()).isEqualTo(1);
+        verify(quizSessionHistoryService, times(1))
+                .findLatestSessionCompletedAtByNoteIds(userId, List.of(firstNoteId, secondNoteId));
+    }
+
+    @Test
+    void get_returnsMixedCollectionProgressFromAssembledItems() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        List<NoteCollectionItemEntity> items = List.of(
+                buildItem(collectionId, firstNoteId, 0, null),
+                buildItem(collectionId, secondNoteId, 1, null),
+                buildItem(collectionId, thirdNoteId, 2, null)
+        );
+        List<NoteEntity> notes = List.of(
+                buildNote(firstNoteId, userId, NOTE_TITLE_ONE),
+                buildNote(secondNoteId, userId, NOTE_TITLE_TWO),
+                buildNote(thirdNoteId, userId, NOTE_TITLE_THREE)
+        );
+        List<UUID> noteIds = List.of(firstNoteId, secondNoteId, thirdNoteId);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
+        when(noteRepository.findAllById(noteIds)).thenReturn(notes);
+        when(studyPackRepository.findByNoteIdIn(noteIds))
+                .thenReturn(List.of(buildStudyPack(firstNoteId), buildStudyPack(thirdNoteId)));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds))
+                .thenReturn(Map.of(
+                        firstNoteId, FIRST_PRACTICED_AT,
+                        secondNoteId, SECOND_PRACTICED_AT
+                ));
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.progress().totalNotes()).isEqualTo(3);
+        assertThat(result.progress().notesWithStudyPack()).isEqualTo(2);
+        assertThat(result.progress().notesPracticed()).isEqualTo(2);
+        assertThat(result.items()).extracting(item -> item.lastSessionCompletedAt())
+                .containsExactly(FIRST_PRACTICED_AT, SECOND_PRACTICED_AT, null);
+        verify(quizSessionHistoryService, times(1)).findLatestSessionCompletedAtByNoteIds(userId, noteIds);
+    }
+
+    @Test
+    void get_returnsZeroProgressForEmptyCollectionWithoutLoadingPracticeSignals() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.progress().totalNotes()).isZero();
+        assertThat(result.progress().notesWithStudyPack()).isZero();
+        assertThat(result.progress().notesPracticed()).isZero();
+        assertThat(result.items()).isEmpty();
+        verify(quizSessionHistoryService, never()).findLatestSessionCompletedAtByNoteIds(any(), any());
+    }
+
+    @Test
+    void get_degradesPracticeSignalFailureToNotPracticed() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId)))
+                .thenThrow(new IllegalStateException("session history unavailable"));
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.progress().notesPracticed()).isZero();
+        assertThat(result.items().getFirst().lastSessionCompletedAt()).isNull();
+    }
+
+    @Test
+    void get_entitledUserReturnsOrderedCappedDueConceptsFromOneBatchCall() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID dueNoteId = UUID.randomUUID();
+        UUID currentNoteId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        List<UUID> noteIds = List.of(dueNoteId, currentNoteId, draftNoteId);
+        List<NoteCollectionItemEntity> items = List.of(
+                buildItem(collectionId, dueNoteId, 0, null),
+                buildItem(collectionId, currentNoteId, 1, null),
+                buildItem(collectionId, draftNoteId, 2, null)
+        );
+        List<NoteEntity> notes = List.of(
+                buildNote(dueNoteId, userId, NOTE_TITLE_ONE),
+                buildNote(currentNoteId, userId, NOTE_TITLE_TWO),
+                buildNote(draftNoteId, userId, NOTE_TITLE_THREE)
+        );
+        StudyPackEntity dueStudyPack = buildStudyPack(
+                dueNoteId,
+                List.of(OLDEST_CONCEPT, OLDER_CONCEPT, NEVER_SEEN_CONCEPT, NEWEST_DUE_CONCEPT, CURRENT_CONCEPT)
+        );
+        StudyPackEntity currentStudyPack = buildStudyPack(currentNoteId, List.of(CURRENT_CONCEPT));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
+        when(noteRepository.findAllById(noteIds)).thenReturn(notes);
+        when(studyPackRepository.findByNoteIdIn(noteIds)).thenReturn(List.of(dueStudyPack, currentStudyPack));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
+        when(conceptHealthService.canViewConceptHealth(userId)).thenReturn(true);
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), anyMap(), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        dueStudyPack.getId(), List.of(
+                                OLDEST_CONCEPT,
+                                OLDER_CONCEPT,
+                                NEVER_SEEN_CONCEPT,
+                                NEWEST_DUE_CONCEPT
+                        ),
+                        currentStudyPack.getId(), List.of()
+                ));
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.items().get(0).dueConceptCount()).isEqualTo(4);
+        assertThat(result.items().get(0).dueConcepts())
+                .containsExactly(OLDEST_CONCEPT, OLDER_CONCEPT, NEVER_SEEN_CONCEPT);
+        assertThat(result.items().get(1).dueConceptCount()).isZero();
+        assertThat(result.items().get(1).dueConcepts()).isEmpty();
+        assertThat(result.items().get(2).dueConceptCount()).isZero();
+        assertThat(result.items().get(2).dueConcepts()).isEmpty();
+        verify(conceptHealthService, times(1))
+                .getDueConceptsByStudyPackIds(eq(userId), anyMap(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void get_nonEntitledUserDoesNotLoadOrReturnDueConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        StudyPackEntity studyPack = buildStudyPack(noteId, List.of("Underlying Due Concept"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(studyPack));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId))).thenReturn(Map.of());
+        when(conceptHealthService.canViewConceptHealth(userId)).thenReturn(false);
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.items().getFirst().dueConceptCount()).isZero();
+        assertThat(result.items().getFirst().dueConcepts()).isEmpty();
+        verify(conceptHealthService, never()).getDueConceptsByStudyPackIds(any(), anyMap(), any());
+    }
+
+    @Test
+    void get_degradesConceptHealthFailureToEmptyDueConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        StudyPackEntity studyPack = buildStudyPack(noteId, List.of("Due Concept"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(studyPack));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId))).thenReturn(Map.of());
+        when(conceptHealthService.canViewConceptHealth(userId)).thenReturn(true);
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), anyMap(), any(OffsetDateTime.class)))
+                .thenThrow(new IllegalStateException("concept health unavailable"));
+
+        NoteCollectionDetailResponse result = service.get(collectionId, userId);
+
+        assertThat(result.items().getFirst().dueConceptCount()).isZero();
+        assertThat(result.items().getFirst().dueConcepts()).isEmpty();
     }
 
     @Test
     void updateMetadata_changesTitleDescriptionAndBumpsUpdatedAt() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
-        Instant previousUpdatedAt = Instant.parse("2026-04-01T00:00:00Z");
+        Instant previousUpdatedAt = Instant.parse(BASE_TIMESTAMP);
         NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, previousUpdatedAt);
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
 
         NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
-                "Updated",
-                "Updated description"
+                UPDATED_COLLECTION_TITLE,
+                UPDATED_COLLECTION_DESCRIPTION
         ));
 
-        assertThat(result.title()).isEqualTo("Updated");
-        assertThat(result.description()).isEqualTo("Updated description");
+        assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
+        assertThat(result.description()).isEqualTo(UPDATED_COLLECTION_DESCRIPTION);
         assertThat(result.updatedAt()).isAfter(previousUpdatedAt);
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
     }
@@ -414,7 +634,7 @@ class NoteCollectionServiceTest {
 
     @Test
     void blankTitleThrows() {
-        CreateNoteCollectionRequest request = new CreateNoteCollectionRequest("  ", null, null);
+        CreateNoteCollectionRequest request = new CreateNoteCollectionRequest(WHITESPACE, null, null);
 
         assertThatThrownBy(() -> service.create(UUID.randomUUID(), request))
                 .isInstanceOf(InvalidCollectionRequestException.class)
@@ -423,7 +643,7 @@ class NoteCollectionServiceTest {
 
     @Test
     void overLongTitleThrows() {
-        CreateNoteCollectionRequest request = new CreateNoteCollectionRequest("a".repeat(151), null, null);
+        CreateNoteCollectionRequest request = new CreateNoteCollectionRequest(REPEATED_CHARACTER.repeat(151), null, null);
 
         assertThatThrownBy(() -> service.create(UUID.randomUUID(), request))
                 .isInstanceOf(InvalidCollectionRequestException.class)
@@ -437,7 +657,7 @@ class NoteCollectionServiceTest {
         UUID noteId = UUID.randomUUID();
         NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
         SetNoteCollectionOrderRequest request = new SetNoteCollectionOrderRequest(List.of(
-                new SetNoteCollectionOrderRequest.OrderedItem(noteId, "a".repeat(121))
+                new SetNoteCollectionOrderRequest.OrderedItem(noteId, REPEATED_CHARACTER.repeat(121))
         ));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
 
@@ -503,6 +723,7 @@ class NoteCollectionServiceTest {
         when(noteRepository.findAllById(noteIds)).thenReturn(notes);
         when(studyPackRepository.findByNoteIdIn(noteIds)).thenReturn(List.of());
         when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
     }
 
     private NoteCollectionEntity buildCollection(UUID id, UUID userId, String title, Instant updatedAt) {
@@ -539,15 +760,20 @@ class NoteCollectionServiceTest {
         note.setStatus(NoteStatus.DRAFT);
         note.setVisibility(NoteVisibility.PRIVATE);
         note.setTargetProfileType(NoteTargetProfileType.STUDENT);
-        note.setCreatedAt(OffsetDateTime.parse("2026-04-01T00:00:00Z"));
+        note.setCreatedAt(OffsetDateTime.parse(BASE_TIMESTAMP));
         note.setUpdatedAt(OffsetDateTime.parse("2026-04-01T01:00:00Z"));
         return note;
     }
 
     private StudyPackEntity buildStudyPack(UUID noteId) {
+        return buildStudyPack(noteId, List.of());
+    }
+
+    private StudyPackEntity buildStudyPack(UUID noteId, List<String> keyConcepts) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(UUID.randomUUID());
         studyPack.setNoteId(noteId);
+        studyPack.setKeyConcepts(keyConcepts);
         studyPack.setStatus(StudyPackStatus.DONE);
         return studyPack;
     }
@@ -557,8 +783,8 @@ class NoteCollectionServiceTest {
         generatedQuiz.setId(UUID.randomUUID());
         generatedQuiz.setNoteId(noteId);
         generatedQuiz.setOwnerUserId(userId);
-        generatedQuiz.setGeneratedAt(OffsetDateTime.parse("2026-04-01T02:00:00Z"));
-        generatedQuiz.setUpdatedAt(OffsetDateTime.parse("2026-04-01T02:00:00Z"));
+        generatedQuiz.setGeneratedAt(OffsetDateTime.parse(QUIZ_TIMESTAMP));
+        generatedQuiz.setUpdatedAt(OffsetDateTime.parse(QUIZ_TIMESTAMP));
         generatedQuiz.setQuestions(List.of());
         return generatedQuiz;
     }
