@@ -38,7 +38,9 @@ If the user cannot access it:
 Primary CTA:
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
-- the shared `<PostSessionNextStep>` component renders the dominant next action from ConceptHealth
+- the shared `<PostSessionNextStep>` component always steps the learner up to Challenge Quiz after Adaptive Practice instead of making Adaptive Practice its own primary next action
+- if genuine weak concepts remain, they stay visible as focus areas; the primary action still does not loop back into Adaptive Practice
+- genuine weakness includes reviewed-and-decayed concepts plus actual misses from the completed session, and excludes never-reviewed concepts
 - the previous `Generate New Set` action remains as fallback when the next-step fetch fails
 
 Secondary actions:
@@ -46,7 +48,7 @@ Secondary actions:
 - `Review Answers`
 - `← Back to Note`
 
-The result screen should stay focused and should not compete with unrelated actions. The targeted weak areas block remains mode-owned; only the primary next-action slot is replaced by the shared post-session component.
+The result screen should stay focused and should not compete with unrelated actions. The targeted weak areas block remains mode-owned; only the primary next-action slot is replaced by the shared post-session component. The deterministic server-resolved primary is Challenge Quiz whether genuine weakness remains or has cleared.
 
 ## Session rules
 

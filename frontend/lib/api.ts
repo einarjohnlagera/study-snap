@@ -189,6 +189,11 @@ export type PostSessionNextStepResponse = {
   adaptivePracticeAvailable: boolean;
   adaptivePracticeRemaining: number | null;
   goalNudge: GoalNudgeResponse | null;
+  secondaryAction: {
+    actionLabel: string;
+    actionHref: string;
+    adaptivePractice: boolean;
+  } | null;
 };
 
 export type GoalNudgeResponse = {
