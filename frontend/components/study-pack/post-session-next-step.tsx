@@ -29,10 +29,13 @@ export function PostSessionNextStep({
 
   const normalizedPlan = normalizePlan(currentPlan);
   const upgradeCta = getUpgradeCtas(normalizedPlan, "adaptive-practice").primary;
-  const shouldShowUpgradeCta = response.type === "PRACTICE_WEAK_CONCEPT"
-    && response.adaptivePracticeAvailable
+  const adaptiveQuotaExhausted = response.adaptivePracticeAvailable
     && response.adaptivePracticeRemaining === 0
     && upgradeCta !== null;
+  const shouldShowPrimaryUpgradeCta = response.type === "PRACTICE_WEAK_CONCEPT"
+    && adaptiveQuotaExhausted;
+  const shouldShowSecondaryUpgradeCta = response.secondaryAction?.adaptivePractice === true
+    && adaptiveQuotaExhausted;
   const actionHref = response.actionHref || (noteId ? `/notes/${noteId}` : "/library");
 
   return (
@@ -59,17 +62,32 @@ export function PostSessionNextStep({
           </div>
         </div>
       ) : null}
-      {shouldShowUpgradeCta ? (
-        <Button type="button" className="w-full sm:w-auto" onClick={onOpenPaywall}>
-          {upgradeCta.label}
-        </Button>
-      ) : (
-        <Link href={actionHref} className="block w-full sm:w-fit">
-          <Button type="button" className="w-full sm:w-auto">
-            {response.actionLabel}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        {shouldShowPrimaryUpgradeCta ? (
+          <Button type="button" className="w-full sm:w-auto" onClick={onOpenPaywall}>
+            {upgradeCta?.label}
           </Button>
-        </Link>
-      )}
+        ) : (
+          <Link href={actionHref} className="block w-full sm:w-fit">
+            <Button type="button" className="w-full sm:w-auto">
+              {response.actionLabel}
+            </Button>
+          </Link>
+        )}
+        {response.secondaryAction ? (
+          shouldShowSecondaryUpgradeCta ? (
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={onOpenPaywall}>
+              {upgradeCta?.label}
+            </Button>
+          ) : (
+            <Link href={response.secondaryAction.actionHref} className="block w-full sm:w-fit">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
+                {response.secondaryAction.actionLabel}
+              </Button>
+            </Link>
+          )
+        ) : null}
+      </div>
     </Card>
   );
 }

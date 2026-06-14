@@ -249,17 +249,22 @@ describe("QuickReviewPage post-quiz UX", () => {
   it("fetches and renders the server-resolved next step after completion", async () => {
     setupCompleteState({ adaptivePracticeAvailable: true });
     (getPostSessionNextStep as jest.Mock).mockResolvedValue({
-      type: "PRACTICE_WEAK_CONCEPT",
+      type: "REVIEW_PACK",
       studyPackId: "study-pack-1",
       noteId: "note-1",
       title: "Cells",
-      message: "Cell organelles is due for review. Practice it while it is fresh.",
-      actionLabel: "Practice Weak Concepts",
-      actionHref: "/notes/note-1/adaptive-practice",
+      message: "Strong Quick Review. Step up with a Challenge, with targeted review still available below.",
+      actionLabel: "Take a Challenge",
+      actionHref: "/notes/note-1/challenge-quiz",
       concepts: ["Cell organelles"],
       adaptivePracticeAvailable: true,
       adaptivePracticeRemaining: 2,
       goalNudge: null,
+      secondaryAction: {
+        actionLabel: "Practice Weak Concepts",
+        actionHref: "/notes/note-1/adaptive-practice",
+        adaptivePractice: true,
+      },
     });
     render(<QuickReviewPage />);
 
@@ -268,6 +273,10 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
     expect(screen.getByText("Cell organelles")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/challenge-quiz",
+    );
     expect(screen.getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute(
       "href",
       "/notes/note-1/adaptive-practice",

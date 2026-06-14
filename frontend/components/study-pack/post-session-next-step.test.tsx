@@ -14,6 +14,7 @@ const baseResponse: PostSessionNextStepResponse = {
   adaptivePracticeAvailable: true,
   adaptivePracticeRemaining: 2,
   goalNudge: null,
+  secondaryAction: null,
 };
 
 describe("PostSessionNextStep", () => {
@@ -47,6 +48,65 @@ describe("PostSessionNextStep", () => {
       />,
     );
 
+    expect(screen.queryByRole("link", { name: "Practice Weak Concepts" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Get More Adaptive Practice" }));
+
+    expect(onOpenPaywall).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a demoted weak-area action while keeping Challenge primary", () => {
+    render(
+      <PostSessionNextStep
+        response={{
+          ...baseResponse,
+          type: "REVIEW_PACK",
+          actionLabel: "Take a Challenge",
+          actionHref: "/notes/note-1/challenge-quiz",
+          secondaryAction: {
+            actionLabel: "Practice Weak Concepts",
+            actionHref: "/notes/note-1/adaptive-practice",
+            adaptivePractice: true,
+          },
+        }}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/challenge-quiz",
+    );
+    expect(screen.getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/adaptive-practice",
+    );
+  });
+
+  it("keeps Challenge reachable when the secondary Adaptive action is quota-blocked", () => {
+    const onOpenPaywall = jest.fn();
+    render(
+      <PostSessionNextStep
+        response={{
+          ...baseResponse,
+          type: "REVIEW_PACK",
+          actionLabel: "Take a Challenge",
+          actionHref: "/notes/note-1/challenge-quiz",
+          adaptivePracticeRemaining: 0,
+          secondaryAction: {
+            actionLabel: "Practice Weak Concepts",
+            actionHref: "/notes/note-1/adaptive-practice",
+            adaptivePractice: true,
+          },
+        }}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={onOpenPaywall}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Take a Challenge" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Practice Weak Concepts" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Get More Adaptive Practice" }));
 

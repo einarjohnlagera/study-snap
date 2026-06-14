@@ -55,6 +55,9 @@ Primary CTA rules:
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
 - the shared `<PostSessionNextStep>` component renders the dominant next action
+- a Quick Review with actual misses prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action
+- a Quick Review with no misses advances primarily to `Take a Challenge`
+- genuine weak concepts may keep `Practice Weak Concepts` reachable as a secondary action after a strong Quick Review, but never replace Challenge Quiz as the primary action
 - fallback UI keeps the previous weak-area / challenge / retry guidance when the next-step fetch fails
 
 Secondary actions:
@@ -82,8 +85,11 @@ Meaning:
 ## Weak concepts and Adaptive Practice
 
 - weak concepts are visible to all plans after completion
+- post-session genuine weakness is the capped union of reviewed concepts that have decayed due and concepts actually missed in the completed session
+- never-reviewed concepts are `not started`, not genuine weakness, and do not trigger a weak-area recommendation
 - Adaptive Practice is available to Free users up to 3 sessions / month, then opens the shared upgrade flow for more sessions
 - when the shared next-step response recommends Adaptive Practice but quota is exhausted, the component shows a plan-aware upgrade CTA instead of routing into the limit wall
+- this remains inside the locked `EXAM_MODES.md` hierarchy: Quick Review still guides into Challenge Quiz or Adaptive Practice; weak-area practice is demoted after a strong result, not removed
 
 ## ConceptHealth
 
@@ -91,6 +97,7 @@ Meaning:
 - a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
 - weak or partially correct concepts are not recorded as mastered
 - the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved
+- ConceptHealth entries drive weak-area routing only when they have prior review history and are currently due; due entries with no `lastCorrectAt` remain not-started concepts
 
 ## Review history
 
