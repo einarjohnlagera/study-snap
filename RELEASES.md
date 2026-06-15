@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.29.0 - Bulk Generation
+
+**Status: In Progress**
+
+Theme: kill the one-note-at-a-time tax on seeding study content. An admin pastes a structured list of titles (grouped by subject under one course/program and target audience) and the system generates a note **and** its Study Pack per title, unattended. Built admin-first to seed our exam-prep buckets, but architected as a normal Library capability behind a role gate — opening it to all users later is a gate-flip, not a rebuild. No new job/progress infrastructure: each title is generated content-first into a real note that then runs Study-Pack-gen on the existing executors and resolves `GENERATING → READY` via the status field the Library already carries. The non-admin path reuses the existing quota-enforcing entry points (ADMIN bypasses) so opening it to all users is a gate-flip. See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
+
+### Shipped
+
+_In progress._
+
+---
+
 ## v0.28.0 - Feature Discoverability & Activation
 
 **Status: Released**

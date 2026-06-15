@@ -6,19 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.28.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.29.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.28.0 — Feature Discoverability & Activation (anti-drift)
+## Active release: v0.29.0 — Bulk Generation (anti-drift)
 
-Base branch for this release: `releases/v0.28.0`. Full scope in `ROADMAP.md`; locked rules:
+Base branch for this release: `releases/v0.29.0`. Full scope in `ROADMAP.md`; locked rules:
 
-- **This is an activation problem, not a docs problem.** The lever is in-flow *push* through systems we already have, not new help pages. Quiz-session export is already documented in Help and still goes unused — pull-docs do not drive discovery.
-- **Contextual nudges are the primary lever.** Reuse the existing `GuidanceTip` / `pickActiveGuidance` one-time-tip system (`lib/guidance-engine.ts`, `lib/guidance.ts`) — **do not build a new tips framework, do not add ad-hoc one-time tips.** Route every new tip through `pickActiveGuidance`. Tips are one-time, dismissible, and contextual only.
-- **Strengthen the existing Dashboard recommendation, do not add a promo banner.** Push underused modes through `ContinueSpotlight` / `continueStudying` when contextually appropriate. A permanent top-of-Dashboard banner was explicitly rejected (banner-blindness).
-- **Instrument before you guess.** Track tip impression → click → feature use via the `AnalyticsEventType` enum — **add new events to the enum (Java + frontend) before firing.**
-- **Help reference completeness is table-stakes pull, not the adoption driver.** Add the missing Study Plans / Collections Help topic and audit Help for gaps; bundled here, not the headline.
-- **No new infrastructure.** Study Plan progress rollup, if built, is a read-only aggregation of existing per-note signals — never a new generated artifact or quota category.
-- **Out of scope (do not build without explicit ask):** the v0.29.0 work — teacher-flow quiz-preview fixes, async quiz generation, and collection-level bulk generation.
+- **This is orchestration, not new AI.** The building blocks exist: `NoteGenerationService.generateFromTopic` (note content from a title), the async Study Pack pipeline (`NoteService.startAsyncGenerationFromNote`), `NoteService.create`, and the existing quota services. Compose them — do not write a new generation path or a parallel pipeline.
+- **No new job/progress infrastructure.** Each title is generated content-first into a real note (note content is required, so the row appears once content-gen completes), then runs Study-Pack-gen on the existing executors; progress and load-on-refresh come from the real note rows + the `studyPackStatus` field the Library list already carries (`GENERATING → READY/FAILED`). **Do not add a batch-job entity, a progress table, or a new status enum.**
+- **Per-item isolation + throttled fan-out.** One bad title never fails the batch (try/catch per iteration — the `/notes/import-batch` pattern). Submit chains to the existing `studyPackGenerationTaskExecutor` with throttling so a large batch never saturates the pool or trips LLM rate limits.
+- **Role-gated in Library, not `/admin`.** Entry is in the Library Create split-button, shown only to ADMIN; the flow is a dedicated `/library/bulk-generate` route. The gate is role-based and removable — opening it to all users later is a gate-flip, not a rebuild. Do not hardcode admin checks that would block future ungating.
+- **Quota check built now; ADMIN bypasses.** Wire per-user quota enforcement through the existing quota services so the all-users path is real — ADMIN bypasses it. Defer only the "quota ran out mid-batch" partial-execution messaging.
+- **Subject field = the admin's list; title + tags = AI.** Set the note's dedicated `subject` field from the pasted list (it beats the AI subject); keep the AI title and AI tags from the Study Pack write-back (the user wants both kept). Do not strip or override AI tags with the subject. No per-profile pipeline fork.
+- **Out of scope (do not build without explicit ask):** the v0.31.0 work — collection-level bulk *quiz* generation over existing notes, async quiz generation, and teacher quiz-preview polish; and the v0.30.0 Readiness Signals work.
 
 ## Source-of-truth docs (read before implementing anything)
 
