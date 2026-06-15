@@ -117,6 +117,25 @@ export type BulkImportResult = {
   failed: BulkImportFailure[];
 };
 
+export type BulkGenerateNoteGroup = {
+  subject: string;
+  titles: string[];
+};
+
+export type BulkGenerateNotesRequest = {
+  courseProgram: string;
+  targetAudience: LearnerLevel;
+  makePublic: boolean;
+  groups: BulkGenerateNoteGroup[];
+};
+
+export type BulkGenerateNotesResponse = {
+  acceptedTitles: number;
+  queuedTitles: number;
+  subjectCount: number;
+  rejectedTitles: number;
+};
+
 export type StudyPackListItemResponse = {
   id: string;
   title: string;
@@ -2222,6 +2241,24 @@ export async function importNotesBatch(files: File[]): Promise<BulkImportResult>
   return parseApiResponse<BulkImportResult>(
     response,
     "We could not import these files right now. Please try again.",
+  );
+}
+
+export async function bulkGenerateNotes(
+  request: BulkGenerateNotesRequest,
+): Promise<BulkGenerateNotesResponse> {
+  const response = await fetchWithAuth(
+    "/notes/bulk-generate",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<BulkGenerateNotesResponse>(
+    response,
+    "We could not queue these notes right now. Please try again.",
   );
 }
 

@@ -7,6 +7,8 @@ import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
+import com.studysnap.backend.dto.BulkGenerateNotesRequest;
+import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.GenerateGeneratedQuizRequest;
@@ -28,11 +30,13 @@ import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
+import com.studysnap.backend.service.NoteBulkGenerationService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
@@ -73,6 +77,7 @@ public class NoteController {
     private final AuthService authService;
     private final NoteService noteService;
     private final NoteBulkImportService noteBulkImportService;
+    private final NoteBulkGenerationService noteBulkGenerationService;
     private final NoteGenerationService noteGenerationService;
     private final NoteTextExtractionService noteTextExtractionService;
     private final StudyPackService studyPackService;
@@ -122,6 +127,18 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteBulkImportService.importBatch(userId, files);
+    }
+
+    @PostMapping("/bulk-generate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public BulkGenerateNotesResponse bulkGenerate(
+            @Valid @RequestBody BulkGenerateNotesRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        boolean enforceLimits = user.role() != UserRole.ADMIN;
+        return noteBulkGenerationService.queueBatch(request, userId, enforceLimits);
     }
 
     @PutMapping("/{id}")

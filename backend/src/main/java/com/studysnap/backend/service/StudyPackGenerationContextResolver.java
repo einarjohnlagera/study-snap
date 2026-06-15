@@ -1,11 +1,13 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +57,29 @@ public class StudyPackGenerationContextResolver {
                         null,
                         studyPack == null ? null : studyPack.getSubject(),
                         tags
+                ));
+    }
+
+    public StudyPackGenerationContext resolveForBulkGeneration(
+            UUID ownerUserId,
+            LearnerLevel learnerLevel,
+            String courseProgram,
+            String subject
+    ) {
+        return userRepository.findById(ownerUserId)
+                .map(user -> new StudyPackGenerationContext(
+                        learnerLevel == null ? user.getLearnerLevel() : learnerLevel,
+                        CourseProgramNormalizationUtils.normalizeForStorage(
+                                firstNonBlank(courseProgram, user.getCourseProgram())
+                        ),
+                        subject,
+                        List.of()
+                ))
+                .orElseGet(() -> new StudyPackGenerationContext(
+                        learnerLevel,
+                        CourseProgramNormalizationUtils.normalizeForStorage(courseProgram),
+                        subject,
+                        List.of()
                 ));
     }
 

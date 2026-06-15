@@ -8,7 +8,7 @@ Theme: kill the one-note-at-a-time tax on seeding study content. An admin pastes
 
 ### Shipped
 
-_In progress._
+- **Admin Bulk Generation** — Added an ADMIN-only Library flow for pasting subject-grouped title lists and immediately queueing throttled, per-title note-content and Study Pack generation on the existing executor. Bulk-created notes keep the pasted subject while accepting AI-refined titles and tags, optionally become public, isolate individual failures, and bypass ADMIN quota/rate-limit usage without changing single-note enforcement or adding batch-job infrastructure.
 
 ---
 
