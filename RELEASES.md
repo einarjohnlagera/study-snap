@@ -4,11 +4,11 @@
 
 **Status: In Progress**
 
-Theme: kill the one-note-at-a-time tax on seeding study content. An admin pastes a structured list of titles (grouped by subject under one course/program and target audience) and the system generates a note **and** its Study Pack per title, unattended. Built admin-first to seed our exam-prep buckets, but architected as a normal Library capability behind a role gate — opening it to all users later is a gate-flip, not a rebuild. No new job/progress infrastructure: each title is generated content-first into a real note that then runs Study-Pack-gen on the existing executors and resolves `GENERATING → READY` via the status field the Library already carries. The non-admin path reuses the existing quota-enforcing entry points (ADMIN bypasses) so opening it to all users is a gate-flip. See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
+Theme: kill the one-note-at-a-time tax on seeding study content. An admin enters one subject and a list of topics, and the system generates a note **and** its Study Pack per topic, unattended. Built admin-first to seed our exam-prep buckets, but architected as a normal Library capability behind a role gate — opening it to all users later is a gate-flip, not a rebuild. No new job/progress infrastructure: each topic is generated content-first into a real note that then runs Study-Pack-gen on the existing executors and resolves `GENERATING → READY` via the status field the Library already carries. The non-admin path reuses the existing quota-enforcing entry points (ADMIN bypasses) so opening it to all users is a gate-flip. See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
 
 ### Shipped
 
-- **Admin Bulk Generation** — Added an ADMIN-only Library flow for pasting subject-grouped title lists and immediately queueing throttled, per-title note-content and Study Pack generation on the existing executor. Bulk-created notes keep the pasted subject while accepting AI-refined titles and tags, optionally become public, isolate individual failures, and bypass ADMIN quota/rate-limit usage without changing single-note enforcement or adding batch-job infrastructure.
+- **Admin Bulk Generation** — Added an ADMIN-only, Note-Create-aligned Library flow for entering one subject plus a discrete topic list, with a compact profile-aware metadata grid and accessible Public toggle. Each topic immediately queues throttled note-content and Study Pack generation on the existing executor; bulk-created notes keep the batch subject while accepting AI-refined titles and tags, optionally become public, isolate individual failures, and bypass ADMIN quota/rate-limit usage without changing single-note enforcement or adding batch-job infrastructure.
 
 ---
 

@@ -124,7 +124,7 @@ class NoteControllerTest {
                 NoteTargetProfileType.BOARD_TAKER,
                 LearnerLevel.BOARD_EXAM_REVIEW
         );
-        BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(1, 1, 1, 0);
+        BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(1, 1, 0);
         when(noteBulkGenerationService.queueBatch(request, userId, false)).thenReturn(expected);
 
         BulkGenerateNotesResponse response = noteController.bulkGenerate(request, user);

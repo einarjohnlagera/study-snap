@@ -102,7 +102,7 @@ class NoteBulkGenerationServiceTest {
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
 
-        assertThat(response).isEqualTo(new BulkGenerateNotesResponse(2, 2, 1, 0));
+        assertThat(response).isEqualTo(new BulkGenerateNotesResponse(2, 2, 0));
         ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
         verify(noteService, times(2)).create(captor.capture(), eq(userId));
         assertThat(captor.getAllValues()).allSatisfy(noteRequest -> {
@@ -207,38 +207,38 @@ class NoteBulkGenerationServiceTest {
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
 
-        assertThat(response.queuedTitles()).isEqualTo(2);
+        assertThat(response.queuedTopics()).isEqualTo(2);
         ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
         verify(noteService).create(captor.capture(), eq(userId));
         assertThat(captor.getValue().title()).isEqualTo("Healthy Topic");
     }
 
     @Test
-    void queueBatch_rejectsMissingSubjectEmptyTitlesAndOverCap() {
+    void queueBatch_rejectsMissingSubjectEmptyTopicsAndOverCap() {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest missingSubject = new BulkGenerateNotesRequest(
-                " ", List.of("Title"), false, COURSE_PROGRAM, NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE
+                " ", List.of("Topic"), false, COURSE_PROGRAM, NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE
         );
-        BulkGenerateNotesRequest emptyTitles = request(
+        BulkGenerateNotesRequest emptyTopics = request(
                 List.of(), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE, false
         );
-        List<String> tooManyTitles = java.util.stream.IntStream.rangeClosed(1, 51)
-                .mapToObj(index -> "Title " + index)
+        List<String> tooManyTopics = java.util.stream.IntStream.rangeClosed(1, 51)
+                .mapToObj(index -> "Topic " + index)
                 .toList();
         BulkGenerateNotesRequest overCap = request(
-                tooManyTitles, COURSE_PROGRAM, NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE, false
+                tooManyTopics, COURSE_PROGRAM, NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE, false
         );
 
         assertThatThrownBy(() -> service.queueBatch(missingSubject, userId, false))
                 .isInstanceOf(InvalidBulkGenerationRequestException.class)
                 .hasMessage("Subject is required.");
-        assertThatThrownBy(() -> service.queueBatch(emptyTitles, userId, false))
+        assertThatThrownBy(() -> service.queueBatch(emptyTopics, userId, false))
                 .isInstanceOf(InvalidBulkGenerationRequestException.class)
-                .hasMessage("Add at least one title.");
+                .hasMessage("Add at least one topic.");
         assertThatThrownBy(() -> service.queueBatch(overCap, userId, false))
                 .isInstanceOf(InvalidBulkGenerationRequestException.class)
-                .hasMessage("You can bulk generate up to 50 titles at once.");
+                .hasMessage("You can bulk generate up to 50 topics at once.");
     }
 
     @Test
@@ -246,15 +246,15 @@ class NoteBulkGenerationServiceTest {
         UUID teacherId = UUID.randomUUID();
         mockUser(teacherId, UserRole.USER, ProfileType.TEACHER, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest missingCourse = request(
-                List.of("Title"), " ", NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE, false
+                List.of("Topic"), " ", NoteTargetProfileType.STUDENT, LearnerLevel.COLLEGE, false
         );
         BulkGenerateNotesRequest missingTarget = request(
-                List.of("Title"), COURSE_PROGRAM, null, LearnerLevel.COLLEGE, false
+                List.of("Topic"), COURSE_PROGRAM, null, LearnerLevel.COLLEGE, false
         );
         UUID adminId = UUID.randomUUID();
         mockUser(adminId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest missingLearner = request(
-                List.of("Title"), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, null, false
+                List.of("Topic"), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, null, false
         );
 
         assertThatThrownBy(() -> service.queueBatch(missingCourse, teacherId, false))
@@ -268,8 +268,37 @@ class NoteBulkGenerationServiceTest {
                 .hasMessage("Learner level is required for admins.");
     }
 
+    @Test
+    void queueBatch_honorsConfiguredTopicCap() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        NoteBulkGenerationService limitedService = new NoteBulkGenerationService(
+                noteGenerationService,
+                noteService,
+                studyPackService,
+                llmStudyPackService,
+                contentModerationService,
+                generationContextResolver,
+                new StudyPackGenerationTaskDispatcher(Runnable::run),
+                userRepository,
+                1,
+                0
+        );
+        BulkGenerateNotesRequest request = request(
+                List.of("Topic One", "Topic Two"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                LearnerLevel.COLLEGE,
+                false
+        );
+
+        assertThatThrownBy(() -> limitedService.queueBatch(request, userId, false))
+                .isInstanceOf(InvalidBulkGenerationRequestException.class)
+                .hasMessage("You can bulk generate up to 1 topics at once.");
+    }
+
     private BulkGenerateNotesRequest request(
-            List<String> titles,
+            List<String> topics,
             String courseProgram,
             NoteTargetProfileType targetProfileType,
             LearnerLevel learnerLevel,
@@ -277,7 +306,7 @@ class NoteBulkGenerationServiceTest {
     ) {
         return new BulkGenerateNotesRequest(
                 SUBJECT,
-                titles,
+                topics,
                 makePublic,
                 courseProgram,
                 targetProfileType,

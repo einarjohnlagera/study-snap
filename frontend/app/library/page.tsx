@@ -1096,7 +1096,7 @@ export default function LibraryPage() {
                 ...(authUser?.role === "ADMIN" ? [{
                   key: "bulk-generate",
                   label: "Bulk generate",
-                  description: "Generate notes and Study Packs from a title list",
+                  description: "Generate notes and Study Packs from a list of topics",
                   onSelect: () => router.push("/library/bulk-generate"),
                 }] : []),
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },

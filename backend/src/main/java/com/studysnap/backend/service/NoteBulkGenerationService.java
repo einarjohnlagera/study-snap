@@ -30,13 +30,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class NoteBulkGenerationService {
     private static final Logger log = LoggerFactory.getLogger(NoteBulkGenerationService.class);
-    private static final int MIN_MAX_TITLES = 1;
-    private static final int MAX_TITLE_LENGTH = 160;
+    private static final int MIN_MAX_TOPICS = 1;
+    private static final int MAX_TOPIC_LENGTH = 160;
     private static final int MAX_SUBJECT_LENGTH = 160;
     private static final int MAX_COURSE_PROGRAM_LENGTH = 160;
     private static final int MIN_THROTTLE_DELAY_MS = 0;
     private static final int MAX_THROTTLE_DELAY_MS = 5_000;
-    private static final String EMPTY_BATCH_MESSAGE = "Add at least one title.";
+    private static final String EMPTY_BATCH_MESSAGE = "Add at least one topic.";
     private static final String COURSE_PROGRAM_REQUIRED_MESSAGE = "Course/program is required.";
     private static final String TARGET_AUDIENCE_REQUIRED_MESSAGE =
             "Target audience is required for teachers and admins.";
@@ -45,7 +45,7 @@ public class NoteBulkGenerationService {
             "Add a learner level to your profile before bulk generating notes.";
     private static final String SUBJECT_REQUIRED_MESSAGE = "Subject is required.";
     private static final String FIELD_TOO_LONG_MESSAGE_TEMPLATE = "%s must be %d characters or less.";
-    private static final String MAX_TITLES_MESSAGE_TEMPLATE = "You can bulk generate up to %d titles at once.";
+    private static final String MAX_TOPICS_MESSAGE_TEMPLATE = "You can bulk generate up to %d topics at once.";
     private static final String COURSE_PROGRAM_FIELD = "Course/program";
     private static final String SUBJECT_FIELD = "Subject";
     private static final Set<LearnerLevel> SUPPORTED_TARGET_AUDIENCES = EnumSet.of(
@@ -65,7 +65,7 @@ public class NoteBulkGenerationService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final StudyPackGenerationTaskDispatcher taskDispatcher;
     private final UserRepository userRepository;
-    private final int maxTitles;
+    private final int maxTopics;
     private final int throttleDelayMs;
 
     public NoteBulkGenerationService(
@@ -77,7 +77,7 @@ public class NoteBulkGenerationService {
             StudyPackGenerationContextResolver generationContextResolver,
             StudyPackGenerationTaskDispatcher taskDispatcher,
             UserRepository userRepository,
-            @Value("${note.bulk-generation.max-titles:50}") int maxTitles,
+            @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
         this.noteGenerationService = noteGenerationService;
@@ -88,7 +88,7 @@ public class NoteBulkGenerationService {
         this.generationContextResolver = generationContextResolver;
         this.taskDispatcher = taskDispatcher;
         this.userRepository = userRepository;
-        this.maxTitles = Math.clamp(maxTitles, MIN_MAX_TITLES, Integer.MAX_VALUE);
+        this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
 
@@ -103,8 +103,7 @@ public class NoteBulkGenerationService {
         return new BulkGenerateNotesResponse(
                 batch.items().size(),
                 batch.items().size(),
-                batch.subjectCount(),
-                batch.rejectedTitles()
+                batch.rejectedTopics()
         );
     }
 
@@ -120,8 +119,8 @@ public class NoteBulkGenerationService {
             } catch (RuntimeException exception) {
                 failedCount.incrementAndGet();
                 log.warn(
-                        "action=bulk_generate_note outcome=failed title={} subject={} ownerUserId={}",
-                        item.title(),
+                        "action=bulk_generate_note outcome=failed topic={} subject={} ownerUserId={}",
+                        item.topic(),
                         batch.subject(),
                         ownerUserId,
                         exception
@@ -153,14 +152,14 @@ public class NoteBulkGenerationService {
         );
         String content = enforceLimits
                 ? noteGenerationService.generateFromTopic(
-                        new GenerateNoteFromTopicRequest(item.title(), batch.courseProgram()),
+                        new GenerateNoteFromTopicRequest(item.topic(), batch.courseProgram()),
                         ownerUserId
                 ).content()
-                : generateAdminContent(item.title(), context);
+                : generateAdminContent(item.topic(), context);
 
         NoteResponse note = noteService.create(
                 new UpsertNoteRequest(
-                        item.title(),
+                        item.topic(),
                         batch.subject(),
                         batch.courseProgram(),
                         List.of(),
@@ -182,9 +181,9 @@ public class NoteBulkGenerationService {
         );
     }
 
-    private String generateAdminContent(String title, StudyPackGenerationContext context) {
-        contentModerationService.validateOrThrow(title);
-        return llmStudyPackService.generateNoteFromTopic(title, context);
+    private String generateAdminContent(String topic, StudyPackGenerationContext context) {
+        contentModerationService.validateOrThrow(topic);
+        return llmStudyPackService.generateNoteFromTopic(topic, context);
     }
 
     private NormalizedBatch normalizeAndValidate(BulkGenerateNotesRequest request, UserEntity owner) {
@@ -193,22 +192,22 @@ public class NoteBulkGenerationService {
         }
         String subject = requireText(request.subject(), SUBJECT_REQUIRED_MESSAGE);
         assertMaxLength(subject, MAX_SUBJECT_LENGTH, SUBJECT_FIELD);
-        if (request.titles() == null || request.titles().isEmpty()) {
+        if (request.topics() == null || request.topics().isEmpty()) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
-        if (request.titles().size() > maxTitles) {
-            throw new InvalidBulkGenerationRequestException(MAX_TITLES_MESSAGE_TEMPLATE.formatted(maxTitles));
+        if (request.topics().size() > maxTopics) {
+            throw new InvalidBulkGenerationRequestException(MAX_TOPICS_MESSAGE_TEMPLATE.formatted(maxTopics));
         }
 
         List<BulkGenerationItem> items = new ArrayList<>();
-        int rejectedTitles = 0;
-        for (String rawTitle : request.titles()) {
-            String title = rawTitle == null ? "" : rawTitle.trim();
-            if (title.isBlank() || title.length() > MAX_TITLE_LENGTH) {
-                rejectedTitles++;
+        int rejectedTopics = 0;
+        for (String rawTopic : request.topics()) {
+            String topic = rawTopic == null ? "" : rawTopic.trim();
+            if (topic.isBlank() || topic.length() > MAX_TOPIC_LENGTH) {
+                rejectedTopics++;
                 continue;
             }
-            items.add(new BulkGenerationItem(title));
+            items.add(new BulkGenerationItem(topic));
         }
         if (items.isEmpty()) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
@@ -236,8 +235,7 @@ public class NoteBulkGenerationService {
                 learnerLevel,
                 request.makePublic(),
                 List.copyOf(items),
-                1,
-                rejectedTitles
+                rejectedTopics
         );
     }
 
@@ -303,7 +301,7 @@ public class NoteBulkGenerationService {
         }
     }
 
-    private record BulkGenerationItem(String title) {
+    private record BulkGenerationItem(String topic) {
     }
 
     private record NormalizedBatch(
@@ -313,8 +311,7 @@ public class NoteBulkGenerationService {
             LearnerLevel learnerLevel,
             boolean makePublic,
             List<BulkGenerationItem> items,
-            int subjectCount,
-            int rejectedTitles
+            int rejectedTopics
     ) {
     }
 }

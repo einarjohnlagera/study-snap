@@ -119,7 +119,7 @@ export type BulkImportResult = {
 
 export type BulkGenerateNotesRequest = {
   subject: string;
-  titles: string[];
+  topics: string[];
   makePublic: boolean;
   courseProgram?: string;
   targetProfileType?: NoteTargetProfileType;
@@ -127,10 +127,9 @@ export type BulkGenerateNotesRequest = {
 };
 
 export type BulkGenerateNotesResponse = {
-  acceptedTitles: number;
-  queuedTitles: number;
-  subjectCount: number;
-  rejectedTitles: number;
+  acceptedTopics: number;
+  queuedTopics: number;
+  rejectedTopics: number;
 };
 
 export type StudyPackListItemResponse = {

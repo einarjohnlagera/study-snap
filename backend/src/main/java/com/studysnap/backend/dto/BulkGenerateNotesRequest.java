@@ -12,8 +12,8 @@ public record BulkGenerateNotesRequest(
         @NotBlank(message = "Subject is required.")
         @Size(max = 160, message = "Subject must be 160 characters or less.")
         String subject,
-        @NotEmpty(message = "Add at least one title.")
-        List<String> titles,
+        @NotEmpty(message = "Add at least one topic.")
+        List<String> topics,
         boolean makePublic,
         @Size(max = 160, message = "Course/program must be 160 characters or less.")
         String courseProgram,
