@@ -117,16 +117,13 @@ export type BulkImportResult = {
   failed: BulkImportFailure[];
 };
 
-export type BulkGenerateNoteGroup = {
+export type BulkGenerateNotesRequest = {
   subject: string;
   titles: string[];
-};
-
-export type BulkGenerateNotesRequest = {
-  courseProgram: string;
-  targetAudience: LearnerLevel;
   makePublic: boolean;
-  groups: BulkGenerateNoteGroup[];
+  courseProgram?: string;
+  targetProfileType?: NoteTargetProfileType;
+  learnerLevel?: LearnerLevel;
 };
 
 export type BulkGenerateNotesResponse = {

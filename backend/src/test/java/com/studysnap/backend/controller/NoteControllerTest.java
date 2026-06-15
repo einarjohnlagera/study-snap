@@ -4,7 +4,6 @@ import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
-import com.studysnap.backend.dto.BulkGenerateNoteGroupRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
@@ -118,10 +117,12 @@ class NoteControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.ADMIN, true, 1);
         BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
-                "Nursing",
-                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Maternal Health",
+                List.of("Prenatal Care"),
                 true,
-                List.of(new BulkGenerateNoteGroupRequest("Maternal Health", List.of("Prenatal Care")))
+                "Nursing",
+                NoteTargetProfileType.BOARD_TAKER,
+                LearnerLevel.BOARD_EXAM_REVIEW
         );
         BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(1, 1, 1, 0);
         when(noteBulkGenerationService.queueBatch(request, userId, false)).thenReturn(expected);
