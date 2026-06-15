@@ -214,7 +214,7 @@ export function BulkGenerationPageClient() {
             />
           </div>
 
-          <div data-testid="bulk-metadata-grid" className="grid gap-4 sm:grid-cols-2">
+          <div data-testid="bulk-metadata-grid" className="grid gap-4 empty:hidden sm:grid-cols-2">
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">
@@ -275,20 +275,21 @@ export function BulkGenerationPageClient() {
               </div>
             ) : null}
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-4">
-                <label htmlFor="bulk-make-public" className="text-sm font-medium text-foreground">Public</label>
-                <Toggle
-                  id="bulk-make-public"
-                  checked={makePublic}
-                  onChange={setMakePublic}
-                  ariaLabel="Make generated notes public"
-                />
-              </div>
-              <p className="text-xs text-foreground/60">
-                Make each created note public as soon as it is queued.
-              </p>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <label htmlFor="bulk-make-public" className="text-sm font-medium text-foreground">Public</label>
+              <Toggle
+                id="bulk-make-public"
+                checked={makePublic}
+                onChange={setMakePublic}
+                ariaLabel="Make generated notes public"
+              />
             </div>
+            <p className="text-xs text-foreground/60">
+              Make each created note public as soon as it is queued.
+            </p>
           </div>
 
           <section className="space-y-3" aria-labelledby="bulk-topics-heading">
