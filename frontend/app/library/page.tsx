@@ -1093,6 +1093,12 @@ export default function LibraryPage() {
               items={[
                 { key: "note", label: "Note", description: "Write, import, or generate a note", onSelect: () => router.push("/notes/new") },
                 { key: "import", label: "Import files", description: "Upload several files as draft notes", onSelect: () => router.push("/notes/import?from=library") },
+                ...(authUser?.role === "ADMIN" ? [{
+                  key: "bulk-generate",
+                  label: "Bulk generate",
+                  description: "Generate notes and Study Packs from a title list",
+                  onSelect: () => router.push("/library/bulk-generate"),
+                }] : []),
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },
               ]}
             />

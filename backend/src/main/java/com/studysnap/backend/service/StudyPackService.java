@@ -148,6 +148,33 @@ public class StudyPackService {
     }
 
     public void startAsyncGenerationFromNote(String noteIdRaw, UUID ownerUserId, boolean autoApplyGeneratedMetadata) {
+        startAsyncGenerationFromNote(noteIdRaw, ownerUserId, autoApplyGeneratedMetadata, true);
+    }
+
+    public void startAsyncGenerationFromNote(
+            String noteIdRaw,
+            UUID ownerUserId,
+            boolean autoApplyGeneratedMetadata,
+            boolean enforceLimits
+    ) {
+        startAsyncGenerationFromNote(
+                noteIdRaw,
+                ownerUserId,
+                autoApplyGeneratedMetadata,
+                enforceLimits,
+                null,
+                null
+        );
+    }
+
+    public void startAsyncGenerationFromNote(
+            String noteIdRaw,
+            UUID ownerUserId,
+            boolean autoApplyGeneratedMetadata,
+            boolean enforceLimits,
+            StudyPackGenerationContext generationContextOverride,
+            String preservedSubject
+    ) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         NoteEntity sourceNote = resolveSourceNoteForGeneration(noteIdRaw, ownerUserId, true);
@@ -155,9 +182,15 @@ public class StudyPackService {
             throw new NoteNotFoundException();
         }
         String normalizedText = normalizeAndValidateText(sourceNote.getContent());
-        PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
-        aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
-        StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, sourceNote);
+        PlanType planType = enforceLimits
+                ? assertMonthlyStudyPackQuotaAvailable(ownerUserId)
+                : subscriptionService.resolvePlan(ownerUserId);
+        if (enforceLimits) {
+            aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
+        }
+        StudyPackGenerationContext generationContext = generationContextOverride == null
+                ? generationContextResolver.resolve(ownerUserId, sourceNote)
+                : generationContextOverride;
         UUID noteId = sourceNote.getId();
 
         sourceNote.setStatus(NoteStatus.GENERATING);
@@ -171,6 +204,8 @@ public class StudyPackService {
                 planType,
                 generationContext,
                 autoApplyGeneratedMetadata,
+                enforceLimits,
+                preservedSubject,
                 startedAt,
                 requestId
         );
@@ -491,6 +526,19 @@ public class StudyPackService {
             PlanType planType,
             UUID noteId
     ) {
+        return saveStudyPack(inputType, ocrConfidence, generated, sourceText, ownerUserId, planType, noteId, true);
+    }
+
+    private StudyPackEntity saveStudyPack(
+            InputType inputType,
+            Double ocrConfidence,
+            GeneratedStudyPackContent generated,
+            String sourceText,
+            UUID ownerUserId,
+            PlanType planType,
+            UUID noteId,
+            boolean recordUsage
+    ) {
         OffsetDateTime now = OffsetDateTime.now();
         StudyPackEntity entity = noteId == null
                 ? new StudyPackEntity()
@@ -523,7 +571,9 @@ public class StudyPackService {
         entity.setUpdatedAt(now);
         entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
-        userUsageService.incrementStudyPackGeneration(ownerUserId, now);
+        if (recordUsage) {
+            userUsageService.incrementStudyPackGeneration(ownerUserId, now);
+        }
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, savedEntity.getId());
         return savedEntity;
     }
@@ -584,6 +634,8 @@ public class StudyPackService {
             PlanType planType,
             StudyPackGenerationContext generationContext,
             boolean autoApplyGeneratedMetadata,
+            boolean recordUsage,
+            String preservedSubject,
             long startedAt,
             String requestId
     ) {
@@ -611,10 +663,13 @@ public class StudyPackService {
                         normalizedText,
                         ownerUserId,
                         planType,
-                        noteId
+                        noteId,
+                        recordUsage
                 );
                 markNoteGenerated(noteId, sourceNote);
-                if (autoApplyGeneratedMetadata) {
+                if (preservedSubject != null) {
+                    applyBulkGeneratedMetadataToNote(sourceNote, generated, preservedSubject);
+                } else if (autoApplyGeneratedMetadata) {
                     applyGeneratedMetadataToNote(sourceNote, generated);
                 }
                 return savedEntity;
@@ -902,6 +957,18 @@ public class StudyPackService {
             note.setUpdatedAt(OffsetDateTime.now());
             noteRepository.save(note);
         }
+    }
+
+    private void applyBulkGeneratedMetadataToNote(
+            NoteEntity note,
+            GeneratedStudyPackContent generated,
+            String preservedSubject
+    ) {
+        note.setTitle(normalizeEditableTitle(generated.title()));
+        note.setTags(resolveTags(generated.tags(), generated.title()));
+        note.setSubject(normalizeSubject(preservedSubject));
+        note.setUpdatedAt(OffsetDateTime.now());
+        noteRepository.save(note);
     }
 
     private LinkedHashMap<String, Object> buildGenerationMetadata(UUID noteId, InputType inputType, boolean generatedFromExistingNote) {

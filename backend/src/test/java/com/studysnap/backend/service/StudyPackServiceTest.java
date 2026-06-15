@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -625,6 +626,57 @@ class StudyPackServiceTest {
 
         assertThat(draftNote.getSubject()).isEqualTo("History");
         assertThat(draftNote.getTags()).containsExactly("History", "Battle of Puebla", "Culture");
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_bulkBypassPreservesSubjectAndAppliesAiTitleAndTagsWithoutUsage() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        draftNote.setTitle("Pasted topic");
+        draftNote.setSubject("Admin Subject");
+        draftNote.setTags(new String[0]);
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                "Admin Subject",
+                List.of()
+        );
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "AI Refined Title",
+                "Generated summary",
+                "AI Subject",
+                List.of("ai-tag", "review"),
+                List.of("Key concept"),
+                List.of(),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateStudyPack("draft note content", context)).thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(
+                noteId.toString(),
+                userId,
+                false,
+                false,
+                context,
+                "Admin Subject"
+        );
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
+        assertThat(draftNote.getTitle()).isEqualTo("AI Refined Title");
+        assertThat(draftNote.getSubject()).isEqualTo("Admin Subject");
+        assertThat(draftNote.getTags()).containsExactly("ai-tag", "review");
+        verify(studyPackUsageService, never()).resolveUsage(any(UUID.class), any(OffsetDateTime.class));
+        verify(aiRateLimitService, never()).assertAllowed(any(UUID.class), any(PlanType.class), anyString());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
     @Test

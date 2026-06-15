@@ -369,7 +369,23 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create options" }));
     expect(screen.getByRole("menuitem", { name: /^Note/ })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Import files/ })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Bulk generate/ })).not.toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Study Plan/ })).toBeInTheDocument();
+  });
+
+  it("shows Bulk generate only for admins", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "admin-1",
+      role: "ADMIN",
+      profileType: "STUDENT",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Bulk generate/ }));
+    expect(pushMock).toHaveBeenCalledWith("/library/bulk-generate");
   });
 
   it("creates a Study Plan from notes selected in the Library", async () => {
