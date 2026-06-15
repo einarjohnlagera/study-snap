@@ -24,26 +24,26 @@ Older milestone labels below are preserved as planning history only. They are no
 
 Base branch for this release: `releases/v0.29.0`.
 
-Theme: kill the one-note-at-a-time tax on seeding study content. An admin pastes a structured list of titles (grouped by subject under one course/program and target audience) and the system generates a note **and** its Study Pack for each title, unattended. Built admin-first to seed our exam-prep buckets (ALE/PNLE/LET), but architected as a normal Library capability behind a **role gate** — opening it to all users later is a gate-flip, not a rebuild.
+Theme: kill the one-note-at-a-time tax on seeding study content. An admin enters one subject and a list of topics, and the system generates a note **and** its Study Pack for each topic, unattended. Built admin-first to seed our exam-prep buckets (ALE/PNLE/LET), but architected as a normal Library capability behind a **role gate** — opening it to all users later is a gate-flip, not a rebuild.
 
-Why now (over Readiness Signals): seeding public content one note at a time is the active operational bottleneck, and the building blocks already exist — `NoteGenerationService.generateFromTopic` (note content from a title), the async Study Pack pipeline, and the per-user quota services. This is mostly **orchestration** (high leverage, low risk), and more seeded content makes Readiness Signals (now v0.30.0) more valuable when it ships.
+Why now (over Readiness Signals): seeding public content one note at a time is the active operational bottleneck, and the building blocks already exist — `NoteGenerationService.generateFromTopic` (note content from a topic), the async Study Pack pipeline, and the per-user quota services. This is mostly **orchestration** (high leverage, low risk), and more seeded content makes Readiness Signals (now v0.30.0) more valuable when it ships.
 
 Locked direction:
 
-- **No new job/progress infrastructure.** Each title is generated content-first into a real note (note content is required, so the row appears once content-gen completes), then runs Study-Pack-gen on the **existing executors** (`studyPackGenerationTaskExecutor`). Progress and load-on-refresh come from the real note rows plus the `studyPackStatus` field the Library list already carries (`GENERATING → READY/FAILED`) — no batch-job entity, no progress table, no new status enum.
-- **Per-item isolation.** One bad title never fails the batch — try/catch per iteration, mirroring the `/notes/import-batch` pattern from v0.27.0; failures are reported per title.
-- **Throttled fan-out.** Submit generation chains to the existing executor with throttling so a 40-title batch never saturates the pool or trips LLM rate limits. This is the one genuinely new dispatch concern — throttling, not infrastructure.
-- **Role-gated in Library, not a separate `/admin` surface.** Entry lives in the Library Create split-button, shown only to ADMIN; the flow is a dedicated `/library/bulk-generate` route (the hierarchical paste + per-item list is too large for a modal). Opening to all later = relax the gate.
+- **No new job/progress infrastructure.** Each topic is generated content-first into a real note (note content is required, so the row appears once content-gen completes), then runs Study-Pack-gen on the **existing executors** (`studyPackGenerationTaskExecutor`). Progress and load-on-refresh come from the real note rows plus the `studyPackStatus` field the Library list already carries (`GENERATING → READY/FAILED`) — no batch-job entity, no progress table, no new status enum.
+- **Per-item isolation.** One bad topic never fails the batch — try/catch per iteration, mirroring the `/notes/import-batch` pattern from v0.27.0.
+- **Throttled fan-out.** Submit generation chains to the existing executor with throttling so a 40-topic batch never saturates the pool or trips LLM rate limits. This is the one genuinely new dispatch concern — throttling, not infrastructure.
+- **Role-gated in Library, not a separate `/admin` surface.** Entry lives in the Library Create split-button, shown only to ADMIN; the flow is a dedicated `/library/bulk-generate` route with Note-Create-aligned metadata and discrete topic rows. Opening to all later = relax the gate.
 - **Quota check built now; ADMIN bypasses.** Per-user quota enforcement is wired through the existing quota services so the all-users path is real, not a stub — ADMIN role bypasses it. Deferred: the "quota ran out mid-batch" partial-execution messaging (admin never hits it).
-- **Reuse existing creation + context paths.** Note creation goes through `NoteService.create(UpsertNoteRequest)`; generation context (learner level + course/program) goes through the shared resolver. The note's dedicated `subject` field = the admin's **subject from the pasted list** (it beats the AI subject); title and tags stay AI (from the Study Pack write-back). No per-profile pipeline fork.
+- **Reuse existing creation + context paths.** Note creation goes through `NoteService.create(UpsertNoteRequest)`; generation context (learner level + course/program) goes through the shared resolver. The note's dedicated `subject` field = the batch subject (it beats the AI subject); title and tags stay AI (from the Study Pack write-back). No per-profile pipeline fork.
 
 Scope:
 
-- **Bulk-generate endpoint** — a role-gated endpoint that, per parsed title, creates a DRAFT note, kicks the content-gen → Study-Pack-gen chain on the existing executors (throttled, per-item isolated), applies the batch's subject tag + course/program + target audience (learner level), and honors a per-batch Public toggle.
-- **`/library/bulk-generate` admin page** — paste the hierarchical `Course → Subject: → titles` list, set Course/Program + Target Audience + Public once, confirm the parsed groups, submit; results surface as real notes in the Library that resolve `GENERATING → READY`.
+- **Bulk-generate endpoint** — a role-gated endpoint that, per topic, creates a DRAFT note, kicks the content-gen → Study-Pack-gen chain on the existing executors (throttled, per-item isolated), applies resolved subject/course/audience/learner-level metadata, and honors a per-batch Public toggle.
+- **`/library/bulk-generate` admin page** — enter one Subject plus topic rows, use the compact profile-aware `Course / Program · Learner Level` / `Target Audience · Public` grid, and submit; results surface as real notes in the Library that resolve `GENERATING → READY`.
 - **Quota wiring** — per-user pre-flight quota check (admin-bypassed) plus a cost/count preview before the batch starts.
 
-Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from titles — **distinct from** the v0.31.0 collection-level bulk *quiz* generation over existing notes.
+Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.31.0 collection-level bulk *quiz* generation over existing notes.
 
 ---
 
@@ -69,7 +69,7 @@ Scope:
 
 ## v0.31.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
-Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from titles; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 

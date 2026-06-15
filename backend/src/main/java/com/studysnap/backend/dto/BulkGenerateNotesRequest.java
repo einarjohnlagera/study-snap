@@ -1,22 +1,23 @@
 package com.studysnap.backend.dto;
 
 import com.studysnap.backend.entity.LearnerLevel;
-import jakarta.validation.Valid;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
 public record BulkGenerateNotesRequest(
-        @NotBlank(message = "Course/program is required.")
+        @NotBlank(message = "Subject is required.")
+        @Size(max = 160, message = "Subject must be 160 characters or less.")
+        String subject,
+        @NotEmpty(message = "Add at least one topic.")
+        List<String> topics,
+        boolean makePublic,
         @Size(max = 160, message = "Course/program must be 160 characters or less.")
         String courseProgram,
-        @NotNull(message = "Target audience is required.")
-        LearnerLevel targetAudience,
-        boolean makePublic,
-        @NotEmpty(message = "Add at least one subject group.")
-        List<@Valid BulkGenerateNoteGroupRequest> groups
+        NoteTargetProfileType targetProfileType,
+        LearnerLevel learnerLevel
 ) {
 }

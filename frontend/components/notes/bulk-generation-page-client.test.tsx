@@ -1,15 +1,22 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
-import { bulkGenerateNotes } from "@/lib/api";
+import { bulkGenerateNotes, getMe, listCoursePrograms, listSubjects } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
+import { consumeBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 
 const replaceMock = jest.fn();
+const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => ({ replace: replaceMock, push: pushMock }),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
   requireAdminUser: () => true,
+}));
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -22,82 +29,153 @@ jest.mock("@/lib/api", () => ({
     }
   },
   bulkGenerateNotes: jest.fn(),
+  listSubjects: jest.fn(),
+  listCoursePrograms: jest.fn(),
+  getMe: jest.fn(),
 }));
 
-const samplePaste = `Subject: Maternal Health
-Prenatal Care
-Stages of Labor
-
-Subject: Community Health
-Epidemiology Basics`;
-
-function fillValidForm() {
-  fireEvent.change(screen.getByLabelText("Course / Program"), { target: { value: "Nursing" } });
-  fireEvent.change(screen.getByLabelText("Subject-grouped titles"), { target: { value: samplePaste } });
-  fireEvent.click(screen.getByRole("checkbox", { name: /Public/ }));
+async function fillAdminForm(topicValues: string[]) {
+  fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
+  fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
+  // Target Audience defaults to "Student" and Learner Level to "College" for admin.
+  topicValues.forEach((value, index) => {
+    if (index > 0) {
+      fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
+    }
+    fireEvent.change(screen.getByLabelText(new RegExp(`^Topic ${index + 1}$`)), { target: { value } });
+  });
+  fireEvent.click(screen.getByRole("switch", { name: /public/i }));
 }
 
 describe("BulkGenerationPageClient", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     replaceMock.mockReset();
+    pushMock.mockReset();
+    globalThis.sessionStorage?.clear();
     (bulkGenerateNotes as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockResolvedValue([]);
+    (listCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "", learnerLevel: "COLLEGE" });
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "admin-1", role: "ADMIN", profileType: null });
+  });
+
+  it("shows the admin metadata fields", async () => {
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Learner Level/)).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
+    expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
+  });
+
+  it("keeps the compact grid profile-aware for teacher and non-teacher views", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "teacher-1", role: "USER", profileType: "TEACHER" });
+    const { unmount } = render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
+
+    unmount();
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "student-1", role: "USER", profileType: "STUDENT" });
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
+
+    expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Course \/ Program/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
+  });
+
+  it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
+    (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({
+      acceptedTopics: 2,
+      queuedTopics: 2,
+      rejectedTopics: 0,
+    });
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    await fillAdminForm(["Prenatal Care", "Stages of Labor"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Queue 2 notes" }));
+
+    await waitFor(() => {
+      expect(bulkGenerateNotes).toHaveBeenCalledWith({
+        subject: "Maternal Health",
+        topics: ["Prenatal Care", "Stages of Labor"],
+        makePublic: true,
+        courseProgram: "Nursing",
+        targetProfileType: "STUDENT",
+        learnerLevel: "COLLEGE",
+      });
+    });
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));
+    expect(consumeBulkQueuedFlash()).toBe(2);
   });
 
   it("preserves form state when submission fails", async () => {
     (bulkGenerateNotes as jest.Mock).mockRejectedValueOnce(new Error("Connection lost."));
     render(<BulkGenerationPageClient />);
-    fillValidForm();
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    await fillAdminForm(["Prenatal Care"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Queue 3 notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue 1 note" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Connection lost.");
-    expect(screen.getByLabelText("Course / Program")).toHaveValue("Nursing");
-    expect(screen.getByLabelText("Subject-grouped titles")).toHaveValue(samplePaste);
-    expect(screen.getByRole("checkbox", { name: /Public/ })).toBeChecked();
+    expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
+    expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
   });
 
-  it("submits parsed groups and shows the queue acknowledgment", async () => {
-    (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({
-      acceptedTitles: 3,
-      queuedTitles: 3,
-      subjectCount: 2,
-      rejectedTitles: 0,
-    });
+  it("adds and removes topic rows", async () => {
     render(<BulkGenerationPageClient />);
-    fillValidForm();
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: "Queue 3 notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
 
-    await waitFor(() => {
-      expect(bulkGenerateNotes).toHaveBeenCalledWith({
-        courseProgram: "Nursing",
-        targetAudience: "BOARD_EXAM_REVIEW",
-        makePublic: true,
-        groups: [
-          { subject: "Maternal Health", titles: ["Prenatal Care", "Stages of Labor"] },
-          { subject: "Community Health", titles: ["Epidemiology Basics"] },
-        ],
-      });
-    });
-    expect(await screen.findByRole("heading", { name: "Bulk generation queued" })).toBeInTheDocument();
-    expect(screen.getByText(/Queued 3 notes across 2 subjects/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to Library" })).toHaveAttribute("href", "/library");
+    expect(screen.getByLabelText(/^Topic 1$/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Topic 2$/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove topic 2" }));
+
+    expect(screen.queryByLabelText(/^Topic 2$/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove topic 1" })).toBeDisabled();
   });
 
-  it("blocks empty and over-cap submissions inline", () => {
+  it("blocks submission with no topics", async () => {
     render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
+    fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Queue 0 notes" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Add at least one title");
 
-    const titles = Array.from({ length: 51 }, (_, index) => `Title ${index + 1}`).join("\n");
-    fireEvent.change(screen.getByLabelText("Course / Program"), { target: { value: "Nursing" } });
-    fireEvent.change(screen.getByLabelText("Subject-grouped titles"), {
-      target: { value: `Subject: Nursing\n${titles}` },
-    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Add at least one topic");
+    expect(bulkGenerateNotes).not.toHaveBeenCalled();
+  });
+
+  it("blocks submission over the topic cap", async () => {
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
+    fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });
+
+    for (let index = 2; index <= 51; index += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
+      fireEvent.change(screen.getByLabelText(new RegExp(`^Topic ${index}$`)), {
+        target: { value: `Topic ${index}` },
+      });
+    }
     fireEvent.click(screen.getByRole("button", { name: "Queue 51 notes" }));
 
-    expect(screen.getAllByText("You can bulk generate up to 50 titles at once.").length).toBeGreaterThan(0);
+    expect(screen.getByRole("alert")).toHaveTextContent("up to 50 topics at once");
     expect(bulkGenerateNotes).not.toHaveBeenCalled();
   });
 });

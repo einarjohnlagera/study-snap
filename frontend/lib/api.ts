@@ -117,23 +117,19 @@ export type BulkImportResult = {
   failed: BulkImportFailure[];
 };
 
-export type BulkGenerateNoteGroup = {
-  subject: string;
-  titles: string[];
-};
-
 export type BulkGenerateNotesRequest = {
-  courseProgram: string;
-  targetAudience: LearnerLevel;
+  subject: string;
+  topics: string[];
   makePublic: boolean;
-  groups: BulkGenerateNoteGroup[];
+  courseProgram?: string;
+  targetProfileType?: NoteTargetProfileType;
+  learnerLevel?: LearnerLevel;
 };
 
 export type BulkGenerateNotesResponse = {
-  acceptedTitles: number;
-  queuedTitles: number;
-  subjectCount: number;
-  rejectedTitles: number;
+  acceptedTopics: number;
+  queuedTopics: number;
+  rejectedTopics: number;
 };
 
 export type StudyPackListItemResponse = {

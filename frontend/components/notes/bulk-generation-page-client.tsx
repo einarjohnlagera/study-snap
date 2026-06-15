@@ -1,75 +1,167 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
+import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Toggle } from "@/components/ui/toggle";
 import {
   ApiRequestError,
   bulkGenerateNotes,
-  type BulkGenerateNotesResponse,
+  getMe,
+  listCoursePrograms,
+  listSubjects,
+  type BulkGenerateNotesRequest,
   type LearnerLevel,
+  type NoteTargetProfileType,
 } from "@/lib/api";
-import {
-  MAX_BULK_GENERATION_TITLES,
-  parseBulkGenerationText,
-} from "@/lib/bulk-generation";
+import { getAuthUser } from "@/lib/auth";
+import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import {
+  getNoteTargetProfileLabel,
+  isTeacherSelectableNoteTarget,
+  mapProfileTypeToNoteTargetProfile,
+  SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
+} from "@/lib/note-target-profile";
 import { requireAdminUser } from "@/lib/route-guards";
 
-const BULK_TARGET_AUDIENCE_OPTIONS = LEARNER_LEVEL_OPTIONS.filter(
+export const MAX_BULK_GENERATION_TOPICS = 50;
+
+const BULK_LEARNER_LEVEL_OPTIONS = LEARNER_LEVEL_OPTIONS.filter(
   (option) => option.value !== "PERSONAL_LEARNING",
 );
 
+type TopicRow = {
+  id: number;
+  value: string;
+};
+
 export function BulkGenerationPageClient() {
   const router = useRouter();
-  const [rawText, setRawText] = useState("");
+  const authUser = getAuthUser();
+  const isAdmin = authUser?.role === "ADMIN";
+  const isTeacherOrAdmin = isTeacherSelectableNoteTarget(authUser?.profileType, authUser?.role);
+  const nextTopicId = useRef(2);
+  const [subject, setSubject] = useState("");
   const [courseProgram, setCourseProgram] = useState("");
-  const [targetAudience, setTargetAudience] = useState<LearnerLevel>("BOARD_EXAM_REVIEW");
+  const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
+    mapProfileTypeToNoteTargetProfile(authUser?.profileType),
+  );
+  const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("COLLEGE");
+  const [topics, setTopics] = useState<TopicRow[]>([{ id: 1, value: "" }]);
   const [makePublic, setMakePublic] = useState(false);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
+  const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [acknowledgment, setAcknowledgment] = useState<BulkGenerateNotesResponse | null>(null);
-  const parsed = useMemo(() => parseBulkGenerationText(rawText), [rawText]);
+  const normalizedTopics = useMemo(
+    () => topics.map((topic) => topic.value.trim()).filter(Boolean),
+    [topics],
+  );
 
   useEffect(() => {
     requireAdminUser(router);
   }, [router]);
 
+  useEffect(() => {
+    let active = true;
+    void Promise.allSettled([
+      listSubjects("mine"),
+      listCoursePrograms("mine"),
+      getMe(),
+    ]).then(([subjectsResult, courseProgramsResult, meResult]) => {
+      if (!active) {
+        return;
+      }
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
+      setCourseProgramSuggestions(
+        courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : [],
+      );
+      if (meResult.status === "fulfilled") {
+        if (isTeacherOrAdmin) {
+          setCourseProgram((current) => current || meResult.value.courseProgram || "");
+        }
+        if (
+          isAdmin
+          && meResult.value.learnerLevel
+          && meResult.value.learnerLevel !== "PERSONAL_LEARNING"
+        ) {
+          setLearnerLevel(meResult.value.learnerLevel);
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, isTeacherOrAdmin]);
+
   const validate = (): string | null => {
-    if (parsed.totalTitles === 0) {
-      return "Add at least one title under a Subject: heading.";
+    if (!subject.trim()) {
+      return "Enter a subject for this batch.";
     }
-    if (parsed.totalTitles > MAX_BULK_GENERATION_TITLES) {
-      return `You can bulk generate up to ${MAX_BULK_GENERATION_TITLES} titles at once.`;
+    if (normalizedTopics.length === 0) {
+      return "Add at least one topic.";
     }
-    if (!courseProgram.trim()) {
+    if (normalizedTopics.length > MAX_BULK_GENERATION_TOPICS) {
+      return `You can bulk generate up to ${MAX_BULK_GENERATION_TOPICS} topics at once.`;
+    }
+    if (isTeacherOrAdmin && !courseProgram.trim()) {
       return "Enter a course or program for this batch.";
+    }
+    if (isTeacherOrAdmin && !targetProfileType) {
+      return "Select a target audience for this batch.";
+    }
+    if (isAdmin && !learnerLevel) {
+      return "Select a learner level for this batch.";
     }
     return null;
   };
 
+  const updateTopic = (id: number, value: string) => {
+    setTopics((current) => current.map((topic) => (topic.id === id ? { ...topic, value } : topic)));
+  };
+
+  const addTopic = () => {
+    setTopics((current) => [...current, { id: nextTopicId.current++, value: "" }]);
+  };
+
+  const removeTopic = (id: number) => {
+    setTopics((current) => current.length === 1 ? current : current.filter((topic) => topic.id !== id));
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setAcknowledgment(null);
     const validationError = validate();
     if (validationError) {
       setError(validationError);
       return;
     }
 
+    const request: BulkGenerateNotesRequest = {
+      subject: subject.trim(),
+      topics: normalizedTopics,
+      makePublic,
+      ...(isTeacherOrAdmin
+        ? {
+            courseProgram: courseProgram.trim(),
+            targetProfileType: targetProfileType as NoteTargetProfileType,
+          }
+        : {}),
+      ...(isAdmin ? { learnerLevel: learnerLevel as LearnerLevel } : {}),
+    };
+
     setSubmitting(true);
     setError(null);
     try {
-      const response = await bulkGenerateNotes({
-        courseProgram: courseProgram.trim(),
-        targetAudience,
-        makePublic,
-        groups: parsed.groups,
-      });
-      setAcknowledgment(response);
+      const response = await bulkGenerateNotes(request);
+      setBulkQueuedFlash(response.queuedTopics);
+      router.push("/library");
     } catch (submitError) {
       if (submitError instanceof ApiRequestError && submitError.status === 403) {
         router.replace("/dashboard");
@@ -91,113 +183,159 @@ export function BulkGenerationPageClient() {
         </p>
         <h1 className="text-3xl font-semibold text-foreground">Bulk generate notes</h1>
         <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
-          Paste titles grouped under Subject: headings. Each title will become a note and generate its Study Pack in the background.
+          Add one subject and a list of topics. Each topic becomes a study-ready note with its own Study Pack, generated in the background.
         </p>
       </header>
 
-      {acknowledgment ? (
-        <Card className="space-y-3 border-emerald-500/40 bg-emerald-50/70 p-5 dark:bg-emerald-950/20">
-          <h2 className="text-lg font-semibold text-foreground">Bulk generation queued</h2>
-          <p className="text-sm text-foreground/75">
-            Queued {acknowledgment.queuedTitles} note{acknowledgment.queuedTitles === 1 ? "" : "s"} across {acknowledgment.subjectCount} subject{acknowledgment.subjectCount === 1 ? "" : "s"}. They will appear in your Library and finish generating shortly.
-          </p>
-          <Link className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" href="/library">
-            Back to Library
-          </Link>
-        </Card>
-      ) : null}
-
       <form className="space-y-6" onSubmit={handleSubmit}>
         <Card className="space-y-5 p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-2 text-sm font-medium text-foreground" htmlFor="bulk-course-program">
-              <span>Course / Program</span>
-              <input
-                id="bulk-course-program"
-                value={courseProgram}
-                onChange={(event) => setCourseProgram(event.target.value)}
-                placeholder="e.g. Nursing, Architecture, Education"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-blue-600"
-              />
+          <div className="space-y-2">
+            <label htmlFor="bulk-subject" className="text-sm font-medium text-foreground">
+              Subject <span className="text-red-500" aria-hidden="true">*</span>
             </label>
-
-            <label className="space-y-2 text-sm font-medium text-foreground" htmlFor="bulk-target-audience">
-              <span>Target Audience</span>
-              <select
-                id="bulk-target-audience"
-                value={targetAudience}
-                onChange={(event) => setTargetAudience(event.target.value as LearnerLevel)}
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                {BULK_TARGET_AUDIENCE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+            <SubjectCombobox
+              id="bulk-subject"
+              value={subject}
+              suggestions={subjectSuggestions}
+              onChange={setSubject}
+            />
           </div>
 
-          <label className="flex items-start gap-3 rounded-lg border border-border bg-background p-3 text-sm" htmlFor="bulk-make-public">
-            <input
-              id="bulk-make-public"
-              type="checkbox"
-              checked={makePublic}
-              onChange={(event) => setMakePublic(event.target.checked)}
-              className="mt-0.5 h-4 w-4"
-            />
-            <span>
-              <span className="block font-medium text-foreground">Public</span>
-              <span className="block text-foreground/60">Make each created note public as soon as it is queued.</span>
-            </span>
-          </label>
+          <div data-testid="bulk-metadata-grid" className="grid gap-4 empty:hidden sm:grid-cols-2">
+            {isTeacherOrAdmin ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">
+                  Course / Program <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <CourseProgramCombobox
+                  id="bulk-course-program"
+                  value={courseProgram}
+                  suggestions={courseProgramSuggestions}
+                  onChange={setCourseProgram}
+                  learnerLevel={learnerLevel}
+                  context="note"
+                />
+              </div>
+            ) : null}
 
-          <label className="space-y-2 text-sm font-medium text-foreground" htmlFor="bulk-title-list">
-            <span>Subject-grouped titles</span>
-            <textarea
-              id="bulk-title-list"
-              value={rawText}
-              onChange={(event) => setRawText(event.target.value)}
-              rows={14}
-              placeholder={`Subject: Maternal Health\nPrenatal Care\nStages of Labor\n\nSubject: Community Health\nEpidemiology Basics`}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm font-normal leading-6 outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </label>
+            {isAdmin ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-learner-level" className="text-sm font-medium text-foreground">
+                  Learner Level <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <select
+                  id="bulk-learner-level"
+                  value={learnerLevel}
+                  onChange={(event) => setLearnerLevel(event.target.value as LearnerLevel | "")}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                >
+                  <option value="">Select a learner level</option>
+                  {BULK_LEARNER_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-foreground/60">
+                  Sets the generation difficulty for note content and Study Packs.
+                </p>
+              </div>
+            ) : null}
 
-          {parsed.ignoredLineCount > 0 ? (
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              Ignored {parsed.ignoredLineCount} non-empty line{parsed.ignoredLineCount === 1 ? "" : "s"} that appeared before a valid Subject: heading.
+            {isTeacherOrAdmin ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-target-profile-type" className="text-sm font-medium text-foreground">
+                  Target Audience <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <select
+                  id="bulk-target-profile-type"
+                  value={targetProfileType}
+                  onChange={(event) => setTargetProfileType(event.target.value as NoteTargetProfileType | "")}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                >
+                  <option value="">Select an audience</option>
+                  {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((value) => (
+                    <option key={value} value={value}>{getNoteTargetProfileLabel(value)}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-foreground/60">
+                  Categorizes these notes for Library and Public Library audiences.
+                </p>
+              </div>
+            ) : null}
+
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <label htmlFor="bulk-make-public" className="text-sm font-medium text-foreground">Public</label>
+              <Toggle
+                id="bulk-make-public"
+                checked={makePublic}
+                onChange={setMakePublic}
+                ariaLabel="Make generated notes public"
+              />
+            </div>
+            <p className="text-xs text-foreground/60">
+              Make each created note public as soon as it is queued.
             </p>
-          ) : null}
-          {parsed.totalTitles > MAX_BULK_GENERATION_TITLES ? (
+          </div>
+
+          <section className="space-y-3" aria-labelledby="bulk-topics-heading">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 id="bulk-topics-heading" className="text-sm font-medium text-foreground">
+                  Topics <span className="text-red-500" aria-hidden="true">*</span>
+                </h2>
+                <p className="mt-1 text-xs text-foreground/60">Each topic becomes a separate note. Each note&apos;s title and tags are generated automatically — the subject and other batch details apply to every note.</p>
+              </div>
+              <span className={`text-sm font-medium ${
+                normalizedTopics.length > MAX_BULK_GENERATION_TOPICS
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-foreground/65"
+              }`}>
+                {normalizedTopics.length} / {MAX_BULK_GENERATION_TOPICS}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {topics.map((topic, index) => (
+                <div key={topic.id} className="flex items-center gap-2">
+                  <label htmlFor={`bulk-topic-${topic.id}`} className="sr-only">Topic {index + 1}</label>
+                  <input
+                    id={`bulk-topic-${topic.id}`}
+                    value={topic.value}
+                    onChange={(event) => updateTopic(topic.id, event.target.value)}
+                    maxLength={160}
+                    placeholder={index === 0 ? "e.g. Newton's Laws of Motion" : `Topic ${index + 1}`}
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Remove topic ${index + 1}`}
+                    disabled={topics.length === 1}
+                    onClick={() => removeTopic(topic.id)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border text-lg text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addTopic}
+              className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              + Add topic
+            </button>
+          </section>
+
+          {normalizedTopics.length > MAX_BULK_GENERATION_TOPICS ? (
             <p className="text-sm text-red-600 dark:text-red-400">
-              You can bulk generate up to {MAX_BULK_GENERATION_TITLES} titles at once.
+              You can bulk generate up to {MAX_BULK_GENERATION_TOPICS} topics at once.
             </p>
           ) : null}
           {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-        </Card>
-
-        <Card className="space-y-4 p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-foreground">Parsed preview</h2>
-            <span className="text-sm font-medium text-foreground/65">
-              {parsed.totalTitles} / {MAX_BULK_GENERATION_TITLES} titles
-            </span>
-          </div>
-          {parsed.groups.length === 0 ? (
-            <p className="text-sm text-foreground/60">No subject groups detected yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {parsed.groups.map((group, groupIndex) => (
-                <section key={`${group.subject}-${groupIndex}`} className="rounded-lg border border-border bg-background p-4">
-                  <h3 className="font-semibold text-foreground">{group.subject}</h3>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/70">
-                    {group.titles.map((title, titleIndex) => (
-                      <li key={`${title}-${titleIndex}`}>{title}</li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          )}
         </Card>
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -205,7 +343,7 @@ export function BulkGenerationPageClient() {
             Cancel
           </Link>
           <Button type="submit" loading={submitting} loadingText="Queueing notes...">
-            Queue {parsed.totalTitles} note{parsed.totalTitles === 1 ? "" : "s"}
+            Queue {normalizedTopics.length} note{normalizedTopics.length === 1 ? "" : "s"}
           </Button>
         </div>
       </form>

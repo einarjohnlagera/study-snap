@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.dto.BulkGenerateNoteGroupRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
@@ -9,7 +8,12 @@ import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,18 +30,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class NoteBulkGenerationService {
     private static final Logger log = LoggerFactory.getLogger(NoteBulkGenerationService.class);
-    private static final int MIN_MAX_TITLES = 1;
-    private static final int MAX_TITLE_LENGTH = 160;
+    private static final int MIN_MAX_TOPICS = 1;
+    private static final int MAX_TOPIC_LENGTH = 160;
     private static final int MAX_SUBJECT_LENGTH = 160;
     private static final int MAX_COURSE_PROGRAM_LENGTH = 160;
     private static final int MIN_THROTTLE_DELAY_MS = 0;
     private static final int MAX_THROTTLE_DELAY_MS = 5_000;
-    private static final String EMPTY_BATCH_MESSAGE = "Add at least one title under a Subject: heading.";
+    private static final String EMPTY_BATCH_MESSAGE = "Add at least one topic.";
     private static final String COURSE_PROGRAM_REQUIRED_MESSAGE = "Course/program is required.";
-    private static final String TARGET_AUDIENCE_REQUIRED_MESSAGE = "Target audience is required.";
-    private static final String SUBJECT_REQUIRED_MESSAGE = "Every group must include a subject.";
+    private static final String TARGET_AUDIENCE_REQUIRED_MESSAGE =
+            "Target audience is required for teachers and admins.";
+    private static final String LEARNER_LEVEL_REQUIRED_MESSAGE = "Learner level is required for admins.";
+    private static final String PROFILE_LEARNER_LEVEL_REQUIRED_MESSAGE =
+            "Add a learner level to your profile before bulk generating notes.";
+    private static final String SUBJECT_REQUIRED_MESSAGE = "Subject is required.";
     private static final String FIELD_TOO_LONG_MESSAGE_TEMPLATE = "%s must be %d characters or less.";
-    private static final String MAX_TITLES_MESSAGE_TEMPLATE = "You can bulk generate up to %d titles at once.";
+    private static final String MAX_TOPICS_MESSAGE_TEMPLATE = "You can bulk generate up to %d topics at once.";
     private static final String COURSE_PROGRAM_FIELD = "Course/program";
     private static final String SUBJECT_FIELD = "Subject";
     private static final Set<LearnerLevel> SUPPORTED_TARGET_AUDIENCES = EnumSet.of(
@@ -56,7 +64,8 @@ public class NoteBulkGenerationService {
     private final ContentModerationService contentModerationService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final StudyPackGenerationTaskDispatcher taskDispatcher;
-    private final int maxTitles;
+    private final UserRepository userRepository;
+    private final int maxTopics;
     private final int throttleDelayMs;
 
     public NoteBulkGenerationService(
@@ -67,7 +76,8 @@ public class NoteBulkGenerationService {
             ContentModerationService contentModerationService,
             StudyPackGenerationContextResolver generationContextResolver,
             StudyPackGenerationTaskDispatcher taskDispatcher,
-            @Value("${note.bulk-generation.max-titles:50}") int maxTitles,
+            UserRepository userRepository,
+            @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
         this.noteGenerationService = noteGenerationService;
@@ -77,7 +87,8 @@ public class NoteBulkGenerationService {
         this.contentModerationService = contentModerationService;
         this.generationContextResolver = generationContextResolver;
         this.taskDispatcher = taskDispatcher;
-        this.maxTitles = Math.clamp(maxTitles, MIN_MAX_TITLES, Integer.MAX_VALUE);
+        this.userRepository = userRepository;
+        this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
 
@@ -86,13 +97,13 @@ public class NoteBulkGenerationService {
             UUID ownerUserId,
             boolean enforceLimits
     ) {
-        NormalizedBatch batch = normalizeAndValidate(request);
+        UserEntity owner = userRepository.findById(ownerUserId).orElseThrow(UserNotFoundException::new);
+        NormalizedBatch batch = normalizeAndValidate(request, owner);
         taskDispatcher.execute(() -> processBatch(batch, ownerUserId, enforceLimits));
         return new BulkGenerateNotesResponse(
                 batch.items().size(),
                 batch.items().size(),
-                batch.subjectCount(),
-                batch.rejectedTitles()
+                batch.rejectedTopics()
         );
     }
 
@@ -108,9 +119,9 @@ public class NoteBulkGenerationService {
             } catch (RuntimeException exception) {
                 failedCount.incrementAndGet();
                 log.warn(
-                        "action=bulk_generate_note outcome=failed title={} subject={} ownerUserId={}",
-                        item.title(),
-                        item.subject(),
+                        "action=bulk_generate_note outcome=failed topic={} subject={} ownerUserId={}",
+                        item.topic(),
+                        batch.subject(),
                         ownerUserId,
                         exception
                 );
@@ -135,24 +146,24 @@ public class NoteBulkGenerationService {
     ) {
         StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
                 ownerUserId,
-                batch.targetAudience(),
+                batch.learnerLevel(),
                 batch.courseProgram(),
-                item.subject()
+                batch.subject()
         );
         String content = enforceLimits
                 ? noteGenerationService.generateFromTopic(
-                        new GenerateNoteFromTopicRequest(item.title(), batch.courseProgram()),
+                        new GenerateNoteFromTopicRequest(item.topic(), batch.courseProgram()),
                         ownerUserId
                 ).content()
-                : generateAdminContent(item.title(), context);
+                : generateAdminContent(item.topic(), context);
 
         NoteResponse note = noteService.create(
                 new UpsertNoteRequest(
-                        item.title(),
-                        item.subject(),
+                        item.topic(),
+                        batch.subject(),
                         batch.courseProgram(),
                         List.of(),
-                        mapTargetProfileType(batch.targetAudience()).name(),
+                        batch.targetProfileType().name(),
                         content
                 ),
                 ownerUserId
@@ -166,69 +177,65 @@ public class NoteBulkGenerationService {
                 false,
                 enforceLimits,
                 context,
-                item.subject()
+                batch.subject()
         );
     }
 
-    private String generateAdminContent(String title, StudyPackGenerationContext context) {
-        contentModerationService.validateOrThrow(title);
-        return llmStudyPackService.generateNoteFromTopic(title, context);
+    private String generateAdminContent(String topic, StudyPackGenerationContext context) {
+        contentModerationService.validateOrThrow(topic);
+        return llmStudyPackService.generateNoteFromTopic(topic, context);
     }
 
-    private NormalizedBatch normalizeAndValidate(BulkGenerateNotesRequest request) {
+    private NormalizedBatch normalizeAndValidate(BulkGenerateNotesRequest request, UserEntity owner) {
         if (request == null) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
-        String courseProgram = requireText(request.courseProgram(), COURSE_PROGRAM_REQUIRED_MESSAGE);
-        assertMaxLength(courseProgram, MAX_COURSE_PROGRAM_LENGTH, COURSE_PROGRAM_FIELD);
-        if (request.targetAudience() == null || !SUPPORTED_TARGET_AUDIENCES.contains(request.targetAudience())) {
-            throw new InvalidBulkGenerationRequestException(TARGET_AUDIENCE_REQUIRED_MESSAGE);
-        }
-        if (request.groups() == null || request.groups().isEmpty()) {
+        String subject = requireText(request.subject(), SUBJECT_REQUIRED_MESSAGE);
+        assertMaxLength(subject, MAX_SUBJECT_LENGTH, SUBJECT_FIELD);
+        if (request.topics() == null || request.topics().isEmpty()) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
-
-        int submittedTitleCount = request.groups().stream()
-                .filter(group -> group != null && group.titles() != null)
-                .mapToInt(group -> group.titles().size())
-                .sum();
-        if (submittedTitleCount > maxTitles) {
-            throw new InvalidBulkGenerationRequestException(MAX_TITLES_MESSAGE_TEMPLATE.formatted(maxTitles));
+        if (request.topics().size() > maxTopics) {
+            throw new InvalidBulkGenerationRequestException(MAX_TOPICS_MESSAGE_TEMPLATE.formatted(maxTopics));
         }
 
         List<BulkGenerationItem> items = new ArrayList<>();
-        int rejectedTitles = 0;
-        int subjectCount = 0;
-        for (BulkGenerateNoteGroupRequest group : request.groups()) {
-            if (group == null) {
-                throw new InvalidBulkGenerationRequestException(SUBJECT_REQUIRED_MESSAGE);
+        int rejectedTopics = 0;
+        for (String rawTopic : request.topics()) {
+            String topic = rawTopic == null ? "" : rawTopic.trim();
+            if (topic.isBlank() || topic.length() > MAX_TOPIC_LENGTH) {
+                rejectedTopics++;
+                continue;
             }
-            String subject = requireText(group.subject(), SUBJECT_REQUIRED_MESSAGE);
-            assertMaxLength(subject, MAX_SUBJECT_LENGTH, SUBJECT_FIELD);
-            int groupAccepted = 0;
-            for (String rawTitle : group.titles() == null ? List.<String>of() : group.titles()) {
-                String title = rawTitle == null ? "" : rawTitle.trim();
-                if (title.isBlank() || title.length() > MAX_TITLE_LENGTH) {
-                    rejectedTitles++;
-                    continue;
-                }
-                items.add(new BulkGenerationItem(subject, title));
-                groupAccepted++;
-            }
-            if (groupAccepted > 0) {
-                subjectCount++;
-            }
+            items.add(new BulkGenerationItem(topic));
         }
         if (items.isEmpty()) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
+
+        boolean isAdmin = owner.getRole() == UserRole.ADMIN;
+        boolean isTeacherOrAdmin = isAdmin || owner.getProfileType() == ProfileType.TEACHER;
+        String courseProgram = isTeacherOrAdmin
+                ? requireText(request.courseProgram(), COURSE_PROGRAM_REQUIRED_MESSAGE)
+                : normalizeOptionalText(owner.getCourseProgram());
+        if (courseProgram != null) {
+            assertMaxLength(courseProgram, MAX_COURSE_PROGRAM_LENGTH, COURSE_PROGRAM_FIELD);
+        }
+        NoteTargetProfileType targetProfileType = isTeacherOrAdmin
+                ? requireTargetProfileType(request.targetProfileType())
+                : mapProfileTypeToNoteTargetProfile(owner.getProfileType());
+        LearnerLevel learnerLevel = isAdmin
+                ? requireAdminLearnerLevel(request.learnerLevel())
+                : requireProfileLearnerLevel(owner.getLearnerLevel());
+
         return new NormalizedBatch(
+                subject,
                 courseProgram,
-                request.targetAudience(),
+                targetProfileType,
+                learnerLevel,
                 request.makePublic(),
                 List.copyOf(items),
-                subjectCount,
-                rejectedTitles
+                rejectedTopics
         );
     }
 
@@ -239,6 +246,31 @@ public class NoteBulkGenerationService {
         return value.trim();
     }
 
+    private String normalizeOptionalText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private NoteTargetProfileType requireTargetProfileType(NoteTargetProfileType targetProfileType) {
+        if (targetProfileType == null) {
+            throw new InvalidBulkGenerationRequestException(TARGET_AUDIENCE_REQUIRED_MESSAGE);
+        }
+        return targetProfileType;
+    }
+
+    private LearnerLevel requireAdminLearnerLevel(LearnerLevel learnerLevel) {
+        if (learnerLevel == null || !SUPPORTED_TARGET_AUDIENCES.contains(learnerLevel)) {
+            throw new InvalidBulkGenerationRequestException(LEARNER_LEVEL_REQUIRED_MESSAGE);
+        }
+        return learnerLevel;
+    }
+
+    private LearnerLevel requireProfileLearnerLevel(LearnerLevel learnerLevel) {
+        if (learnerLevel == null) {
+            throw new InvalidBulkGenerationRequestException(PROFILE_LEARNER_LEVEL_REQUIRED_MESSAGE);
+        }
+        return learnerLevel;
+    }
+
     private void assertMaxLength(String value, int maxLength, String fieldName) {
         if (value.length() > maxLength) {
             throw new InvalidBulkGenerationRequestException(
@@ -247,11 +279,11 @@ public class NoteBulkGenerationService {
         }
     }
 
-    private NoteTargetProfileType mapTargetProfileType(LearnerLevel targetAudience) {
-        if (targetAudience == LearnerLevel.BOARD_EXAM_REVIEW) {
+    private NoteTargetProfileType mapProfileTypeToNoteTargetProfile(ProfileType profileType) {
+        if (profileType == ProfileType.BOARD_EXAM) {
             return NoteTargetProfileType.BOARD_TAKER;
         }
-        if (targetAudience == LearnerLevel.PROFESSIONAL) {
+        if (profileType == ProfileType.PROFESSIONAL) {
             return NoteTargetProfileType.PROFESSIONAL;
         }
         return NoteTargetProfileType.STUDENT;
@@ -269,16 +301,17 @@ public class NoteBulkGenerationService {
         }
     }
 
-    private record BulkGenerationItem(String subject, String title) {
+    private record BulkGenerationItem(String topic) {
     }
 
     private record NormalizedBatch(
+            String subject,
             String courseProgram,
-            LearnerLevel targetAudience,
+            NoteTargetProfileType targetProfileType,
+            LearnerLevel learnerLevel,
             boolean makePublic,
             List<BulkGenerationItem> items,
-            int subjectCount,
-            int rejectedTitles
+            int rejectedTopics
     ) {
     }
 }

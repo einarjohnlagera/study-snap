@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
+import {consumeBulkQueuedFlash} from "@/lib/bulk-generation-flash";
 import {
   ArrowUpDown,
   Bookmark,
@@ -580,6 +581,13 @@ export default function LibraryPage() {
   }, [toast]);
 
   useEffect(() => {
+    const queuedCount = consumeBulkQueuedFlash();
+    if (queuedCount) {
+      setToast(`Queued ${queuedCount} note${queuedCount === 1 ? "" : "s"} — they'll appear here as they finish generating.`);
+    }
+  }, []);
+
+  useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
       router.replace(
         buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter),
@@ -1096,7 +1104,7 @@ export default function LibraryPage() {
                 ...(authUser?.role === "ADMIN" ? [{
                   key: "bulk-generate",
                   label: "Bulk generate",
-                  description: "Generate notes and Study Packs from a title list",
+                  description: "Generate notes and Study Packs from a list of topics",
                   onSelect: () => router.push("/library/bulk-generate"),
                 }] : []),
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },

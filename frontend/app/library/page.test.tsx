@@ -12,6 +12,7 @@ import {
   listSubjects,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -386,6 +387,14 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create options" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Bulk generate/ }));
     expect(pushMock).toHaveBeenCalledWith("/library/bulk-generate");
+  });
+
+  it("shows a queued toast after a bulk-generate redirect", async () => {
+    setBulkQueuedFlash(2);
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText(/Queued 2 notes/)).toBeInTheDocument();
   });
 
   it("creates a Study Plan from notes selected in the Library", async () => {
