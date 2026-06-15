@@ -16,11 +16,11 @@ import {
   listCoursePrograms,
   listSubjects,
   type BulkGenerateNotesRequest,
-  type BulkGenerateNotesResponse,
   type LearnerLevel,
   type NoteTargetProfileType,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 import {
   getNoteTargetProfileLabel,
@@ -59,7 +59,6 @@ export function BulkGenerationPageClient() {
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [acknowledgment, setAcknowledgment] = useState<BulkGenerateNotesResponse | null>(null);
   const normalizedTopics = useMemo(
     () => topics.map((topic) => topic.value.trim()).filter(Boolean),
     [topics],
@@ -138,7 +137,6 @@ export function BulkGenerationPageClient() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setAcknowledgment(null);
     const validationError = validate();
     if (validationError) {
       setError(validationError);
@@ -162,7 +160,8 @@ export function BulkGenerationPageClient() {
     setError(null);
     try {
       const response = await bulkGenerateNotes(request);
-      setAcknowledgment(response);
+      setBulkQueuedFlash(response.queuedTopics);
+      router.push("/library");
     } catch (submitError) {
       if (submitError instanceof ApiRequestError && submitError.status === 403) {
         router.replace("/dashboard");
@@ -187,18 +186,6 @@ export function BulkGenerationPageClient() {
           Add one subject and a list of topics. Each topic becomes a study-ready note with its own Study Pack, generated in the background.
         </p>
       </header>
-
-      {acknowledgment ? (
-        <Card className="space-y-3 border-emerald-500/40 bg-emerald-50/70 p-5 dark:bg-emerald-950/20">
-          <h2 className="text-lg font-semibold text-foreground">Bulk generation queued</h2>
-          <p className="text-sm text-foreground/75">
-            Queued {acknowledgment.queuedTopics} note{acknowledgment.queuedTopics === 1 ? "" : "s"} for {subject.trim()}. They will appear in your Library and finish generating shortly.
-          </p>
-          <Link className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" href="/library">
-            Back to Library
-          </Link>
-        </Card>
-      ) : null}
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         <Card className="space-y-5 p-5 sm:p-6">

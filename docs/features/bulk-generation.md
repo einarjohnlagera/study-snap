@@ -31,9 +31,12 @@ Subject is full-width. The remaining visible metadata uses one responsive two-co
 1. Course / Program
 2. Learner Level
 3. Target Audience
-4. Public
 
-For Admin, this produces `Course / Program · Learner Level` followed by `Target Audience · Public`. Teacher and non-teacher views use the same grid and omit fields that are not relevant. The Topics list remains full-width below the metadata grid.
+For Admin, this produces `Course / Program · Learner Level` followed by `Target Audience`. Teacher and non-teacher views use the same grid and omit fields that are not relevant; the grid collapses (`empty:hidden`) when no fields are visible (non-teacher), so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
+
+## Submission
+
+On a successful queue the page does not show an in-page acknowledgment. It stores a one-shot queued-count flash in `sessionStorage` and redirects to `/library`, where a toast — `Queued N notes — they'll appear here as they finish generating.` — confirms the batch was received. The flash is consumed once on Library mount and does not reappear on refresh. A `sessionStorage` flash is used instead of a query param because the Library rewrites its own URL from filter state, which would strip the param.
 
 ## Profile-Aware Resolution
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
+import {consumeBulkQueuedFlash} from "@/lib/bulk-generation-flash";
 import {
   ArrowUpDown,
   Bookmark,
@@ -578,6 +579,13 @@ export default function LibraryPage() {
     const timeoutId = globalThis.setTimeout(() => setToast(null), 2200);
     return () => globalThis.clearTimeout(timeoutId);
   }, [toast]);
+
+  useEffect(() => {
+    const queuedCount = consumeBulkQueuedFlash();
+    if (queuedCount) {
+      setToast(`Queued ${queuedCount} note${queuedCount === 1 ? "" : "s"} — they'll appear here as they finish generating.`);
+    }
+  }, []);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {

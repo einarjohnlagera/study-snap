@@ -2,11 +2,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
 import { bulkGenerateNotes, getMe, listCoursePrograms, listSubjects } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { consumeBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 
 const replaceMock = jest.fn();
+const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => ({ replace: replaceMock, push: pushMock }),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -49,6 +51,8 @@ describe("BulkGenerationPageClient", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     replaceMock.mockReset();
+    pushMock.mockReset();
+    globalThis.sessionStorage?.clear();
     (bulkGenerateNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue([]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
@@ -90,7 +94,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
   });
 
-  it("submits the resolved payload and shows the queue acknowledgment", async () => {
+  it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
     (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({
       acceptedTopics: 2,
       queuedTopics: 2,
@@ -112,8 +116,8 @@ describe("BulkGenerationPageClient", () => {
         learnerLevel: "COLLEGE",
       });
     });
-    expect(await screen.findByRole("heading", { name: "Bulk generation queued" })).toBeInTheDocument();
-    expect(screen.getByText(/Queued 2 notes for Maternal Health/)).toBeInTheDocument();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));
+    expect(consumeBulkQueuedFlash()).toBe(2);
   });
 
   it("preserves form state when submission fails", async () => {
