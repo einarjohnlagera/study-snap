@@ -20,9 +20,11 @@ Older milestone labels below are preserved as planning history only. They are no
 
 ---
 
-## v0.29.0 - Bulk Generation (in progress)
+## v0.29.0 - Bulk Generation & Generation-Context Correctness (in progress)
 
 Base branch for this release: `releases/v0.29.0`.
+
+This release has three workstreams: **(1) Bulk Generation** (admin content seeding), **(2) Generation-context correctness** (level content by course/program, not learner level), and **(3) Profile-type integrity + onboarding enforcement** (every account that drives generation must have a profile type; onboarding must be a real server-side boundary). Profile-type integrity was pulled forward from v0.30.0.
 
 Theme: kill the one-note-at-a-time tax on seeding study content. An admin enters one subject and a list of topics, and the system generates a note **and** its Study Pack for each topic, unattended. Built admin-first to seed our exam-prep buckets (ALE/PNLE/LET), but architected as a normal Library capability behind a **role gate** — opening it to all users later is a gate-flip, not a rebuild.
 
@@ -45,25 +47,45 @@ Scope:
 
 Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.31.0 collection-level bulk *quiz* generation over existing notes.
 
+### Workstream 2 — Generation-context correctness (learner level → course/program)
+
+Content generation must be leveled by **course/program**, not learner level, so notes and Study Packs are correct for everyone who copies them — shared content can't depend on a per-user attribute.
+
+Locked direction:
+
+- Strip `{LEARNER_LEVEL}` / `{LEARNER_LEVEL_GUIDANCE}` from the **content** prompts only — `note-generation-developer.txt` and the study-pack `developer.txt`. Course/program is already injected; rely on it for depth + terminology. The embedded study-pack quiz follows the same rule (it is content + a dedup source, not a per-taker quiz).
+- **Keep learner level in the quiz/exam prompts** (Quick Review, Challenge, Adaptive, Long Exam, Board Exam, Interview, Teacher) and in the exam-question pool — those adapt to the *taker*, re-resolved per session.
+- Learner level is **no longer required** to generate a note from a topic or a Study Pack. It stays a best-effort context field (from profile) only to pre-warm the exam pool; per-taker correctness is preserved by `sampleQuestions`' `sameLearnerLevel` gate + on-demand fallback.
+- **Remove the now-vestigial Learner Level field** from the bulk-generate form (it only fed content leveling). Bulk's exam-pool pre-warm uses the admin's profile level, best-effort.
+- No prod data migration: new content is course/program-leveled; existing content is untouched (regeneration optional, deferred). Copy/long-exam already serve takers their own level — no copy-time regeneration.
+
+### Workstream 3 — Profile-type integrity + onboarding enforcement
+
+Every account that drives generation/personalization must have a profile type, and onboarding must be a real boundary (today it is enforced only by client-side per-page guards).
+
+Locked direction:
+
+- **Re-prompt, never silent-default.** A wrong default mis-personalizes invisibly; null is at least detectable. Gate on `profile_type` (not just `onboarding_completed_at`, which misses legacy completed-but-null rows): a user missing a profile type gets one focused, blocking prompt — ask only what is missing (don't re-run full onboarding for someone who only lacks a profile type; send truly-not-onboarded users through full onboarding).
+- **Close the bypass with server-side enforcement.** Onboarding is currently enforced only by per-page client guards (no middleware, no backend gate), so an authenticated-but-not-onboarded user can mutate via direct API. Add server-side enforcement so key mutations (note + Study Pack creation/generation) require a completed profile. The client prompt alone is bypassable.
+- All readers already treat null `profile_type` as STUDENT/non-teacher (no crashes) — this is a personalization-quality + integrity fix, not a crash fix. The cohort is bounded (legacy rows + abandoned onboarding); new users cannot reach completed-but-null because `completeOnboarding` requires a profile type.
+
 ---
 
 ## v0.30.0 (candidate) - Readiness Signals
 
-Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers — and make sure personalization actually fires for every account. Two gaps surfaced after v0.28.0: practice in the exam modes never moves the Progress page, and a cohort of accounts has no profile type at all.
+Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers. The gap: practice in the exam modes never moves the Progress page. (Profile-type integrity was pulled forward into v0.29.0.)
 
-Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced, and the personalization their profile type drives. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.31.0 (still no teacher users).
+Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.31.0 (still no teacher users).
 
 Locked direction:
 
 - **Read-time fallbacks stay; fix the source.** Today only Quick Review, Challenge, and Adaptive Practice write `ConceptHealth` (via `recordCorrectAnswers`), and `ConceptHealth` is the **only** thing the Progress page reads. Long Exam, Board Exam, and Interview Practice produce rich per-session reports (`LongExamMasteryReportResponse` domain breakdown, `InterviewReadinessReportResponse` gaps) that are **ephemeral** (`sessionMetadata` JSON) and never persist — so an exam-taker can grind Board Exams and see a flat Progress page. Wire these results into `ConceptHealth` so they count.
 - **Two write-paths, not three.** Board Exam *is* `LONG_EXAM` session mode (no separate enum) and runs through `LongExamService`; Interview Practice runs through `InterviewPracticeService`. So the recording work lives in those two services, mirroring the existing `recordCorrectAnswers` contract — no new entity, no new quota, no new artifact.
 - **Reconcile two "mastery" grains.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is built on per-**concept** `ConceptHealth`. The mapping (domain/result → concept records) is the hard part and must be designed before writing — don't invent a parallel mastery store.
-- **Profile-type integrity = re-prompt, not silent default.** Root cause of null `profileType`: both signup paths set it null (`AuthService.signup`, `createGoogleUser`); only `completeOnboarding` (email-verification-gated) / `updateProfileType` set it, both `@NotNull`-validated. So **null = abandoned onboarding** (never completed), not completed-but-null. All readers null-handle gracefully (treat null as non-teacher/student) — no crash, so this is a **personalization-quality gap**, not a bug. The fix is to instrument the profile-type step, quantify the null cohort, and **re-prompt** abandoned users — *not* a silent default-backfill (a wrong default mis-personalizes undetectably; null is at least detectable).
 
 Scope:
 
 - **Exam-mode results feed Progress** — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, so Progress reflects all practice. Define the domain→concept mapping first.
-- **Profile-type integrity** — onboarding profile-type-step instrumentation, null-cohort sizing, and a re-prompt path for abandoned-onboarding accounts (no silent default).
 
 ---
 

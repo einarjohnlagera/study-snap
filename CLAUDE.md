@@ -8,9 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Current version: **v0.29.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.29.0 — Bulk Generation (anti-drift)
+## Active release: v0.29.0 — Bulk Generation & Generation-Context Correctness (anti-drift)
 
-Base branch for this release: `releases/v0.29.0`. Full scope in `ROADMAP.md`; locked rules:
+Base branch for this release: `releases/v0.29.0`. Three workstreams: (1) Bulk Generation, (2) Generation-context correctness (content leveled by course/program, not learner level), (3) Profile-type integrity + onboarding enforcement. Full scope in `ROADMAP.md`; locked rules:
+
+**Bulk Generation:**
 
 - **This is orchestration, not new AI.** The building blocks exist: `NoteGenerationService.generateFromTopic` (note content from a topic), the async Study Pack pipeline (`NoteService.startAsyncGenerationFromNote`), `NoteService.create`, and the existing quota services. Compose them — do not write a new generation path or a parallel pipeline.
 - **No new job/progress infrastructure.** Each topic is generated content-first into a real note (note content is required, so the row appears once content-gen completes), then runs Study-Pack-gen on the existing executors; progress and load-on-refresh come from the real note rows + the `studyPackStatus` field the Library list already carries (`GENERATING → READY/FAILED`). **Do not add a batch-job entity, a progress table, or a new status enum.**
@@ -18,7 +20,17 @@ Base branch for this release: `releases/v0.29.0`. Full scope in `ROADMAP.md`; lo
 - **Role-gated in Library, not `/admin`.** Entry is in the Library Create split-button, shown only to ADMIN; the flow is a dedicated `/library/bulk-generate` route. The gate is role-based and removable — opening it to all users later is a gate-flip, not a rebuild. Do not hardcode admin checks that would block future ungating.
 - **Quota check built now; ADMIN bypasses.** Wire per-user quota enforcement through the existing quota services so the all-users path is real — ADMIN bypasses it. Defer only the "quota ran out mid-batch" partial-execution messaging.
 - **Subject field = the batch subject; title + tags = AI.** Set the note's dedicated `subject` field from the batch (it beats the AI subject); each topic is only a generation seed, while the AI title and AI tags come from the Study Pack write-back. Do not strip or override AI tags with the subject. No per-profile pipeline fork.
-- **Out of scope (do not build without explicit ask):** the v0.31.0 work — collection-level bulk *quiz* generation over existing notes, async quiz generation, and teacher quiz-preview polish; and the v0.30.0 Readiness Signals work.
+**Generation-context correctness (learner level → course/program):**
+
+- **Content is leveled by course/program, not learner level.** Strip `{LEARNER_LEVEL}` / `{LEARNER_LEVEL_GUIDANCE}` from the content prompts only — `note-generation-developer.txt` and the study-pack `developer.txt` (course/program is already injected). Shared/copied content must not depend on a per-user attribute.
+- **Keep learner level in quiz/exam prompts and the exam pool** — those adapt to the *taker*, re-resolved per session. Do not remove `learnerLevel` from `StudyPackGenerationContext` (the exam pool still needs it); just stop using it in the two content prompts. Learner level is no longer *required* to generate a note/Study Pack. Remove the vestigial bulk Learner Level field.
+
+**Profile-type integrity + onboarding enforcement:**
+
+- **Re-prompt, never silent-default.** Gate on `profile_type` (not just `onboarding_completed_at`); a user missing a profile type gets one focused, blocking prompt asking only what's missing. A wrong default mis-personalizes invisibly.
+- **Onboarding must be enforced server-side.** It is currently client-side-only (per-page guards, no middleware, no backend gate). Add server-side enforcement on key mutations so it is a real boundary — the client prompt alone is bypassable. New users cannot reach completed-but-null (`completeOnboarding` requires profile type); the null cohort is bounded (legacy + abandoned).
+
+- **Out of scope (do not build without explicit ask):** the v0.31.0 work — collection-level bulk *quiz* generation over existing notes, async quiz generation, and teacher quiz-preview polish; and the v0.30.0 Readiness Signals work (exam-mode results → Progress).
 
 ## Source-of-truth docs (read before implementing anything)
 
