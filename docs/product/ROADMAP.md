@@ -71,6 +71,14 @@ Locked direction:
 
 ---
 
+## v0.29.1 (candidate) - Bulk Generation Polish
+
+Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0.29.0 scoped.
+
+- **Partial-outcome reporting for bulk generation.** The bulk endpoint returns `queuedTopics = N` immediately (before background generation runs), so the "Queued N notes" toast promises N. When a topic's **content generation** fails, no note row is created (correct — a note without content is trash, so we do not persist a placeholder), but the user just sees fewer notes than promised with no explanation. Surface the real outcome (e.g. "3 of 5 generated; 2 couldn't be generated") so the promise stays honest. This needs a way to report background results, not just a fire-and-forget toast — more than a cosmetic fix. This subsumes the v0.29.0-deferred "quota ran out mid-batch" partial-execution messaging (same reporting gap).
+
+---
+
 ## v0.30.0 (candidate) - Readiness Signals
 
 Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers. The gap: practice in the exam modes never moves the Progress page. (Profile-type integrity was pulled forward into v0.29.0.)

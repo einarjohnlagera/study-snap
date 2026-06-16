@@ -119,6 +119,26 @@ describe("BulkGenerationPageClient", () => {
     expect(consumeBulkQueuedFlash()).toBe(2);
   });
 
+  it("splits a multi-line paste into separate topic rows and strips list markers", async () => {
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    fireEvent.paste(screen.getByLabelText(/^Topic 1$/), {
+      clipboardData: {
+        getData: () => "* Adjusting Entries and the Accrual Basis of Accounting\n* Cash Management and Cash Equivalents in Financial Reporting",
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue(
+        "Adjusting Entries and the Accrual Basis of Accounting",
+      );
+    });
+    expect(screen.getByLabelText(/^Topic 2$/)).toHaveValue(
+      "Cash Management and Cash Equivalents in Financial Reporting",
+    );
+  });
+
   it("preserves form state when submission fails", async () => {
     (bulkGenerateNotes as jest.Mock).mockRejectedValueOnce(new Error("Connection lost."));
     render(<BulkGenerationPageClient />);
