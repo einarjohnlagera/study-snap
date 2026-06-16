@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.29.1 - Bulk Generation Polish
+
+**Status: In Progress**
+
+Theme: follow-up polish on the v0.29.0 bulk-generation flow. Primary item: honest **partial-outcome reporting** — when a topic's content generation fails, no note row is created (correct — a note without content is not persisted), but the immediate `Queued N notes` toast over-promises with no explanation. Surface the real outcome so the count stays honest. This subsumes the v0.29.0-deferred "quota ran out mid-batch" messaging (same background-reporting gap). No batch-job entity, progress table, or status enum (still locked from v0.29.0). See `docs/product/ROADMAP.md` for full scope.
+
+### Shipped
+
+_None yet._
+
+---
+
 ## v0.29.0 - Bulk Generation
 
 **Status: Released**
