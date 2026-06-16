@@ -217,10 +217,13 @@ Profile type is required before these authenticated mutations can create or gene
 - note creation
 - note-from-topic generation
 - note-owned Study Pack generation
+- note copy (public copy and owner self-copy)
 - bulk generation
 - batch import
 
-The backend throws `ProfileSetupRequiredException` with HTTP `403`, code `ONBOARDING_REQUIRED`, and action `COMPLETE_PROFILE_TYPE` when `profileType` is null.
+The backend throws `ProfileSetupRequiredException` with HTTP `403`, code `ONBOARDING_REQUIRED`, and action `COMPLETE_PROFILE_TYPE`.
+
+The guard fires only for the legacy **completed-but-null** cohort: `profileType == null` **and** `onboardingCompletedAt != null`. Users still mid-onboarding (`onboardingCompletedAt == null`) are exempt because onboarding persists `profileType` only at its final step while generating content earlier; copy-on-signup is likewise exempt because it runs before onboarding completes. Gating on `profileType == null` alone would 403 every new user's first generation and silently lose copy-on-signup intent — do not narrow the condition back to that.
 
 Do not gate recovery paths:
 

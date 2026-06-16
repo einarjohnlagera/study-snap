@@ -180,6 +180,7 @@ public class NoteService {
     }
 
     public NoteResponse copyNote(String id, UUID ownerUserId, boolean includeStudyPack) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity source = noteRepository.findById(noteId)
                 .orElseThrow(NoteNotFoundException::new);
