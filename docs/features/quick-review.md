@@ -55,7 +55,8 @@ Primary CTA rules:
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
 - the shared `<PostSessionNextStep>` component renders the dominant next action
-- a Quick Review with actual misses prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action
+- a Quick Review with two or more missed concepts prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action
+- a strong-majority Quick Review (at most one missed concept, i.e. >= 4/5) advances primarily to `Take a Challenge`; when there is a single miss, `Retry Incorrect Questions` is kept as a secondary action so the missed question is not lost
 - a Quick Review with no misses advances primarily to `Take a Challenge`
 - genuine weak concepts may keep `Practice Weak Concepts` reachable as a secondary action after a strong Quick Review, but never replace Challenge Quiz as the primary action
 - fallback UI keeps the previous weak-area / challenge / retry guidance when the next-step fetch fails
