@@ -97,8 +97,10 @@ public class NoteService {
     private final FeatureGateService featureGateService;
     private final AnalyticsService analyticsService;
     private final ContentModerationService contentModerationService;
+    private final OnboardingGuardService onboardingGuardService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
         NoteEntity entity = new NoteEntity();
         entity.setId(UUID.randomUUID());
@@ -178,6 +180,7 @@ public class NoteService {
     }
 
     public NoteResponse copyNote(String id, UUID ownerUserId, boolean includeStudyPack) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity source = noteRepository.findById(noteId)
                 .orElseThrow(NoteNotFoundException::new);

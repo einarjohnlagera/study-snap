@@ -107,9 +107,11 @@ Frontend OCR gate message:
 After email verification:
 
 - verified users who have not completed onboarding should be routed to `/onboarding` before protected app areas
+- verified users with `onboardingCompletedAt` set but null `profileType` should also be routed to `/onboarding`, where they choose only the missing profile type
 - onboarding should happen once only
-- onboarding collects `profileType` and `learningStyle` (`engagementMode`)
+- onboarding collects `profileType`, learner level, course/program, optional `examDate` for board exam users, and the first Study Pack flow
 - after completion, users should land on `Dashboard`
+- backend content-creating mutations enforce profile setup with a named 403 `ONBOARDING_REQUIRED`; auth, `getMe`, onboarding, verification, product-onboarding, and read-only endpoints remain reachable
 
 ## Navigation Expectations (Authenticated Shell)
 

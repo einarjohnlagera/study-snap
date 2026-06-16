@@ -239,7 +239,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             <PublicSeoCopyCta
               noteId={note.id}
               label="Copy Study Pack"
-              redirectTarget="quick-review"
+              redirectTarget="generate"
               variant="outline"
               includeStudyPack
             />

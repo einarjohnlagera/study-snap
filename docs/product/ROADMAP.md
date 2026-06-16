@@ -6,43 +6,100 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.29.0 - Readiness Signals` is the next candidate (not yet started).
+`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the current documentation baseline (last released).
 
-`v0.28.0 - Feature Discoverability & Activation` is the current documentation baseline (last released).
+`v0.28.0 - Feature Discoverability & Activation` is the previous baseline.
 
-`v0.27.0 - Material Import & Collections` is the previous baseline.
+`v0.27.0 - Material Import & Collections` is the release before that.
 
 `v0.26.1 - Guidance System` is the release before that.
 
-`v0.26.0 - Exam Depth` is the release before that.
+No release is currently in progress. Next candidates: `v0.29.1 - Bulk Generation Polish` and `v0.30.0 - Readiness Signals` (see sections below).
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
 ---
 
-## Next Release (candidate) - v0.29.0 Readiness Signals
+## v0.29.0 - Bulk Generation & Generation-Context Correctness (released)
 
-Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers — and make sure personalization actually fires for every account. Two gaps surfaced after v0.28.0: practice in the exam modes never moves the Progress page, and a cohort of accounts has no profile type at all.
+Base branch for this release: `releases/v0.29.0`.
 
-Why now (over Bulk/Teacher): we still have **no teacher users**, so teacher-flow polish and bulk generation are deferred to v0.30.0. The leverage today is the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced, and they need the personalization their profile type drives.
+This release has three workstreams: **(1) Bulk Generation** (admin content seeding), **(2) Generation-context correctness** (level content by course/program, not learner level), and **(3) Profile-type integrity + onboarding enforcement** (every account that drives generation must have a profile type; onboarding must be a real server-side boundary). Profile-type integrity was pulled forward from v0.30.0.
+
+Theme: kill the one-note-at-a-time tax on seeding study content. An admin enters one subject and a list of topics, and the system generates a note **and** its Study Pack for each topic, unattended. Built admin-first to seed our exam-prep buckets (ALE/PNLE/LET), but architected as a normal Library capability behind a **role gate** — opening it to all users later is a gate-flip, not a rebuild.
+
+Why now (over Readiness Signals): seeding public content one note at a time is the active operational bottleneck, and the building blocks already exist — `NoteGenerationService.generateFromTopic` (note content from a topic), the async Study Pack pipeline, and the per-user quota services. This is mostly **orchestration** (high leverage, low risk), and more seeded content makes Readiness Signals (now v0.30.0) more valuable when it ships.
+
+Locked direction:
+
+- **No new job/progress infrastructure.** Each topic is generated content-first into a real note (note content is required, so the row appears once content-gen completes), then runs Study-Pack-gen on the **existing executors** (`studyPackGenerationTaskExecutor`). Progress and load-on-refresh come from the real note rows plus the `studyPackStatus` field the Library list already carries (`GENERATING → READY/FAILED`) — no batch-job entity, no progress table, no new status enum.
+- **Per-item isolation.** One bad topic never fails the batch — try/catch per iteration, mirroring the `/notes/import-batch` pattern from v0.27.0.
+- **Throttled fan-out.** Submit generation chains to the existing executor with throttling so a 40-topic batch never saturates the pool or trips LLM rate limits. This is the one genuinely new dispatch concern — throttling, not infrastructure.
+- **Role-gated in Library, not a separate `/admin` surface.** Entry lives in the Library Create split-button, shown only to ADMIN; the flow is a dedicated `/library/bulk-generate` route with Note-Create-aligned metadata and discrete topic rows. Opening to all later = relax the gate.
+- **Quota check built now; ADMIN bypasses.** Per-user quota enforcement is wired through the existing quota services so the all-users path is real, not a stub — ADMIN role bypasses it. Deferred: the "quota ran out mid-batch" partial-execution messaging (admin never hits it).
+- **Reuse existing creation + context paths.** Note creation goes through `NoteService.create(UpsertNoteRequest)`; course/program and best-effort exam-pool context go through the shared resolver. The note's dedicated `subject` field = the batch subject (it beats the AI subject); title and tags stay AI (from the Study Pack write-back). No per-profile pipeline fork.
+
+Scope:
+
+- **Bulk-generate endpoint** — a role-gated endpoint that, per topic, creates a DRAFT note, kicks the content-gen → Study-Pack-gen chain on the existing executors (throttled, per-item isolated), applies resolved subject/course/audience metadata, and honors a per-batch Public toggle.
+- **`/library/bulk-generate` admin page** — enter one Subject plus topic rows, use the compact profile-aware `Course / Program · Target Audience` grid plus Public toggle, and submit; results surface as real notes in the Library that resolve `GENERATING → READY`.
+- **Quota wiring** — per-user pre-flight quota check (admin-bypassed) plus a cost/count preview before the batch starts.
+
+Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.31.0 collection-level bulk *quiz* generation over existing notes.
+
+### Workstream 2 — Generation-context correctness (learner level → course/program)
+
+Content generation must be leveled by **course/program**, not learner level, so notes and Study Packs are correct for everyone who copies them — shared content can't depend on a per-user attribute.
+
+Locked direction:
+
+- Strip `{LEARNER_LEVEL}` / `{LEARNER_LEVEL_GUIDANCE}` from the **content** prompts only — `note-generation-developer.txt` and the study-pack `developer.txt`. Course/program is already injected; rely on it for depth + terminology. The embedded study-pack quiz follows the same rule (it is content + a dedup source, not a per-taker quiz).
+- **Keep learner level in the quiz/exam prompts** (Quick Review, Challenge, Adaptive, Long Exam, Board Exam, Interview, Teacher) and in the exam-question pool — those adapt to the *taker*, re-resolved per session.
+- Learner level is **no longer required** to generate a note from a topic or a Study Pack. It stays a best-effort context field (from profile) only to pre-warm the exam pool; per-taker correctness is preserved by `sampleQuestions`' `sameLearnerLevel` gate + on-demand fallback.
+- **Remove the now-vestigial Learner Level field** from the bulk-generate form (it only fed content leveling). Bulk's exam-pool pre-warm uses the admin's profile level, best-effort.
+- No prod data migration: new content is course/program-leveled; existing content is untouched (regeneration optional, deferred). Copy/long-exam already serve takers their own level — no copy-time regeneration.
+
+### Workstream 3 — Profile-type integrity + onboarding enforcement
+
+Every account that drives generation/personalization must have a profile type, and onboarding must be a real boundary (today it is enforced only by client-side per-page guards).
+
+Locked direction:
+
+- **Re-prompt, never silent-default.** A wrong default mis-personalizes invisibly; null is at least detectable. Gate on `profile_type` (not just `onboarding_completed_at`, which misses legacy completed-but-null rows): a user missing a profile type gets one focused, blocking prompt — ask only what is missing (don't re-run full onboarding for someone who only lacks a profile type; send truly-not-onboarded users through full onboarding).
+- **Close the bypass with server-side enforcement.** Onboarding is currently enforced only by per-page client guards (no middleware, no backend gate), so an authenticated-but-not-onboarded user can mutate via direct API. Add server-side enforcement so key mutations (note + Study Pack creation/generation) require a completed profile. The client prompt alone is bypassable.
+- All readers already treat null `profile_type` as STUDENT/non-teacher (no crashes) — this is a personalization-quality + integrity fix, not a crash fix. The cohort is bounded (legacy rows + abandoned onboarding); new users cannot reach completed-but-null because `completeOnboarding` requires a profile type.
+
+---
+
+## v0.29.1 (candidate) - Bulk Generation Polish
+
+Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0.29.0 scoped.
+
+- **Partial-outcome reporting for bulk generation.** The bulk endpoint returns `queuedTopics = N` immediately (before background generation runs), so the "Queued N notes" toast promises N. When a topic's **content generation** fails, no note row is created (correct — a note without content is trash, so we do not persist a placeholder), but the user just sees fewer notes than promised with no explanation. Surface the real outcome (e.g. "3 of 5 generated; 2 couldn't be generated") so the promise stays honest. This needs a way to report background results, not just a fire-and-forget toast — more than a cosmetic fix. This subsumes the v0.29.0-deferred "quota ran out mid-batch" partial-execution messaging (same reporting gap).
+
+---
+
+## v0.30.0 (candidate) - Readiness Signals
+
+Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers. The gap: practice in the exam modes never moves the Progress page. (Profile-type integrity was pulled forward into v0.29.0.)
+
+Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.31.0 (still no teacher users).
 
 Locked direction:
 
 - **Read-time fallbacks stay; fix the source.** Today only Quick Review, Challenge, and Adaptive Practice write `ConceptHealth` (via `recordCorrectAnswers`), and `ConceptHealth` is the **only** thing the Progress page reads. Long Exam, Board Exam, and Interview Practice produce rich per-session reports (`LongExamMasteryReportResponse` domain breakdown, `InterviewReadinessReportResponse` gaps) that are **ephemeral** (`sessionMetadata` JSON) and never persist — so an exam-taker can grind Board Exams and see a flat Progress page. Wire these results into `ConceptHealth` so they count.
 - **Two write-paths, not three.** Board Exam *is* `LONG_EXAM` session mode (no separate enum) and runs through `LongExamService`; Interview Practice runs through `InterviewPracticeService`. So the recording work lives in those two services, mirroring the existing `recordCorrectAnswers` contract — no new entity, no new quota, no new artifact.
 - **Reconcile two "mastery" grains.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is built on per-**concept** `ConceptHealth`. The mapping (domain/result → concept records) is the hard part and must be designed before writing — don't invent a parallel mastery store.
-- **Profile-type integrity = re-prompt, not silent default.** Root cause of null `profileType`: both signup paths set it null (`AuthService.signup`, `createGoogleUser`); only `completeOnboarding` (email-verification-gated) / `updateProfileType` set it, both `@NotNull`-validated. So **null = abandoned onboarding** (never completed), not completed-but-null. All readers null-handle gracefully (treat null as non-teacher/student) — no crash, so this is a **personalization-quality gap**, not a bug. The fix is to instrument the profile-type step, quantify the null cohort, and **re-prompt** abandoned users — *not* a silent default-backfill (a wrong default mis-personalizes undetectably; null is at least detectable).
 
 Scope:
 
 - **Exam-mode results feed Progress** — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, so Progress reflects all practice. Define the domain→concept mapping first.
-- **Profile-type integrity** — onboarding profile-type-step instrumentation, null-cohort sizing, and a re-prompt path for abandoned-onboarding accounts (no silent default).
 
 ---
 
-## v0.30.0 (candidate, gated on teacher users) - Bulk Generation & Teacher-Flow Polish
+## v0.31.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
-Theme: reduce the friction of turning material into quizzes. Builds directly on the v0.27.0 collections spine. **Deferred from v0.29.0** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. Bundles three teacher-flow quiz-preview polish fixes with the two-part generation effort — make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 

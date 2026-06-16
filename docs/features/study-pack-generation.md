@@ -15,6 +15,8 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
   - note `subject`
   - note `tags`
 - `courseProgram` must resolve from the note first. If `notes.courseProgram` is present, it is the source of truth for Study Pack generation. Only fall back to the profile-level `users.courseProgram` when the note has no course/program saved.
+- Static Study Pack output (summary, key concepts, metadata suggestions, and embedded Quick Review) uses the resolved `courseProgram` to calibrate depth, vocabulary, terminology, and examples. It does not use `learnerLevel`.
+- `learnerLevel` remains in `StudyPackGenerationContext` for taker-specific quiz/exam prompts and exam-question pool pre-warm. Static content generation must succeed when that value is null.
 
 ## Output structure
 
@@ -255,7 +257,7 @@ User-facing generation statuses:
 - AI subject output must be a reusable academic subject label, not a specific topic. Topic specificity belongs in tags.
 - Subject should avoid broad umbrella labels like `Engineering`, `Medicine`, `Business`, and `Law`; use a clearer subject such as `Electrical Engineering`, `Clinical Chemistry`, `Accountancy`, or `Criminal Law` when the note supports it.
 - Broad or invalid AI subject suggestions are ignored rather than saved or allowed to fail generation. Combined domain-topic values are normalized back to the domain before save.
-- Generation context should use learner level, course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free.
+- Generation context should use course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free. Learner level must not influence static Study Pack content or metadata suggestions.
 - Onboarding is the exception: it may opt into backend auto-apply for empty metadata fields so the guided flow stays zero-friction.
 
 ## Validation and retry

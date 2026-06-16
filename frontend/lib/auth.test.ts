@@ -6,6 +6,7 @@ import {
   LOGIN_REASON_AUTH_REQUIRED,
   LOGIN_REASON_LOGGED_OUT,
   LOGIN_REASON_SESSION_EXPIRED,
+  needsProfileType,
   resolvePostLoginDestination,
   setAuthUser,
   type AuthUser,
@@ -170,5 +171,21 @@ describe("auth redirect helpers", () => {
       unverifiedUser,
       { search: "?redirect=%2Fnotes%2F123" },
     )).toBe("/verify-email");
+  });
+
+  it("detects users missing a profile type", () => {
+    expect(needsProfileType({ ...verifiedUser, profileType: null })).toBe(true);
+    expect(needsProfileType(verifiedUser)).toBe(false);
+    expect(needsProfileType(null)).toBe(false);
+  });
+
+  it("routes completed users without a profile type back to onboarding", () => {
+    const legacyUser: AuthUser = {
+      ...verifiedUser,
+      profileType: null,
+      onboardingCompletedAt: "2026-03-31T00:05:00Z",
+    };
+
+    expect(resolvePostLoginDestination(legacyUser)).toBe("/onboarding");
   });
 });

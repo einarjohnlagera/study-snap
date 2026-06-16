@@ -3,6 +3,12 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
+import {consumeBulkQueuedFlash} from "@/lib/bulk-generation-flash";
+import {
+  LIBRARY_GENERATION_POLL_MAX_TICKS,
+  LIBRARY_GENERATION_POLL_QUIET_TICKS,
+  STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
+} from "@/lib/study-pack-generation";
 import {
   ArrowUpDown,
   Bookmark,
@@ -463,7 +469,14 @@ export default function LibraryPage() {
   const searchParams = useSearchParams();
   const initialLoadStartedRef = useRef(false);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
+  const bulkGraceUntilRef = useRef(0);
+  // Tracks note ids already shown so rows that arrive later (via the generation
+  // poller) can animate in. null until the first load seeds it, so the initial
+  // list does not animate wholesale.
+  const seenNoteIdsRef = useRef<Set<string> | null>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [autoRefreshActive, setAutoRefreshActive] = useState(false);
+  const [enteringNoteIds, setEnteringNoteIds] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(() => searchParams.get("cp") ?? ALL_COURSE_PROGRAMS);
@@ -534,6 +547,8 @@ export default function LibraryPage() {
         throw notesResult.reason;
       }
       const notes = notesResult.value;
+      // Seed the seen-set from the full load so only later (poller) arrivals animate.
+      seenNoteIdsRef.current = new Set(notes.map((note) => note.id));
       setItems(notes);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setVisibleCount(LIBRARY_PAGE_SIZE);
@@ -544,6 +559,22 @@ export default function LibraryPage() {
       setLoading(false);
     }
   }, [router]);
+
+  // Silent refresh used by the generation poller: updates the note list only,
+  // without toggling the loading skeleton or resetting pagination.
+  const fetchNotesSilently = useCallback(async (): Promise<NoteListItemResponse[] | null> => {
+    if (!getAuthUser()) {
+      return null;
+    }
+    try {
+      const notes = await listNotes();
+      setItems(notes);
+      return notes;
+    } catch {
+      // Keep the current list; the next poll can recover.
+      return null;
+    }
+  }, []);
 
   const loadSavedFilters = useCallback(async () => {
     setSavedFiltersLoading(true);
@@ -578,6 +609,100 @@ export default function LibraryPage() {
     const timeoutId = globalThis.setTimeout(() => setToast(null), 2200);
     return () => globalThis.clearTimeout(timeoutId);
   }, [toast]);
+
+  useEffect(() => {
+    const queuedCount = consumeBulkQueuedFlash();
+    if (queuedCount) {
+      setToast(`Queued ${queuedCount} note${queuedCount === 1 ? "" : "s"} — they'll appear here as they finish generating.`);
+      // Bulk rows do not exist yet at redirect, so seed a grace window during
+      // which the poller will not stop even though nothing is generating yet.
+      bulkGraceUntilRef.current = Date.now()
+        + LIBRARY_GENERATION_POLL_QUIET_TICKS * STUDY_PACK_GENERATION_POLL_INTERVAL_MS;
+      setAutoRefreshActive(true);
+    }
+  }, []);
+
+  // Keep auto-refresh running whenever a visible note is still generating its
+  // Study Pack — this covers single-note generation too, not just bulk.
+  const hasGeneratingNote = useMemo(
+    () => items.some((item) => item.studyPackStatus === "GENERATING"),
+    [items],
+  );
+
+  useEffect(() => {
+    if (hasGeneratingNote) {
+      setAutoRefreshActive(true);
+    }
+  }, [hasGeneratingNote]);
+
+  useEffect(() => {
+    if (!autoRefreshActive) {
+      return undefined;
+    }
+
+    let active = true;
+    let inFlight = false;
+    let quietTicks = 0;
+    let totalTicks = 0;
+    // Seed below zero so the first appearance of any row registers as growth.
+    let highWatermark = -1;
+    const graceUntil = bulkGraceUntilRef.current;
+
+    const tick = async () => {
+      if (!active || inFlight) {
+        return;
+      }
+      inFlight = true;
+      totalTicks += 1;
+      try {
+        const notes = await fetchNotesSilently();
+        if (!active || notes === null) {
+          return;
+        }
+        const anyGenerating = notes.some((item) => item.studyPackStatus === "GENERATING");
+        const grew = notes.length > highWatermark;
+        highWatermark = Math.max(highWatermark, notes.length);
+        const withinGrace = Date.now() < graceUntil;
+        if (anyGenerating || grew || withinGrace) {
+          quietTicks = 0;
+        } else {
+          quietTicks += 1;
+        }
+        if (quietTicks >= LIBRARY_GENERATION_POLL_QUIET_TICKS || totalTicks >= LIBRARY_GENERATION_POLL_MAX_TICKS) {
+          bulkGraceUntilRef.current = 0;
+          setAutoRefreshActive(false);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const intervalId = globalThis.setInterval(() => void tick(), STUDY_PACK_GENERATION_POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      globalThis.clearInterval(intervalId);
+    };
+  }, [autoRefreshActive, fetchNotesSilently]);
+
+  // Animate rows that arrive after the initial load (e.g. bulk-generated notes
+  // surfaced by the poller) so they do not just pop into the list.
+  useEffect(() => {
+    if (seenNoteIdsRef.current === null) {
+      return undefined;
+    }
+    const newIds = items
+      .map((item) => item.id)
+      .filter((id) => !seenNoteIdsRef.current!.has(id));
+    if (newIds.length === 0) {
+      return undefined;
+    }
+    for (const id of newIds) {
+      seenNoteIdsRef.current.add(id);
+    }
+    setEnteringNoteIds(new Set(newIds));
+    const timeoutId = globalThis.setTimeout(() => setEnteringNoteIds(new Set()), 600);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [items]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -1093,6 +1218,12 @@ export default function LibraryPage() {
               items={[
                 { key: "note", label: "Note", description: "Write, import, or generate a note", onSelect: () => router.push("/notes/new") },
                 { key: "import", label: "Import files", description: "Upload several files as draft notes", onSelect: () => router.push("/notes/import?from=library") },
+                ...(authUser?.role === "ADMIN" ? [{
+                  key: "bulk-generate",
+                  label: "Bulk generate",
+                  description: "Generate notes and Study Packs from a list of topics",
+                  onSelect: () => router.push("/library/bulk-generate"),
+                }] : []),
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },
               ]}
             />
@@ -1440,6 +1571,8 @@ export default function LibraryPage() {
                     }}
                     aria-pressed={selectionMode ? isSelected : undefined}
                     className={`flex h-full flex-col justify-between space-y-4 p-4 sm:p-6 ${
+                      enteringNoteIds.has(item.id) ? "motion-fade-enter " : ""
+                    }${
                       selectionMode
                         ? getSelectionCardClassName({
                             selected: isSelected,

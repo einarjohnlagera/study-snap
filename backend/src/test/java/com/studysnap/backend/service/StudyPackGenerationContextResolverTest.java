@@ -148,4 +148,45 @@ class StudyPackGenerationContextResolverTest {
         assertThat(context.subject()).isEqualTo("Computing");
         assertThat(context.tags()).containsExactly("algorithms");
     }
+
+    @Test
+    void resolveForBulkGeneration_usesProfileLearnerLevelForPoolPrewarm() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
+        user.setCourseProgram("Profile Course");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+
+        StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
+                userId,
+                "Nursing",
+                "Maternal Health"
+        );
+
+        assertThat(context.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
+        assertThat(context.courseProgram()).isEqualTo("Nursing");
+        assertThat(context.subject()).isEqualTo("Maternal Health");
+    }
+
+    @Test
+    void resolveForBulkGeneration_allowsMissingProfileLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setCourseProgram("Nursing");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+
+        StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
+                userId,
+                "Nursing",
+                "Maternal Health"
+        );
+
+        assertThat(context.learnerLevel()).isNull();
+    }
 }

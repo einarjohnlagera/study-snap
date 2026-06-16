@@ -46,6 +46,11 @@ public class PostSessionNextStepService {
     private static final String FALLBACK_PATH = "/library";
     private static final String TAKE_CHALLENGE_LABEL = "Take a Challenge";
     private static final String PRACTICE_WEAK_CONCEPTS_LABEL = "Practice Weak Concepts";
+    private static final String RETRY_INCORRECT_QUESTIONS_LABEL = "Retry Incorrect Questions";
+    // Promote Challenge to the primary next step at a strong-majority Quick Review (>= 4/5):
+    // up to this many missed concepts still counts as "strong, step up" with retry kept available
+    // as a secondary action. Two or more misses keeps retry as the primary action.
+    private static final int STRONG_QUICK_REVIEW_MAX_MISSES = 1;
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -135,13 +140,26 @@ public class PostSessionNextStepService {
             AdaptivePracticeQuota adaptivePracticeQuota,
             GoalNudgeResponse goalNudge
     ) {
-        if (!sessionMisses.isEmpty()) {
+        if (sessionMisses.size() > STRONG_QUICK_REVIEW_MAX_MISSES) {
             return retryReviewResponse(
                     studyPack,
                     sessionMisses,
                     adaptivePracticeQuota,
                     goalNudge,
                     challengeSecondaryAction(studyPack)
+            );
+        }
+
+        if (!sessionMisses.isEmpty()) {
+            // Strong-majority Quick Review with a single miss: promote Challenge, keep the missed
+            // question retrievable as a secondary "retry" action so the miss is not lost.
+            return reviewPackResponse(
+                    studyPack,
+                    adaptivePracticeQuota,
+                    goalNudge,
+                    sessionMisses,
+                    "Strong Quick Review. Step up with a Challenge — the one you missed is ready to retry below.",
+                    retryReviewSecondaryAction(studyPack)
             );
         }
 
@@ -208,7 +226,7 @@ public class PostSessionNextStepService {
                 stringify(studyPack.getNoteId()),
                 studyPack.getTitle(),
                 "You have missed questions from this Quick Review ready to retry.",
-                "Retry Incorrect Questions",
+                RETRY_INCORRECT_QUESTIONS_LABEL,
                 pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
                 weakConcepts,
                 adaptivePracticeQuota.available(),
@@ -281,6 +299,14 @@ public class PostSessionNextStepService {
         return new NextStepSecondaryActionResponse(
                 TAKE_CHALLENGE_LABEL,
                 pathOrFallback(studyPack.getNoteId(), CHALLENGE_QUIZ_PATH),
+                false
+        );
+    }
+
+    private NextStepSecondaryActionResponse retryReviewSecondaryAction(StudyPackEntity studyPack) {
+        return new NextStepSecondaryActionResponse(
+                RETRY_INCORRECT_QUESTIONS_LABEL,
+                pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
                 false
         );
     }

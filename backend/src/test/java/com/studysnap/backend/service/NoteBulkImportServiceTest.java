@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidBulkImportRequestException;
+import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,6 +61,8 @@ class NoteBulkImportServiceTest {
     private NoteService noteService;
     @Mock
     private AnalyticsService analyticsService;
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
 
     private NoteBulkImportService service;
 
@@ -70,8 +73,24 @@ class NoteBulkImportServiceTest {
                 noteTextExtractionService,
                 noteService,
                 analyticsService,
+                onboardingGuardService,
                 MAX_BATCH_FILES
         );
+    }
+
+    @Test
+    void importBatch_rejectsMissingProfileTypeBeforeReadingFiles() {
+        UUID userId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        doThrow(exception).when(onboardingGuardService).assertProfileComplete(userId);
+        MockMultipartFile file = textFile("biology.txt");
+
+        assertThatThrownBy(() -> service.importBatch(userId, List.of(file)))
+                .isSameAs(exception);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteTextExtractionService, never()).extractText(any(), any(UUID.class));
+        verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
     }
 
     @Test

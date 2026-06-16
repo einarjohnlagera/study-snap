@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +19,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +42,9 @@ class NoteGenerationServiceTest {
     @Mock
     private ContentModerationService contentModerationService;
 
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
+
     private NoteGenerationService noteGenerationService;
 
     @BeforeEach
@@ -48,7 +54,24 @@ class NoteGenerationServiceTest {
                 subscriptionService,
                 noteGenerationUsageProtectionService,
                 llmStudyPackService,
-                contentModerationService
+                contentModerationService,
+                onboardingGuardService
+        );
+    }
+
+    @Test
+    void generateFromTopic_rejectsMissingProfileTypeBeforeQuotaOrGeneration() {
+        UUID userId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        doThrow(exception).when(onboardingGuardService).assertProfileComplete(userId);
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Ohm's Law", null);
+
+        assertThatThrownBy(() -> noteGenerationService.generateFromTopic(request, userId))
+                .isSameAs(exception);
+
+        verify(noteGenerationUsageProtectionService, org.mockito.Mockito.never()).assertQuotaAvailable(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
         );
     }
 

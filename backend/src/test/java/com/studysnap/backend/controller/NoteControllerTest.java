@@ -4,6 +4,8 @@ import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
+import com.studysnap.backend.dto.BulkGenerateNotesRequest;
+import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
@@ -22,6 +24,7 @@ import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
+import com.studysnap.backend.service.NoteBulkGenerationService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
@@ -56,6 +59,7 @@ class NoteControllerTest {
 
     private static final String CREATOR_USERNAME = "einarjohn";
     private static final String USER_ADMIN_ROLE_GATE = "hasAnyRole('USER','ADMIN')";
+    private static final String ADMIN_ROLE_GATE = "hasRole('ADMIN')";
     private static final String MULTIPART_FIELD_NAME = "files";
     private static final String TEXT_PLAIN_CONTENT_TYPE = "text/plain";
 
@@ -65,6 +69,8 @@ class NoteControllerTest {
     private NoteService noteService;
     @Mock
     private NoteBulkImportService noteBulkImportService;
+    @Mock
+    private NoteBulkGenerationService noteBulkGenerationService;
     @Mock
     private NoteGenerationService noteGenerationService;
     @Mock
@@ -92,6 +98,7 @@ class NoteControllerTest {
                 authService,
                 noteService,
                 noteBulkImportService,
+                noteBulkGenerationService,
                 noteGenerationService,
                 noteTextExtractionService,
                 studyPackService,
@@ -102,6 +109,41 @@ class NoteControllerTest {
                 generatedQuizService,
                 quizSessionHistoryService
         );
+    }
+
+    @Test
+    void bulkGenerate_delegatesWithAdminQuotaBypass() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.ADMIN, true, 1);
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                "Maternal Health",
+                List.of("Prenatal Care"),
+                true,
+                "Nursing",
+                NoteTargetProfileType.BOARD_TAKER
+        );
+        BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(1, 1, 0);
+        when(noteBulkGenerationService.queueBatch(request, userId, false)).thenReturn(expected);
+
+        BulkGenerateNotesResponse response = noteController.bulkGenerate(request, user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteBulkGenerationService).queueBatch(request, userId, false);
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void bulkGenerate_requiresAdminRole() throws NoSuchMethodException {
+        Method method = NoteController.class.getMethod(
+                "bulkGenerate",
+                BulkGenerateNotesRequest.class,
+                AuthenticatedUser.class
+        );
+
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo(ADMIN_ROLE_GATE);
     }
 
     @Test

@@ -71,9 +71,10 @@ Rules:
 - Topic-level specificity belongs in tags and key concepts, not in subject
 - Subject is a reusable library shelf label — it should group many notes, not describe one note
 - The backend strips any subtopic suffix (`Biology – Cell Division` → `Biology`) before saving
-- `learnerLevel` and `courseProgram` are required before saving or generating a Study Pack; the frontend validates and reveals the metadata section with a toast if either is missing.
-- `learnerLevel` and `courseProgram` are pre-filled from the user's profile so the required validation rarely blocks users who completed onboarding.
-- learner level, course/program, current subject, and tags may be passed into Study Pack generation to improve subject suggestion quality without changing the note form flow.
+- `courseProgram` is required before saving or generating a Study Pack and is pre-filled from the user's profile so validation rarely blocks users who completed onboarding.
+- `learnerLevel` remains required on completed profiles for quiz/exam personalization, but it is not a static content-leveling input and a null legacy value must not break note or Study Pack generation.
+- Note-from-topic and Study Pack content use note-first `courseProgram` to calibrate depth, vocabulary, terminology, and examples. They must not use learner level for static content.
+- `learnerLevel` may remain in generation context for quiz/exam generation and exam-question pool pre-warm; content generation must tolerate a null level.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 
 ## Shared Share Behavior Rule
@@ -121,6 +122,7 @@ Create mode:
 - the editor must not wait for the LLM request to finish before navigation.
 - `Generate Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
 - `Generate Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
+- `Generate Note` calibrates the generated draft from that resolved Course / Program, not from the owner's learner level, so copied notes retain a shared academic depth signal.
 - topic note generation is plan-gated separately from Study Pack generation and OCR.
 
 Bulk import behavior:

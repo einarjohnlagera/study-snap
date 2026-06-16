@@ -3,8 +3,10 @@ package com.studysnap.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +24,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -84,6 +87,8 @@ class StudyPackServiceTest {
     private ContentModerationService contentModerationService;
     @Mock
     private ExamQuestionPoolService examQuestionPoolService;
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -114,7 +119,8 @@ class StudyPackServiceTest {
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
-                examQuestionPoolService
+                examQuestionPoolService,
+                onboardingGuardService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -308,6 +314,20 @@ class StudyPackServiceTest {
     }
 
     @Test
+    void startAsyncGenerationFromNote_rejectsMissingProfileTypeBeforeLoadingNote() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        doThrow(exception).when(onboardingGuardService).assertProfileComplete(userId);
+
+        assertThatThrownBy(() -> studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId))
+                .isSameAs(exception);
+
+        verify(noteRepository, never()).findByIdAndOwnerUserId(any(UUID.class), any(UUID.class));
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
     void createFromText_blocksOnlyAfterStudyPackLimitIsReached() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -337,7 +357,8 @@ class StudyPackServiceTest {
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
-                examQuestionPoolService
+                examQuestionPoolService,
+                onboardingGuardService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -413,7 +434,8 @@ class StudyPackServiceTest {
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
                 contentModerationService,
-                examQuestionPoolService
+                examQuestionPoolService,
+                onboardingGuardService
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
@@ -625,6 +647,57 @@ class StudyPackServiceTest {
 
         assertThat(draftNote.getSubject()).isEqualTo("History");
         assertThat(draftNote.getTags()).containsExactly("History", "Battle of Puebla", "Culture");
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_bulkBypassPreservesSubjectAndAppliesAiTitleAndTagsWithoutUsage() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        draftNote.setTitle("Pasted topic");
+        draftNote.setSubject("Admin Subject");
+        draftNote.setTags(new String[0]);
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                "Admin Subject",
+                List.of()
+        );
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "AI Refined Title",
+                "Generated summary",
+                "AI Subject",
+                List.of("ai-tag", "review"),
+                List.of("Key concept"),
+                List.of(),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateStudyPack("draft note content", context)).thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(
+                noteId.toString(),
+                userId,
+                false,
+                false,
+                context,
+                "Admin Subject"
+        );
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
+        assertThat(draftNote.getTitle()).isEqualTo("AI Refined Title");
+        assertThat(draftNote.getSubject()).isEqualTo("Admin Subject");
+        assertThat(draftNote.getTags()).containsExactly("ai-tag", "review");
+        verify(studyPackUsageService, never()).resolveUsage(any(UUID.class), any(OffsetDateTime.class));
+        verify(aiRateLimitService, never()).assertAllowed(any(UUID.class), any(PlanType.class), anyString());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
     @Test
