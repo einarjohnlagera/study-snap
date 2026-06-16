@@ -44,6 +44,7 @@ class PostSessionNextStepServiceTest {
     private static final String SECOND_CONCEPT = "Renal Clearance";
     private static final String CHALLENGE_PATH_SUFFIX = "/challenge-quiz";
     private static final String ADAPTIVE_PATH_SUFFIX = "/adaptive-practice";
+    private static final String QUICK_REVIEW_PATH_SUFFIX = "/quick-review";
     private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 6, 4, 7, 0, 0, 0, ZoneOffset.UTC);
 
     @Mock
@@ -126,7 +127,7 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
-    void getNextStep_returnsRetryReviewForQuickReviewMissesWithChallengeSecondary() {
+    void getNextStep_promotesChallengeForSingleMissQuickReviewWithRetrySecondary() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
@@ -136,8 +137,27 @@ class PostSessionNextStepServiceTest {
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
+        assertThat(response.secondaryAction()).isNotNull();
+        assertThat(response.secondaryAction().actionHref()).endsWith(QUICK_REVIEW_PATH_SUFFIX);
+        assertThat(response.secondaryAction().adaptivePractice()).isFalse();
+    }
+
+    @Test
+    void getNextStep_returnsRetryReviewForMultipleQuickReviewMissesWithChallengeSecondary() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of(FIRST_CONCEPT, SECOND_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of());
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
         assertThat(response.secondaryAction()).isNotNull();
         assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.secondaryAction().adaptivePractice()).isFalse();
