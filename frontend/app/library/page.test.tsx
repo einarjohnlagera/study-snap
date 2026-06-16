@@ -222,6 +222,48 @@ describe("Library page", () => {
     });
   });
 
+  it("auto-refreshes the note list after a bulk queue so generated notes appear without a manual refresh", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    setBulkQueuedFlash(2);
+    (listNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-bulk-1",
+        title: "Newton's Laws",
+        courseProgram: "Physics",
+        subject: "Physics",
+        tags: ["mechanics"],
+        contentPreview: "Generated content...",
+        summaryPreview: "Generated summary.",
+        visibility: "PRIVATE",
+        studyPackId: null,
+        studyPackStatus: "GENERATING",
+        quizCount: null,
+        generatedQuizId: null,
+        generatedQuizQuestionCount: null,
+        createdAt: "2026-03-20T10:00:00Z",
+        updatedAt: "2026-03-21T10:00:00Z",
+      },
+    ]);
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
+    // Reset the call count after the initial load so the assertion measures the
+    // poller specifically (the mock is shared and not auto-cleared between tests).
+    (listNotes as jest.Mock).mockClear();
+
+    // A GENERATING note keeps the poller running, so listNotes is re-fetched
+    // beyond the initial load — the notes appear without a manual refresh.
+    await waitFor(
+      () => expect((listNotes as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(1),
+      { timeout: 5000 },
+    );
+  }, 10000);
+
   it("renders subject stats when the library has enough notes across multiple subjects", async () => {
     (listNotes as jest.Mock).mockResolvedValue(
       notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]),

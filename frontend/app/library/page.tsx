@@ -5,6 +5,11 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
 import {consumeBulkQueuedFlash} from "@/lib/bulk-generation-flash";
 import {
+  LIBRARY_GENERATION_POLL_MAX_TICKS,
+  LIBRARY_GENERATION_POLL_QUIET_TICKS,
+  STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
+} from "@/lib/study-pack-generation";
+import {
   ArrowUpDown,
   Bookmark,
   ChevronDown,
@@ -464,7 +469,9 @@ export default function LibraryPage() {
   const searchParams = useSearchParams();
   const initialLoadStartedRef = useRef(false);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
+  const bulkGraceUntilRef = useRef(0);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [autoRefreshActive, setAutoRefreshActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(() => searchParams.get("cp") ?? ALL_COURSE_PROGRAMS);
@@ -546,6 +553,22 @@ export default function LibraryPage() {
     }
   }, [router]);
 
+  // Silent refresh used by the generation poller: updates the note list only,
+  // without toggling the loading skeleton or resetting pagination.
+  const fetchNotesSilently = useCallback(async (): Promise<NoteListItemResponse[] | null> => {
+    if (!getAuthUser()) {
+      return null;
+    }
+    try {
+      const notes = await listNotes();
+      setItems(notes);
+      return notes;
+    } catch {
+      // Keep the current list; the next poll can recover.
+      return null;
+    }
+  }, []);
+
   const loadSavedFilters = useCallback(async () => {
     setSavedFiltersLoading(true);
     setSavedFiltersUnavailable(false);
@@ -584,8 +607,75 @@ export default function LibraryPage() {
     const queuedCount = consumeBulkQueuedFlash();
     if (queuedCount) {
       setToast(`Queued ${queuedCount} note${queuedCount === 1 ? "" : "s"} — they'll appear here as they finish generating.`);
+      // Bulk rows do not exist yet at redirect, so seed a grace window during
+      // which the poller will not stop even though nothing is generating yet.
+      bulkGraceUntilRef.current = Date.now()
+        + LIBRARY_GENERATION_POLL_QUIET_TICKS * STUDY_PACK_GENERATION_POLL_INTERVAL_MS;
+      setAutoRefreshActive(true);
     }
   }, []);
+
+  // Keep auto-refresh running whenever a visible note is still generating its
+  // Study Pack — this covers single-note generation too, not just bulk.
+  const hasGeneratingNote = useMemo(
+    () => items.some((item) => item.studyPackStatus === "GENERATING"),
+    [items],
+  );
+
+  useEffect(() => {
+    if (hasGeneratingNote) {
+      setAutoRefreshActive(true);
+    }
+  }, [hasGeneratingNote]);
+
+  useEffect(() => {
+    if (!autoRefreshActive) {
+      return undefined;
+    }
+
+    let active = true;
+    let inFlight = false;
+    let quietTicks = 0;
+    let totalTicks = 0;
+    // Seed below zero so the first appearance of any row registers as growth.
+    let highWatermark = -1;
+    const graceUntil = bulkGraceUntilRef.current;
+
+    const tick = async () => {
+      if (!active || inFlight) {
+        return;
+      }
+      inFlight = true;
+      totalTicks += 1;
+      try {
+        const notes = await fetchNotesSilently();
+        if (!active || notes === null) {
+          return;
+        }
+        const anyGenerating = notes.some((item) => item.studyPackStatus === "GENERATING");
+        const grew = notes.length > highWatermark;
+        highWatermark = Math.max(highWatermark, notes.length);
+        const withinGrace = Date.now() < graceUntil;
+        if (anyGenerating || grew || withinGrace) {
+          quietTicks = 0;
+        } else {
+          quietTicks += 1;
+        }
+        if (quietTicks >= LIBRARY_GENERATION_POLL_QUIET_TICKS || totalTicks >= LIBRARY_GENERATION_POLL_MAX_TICKS) {
+          bulkGraceUntilRef.current = 0;
+          setAutoRefreshActive(false);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const intervalId = globalThis.setInterval(() => void tick(), STUDY_PACK_GENERATION_POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      globalThis.clearInterval(intervalId);
+    };
+  }, [autoRefreshActive, fetchNotesSilently]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
