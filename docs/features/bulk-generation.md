@@ -23,6 +23,8 @@ Every batch contains:
 
 Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
 
+Pasting a multi-line block into a topic row splits it into one topic per line (`parsePastedTopics`). Splitting is on newlines only (CRLF-aware) — never on commas, because topics legitimately contain commas. Each line is trimmed, clamped to the topic max length, and has a single leading list marker stripped: bullets (`* - – — • · ‣ ◦`) and numbered prefixes (`1.` / `1)` / `(1)`), each requiring trailing whitespace so real topics like `.NET basics` and `1.5 inch standards` are left intact. The pasted-into row is filled when empty (otherwise the parsed rows are inserted after it), source order is preserved, and the import is capped at the topic max with a visible notice when lines are dropped — never silent truncation. Stripping is paste-time only; typed input is never altered.
+
 ## Compact Layout
 
 Subject is full-width. The remaining visible metadata uses one responsive two-column grid in this order:

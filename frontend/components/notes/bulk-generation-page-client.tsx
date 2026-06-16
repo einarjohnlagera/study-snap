@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
+import { MAX_TOPIC_LENGTH, parsePastedTopics } from "@/lib/bulk-topics";
 import {
   getNoteTargetProfileLabel,
   isTeacherSelectableNoteTarget,
@@ -51,6 +52,7 @@ export function BulkGenerationPageClient() {
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
   const normalizedTopics = useMemo(
     () => topics.map((topic) => topic.value.trim()).filter(Boolean),
     [topics],
@@ -115,6 +117,48 @@ export function BulkGenerationPageClient() {
 
   const removeTopic = (id: number) => {
     setTopics((current) => current.length === 1 ? current : current.filter((topic) => topic.id !== id));
+  };
+
+  const handleTopicPaste = (id: number, event: React.ClipboardEvent<HTMLInputElement>) => {
+    const parsed = parsePastedTopics(event.clipboardData.getData("text"));
+    const targetIsEmpty = (topics.find((topic) => topic.id === id)?.value.trim() ?? "") === "";
+    // Let the browser handle an ordinary single-line paste into a non-empty
+    // field (preserves cursor position); only take over for multi-topic pastes
+    // or a single bulleted line dropped into an empty row.
+    if (parsed.length === 0 || (parsed.length === 1 && !targetIsEmpty)) {
+      return;
+    }
+    event.preventDefault();
+    setPasteNotice(null);
+    setTopics((current) => {
+      const index = current.findIndex((topic) => topic.id === id);
+      if (index === -1) {
+        return current;
+      }
+      const replaceTarget = current[index]!.value.trim() === "";
+      const existingCount = current
+        .filter((topic) => topic.value.trim() && !(replaceTarget && topic.id === id))
+        .length;
+      const remainingSlots = Math.max(0, MAX_BULK_GENERATION_TOPICS - existingCount);
+      const accepted = parsed.slice(0, remainingSlots);
+      const dropped = parsed.length - accepted.length;
+      if (dropped > 0) {
+        setPasteNotice(
+          `Added ${accepted.length} topic${accepted.length === 1 ? "" : "s"} up to the ${MAX_BULK_GENERATION_TOPICS} max — ${dropped} more weren't added.`,
+        );
+      }
+      if (accepted.length === 0) {
+        return current;
+      }
+      const newRows: TopicRow[] = accepted.map((value) => ({ id: nextTopicId.current++, value }));
+      const removeCount = replaceTarget ? 1 : 0;
+      const insertAt = replaceTarget ? index : index + 1;
+      return [
+        ...current.slice(0, insertAt),
+        ...newRows,
+        ...current.slice(insertAt + removeCount),
+      ];
+    });
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -243,7 +287,7 @@ export function BulkGenerationPageClient() {
                 <h2 id="bulk-topics-heading" className="text-sm font-medium text-foreground">
                   Topics <span className="text-red-500" aria-hidden="true">*</span>
                 </h2>
-                <p className="mt-1 text-xs text-foreground/60">Each topic becomes a separate note. Each note&apos;s title and tags are generated automatically — the subject and other batch details apply to every note.</p>
+                <p className="mt-1 text-xs text-foreground/60">Each topic becomes a separate note. Each note&apos;s title and tags are generated automatically — the subject and other batch details apply to every note. Paste a list to add several at once — one topic per line.</p>
               </div>
               <span className={`text-sm font-medium ${
                 normalizedTopics.length > MAX_BULK_GENERATION_TOPICS
@@ -262,7 +306,8 @@ export function BulkGenerationPageClient() {
                     id={`bulk-topic-${topic.id}`}
                     value={topic.value}
                     onChange={(event) => updateTopic(topic.id, event.target.value)}
-                    maxLength={160}
+                    onPaste={(event) => handleTopicPaste(topic.id, event)}
+                    maxLength={MAX_TOPIC_LENGTH}
                     placeholder={index === 0 ? "e.g. Newton's Laws of Motion" : `Topic ${index + 1}`}
                     className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
                   />
@@ -288,6 +333,9 @@ export function BulkGenerationPageClient() {
             </button>
           </section>
 
+          {pasteNotice ? (
+            <p className="text-sm text-amber-600 dark:text-amber-400">{pasteNotice}</p>
+          ) : null}
           {normalizedTopics.length > MAX_BULK_GENERATION_TOPICS ? (
             <p className="text-sm text-red-600 dark:text-red-400">
               You can bulk generate up to {MAX_BULK_GENERATION_TOPICS} topics at once.
