@@ -36,6 +36,8 @@ For Admin and Teacher, this produces `Course / Program · Target Audience`. The 
 
 On a successful queue the page does not show an in-page acknowledgment. It stores a one-shot queued-count flash in `sessionStorage` and redirects to `/library`, where a toast — `Queued N notes — they'll appear here as they finish generating.` — confirms the batch was received. The flash is consumed once on Library mount and does not reappear on refresh. A `sessionStorage` flash is used instead of a query param because the Library rewrites its own URL from filter state, which would strip the param.
 
+The Library auto-refreshes so the queued notes appear without a manual refresh. Consuming the flash starts a silent poller (it re-fetches `listNotes()` only — it does not toggle the loading skeleton or reset pagination). The poller is sustained while any visible note is `GENERATING` or the list is still growing, and it stops after a generous quiet window plus an absolute hard-cap backstop. Because bulk uses throttled **sequential** fan-out, there are recurring windows where no row is generating and none has newly appeared (between one topic finishing and the next topic's row materializing); the quiet window is sized to exceed that inter-topic gap so the batch is not truncated mid-way. A short initial grace covers the redirect moment when no rows exist yet. This is automatic load-on-refresh — not a backend batch/progress signal — so it cannot perfectly distinguish "batch complete" from "long gap"; the manual refresh remains the fallback. The same poller also auto-refreshes single-note generation, which had the identical never-auto-updates gap.
+
 ## Profile-Aware Resolution
 
 The server loads the caller and treats profile data as authoritative for hidden fields:
