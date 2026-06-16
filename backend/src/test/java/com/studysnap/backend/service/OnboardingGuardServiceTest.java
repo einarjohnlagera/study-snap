@@ -4,6 +4,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.UserRepository;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,10 +33,11 @@ class OnboardingGuardServiceTest {
     }
 
     @Test
-    void assertProfileComplete_throwsOnboardingRequiredWhenProfileTypeIsNull() {
+    void assertProfileComplete_throwsOnboardingRequiredForCompletedButNullProfileType() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
+        user.setOnboardingCompletedAt(OffsetDateTime.now());
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> onboardingGuardService.assertProfileComplete(userId))
@@ -46,6 +48,18 @@ class OnboardingGuardServiceTest {
                     assertThat(exception.getCode()).isEqualTo("ONBOARDING_REQUIRED");
                     assertThat(exception.getAction()).isEqualTo("COMPLETE_PROFILE_TYPE");
                 });
+    }
+
+    @Test
+    void assertProfileComplete_exemptsUsersStillMidOnboarding() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        // null profileType + null onboardingCompletedAt = mid-onboarding or copy-on-signup; must not block.
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatCode(() -> onboardingGuardService.assertProfileComplete(userId))
+                .doesNotThrowAnyException();
     }
 
     @Test

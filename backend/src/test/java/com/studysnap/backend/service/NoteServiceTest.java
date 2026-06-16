@@ -386,6 +386,19 @@ class NoteServiceTest {
     }
 
     @Test
+    void copyNote_rejectsMissingProfileTypeBeforeSaving() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        org.mockito.Mockito.doThrow(exception).when(onboardingGuardService).assertProfileComplete(ownerUserId);
+
+        assertThatThrownBy(() -> noteService.copyNote(sourceNoteId.toString(), ownerUserId))
+                .isSameAs(exception);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
     void copyPublicNote_setsAttributionFields() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceOwnerUserId = UUID.randomUUID();
