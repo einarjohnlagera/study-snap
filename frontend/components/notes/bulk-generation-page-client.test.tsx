@@ -37,7 +37,7 @@ jest.mock("@/lib/api", () => ({
 async function fillAdminForm(topicValues: string[]) {
   fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
   fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
-  // Target Audience defaults to "Student" and Learner Level to "College" for admin.
+  // Target Audience defaults to "Student" for admin.
   topicValues.forEach((value, index) => {
     if (index > 0) {
       fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
@@ -56,18 +56,18 @@ describe("BulkGenerationPageClient", () => {
     (bulkGenerateNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue([]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
-    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "", learnerLevel: "COLLEGE" });
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });
     (getAuthUser as jest.Mock).mockReturnValue({ id: "admin-1", role: "ADMIN", profileType: null });
   });
 
-  it("shows the admin metadata fields", async () => {
+  it("shows the admin metadata fields without learner level", async () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
 
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Learner Level/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
   });
@@ -113,7 +113,6 @@ describe("BulkGenerationPageClient", () => {
         makePublic: true,
         courseProgram: "Nursing",
         targetProfileType: "STUDENT",
-        learnerLevel: "COLLEGE",
       });
     });
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));

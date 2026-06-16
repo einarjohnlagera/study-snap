@@ -14,7 +14,6 @@ import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
-import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
@@ -121,8 +120,7 @@ class NoteControllerTest {
                 List.of("Prenatal Care"),
                 true,
                 "Nursing",
-                NoteTargetProfileType.BOARD_TAKER,
-                LearnerLevel.BOARD_EXAM_REVIEW
+                NoteTargetProfileType.BOARD_TAKER
         );
         BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(1, 1, 0);
         when(noteBulkGenerationService.queueBatch(request, userId, false)).thenReturn(expected);

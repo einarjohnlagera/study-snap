@@ -9,6 +9,7 @@ Theme: kill the one-note-at-a-time tax on seeding study content. An admin enters
 ### Shipped
 
 - **Admin Bulk Generation** — Added an ADMIN-only, Note-Create-aligned Library flow for entering one subject plus a discrete topic list, with a compact profile-aware metadata grid and accessible Public toggle. Each topic immediately queues throttled note-content and Study Pack generation on the existing executor; bulk-created notes keep the batch subject while accepting AI-refined titles and tags, optionally become public, isolate individual failures, and bypass ADMIN quota/rate-limit usage without changing single-note enforcement or adding batch-job infrastructure. Queuing redirects to the Library with a confirmation toast (`Queued N notes…`) so the batch is visibly received where the notes will appear.
+- **Generation-context correctness** — Static note and Study Pack content now calibrates depth, vocabulary, terminology, examples, and embedded Quick Review material from the shared note-first Course / Program instead of per-user learner level. Quiz/exam prompts and the exam-question pool retain learner level for taker-specific difficulty; bulk generation no longer asks admins for a learner level and uses the owner's profile level only as best-effort pool context.
 
 ---
 

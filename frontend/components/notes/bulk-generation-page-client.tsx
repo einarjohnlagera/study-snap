@@ -16,12 +16,10 @@ import {
   listCoursePrograms,
   listSubjects,
   type BulkGenerateNotesRequest,
-  type LearnerLevel,
   type NoteTargetProfileType,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
-import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 import {
   getNoteTargetProfileLabel,
   isTeacherSelectableNoteTarget,
@@ -32,10 +30,6 @@ import { requireAdminUser } from "@/lib/route-guards";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 
-const BULK_LEARNER_LEVEL_OPTIONS = LEARNER_LEVEL_OPTIONS.filter(
-  (option) => option.value !== "PERSONAL_LEARNING",
-);
-
 type TopicRow = {
   id: number;
   value: string;
@@ -44,7 +38,6 @@ type TopicRow = {
 export function BulkGenerationPageClient() {
   const router = useRouter();
   const authUser = getAuthUser();
-  const isAdmin = authUser?.role === "ADMIN";
   const isTeacherOrAdmin = isTeacherSelectableNoteTarget(authUser?.profileType, authUser?.role);
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
@@ -52,7 +45,6 @@ export function BulkGenerationPageClient() {
   const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
     mapProfileTypeToNoteTargetProfile(authUser?.profileType),
   );
-  const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("COLLEGE");
   const [topics, setTopics] = useState<TopicRow[]>([{ id: 1, value: "" }]);
   const [makePublic, setMakePublic] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
@@ -86,20 +78,13 @@ export function BulkGenerationPageClient() {
         if (isTeacherOrAdmin) {
           setCourseProgram((current) => current || meResult.value.courseProgram || "");
         }
-        if (
-          isAdmin
-          && meResult.value.learnerLevel
-          && meResult.value.learnerLevel !== "PERSONAL_LEARNING"
-        ) {
-          setLearnerLevel(meResult.value.learnerLevel);
-        }
       }
     });
 
     return () => {
       active = false;
     };
-  }, [isAdmin, isTeacherOrAdmin]);
+  }, [isTeacherOrAdmin]);
 
   const validate = (): string | null => {
     if (!subject.trim()) {
@@ -116,9 +101,6 @@ export function BulkGenerationPageClient() {
     }
     if (isTeacherOrAdmin && !targetProfileType) {
       return "Select a target audience for this batch.";
-    }
-    if (isAdmin && !learnerLevel) {
-      return "Select a learner level for this batch.";
     }
     return null;
   };
@@ -153,7 +135,6 @@ export function BulkGenerationPageClient() {
             targetProfileType: targetProfileType as NoteTargetProfileType,
           }
         : {}),
-      ...(isAdmin ? { learnerLevel: learnerLevel as LearnerLevel } : {}),
     };
 
     setSubmitting(true);
@@ -212,31 +193,8 @@ export function BulkGenerationPageClient() {
                   value={courseProgram}
                   suggestions={courseProgramSuggestions}
                   onChange={setCourseProgram}
-                  learnerLevel={learnerLevel}
                   context="note"
                 />
-              </div>
-            ) : null}
-
-            {isAdmin ? (
-              <div className="space-y-2">
-                <label htmlFor="bulk-learner-level" className="text-sm font-medium text-foreground">
-                  Learner Level <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
-                <select
-                  id="bulk-learner-level"
-                  value={learnerLevel}
-                  onChange={(event) => setLearnerLevel(event.target.value as LearnerLevel | "")}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                >
-                  <option value="">Select a learner level</option>
-                  {BULK_LEARNER_LEVEL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-foreground/60">
-                  Sets the generation difficulty for note content and Study Packs.
-                </p>
               </div>
             ) : null}
 

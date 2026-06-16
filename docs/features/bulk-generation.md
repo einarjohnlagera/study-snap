@@ -19,7 +19,6 @@ Every batch contains:
 - one or more `Topics`, capped at 50
 - `Course / Program` for Teacher and Admin profiles
 - `Target Audience` for Teacher and Admin profiles
-- `Learner Level` for Admin profiles
 - a `Public` toggle
 
 Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
@@ -29,10 +28,9 @@ Topics are discrete rows with `+ Add topic` and per-row removal. They are not no
 Subject is full-width. The remaining visible metadata uses one responsive two-column grid in this order:
 
 1. Course / Program
-2. Learner Level
-3. Target Audience
+2. Target Audience
 
-For Admin, this produces `Course / Program · Learner Level` followed by `Target Audience`. Teacher and non-teacher views use the same grid and omit fields that are not relevant; the grid collapses (`empty:hidden`) when no fields are visible (non-teacher), so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
+For Admin and Teacher, this produces `Course / Program · Target Audience`. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
 
 ## Submission
 
@@ -47,11 +45,10 @@ The server loads the caller and treats profile data as authoritative for hidden 
 | Subject | Request | Request | Request |
 | Course / Program | Profile | Request | Request |
 | Target Audience | Derived from profile type | Request | Request |
-| Learner Level | Profile | Profile | Request |
 
 Profile type maps to note target profile as follows: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, and all other non-teacher profiles -> `STUDENT`. Client-sent overrides for hidden fields are ignored.
 
-Learner Level is generation context, not quiz-only metadata. It influences both note-content generation and Study Pack generation through `StudyPackGenerationContext`.
+Note content and Study Pack content are calibrated by the resolved Course / Program so copied/shared content remains appropriate for everyone in that program. The owner's profile learner level is still carried best-effort in `StudyPackGenerationContext` only for exam-question pool pre-warm; it is not accepted as bulk input and does not level static content.
 
 The endpoint remains ADMIN-only in v0.29.0. Teacher and non-teacher branches are dormant until the role gate is intentionally relaxed.
 
@@ -60,7 +57,7 @@ The endpoint remains ADMIN-only in v0.29.0. Teacher and non-teacher branches are
 The endpoint validates the request, queues one throttled background batch on the existing `studyPackGenerationTaskExecutor`, and returns an immediate acknowledgment. The worker processes each topic independently:
 
 1. Validate the topic through content moderation.
-2. Resolve learner level, course/program, and subject through `StudyPackGenerationContextResolver`.
+2. Resolve course/program and subject through `StudyPackGenerationContextResolver`, retaining the owner's profile learner level only as best-effort exam-pool context.
 3. Generate note content with the existing LLM note-from-topic operation.
 4. Create the note through `NoteService.create` with the topic as its initial title, resolved metadata, and generated content.
 5. Apply PUBLIC visibility when requested.

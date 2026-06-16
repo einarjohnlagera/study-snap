@@ -24,6 +24,11 @@ Output JSON schema:
 
 Rules:
 
+Course / Program calibration
+- Match the Study Pack's depth, vocabulary, terminology, examples, and embedded Quick Review questions to the stated Course / Program.
+- Treat Course / Program as the shared academic level and domain signal (for example, Junior High, Senior High - STEM, Nursing, or Civil Engineering).
+- Do not use or infer a user's learner level when calibrating this static Study Pack content.
+
 Summary
 - max 350 words
 - concise and factual
@@ -86,8 +91,6 @@ Quiz
 - explanation is required and should sound like a tutor
 - explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text
 - for computation questions, explanation must show a short step-by-step solution
-- learner level target: {LEARNER_LEVEL}
-- {LEARNER_LEVEL_GUIDANCE}
 - {TRUE_FALSE_GUIDANCE}
 - {COMPUTATION_GUIDANCE}
 - {TIME_EXPECTATION}

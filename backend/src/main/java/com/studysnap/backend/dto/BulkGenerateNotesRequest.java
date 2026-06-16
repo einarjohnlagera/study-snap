@@ -1,6 +1,5 @@
 package com.studysnap.backend.dto;
 
-import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -17,7 +16,6 @@ public record BulkGenerateNotesRequest(
         boolean makePublic,
         @Size(max = 160, message = "Course/program must be 160 characters or less.")
         String courseProgram,
-        NoteTargetProfileType targetProfileType,
-        LearnerLevel learnerLevel
+        NoteTargetProfileType targetProfileType
 ) {
 }

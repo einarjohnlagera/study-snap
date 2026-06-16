@@ -202,15 +202,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String buildStudyPackDeveloperPrompt(StudyPackGenerationContext context) {
         return promptResources.developerPromptTemplate()
                 .replace("{QUIZ_COUNT}", String.valueOf(STUDY_PACK_QUIZ_QUESTION_COUNT))
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.QUICK_REVIEW))
                 .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(isQuantitativeContext(context, List.of(), null), QuizMode.QUICK_REVIEW))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.QUICK_REVIEW));
     }
 
     private String buildStudyPackUserPrompt(String normalizedNotesText, StudyPackGenerationContext context) {
-        return buildLearnerContextBlock(context)
+        return buildContentContextBlock(context)
                 + "\n"
                 + buildSubjectSuggestionGuidanceBlock(context)
                 + "\nStudy notes:\n"
@@ -549,23 +547,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         input.add(buildTextMessage("system", promptResources.noteGenerationSystemPrompt()));
         input.add(buildTextMessage(
                 "developer",
-                buildNoteGenerationDeveloperPrompt(context)
+                buildNoteGenerationDeveloperPrompt()
         ));
         input.add(buildTextMessage(
                 "user",
-                buildLearnerContextBlock(context) + "\n"
+                buildContentContextBlock(context) + "\n"
                         + "Topic: " + topic + "\n"
                         + "Create a study note draft for this topic."
         ));
         return input;
     }
 
-    private String buildNoteGenerationDeveloperPrompt(StudyPackGenerationContext context) {
-        LearnerLevel learnerLevel = resolveLearnerLevel(context);
+    private String buildNoteGenerationDeveloperPrompt() {
         return promptResources.noteGenerationDeveloperPromptTemplate()
-                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS))
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(learnerLevel))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelNoteGuidance(learnerLevel));
+                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS));
     }
 
     private ArrayNode buildAdaptivePracticeInputMessages(
@@ -1216,18 +1211,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         };
     }
 
-    private String buildLearnerLevelNoteGuidance(LearnerLevel learnerLevel) {
-        return switch (learnerLevel) {
-            case GRADE_SCHOOL -> "Use simple definitions, concrete wording, and familiar examples without heavy jargon.";
-            case JUNIOR_HIGH -> "Keep the note foundational and direct. Highlight the main ideas, basic relationships, and a few concrete examples.";
-            case SENIOR_HIGH -> "Use clear academic language with moderate detail, cause-and-effect links, and key terms the learner should remember.";
-            case COLLEGE -> "Assume basic subject familiarity and include deeper concepts, distinctions, mechanisms, or formulas when they are genuinely relevant.";
-            case BOARD_EXAM_REVIEW -> "Prioritize high-yield distinctions, mechanisms, and review-worthy details that matter for exam preparation.";
-            case PROFESSIONAL -> "Use concise applied language, emphasizing practical implications, systems, and real-world decision points when relevant.";
-            case PERSONAL_LEARNING -> "Keep the note accessible and practical while still preserving the essential terminology and structure of the topic.";
-        };
-    }
-
     private String buildComputationGuidance(boolean quantitativeContext, QuizMode quizMode) {
         if (!quantitativeContext) {
             return "";
@@ -1284,11 +1267,27 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private String buildLearnerContextBlock(StudyPackGenerationContext context) {
+        return buildGenerationContextBlock(context, true);
+    }
+
+    private String buildContentContextBlock(StudyPackGenerationContext context) {
+        return buildGenerationContextBlock(context, false);
+    }
+
+    private String buildGenerationContextBlock(
+            StudyPackGenerationContext context,
+            boolean includeLearnerLevel
+    ) {
         List<String> lines = new ArrayList<>();
-        lines.add("Learner level: " + toLearnerLevelLabel(resolveLearnerLevel(context)));
+        if (includeLearnerLevel) {
+            lines.add("Learner level: " + toLearnerLevelLabel(resolveLearnerLevel(context)));
+        }
         if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
             lines.add("Course / Program: " + context.courseProgram().trim());
             lines.add("Domain constraint: treat the course/program above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines.");
+            if (!includeLearnerLevel) {
+                lines.add("Content calibration: use the Course / Program above to set depth, vocabulary, terminology, and examples. Do not use learner level to calibrate static note or Study Pack content.");
+            }
         }
         if (context != null && context.subject() != null && !context.subject().isBlank()) {
             lines.add("Current subject: " + context.subject().trim());
