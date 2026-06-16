@@ -5,7 +5,6 @@ import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
-import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
@@ -21,9 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -40,23 +37,11 @@ public class NoteBulkGenerationService {
     private static final String COURSE_PROGRAM_REQUIRED_MESSAGE = "Course/program is required.";
     private static final String TARGET_AUDIENCE_REQUIRED_MESSAGE =
             "Target audience is required for teachers and admins.";
-    private static final String LEARNER_LEVEL_REQUIRED_MESSAGE = "Learner level is required for admins.";
-    private static final String PROFILE_LEARNER_LEVEL_REQUIRED_MESSAGE =
-            "Add a learner level to your profile before bulk generating notes.";
     private static final String SUBJECT_REQUIRED_MESSAGE = "Subject is required.";
     private static final String FIELD_TOO_LONG_MESSAGE_TEMPLATE = "%s must be %d characters or less.";
     private static final String MAX_TOPICS_MESSAGE_TEMPLATE = "You can bulk generate up to %d topics at once.";
     private static final String COURSE_PROGRAM_FIELD = "Course/program";
     private static final String SUBJECT_FIELD = "Subject";
-    private static final Set<LearnerLevel> SUPPORTED_TARGET_AUDIENCES = EnumSet.of(
-            LearnerLevel.GRADE_SCHOOL,
-            LearnerLevel.JUNIOR_HIGH,
-            LearnerLevel.SENIOR_HIGH,
-            LearnerLevel.COLLEGE,
-            LearnerLevel.BOARD_EXAM_REVIEW,
-            LearnerLevel.PROFESSIONAL
-    );
-
     private final NoteGenerationService noteGenerationService;
     private final NoteService noteService;
     private final StudyPackService studyPackService;
@@ -146,7 +131,6 @@ public class NoteBulkGenerationService {
     ) {
         StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
                 ownerUserId,
-                batch.learnerLevel(),
                 batch.courseProgram(),
                 batch.subject()
         );
@@ -213,8 +197,8 @@ public class NoteBulkGenerationService {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
 
-        boolean isAdmin = owner.getRole() == UserRole.ADMIN;
-        boolean isTeacherOrAdmin = isAdmin || owner.getProfileType() == ProfileType.TEACHER;
+        boolean isTeacherOrAdmin = owner.getRole() == UserRole.ADMIN
+                || owner.getProfileType() == ProfileType.TEACHER;
         String courseProgram = isTeacherOrAdmin
                 ? requireText(request.courseProgram(), COURSE_PROGRAM_REQUIRED_MESSAGE)
                 : normalizeOptionalText(owner.getCourseProgram());
@@ -224,15 +208,11 @@ public class NoteBulkGenerationService {
         NoteTargetProfileType targetProfileType = isTeacherOrAdmin
                 ? requireTargetProfileType(request.targetProfileType())
                 : mapProfileTypeToNoteTargetProfile(owner.getProfileType());
-        LearnerLevel learnerLevel = isAdmin
-                ? requireAdminLearnerLevel(request.learnerLevel())
-                : requireProfileLearnerLevel(owner.getLearnerLevel());
 
         return new NormalizedBatch(
                 subject,
                 courseProgram,
                 targetProfileType,
-                learnerLevel,
                 request.makePublic(),
                 List.copyOf(items),
                 rejectedTopics
@@ -255,20 +235,6 @@ public class NoteBulkGenerationService {
             throw new InvalidBulkGenerationRequestException(TARGET_AUDIENCE_REQUIRED_MESSAGE);
         }
         return targetProfileType;
-    }
-
-    private LearnerLevel requireAdminLearnerLevel(LearnerLevel learnerLevel) {
-        if (learnerLevel == null || !SUPPORTED_TARGET_AUDIENCES.contains(learnerLevel)) {
-            throw new InvalidBulkGenerationRequestException(LEARNER_LEVEL_REQUIRED_MESSAGE);
-        }
-        return learnerLevel;
-    }
-
-    private LearnerLevel requireProfileLearnerLevel(LearnerLevel learnerLevel) {
-        if (learnerLevel == null) {
-            throw new InvalidBulkGenerationRequestException(PROFILE_LEARNER_LEVEL_REQUIRED_MESSAGE);
-        }
-        return learnerLevel;
     }
 
     private void assertMaxLength(String value, int maxLength, String fieldName) {
@@ -308,7 +274,6 @@ public class NoteBulkGenerationService {
             String subject,
             String courseProgram,
             NoteTargetProfileType targetProfileType,
-            LearnerLevel learnerLevel,
             boolean makePublic,
             List<BulkGenerationItem> items,
             int rejectedTopics

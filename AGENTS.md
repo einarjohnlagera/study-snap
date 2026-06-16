@@ -856,21 +856,22 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
   - `tags` -> fine-grained keywords
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
 - `courseProgram` is required during onboarding and later Learning Profile saves, but remains nullable in storage for pre-existing users until they update it.
-- backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
+- Backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags`. Static note and Study Pack content uses course/program for calibration; learner level remains available for quizzes, exams, and exam-pool pre-warm.
 
 ### LLM Context Builder Rule
 
-- All LLM calls for quiz and Study Pack generation must supply learner-level and course/program context by going through `StudyPackGenerationContextResolver` (backend service) and calling `buildLearnerContextBlock()` in `OpenAiLlmStudyPackService`.
-- `buildLearnerContextBlock()` is the single source of truth for how learner level and course/program are formatted in prompts — do not inline this formatting elsewhere.
-- Never add a raw learner-level or course/program string to a prompt without going through `buildLearnerContextBlock()`.
-- Learner level defaults to `COLLEGE` when the user has no saved `learnerLevel`.
+- All LLM calls must resolve context through `StudyPackGenerationContextResolver` (backend service).
+- Static note and Study Pack content must call the content-context builder, which omits learner level and uses course/program to calibrate depth, vocabulary, terminology, and examples.
+- Quiz and exam prompts must call `buildLearnerContextBlock()`, which includes learner level and course/program for taker-specific difficulty plus domain context.
+- Never inline raw learner-level or course/program formatting in individual prompt builders.
+- Learner level defaults to `COLLEGE` for quiz/exam prompts when the user has no saved `learnerLevel`; note and Study Pack content generation must also work when context learner level is null.
 - Course/program is omitted from the context block when the user has no saved `courseProgram`.
 - In the normal note flow, AI-generated `title`, `subject`, and `tags` must not be persisted before explicit user confirmation.
 - When merging AI tags with existing note tags, always deduplicate case-insensitively after trimming whitespace.
 
 ### Quiz Generation Rule
 
-- Quick Review comes from the Study Pack quiz generated during note generation and should stay lightweight, fast, and learner-level aware.
+- Quick Review comes from the Study Pack quiz generated with static content and should stay lightweight, fast, and course/program-leveled. Per-taker quiz/exam generation remains learner-level aware.
 - Challenge Quiz and Adaptive Practice use separate LLM generation flows and must receive learner-level context, defaulting to `COLLEGE` when the user has no saved learner level.
 - Local quiz UI development may use `QUIZ_GENERATION_MODE=mock` to stub Challenge Quiz, Adaptive Practice, and Board Exam generation without changing Study Pack generation or the default production LLM path.
 - Optional local loading-state testing may add `QUIZ_GENERATION_MOCK_DELAY_MS`, but the default quiz-generation mode must remain real unless explicitly overridden.
@@ -1494,11 +1495,11 @@ These rules exist to prevent the most common forms of context drift across AI co
 ### Learner Level vs Course/Program Anti-Drift
 
 - **Learner Level** and **Course/Program** are separate concerns. Never merge them into a single field, a single UI input, or a single LLM prompt variable.
-- `learnerLevel` controls **difficulty, style, vocabulary** in generated outputs.
-- `courseProgram` provides **domain context** — examples, scenarios, terminology.
-- Both are passed separately to `buildLearnerContextBlock()`. Do not skip one to simplify.
+- Static **note content and Study Pack content are leveled by course/program**, including depth, vocabulary, terminology, examples, and the embedded Quick Review. Shared/copied content must never be calibrated from a per-user learner level.
+- `learnerLevel` controls taker-specific quiz/exam difficulty, explanation depth, vocabulary, and question complexity, and remains in `StudyPackGenerationContext` for exam-question pool pre-warm and `sameLearnerLevel` gating.
+- Quiz/exam prompts receive learner level and course/program separately through `buildLearnerContextBlock()`; content prompts use the content-context builder and omit learner level.
 - Study Pack, Challenge Quiz, Board Exam, and Adaptive Practice generation must use the shared note-first Course/Program resolver: note `courseProgram` wins, profile `courseProgram` is fallback only.
-- Learner Level is required at the user/profile level — never reintroduce per-note learner level columns or treat the field as nullable in generation context. Teacher quiz modal's `targetLearnerLevel` is the only per-generation override.
+- Learner Level is required at the user/profile level for completed accounts, but generation context remains nullable for legacy/best-effort paths. Never reintroduce per-note learner level columns. Teacher quiz modal's `targetLearnerLevel` is the only per-generation override.
 - See `docs/features/profile-learning-context.md` for the full rule set.
 
 ### Upgrade CTA Anti-Drift
@@ -1538,7 +1539,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Quiz Generation Anti-Drift
 
-- `buildLearnerContextBlock()` is the single formatting point for learner level + course/program in LLM prompts. Do not inline these fields in individual quiz or Study Pack service methods.
+- `buildLearnerContextBlock()` is the single formatting point for learner level + course/program in quiz/exam prompts. Static note and Study Pack prompts use the content-context builder, which deliberately excludes learner level.
 - Quiz result statistics (score, performance level, weak concepts) are derived from stored session data only. No LLM calls for stats.
 - Weak concept threshold is `< 60%` accuracy (`WEAK_CONCEPT_THRESHOLD`). Do not change this without a test covering the boundary.
 - `lib/challenge-quiz-results.ts` owns quiz result computation utilities. Reuse them; do not duplicate the logic.

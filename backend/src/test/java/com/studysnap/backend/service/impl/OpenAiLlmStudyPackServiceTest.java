@@ -17,12 +17,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
@@ -67,10 +69,10 @@ class OpenAiLlmStudyPackServiceTest {
             restClient,
             new OpenAiPromptResources(
                 "System prompt",
-                "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Developer prompt with {QUIZ_COUNT} questions. Match depth and terminology to Course / Program. {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 objectMapper.createObjectNode(),
                 "Note generation system prompt",
-                "Note generation developer prompt for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} Built for studying, not just exploring information. Max {MAX_WORDS} words.",
+                "Note generation developer prompt. Match depth and terminology to Course / Program. Built for studying, not just exploring information. Max {MAX_WORDS} words.",
                 "Challenge quiz system prompt",
                 "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Board exam system prompt",
@@ -140,6 +142,37 @@ class OpenAiLlmStudyPackServiceTest {
                 .contains("Only Statement 1 is correct")
                 .contains("Only Statement 2 is correct")
                 .contains("Neither statement is correct");
+    }
+
+    @Test
+    void contentPromptTemplates_useCourseProgramWithoutLearnerLevelPlaceholders() throws IOException {
+        for (String resourcePath : List.of(
+                "prompts/study-pack-v1/note-generation-developer.txt",
+                "prompts/study-pack-v1/developer.txt"
+        )) {
+            String template = new ClassPathResource(resourcePath).getContentAsString(StandardCharsets.UTF_8);
+
+            assertThat(template)
+                    .contains("Course / Program")
+                    .doesNotContain("{LEARNER_LEVEL}")
+                    .doesNotContain("{LEARNER_LEVEL_GUIDANCE}");
+        }
+    }
+
+    @Test
+    void quizAndExamPromptTemplates_keepLearnerLevelPlaceholders() throws IOException {
+        for (String resourcePath : List.of(
+                "prompts/study-pack-v1/challenge-quiz-developer.txt",
+                "prompts/study-pack-v1/adaptive-practice-developer.txt",
+                "prompts/study-pack-v1/long-exam-developer.txt",
+                "prompts/study-pack-v1/board-exam-developer.txt",
+                "prompts/study-pack-v1/interview-practice-developer.txt",
+                "prompts/study-pack-v1/teacher-quiz-developer.txt"
+        )) {
+            String template = new ClassPathResource(resourcePath).getContentAsString(StandardCharsets.UTF_8);
+
+            assertThat(template).contains("{LEARNER_LEVEL}");
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -296,14 +329,14 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateStudyPack_includesLearnerAndSubjectSpecificGuidanceInPrompt() throws JsonProcessingException {
+    void generateStudyPack_usesCourseProgramGuidanceWithoutLearnerLevel() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
 
         service.generateStudyPack(
             "Beam design notes",
             new StudyPackGenerationContext(
-                LearnerLevel.COLLEGE,
+                null,
                 "Civil Engineering",
                 "Engineering",
                 List.of("beams", "load")
@@ -315,10 +348,15 @@ class OpenAiLlmStudyPackServiceTest {
         String requestBody = requestCaptor.getValue();
 
         assertThat(requestBody).contains("Course / Program: Civil Engineering")
+            .contains("Match depth and terminology to Course / Program")
+            .contains("Content calibration: use the Course / Program above to set depth")
             .contains("Current subject: Engineering")
             .contains("Subject guidance: use the specific academic subject or professional discipline")
             .contains("Do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law")
-            .contains("label only, no topic suffix");
+            .contains("label only, no topic suffix")
+            .doesNotContain("Learner level:")
+            .doesNotContain("{LEARNER_LEVEL}")
+            .doesNotContain("{LEARNER_LEVEL_GUIDANCE}");
     }
 
     @Test
@@ -405,7 +443,7 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateNoteFromTopic_usesLearnerContextAndReturnsContent() throws JsonProcessingException {
+    void generateNoteFromTopic_usesCourseProgramContextWithNullLearnerLevel() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("title", "Newton's Laws of Motion");
@@ -427,7 +465,7 @@ class OpenAiLlmStudyPackServiceTest {
         String content = service.generateNoteFromTopic(
                 "Newton's Laws of Motion",
                 new StudyPackGenerationContext(
-                        LearnerLevel.SENIOR_HIGH,
+                        null,
                         "Senior High – STEM",
                         null,
                         List.of("physics")
@@ -447,8 +485,12 @@ class OpenAiLlmStudyPackServiceTest {
         String requestBody = requestCaptor.getValue();
 
         assertThat(requestBody).contains("Topic: Newton's Laws of Motion")
-                .contains("Learner level: Senior High School")
                 .contains("Course / Program: Senior High – STEM")
+                .contains("Match depth and terminology to Course / Program")
+                .contains("Content calibration: use the Course / Program above to set depth")
+                .doesNotContain("Learner level:")
+                .doesNotContain("{LEARNER_LEVEL}")
+                .doesNotContain("{LEARNER_LEVEL_GUIDANCE}")
                 .contains("Built for studying, not just exploring information.");
     }
 
@@ -794,9 +836,12 @@ class OpenAiLlmStudyPackServiceTest {
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());
         assertThat(requestCaptor.getValue())
+                .contains("Learner level: Board Exam Review")
+                .contains("for Board Exam Review")
                 .contains("questionFormat")
                 .contains("\"TRUE_FALSE\"")
-                .contains("[\\\"True\\\", \\\"False\\\"]");
+                .contains("[\\\"True\\\", \\\"False\\\"]")
+                .doesNotContain("{LEARNER_LEVEL}");
     }
 
     @Test

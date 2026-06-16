@@ -144,7 +144,7 @@ The core async flow that touches the most files:
 
 Prompts live in `backend/src/main/resources/prompts/study-pack-v1/`. Each quiz mode has its own `{mode}-developer.txt` + `{mode}-system.txt` pair.
 
-**Generation context** (which learner level / course program the AI uses) is resolved in a shared utility: note-level `courseProgram` is always preferred; user profile `courseProgram` is fallback only. Do not bypass this resolver.
+**Generation context** is resolved in a shared utility: note-level `courseProgram` is always preferred and profile `courseProgram` is fallback only. Static note/Study Pack content uses course/program; learner level remains in context for quizzes, exams, and exam-pool pre-warm. Do not bypass this resolver.
 
 LLM fan-out batches run on a dedicated `llmParallelTaskExecutor`; the main `studyPackGenerationTaskExecutor` must not be passed to `generateLongExamParallel`.
 

@@ -123,7 +123,6 @@ export type BulkGenerateNotesRequest = {
   makePublic: boolean;
   courseProgram?: string;
   targetProfileType?: NoteTargetProfileType;
-  learnerLevel?: LearnerLevel;
 };
 
 export type BulkGenerateNotesResponse = {
