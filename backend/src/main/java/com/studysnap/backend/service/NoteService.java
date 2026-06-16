@@ -97,8 +97,10 @@ public class NoteService {
     private final FeatureGateService featureGateService;
     private final AnalyticsService analyticsService;
     private final ContentModerationService contentModerationService;
+    private final OnboardingGuardService onboardingGuardService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
         NoteEntity entity = new NoteEntity();
         entity.setId(UUID.randomUUID());

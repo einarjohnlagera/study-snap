@@ -1,4 +1,9 @@
-import { redirectToLoginWithCurrentDestination, requireAuthenticatedOnboardedUser, requireVerifiedOnboardedUser } from "./route-guards";
+import {
+  redirectToLoginWithCurrentDestination,
+  requireAdminUser,
+  requireAuthenticatedOnboardedUser,
+  requireVerifiedOnboardedUser,
+} from "./route-guards";
 import { buildLoginPath, getAuthUser, isManualLogoutInProgress } from "./auth";
 
 jest.mock("./auth", () => ({
@@ -8,6 +13,7 @@ jest.mock("./auth", () => ({
   isManualLogoutInProgress: jest.fn(() => false),
   LOGIN_REASON_AUTH_REQUIRED: "auth_required",
   needsOnboarding: jest.fn((authUser) => Boolean(authUser?.emailVerifiedAt) && authUser?.onboardingCompletedAt === null),
+  needsProfileType: jest.fn((authUser) => authUser !== null && authUser.profileType == null),
 }));
 
 describe("route guards", () => {
@@ -37,6 +43,7 @@ describe("route guards", () => {
       id: "user-1",
       emailVerifiedAt: "2026-03-24T00:00:00Z",
       onboardingCompletedAt: null,
+      profileType: null,
     });
 
     expect(requireAuthenticatedOnboardedUser(router)).toBe(false);
@@ -48,10 +55,36 @@ describe("route guards", () => {
       id: "user-1",
       emailVerifiedAt: "2026-03-24T00:00:00Z",
       onboardingCompletedAt: "2026-03-24T00:05:00Z",
+      profileType: "STUDENT",
     });
 
     expect(requireVerifiedOnboardedUser(router)).toBe(true);
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("redirects completed users without a profile type to onboarding", () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      onboardingCompletedAt: "2026-03-24T00:05:00Z",
+      profileType: null,
+    });
+
+    expect(requireVerifiedOnboardedUser(router)).toBe(false);
+    expect(router.replace).toHaveBeenCalledWith("/onboarding");
+  });
+
+  it("sends null-profile admins to onboarding before admin pages", () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "admin-1",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      onboardingCompletedAt: "2026-03-24T00:05:00Z",
+      profileType: null,
+      role: "ADMIN",
+    });
+
+    expect(requireAdminUser(router)).toBe(false);
+    expect(router.replace).toHaveBeenCalledWith("/onboarding");
   });
 
   it("does not redirect when manual logout is in progress", () => {

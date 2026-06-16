@@ -23,12 +23,14 @@ public class NoteGenerationService {
     private final NoteGenerationUsageProtectionService noteGenerationUsageProtectionService;
     private final LlmStudyPackService llmStudyPackService;
     private final ContentModerationService contentModerationService;
+    private final OnboardingGuardService onboardingGuardService;
 
     private static String firstNonBlank(String primary, String fallback) {
         return (primary != null && !primary.isBlank()) ? primary : fallback;
     }
 
     public GenerateNoteFromTopicResponse generateFromTopic(GenerateNoteFromTopicRequest request, UUID userId) {
+        onboardingGuardService.assertProfileComplete(userId);
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
         noteGenerationUsageProtectionService.assertQuotaAvailable(userId, subscriptionService.resolvePlan(userId));

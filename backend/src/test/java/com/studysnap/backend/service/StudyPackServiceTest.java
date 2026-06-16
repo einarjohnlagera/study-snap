@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -85,6 +87,8 @@ class StudyPackServiceTest {
     private ContentModerationService contentModerationService;
     @Mock
     private ExamQuestionPoolService examQuestionPoolService;
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -115,7 +119,8 @@ class StudyPackServiceTest {
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
-                examQuestionPoolService
+                examQuestionPoolService,
+                onboardingGuardService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -309,6 +314,20 @@ class StudyPackServiceTest {
     }
 
     @Test
+    void startAsyncGenerationFromNote_rejectsMissingProfileTypeBeforeLoadingNote() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        doThrow(exception).when(onboardingGuardService).assertProfileComplete(userId);
+
+        assertThatThrownBy(() -> studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId))
+                .isSameAs(exception);
+
+        verify(noteRepository, never()).findByIdAndOwnerUserId(any(UUID.class), any(UUID.class));
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
     void createFromText_blocksOnlyAfterStudyPackLimitIsReached() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -338,7 +357,8 @@ class StudyPackServiceTest {
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
-                examQuestionPoolService
+                examQuestionPoolService,
+                onboardingGuardService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -414,7 +434,8 @@ class StudyPackServiceTest {
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
                 contentModerationService,
-                examQuestionPoolService
+                examQuestionPoolService,
+                onboardingGuardService
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));

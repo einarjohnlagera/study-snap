@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,6 +57,8 @@ class NoteBulkGenerationServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
 
     private NoteBulkGenerationService service;
 
@@ -69,9 +73,29 @@ class NoteBulkGenerationServiceTest {
                 generationContextResolver,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 userRepository,
+                onboardingGuardService,
                 50,
                 0
         );
+    }
+
+    @Test
+    void queueBatch_rejectsMissingProfileTypeBeforeLoadingOwnerOrQueueingWork() {
+        UUID userId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        doThrow(exception).when(onboardingGuardService).assertProfileComplete(userId);
+        BulkGenerateNotesRequest request = request(
+                List.of("Prenatal Care"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.BOARD_TAKER,
+                true
+        );
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, false))
+                .isSameAs(exception);
+
+        verify(userRepository, never()).findById(userId);
+        verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
     }
 
     @Test
@@ -286,6 +310,7 @@ class NoteBulkGenerationServiceTest {
                 generationContextResolver,
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 userRepository,
+                onboardingGuardService,
                 1,
                 0
         );

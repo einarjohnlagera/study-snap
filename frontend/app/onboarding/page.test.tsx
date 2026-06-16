@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import OnboardingPage from "./page";
 import {
   completeOnboarding,
+  completeOnboardingProfileType,
   createNote,
   createStudyPackFromNote,
   generateNoteFromTopic,
@@ -103,6 +104,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeOnboarding: jest.fn(),
+  completeOnboardingProfileType: jest.fn(),
   createNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   generateNoteFromTopic: jest.fn(),
@@ -130,6 +132,7 @@ describe("OnboardingPage", () => {
     (createStudyPackFromNote as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (completeOnboarding as jest.Mock).mockReset();
+    (completeOnboardingProfileType as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateLearningProfileContext as jest.Mock).mockReset();
 
@@ -137,6 +140,7 @@ describe("OnboardingPage", () => {
       id: "user-1",
       email: "note@example.com",
       displayName: "Note",
+      profileType: null,
       emailVerifiedAt: "2026-04-27T00:00:00Z",
       onboardingCompletedAt: null,
       role: "USER",
@@ -182,6 +186,11 @@ describe("OnboardingPage", () => {
       profileType: "STUDENT",
       onboardingCompletedAt: "2026-04-27T00:05:00Z",
     });
+    (completeOnboardingProfileType as jest.Mock).mockResolvedValue({
+      ...baseMe,
+      profileType: "STUDENT",
+      onboardingCompletedAt: "2026-04-27T00:05:00Z",
+    });
     (updateLearningProfileContext as jest.Mock).mockResolvedValue(baseMe);
   });
 
@@ -199,6 +208,7 @@ describe("OnboardingPage", () => {
       id: "user-1",
       email: "note@example.com",
       displayName: "Note",
+      profileType: "STUDENT",
       emailVerifiedAt: "2026-04-27T00:00:00Z",
       onboardingCompletedAt: "2026-04-27T00:05:00Z",
       role: "USER",
@@ -215,6 +225,45 @@ describe("OnboardingPage", () => {
       expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
     });
     expect(getMe).not.toHaveBeenCalled();
+  });
+
+  it("shows only profile-type setup for completed users missing profileType", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      email: "note@example.com",
+      displayName: "Note",
+      profileType: null,
+      emailVerifiedAt: "2026-04-27T00:00:00Z",
+      onboardingCompletedAt: "2026-04-27T00:05:00Z",
+      role: "USER",
+      planType: "FREE",
+      accessToken: "token",
+      refreshToken: "refresh",
+      accessTokenExpiresAt: "2026-04-27T01:00:00Z",
+      refreshTokenExpiresAt: "2026-05-27T01:00:00Z",
+    });
+    (getMe as jest.Mock).mockResolvedValue({
+      ...baseMe,
+      onboardingCompletedAt: "2026-04-27T00:05:00Z",
+      profileType: null,
+    });
+
+    render(<OnboardingPage />);
+
+    expect(await screen.findByText("Choose your profile type")).toBeInTheDocument();
+    expect(screen.getByText("Profile setup")).toBeInTheDocument();
+    expect(screen.queryByText("Step 1 of 5")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set up your learning profile")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Professional"));
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
+
+    await waitFor(() => {
+      expect(completeOnboardingProfileType).toHaveBeenCalledWith({ profileType: "PROFESSIONAL" });
+    });
+    expect(completeOnboarding).not.toHaveBeenCalled();
+    expect(createNote).not.toHaveBeenCalled();
+    expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
   });
 
   it("disables step two Continue when the learner level is cleared", async () => {

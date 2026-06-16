@@ -50,6 +50,7 @@ public class NoteBulkGenerationService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final StudyPackGenerationTaskDispatcher taskDispatcher;
     private final UserRepository userRepository;
+    private final OnboardingGuardService onboardingGuardService;
     private final int maxTopics;
     private final int throttleDelayMs;
 
@@ -62,6 +63,7 @@ public class NoteBulkGenerationService {
             StudyPackGenerationContextResolver generationContextResolver,
             StudyPackGenerationTaskDispatcher taskDispatcher,
             UserRepository userRepository,
+            OnboardingGuardService onboardingGuardService,
             @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
@@ -73,6 +75,7 @@ public class NoteBulkGenerationService {
         this.generationContextResolver = generationContextResolver;
         this.taskDispatcher = taskDispatcher;
         this.userRepository = userRepository;
+        this.onboardingGuardService = onboardingGuardService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
@@ -82,6 +85,7 @@ public class NoteBulkGenerationService {
             UUID ownerUserId,
             boolean enforceLimits
     ) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         UserEntity owner = userRepository.findById(ownerUserId).orElseThrow(UserNotFoundException::new);
         NormalizedBatch batch = normalizeAndValidate(request, owner);
         taskDispatcher.execute(() -> processBatch(batch, ownerUserId, enforceLimits));
