@@ -9,6 +9,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   completeOnboarding,
+  completeOnboardingProfileType,
   createNote,
   createStudyPackFromNote,
   generateNoteFromTopic,
@@ -248,6 +249,9 @@ export default function OnboardingPage() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [studyPackLimitReached, setStudyPackLimitReached] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [profileTypeOnlyMode, setProfileTypeOnlyMode] = useState(false);
+  const [savingProfileType, setSavingProfileType] = useState(false);
+  const [profileTypeSaveError, setProfileTypeSaveError] = useState<string | null>(null);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
@@ -369,7 +373,7 @@ export default function OnboardingPage() {
       router.replace("/verify-email");
       return;
     }
-    if (authUser.onboardingCompletedAt) {
+    if (authUser.onboardingCompletedAt && isOnboardingProfileType(authUser.profileType)) {
       router.replace("/dashboard");
       return;
     }
@@ -380,8 +384,17 @@ export default function OnboardingPage() {
         if (cancelled) {
           return;
         }
-        if (me.onboardingCompletedAt) {
+        if (me.onboardingCompletedAt && isOnboardingProfileType(me.profileType)) {
           router.replace("/dashboard");
+          return;
+        }
+        if (me.onboardingCompletedAt) {
+          shouldTrackAbandonmentRef.current = false;
+          setProfileTypeOnlyMode(true);
+          setDraft({
+            ...createEmptyOnboardingDraft(),
+            currentStep: 1,
+          });
           return;
         }
 
@@ -593,6 +606,7 @@ export default function OnboardingPage() {
   ]);
 
   const selectProfileType = (value: OnboardingProfileType) => {
+    setProfileTypeSaveError(null);
     setDraft((previous) => ({
       ...previous,
       profileType: value,
@@ -602,6 +616,38 @@ export default function OnboardingPage() {
     trackOnboardingEvent("ONBOARDING_V2_PROFILE_SELECTED", {
       profile_type: value,
     });
+  };
+
+  const handleSaveProfileTypeOnly = async () => {
+    if (!profileType || savingProfileType) {
+      return;
+    }
+
+    setSavingProfileType(true);
+    setProfileTypeSaveError(null);
+    try {
+      const me = await completeOnboardingProfileType({ profileType });
+      const authUser = getAuthUser();
+      if (authUser) {
+        setAuthUser({
+          ...authUser,
+          displayName: me.displayName,
+          profileType: me.profileType,
+          emailVerifiedAt: me.emailVerifiedAt,
+          onboardingCompletedAt: me.onboardingCompletedAt,
+          productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+        });
+        clearOnboardingDraft(authUser.id);
+      }
+      shouldTrackAbandonmentRef.current = false;
+      router.replace("/dashboard");
+    } catch (error) {
+      setProfileTypeSaveError(
+        error instanceof Error ? error.message : "Could not save your profile type. Please try again.",
+      );
+    } finally {
+      setSavingProfileType(false);
+    }
   };
 
   const updateCourseProgram = (value: string) => {
@@ -851,10 +897,14 @@ export default function OnboardingPage() {
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
             <CardTitle className="text-2xl leading-tight sm:text-3xl">
-              Welcome to NoteLib. Let&apos;s set things up.
+              {profileTypeOnlyMode
+                ? "Choose your profile type"
+                : "Welcome to NoteLib. Let's set things up."}
             </CardTitle>
             <CardDescription className="text-sm">
-              Select the profile that best matches how you&apos;ll use NoteLib.
+              {profileTypeOnlyMode
+                ? "This keeps NoteLib's generation, dashboard, and note audience settings matched to how you study or teach."
+                : "Select the profile that best matches how you'll use NoteLib."}
             </CardDescription>
           </div>
 
@@ -878,6 +928,9 @@ export default function OnboardingPage() {
               </button>
             ))}
           </div>
+          {profileTypeSaveError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{profileTypeSaveError}</p>
+          ) : null}
         </div>
       );
     }
@@ -1315,10 +1368,12 @@ export default function OnboardingPage() {
           <Button
             type="button"
             className="min-h-12 text-base sm:min-w-40"
-            onClick={() => goToStep(2)}
+            onClick={profileTypeOnlyMode ? () => void handleSaveProfileTypeOnly() : () => goToStep(2)}
             disabled={!canContinueFromStepOne}
+            loading={savingProfileType}
+            loadingText="Saving..."
           >
-            Continue
+            {profileTypeOnlyMode ? "Save Profile Type" : "Continue"}
           </Button>
         </div>
       );
@@ -1457,12 +1512,12 @@ export default function OnboardingPage() {
         <div className="border-b border-border px-5 py-4 sm:px-6 sm:py-4">
           <div className="space-y-2.5">
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/50">
-              Step {currentStep} of 5
+              {profileTypeOnlyMode ? "Profile setup" : `Step ${currentStep} of 5`}
             </p>
             <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
               <div
                 className="motion-progress-bar h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
-                style={{ width: `${(currentStep / 5) * 100}%` }}
+                style={{ width: profileTypeOnlyMode ? "100%" : `${(currentStep / 5) * 100}%` }}
               />
             </div>
           </div>

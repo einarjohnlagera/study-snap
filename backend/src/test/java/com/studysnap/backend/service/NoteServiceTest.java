@@ -22,6 +22,7 @@ import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
@@ -82,6 +83,8 @@ class NoteServiceTest {
     private AnalyticsService analyticsService;
     @Mock
     private ContentModerationService contentModerationService;
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
     private NoteService noteService;
 
     @BeforeEach
@@ -97,7 +100,8 @@ class NoteServiceTest {
                 subscriptionService,
                 featureGateService,
                 analyticsService,
-                contentModerationService
+                contentModerationService,
+                onboardingGuardService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -120,6 +124,26 @@ class NoteServiceTest {
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.DIFFICULTY_SELECTION))).thenReturn(false);
+    }
+
+    @Test
+    void create_rejectsMissingProfileTypeBeforeSaving() {
+        UUID ownerUserId = UUID.randomUUID();
+        ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
+        org.mockito.Mockito.doThrow(exception).when(onboardingGuardService).assertProfileComplete(ownerUserId);
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title",
+                "Subject",
+                null,
+                List.of(),
+                null,
+                "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isSameAs(exception);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
     }
 
     @Test

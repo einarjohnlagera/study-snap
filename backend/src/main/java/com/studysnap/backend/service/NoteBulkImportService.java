@@ -40,6 +40,7 @@ public class NoteBulkImportService {
     private final NoteTextExtractionService noteTextExtractionService;
     private final NoteService noteService;
     private final AnalyticsService analyticsService;
+    private final OnboardingGuardService onboardingGuardService;
     private final int maxBatchFiles;
 
     public NoteBulkImportService(
@@ -47,17 +48,20 @@ public class NoteBulkImportService {
             NoteTextExtractionService noteTextExtractionService,
             NoteService noteService,
             AnalyticsService analyticsService,
+            OnboardingGuardService onboardingGuardService,
             @Value("${note.import.max-batch-files:20}") int maxBatchFiles
     ) {
         this.authService = authService;
         this.noteTextExtractionService = noteTextExtractionService;
         this.noteService = noteService;
         this.analyticsService = analyticsService;
+        this.onboardingGuardService = onboardingGuardService;
         this.maxBatchFiles = Math.clamp(maxBatchFiles, MIN_MAX_BATCH_FILES, Integer.MAX_VALUE);
     }
 
     public BulkImportResultResponse importBatch(UUID userId, List<MultipartFile> files) {
         authService.requireEmailVerified(userId);
+        onboardingGuardService.assertProfileComplete(userId);
         validateFiles(files);
 
         List<BulkImportResultResponse.ImportedNoteResult> created = new ArrayList<>();

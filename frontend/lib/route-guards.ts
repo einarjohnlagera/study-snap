@@ -5,6 +5,7 @@ import {
   isManualLogoutInProgress,
   LOGIN_REASON_AUTH_REQUIRED,
   needsOnboarding,
+  needsProfileType,
 } from "./auth";
 
 type RouterLike = {
@@ -37,7 +38,7 @@ export function requireVerifiedOnboardedUser(
     router.replace("/verify-email");
     return false;
   }
-  if (needsOnboarding(authUser)) {
+  if (needsOnboarding(authUser) || needsProfileType(authUser)) {
     router.replace("/onboarding");
     return false;
   }
@@ -52,7 +53,7 @@ export function requireAuthenticatedOnboardedUser(
     redirectToLoginWithCurrentDestination(router);
     return false;
   }
-  if (needsOnboarding(authUser)) {
+  if (needsOnboarding(authUser) || needsProfileType(authUser)) {
     router.replace("/onboarding");
     return false;
   }
@@ -65,6 +66,10 @@ export function requireAdminUser(
   const authUser = getAuthUser();
   if (!authUser) {
     redirectToLoginWithCurrentDestination(router);
+    return false;
+  }
+  if (needsOnboarding(authUser) || needsProfileType(authUser)) {
+    router.replace("/onboarding");
     return false;
   }
   if (authUser.role !== "ADMIN") {

@@ -185,11 +185,15 @@ export function needsOnboarding(authUser: AuthUser | null): boolean {
   return authUser.onboardingCompletedAt === null;
 }
 
+export function needsProfileType(authUser: AuthUser | null): boolean {
+  return authUser !== null && authUser.profileType == null;
+}
+
 export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
   if (!authUser?.emailVerifiedAt) {
     return "/verify-email";
   }
-  if (needsOnboarding(authUser)) {
+  if (needsOnboarding(authUser) || needsProfileType(authUser)) {
     return "/onboarding";
   }
   return "/dashboard";

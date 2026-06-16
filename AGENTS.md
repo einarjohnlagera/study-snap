@@ -217,6 +217,8 @@ Use these skills before writing prompts, before starting new features, and after
   - `Completion`
 - `Exam Date` is optional and shown inline on the Study Goal step for `BOARD_EXAM`.
 - Onboarding persists `profileType`, optional `examDate`, and `onboardingCompletedAt`.
+- Profile Type is required before creating or generating study content. Client guards are UX only; backend content-creating mutations must enforce this server-side through `ProfileSetupRequiredException` (`ONBOARDING_REQUIRED`) rather than silently defaulting null `profileType`.
+- Users with `onboardingCompletedAt != null` but `profileType == null` must be re-prompted only for Profile Type. Do not force them through learner level, course/program, exam-date, note creation, or Study Pack generation again.
 - Onboarding step 2 collects required `learnerLevel` and required `courseProgram` before the first Study Pack flow can continue.
 - `bio`, `Learning Style`, and reminder preferences are deferred to `/profile` and `/settings`.
 - Profile Type can be edited later in `Profile`.

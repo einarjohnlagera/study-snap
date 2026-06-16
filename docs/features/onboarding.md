@@ -13,8 +13,10 @@ Current onboarding is intentionally low-friction:
 ## Activation Rule
 
 - verified users who have not completed onboarding are routed to `/onboarding`
+- verified users who completed onboarding but are missing `profileType` are routed to `/onboarding` for a focused, blocking profile-type prompt only
 - public pages and anonymous flows are never blocked by onboarding
-- users with `onboardingCompletedAt` already set should be sent to `/dashboard`
+- users with both `onboardingCompletedAt` and `profileType` set should be sent to `/dashboard`
+- backend content-creating mutations enforce profile setup server-side; client guards improve UX but are not the boundary
 
 ## Current Flow
 
@@ -35,8 +37,22 @@ Options:
 - `Student`
 - `Board Taker`
 - `Teacher`
+- `Professional`
 
 This is the only identity-like field collected during onboarding.
+
+### Profile Type Re-prompt
+
+Legacy users may have `onboardingCompletedAt` set while `profileType` is still null.
+
+In that case `/onboarding` renders only Step 1:
+
+- no learner-level or course/program prompt
+- no exam-date prompt
+- no note or Study Pack generation
+- submit uses `POST /auth/onboarding/profile-type`
+
+Do not backfill or silently default `profileType`. The user must choose the correct profile type.
 
 ### Step 2 — Study Goal
 
@@ -193,6 +209,28 @@ Current metadata behavior:
 This happens automatically with no extra onboarding prompt.
 
 This is the guided-flow exception. Normal note generation keeps AI metadata suggestions transient until the user applies them.
+
+## Server-Side Boundary
+
+Profile type is required before these authenticated mutations can create or generate content:
+
+- note creation
+- note-from-topic generation
+- note-owned Study Pack generation
+- bulk generation
+- batch import
+
+The backend throws `ProfileSetupRequiredException` with HTTP `403`, code `ONBOARDING_REQUIRED`, and action `COMPLETE_PROFILE_TYPE` when `profileType` is null.
+
+Do not gate recovery paths:
+
+- `GET /auth/me`
+- `POST /auth/onboarding`
+- `POST /auth/onboarding/profile-type`
+- email verification
+- logout/auth/session endpoints
+- product-onboarding
+- read-only endpoints
 
 ## Product-Onboarding Relationship
 

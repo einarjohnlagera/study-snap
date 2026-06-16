@@ -100,6 +100,7 @@ public class StudyPackService {
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final ContentModerationService contentModerationService;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final OnboardingGuardService onboardingGuardService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -175,6 +176,7 @@ public class StudyPackService {
             StudyPackGenerationContext generationContextOverride,
             String preservedSubject
     ) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         NoteEntity sourceNote = resolveSourceNoteForGeneration(noteIdRaw, ownerUserId, true);
