@@ -180,7 +180,7 @@ export function PublicNoteOwnershipActions({
             <PublicSeoCopyCta
               noteId={noteId}
               label="Copy Study Pack"
-              redirectTarget="quick-review"
+              redirectTarget="generate"
               action="copy"
               analyticsEvent="PUBLIC_NOTE_COPY_CLICKED"
               authModalTitle="Copy this Study Pack"
