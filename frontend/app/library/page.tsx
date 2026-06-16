@@ -470,8 +470,13 @@ export default function LibraryPage() {
   const initialLoadStartedRef = useRef(false);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const bulkGraceUntilRef = useRef(0);
+  // Tracks note ids already shown so rows that arrive later (via the generation
+  // poller) can animate in. null until the first load seeds it, so the initial
+  // list does not animate wholesale.
+  const seenNoteIdsRef = useRef<Set<string> | null>(null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [autoRefreshActive, setAutoRefreshActive] = useState(false);
+  const [enteringNoteIds, setEnteringNoteIds] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedSubject, setSelectedSubject] = useState<string>(() => searchParams.get("subject") ?? ALL_SUBJECTS);
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(() => searchParams.get("cp") ?? ALL_COURSE_PROGRAMS);
@@ -542,6 +547,8 @@ export default function LibraryPage() {
         throw notesResult.reason;
       }
       const notes = notesResult.value;
+      // Seed the seen-set from the full load so only later (poller) arrivals animate.
+      seenNoteIdsRef.current = new Set(notes.map((note) => note.id));
       setItems(notes);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setVisibleCount(LIBRARY_PAGE_SIZE);
@@ -676,6 +683,26 @@ export default function LibraryPage() {
       globalThis.clearInterval(intervalId);
     };
   }, [autoRefreshActive, fetchNotesSilently]);
+
+  // Animate rows that arrive after the initial load (e.g. bulk-generated notes
+  // surfaced by the poller) so they do not just pop into the list.
+  useEffect(() => {
+    if (seenNoteIdsRef.current === null) {
+      return undefined;
+    }
+    const newIds = items
+      .map((item) => item.id)
+      .filter((id) => !seenNoteIdsRef.current!.has(id));
+    if (newIds.length === 0) {
+      return undefined;
+    }
+    for (const id of newIds) {
+      seenNoteIdsRef.current.add(id);
+    }
+    setEnteringNoteIds(new Set(newIds));
+    const timeoutId = globalThis.setTimeout(() => setEnteringNoteIds(new Set()), 600);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [items]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -1544,6 +1571,8 @@ export default function LibraryPage() {
                     }}
                     aria-pressed={selectionMode ? isSelected : undefined}
                     className={`flex h-full flex-col justify-between space-y-4 p-4 sm:p-6 ${
+                      enteringNoteIds.has(item.id) ? "motion-fade-enter " : ""
+                    }${
                       selectionMode
                         ? getSelectionCardClassName({
                             selected: isSelected,
