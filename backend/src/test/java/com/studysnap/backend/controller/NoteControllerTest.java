@@ -61,7 +61,6 @@ class NoteControllerTest {
 
     private static final String CREATOR_USERNAME = "einarjohn";
     private static final String USER_ADMIN_ROLE_GATE = "hasAnyRole('USER','ADMIN')";
-    private static final String ADMIN_ROLE_GATE = "hasRole('ADMIN')";
     private static final String MULTIPART_FIELD_NAME = "files";
     private static final String TEXT_PLAIN_CONTENT_TYPE = "text/plain";
 
@@ -139,7 +138,29 @@ class NoteControllerTest {
     }
 
     @Test
-    void bulkGenerate_requiresAdminRole() throws NoSuchMethodException {
+    void bulkGenerate_delegatesWithUserQuotaEnforcement() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                "Maternal Health",
+                List.of("Prenatal Care"),
+                false,
+                null,
+                null
+        );
+        UUID resultId = UUID.randomUUID();
+        BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(resultId, 1, 1, 0);
+        when(noteBulkGenerationService.queueBatch(request, userId, true)).thenReturn(expected);
+
+        BulkGenerateNotesResponse response = noteController.bulkGenerate(request, user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteBulkGenerationService).queueBatch(request, userId, true);
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void bulkGenerate_requiresUserOrAdminRole() throws NoSuchMethodException {
         Method method = NoteController.class.getMethod(
                 "bulkGenerate",
                 BulkGenerateNotesRequest.class,
@@ -149,7 +170,7 @@ class NoteControllerTest {
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
 
         assertThat(preAuthorize).isNotNull();
-        assertThat(preAuthorize.value()).isEqualTo(ADMIN_ROLE_GATE);
+        assertThat(preAuthorize.value()).isEqualTo(USER_ADMIN_ROLE_GATE);
     }
 
     @Test
@@ -166,6 +187,7 @@ class NoteControllerTest {
                 2,
                 1,
                 List.of("Prenatal Care"),
+                List.of(),
                 OffsetDateTime.now()
         );
         when(bulkGenerationResultService.consumeResult(resultId, userId)).thenReturn(expected);
@@ -177,7 +199,7 @@ class NoteControllerTest {
     }
 
     @Test
-    void getBulkGenerationResult_requiresAdminRole() throws NoSuchMethodException {
+    void getBulkGenerationResult_requiresUserOrAdminRole() throws NoSuchMethodException {
         Method method = NoteController.class.getMethod(
                 "getBulkGenerationResult",
                 UUID.class,
@@ -187,7 +209,7 @@ class NoteControllerTest {
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
 
         assertThat(preAuthorize).isNotNull();
-        assertThat(preAuthorize.value()).isEqualTo(ADMIN_ROLE_GATE);
+        assertThat(preAuthorize.value()).isEqualTo(USER_ADMIN_ROLE_GATE);
     }
 
     @Test

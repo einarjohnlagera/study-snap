@@ -48,6 +48,10 @@ public class BulkGenerationResultEntity {
     @Column(name = "failed_topics", nullable = false, columnDefinition = "jsonb")
     private List<String> failedTopics;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "quota_blocked_topics", nullable = false, columnDefinition = "jsonb")
+    private List<String> quotaBlockedTopics;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }

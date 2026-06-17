@@ -583,6 +583,12 @@ export function NoteEditorForm({
                 Generate a first draft here, then review and edit the content below before saving or generating a Study
                 Pack.
             </p>
+            <p className="text-xs text-foreground/65">
+                Have a list of topics?{" "}
+                <Link href="/library/bulk-generate" className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                    Generate them all at once &rarr;
+                </Link>
+            </p>
             <p className="text-xs text-foreground/50">
                 Your Learning Profile helps tailor the generated note&apos;s depth, terminology, and examples.
             </p>

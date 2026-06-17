@@ -13,6 +13,7 @@ public record BulkGenerationResultResponse(
         int requestedCount,
         int createdCount,
         List<String> failedTopics,
+        List<String> quotaBlockedTopics,
         OffsetDateTime createdAt
 ) {
 }
