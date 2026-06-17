@@ -29,6 +29,7 @@ import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -89,6 +90,7 @@ public class InterviewPracticeService {
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
     private final StudyPackGenerationContextResolver generationContextResolver;
+    private final ConceptHealthService conceptHealthService;
 
     public InterviewPracticeStartResponse startSession(UUID userId, InterviewPracticeStartRequest request) {
         authService.requireEmailVerified(userId);
@@ -208,19 +210,75 @@ public class InterviewPracticeService {
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new InterviewPracticeSessionNotInProgressException();
         }
-        InterviewReadinessReportResponse report = buildReport(session);
+        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        Map<Integer, Integer> selectedChoices =
+                QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, Integer> timeSpent =
+                QuizSessionStateUtils.extractInterviewTimeSpentSeconds(session.getSessionState(), quiz);
+        InterviewReadinessReportResponse report = buildReport(session, quiz, selectedChoices, timeSpent);
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(report.totalQuestions());
         session.setTotalQuestions(report.totalQuestions());
         session.setCorrectAnswers(report.correctAnswers());
         session.setScorePercentage(BigDecimal.valueOf(report.scorePercentage()).setScale(2, RoundingMode.HALF_UP));
-        session.setCompletedAt(OffsetDateTime.now());
-        quickReviewSessionRepository.save(session);
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        session.setCompletedAt(now);
+        QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(
+                QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, Map.of())
+        );
+        recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
         trackAnalytics(userId, AnalyticsEventType.INTERVIEW_PRACTICE_COMPLETED, session.getStudyPackId(), Map.of(
                 ANALYTICS_METADATA_SESSION_ID, session.getId().toString(),
                 ANALYTICS_METADATA_SCORE_PERCENTAGE, report.scorePercentage()
         ));
         return report;
+    }
+
+    private void recordCorrectConceptsForSourcePacks(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            List<String> correctConcepts,
+            OffsetDateTime now
+    ) {
+        if (correctConcepts.isEmpty()) {
+            return;
+        }
+        for (UUID studyPackId : resolveSourceStudyPackIds(session)) {
+            studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                    .ifPresent(studyPack -> conceptHealthService.recordCorrectAnswersForKnownConcepts(
+                            userId,
+                            studyPackId,
+                            correctConcepts,
+                            getKeyConcepts(studyPack),
+                            now
+                    ));
+        }
+    }
+
+    private Set<UUID> resolveSourceStudyPackIds(QuickReviewSessionEntity session) {
+        Set<UUID> studyPackIds = new LinkedHashSet<>();
+        if (session.getStudyPackId() != null) {
+            studyPackIds.add(session.getStudyPackId());
+        }
+        for (InterviewSourceNoteRef sourceNoteRef : QuizSessionStateUtils.extractInterviewSourceNoteRefs(session.getSessionState())) {
+            UUID studyPackId = parseOptionalUuid(sourceNoteRef.studyPackId());
+            if (studyPackId != null) {
+                studyPackIds.add(studyPackId);
+            }
+        }
+        return studyPackIds;
+    }
+
+    private UUID parseOptionalUuid(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(rawId);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     public SimpleMessageResponse forfeitSession(UUID sessionId, UUID userId) {
@@ -317,10 +375,12 @@ public class InterviewPracticeService {
         );
     }
 
-    private InterviewReadinessReportResponse buildReport(QuickReviewSessionEntity session) {
-        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
-        Map<Integer, Integer> timeSpent = QuizSessionStateUtils.extractInterviewTimeSpentSeconds(session.getSessionState(), quiz);
+    private InterviewReadinessReportResponse buildReport(
+            QuickReviewSessionEntity session,
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, Integer> timeSpent
+    ) {
         Map<String, ConceptCounter> counters = new LinkedHashMap<>();
         LinkedHashSet<String> talkingPoints = new LinkedHashSet<>();
         int correctAnswers = 0;
@@ -504,6 +564,10 @@ public class InterviewPracticeService {
 
     private boolean isStudyPackReady(StudyPackEntity studyPack) {
         return studyPack != null && studyPack.getStatus() == StudyPackStatus.DONE;
+    }
+
+    private List<String> getKeyConcepts(StudyPackEntity studyPack) {
+        return studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts();
     }
 
     private int parseChoiceIndex(String selectedChoice) {

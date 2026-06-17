@@ -117,6 +117,49 @@ class ConceptHealthServiceTest {
     }
 
     @Test
+    void recordCorrectAnswersForKnownConcepts_recordsOnlyConceptsPresentInKeyConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, OHMS_LAW_CONCEPT))
+            .thenReturn(Optional.empty());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, RECURSION_CONCEPT))
+            .thenReturn(Optional.empty());
+
+        conceptHealthService.recordCorrectAnswersForKnownConcepts(
+            userId,
+            studyPackId,
+            List.of(" " + OHMS_LAW_CONCEPT + " ", "Free-form label", RECURSION_CONCEPT, RECURSION_CONCEPT),
+            List.of(OHMS_LAW_CONCEPT, " " + RECURSION_CONCEPT + " "),
+            now
+        );
+
+        ArgumentCaptor<ConceptHealthEntity> captor = ArgumentCaptor.forClass(ConceptHealthEntity.class);
+        verify(conceptHealthRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+            .extracting(ConceptHealthEntity::getConcept)
+            .containsExactly(OHMS_LAW_CONCEPT, RECURSION_CONCEPT);
+    }
+
+    @Test
+    void recordCorrectAnswersForKnownConcepts_noopsWhenNoCorrectConceptMatchesKeyConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+
+        conceptHealthService.recordCorrectAnswersForKnownConcepts(
+            userId,
+            studyPackId,
+            List.of("Free-form label"),
+            List.of(OHMS_LAW_CONCEPT),
+            now
+        );
+
+        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackIdAndConcept(any(), any(), any());
+        verify(conceptHealthRepository, never()).save(any());
+    }
+
+    @Test
     void getConceptHealth_marksConceptExactlyThreeDaysOldAsDue() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
