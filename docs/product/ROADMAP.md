@@ -95,11 +95,16 @@ Locked direction:
 
 - **Read-time fallbacks stay; fix the source.** Today only Quick Review, Challenge, and Adaptive Practice write `ConceptHealth` (via `recordCorrectAnswers`), and `ConceptHealth` is the **only** thing the Progress page reads. Long Exam, Board Exam, and Interview Practice produce rich per-session reports (`LongExamMasteryReportResponse` domain breakdown, `InterviewReadinessReportResponse` gaps) that are **ephemeral** (`sessionMetadata` JSON) and never persist — so an exam-taker can grind Board Exams and see a flat Progress page. Wire these results into `ConceptHealth` so they count.
 - **Two write-paths, not three.** Board Exam *is* `LONG_EXAM` session mode (no separate enum) and runs through `LongExamService`; Interview Practice runs through `InterviewPracticeService`. So the recording work lives in those two services, mirroring the existing `recordCorrectAnswers` contract — no new entity, no new quota, no new artifact.
-- **Reconcile two "mastery" grains.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is built on per-**concept** `ConceptHealth`. The mapping (domain/result → concept records) is the hard part and must be designed before writing — don't invent a parallel mastery store.
+- **Reconcile two "mastery" grains.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is built on per-**concept** `ConceptHealth`. The mapping (domain/result → concept records) is the hard part and must be designed before writing — don't invent a parallel mastery store. Shipped in two passes: (1) record fully-correct concepts intersected with the source pack's `keyConcepts` (drop non-matches, no orphan rows); (2) constrain exam generation to tag each question with a separate, schema-enforced `keyConcept` drawn from the source pack's key concepts, leaving the report-facing `concept` label untouched, with a read-time fallback to `concept` for legacy/pool questions.
+- **Weakness counts too, uniformly.** `ConceptHealth` is freshness-only (`lastCorrectAt`), so a concept a user keeps *failing* looks identical to one never practiced. Add a `lastIncorrectAt` weakness signal that **mirrors** the `recordCorrectAnswers` contract (one nullable column, no parallel mastery store) and record missed concepts on completion across **all six** practice modes — Quick Review, Challenge, Adaptive, Long Exam, Board Exam, Interview — not exam-only. Recording weakness for exams alone would create the exact drift this release exists to kill. Progress surfaces a struggling state derived from the two timestamps (latest event wins; self-clears on a clean retake).
 
 Scope:
 
-- **Exam-mode results feed Progress** — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, so Progress reflects all practice. Define the domain→concept mapping first.
+- **Exam-mode results feed Progress** *(shipped)* — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, intersected with the source pack's `keyConcepts`.
+- **Source-constrained key concepts** *(shipped)* — Long Exam and Interview question generation emit a schema-enforced per-question `keyConcept` from the source pack's key concepts; recording prefers it and falls back to the free-form `concept` for legacy/pool questions.
+- **Weakness signal across all modes** *(in progress)* — add `lastIncorrectAt` and record missed concepts on completion in every practice mode; Progress shows a distinct struggling indicator.
+
+Teacher-flow polish and bulk *quiz* generation stay in v0.31.0 (still no teacher users); no readiness work is deferred there.
 
 ---
 
