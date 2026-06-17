@@ -29,7 +29,8 @@ public class BulkGenerationResultService {
             boolean makePublic,
             int requestedCount,
             int createdCount,
-            List<String> failedTopics
+            List<String> failedTopics,
+            List<String> quotaBlockedTopics
     ) {
         BulkGenerationResultEntity entity = new BulkGenerationResultEntity();
         entity.setId(id);
@@ -41,6 +42,7 @@ public class BulkGenerationResultService {
         entity.setRequestedCount(requestedCount);
         entity.setCreatedCount(createdCount);
         entity.setFailedTopics(List.copyOf(failedTopics));
+        entity.setQuotaBlockedTopics(List.copyOf(quotaBlockedTopics));
         entity.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         repository.save(entity);
     }
@@ -69,6 +71,7 @@ public class BulkGenerationResultService {
                 entity.getRequestedCount(),
                 entity.getCreatedCount(),
                 List.copyOf(entity.getFailedTopics()),
+                List.copyOf(entity.getQuotaBlockedTopics()),
                 entity.getCreatedAt()
         );
     }

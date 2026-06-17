@@ -133,7 +133,7 @@ public class NoteController {
     }
 
     @PostMapping("/bulk-generate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BulkGenerateNotesResponse bulkGenerate(
             @Valid @RequestBody BulkGenerateNotesRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -145,7 +145,7 @@ public class NoteController {
     }
 
     @GetMapping("/bulk-generate/results/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BulkGenerationResultResponse getBulkGenerationResult(
             @PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser user

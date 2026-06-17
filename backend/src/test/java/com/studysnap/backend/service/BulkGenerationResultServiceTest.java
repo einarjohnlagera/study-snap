@@ -45,7 +45,8 @@ class BulkGenerationResultServiceTest {
                 true,
                 2,
                 1,
-                List.of("Prenatal Care")
+                List.of("Prenatal Care"),
+                List.of("Quota Topic")
         );
 
         ArgumentCaptor<BulkGenerationResultEntity> captor =
@@ -61,6 +62,7 @@ class BulkGenerationResultServiceTest {
         assertThat(entity.getRequestedCount()).isEqualTo(2);
         assertThat(entity.getCreatedCount()).isEqualTo(1);
         assertThat(entity.getFailedTopics()).containsExactly("Prenatal Care");
+        assertThat(entity.getQuotaBlockedTopics()).containsExactly("Quota Topic");
         assertThat(entity.getCreatedAt()).isNotNull();
     }
 
@@ -82,6 +84,7 @@ class BulkGenerationResultServiceTest {
         assertThat(response.requestedCount()).isEqualTo(2);
         assertThat(response.createdCount()).isEqualTo(1);
         assertThat(response.failedTopics()).containsExactly("Prenatal Care");
+        assertThat(response.quotaBlockedTopics()).containsExactly("Quota Topic");
         verify(repository).delete(entity);
     }
 
@@ -119,6 +122,7 @@ class BulkGenerationResultServiceTest {
         entity.setRequestedCount(2);
         entity.setCreatedCount(1);
         entity.setFailedTopics(List.of("Prenatal Care"));
+        entity.setQuotaBlockedTopics(List.of("Quota Topic"));
         entity.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         return entity;
     }

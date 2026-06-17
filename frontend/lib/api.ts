@@ -141,6 +141,7 @@ export type BulkGenerationResultResponse = {
   requestedCount: number;
   createdCount: number;
   failedTopics: string[];
+  quotaBlockedTopics: string[];
   createdAt: string;
 };
 

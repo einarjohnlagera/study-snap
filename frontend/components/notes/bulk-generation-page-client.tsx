@@ -13,6 +13,7 @@ import {
   ApiRequestError,
   bulkGenerateNotes,
   getMe,
+  getMyPlan,
   listCoursePrograms,
   listSubjects,
   type BulkGenerateNotesRequest,
@@ -27,7 +28,7 @@ import {
   mapProfileTypeToNoteTargetProfile,
   SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
 } from "@/lib/note-target-profile";
-import { requireAdminUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 
@@ -36,10 +37,16 @@ type TopicRow = {
   value: string;
 };
 
+type NoteGenerationQuota = {
+  remaining: number;
+  limit: number;
+};
+
 export function BulkGenerationPageClient() {
   const router = useRouter();
   const authUser = getAuthUser();
   const isTeacherOrAdmin = isTeacherSelectableNoteTarget(authUser?.profileType, authUser?.role);
+  const isAdmin = authUser?.role === "ADMIN";
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
   const [courseProgram, setCourseProgram] = useState("");
@@ -53,13 +60,14 @@ export function BulkGenerationPageClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
+  const [noteGenerationQuota, setNoteGenerationQuota] = useState<NoteGenerationQuota | null>(null);
   const normalizedTopics = useMemo(
     () => topics.map((topic) => topic.value.trim()).filter(Boolean),
     [topics],
   );
 
   useEffect(() => {
-    requireAdminUser(router);
+    requireAuthenticatedOnboardedUser(router);
   }, [router]);
 
   useEffect(() => {
@@ -81,7 +89,8 @@ export function BulkGenerationPageClient() {
       listSubjects("mine"),
       listCoursePrograms("mine"),
       getMe(),
-    ]).then(([subjectsResult, courseProgramsResult, meResult]) => {
+      isAdmin ? Promise.resolve(null) : getMyPlan(),
+    ]).then(([subjectsResult, courseProgramsResult, meResult, planResult]) => {
       if (!active) {
         return;
       }
@@ -94,12 +103,19 @@ export function BulkGenerationPageClient() {
           setCourseProgram((current) => current || meResult.value.courseProgram || "");
         }
       }
+      if (!isAdmin && planResult.status === "fulfilled" && planResult.value) {
+        const remaining = planResult.value.remaining.noteGenerationsRemaining;
+        const limit = planResult.value.limits.noteGenerationsPerMonth;
+        if (typeof remaining === "number" && typeof limit === "number") {
+          setNoteGenerationQuota({ remaining, limit });
+        }
+      }
     });
 
     return () => {
       active = false;
     };
-  }, [isTeacherOrAdmin]);
+  }, [isAdmin, isTeacherOrAdmin]);
 
   const validate = (): string | null => {
     if (!subject.trim()) {
@@ -217,15 +233,23 @@ export function BulkGenerationPageClient() {
 
       <header className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Admin tool
+          Library tool
         </p>
         <h1 className="text-3xl font-semibold text-foreground">Bulk generate notes</h1>
         <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
-          Add one subject and a list of topics. Each topic becomes a study-ready note with its own Study Pack, generated in the background.
+          Add one subject and a list of topics. Each topic becomes its own note and Study Pack in the background, then appears in your Library as it finishes.
         </p>
       </header>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
+        {noteGenerationQuota ? (
+          <Card className="border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+            You have <span className="font-semibold">{noteGenerationQuota.remaining}</span> of{" "}
+            <span className="font-semibold">{noteGenerationQuota.limit}</span> note generations remaining this cycle.
+            Bulk generation stops when that reaches 0.
+          </Card>
+        ) : null}
+
         <Card className="space-y-5 p-5 sm:p-6">
           <div className="space-y-2">
             <label htmlFor="bulk-subject" className="text-sm font-medium text-foreground">

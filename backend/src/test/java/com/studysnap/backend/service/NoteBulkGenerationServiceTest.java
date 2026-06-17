@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -11,6 +13,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -153,6 +156,7 @@ class NoteBulkGenerationServiceTest {
                 eq(true),
                 eq(2),
                 eq(2),
+                eq(List.of()),
                 eq(List.of())
         );
     }
@@ -253,7 +257,51 @@ class NoteBulkGenerationServiceTest {
                 eq(false),
                 eq(2),
                 eq(1),
-                eq(List.of("Rejected Topic"))
+                eq(List.of("Rejected Topic")),
+                eq(List.of())
+        );
+    }
+
+    @Test
+    void queueBatch_classifiesQuotaAndGenerationFailuresForNonAdmins() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.USER, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Healthy Topic", "Over Limit Topic", "Broken Topic"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+                .thenReturn(context);
+        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
+                .thenAnswer(invocation -> {
+                    GenerateNoteFromTopicRequest generationRequest = invocation.getArgument(0);
+                    if ("Over Limit Topic".equals(generationRequest.topic())) {
+                        throw new MonthlyNoteGenerationLimitReachedException();
+                    }
+                    if ("Broken Topic".equals(generationRequest.topic())) {
+                        throw new RuntimeException("generation failed");
+                    }
+                    return new GenerateNoteFromTopicResponse("Healthy content");
+                });
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-healthy"));
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, true);
+
+        verify(noteService).create(any(UpsertNoteRequest.class), eq(userId));
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.STUDENT.name()),
+                eq(false),
+                eq(3),
+                eq(1),
+                eq(List.of("Broken Topic")),
+                eq(List.of("Over Limit Topic"))
         );
     }
 
@@ -287,6 +335,7 @@ class NoteBulkGenerationServiceTest {
                 eq(false),
                 eq(1),
                 eq(1),
+                eq(List.of()),
                 eq(List.of())
         );
     }
@@ -316,7 +365,8 @@ class NoteBulkGenerationServiceTest {
                 eq(false),
                 eq(2),
                 eq(0),
-                eq(List.of("Topic One", "Topic Two"))
+                eq(List.of("Topic One", "Topic Two")),
+                eq(List.of())
         );
     }
 

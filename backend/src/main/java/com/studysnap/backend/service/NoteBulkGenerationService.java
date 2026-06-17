@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -104,6 +105,7 @@ public class NoteBulkGenerationService {
     private void processBatch(UUID resultId, NormalizedBatch batch, UUID ownerUserId, boolean enforceLimits) {
         AtomicInteger createdCount = new AtomicInteger();
         List<String> failedTopics = new ArrayList<>();
+        List<String> quotaBlockedTopics = new ArrayList<>();
 
         try {
             StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
@@ -117,7 +119,11 @@ public class NoteBulkGenerationService {
                     processItem(batch, item, ownerUserId, enforceLimits, context);
                     createdCount.incrementAndGet();
                 } catch (RuntimeException exception) {
-                    failedTopics.add(item.topic());
+                    if (exception instanceof MonthlyNoteGenerationLimitReachedException) {
+                        quotaBlockedTopics.add(item.topic());
+                    } else {
+                        failedTopics.add(item.topic());
+                    }
                     log.warn(
                             "action=bulk_generate_note outcome=failed topic={} subject={} ownerUserId={}",
                             item.topic(),
@@ -131,6 +137,7 @@ public class NoteBulkGenerationService {
         } catch (RuntimeException exception) {
             failedTopics.clear();
             failedTopics.addAll(batch.items().stream().map(BulkGenerationItem::topic).toList());
+            quotaBlockedTopics.clear();
             log.warn(
                     "action=bulk_generate_batch outcome=failed_before_loop accepted={} subject={} ownerUserId={}",
                     batch.items().size(),
@@ -149,7 +156,8 @@ public class NoteBulkGenerationService {
                         batch.makePublic(),
                         batch.items().size(),
                         createdCount.get(),
-                        failedTopics
+                        failedTopics,
+                        quotaBlockedTopics
                 );
             } catch (RuntimeException exception) {
                 log.warn(
@@ -161,10 +169,11 @@ public class NoteBulkGenerationService {
                 );
             }
             log.info(
-                    "action=bulk_generate_batch outcome=completed accepted={} created={} failed={} ownerUserId={}",
+                    "action=bulk_generate_batch outcome=completed accepted={} created={} failed={} quotaBlocked={} ownerUserId={}",
                     batch.items().size(),
                     createdCount.get(),
                     failedTopics.size(),
+                    quotaBlockedTopics.size(),
                     ownerUserId
             );
         }
