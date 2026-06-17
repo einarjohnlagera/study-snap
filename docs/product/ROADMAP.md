@@ -6,15 +6,15 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.29.1 - Bulk Generation Polish` is the release currently in progress.
+`v0.29.1 - Bulk Generation Polish` is the current documentation baseline (last released).
 
-`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the current documentation baseline (last released).
+`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the previous baseline.
 
-`v0.28.0 - Feature Discoverability & Activation` is the previous baseline.
+`v0.28.0 - Feature Discoverability & Activation` is the release before that.
 
 `v0.27.0 - Material Import & Collections` is the release before that.
 
-`v0.26.1 - Guidance System` is the release before that.
+No release is currently in progress. Next candidate: `v0.30.0 - Readiness Signals` (see section below).
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -71,7 +71,7 @@ Locked direction:
 
 ---
 
-## v0.29.1 - Bulk Generation Polish (in progress)
+## v0.29.1 - Bulk Generation Polish (released)
 
 Base branch for this release: `releases/v0.29.1`.
 

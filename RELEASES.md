@@ -2,7 +2,7 @@
 
 ## v0.29.1 - Bulk Generation Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: follow-up polish on the v0.29.0 bulk-generation flow. Primary item: honest **partial-outcome reporting** — when a topic's content generation fails, no note row is created (correct — a note without content is not persisted), but the immediate `Queued N notes` toast over-promises before background work finishes. Surface the real outcome so the count stays honest. This uses one narrow terminal-outcome receipt exception; no batch-job entity, live progress table, or status enum is allowed. See `docs/product/ROADMAP.md` for full scope.
 
