@@ -82,6 +82,43 @@ public final class QuizSessionReviewUtils {
                 .toList();
     }
 
+    public static List<String> computeFullyCorrectKeyConcepts(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        if (quiz == null || quiz.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, ConceptCounter> counters = new LinkedHashMap<>();
+        for (int index = 0; index < quiz.size(); index++) {
+            QuizItem item = quiz.get(index);
+            if (item == null) {
+                continue;
+            }
+            String concept = normalizeConcept(effectiveKeyConcept(item));
+            ConceptCounter counter = counters.computeIfAbsent(concept, ignored -> new ConceptCounter());
+            counter.totalQuestions += 1;
+            if (isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices)) {
+                counter.correctAnswers += 1;
+            }
+        }
+
+        return counters.entrySet().stream()
+                .filter(entry -> entry.getValue().totalQuestions > 0)
+                .filter(entry -> entry.getValue().correctAnswers == entry.getValue().totalQuestions)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    private static String effectiveKeyConcept(QuizItem item) {
+        if (item.keyConcept() != null && !item.keyConcept().isBlank()) {
+            return item.keyConcept();
+        }
+        return item.concept();
+    }
+
     private static String normalizeConcept(String concept) {
         if (concept == null) {
             return UNKNOWN_CONCEPT_LABEL;

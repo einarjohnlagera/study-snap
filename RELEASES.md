@@ -8,7 +8,8 @@ Theme: make Progress an honest, complete readiness picture for students and exam
 
 ### Shipped
 
-- **Exam practice now feeds Progress** — Long Exam, Board Exam, and Interview Practice completions now record fully-correct concepts into `ConceptHealth` so Progress reflects exam-mode practice. Recording is constrained to concepts that exactly match a source Study Pack's `keyConcepts`, skips missing/unreadable source packs, and preserves the existing Progress read path while a later source-constrained prompt pass remains deferred.
+- **Exam practice now feeds Progress** — Long Exam, Board Exam, and Interview Practice completions now record fully-correct concepts into `ConceptHealth` so Progress reflects exam-mode practice. Recording is constrained to concepts that exactly match a source Study Pack's `keyConcepts`, skips missing/unreadable source packs, and preserves the existing Progress read path.
+- **Exam questions carry source key concepts** — Long Exam and Interview Practice generation now adds a separate per-question `keyConcept` field, schema-constrained to the source Study Pack's key concepts, while leaving the report-facing `concept` labels unchanged. Completion recording now prefers `keyConcept` and falls back to legacy `concept` for old sessions or pre-warmed pool questions, completing the Readiness Signals source-side fix without fuzzy matching, new storage, or Progress read changes.
 
 ---
 

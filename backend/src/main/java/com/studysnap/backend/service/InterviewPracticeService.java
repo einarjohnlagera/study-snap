@@ -224,8 +224,10 @@ public class InterviewPracticeService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(
-                QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, Map.of())
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectKeyConcepts(
+                quiz,
+                selectedChoices,
+                Map.of()
         );
         recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
         trackAnalytics(userId, AnalyticsEventType.INTERVIEW_PRACTICE_COMPLETED, session.getStudyPackId(), Map.of(

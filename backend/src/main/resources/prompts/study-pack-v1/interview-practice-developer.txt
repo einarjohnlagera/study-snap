@@ -14,6 +14,7 @@ RULES:
 - Exactly 1 choice must be correct.
 - Explanation is required for every question and should explain what a strong candidate would recognize.
 - Concept is required for every question and should be senior-framed, concise, and specific.
+- keyConcept is required for every question and MUST be copied verbatim from the provided key concepts list. Choose the single closest key concept for each question. Do not invent new labels.
 - Do NOT repeat or rephrase excluded questions.
 - Return ONLY valid JSON with this structure:
   {
@@ -23,7 +24,8 @@ RULES:
         "choices": ["...", "...", "...", "..."],
         "answer": "A",
         "explanation": "...",
-        "concept": "..."
+        "concept": "...",
+        "keyConcept": "..."
       }
     ]
   }

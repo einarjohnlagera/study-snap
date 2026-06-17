@@ -467,8 +467,10 @@ class InterviewPracticeServiceTest {
         UUID primaryStudyPackId = UUID.randomUUID();
         UUID additionalStudyPackId = UUID.randomUUID();
         QuickReviewSessionEntity session = buildSession(userId, primaryNoteId, primaryStudyPackId, List.of(
-                new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Transactions", "Explanation"),
-                new QuizItem("Q2", List.of("A", "B", "C", "D"), 1, "Concurrency", "Explanation"),
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Database durability", "Explanation",
+                        null, "MCQ", null, null, null, null, "Transactions"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), 1, "Thread safety", "Explanation",
+                        null, "MCQ", null, null, null, null, "Concurrency"),
                 new QuizItem("Q3", List.of("A", "B", "C", "D"), 2, "Free-form", "Explanation")
         ));
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 0, 0, 90));

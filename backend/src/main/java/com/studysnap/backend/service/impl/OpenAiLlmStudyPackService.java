@@ -508,7 +508,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 item.questionType(),
                 item.workingSolution(),
                 item.correctIndices(),
-                questionGroup
+                questionGroup,
+                item.keyConcept()
         );
     }
 
@@ -774,11 +775,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
-    private JsonNode buildGeneratedQuizSchema(int questionCount, boolean allowTrueFalse) {
+    private JsonNode buildGeneratedQuizSchema(
+            int questionCount,
+            boolean allowTrueFalse,
+            List<String> keyConceptEnum
+    ) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "object");
         root.put("additionalProperties", false);
         root.putArray("required").add("questions");
+        List<String> normalizedKeyConceptEnum = sanitizeConceptList(keyConceptEnum);
 
         ObjectNode properties = root.putObject("properties");
         ObjectNode quiz = properties.putObject("questions");
@@ -797,6 +803,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         required.add("concept");
         required.add("questionType");
         required.add("workingSolution");
+        if (!normalizedKeyConceptEnum.isEmpty()) {
+            required.add("keyConcept");
+        }
         if (allowTrueFalse) {
             required.add("questionFormat");
             required.add("questionGroup");
@@ -814,6 +823,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         answerEnum.add("D");
         itemProps.putObject("explanation").put("type", "string").put("minLength", 1);
         itemProps.putObject("concept").put("type", "string").put("minLength", 1);
+        if (!normalizedKeyConceptEnum.isEmpty()) {
+            ObjectNode keyConcept = itemProps.putObject("keyConcept");
+            keyConcept.put("type", "string");
+            ArrayNode keyConceptValues = keyConcept.putArray("enum");
+            normalizedKeyConceptEnum.forEach(keyConceptValues::add);
+        }
         if (allowTrueFalse) {
             ObjectNode questionFormat = itemProps.putObject("questionFormat");
             ArrayNode questionFormatTypes = questionFormat.putArray("type");
@@ -1141,6 +1156,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         throw invalidOutput("The quiz service returned an invalid concept. Please try again.");
     }
 
+    private String normalizeKeyConceptOrNull(String keyConcept, List<String> allowedKeyConcepts) {
+        if (allowedKeyConcepts == null || allowedKeyConcepts.isEmpty()) {
+            return null;
+        }
+        if (keyConcept == null) {
+            return null;
+        }
+        String normalized = keyConcept.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return allowedKeyConcepts.contains(normalized) ? normalized : null;
+    }
+
     private String normalizeAndValidateExplanation(String explanation, String invalidMessage) {
         String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(explanation);
         if (!StringNormalizationUtils.containsAlphaNumeric(normalized)) {
@@ -1436,6 +1465,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 "note_lib_interview_practice",
                 "Interview practice generation",
                 normalizedKeyConcepts,
+                normalizedKeyConcepts,
                 false
         );
     }
@@ -1570,6 +1600,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_long_exam",
                 "Long exam generation",
+                normalizedKeyConcepts,
                 normalizedKeyConcepts
         );
     }
@@ -1691,6 +1722,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_long_exam",
                 "Long exam generation batch",
+                normalizedKeyConcepts,
                 normalizedKeyConcepts
         );
     }
@@ -1726,7 +1758,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String operationLabel,
             List<String> conceptFallbackPool
     ) {
-        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, true);
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, List.of(), true);
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            List<String> keyConceptEnum
+    ) {
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, keyConceptEnum, true);
     }
 
     private List<QuizItem> generateQuizWithSchema(
@@ -1737,6 +1780,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> conceptFallbackPool,
             boolean allowTrueFalse
     ) {
+        return generateQuizWithSchema(inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, List.of(), allowTrueFalse);
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            List<String> keyConceptEnum,
+            boolean allowTrueFalse
+    ) {
         String model = requireConfiguredModel();
         return generateQuizWithSchema(
                 model,
@@ -1745,6 +1800,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 schemaName,
                 operationLabel,
                 conceptFallbackPool,
+                keyConceptEnum,
                 allowTrueFalse
         );
     }
@@ -1764,6 +1820,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 schemaName,
                 operationLabel,
                 conceptFallbackPool,
+                List.of(),
                 true
         );
     }
@@ -1777,6 +1834,19 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> conceptFallbackPool,
             boolean allowTrueFalse
     ) {
+        return generateQuizWithSchema(model, inputMessages, questionCount, schemaName, operationLabel, conceptFallbackPool, List.of(), allowTrueFalse);
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            String model,
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            List<String> keyConceptEnum,
+            boolean allowTrueFalse
+    ) {
         return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
                 model,
                 inputMessages,
@@ -1784,6 +1854,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 schemaName,
                 operationLabel,
                 conceptFallbackPool,
+                keyConceptEnum,
                 allowTrueFalse
         ));
     }
@@ -1795,13 +1866,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String schemaName,
             String operationLabel,
             List<String> conceptFallbackPool,
+            List<String> keyConceptEnum,
             boolean allowTrueFalse
     ) {
+        List<String> normalizedKeyConceptEnum = sanitizeConceptList(keyConceptEnum);
         JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
                 model,
                 inputMessages,
                 quizOperation(schemaName, operationLabel),
-                buildGeneratedQuizSchema(questionCount, allowTrueFalse),
+                buildGeneratedQuizSchema(questionCount, allowTrueFalse, normalizedKeyConceptEnum),
                 PromptGeneratedQuiz.class
         );
         PromptGeneratedQuiz promptGeneratedQuiz = response.payload();
@@ -1830,7 +1903,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.questionType(),
                     item.workingSolution(),
                     item.correctIndices(),
-                    item.questionGroup()
+                    item.questionGroup(),
+                    normalizeKeyConceptOrNull(item.keyConcept(), normalizedKeyConceptEnum)
             ));
         }
         return normalizeMatchingGroups(quizItems, operationLabel);
@@ -2147,7 +2221,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String questionType,
             String workingSolution,
             List<Integer> correctIndices,
-            String questionGroup
+            String questionGroup,
+            String keyConcept
     ) {
     }
 

@@ -176,7 +176,8 @@ public final class QuizVersionShuffleUtils {
                 question.questionType(),
                 question.workingSolution(),
                 correctIndices,
-                question.questionGroup()
+                question.questionGroup(),
+                question.keyConcept()
         );
     }
 
