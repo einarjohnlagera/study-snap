@@ -147,7 +147,7 @@ Post-quiz goal nudges reinforce goals after off-goal practice:
 
 ## Progress Signals
 
-Completing Long Exam, Board Exam, or Interview Practice records concept-level signals into `ConceptHealth`, which is the only store `/progress` reads. The write uses the same fully-correct concept contract as Quick Review and Challenge Quiz, then intersects those concepts with each source Study Pack's `keyConcepts` before persisting. Concepts that do not exactly match a source pack key concept are ignored, and missing or unreadable source packs are skipped so completing the exam still returns its report.
+Completing Long Exam, Board Exam, or Interview Practice records concept-level signals into `ConceptHealth`, which is the only store `/progress` reads. The write uses the same fully-correct concept contract as Quick Review and Challenge Quiz, then intersects those concepts with each source Study Pack's `keyConcepts` before persisting. New Long Exam and Interview Practice questions carry a separate `keyConcept` for Progress recording; it is distinct from the report-facing `concept`, which remains the free-form domain/readiness label used in exam reports. Legacy questions without `keyConcept` fall back to `concept`. Concepts that do not exactly match a source pack key concept are ignored, and missing or unreadable source packs are skipped so completing the exam still returns its report.
 
 ## Analytics
 

@@ -28,13 +28,21 @@ class QuizVersionShuffleUtilsTest {
                 List.of("Distractor A", "Correct", "Distractor B", "Distractor C"),
                 1,
                 "Versioning",
-                "The correct choice must follow the shuffled text."
+                "The correct choice must follow the shuffled text.",
+                null,
+                "MCQ",
+                null,
+                null,
+                null,
+                null,
+                "Versioned key concept"
         );
 
         QuizItem shuffled = QuizVersionShuffleUtils.shuffleQuestionsAndChoices(List.of(question), "C", "quiz-2").getFirst();
 
         assertThat(shuffled.answer()).isEqualTo("Correct");
         assertThat(shuffled.choices().get(shuffled.correctIndex())).isEqualTo("Correct");
+        assertThat(shuffled.keyConcept()).isEqualTo("Versioned key concept");
     }
 
     @Test

@@ -393,8 +393,10 @@ public class LongExamService {
         session.setSessionMetadata(buildMasteryReportMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(
-                QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices)
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectKeyConcepts(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices
         );
         recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
         if (QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {

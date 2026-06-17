@@ -54,6 +54,47 @@ class QuizItemDeserializationTest {
     }
 
     @Test
+    void deserializesAndSerializesKeyConcept() throws Exception {
+        QuizItem item = objectMapper.readValue(
+                """
+                {
+                  "question": "Which stage generates most ATP?",
+                  "choices": ["Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"],
+                  "correctIndex": 2,
+                  "concept": "Energy systems",
+                  "keyConcept": "Electron transport chain",
+                  "explanation": "The electron transport chain produces most ATP."
+                }
+                """,
+                QuizItem.class
+        );
+
+        String serialized = objectMapper.writeValueAsString(item);
+
+        assertThat(item.concept()).isEqualTo("Energy systems");
+        assertThat(item.keyConcept()).isEqualTo("Electron transport chain");
+        assertThat(serialized).contains("\"keyConcept\":\"Electron transport chain\"");
+    }
+
+    @Test
+    void deserializesMissingKeyConceptAsNull() throws Exception {
+        QuizItem item = objectMapper.readValue(
+                """
+                {
+                  "question": "What is voltage?",
+                  "choices": ["Current", "Potential difference", "Resistance", "Power"],
+                  "correctIndex": 1,
+                  "concept": "Voltage",
+                  "explanation": "Voltage is electric potential difference."
+                }
+                """,
+                QuizItem.class
+        );
+
+        assertThat(item.keyConcept()).isNull();
+    }
+
+    @Test
     void deserializesTrueFalseFormatAndLetterAnswer() throws Exception {
         QuizItem item = objectMapper.readValue(
                 """
@@ -246,5 +287,40 @@ class QuizItemDeserializationTest {
 
         assertThat(first).isNotEqualTo(differentGroup);
         assertThat(first.hashCode()).isNotEqualTo(differentGroup.hashCode());
+    }
+
+    @Test
+    void equalityIncludesKeyConcept() {
+        QuizItem first = new QuizItem(
+                "Which stage generates most ATP?",
+                List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
+                2,
+                "Energy systems",
+                "The electron transport chain produces most ATP.",
+                null,
+                "MCQ",
+                null,
+                null,
+                null,
+                null,
+                "Electron transport chain"
+        );
+        QuizItem differentKeyConcept = new QuizItem(
+                "Which stage generates most ATP?",
+                List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
+                2,
+                "Energy systems",
+                "The electron transport chain produces most ATP.",
+                null,
+                "MCQ",
+                null,
+                null,
+                null,
+                null,
+                "ATP synthesis"
+        );
+
+        assertThat(first).isNotEqualTo(differentKeyConcept);
+        assertThat(first.hashCode()).isNotEqualTo(differentKeyConcept.hashCode());
     }
 }

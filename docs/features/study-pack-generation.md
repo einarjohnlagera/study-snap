@@ -30,6 +30,17 @@ The LLM should produce:
 
 The strict JSON contract is documented in `docs/ai/PROMPTS.md`.
 
+## Exam-only keyConcept tags
+
+Long Exam and Interview Practice questions include an additional nullable `keyConcept` field on `QuizItem`. This field is separate from `concept`:
+
+- `concept` remains the report-facing label. Long Exam uses it for domain breakdowns, and Interview Practice uses it for senior-framed strengths, gaps, and talking points.
+- `keyConcept` is for Progress recording only.
+- For Long Exam and Interview generation, the strict quiz schema adds `keyConcept` as a required string enum when the source Study Pack has non-empty `keyConcepts`; the enum values are copied verbatim from that source list.
+- Non-exam quiz schemas do not include `keyConcept`.
+- If a source pack has no key concepts, the schema omits `keyConcept` and completion recording falls back to the legacy `concept` behavior.
+- Legacy persisted sessions and pre-warmed pool questions may have `keyConcept == null`; they remain valid and require no migration.
+
 ## Enhanced summary format
 
 The summary field supports limited markdown to enrich the generated content:

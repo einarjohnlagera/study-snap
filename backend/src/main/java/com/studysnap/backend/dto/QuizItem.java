@@ -25,6 +25,7 @@ public final class QuizItem {
     private final String questionType;
     private final String workingSolution;
     private final String questionGroup;
+    private final String keyConcept;
 
     public QuizItem(
             String question,
@@ -112,6 +113,36 @@ public final class QuizItem {
             List<Integer> correctIndices,
             String questionGroup
     ) {
+        this(
+                question,
+                choices,
+                correctIndex,
+                concept,
+                explanation,
+                legacyAnswer,
+                questionFormat,
+                questionType,
+                workingSolution,
+                correctIndices,
+                questionGroup,
+                null
+        );
+    }
+
+    public QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices,
+            String questionGroup,
+            String keyConcept
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
@@ -122,6 +153,7 @@ public final class QuizItem {
         this.questionType = questionType;
         this.workingSolution = workingSolution;
         this.questionGroup = normalizeQuestionGroup(questionGroup);
+        this.keyConcept = keyConcept;
     }
 
     @JsonCreator
@@ -138,7 +170,8 @@ public final class QuizItem {
             @JsonProperty("questionType") String questionType,
             @JsonProperty("workingSolution") String workingSolution,
             @JsonProperty("correctIndices") List<Integer> correctIndices,
-            @JsonProperty("questionGroup") String questionGroup
+            @JsonProperty("questionGroup") String questionGroup,
+            @JsonProperty("keyConcept") String keyConcept
     ) {
         this(
                 question,
@@ -151,7 +184,8 @@ public final class QuizItem {
                 questionType,
                 workingSolution,
                 correctIndices,
-                questionGroup
+                questionGroup,
+                keyConcept
         );
     }
 
@@ -201,6 +235,10 @@ public final class QuizItem {
 
     public String questionGroup() {
         return questionGroup;
+    }
+
+    public String keyConcept() {
+        return keyConcept;
     }
 
     private static Integer resolveCorrectIndex(
@@ -304,12 +342,13 @@ public final class QuizItem {
                 && Objects.equals(questionFormat, quizItem.questionFormat)
                 && Objects.equals(questionType, quizItem.questionType)
                 && Objects.equals(workingSolution, quizItem.workingSolution)
-                && Objects.equals(questionGroup, quizItem.questionGroup);
+                && Objects.equals(questionGroup, quizItem.questionGroup)
+                && Objects.equals(keyConcept, quizItem.keyConcept);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup);
+        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept);
     }
 
     @Override
@@ -325,6 +364,7 @@ public final class QuizItem {
                 + ", questionType='" + questionType + '\''
                 + ", workingSolution='" + workingSolution + '\''
                 + ", questionGroup='" + questionGroup + '\''
+                + ", keyConcept='" + keyConcept + '\''
                 + '}';
     }
 }
