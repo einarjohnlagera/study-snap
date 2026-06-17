@@ -19,7 +19,7 @@ import {
   type NoteTargetProfileType,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
+import { consumeBulkGenerationRetryStash, setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 import { MAX_TOPIC_LENGTH, parsePastedTopics } from "@/lib/bulk-topics";
 import {
   getNoteTargetProfileLabel,
@@ -61,6 +61,19 @@ export function BulkGenerationPageClient() {
   useEffect(() => {
     requireAdminUser(router);
   }, [router]);
+
+  useEffect(() => {
+    const stash = consumeBulkGenerationRetryStash();
+    if (!stash) {
+      return;
+    }
+    setSubject(stash.subject);
+    setCourseProgram(stash.courseProgram ?? "");
+    setTargetProfileType(stash.targetProfileType as NoteTargetProfileType);
+    setMakePublic(stash.makePublic);
+    setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
+    nextTopicId.current = stash.topics.length + 1;
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -185,7 +198,7 @@ export function BulkGenerationPageClient() {
     setError(null);
     try {
       const response = await bulkGenerateNotes(request);
-      setBulkQueuedFlash(response.queuedTopics);
+      setBulkQueuedFlash(response.queuedTopics, response.resultId);
       router.push("/library");
     } catch (submitError) {
       if (submitError instanceof ApiRequestError && submitError.status === 403) {

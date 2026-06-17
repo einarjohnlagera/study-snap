@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
+import com.studysnap.backend.dto.BulkGenerationResultResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
@@ -21,6 +22,7 @@ import com.studysnap.backend.dto.CopyOnSignupRequest;
 import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.BulkGenerationResultService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
@@ -66,6 +68,8 @@ class NoteControllerTest {
     @Mock
     private AuthService authService;
     @Mock
+    private BulkGenerationResultService bulkGenerationResultService;
+    @Mock
     private NoteService noteService;
     @Mock
     private NoteBulkImportService noteBulkImportService;
@@ -96,6 +100,7 @@ class NoteControllerTest {
     void setUp() {
         noteController = new NoteController(
                 authService,
+                bulkGenerationResultService,
                 noteService,
                 noteBulkImportService,
                 noteBulkGenerationService,
@@ -122,7 +127,8 @@ class NoteControllerTest {
                 "Nursing",
                 NoteTargetProfileType.BOARD_TAKER
         );
-        BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(1, 1, 0);
+        UUID resultId = UUID.randomUUID();
+        BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(resultId, 1, 1, 0);
         when(noteBulkGenerationService.queueBatch(request, userId, false)).thenReturn(expected);
 
         BulkGenerateNotesResponse response = noteController.bulkGenerate(request, user);
@@ -137,6 +143,44 @@ class NoteControllerTest {
         Method method = NoteController.class.getMethod(
                 "bulkGenerate",
                 BulkGenerateNotesRequest.class,
+                AuthenticatedUser.class
+        );
+
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo(ADMIN_ROLE_GATE);
+    }
+
+    @Test
+    void getBulkGenerationResult_consumesOwnedResult() {
+        UUID userId = UUID.randomUUID();
+        UUID resultId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.ADMIN, true, 1);
+        BulkGenerationResultResponse expected = new BulkGenerationResultResponse(
+                resultId,
+                "Maternal Health",
+                "Nursing",
+                NoteTargetProfileType.BOARD_TAKER.name(),
+                true,
+                2,
+                1,
+                List.of("Prenatal Care"),
+                OffsetDateTime.now()
+        );
+        when(bulkGenerationResultService.consumeResult(resultId, userId)).thenReturn(expected);
+
+        BulkGenerationResultResponse response = noteController.getBulkGenerationResult(resultId, user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(bulkGenerationResultService).consumeResult(resultId, userId);
+    }
+
+    @Test
+    void getBulkGenerationResult_requiresAdminRole() throws NoSuchMethodException {
+        Method method = NoteController.class.getMethod(
+                "getBulkGenerationResult",
+                UUID.class,
                 AuthenticatedUser.class
         );
 

@@ -6,13 +6,17 @@ import {
   createCollection,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
+  getBulkGenerationResult,
   getSavedLibraryFilters,
   listCollections,
   listNotes,
   listSubjects,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
+import {
+  consumeBulkGenerationRetryStash,
+  setBulkQueuedFlash,
+} from "@/lib/bulk-generation-flash";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -32,11 +36,20 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    status: number;
+
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  },
   addCollectionItems: jest.fn(),
   createCollection: jest.fn(),
   createSavedLibraryFilter: jest.fn(),
   deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
+  getBulkGenerationResult: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
   listCollections: jest.fn(),
   listNotes: jest.fn(),
@@ -46,6 +59,12 @@ jest.mock("@/lib/api", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
+}));
+
+jest.mock("@/lib/study-pack-generation", () => ({
+  LIBRARY_GENERATION_POLL_MAX_TICKS: 3,
+  LIBRARY_GENERATION_POLL_QUIET_TICKS: 1,
+  STUDY_PACK_GENERATION_POLL_INTERVAL_MS: 10,
 }));
 
 async function openMoreFilters() {
@@ -145,6 +164,7 @@ describe("Library page", () => {
       createdAt: "2026-03-24T00:00:00Z",
     });
     (deleteSavedLibraryFilter as jest.Mock).mockResolvedValue(undefined);
+    (getBulkGenerationResult as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
@@ -437,6 +457,80 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByText(/Queued 2 notes/)).toBeInTheDocument();
+  });
+
+  it("shows failed bulk topics after the poller settles and stashes them for retry", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "admin-1",
+      role: "ADMIN",
+      profileType: "STUDENT",
+    });
+    setBulkQueuedFlash(5, "result-1");
+    (getBulkGenerationResult as jest.Mock).mockResolvedValueOnce({
+      id: "result-1",
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      targetProfileType: "BOARD_TAKER",
+      makePublic: true,
+      requestedCount: 5,
+      createdCount: 4,
+      failedTopics: ["Prenatal Care", "Labor Stages"],
+      createdAt: "2026-06-17T00:00:00Z",
+    });
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText(/4 of 5 notes generated/)).toBeInTheDocument();
+    expect(screen.getByText("Prenatal Care")).toBeInTheDocument();
+    expect(screen.getByText("Labor Stages")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry these" }));
+
+    expect(consumeBulkGenerationRetryStash()).toEqual({
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      targetProfileType: "BOARD_TAKER",
+      makePublic: true,
+      topics: ["Prenatal Care", "Labor Stages"],
+    });
+    expect(pushMock).toHaveBeenCalledWith("/library/bulk-generate");
+  });
+
+  it("renders no bulk failure banner for zero-failure results or missing receipts", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "admin-1",
+      role: "ADMIN",
+      profileType: "STUDENT",
+    });
+    setBulkQueuedFlash(2, "result-success");
+    (getBulkGenerationResult as jest.Mock).mockResolvedValueOnce({
+      id: "result-success",
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      targetProfileType: "STUDENT",
+      makePublic: false,
+      requestedCount: 2,
+      createdCount: 2,
+      failedTopics: [],
+      createdAt: "2026-06-17T00:00:00Z",
+    });
+
+    const { unmount } = render(<LibraryPage />);
+
+    await waitFor(() => expect(getBulkGenerationResult).toHaveBeenCalledWith("result-success"));
+    expect(screen.queryByText(/couldn't be generated/)).not.toBeInTheDocument();
+
+    unmount();
+    pushMock.mockReset();
+    replaceMock.mockReset();
+    setBulkQueuedFlash(2, "result-missing");
+    (getBulkGenerationResult as jest.Mock).mockRejectedValue(new Error("not found"));
+
+    render(<LibraryPage />);
+
+    await waitFor(() => expect(getBulkGenerationResult).toHaveBeenCalledWith("result-missing"));
+    expect(screen.queryByText(/couldn't be generated/)).not.toBeInTheDocument();
+    expect(await screen.findByText("Cell Respiration")).toBeInTheDocument();
   });
 
   it("creates a Study Plan from notes selected in the Library", async () => {

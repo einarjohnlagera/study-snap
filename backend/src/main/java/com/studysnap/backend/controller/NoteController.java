@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
+import com.studysnap.backend.dto.BulkGenerationResultResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
 import com.studysnap.backend.dto.BulkImportResultResponse;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
@@ -33,6 +34,7 @@ import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.BulkGenerationResultService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
@@ -75,6 +77,7 @@ public class NoteController {
     private static final int PUBLIC_NOTES_MAX_SIZE = 50;
 
     private final AuthService authService;
+    private final BulkGenerationResultService bulkGenerationResultService;
     private final NoteService noteService;
     private final NoteBulkImportService noteBulkImportService;
     private final NoteBulkGenerationService noteBulkGenerationService;
@@ -139,6 +142,16 @@ public class NoteController {
         authService.requireEmailVerified(userId);
         boolean enforceLimits = user.role() != UserRole.ADMIN;
         return noteBulkGenerationService.queueBatch(request, userId, enforceLimits);
+    }
+
+    @GetMapping("/bulk-generate/results/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public BulkGenerationResultResponse getBulkGenerationResult(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return bulkGenerationResultService.consumeResult(id, userId);
     }
 
     @PutMapping("/{id}")

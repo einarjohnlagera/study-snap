@@ -4,11 +4,11 @@
 
 **Status: In Progress**
 
-Theme: follow-up polish on the v0.29.0 bulk-generation flow. Primary item: honest **partial-outcome reporting** — when a topic's content generation fails, no note row is created (correct — a note without content is not persisted), but the immediate `Queued N notes` toast over-promises with no explanation. Surface the real outcome so the count stays honest. This subsumes the v0.29.0-deferred "quota ran out mid-batch" messaging (same background-reporting gap). No batch-job entity, progress table, or status enum (still locked from v0.29.0). See `docs/product/ROADMAP.md` for full scope.
+Theme: follow-up polish on the v0.29.0 bulk-generation flow. Primary item: honest **partial-outcome reporting** — when a topic's content generation fails, no note row is created (correct — a note without content is not persisted), but the immediate `Queued N notes` toast over-promises before background work finishes. Surface the real outcome so the count stays honest. This uses one narrow terminal-outcome receipt exception; no batch-job entity, live progress table, or status enum is allowed. See `docs/product/ROADMAP.md` for full scope.
 
 ### Shipped
 
-_None yet._
+- **Bulk generation partial-outcome receipts** — `POST /notes/bulk-generate` now returns a `resultId` and the background worker writes one terminal, owner-scoped `bulk_generation_result` receipt at batch completion (including zero-failure and whole-batch-failure cases). `GET /notes/bulk-generate/results/{id}` is ADMIN-gated, read-once, deletes after returning, and 24h cleanup removes unread receipts. The Library keeps the immediate `Queued N notes` toast, then after the existing auto-refresh settles it reads the receipt and shows a dismissible banner listing the exact failed topic strings with `Retry these`, which pre-fills `/library/bulk-generate` with the failed topics plus subject/course/audience/public context. Content-first behavior is unchanged: failed content generation still creates no note row, and post-create Study Pack failures are not counted as failed topics.
 
 ---
 
