@@ -1,5 +1,18 @@
 # RELEASES.md - NoteLib
 
+## v0.29.1 - Bulk Generation Polish
+
+**Status: Released**
+
+Theme: follow-up polish on the v0.29.0 bulk-generation flow. Primary item: honest **partial-outcome reporting** — when a topic's content generation fails, no note row is created (correct — a note without content is not persisted), but the immediate `Queued N notes` toast over-promises before background work finishes. Surface the real outcome so the count stays honest. This uses one narrow terminal-outcome receipt exception; no batch-job entity, live progress table, or status enum is allowed. See `docs/product/ROADMAP.md` for full scope.
+
+### Shipped
+
+- **Bulk generation partial-outcome receipts** — `POST /notes/bulk-generate` now returns a `resultId` and the background worker writes one terminal, owner-scoped `bulk_generation_result` receipt at batch completion (including zero-failure and whole-batch-failure cases). `GET /notes/bulk-generate/results/{id}` is owner-scoped, read-once, deletes after returning, and 24h cleanup removes unread receipts. The Library keeps the immediate `Queued N notes` toast, then after the existing auto-refresh settles it reads the receipt and shows a dismissible banner listing the exact failed topic strings with `Retry these`, which pre-fills `/library/bulk-generate` with the failed topics plus subject/course/audience/public context. Content-first behavior is unchanged: failed content generation still creates no note row, and post-create Study Pack failures are not counted as failed topics.
+- **Bulk generation opened to all users** — removed the ADMIN-only gates from the Library Create entry, `/library/bulk-generate` route, and bulk result endpoints while preserving ADMIN quota bypass and existing profile-aware metadata resolution. Non-admin batches now classify no-row failures as either generation failures or note-generation quota blocks; the Library banner offers `Retry these` only for genuine generation failures and uses plan-aware upgrade CTAs for quota-blocked topics. The bulk page shows remaining note-generation quota when available, Note Create links to bulk generation from the single-topic panel, and Help adds a deep-linkable `/help#bulk-generate` guide.
+
+---
+
 ## v0.29.0 - Bulk Generation
 
 **Status: Released**

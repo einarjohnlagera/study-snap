@@ -126,9 +126,23 @@ export type BulkGenerateNotesRequest = {
 };
 
 export type BulkGenerateNotesResponse = {
+  resultId: string;
   acceptedTopics: number;
   queuedTopics: number;
   rejectedTopics: number;
+};
+
+export type BulkGenerationResultResponse = {
+  id: string;
+  subject: string;
+  courseProgram: string | null;
+  targetProfileType: NoteTargetProfileType;
+  makePublic: boolean;
+  requestedCount: number;
+  createdCount: number;
+  failedTopics: string[];
+  quotaBlockedTopics: string[];
+  createdAt: string;
 };
 
 export type StudyPackListItemResponse = {
@@ -2254,6 +2268,21 @@ export async function bulkGenerateNotes(
   return parseApiResponse<BulkGenerateNotesResponse>(
     response,
     "We could not queue these notes right now. Please try again.",
+  );
+}
+
+export async function getBulkGenerationResult(resultId: string): Promise<BulkGenerationResultResponse> {
+  const response = await fetchWithAuth(
+    `/notes/bulk-generate/results/${encodeURIComponent(resultId)}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<BulkGenerationResultResponse>(
+    response,
+    "We could not load this bulk generation result right now.",
   );
 }
 

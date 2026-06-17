@@ -3,7 +3,10 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
-import {consumeBulkQueuedFlash} from "@/lib/bulk-generation-flash";
+import {
+  consumeBulkQueuedFlash,
+  setBulkGenerationRetryStash,
+} from "@/lib/bulk-generation-flash";
 import {
   LIBRARY_GENERATION_POLL_MAX_TICKS,
   LIBRARY_GENERATION_POLL_QUIET_TICKS,
@@ -33,9 +36,11 @@ import {
   createCollection,
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
+  getBulkGenerationResult,
   getSavedLibraryFilters,
   listNotes,
   listSubjects,
+  type BulkGenerationResultResponse,
   type NoteListItemResponse,
   type SavedLibraryFilterResponse,
   type SavedLibraryFilterState,
@@ -49,6 +54,7 @@ import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
 import {GuidanceTip} from "@/components/ui/guidance-tip";
 import {pickActiveGuidance, type GuidanceRule} from "@/lib/guidance-engine";
+import {getUpgradeCtas, type AppPlanType} from "@/src/config/plans";
 
 type LibrarySortOption =
   | "RECENTLY_UPDATED"
@@ -77,6 +83,8 @@ const FILTER_SAVED_TOAST = "Filter saved";
 const FILTER_DELETED_TOAST = "Filter deleted";
 const FILTER_SAVE_ERROR_TOAST = "Could not save filter";
 const FILTER_DELETE_ERROR_TOAST = "Could not delete filter";
+const BULK_RESULT_FETCH_MAX_ATTEMPTS = 5;
+const BULK_RESULT_FETCH_RETRY_DELAY_MS = 800;
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
@@ -104,6 +112,24 @@ type ToastMessage = string | {
   href: string;
   linkLabel: string;
 };
+
+type BulkGenerationFailureBanner = Pick<
+  BulkGenerationResultResponse,
+  | "subject"
+  | "courseProgram"
+  | "targetProfileType"
+  | "makePublic"
+  | "requestedCount"
+  | "createdCount"
+  | "failedTopics"
+  | "quotaBlockedTopics"
+>;
+
+function waitForBulkResultRetry() {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, BULK_RESULT_FETCH_RETRY_DELAY_MS);
+  });
+}
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -506,6 +532,8 @@ export default function LibraryPage() {
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [pendingBulkResultId, setPendingBulkResultId] = useState<string | null>(null);
+  const [bulkFailureBanner, setBulkFailureBanner] = useState<BulkGenerationFailureBanner | null>(null);
   const [savedFilters, setSavedFilters] = useState<SavedLibraryFilterResponse[]>([]);
   const [savedFiltersLoading, setSavedFiltersLoading] = useState(true);
   const [savedFiltersUnavailable, setSavedFiltersUnavailable] = useState(false);
@@ -611,9 +639,11 @@ export default function LibraryPage() {
   }, [toast]);
 
   useEffect(() => {
-    const queuedCount = consumeBulkQueuedFlash();
-    if (queuedCount) {
+    const queuedFlash = consumeBulkQueuedFlash();
+    if (queuedFlash) {
+      const queuedCount = queuedFlash.queuedCount;
       setToast(`Queued ${queuedCount} note${queuedCount === 1 ? "" : "s"} — they'll appear here as they finish generating.`);
+      setPendingBulkResultId(queuedFlash.resultId);
       // Bulk rows do not exist yet at redirect, so seed a grace window during
       // which the poller will not stop even though nothing is generating yet.
       bulkGraceUntilRef.current = Date.now()
@@ -621,6 +651,49 @@ export default function LibraryPage() {
       setAutoRefreshActive(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!pendingBulkResultId || autoRefreshActive) {
+      return undefined;
+    }
+
+    let active = true;
+    const fetchBulkResult = async () => {
+      for (let attempt = 1; attempt <= BULK_RESULT_FETCH_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const result = await getBulkGenerationResult(pendingBulkResultId);
+          if (!active) {
+            return;
+          }
+          setPendingBulkResultId(null);
+          setBulkFailureBanner(
+            result.failedTopics.length > 0 || result.quotaBlockedTopics.length > 0 ? result : null,
+          );
+          return;
+        } catch (resultError) {
+          if (!active) {
+            return;
+          }
+          const shouldRetry = resultError instanceof ApiRequestError
+            && resultError.status === 404
+            && attempt < BULK_RESULT_FETCH_MAX_ATTEMPTS;
+          if (!shouldRetry) {
+            setPendingBulkResultId(null);
+            return;
+          }
+          await waitForBulkResultRetry();
+        }
+      }
+      if (active) {
+        setPendingBulkResultId(null);
+      }
+    };
+
+    void fetchBulkResult();
+    return () => {
+      active = false;
+    };
+  }, [autoRefreshActive, pendingBulkResultId]);
 
   // Keep auto-refresh running whenever a visible note is still generating its
   // Study Pack — this covers single-note generation too, not just bulk.
@@ -1167,6 +1240,24 @@ export default function LibraryPage() {
     router.push(`/library/exam-builder?${params.toString()}`);
   }, [router, selectedNoteIds, selectedQuizReadyCount]);
 
+  const retryBulkFailures = useCallback(() => {
+    if (!bulkFailureBanner || bulkFailureBanner.failedTopics.length === 0) {
+      return;
+    }
+    setBulkGenerationRetryStash({
+      subject: bulkFailureBanner.subject,
+      courseProgram: bulkFailureBanner.courseProgram,
+      targetProfileType: bulkFailureBanner.targetProfileType,
+      makePublic: bulkFailureBanner.makePublic,
+      topics: bulkFailureBanner.failedTopics,
+    });
+    setBulkFailureBanner(null);
+    router.push("/library/bulk-generate");
+  }, [bulkFailureBanner, router]);
+
+  const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
+  const upgradeCtas = getUpgradeCtas(currentPlan, { profileType: authUser?.profileType ?? null });
+
   const handlePlanCreated = useCallback((collectionId: string) => {
     setCreatePlanOpen(false);
     resetSelectionMode();
@@ -1218,18 +1309,66 @@ export default function LibraryPage() {
               items={[
                 { key: "note", label: "Note", description: "Write, import, or generate a note", onSelect: () => router.push("/notes/new") },
                 { key: "import", label: "Import files", description: "Upload several files as draft notes", onSelect: () => router.push("/notes/import?from=library") },
-                ...(authUser?.role === "ADMIN" ? [{
+                {
                   key: "bulk-generate",
                   label: "Bulk generate",
                   description: "Generate notes and Study Packs from a list of topics",
                   onSelect: () => router.push("/library/bulk-generate"),
-                }] : []),
+                },
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },
               ]}
             />
           </div>
         )}
       />
+
+      {bulkFailureBanner ? (
+        <Card className="space-y-4 border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/60 dark:bg-amber-950/30 dark:text-amber-100 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-3">
+              {bulkFailureBanner.quotaBlockedTopics.length > 0 ? (
+                <section className="space-y-2">
+                  <p className="text-sm font-semibold">
+                    You&apos;ve used this month&apos;s note generations — {bulkFailureBanner.quotaBlockedTopics.length} topic{bulkFailureBanner.quotaBlockedTopics.length === 1 ? "" : "s"} weren&apos;t generated.
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
+                    {bulkFailureBanner.quotaBlockedTopics.map((topic) => (
+                      <li key={topic} className="break-words">{topic}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {bulkFailureBanner.failedTopics.length > 0 ? (
+                <section className="space-y-2">
+                  <p className="text-sm font-semibold">
+                    {bulkFailureBanner.createdCount} of {bulkFailureBanner.requestedCount} notes generated. These couldn&apos;t be generated — try again:
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
+                    {bulkFailureBanner.failedTopics.map((topic) => (
+                      <li key={topic} className="break-words">{topic}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              {bulkFailureBanner.quotaBlockedTopics.length > 0 && upgradeCtas.primary ? (
+                <Button type="button" onClick={() => router.push("/settings?section=plans")}>
+                  {upgradeCtas.primary.label}
+                </Button>
+              ) : null}
+              {bulkFailureBanner.failedTopics.length > 0 ? (
+                <Button type="button" onClick={retryBulkFailures}>
+                  Retry these
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" onClick={() => setBulkFailureBanner(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {loading ? (
         <LibraryLoading />

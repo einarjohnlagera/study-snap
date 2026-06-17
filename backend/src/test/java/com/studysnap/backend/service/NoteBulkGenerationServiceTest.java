@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -11,6 +13,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -59,6 +62,8 @@ class NoteBulkGenerationServiceTest {
     private UserRepository userRepository;
     @Mock
     private OnboardingGuardService onboardingGuardService;
+    @Mock
+    private BulkGenerationResultService bulkGenerationResultService;
 
     private NoteBulkGenerationService service;
 
@@ -74,6 +79,7 @@ class NoteBulkGenerationServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 userRepository,
                 onboardingGuardService,
+                bulkGenerationResultService,
                 50,
                 0
         );
@@ -124,7 +130,10 @@ class NoteBulkGenerationServiceTest {
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
 
-        assertThat(response).isEqualTo(new BulkGenerateNotesResponse(2, 2, 0));
+        assertThat(response.resultId()).isNotNull();
+        assertThat(response.acceptedTopics()).isEqualTo(2);
+        assertThat(response.queuedTopics()).isEqualTo(2);
+        assertThat(response.rejectedTopics()).isZero();
         ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
         verify(noteService, times(2)).create(captor.capture(), eq(userId));
         assertThat(captor.getAllValues()).allSatisfy(noteRequest -> {
@@ -138,6 +147,18 @@ class NoteBulkGenerationServiceTest {
                 anyString(), eq(userId), eq(false), eq(false), eq(context), eq(SUBJECT)
         );
         verify(noteGenerationService, never()).generateFromTopic(any(), any());
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.BOARD_TAKER.name()),
+                eq(true),
+                eq(2),
+                eq(2),
+                eq(List.of()),
+                eq(List.of())
+        );
     }
 
     @Test
@@ -201,7 +222,7 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
-    void queueBatch_isolatesContentGenerationFailures() {
+    void queueBatch_isolatesContentGenerationFailuresAndRecordsFailedTopics() {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest request = request(
@@ -227,6 +248,126 @@ class NoteBulkGenerationServiceTest {
         ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
         verify(noteService).create(captor.capture(), eq(userId));
         assertThat(captor.getValue().title()).isEqualTo("Healthy Topic");
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.STUDENT.name()),
+                eq(false),
+                eq(2),
+                eq(1),
+                eq(List.of("Rejected Topic")),
+                eq(List.of())
+        );
+    }
+
+    @Test
+    void queueBatch_classifiesQuotaAndGenerationFailuresForNonAdmins() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.USER, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Healthy Topic", "Over Limit Topic", "Broken Topic"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+                .thenReturn(context);
+        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
+                .thenAnswer(invocation -> {
+                    GenerateNoteFromTopicRequest generationRequest = invocation.getArgument(0);
+                    if ("Over Limit Topic".equals(generationRequest.topic())) {
+                        throw new MonthlyNoteGenerationLimitReachedException();
+                    }
+                    if ("Broken Topic".equals(generationRequest.topic())) {
+                        throw new RuntimeException("generation failed");
+                    }
+                    return new GenerateNoteFromTopicResponse("Healthy content");
+                });
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-healthy"));
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, true);
+
+        verify(noteService).create(any(UpsertNoteRequest.class), eq(userId));
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.STUDENT.name()),
+                eq(false),
+                eq(3),
+                eq(1),
+                eq(List.of("Broken Topic")),
+                eq(List.of("Over Limit Topic"))
+        );
+    }
+
+    @Test
+    void queueBatch_studyPackFailureAfterNoteCreateDoesNotRecordFailedTopic() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Healthy Topic"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+                .thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Healthy Topic", context)).thenReturn("Healthy content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-healthy"));
+        doThrow(new RuntimeException("pack generation failed")).when(studyPackService)
+                .startAsyncGenerationFromNote("note-healthy", userId, false, false, context, SUBJECT);
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
+
+        verify(noteService).create(any(UpsertNoteRequest.class), eq(userId));
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.STUDENT.name()),
+                eq(false),
+                eq(1),
+                eq(1),
+                eq(List.of()),
+                eq(List.of())
+        );
+    }
+
+    @Test
+    void queueBatch_recordsAllTopicsWhenBatchFailsBeforeLoop() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Topic One", "Topic Two"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+                .thenThrow(new RuntimeException("context unavailable"));
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
+
+        verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.STUDENT.name()),
+                eq(false),
+                eq(2),
+                eq(0),
+                eq(List.of("Topic One", "Topic Two")),
+                eq(List.of())
+        );
     }
 
     @Test
@@ -311,6 +452,7 @@ class NoteBulkGenerationServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 userRepository,
                 onboardingGuardService,
+                bulkGenerationResultService,
                 1,
                 0
         );

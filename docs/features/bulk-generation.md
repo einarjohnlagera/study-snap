@@ -2,14 +2,14 @@
 
 ## Goal
 
-Bulk Generation lets an admin enter one subject and a list of topics, then queue one generated note plus one Study Pack per topic. Each topic is a generation seed, matching the Note Create `Generate from topic` flow. The AI generates the note content and later refines the note title and tags.
+Bulk Generation lets an authenticated user enter one subject and a list of topics, then queue one generated note plus one Study Pack per topic. Each topic is a generation seed, matching the Note Create `Generate from topic` flow. The AI generates the note content and later refines the note title and tags.
 
 ## Access
 
-- The Library Create menu shows `Bulk generate` only to users with the `ADMIN` role.
-- The page route is `/library/bulk-generate` and uses the shared admin route guard.
-- `POST /notes/bulk-generate` is protected with `@PreAuthorize("hasRole('ADMIN')")`.
-- The role gate is removable. Teacher and non-teacher resolution already exists behind the gate so opening the feature later does not require another generation pipeline.
+- The Library Create menu shows `Bulk generate` to authenticated, onboarded users.
+- The page route is `/library/bulk-generate` and uses the shared authenticated/onboarded route guard.
+- `POST /notes/bulk-generate` and `GET /notes/bulk-generate/results/{id}` are protected with `@PreAuthorize("hasAnyRole('USER','ADMIN')")`.
+- ADMIN keeps the existing quota bypass. Non-admin users run through the existing quota-enforcing note-generation path.
 
 ## Input Model
 
@@ -36,9 +36,17 @@ For Admin and Teacher, this produces `Course / Program · Target Audience`. The 
 
 ## Submission
 
-On a successful queue the page does not show an in-page acknowledgment. It stores a one-shot queued-count flash in `sessionStorage` and redirects to `/library`, where a toast — `Queued N notes — they'll appear here as they finish generating.` — confirms the batch was received. The flash is consumed once on Library mount and does not reappear on refresh. A `sessionStorage` flash is used instead of a query param because the Library rewrites its own URL from filter state, which would strip the param.
+On a successful queue the page does not show an in-page acknowledgment. It stores a one-shot flash containing the queued count and server-returned `resultId` in `sessionStorage` and redirects to `/library`, where a toast — `Queued N notes — they'll appear here as they finish generating.` — confirms the batch was received. The flash is consumed once on Library mount and does not reappear on refresh. A `sessionStorage` flash is used instead of a query param because the Library rewrites its own URL from filter state, which would strip the param.
 
-The Library auto-refreshes so the queued notes appear without a manual refresh. Consuming the flash starts a silent poller (it re-fetches `listNotes()` only — it does not toggle the loading skeleton or reset pagination). Rows that arrive after the initial load (the generated notes surfaced by the poller) animate in via the shared `motion-fade-enter` entrance rather than popping in abruptly; the initial list does not animate wholesale, and the entrance is disabled under `prefers-reduced-motion`. The poller is sustained while any visible note is `GENERATING` or the list is still growing, and it stops after a generous quiet window plus an absolute hard-cap backstop. Because bulk uses throttled **sequential** fan-out, there are recurring windows where no row is generating and none has newly appeared (between one topic finishing and the next topic's row materializing); the quiet window is sized to exceed that inter-topic gap so the batch is not truncated mid-way. A short initial grace covers the redirect moment when no rows exist yet. This is automatic load-on-refresh — not a backend batch/progress signal — so it cannot perfectly distinguish "batch complete" from "long gap"; the manual refresh remains the fallback. The same poller also auto-refreshes single-note generation, which had the identical never-auto-updates gap.
+For non-admin users, the bulk form also loads the existing `/me/plan` usage summary and shows remaining monthly note-generation quota when available. If the quota read fails, the hint is hidden and the form remains usable. ADMIN users do not see this hint because bulk generation bypasses note-generation quota for them.
+
+The Library auto-refreshes so the queued notes appear without a manual refresh. Consuming the flash starts a silent poller (it re-fetches `listNotes()` only — it does not toggle the loading skeleton or reset pagination). Rows that arrive after the initial load (the generated notes surfaced by the poller) animate in via the shared `motion-fade-enter` entrance rather than popping in abruptly; the initial list does not animate wholesale, and the entrance is disabled under `prefers-reduced-motion`. The poller is sustained while any visible note is `GENERATING` or the list is still growing, and it stops after a generous quiet window plus an absolute hard-cap backstop. Because bulk uses throttled **sequential** fan-out, there are recurring windows where no row is generating and none has newly appeared (between one topic finishing and the next topic's row materializing); the quiet window is sized to exceed that inter-topic gap so the batch is not truncated mid-way. A short initial grace covers the redirect moment when no rows exist yet. This is automatic load-on-refresh, not live backend progress. The same poller also auto-refreshes single-note generation, which had the identical never-auto-updates gap.
+
+After the poller settles, the Library makes a best-effort read of the terminal result receipt via `GET /notes/bulk-generate/results/{id}`. If the receipt is not ready yet, the Library retries a bounded number of times; if it is still missing, already read, owned by someone else, or a transient request fails, no banner is shown and the Library continues normally. A receipt with no `failedTopics` and no `quotaBlockedTopics` is silent.
+
+When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, target audience, and public toggle in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
+
+When `quotaBlockedTopics` is non-empty, the banner lists those topics separately as monthly note-generation quota blocks and shows the plan-aware upgrade action from `getUpgradeCtas(currentPlan)`. It does not offer `Retry these` for quota-blocked topics because retrying immediately would hit the same limit. Mixed receipts show both groups with their distinct actions.
 
 ## Profile-Aware Resolution
 
@@ -54,7 +62,7 @@ Profile type maps to note target profile as follows: `BOARD_EXAM -> BOARD_TAKER`
 
 Note content and Study Pack content are calibrated by the resolved Course / Program so copied/shared content remains appropriate for everyone in that program. The owner's profile learner level is still carried best-effort in `StudyPackGenerationContext` only for exam-question pool pre-warm; it is not accepted as bulk input and does not level static content.
 
-The endpoint remains ADMIN-only in v0.29.0. Teacher and non-teacher branches are dormant until the role gate is intentionally relaxed.
+All profiles use the same pipeline. Teacher/Admin users can provide course/program and target audience; non-teachers use profile-owned course/program and derived target audience.
 
 ## Per-Topic Flow
 
@@ -67,7 +75,15 @@ The endpoint validates the request, queues one throttled background batch on the
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
 
-One topic failure is caught and logged without aborting later topics. There is no persisted batch record. Notes appear as real Library rows and independently resolve through the existing `GENERATING -> STUDY_PACK_READY` or `FAILED` states.
+One topic failure is caught and logged without aborting later topics. Notes appear as real Library rows and independently resolve through the existing `GENERATING -> STUDY_PACK_READY` or `FAILED` states.
+
+## Terminal Result Receipt
+
+v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, the worker writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, `failedTopics` (topic strings whose content generation failed), and `quotaBlockedTopics` (topic strings blocked by monthly note-generation quota before a note row existed). The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation.
+
+`GET /notes/bulk-generate/results/{id}` is authenticated-user gated and owner-scoped. It returns the receipt only to the owner, deletes it in the same read-once flow, and returns 404 when the id is unknown, already read, or owned by someone else. A scheduled cleanup removes unread receipts older than 24 hours.
+
+This receipt is not a batch-job entity, not a progress table, not a per-item status table, and not a status enum. It has no in-flight state and is not polled for live progress. The broader v0.29.0 rule remains: no placeholder notes, no failed-note rows, no live batch progress infrastructure.
 
 ## Metadata Rule
 
@@ -77,18 +93,23 @@ The batch subject wins. Bulk Study Pack completion applies the AI-refined title 
 
 - ADMIN bulk generation bypasses note-generation quota, Study Pack quota, per-user AI rate limits, and their usage counters.
 - The bypass is local to bulk orchestration and its Study Pack call. Shared quota services do not contain an ADMIN exemption.
-- Existing single-note generation entry points still enforce quota and rate limits and record successful usage.
-- A future non-admin gate flip uses the existing enforced paths.
+- Non-admin bulk note-content generation uses `NoteGenerationService.generateFromTopic`, so monthly note-generation quota and usage accounting match the single-note Generate from topic path.
+- If note-generation quota runs out before a note row is created, the topic is written to `quotaBlockedTopics`. If a note row exists and a later make-public or Study Pack enqueue step fails, the topic is not added to any receipt failure list because the Library row is visible.
 - Throttled sequential fan-out protects the LLM provider while Study Pack workers continue on the existing executor.
+
+## Discoverability
+
+The Library Create menu exposes `Bulk generate` next to normal note creation and file import. The single Note Create `Generate from topic` panel includes a persistent inline link, `Have a list of topics? Generate them all at once`, pointing to `/library/bulk-generate`. This is a navigational affordance, not a one-time guidance tip.
+
+Help includes a deep-linkable `Bulk Generation` guide at `/help#bulk-generate` covering what one topic produces, background Library arrival, quota behavior, and when retry is appropriate.
 
 ## Out Of Scope
 
-- persisted batch/job entities, progress tables, or new status enums
+- persisted batch/job entities, live progress tables, per-item progress rows, or new status enums beyond the terminal read-once receipt
 - a batch progress/status page
-- partial-execution messaging when a future non-admin runs out of quota mid-batch
+- live partial-execution progress; terminal partial-outcome messaging for content-generation and note-generation quota failures is in scope through the receipt
 - production regeneration or backfill of existing Study Packs
 - collection-level bulk quiz generation
 - async quiz generation
-- opening the frontend flow to non-admin users
 
-No new analytics event was added for v0.29.0.
+No new analytics event was added for v0.29.1.

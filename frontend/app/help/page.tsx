@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Layers, Lightbulb, User } from "lucide-react";
+import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Layers, Lightbulb, Sparkles, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
 import { GettingStartedGuide } from "@/components/help/getting-started-guide";
 import { CreatingNotesGuide } from "@/components/help/creating-notes-guide";
+import { BulkGenerateGuide } from "@/components/help/bulk-generate-guide";
 import { StudyPlansGuide } from "@/components/help/study-plans-guide";
 import { StudyPacksGuide } from "@/components/help/study-packs-guide";
 import { ExportSharingGuide } from "@/components/help/export-sharing-guide";
@@ -44,6 +45,12 @@ const HELP_CARDS: HelpCard[] = [
     icon: FileText,
     title: "Creating Notes",
     description: "How to write, organize, and manage notes effectively.",
+  },
+  {
+    id: "bulk-generate",
+    icon: Sparkles,
+    title: "Bulk Generation",
+    description: "Create notes and Study Packs from a list of topics, with quota-aware retry guidance.",
   },
   {
     id: "study-plans",
@@ -143,6 +150,8 @@ function GuideContent({
       return <GettingStartedGuide />;
     case "creating-notes":
       return <CreatingNotesGuide />;
+    case "bulk-generate":
+      return <BulkGenerateGuide />;
     case "study-plans":
       return <StudyPlansGuide profileType={currentProfileType} />;
     case "study-packs":

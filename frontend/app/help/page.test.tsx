@@ -1,71 +1,49 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import HelpPage from "./page";
+import { getAuthUser } from "@/lib/auth";
 
-const routerMock = { push: jest.fn(), replace: jest.fn(), refresh: jest.fn() };
-let currentProfileType: string | null = "STUDENT";
+const replaceMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => routerMock,
+  useRouter: () => ({ replace: replaceMock }),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
-  requireAuthenticatedOnboardedUser: jest.fn(() => true),
+  requireAuthenticatedOnboardedUser: () => true,
 }));
 
 jest.mock("@/lib/auth", () => ({
-  getAuthUser: jest.fn(() => ({ id: "user-1", profileType: currentProfileType })),
+  getAuthUser: jest.fn(),
 }));
 
 describe("HelpPage", () => {
-  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
-
   beforeEach(() => {
-    currentProfileType = "STUDENT";
-    routerMock.push.mockReset();
-    routerMock.replace.mockReset();
-    routerMock.refresh.mockReset();
-    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    }) as typeof globalThis.requestAnimationFrame;
-    globalThis.cancelAnimationFrame = jest.fn() as typeof globalThis.cancelAnimationFrame;
+    jest.clearAllMocks();
+    replaceMock.mockReset();
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
+    globalThis.history.replaceState(null, "", "/help");
   });
 
-  afterEach(() => {
-    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
-  });
-
-  it("uses Board Exam guide copy that does not recommend Long Exam", () => {
+  it("renders the Bulk Generation guide from its card", async () => {
     render(<HelpPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Board Exam Guide/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Bulk Generation/i }));
 
-    expect(screen.getByText("Practice with Challenge Quiz")).toBeInTheDocument();
-    expect(screen.queryByText(["Practice with", "Long Exam"].join(" "))).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Switch Profile/i })).toHaveAttribute("href", "/profile#profile-type");
+    expect(await screen.findByRole("dialog", { name: "Bulk Generation" })).toBeInTheDocument();
+    expect(screen.getByText(/turns a list of topics into separate notes/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Bulk Generation" })).toHaveAttribute(
+      "href",
+      "/library/bulk-generate",
+    );
   });
 
-  it("opens a profile-aware Study Plans guide linking to Collections", () => {
+  it("opens the Bulk Generation guide from the hash deep link", async () => {
+    globalThis.history.replaceState(null, "", "/help#bulk-generate");
+
     render(<HelpPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Study Plans & Collections/i }));
-
-    expect(screen.getByText(/What Study Plans are/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open Study Plans/i })).toHaveAttribute("href", "/collections");
-  });
-
-  it("hides Switch Profile on the matching profile guide and shows it on other profile guides", () => {
-    render(<HelpPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Student Guide/i }));
-    expect(screen.queryByRole("link", { name: /Switch Profile/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText("Close"));
-    fireEvent.click(screen.getByRole("button", { name: /Teacher Guide/i }));
-
-    expect(screen.getByRole("link", { name: /Switch Profile/i })).toHaveAttribute("href", "/profile#profile-type");
-    expect(screen.queryByRole("link", { name: /Browse Public Library/i })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("dialog", { name: "Bulk Generation" })).toBeInTheDocument();
+    });
   });
 });

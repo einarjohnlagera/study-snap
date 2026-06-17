@@ -1,8 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
-import { bulkGenerateNotes, getMe, listCoursePrograms, listSubjects } from "@/lib/api";
+import { bulkGenerateNotes, getMe, getMyPlan, listCoursePrograms, listSubjects } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { consumeBulkQueuedFlash } from "@/lib/bulk-generation-flash";
+import {
+  consumeBulkQueuedFlash,
+  setBulkGenerationRetryStash,
+} from "@/lib/bulk-generation-flash";
 
 const replaceMock = jest.fn();
 const pushMock = jest.fn();
@@ -12,7 +15,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/lib/route-guards", () => ({
-  requireAdminUser: () => true,
+  requireAuthenticatedOnboardedUser: () => true,
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -32,6 +35,7 @@ jest.mock("@/lib/api", () => ({
   listSubjects: jest.fn(),
   listCoursePrograms: jest.fn(),
   getMe: jest.fn(),
+  getMyPlan: jest.fn(),
 }));
 
 async function fillAdminForm(topicValues: string[]) {
@@ -57,6 +61,10 @@ describe("BulkGenerationPageClient", () => {
     (listSubjects as jest.Mock).mockResolvedValue([]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      limits: { noteGenerationsPerMonth: 10 },
+      remaining: { noteGenerationsRemaining: 7 },
+    });
     (getAuthUser as jest.Mock).mockReturnValue({ id: "admin-1", role: "ADMIN", profileType: null });
   });
 
@@ -64,12 +72,14 @@ describe("BulkGenerationPageClient", () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
 
+    expect(screen.getByText("Library tool")).toBeInTheDocument();
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
+    expect(screen.queryByText(/note generations remaining this cycle/i)).not.toBeInTheDocument();
   });
 
   it("keeps the compact grid profile-aware for teacher and non-teacher views", async () => {
@@ -92,10 +102,13 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
+    expect(await screen.findByText(/7/)).toBeInTheDocument();
+    expect(screen.getByText(/note generations remaining this cycle/i)).toBeInTheDocument();
   });
 
   it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
     (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({
+      resultId: "result-1",
       acceptedTopics: 2,
       queuedTopics: 2,
       rejectedTopics: 0,
@@ -116,7 +129,28 @@ describe("BulkGenerationPageClient", () => {
       });
     });
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));
-    expect(consumeBulkQueuedFlash()).toBe(2);
+    expect(consumeBulkQueuedFlash()).toEqual({ queuedCount: 2, resultId: "result-1" });
+  });
+
+  it("prefills from retry stash and clears it", async () => {
+    setBulkGenerationRetryStash({
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      targetProfileType: "BOARD_TAKER",
+      makePublic: true,
+      topics: ["Prenatal Care", "Labor Stages"],
+    });
+
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
+    expect(screen.getByLabelText(/^Course \/ Program/)).toHaveValue("Nursing");
+    expect(screen.getByLabelText(/^Target Audience/)).toHaveValue("BOARD_TAKER");
+    expect(screen.getByRole("switch", { name: /public/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
+    expect(screen.getByLabelText(/^Topic 2$/)).toHaveValue("Labor Stages");
+    expect(globalThis.sessionStorage.getItem("notelib.bulk.retryTopics")).toBeNull();
   });
 
   it("splits a multi-line paste into separate topic rows and strips list markers", async () => {

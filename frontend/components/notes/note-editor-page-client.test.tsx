@@ -296,7 +296,11 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByRole("button", { name: /Write your own note/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Generate from topic/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Generate from topic/i }));
+    expect(screen.getByRole("link", { name: /Generate them all at once/i })).toHaveAttribute(
+      "href",
+      "/library/bulk-generate",
+    );
     expect(screen.getByRole("button", { name: /Import notes/i })).toBeInTheDocument();
   });
 

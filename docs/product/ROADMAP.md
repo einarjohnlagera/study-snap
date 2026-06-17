@@ -6,15 +6,15 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the current documentation baseline (last released).
+`v0.29.1 - Bulk Generation Polish` is the current documentation baseline (last released).
 
-`v0.28.0 - Feature Discoverability & Activation` is the previous baseline.
+`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the previous baseline.
+
+`v0.28.0 - Feature Discoverability & Activation` is the release before that.
 
 `v0.27.0 - Material Import & Collections` is the release before that.
 
-`v0.26.1 - Guidance System` is the release before that.
-
-No release is currently in progress. Next candidates: `v0.29.1 - Bulk Generation Polish` and `v0.30.0 - Readiness Signals` (see sections below).
+No release is currently in progress. Next candidate: `v0.30.0 - Readiness Signals` (see section below).
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -71,11 +71,15 @@ Locked direction:
 
 ---
 
-## v0.29.1 (candidate) - Bulk Generation Polish
+## v0.29.1 - Bulk Generation Polish (released)
+
+Base branch for this release: `releases/v0.29.1`.
 
 Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0.29.0 scoped.
 
-- **Partial-outcome reporting for bulk generation.** The bulk endpoint returns `queuedTopics = N` immediately (before background generation runs), so the "Queued N notes" toast promises N. When a topic's **content generation** fails, no note row is created (correct — a note without content is trash, so we do not persist a placeholder), but the user just sees fewer notes than promised with no explanation. Surface the real outcome (e.g. "3 of 5 generated; 2 couldn't be generated") so the promise stays honest. This needs a way to report background results, not just a fire-and-forget toast — more than a cosmetic fix. This subsumes the v0.29.0-deferred "quota ran out mid-batch" partial-execution messaging (same reporting gap).
+- **Partial-outcome reporting for bulk generation.** Shipped as a bounded terminal-outcome receipt: `POST /notes/bulk-generate` returns a `resultId`, the worker writes one owner-scoped `bulk_generation_result` receipt at batch completion with requested/created counts, exact failed topic strings, and quota-blocked topic strings, and `GET /notes/bulk-generate/results/{id}` returns then deletes it. The Library keeps the immediate `Queued N notes` toast, waits for the existing auto-refresh poller to settle, then reads the receipt and shows a dismissible banner only when content-generation failures or note-generation quota blocks occurred. `Retry these` pre-fills `/library/bulk-generate` only for genuine generation failures. This is the one v0.29.1 relaxation of the v0.29.0 no-progress-infrastructure rule: it is terminal, write-once/read-once, and expires after 24h; it is not a batch-job entity, live progress table, per-item status row, or new status enum.
+
+- **Open Bulk Generation to all users (gate-flip + quota-aware failure UX + discoverability).** Shipped: Bulk Generation is now available from the Library Create menu and `/library/bulk-generate` for authenticated, onboarded users; `POST /notes/bulk-generate` and `GET .../results/{id}` use the same `hasAnyRole('USER','ADMIN')` gate as other note endpoints. Non-admins keep the existing per-user note-generation quota path (`enforceLimits = role != ADMIN`), while ADMIN still bypasses. The receipt now distinguishes generation failures from note-generation quota blocks, the Library banner retries only generation failures and routes quota blocks through `getUpgradeCtas(currentPlan)`, the bulk page shows remaining note-generation quota when available, the single Note Create Generate-from-topic panel links to bulk generation, and Help includes `/help#bulk-generate`. Out of scope remains unchanged: no quota limit changes, no teacher-specific bulk flow, and no bulk *quiz* generation.
 
 ---
 
