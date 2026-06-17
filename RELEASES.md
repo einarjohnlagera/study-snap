@@ -4,11 +4,11 @@
 
 **Status: In Progress**
 
-Theme: make Progress an honest, complete readiness picture for students and exam-takers. Today only Quick Review, Challenge Quiz, and Adaptive Practice write `ConceptHealth` (the only thing Progress reads), so Long Exam, Board Exam, and Interview Practice can be ground for hours without moving Progress. This release records concept-level signals from those exam modes into `ConceptHealth` on session completion. The hard part is the domain→concept mapping (Long Exam reports LLM-tagged domain mastery; Progress is per-concept) — design it before writing. No new entity, no new quota, no new artifact; the work lives in `LongExamService` (Long + Board) and `InterviewPracticeService`, mirroring the existing `recordCorrectAnswers` contract. See `docs/product/ROADMAP.md` for full scope and locked rules.
+Theme: make Progress an honest, complete readiness picture for students and exam-takers. Before this release, only Quick Review, Challenge Quiz, and Adaptive Practice wrote `ConceptHealth` (the only thing Progress reads), so Long Exam, Board Exam, and Interview Practice could be ground for hours without moving Progress. This release records concept-level signals from those exam modes into `ConceptHealth` on session completion. The hard part is the domain→concept mapping (Long Exam reports LLM-tagged domain mastery; Progress is per-concept) — design it before writing. No new entity, no new quota, no new artifact; the work lives in `LongExamService` (Long + Board) and `InterviewPracticeService`, mirroring the existing `recordCorrectAnswers` contract. See `docs/product/ROADMAP.md` for full scope and locked rules.
 
 ### Shipped
 
-_None yet._
+- **Exam practice now feeds Progress** — Long Exam, Board Exam, and Interview Practice completions now record fully-correct concepts into `ConceptHealth` so Progress reflects exam-mode practice. Recording is constrained to concepts that exactly match a source Study Pack's `keyConcepts`, skips missing/unreadable source packs, and preserves the existing Progress read path while a later source-constrained prompt pass remains deferred.
 
 ---
 

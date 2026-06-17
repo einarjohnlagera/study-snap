@@ -145,6 +145,10 @@ Post-quiz goal nudges reinforce goals after off-goal practice:
 - v1 surfaces this card below `PostSessionNextStep` on Quick Review, Challenge Quiz, Board Exam Mode score reveal,
   and Adaptive Practice result screens. Long Exam and public quiz flows are excluded.
 
+## Progress Signals
+
+Completing Long Exam, Board Exam, or Interview Practice records concept-level signals into `ConceptHealth`, which is the only store `/progress` reads. The write uses the same fully-correct concept contract as Quick Review and Challenge Quiz, then intersects those concepts with each source Study Pack's `keyConcepts` before persisting. Concepts that do not exactly match a source pack key concept are ignored, and missing or unreadable source packs are skipped so completing the exam still returns its report.
+
 ## Analytics
 
 Exam hub analytics events are frontend-fired and non-blocking:

@@ -63,6 +63,13 @@ Aggregation path:
 
 The subject label comes from the Study Pack. Packs with a null or blank subject are grouped under `Other`.
 
+ConceptHealth write sources:
+
+- Quick Review, Challenge Quiz, and Adaptive Practice record their existing fully-correct concept signals.
+- Long Exam and Board Exam record fully-correct concepts on normal completion only when the concept exactly matches a source Study Pack's `keyConcepts`.
+- Interview Practice records the same exact-match ConceptHealth signals across its primary and additional source Study Packs.
+- Free-form exam labels that do not match a source pack key concept are dropped before writing, so Progress never depends on invisible orphan ConceptHealth rows.
+
 ## Aggregation Rules
 
 - Include all Study Packs owned by the authenticated user.

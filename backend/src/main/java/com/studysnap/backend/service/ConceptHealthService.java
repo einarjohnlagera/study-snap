@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -57,6 +58,38 @@ public class ConceptHealthService {
             entity.setUpdatedAt(now);
             conceptHealthRepository.save(entity);
         }
+    }
+
+    @Transactional
+    public void recordCorrectAnswersForKnownConcepts(
+        UUID userId,
+        UUID studyPackId,
+        List<String> correctConceptNames,
+        List<String> keyConcepts,
+        OffsetDateTime now
+    ) {
+        if (correctConceptNames == null || correctConceptNames.isEmpty() || keyConcepts == null || keyConcepts.isEmpty()) {
+            return;
+        }
+
+        Set<String> knownConcepts = keyConcepts.stream()
+            .map(this::normalizeConcept)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (knownConcepts.isEmpty()) {
+            return;
+        }
+
+        List<String> matchedConcepts = correctConceptNames.stream()
+            .map(this::normalizeConcept)
+            .filter(Objects::nonNull)
+            .filter(knownConcepts::contains)
+            .distinct()
+            .toList();
+        if (matchedConcepts.isEmpty()) {
+            return;
+        }
+        recordCorrectAnswers(userId, studyPackId, matchedConcepts, now);
     }
 
     @Transactional(readOnly = true)
