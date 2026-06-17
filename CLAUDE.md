@@ -6,15 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.29.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.30.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.29.1 — Bulk Generation Polish (anti-drift)
+## Active release: v0.30.0 — Readiness Signals (anti-drift)
 
-Base branch for this release: `releases/v0.29.1`. A small polish/follow-up release on the v0.29.0 bulk-generation flow. Full scope in `ROADMAP.md`; locked rules:
+Base branch for this release: `releases/v0.30.0`. Make Progress reflect all practice: record concept-level signals from the exam modes into `ConceptHealth` (the only thing Progress reads) on session completion. Full scope in `ROADMAP.md`; locked rules:
 
-- **Partial-outcome reporting, not progress infrastructure.** When a bulk topic's content generation or note-generation quota check fails before a note row exists, no note row is created — that behavior stays (a note without content is not persisted). v0.29.1 allows one narrow exception to the v0.29.0 no-batch/progress rule: a single terminal-outcome `bulk_generation_result` receipt, generated up front as a `resultId`, written once at batch completion, read once by the owner, then deleted or expired after 24h. It may store requested/created counts, generation-failed topic strings, quota-blocked topic strings, and retry context. It is **not** a batch-job entity, live progress table, per-item status row, or new status enum; those remain locked.
-- **Bulk access and quota.** Bulk generation is available to authenticated, onboarded users. Non-admin users stay on the existing quota-enforcing path; ADMIN bypasses bulk note-generation and Study Pack quota inside the bulk orchestration only.
-- **Out of scope (do not build without explicit ask):** the v0.30.0 Readiness Signals work (exam-mode results → Progress) and the v0.31.0 work (collection-level bulk *quiz* generation, async quiz generation, teacher quiz-preview polish).
+- **Fix the source, keep read-time fallbacks.** Today only Quick Review, Challenge, and Adaptive Practice write `ConceptHealth` (via `recordCorrectAnswers`). Long Exam, Board Exam, and Interview Practice produce rich per-session reports that are ephemeral (`sessionMetadata` JSON) and never persist — so exam-takers see a flat Progress page. Wire those results into `ConceptHealth` so they count.
+- **Two write-paths, not three.** Board Exam *is* `LONG_EXAM` session mode (no separate enum) and runs through `LongExamService`; Interview Practice runs through `InterviewPracticeService`. The recording work lives in those two services, mirroring the existing `recordCorrectAnswers` contract — **no new entity, no new quota, no new artifact.**
+- **Design the domain→concept mapping first.** Long Exam reports LLM-tagged **domain**-level mastery; Progress is per-**concept** `ConceptHealth`. The mapping is the hard part and must be designed before writing — do not invent a parallel mastery store.
+- **Out of scope (do not build without explicit ask):** the v0.31.0 work — collection-level bulk *quiz* generation, async quiz generation, and teacher quiz-preview polish (still gated on having teacher users).
 
 ## Source-of-truth docs (read before implementing anything)
 

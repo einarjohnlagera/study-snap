@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.30.0 - Readiness Signals` is the release currently in progress.
+
 `v0.29.1 - Bulk Generation Polish` is the current documentation baseline (last released).
 
 `v0.29.0 - Bulk Generation & Generation-Context Correctness` is the previous baseline.
@@ -13,8 +15,6 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.28.0 - Feature Discoverability & Activation` is the release before that.
 
 `v0.27.0 - Material Import & Collections` is the release before that.
-
-No release is currently in progress. Next candidate: `v0.30.0 - Readiness Signals` (see section below).
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -83,7 +83,9 @@ Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0
 
 ---
 
-## v0.30.0 (candidate) - Readiness Signals
+## v0.30.0 - Readiness Signals (in progress)
+
+Base branch for this release: `releases/v0.30.0`.
 
 Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers. The gap: practice in the exam modes never moves the Progress page. (Profile-type integrity was pulled forward into v0.29.0.)
 

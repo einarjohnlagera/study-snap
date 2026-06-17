@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.30.0 - Readiness Signals
+
+**Status: In Progress**
+
+Theme: make Progress an honest, complete readiness picture for students and exam-takers. Today only Quick Review, Challenge Quiz, and Adaptive Practice write `ConceptHealth` (the only thing Progress reads), so Long Exam, Board Exam, and Interview Practice can be ground for hours without moving Progress. This release records concept-level signals from those exam modes into `ConceptHealth` on session completion. The hard part is the domain→concept mapping (Long Exam reports LLM-tagged domain mastery; Progress is per-concept) — design it before writing. No new entity, no new quota, no new artifact; the work lives in `LongExamService` (Long + Board) and `InterviewPracticeService`, mirroring the existing `recordCorrectAnswers` contract. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+_None yet._
+
+---
+
 ## v0.29.1 - Bulk Generation Polish
 
 **Status: Released**
