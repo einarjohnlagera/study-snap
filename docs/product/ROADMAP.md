@@ -45,7 +45,7 @@ Scope:
 - **`/library/bulk-generate` admin page** — enter one Subject plus topic rows, use the compact profile-aware `Course / Program · Target Audience` grid plus Public toggle, and submit; results surface as real notes in the Library that resolve `GENERATING → READY`.
 - **Quota wiring** — per-user pre-flight quota check (admin-bypassed) plus a cost/count preview before the batch starts.
 
-Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.31.0 collection-level bulk *quiz* generation over existing notes.
+Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.32.0 collection-level bulk *quiz* generation over existing notes.
 
 ### Workstream 2 — Generation-context correctness (learner level → course/program)
 
@@ -89,7 +89,7 @@ Base branch for this release: `releases/v0.30.0`.
 
 Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers. The gap: practice in the exam modes never moves the Progress page. (Profile-type integrity was pulled forward into v0.29.0.)
 
-Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.31.0 (still no teacher users).
+Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.32.0 (still no teacher users).
 
 Locked direction:
 
@@ -104,13 +104,44 @@ Scope:
 - **Source-constrained key concepts** *(shipped)* — Long Exam and Interview question generation emit a schema-enforced per-question `keyConcept` from the source pack's key concepts; recording prefers it and falls back to the free-form `concept` for legacy/pool questions.
 - **Weakness signal across all modes** *(in progress)* — add `lastIncorrectAt` and record missed concepts on completion in every practice mode; Progress shows a distinct struggling indicator.
 
-Teacher-flow polish and bulk *quiz* generation stay in v0.31.0 (still no teacher users); no readiness work is deferred there.
+Teacher-flow polish and bulk *quiz* generation move to v0.32.0 (still no teacher users); v0.31.0 is now Adoptable Study Plans (v1). No readiness work is deferred.
 
 ---
 
-## v0.31.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+## v0.31.0 (next) - Adoptable Study Plans (v1)
 
-Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+Theme: most learners don't want to assemble a study plan note-by-note — they want a ready-made, structured plan for their goal (a LET taker wants a LET reviewer plan, not a pile of filtered notes). Observed behavior: most users only add their own notes; the pre-filtered Dashboard helps them *find* exam-relevant public notes but still leaves them to self-assemble. This release lets a learner **adopt** a curated, ordered study plan in one tap.
+
+Why now (over teacher-flow): this is the payoff of the two prior bets — **Bulk Generation** seeds the public exam content (ALE/PNLE/LET) and **Readiness Signals** make practice count. Adopt → practice → Progress reflects it. It serves the students/exam-takers we already have. Teacher-flow polish and bulk *quiz* generation are deferred to v0.32.0 (we still have no teacher users, so it is fine to defer).
+
+The discriminating constraint that fixes the design: the **entire learning loop — generation, `ConceptHealth`, Progress, "Next in this plan," and the v0.30.0 exam→Progress recording — runs on *owned* notes.** A plan that merely *links* public notes is inert (it cannot feed Progress). Therefore **adopt = copy, not reference.**
+
+Locked direction:
+
+- **Curation, never generation.** Sequencing is **human/admin curation over existing seeded content**, not AI-synthesized per user. This stays on the right side of the standing "never generate curriculum" rule. The forbidden version is *"auto-generate a personalized plan"* — do not build that here.
+- **Adopt = snapshot copy.** "Start this plan" copies the curated notes (with their linked Study Packs) into the user's library and creates a personal Study Plan (collection) in the curated order. After adoption it is fully the user's own — later edits to the curated source plan do **not** propagate (point-in-time snapshot). Reuse the existing public-note copy path `NoteService.copyNote(id, ownerUserId, includeStudyPack=true)`, which already copies the linked Study Pack and is idempotent (re-copy returns the existing copy). The adopt *output* is a normal `NoteCollection` (Study Plan) using `getCollectionLabels` for profile-aware naming.
+- **Quota: adopt is free, like copy.** Adoption bills nothing — it is a copy, not a generation. Billing happens only later, on the existing paths: Study Pack **regenerate** (if the user chooses to), and per-mode quota on **Challenge Quiz** and **Exam** when they practice. Do not let adoption become an accidental paywall.
+- **Copy volume: light, isolated, no new infra.** Adopting copies N notes + N study packs (cheap DB copies, **no LLM** — a plan is adoptable only when all its notes already have Study Packs). Wrap the copy fan-out in **per-item isolation** (one bad note never sinks the adopt). Do **not** reuse or add async/bulk-generation job infrastructure — a curated plan is bounded, so a single request with per-item try/catch is sufficient.
+- **Re-adopt rule.** `copyNote` is idempotent at the note level (re-copy returns the existing copy). The only open piece is the collection-level rule (skip already-owned notes vs. create a fresh plan) — decide at build time; do not duplicate notes.
+- **Depends on seeded public content.** This requires curated public notes per bucket (ALE/PNLE/LET) — the exact content Bulk Generation exists to seed. v1 targets those buckets only.
+
+Scope (v1 cut):
+
+- **Curated source plans (admin)** — an admin-owned, ordered representation of a study plan over already-**public** seeded notes. `NoteCollection` today is owner-private and over owned notes only, so the curated *source* needs an admin/public representation (admin-owned public collection variant, or config). The build needs a short design pass on this source shape; the adopt *output* is a normal user collection. No new content type, no AI synthesis.
+- **Surface + adopt** — present the relevant curated plan(s) on the Dashboard/onboarding for the user's exam, with a one-tap "Start this plan" that performs the snapshot copy (notes + linked Study Packs) and creates the personal Study Plan in curated order, then routes into the existing plan/loop.
+
+Deferred — explicitly, together (do not smuggle into v1):
+
+- **Live-link / shared-progress plans.** The "original owner keeps the plan; adopters get their own progress on shared content; owner pushes updates" model is a **different architecture**, not a setting — it requires letting users practice/track progress on study packs they do **not** own, relaxing the `findByIdAndOwnerUserId` ownership gate across every read/practice path plus per-user progress overlays on shared content. That is the **teacher-monitoring / LMS shape**, which belongs with teacher-flow (v0.32.0, gated on having teacher users). **Do not offer both own-copy and link-copy** — that doubles the surface for two architectures.
+- **User/teacher-authored plan sharing of *private* notes.** Snapshot copy relies on the public-note copy path, which requires the notes to be public. A teacher sharing their *private* curated notes to students has no copy path today (it would need a share-grant mechanism). So teacher→student sharing of private content is a separate deferred piece even in snapshot form.
+
+Anti-drift: reuse `copyNote(..., includeStudyPack=true)`, the `NoteCollection` model, and `getCollectionLabels`; no new quota category; no async/bulk-generation infra; no AI curriculum synthesis; no relaxation of note/study-pack ownership checks; v1 is admin-curated plans over public seeded notes only.
+
+---
+
+## v0.32.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 
