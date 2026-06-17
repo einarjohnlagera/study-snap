@@ -36,9 +36,11 @@ For Admin and Teacher, this produces `Course / Program · Target Audience`. The 
 
 ## Submission
 
-On a successful queue the page does not show an in-page acknowledgment. It stores a one-shot queued-count flash in `sessionStorage` and redirects to `/library`, where a toast — `Queued N notes — they'll appear here as they finish generating.` — confirms the batch was received. The flash is consumed once on Library mount and does not reappear on refresh. A `sessionStorage` flash is used instead of a query param because the Library rewrites its own URL from filter state, which would strip the param.
+On a successful queue the page does not show an in-page acknowledgment. It stores a one-shot flash containing the queued count and server-returned `resultId` in `sessionStorage` and redirects to `/library`, where a toast — `Queued N notes — they'll appear here as they finish generating.` — confirms the batch was received. The flash is consumed once on Library mount and does not reappear on refresh. A `sessionStorage` flash is used instead of a query param because the Library rewrites its own URL from filter state, which would strip the param.
 
-The Library auto-refreshes so the queued notes appear without a manual refresh. Consuming the flash starts a silent poller (it re-fetches `listNotes()` only — it does not toggle the loading skeleton or reset pagination). Rows that arrive after the initial load (the generated notes surfaced by the poller) animate in via the shared `motion-fade-enter` entrance rather than popping in abruptly; the initial list does not animate wholesale, and the entrance is disabled under `prefers-reduced-motion`. The poller is sustained while any visible note is `GENERATING` or the list is still growing, and it stops after a generous quiet window plus an absolute hard-cap backstop. Because bulk uses throttled **sequential** fan-out, there are recurring windows where no row is generating and none has newly appeared (between one topic finishing and the next topic's row materializing); the quiet window is sized to exceed that inter-topic gap so the batch is not truncated mid-way. A short initial grace covers the redirect moment when no rows exist yet. This is automatic load-on-refresh — not a backend batch/progress signal — so it cannot perfectly distinguish "batch complete" from "long gap"; the manual refresh remains the fallback. The same poller also auto-refreshes single-note generation, which had the identical never-auto-updates gap.
+The Library auto-refreshes so the queued notes appear without a manual refresh. Consuming the flash starts a silent poller (it re-fetches `listNotes()` only — it does not toggle the loading skeleton or reset pagination). Rows that arrive after the initial load (the generated notes surfaced by the poller) animate in via the shared `motion-fade-enter` entrance rather than popping in abruptly; the initial list does not animate wholesale, and the entrance is disabled under `prefers-reduced-motion`. The poller is sustained while any visible note is `GENERATING` or the list is still growing, and it stops after a generous quiet window plus an absolute hard-cap backstop. Because bulk uses throttled **sequential** fan-out, there are recurring windows where no row is generating and none has newly appeared (between one topic finishing and the next topic's row materializing); the quiet window is sized to exceed that inter-topic gap so the batch is not truncated mid-way. A short initial grace covers the redirect moment when no rows exist yet. This is automatic load-on-refresh, not live backend progress. The same poller also auto-refreshes single-note generation, which had the identical never-auto-updates gap.
+
+After the poller settles, the Library makes a best-effort read of the terminal result receipt via `GET /notes/bulk-generate/results/{id}`. If the receipt is not ready yet, the Library retries a bounded number of times; if it is still missing, already read, owned by someone else, or a transient request fails, no banner is shown and the Library continues normally. A receipt with zero failed topics is silent. A receipt with failed topics shows a dismissible banner above the list: `X of Y notes generated. These couldn't be generated — try again:` followed by the full failed topic strings. `Retry these` stores the failed topics plus subject, course/program, target audience, and public toggle in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
 
 ## Profile-Aware Resolution
 
@@ -54,7 +56,7 @@ Profile type maps to note target profile as follows: `BOARD_EXAM -> BOARD_TAKER`
 
 Note content and Study Pack content are calibrated by the resolved Course / Program so copied/shared content remains appropriate for everyone in that program. The owner's profile learner level is still carried best-effort in `StudyPackGenerationContext` only for exam-question pool pre-warm; it is not accepted as bulk input and does not level static content.
 
-The endpoint remains ADMIN-only in v0.29.0. Teacher and non-teacher branches are dormant until the role gate is intentionally relaxed.
+The endpoint remains ADMIN-only in v0.29.1. Teacher and non-teacher branches are dormant until the role gate is intentionally relaxed.
 
 ## Per-Topic Flow
 
@@ -67,7 +69,15 @@ The endpoint validates the request, queues one throttled background batch on the
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
 
-One topic failure is caught and logged without aborting later topics. There is no persisted batch record. Notes appear as real Library rows and independently resolve through the existing `GENERATING -> STUDY_PACK_READY` or `FAILED` states.
+One topic failure is caught and logged without aborting later topics. Notes appear as real Library rows and independently resolve through the existing `GENERATING -> STUDY_PACK_READY` or `FAILED` states.
+
+## Terminal Result Receipt
+
+v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, the worker writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, and `failedTopics` (a JSON array of topic strings whose content generation failed). The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation.
+
+`GET /notes/bulk-generate/results/{id}` is ADMIN-gated and owner-scoped. It returns the receipt only to the owner, deletes it in the same read-once flow, and returns 404 when the id is unknown, already read, or owned by someone else. A scheduled cleanup removes unread receipts older than 24 hours.
+
+This receipt is not a batch-job entity, not a progress table, not a per-item status table, and not a status enum. It has no in-flight state and is not polled for live progress. The broader v0.29.0 rule remains: no placeholder notes, no failed-note rows, no live batch progress infrastructure.
 
 ## Metadata Rule
 
@@ -83,12 +93,13 @@ The batch subject wins. Bulk Study Pack completion applies the AI-refined title 
 
 ## Out Of Scope
 
-- persisted batch/job entities, progress tables, or new status enums
+- persisted batch/job entities, live progress tables, per-item progress rows, or new status enums beyond the terminal read-once receipt
 - a batch progress/status page
-- partial-execution messaging when a future non-admin runs out of quota mid-batch
+- live partial-execution progress; terminal partial-outcome messaging for content-generation failures is in scope through the receipt
+- partial-execution quota messaging when a future non-admin runs out of quota mid-batch
 - production regeneration or backfill of existing Study Packs
 - collection-level bulk quiz generation
 - async quiz generation
 - opening the frontend flow to non-admin users
 
-No new analytics event was added for v0.29.0.
+No new analytics event was added for v0.29.1.

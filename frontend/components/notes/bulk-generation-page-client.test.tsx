@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
 import { bulkGenerateNotes, getMe, listCoursePrograms, listSubjects } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { consumeBulkQueuedFlash } from "@/lib/bulk-generation-flash";
+import {
+  consumeBulkQueuedFlash,
+  setBulkGenerationRetryStash,
+} from "@/lib/bulk-generation-flash";
 
 const replaceMock = jest.fn();
 const pushMock = jest.fn();
@@ -96,6 +99,7 @@ describe("BulkGenerationPageClient", () => {
 
   it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
     (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({
+      resultId: "result-1",
       acceptedTopics: 2,
       queuedTopics: 2,
       rejectedTopics: 0,
@@ -116,7 +120,28 @@ describe("BulkGenerationPageClient", () => {
       });
     });
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));
-    expect(consumeBulkQueuedFlash()).toBe(2);
+    expect(consumeBulkQueuedFlash()).toEqual({ queuedCount: 2, resultId: "result-1" });
+  });
+
+  it("prefills from retry stash and clears it", async () => {
+    setBulkGenerationRetryStash({
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      targetProfileType: "BOARD_TAKER",
+      makePublic: true,
+      topics: ["Prenatal Care", "Labor Stages"],
+    });
+
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
+    expect(screen.getByLabelText(/^Course \/ Program/)).toHaveValue("Nursing");
+    expect(screen.getByLabelText(/^Target Audience/)).toHaveValue("BOARD_TAKER");
+    expect(screen.getByRole("switch", { name: /public/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
+    expect(screen.getByLabelText(/^Topic 2$/)).toHaveValue("Labor Stages");
+    expect(globalThis.sessionStorage.getItem("notelib.bulk.retryTopics")).toBeNull();
   });
 
   it("splits a multi-line paste into separate topic rows and strips list markers", async () => {

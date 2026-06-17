@@ -11,6 +11,10 @@ Current documentation baseline:
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
+Active release guardrail:
+
+- v0.29.1 consciously allows one narrow relaxation of the v0.29.0 no batch/progress infrastructure rule: a single terminal-outcome `bulk_generation_result` receipt for bulk generation, written once at batch completion, read once by the owner, then deleted or expired after 24h. This receipt may carry requested/created counts, failed topic strings, and retry context. It is not a batch-job entity, live progress table, per-item status row, or new status enum; the broader no batch/progress infrastructure rule still applies everywhere else.
+
 ## Product Summary
 
 NoteLib converts notes into structured study outputs and review workflows.

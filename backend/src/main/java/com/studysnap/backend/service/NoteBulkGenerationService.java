@@ -51,6 +51,7 @@ public class NoteBulkGenerationService {
     private final StudyPackGenerationTaskDispatcher taskDispatcher;
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
+    private final BulkGenerationResultService bulkGenerationResultService;
     private final int maxTopics;
     private final int throttleDelayMs;
 
@@ -64,6 +65,7 @@ public class NoteBulkGenerationService {
             StudyPackGenerationTaskDispatcher taskDispatcher,
             UserRepository userRepository,
             OnboardingGuardService onboardingGuardService,
+            BulkGenerationResultService bulkGenerationResultService,
             @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
@@ -76,6 +78,7 @@ public class NoteBulkGenerationService {
         this.taskDispatcher = taskDispatcher;
         this.userRepository = userRepository;
         this.onboardingGuardService = onboardingGuardService;
+        this.bulkGenerationResultService = bulkGenerationResultService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
@@ -88,56 +91,92 @@ public class NoteBulkGenerationService {
         onboardingGuardService.assertProfileComplete(ownerUserId);
         UserEntity owner = userRepository.findById(ownerUserId).orElseThrow(UserNotFoundException::new);
         NormalizedBatch batch = normalizeAndValidate(request, owner);
-        taskDispatcher.execute(() -> processBatch(batch, ownerUserId, enforceLimits));
+        UUID resultId = UUID.randomUUID();
+        taskDispatcher.execute(() -> processBatch(resultId, batch, ownerUserId, enforceLimits));
         return new BulkGenerateNotesResponse(
+                resultId,
                 batch.items().size(),
                 batch.items().size(),
                 batch.rejectedTopics()
         );
     }
 
-    private void processBatch(NormalizedBatch batch, UUID ownerUserId, boolean enforceLimits) {
+    private void processBatch(UUID resultId, NormalizedBatch batch, UUID ownerUserId, boolean enforceLimits) {
         AtomicInteger createdCount = new AtomicInteger();
-        AtomicInteger failedCount = new AtomicInteger();
+        List<String> failedTopics = new ArrayList<>();
 
-        for (int index = 0; index < batch.items().size(); index++) {
-            BulkGenerationItem item = batch.items().get(index);
+        try {
+            StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
+                    ownerUserId,
+                    batch.courseProgram(),
+                    batch.subject()
+            );
+            for (int index = 0; index < batch.items().size(); index++) {
+                BulkGenerationItem item = batch.items().get(index);
+                try {
+                    processItem(batch, item, ownerUserId, enforceLimits, context);
+                    createdCount.incrementAndGet();
+                } catch (RuntimeException exception) {
+                    failedTopics.add(item.topic());
+                    log.warn(
+                            "action=bulk_generate_note outcome=failed topic={} subject={} ownerUserId={}",
+                            item.topic(),
+                            batch.subject(),
+                            ownerUserId,
+                            exception
+                    );
+                }
+                throttleBeforeNext(index, batch.items().size());
+            }
+        } catch (RuntimeException exception) {
+            failedTopics.clear();
+            failedTopics.addAll(batch.items().stream().map(BulkGenerationItem::topic).toList());
+            log.warn(
+                    "action=bulk_generate_batch outcome=failed_before_loop accepted={} subject={} ownerUserId={}",
+                    batch.items().size(),
+                    batch.subject(),
+                    ownerUserId,
+                    exception
+            );
+        } finally {
             try {
-                processItem(batch, item, ownerUserId, enforceLimits);
-                createdCount.incrementAndGet();
+                bulkGenerationResultService.recordResult(
+                        resultId,
+                        ownerUserId,
+                        batch.subject(),
+                        batch.courseProgram(),
+                        batch.targetProfileType().name(),
+                        batch.makePublic(),
+                        batch.items().size(),
+                        createdCount.get(),
+                        failedTopics
+                );
             } catch (RuntimeException exception) {
-                failedCount.incrementAndGet();
                 log.warn(
-                        "action=bulk_generate_note outcome=failed topic={} subject={} ownerUserId={}",
-                        item.topic(),
+                        "action=bulk_generate_result outcome=failed_to_record resultId={} subject={} ownerUserId={}",
+                        resultId,
                         batch.subject(),
                         ownerUserId,
                         exception
                 );
             }
-            throttleBeforeNext(index, batch.items().size());
+            log.info(
+                    "action=bulk_generate_batch outcome=completed accepted={} created={} failed={} ownerUserId={}",
+                    batch.items().size(),
+                    createdCount.get(),
+                    failedTopics.size(),
+                    ownerUserId
+            );
         }
-
-        log.info(
-                "action=bulk_generate_batch outcome=completed accepted={} created={} failed={} ownerUserId={}",
-                batch.items().size(),
-                createdCount.get(),
-                failedCount.get(),
-                ownerUserId
-        );
     }
 
     private void processItem(
             NormalizedBatch batch,
             BulkGenerationItem item,
             UUID ownerUserId,
-            boolean enforceLimits
+            boolean enforceLimits,
+            StudyPackGenerationContext context
     ) {
-        StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
-                ownerUserId,
-                batch.courseProgram(),
-                batch.subject()
-        );
         String content = enforceLimits
                 ? noteGenerationService.generateFromTopic(
                         new GenerateNoteFromTopicRequest(item.topic(), batch.courseProgram()),
@@ -157,16 +196,38 @@ public class NoteBulkGenerationService {
                 ownerUserId
         );
         if (batch.makePublic()) {
-            noteService.updateVisibility(note.id(), NoteVisibility.PUBLIC.name(), ownerUserId);
+            try {
+                noteService.updateVisibility(note.id(), NoteVisibility.PUBLIC.name(), ownerUserId);
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "action=bulk_generate_note_visibility outcome=failed_after_note_created noteId={} topic={} subject={} ownerUserId={}",
+                        note.id(),
+                        item.topic(),
+                        batch.subject(),
+                        ownerUserId,
+                        exception
+                );
+            }
         }
-        studyPackService.startAsyncGenerationFromNote(
-                note.id(),
-                ownerUserId,
-                false,
-                enforceLimits,
-                context,
-                batch.subject()
-        );
+        try {
+            studyPackService.startAsyncGenerationFromNote(
+                    note.id(),
+                    ownerUserId,
+                    false,
+                    enforceLimits,
+                    context,
+                    batch.subject()
+            );
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "action=bulk_generate_study_pack outcome=failed_after_note_created noteId={} topic={} subject={} ownerUserId={}",
+                    note.id(),
+                    item.topic(),
+                    batch.subject(),
+                    ownerUserId,
+                    exception
+            );
+        }
     }
 
     private String generateAdminContent(String topic, StudyPackGenerationContext context) {
