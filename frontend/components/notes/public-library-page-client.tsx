@@ -67,11 +67,9 @@ const POPULAR_TAG_LIMIT_DESKTOP = 6;
 const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
-const COPY_SUCCESS_BODY_LINE_ONE = "You can start reviewing now or come back later from your library.";
+const COPY_SUCCESS_BODY_LINE_ONE = "The note and its Study Pack are now in your library — open it to read, quiz yourself, and track your progress.";
 const MODAL_VIEW_NOTE_LABEL = "View Note";
-const MODAL_START_REVIEW_LABEL = "Start Review";
 const MOBILE_SUCCESS_SHEET_MEDIA_QUERY = "(max-width: 639px)";
-const CLOSE_MODAL_LABEL = "Close copied to your library";
 const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
 const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
@@ -1949,41 +1947,17 @@ export function PublicLibraryPageClient() {
         contentClassName="space-y-3"
         actionsClassName="mt-5"
         headerClassName={isMobileSuccessSheet ? "gap-3" : "gap-4"}
-        headerActions={(
-          <button
-            type="button"
-            aria-label={CLOSE_MODAL_LABEL}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/90 text-foreground/60 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-            onClick={() => setCopySuccessState(null)}
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
         enableSwipeToClose={isMobileSuccessSheet}
         actions={copySuccessState ? (
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
             <ResponsiveActionButton
               type="button"
-              variant="outline"
               className="w-full sm:w-auto"
               action="library"
               label={MODAL_VIEW_NOTE_LABEL}
               onClick={() => {
                 startRouteProgress();
                 router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "library"));
-              }}
-              showTextOnMobile
-            />
-            <ResponsiveActionButton
-              type="button"
-              className="w-full sm:w-auto"
-              action="quickReview"
-              label={MODAL_START_REVIEW_LABEL}
-              onClick={() => {
-                startRouteProgress();
-                router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review", {
-                  skipGenerate: copySuccessState.studyPackStatus === "STUDY_PACK_READY",
-                }));
               }}
               showTextOnMobile
             />

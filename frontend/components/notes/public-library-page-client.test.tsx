@@ -143,7 +143,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("By Study Buddy · @studybuddy")).toBeInTheDocument();
     expect(screen.getByText("8 views")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "By Study Buddy · @studybuddy" })).toHaveAttribute("href", "/public/creator/studybuddy");
-    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Add to Library" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
   });
 
@@ -352,7 +352,7 @@ describe("PublicLibraryPageClient", () => {
 
     render(<PublicLibraryPageClient />);
 
-    const savedButton = await screen.findByRole("button", { name: "Saved" });
+    const savedButton = await screen.findByRole("button", { name: "In Library" });
     expect(savedButton).toBeDisabled();
     expect(screen.queryByText("Already in your library")).not.toBeInTheDocument();
 
@@ -377,7 +377,7 @@ describe("PublicLibraryPageClient", () => {
 
     render(<PublicLibraryPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add to Library" }));
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-9");
@@ -386,14 +386,14 @@ describe("PublicLibraryPageClient", () => {
     const dialog = await screen.findByRole("dialog", { name: "Copied to your library" });
     const modal = within(dialog);
 
-    expect(modal.getByText("You can start reviewing now or come back later from your library.")).toBeInTheDocument();
+    expect(modal.getByText("The note and its Study Pack are now in your library — open it to read, quiz yourself, and track your progress.")).toBeInTheDocument();
     expect(modal.getByRole("button", { name: "View Note" })).toBeInTheDocument();
-    expect(modal.getByRole("button", { name: "Start Review" })).toBeInTheDocument();
-    expect(modal.getByRole("button", { name: "Close copied to your library" })).toBeInTheDocument();
+    expect(modal.queryByRole("button", { name: "Start Review" })).not.toBeInTheDocument();
+    expect(modal.getAllByRole("button", { name: "Close" })).toHaveLength(1);
 
-    fireEvent.click(modal.getByRole("button", { name: "Start Review" }));
+    fireEvent.click(modal.getByRole("button", { name: "View Note" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-9?copied=1&startQuickReview=1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-9?copied=1");
   });
 
   it("uses a bottom-sheet success surface on mobile", async () => {
@@ -410,7 +410,7 @@ describe("PublicLibraryPageClient", () => {
 
     render(<PublicLibraryPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add to Library" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Copied to your library" });
     const modal = within(dialog);
@@ -418,7 +418,7 @@ describe("PublicLibraryPageClient", () => {
     expect(dialog.className).toContain("self-end");
     expect(dialog.className).toContain("rounded-t-[28px]");
     expect(modal.getByRole("button", { name: "View Note" }).className).toContain("w-full");
-    expect(modal.getByRole("button", { name: "Start Review" }).className).toContain("w-full");
+    expect(modal.queryByRole("button", { name: "Start Review" })).not.toBeInTheDocument();
     const handle = dialog.querySelector(".h-1\\.5.w-12.rounded-full");
     expect(handle?.parentElement?.className).toContain("mb-4");
   });

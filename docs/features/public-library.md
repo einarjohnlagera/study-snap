@@ -332,36 +332,29 @@ Interaction rules:
 
 - whole card opens the canonical public note route
 - keep the card itself clickable for navigation
-- Public Library cards may include one inline secondary CTA at the bottom-right: `Save`
+- Public Library cards may include one inline secondary CTA at the bottom-right: `Add to Library` (copies the note + its Study Pack); the label names the destination, not a bare `Save` (which read as a bookmark next to the like/heart) — icon is a copy/library glyph (`BookPlus`), not a save/bookmark glyph
 - Public Library cards may also include a subtle inline heart toggle in the metrics row
-- the inline save CTA must stop card navigation when clicked
+- the inline copy CTA must stop card navigation when clicked
 - the inline heart toggle must stop card navigation when clicked
 - the CTA should stay subtle:
   - icon + short label
   - outline / ghost weight
   - never full width
-- guest clicks on `Save` should open an auth prompt modal instead of redirecting immediately
+- the card carries a single primary copy action on every breakpoint — no dropdown/caret (poor touch target); the editable-draft fork lives on the public note detail page, not the card
+- guest clicks on `Add to Library` should open an auth prompt modal instead of redirecting immediately
 - guest clicks on the heart toggle should open an auth prompt modal instead of silently failing
-- if the viewer already copied that note, replace the save CTA with muted `Saved`
-- copied state should be conveyed by the available action, not by an extra `In Library` badge
-- a successful card copy should show a confirmation modal with:
-  - `View Note`
-  - `Start Review`
-- `Start Review` is the primary CTA in the modal
-- `View Note` is the secondary CTA
-- `View Note` replaces generic `Open` wording for copied-note navigation
+- if the viewer already copied that note, replace the copy CTA with muted `In Library`
+- copied state should be conveyed by the available action, not by an extra badge
+- a successful card copy should show a confirmation modal whose single action is `View Note` (the primary CTA); the Quick Review quick-action was removed because it under-utilized the note (the detail page is the hub for all study modes)
+- `View Note` replaces generic `Open` wording for copied-note navigation; it routes to the copied note's detail page (`?copied=1`)
 - copying a public note with a linked Study Pack copies the generated summary, key concepts, and quiz; the copied note arrives as Study Pack Ready
-- `Start Review` routes directly to Quick Review for Study Pack Ready copies
-- `Start Review` may route through copied-note generation first only when the public source has no Study Pack and the copied note is still a draft
-- modal body copy should stay short:
-  - `You can start reviewing now or come back later from your library.`
+- modal body copy states the payoff:
+  - `The note and its Study Pack are now in your library — open it to read, quiz yourself, and track your progress.`
 - modal/sheet header should feel success-oriented but minimal:
   - subtle check-style success indicator
   - stronger title hierarchy
-- desktop should use a modal with a visible top-right close button
+- desktop should use a modal with a single visible close button (`AppModal`'s built-in — do not pass a second close button via `headerActions`)
 - mobile should use a dismissible bottom sheet instead of a centered modal
-- desktop should right-align actions in the order `View Note`, `Start Review`
-- mobile should stack full-width actions with the primary CTA visually first
 - modal/sheet actions should use clean spacing and subtle depth so the surface feels polished without becoming heavy
 - avoid generic navigation button labels like `Open` on Public Library cards; card click already owns detail navigation
 - card footer should align author metadata left and save state/action right
@@ -518,7 +511,7 @@ All three guest auth surfaces now use the same dual `Log In` / `Sign Up` AppModa
 - `PublicLibraryLikeAction` → AppModal (unchanged)
 - `PublicSeoCopyCta` → AppModal (was: direct push to `/signup` or `/login`, now opens modal)
 
-The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Modal title: "Save this note". Redirect URLs carry the copy intent query params so auto-copy fires after auth.
+The `guestAuthMode` prop has been removed from `PublicSeoCopyCta`. Card auth-modal title: "Add this note to your library". Redirect URLs carry the copy intent query params so auto-copy fires after auth.
 
 ### E — (resolved in docs) Mini quiz preview count
 
