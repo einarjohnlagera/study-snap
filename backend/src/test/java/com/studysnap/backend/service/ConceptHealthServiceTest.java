@@ -39,6 +39,8 @@ class ConceptHealthServiceTest {
     private static final String CURRENT_CONCEPT = "Current";
     private static final String NEVER_SEEN_CONCEPT = "Never Seen";
     private static final String SECOND_PACK_NEVER_SEEN_CONCEPT = "Second Pack Never Seen";
+    private static final String MISSED_CONCEPT = "Missed Concept";
+    private static final String FREE_FORM_LABEL = "Free-form label";
 
     @Mock
     private ConceptHealthRepository conceptHealthRepository;
@@ -91,6 +93,7 @@ class ConceptHealthServiceTest {
         OffsetDateTime previous = OffsetDateTime.of(2026, 5, 20, 8, 0, 0, 0, ZoneOffset.UTC);
         OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
         ConceptHealthEntity existing = conceptHealth(userId, studyPackId, RECURSION_CONCEPT, previous);
+        existing.setLastIncorrectAt(now.minusDays(1));
 
         when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, RECURSION_CONCEPT))
             .thenReturn(Optional.of(existing));
@@ -99,8 +102,48 @@ class ConceptHealthServiceTest {
 
         verify(conceptHealthRepository).save(existing);
         assertThat(existing.getLastCorrectAt()).isEqualTo(now);
+        assertThat(existing.getLastIncorrectAt()).isEqualTo(now.minusDays(1));
         assertThat(existing.getUpdatedAt()).isEqualTo(now);
         assertThat(existing.getCreatedAt()).isEqualTo(previous);
+    }
+
+    @Test
+    void recordIncorrectAnswers_setsLastIncorrectAtWithoutTouchingLastCorrectAt() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime previous = OffsetDateTime.of(2026, 5, 20, 8, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        ConceptHealthEntity existing = conceptHealth(userId, studyPackId, MISSED_CONCEPT, previous);
+
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, MISSED_CONCEPT))
+            .thenReturn(Optional.of(existing));
+
+        conceptHealthService.recordIncorrectAnswers(userId, studyPackId, List.of(MISSED_CONCEPT), now);
+
+        verify(conceptHealthRepository).save(existing);
+        assertThat(existing.getLastCorrectAt()).isEqualTo(previous);
+        assertThat(existing.getLastIncorrectAt()).isEqualTo(now);
+        assertThat(existing.getUpdatedAt()).isEqualTo(now);
+    }
+
+    @Test
+    void recordIncorrectAnswers_insertsMissOnlyRecordWithNullLastCorrectAt() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, MISSED_CONCEPT))
+            .thenReturn(Optional.empty());
+
+        conceptHealthService.recordIncorrectAnswers(userId, studyPackId, List.of(MISSED_CONCEPT), now);
+
+        ArgumentCaptor<ConceptHealthEntity> captor = ArgumentCaptor.forClass(ConceptHealthEntity.class);
+        verify(conceptHealthRepository).save(captor.capture());
+        ConceptHealthEntity saved = captor.getValue();
+        assertThat(saved.getLastCorrectAt()).isNull();
+        assertThat(saved.getLastIncorrectAt()).isEqualTo(now);
+        assertThat(saved.getCreatedAt()).isEqualTo(now);
+        assertThat(saved.getUpdatedAt()).isEqualTo(now);
     }
 
     @Test
@@ -114,6 +157,141 @@ class ConceptHealthServiceTest {
 
         verify(conceptHealthRepository, never()).findByUserIdAndStudyPackIdAndConcept(any(), any(), any());
         verify(conceptHealthRepository, never()).save(any());
+    }
+
+    @Test
+    void recordCorrectAnswersForKnownConcepts_recordsOnlyConceptsPresentInKeyConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, OHMS_LAW_CONCEPT))
+            .thenReturn(Optional.empty());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, RECURSION_CONCEPT))
+            .thenReturn(Optional.empty());
+
+        conceptHealthService.recordCorrectAnswersForKnownConcepts(
+            userId,
+            studyPackId,
+            List.of(" " + OHMS_LAW_CONCEPT + " ", FREE_FORM_LABEL, RECURSION_CONCEPT, RECURSION_CONCEPT),
+            List.of(OHMS_LAW_CONCEPT, " " + RECURSION_CONCEPT + " "),
+            now
+        );
+
+        ArgumentCaptor<ConceptHealthEntity> captor = ArgumentCaptor.forClass(ConceptHealthEntity.class);
+        verify(conceptHealthRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+            .extracting(ConceptHealthEntity::getConcept)
+            .containsExactly(OHMS_LAW_CONCEPT, RECURSION_CONCEPT);
+    }
+
+    @Test
+    void recordIncorrectAnswersForKnownConcepts_recordsOnlyConceptsPresentInKeyConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, OHMS_LAW_CONCEPT))
+            .thenReturn(Optional.empty());
+
+        conceptHealthService.recordIncorrectAnswersForKnownConcepts(
+            userId,
+            studyPackId,
+            List.of(" " + OHMS_LAW_CONCEPT + " ", FREE_FORM_LABEL),
+            List.of(OHMS_LAW_CONCEPT),
+            now
+        );
+
+        ArgumentCaptor<ConceptHealthEntity> captor = ArgumentCaptor.forClass(ConceptHealthEntity.class);
+        verify(conceptHealthRepository).save(captor.capture());
+        ConceptHealthEntity saved = captor.getValue();
+        assertThat(saved.getConcept()).isEqualTo(OHMS_LAW_CONCEPT);
+        assertThat(saved.getLastIncorrectAt()).isEqualTo(now);
+        assertThat(saved.getLastCorrectAt()).isNull();
+    }
+
+    @Test
+    void recordCorrectAnswersForKnownConcepts_noopsWhenNoCorrectConceptMatchesKeyConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+
+        conceptHealthService.recordCorrectAnswersForKnownConcepts(
+            userId,
+            studyPackId,
+            List.of(FREE_FORM_LABEL),
+            List.of(OHMS_LAW_CONCEPT),
+            now
+        );
+
+        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackIdAndConcept(any(), any(), any());
+        verify(conceptHealthRepository, never()).save(any());
+    }
+
+    @Test
+    void getConceptHealth_marksConceptStrugglingWhenLastIncorrectIsNewerThanLastCorrect() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        ConceptHealthEntity health = conceptHealth(userId, studyPackId, MISSED_CONCEPT, now.minusDays(2));
+        health.setLastIncorrectAt(now.minusHours(1));
+
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId)).thenReturn(List.of(health));
+
+        List<ConceptHealthEntryResponse> response = conceptHealthService.getConceptHealth(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now
+        );
+
+        assertThat(response).singleElement().satisfies(entry -> {
+            assertThat(entry.lastIncorrectAt()).isEqualTo(now.minusHours(1));
+            assertThat(entry.isStruggling()).isTrue();
+        });
+    }
+
+    @Test
+    void getConceptHealth_clearsStrugglingWhenLastCorrectIsNewerThanLastIncorrect() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        ConceptHealthEntity health = conceptHealth(userId, studyPackId, CURRENT_CONCEPT, now.minusHours(1));
+        health.setLastIncorrectAt(now.minusDays(1));
+
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId)).thenReturn(List.of(health));
+
+        List<ConceptHealthEntryResponse> response = conceptHealthService.getConceptHealth(
+            userId,
+            studyPackId,
+            List.of(CURRENT_CONCEPT),
+            now
+        );
+
+        assertThat(response).singleElement().satisfies(entry -> assertThat(entry.isStruggling()).isFalse());
+    }
+
+    @Test
+    void getConceptHealth_marksMissOnlyConceptStrugglingAndDue() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        ConceptHealthEntity health = conceptHealthWithSignals(userId, studyPackId, MISSED_CONCEPT, null, now.minusHours(1), now);
+
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId)).thenReturn(List.of(health));
+
+        List<ConceptHealthEntryResponse> response = conceptHealthService.getConceptHealth(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now
+        );
+
+        assertThat(response).singleElement().satisfies(entry -> {
+            assertThat(entry.lastCorrectAt()).isNull();
+            assertThat(entry.lastIncorrectAt()).isEqualTo(now.minusHours(1));
+            assertThat(entry.isStruggling()).isTrue();
+            assertThat(entry.isDue()).isTrue();
+            assertThat(entry.daysSinceReview()).isNull();
+        });
     }
 
     @Test
@@ -274,14 +452,26 @@ class ConceptHealthServiceTest {
         String concept,
         OffsetDateTime lastCorrectAt
     ) {
+        return conceptHealthWithSignals(userId, studyPackId, concept, lastCorrectAt, null, lastCorrectAt);
+    }
+
+    private ConceptHealthEntity conceptHealthWithSignals(
+        UUID userId,
+        UUID studyPackId,
+        String concept,
+        OffsetDateTime lastCorrectAt,
+        OffsetDateTime lastIncorrectAt,
+        OffsetDateTime createdAt
+    ) {
         ConceptHealthEntity entity = new ConceptHealthEntity();
         entity.setId(UUID.randomUUID());
         entity.setUserId(userId);
         entity.setStudyPackId(studyPackId);
         entity.setConcept(concept);
         entity.setLastCorrectAt(lastCorrectAt);
-        entity.setCreatedAt(lastCorrectAt);
-        entity.setUpdatedAt(lastCorrectAt);
+        entity.setLastIncorrectAt(lastIncorrectAt);
+        entity.setCreatedAt(createdAt);
+        entity.setUpdatedAt(createdAt);
         return entity;
     }
 }

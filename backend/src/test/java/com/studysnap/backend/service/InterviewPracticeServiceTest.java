@@ -16,6 +16,7 @@ import com.studysnap.backend.dto.InterviewPracticeAnswerResponse;
 import com.studysnap.backend.dto.InterviewPracticeStartRequest;
 import com.studysnap.backend.dto.InterviewPracticeStartResponse;
 import com.studysnap.backend.dto.InterviewReadinessReportResponse;
+import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.Feature;
@@ -74,6 +75,8 @@ class InterviewPracticeServiceTest {
     private AiRateLimitService aiRateLimitService;
     @Mock
     private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private ConceptHealthService conceptHealthService;
 
     private InterviewPracticeService service;
 
@@ -91,7 +94,8 @@ class InterviewPracticeServiceTest {
                 authService,
                 analyticsService,
                 aiRateLimitService,
-                generationContextResolver
+                generationContextResolver,
+                conceptHealthService
         );
     }
 
@@ -430,9 +434,11 @@ class InterviewPracticeServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, noteId, studyPackId, buildQuiz(2));
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 0, 0, 130));
         session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 1, 2, 80));
+        StudyPackEntity studyPack = buildStudyPack(userId, noteId, studyPackId);
 
         when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
                 .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -443,6 +449,143 @@ class InterviewPracticeServiceTest {
         assertThat(report.pacingNotes()).containsExactly(0);
         assertThat(report.gaps()).hasSize(1);
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Transactions")),
+                eq(List.of("Transactions", "Concurrency")),
+                any(OffsetDateTime.class)
+        );
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Concurrency")),
+                eq(List.of("Transactions", "Concurrency")),
+                any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
+    void completeSessionRecordsFullyCorrectConceptsAgainstMatchingSourcePacks() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(userId, primaryNoteId, primaryStudyPackId, List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Database durability", "Explanation",
+                        null, "MCQ", null, null, null, null, "Transactions"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), 1, "Thread safety", "Explanation",
+                        null, "MCQ", null, null, null, null, "Concurrency"),
+                new QuizItem("Q3", List.of("A", "B", "C", "D"), 2, "Free-form", "Explanation")
+        ));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 0, 0, 90));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 1, 1, 80));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 2, 2, 70));
+        session.setSessionState(withInterviewSourceRefs(session.getSessionState(), additionalStudyPackId, additionalNoteId));
+        StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
+        primaryStudyPack.setKeyConcepts(List.of("Transactions"));
+        StudyPackEntity additionalStudyPack = buildStudyPack(userId, additionalNoteId, additionalStudyPackId);
+        additionalStudyPack.setKeyConcepts(List.of("Concurrency"));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserId(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InterviewReadinessReportResponse report = service.completeSession(sessionId, userId);
+
+        assertThat(report.scorePercentage()).isEqualTo(100);
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(List.of("Transactions", "Concurrency", "Free-form")),
+                eq(List.of("Transactions")),
+                any(OffsetDateTime.class)
+        );
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(additionalStudyPackId),
+                eq(List.of("Transactions", "Concurrency", "Free-form")),
+                eq(List.of("Concurrency")),
+                any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
+    void completeSessionSkipsMissingSourcePackAndStillReturnsReport() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID missingStudyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(userId, primaryNoteId, primaryStudyPackId, List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Transactions", "Explanation")
+        ));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 0, 0, 90));
+        session.setSessionState(withInterviewSourceRefs(session.getSessionState(), missingStudyPackId, additionalNoteId));
+        StudyPackEntity primaryStudyPack = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserId(missingStudyPackId, userId))
+                .thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InterviewReadinessReportResponse report = service.completeSession(sessionId, userId);
+
+        assertThat(report.totalQuestions()).isEqualTo(1);
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(primaryStudyPackId),
+                eq(List.of("Transactions")),
+                eq(List.of("Transactions", "Concurrency")),
+                any(OffsetDateTime.class)
+        );
+        verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(missingStudyPackId),
+                any(),
+                any(),
+                any()
+        );
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(missingStudyPackId),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void forfeitSessionMarksInProgressSessionWithoutRecordingConceptHealth() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(userId, noteId, studyPackId, buildQuiz(2));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+                .thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.forfeitSession(sessionId, userId);
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(session.getCompletedAt()).isNotNull();
+        verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID userId, UUID noteId, UUID studyPackId) {
@@ -532,6 +675,17 @@ class InterviewPracticeServiceTest {
         session.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         session.setSessionState(QuizSessionStateUtils.withInterviewPracticeState(quiz, "INTERVIEW", 120));
         return session;
+    }
+
+    private Map<String, Object> withInterviewSourceRefs(
+            Map<String, Object> sessionState,
+            UUID studyPackId,
+            UUID noteId
+    ) {
+        return QuizSessionStateUtils.withInterviewSourceNoteRefs(
+                sessionState,
+                List.of(new InterviewSourceNoteRef(studyPackId.toString(), noteId.toString(), "Additional source", 1))
+        );
     }
 
     private List<QuizItem> buildQuiz(int count) {

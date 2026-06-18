@@ -34,6 +34,7 @@ RULES:
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.
 - Concept is required for every question.
+- keyConcept is required for every question and MUST be copied verbatim from the provided key concepts list. Choose the single closest key concept for each question. Do not invent new labels.
 - Use the provided excluded question list as hard constraints.
 - Return ONLY valid JSON with this structure:
   {
@@ -46,7 +47,8 @@ RULES:
         "questionGroup": null,
         "correctIndices": null,
         "explanation": "...",
-        "concept": "..."
+        "concept": "...",
+        "keyConcept": "..."
       }
     ]
   }

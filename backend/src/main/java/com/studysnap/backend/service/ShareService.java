@@ -219,7 +219,8 @@ public class ShareService {
                     item.questionType(),
                     item.workingSolution(),
                     item.correctIndices(),
-                    item.questionGroup()
+                    item.questionGroup(),
+                    item.keyConcept()
             );
         }
         return new QuizItem(
@@ -233,7 +234,8 @@ public class ShareService {
                 item.questionType(),
                 item.workingSolution(),
                 item.correctIndices(),
-                item.questionGroup()
+                item.questionGroup(),
+                item.keyConcept()
         );
     }
 

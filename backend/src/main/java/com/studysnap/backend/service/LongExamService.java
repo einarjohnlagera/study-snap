@@ -139,6 +139,7 @@ public class LongExamService {
     private final AsyncTaskExecutor studyPackGenerationTaskExecutor;
     private final AsyncTaskExecutor llmParallelTaskExecutor;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final ConceptHealthService conceptHealthService;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LongExamStartResponse startSession(String studyPackIdRaw, UUID userId, LongExamStartRequest request) {
@@ -386,11 +387,24 @@ public class LongExamService {
         session.setScorePercentage(scorePercentage);
         session.setRetryCount(0);
         session.setDurationSeconds(request.durationSeconds());
-        session.setCompletedAt(OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        session.setCompletedAt(now);
         session.setSessionState(markSessionStateCompleted(session.getSessionState()));
         session.setSessionMetadata(buildMasteryReportMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectKeyConcepts(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices
+        );
+        List<String> missedConcepts = QuizSessionReviewUtils.computeKeyConceptsWithMisses(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices
+        );
+        recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
+        recordIncorrectConceptsForSourcePacks(userId, saved, missedConcepts, now);
         if (QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
             examQuestionPoolService.markServed(
                     saved.getStudyPackId(),
@@ -404,6 +418,86 @@ public class LongExamService {
                 ANALYTICS_METADATA_SCORE_PERCENTAGE, statistics.scorePercentage()
         ));
         return buildMasteryReportResponse(saved.getId(), statistics, saved.getSessionState());
+    }
+
+    private void recordCorrectConceptsForSourcePacks(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            List<String> correctConcepts,
+            OffsetDateTime now
+    ) {
+        if (correctConcepts.isEmpty()) {
+            return;
+        }
+        recordConceptsForSourcePacks(userId, session, correctConcepts, now, true);
+    }
+
+    private void recordIncorrectConceptsForSourcePacks(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            List<String> incorrectConcepts,
+            OffsetDateTime now
+    ) {
+        if (incorrectConcepts.isEmpty()) {
+            return;
+        }
+        recordConceptsForSourcePacks(userId, session, incorrectConcepts, now, false);
+    }
+
+    private void recordConceptsForSourcePacks(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            List<String> concepts,
+            OffsetDateTime now,
+            boolean correct
+    ) {
+        for (UUID studyPackId : resolveSourceStudyPackIds(session)) {
+            studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                    .ifPresent(studyPack -> {
+                        if (correct) {
+                            conceptHealthService.recordCorrectAnswersForKnownConcepts(
+                                    userId,
+                                    studyPackId,
+                                    concepts,
+                                    getKeyConcepts(studyPack),
+                                    now
+                            );
+                        } else {
+                            conceptHealthService.recordIncorrectAnswersForKnownConcepts(
+                                    userId,
+                                    studyPackId,
+                                    concepts,
+                                    getKeyConcepts(studyPack),
+                                    now
+                            );
+                        }
+                    });
+        }
+    }
+
+    private Set<UUID> resolveSourceStudyPackIds(QuickReviewSessionEntity session) {
+        Set<UUID> studyPackIds = new LinkedHashSet<>();
+        if (session.getStudyPackId() != null) {
+            studyPackIds.add(session.getStudyPackId());
+        }
+        for (LongExamSourceNoteRef sourceNoteRef : extractSourceNoteRefs(session.getSessionState())) {
+            UUID studyPackId = parseOptionalUuid(sourceNoteRef.studyPackId());
+            if (studyPackId != null) {
+                studyPackIds.add(studyPackId);
+            }
+        }
+        return studyPackIds;
+    }
+
+    private UUID parseOptionalUuid(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(rawId);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     public SimpleMessageResponse forfeitSession(UUID sessionId, UUID userId) {

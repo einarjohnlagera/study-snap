@@ -196,11 +196,14 @@ public class QuickReviewSessionService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(
-                computeConceptBreakdownForCompletion(saved, userId)
-        );
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = computeConceptBreakdownForCompletion(saved, userId);
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown);
+        List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
         if (!correctConcepts.isEmpty()) {
             conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
+        }
+        if (!missedConcepts.isEmpty()) {
+            conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
         }
 
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());

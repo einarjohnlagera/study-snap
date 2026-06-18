@@ -1,5 +1,19 @@
 # RELEASES.md - NoteLib
 
+## v0.30.0 - Readiness Signals
+
+**Status: Released**
+
+Theme: make Progress an honest, complete readiness picture for students and exam-takers. Before this release, only Quick Review, Challenge Quiz, and Adaptive Practice wrote `ConceptHealth` (the only thing Progress reads), so Long Exam, Board Exam, and Interview Practice could be ground for hours without moving Progress. This release records concept-level signals from those exam modes into `ConceptHealth` on session completion. The hard part is the domain→concept mapping (Long Exam reports LLM-tagged domain mastery; Progress is per-concept) — design it before writing. No new entity, no new quota, no new artifact; the work lives in `LongExamService` (Long + Board) and `InterviewPracticeService`, mirroring the existing `recordCorrectAnswers` contract. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+- **Exam practice now feeds Progress** — Long Exam, Board Exam, and Interview Practice completions now record fully-correct concepts into `ConceptHealth` so Progress reflects exam-mode practice. Recording is constrained to concepts that exactly match a source Study Pack's `keyConcepts`, skips missing/unreadable source packs, and preserves the existing Progress read path.
+- **Exam questions carry source key concepts** — Long Exam and Interview Practice generation now adds a separate per-question `keyConcept` field, schema-constrained to the source Study Pack's key concepts, while leaving the report-facing `concept` labels unchanged. Completion recording now prefers `keyConcept` and falls back to legacy `concept` for old sessions or pre-warmed pool questions, completing the Readiness Signals source-side fix without fuzzy matching, new storage, or Progress read changes.
+- **Weakness signal completes Readiness Signals** — `ConceptHealth` now records `lastIncorrectAt` alongside `lastCorrectAt` and surfaces a derived struggling state when the latest signal is a miss. Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice all record missed concepts on normal completion, so Progress can distinguish concepts a learner keeps getting wrong from concepts they have never practiced.
+
+---
+
 ## v0.29.1 - Bulk Generation Polish
 
 **Status: Released**

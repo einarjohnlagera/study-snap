@@ -2,7 +2,7 @@
 
 ## Purpose
 
-My Progress gives learners a subject-level view of ConceptHealth mastery across all owned Study Packs. It answers, "Where am I strongest, and what still needs review?" using the same per-concept recency spine that powers due-concept selection.
+My Progress gives learners a subject-level view of ConceptHealth mastery across all owned Study Packs. It answers, "Where am I strongest, and what still needs review?" using the same per-concept recency spine that powers due-concept selection, plus a weakness signal for concepts the learner most recently missed.
 
 The report is available to all plans. It is not gated by Adaptive Practice entitlement.
 
@@ -63,6 +63,16 @@ Aggregation path:
 
 The subject label comes from the Study Pack. Packs with a null or blank subject are grouped under `Other`.
 
+ConceptHealth write sources:
+
+- Quick Review, Challenge Quiz, and Adaptive Practice record fully-correct concepts to `lastCorrectAt` and missed concepts to `lastIncorrectAt`.
+- Long Exam and Board Exam record fully-correct and missed concepts on normal completion only when the effective recording concept exactly matches a source Study Pack's `keyConcepts`.
+- Interview Practice records the same exact-match correct and missed ConceptHealth signals across its primary and additional source Study Packs.
+- New Long Exam and Interview Practice questions carry a separate `keyConcept` field that is schema-constrained to the source pack's key concepts. Recording uses that field first.
+- Legacy sessions and pre-warmed pool questions with no `keyConcept` fall back to the existing free-form `concept` field.
+- Free-form exam labels that do not match a source pack key concept are dropped before writing, so Progress never depends on invisible orphan ConceptHealth rows.
+- Forfeit paths do not record correct or missed concepts.
+
 ## Aggregation Rules
 
 - Include all Study Packs owned by the authenticated user.
@@ -73,6 +83,8 @@ The subject label comes from the Study Pack. Packs with a null or blank subject 
 - A concept is mastered when any matching ConceptHealth row has `lastCorrectAt` within the current due threshold.
 - A concept is due when it has a non-null `lastCorrectAt` but every matching row is stale according to `ConceptHealthService.isDue`.
 - A concept is not practiced when there is no matching row or every matching row has `lastCorrectAt == null`.
+- A concept is struggling when `lastIncorrectAt != null` and either `lastCorrectAt == null` or `lastIncorrectAt` is newer than `lastCorrectAt`.
+- A later fully-correct session updates `lastCorrectAt`, so struggling self-clears without a separate reset or mastery state.
 - `masteryPercentage = round(masteredConcepts * 100 / totalConcepts)`.
 
 The due threshold stays owned by `ConceptHealthService`; do not hardcode the day count in progress-report code.
@@ -146,4 +158,4 @@ Rules:
 - No independent goal tracks per subject.
 - No plan gating.
 - No session-accuracy aggregation.
-- No changes to ConceptHealth recording or quiz completion flows.
+- No rolling accuracy counters, mastery scores, backfills, or separate weakness store.

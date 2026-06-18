@@ -29,8 +29,11 @@ public class ConceptHealthEntity {
     @Column(nullable = false, length = 500)
     private String concept;
 
-    @Column(name = "last_correct_at", nullable = false)
+    @Column(name = "last_correct_at")
     private OffsetDateTime lastCorrectAt;
+
+    @Column(name = "last_incorrect_at")
+    private OffsetDateTime lastIncorrectAt;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

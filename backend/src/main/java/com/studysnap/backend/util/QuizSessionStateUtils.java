@@ -21,6 +21,7 @@ public class QuizSessionStateUtils {
     private static final String CORRECT_ANSWER_INDEX_KEY = "correctAnswerIndex";
     private static final String ANSWER_KEY = "answer";
     private static final String CONCEPT_KEY = "concept";
+    private static final String KEY_CONCEPT_KEY = "keyConcept";
     private static final String EXPLANATION_KEY = "explanation";
     private static final String QUESTION_FORMAT_KEY = "questionFormat";
     private static final String QUESTION_TYPE_KEY = "questionType";
@@ -232,6 +233,7 @@ public class QuizSessionStateUtils {
             Object answerRaw = rawMap.get(ANSWER_KEY);
             Object correctIndicesRaw = rawMap.get(CORRECT_INDICES_KEY);
             Object conceptRaw = rawMap.get(CONCEPT_KEY);
+            Object keyConceptRaw = rawMap.get(KEY_CONCEPT_KEY);
             Object explanationRaw = rawMap.get(EXPLANATION_KEY);
             Object questionFormatRaw = rawMap.get(QUESTION_FORMAT_KEY);
             Object questionTypeRaw = rawMap.get(QUESTION_TYPE_KEY);
@@ -255,6 +257,7 @@ public class QuizSessionStateUtils {
             }
 
             String concept = conceptRaw instanceof String value ? value : null;
+            String keyConcept = keyConceptRaw instanceof String value ? value : null;
             String explanation = explanationRaw instanceof String value ? value : null;
             Integer correctIndex = parseCorrectIndex(choices.size(), correctIndexRaw, answerIndexRaw, correctAnswerIndexRaw);
             List<Integer> correctIndices = parseIndexList(choices.size(), correctIndicesRaw);
@@ -263,7 +266,7 @@ public class QuizSessionStateUtils {
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
             String questionGroup = questionGroupRaw instanceof String value ? value : null;
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup));
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept));
         }
 
         return quiz;
@@ -411,6 +414,7 @@ public class QuizSessionStateUtils {
             quizItem.put(CORRECT_INDEX_KEY, item.correctIndex());
             quizItem.put(CORRECT_INDICES_KEY, item.correctIndices() == null ? List.of() : new ArrayList<>(item.correctIndices()));
             quizItem.put(CONCEPT_KEY, item.concept());
+            quizItem.put(KEY_CONCEPT_KEY, item.keyConcept());
             quizItem.put(EXPLANATION_KEY, item.explanation());
             quizItem.put(QUESTION_FORMAT_KEY, item.questionFormat());
             quizItem.put(QUESTION_TYPE_KEY, item.questionType());

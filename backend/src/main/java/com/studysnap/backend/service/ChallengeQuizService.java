@@ -461,8 +461,12 @@ public class ChallengeQuizService {
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
         List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(statistics.conceptBreakdown());
+        List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(statistics.conceptBreakdown());
         if (!correctConcepts.isEmpty()) {
             conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
+        }
+        if (!missedConcepts.isEmpty()) {
+            conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
         }
         if (MODE_BOARD_EXAM.equals(extractMode(saved.getSessionState()))
                 && QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {

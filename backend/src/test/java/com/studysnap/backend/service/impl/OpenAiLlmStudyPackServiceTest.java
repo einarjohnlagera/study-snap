@@ -1,6 +1,7 @@
 package com.studysnap.backend.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -145,6 +146,31 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void buildGeneratedQuizSchema_includesRequiredKeyConceptEnumWhenProvided() throws Exception {
+        JsonNode schema = invokeBuildGeneratedQuizSchema(
+                2,
+                true,
+                List.of("ATP synthesis", "Electron transport chain")
+        );
+
+        JsonNode item = schema.path("properties").path("questions").path("items");
+        assertThat(jsonArrayValues(item.path("required")))
+                .contains("keyConcept");
+        assertThat(jsonArrayValues(item.path("properties").path("keyConcept").path("enum")))
+                .containsExactly("ATP synthesis", "Electron transport chain");
+    }
+
+    @Test
+    void buildGeneratedQuizSchema_omitsKeyConceptWhenEnumMissing() throws Exception {
+        JsonNode schema = invokeBuildGeneratedQuizSchema(2, true, List.of());
+
+        JsonNode item = schema.path("properties").path("questions").path("items");
+        assertThat(jsonArrayValues(item.path("required")))
+                .doesNotContain("keyConcept");
+        assertThat(item.path("properties").has("keyConcept")).isFalse();
+    }
+
+    @Test
     void contentPromptTemplates_useCourseProgramWithoutLearnerLevelPlaceholders() throws IOException {
         for (String resourcePath : List.of(
                 "prompts/study-pack-v1/note-generation-developer.txt",
@@ -197,6 +223,30 @@ class OpenAiLlmStudyPackServiceTest {
         );
         method.setAccessible(true);
         return (String) method.invoke(service, allowTrueFalse);
+    }
+
+    private JsonNode invokeBuildGeneratedQuizSchema(
+            int questionCount,
+            boolean allowTrueFalse,
+            List<String> keyConceptEnum
+    ) throws Exception {
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
+                "buildGeneratedQuizSchema",
+                int.class,
+                boolean.class,
+                List.class
+        );
+        method.setAccessible(true);
+        return (JsonNode) method.invoke(service, questionCount, allowTrueFalse, keyConceptEnum);
+    }
+
+    private List<String> jsonArrayValues(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<String> values = new java.util.ArrayList<>();
+        node.forEach(value -> values.add(value.asText()));
+        return values;
     }
 
     @Test
@@ -898,6 +948,7 @@ class OpenAiLlmStudyPackServiceTest {
             .contains("Board exam developer prompt")
             .doesNotContain("questionFormat")
             .doesNotContain("TRUE_FALSE")
+            .doesNotContain("\"keyConcept\"")
             .doesNotContain("Challenge quiz system prompt")
             .doesNotContain("Challenge quiz developer prompt");
     }
@@ -922,6 +973,70 @@ class OpenAiLlmStudyPackServiceTest {
             .contains("Teacher quiz system prompt")
             .contains("Teacher quiz developer prompt for 30")
             .doesNotContain("{QUESTION_COUNT}");
+    }
+
+    @Test
+    void generateLongExam_threadsKeyConceptEnumAndMapsKeyConcept() throws Exception {
+        stubResponsesCall();
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        questions.add(generatedQuizItem(
+                "Which stage generates most ATP?",
+                List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
+                "C",
+                "The electron transport chain produces most ATP.",
+                "Energy production",
+                "Electron transport chain"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        List<QuizItem> quizItems = service.generateLongExam(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP synthesis", "Electron transport chain"),
+                List.of(),
+                1,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        JsonNode keyConcept = generatedQuizItemSchema(requestCaptor.getValue())
+                .path("properties")
+                .path("keyConcept");
+        assertThat(quizItems.getFirst().concept()).isEqualTo("Energy production");
+        assertThat(quizItems.getFirst().keyConcept()).isEqualTo("Electron transport chain");
+        assertThat(jsonArrayValues(keyConcept.path("enum")))
+                .containsExactly("ATP synthesis", "Electron transport chain");
+    }
+
+    @Test
+    void generateInterviewPracticeQuiz_nullsKeyConceptOutsideEnum() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        questions.add(generatedQuizItem(
+                "You are reviewing an outage after a race condition caused stale reads. What is the strongest next step?",
+                List.of("Ignore it", "Add a concurrency test", "Remove logging", "Skip the review"),
+                "B",
+                "A strong candidate would add coverage for the race condition.",
+                "Race-condition prevention",
+                "Invented label"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        List<QuizItem> quizItems = service.generateInterviewPracticeQuiz(
+                "Backend Interview Prep",
+                "Concurrency summary",
+                List.of("Concurrency controls"),
+                List.of(),
+                1,
+                new StudyPackGenerationContext(LearnerLevel.PROFESSIONAL, "Software Engineering", "Backend", List.of())
+        );
+
+        assertThat(quizItems.getFirst().concept()).isEqualTo("Race-condition prevention");
+        assertThat(quizItems.getFirst().keyConcept()).isNull();
     }
 
     @Test
@@ -1417,6 +1532,29 @@ class OpenAiLlmStudyPackServiceTest {
         item.put("explanation", explanation);
         item.put("concept", concept);
         return item;
+    }
+
+    private ObjectNode generatedQuizItem(
+            String question,
+            List<String> choices,
+            String answer,
+            String explanation,
+            String concept,
+            String keyConcept
+    ) {
+        ObjectNode item = generatedQuizItem(question, choices, answer, explanation, concept);
+        item.put("keyConcept", keyConcept);
+        return item;
+    }
+
+    private JsonNode generatedQuizItemSchema(String requestBody) throws JsonProcessingException {
+        return objectMapper.readTree(requestBody)
+                .path("text")
+                .path("format")
+                .path("schema")
+                .path("properties")
+                .path("questions")
+                .path("items");
     }
 
     private static final class DirectAsyncTaskExecutor implements AsyncTaskExecutor {

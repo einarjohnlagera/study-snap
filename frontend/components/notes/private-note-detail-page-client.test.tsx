@@ -798,6 +798,77 @@ describe("PrivateNoteDetailPageClient", () => {
     });
   });
 
+  it("shows a distinct Needs work chip for struggling concepts", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PLUS",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PLUS",
+      limits: {
+        studyPacksPerMonth: 50,
+        challengeQuizzesPerMonth: 20,
+        adaptivePracticePerMonth: 10,
+        ocrPerMonth: 50,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 48,
+        challengeQuizzesRemaining: 20,
+        adaptivePracticeRemaining: 10,
+        ocrRemaining: 50,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells", "Genetics"],
+      generatedQuiz: null,
+    });
+    (getConceptHealth as jest.Mock).mockResolvedValue([
+      {
+        concept: "Cells",
+        lastCorrectAt: "2026-03-20T10:00:00Z",
+        lastIncorrectAt: "2026-03-21T10:00:00Z",
+        isStruggling: true,
+        isDue: true,
+        daysSinceReview: 1,
+      },
+      {
+        concept: "Genetics",
+        lastCorrectAt: "2026-03-21T10:00:00Z",
+        lastIncorrectAt: "2026-03-20T10:00:00Z",
+        isStruggling: false,
+        isDue: false,
+        daysSinceReview: 0,
+      },
+    ]);
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Needs work")).toBeInTheDocument();
+    expect(screen.getByText("Due — 1d ago")).toBeInTheDocument();
+  });
+
   it("keeps Target Level out of non-teacher note detail", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",

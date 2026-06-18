@@ -82,6 +82,87 @@ public final class QuizSessionReviewUtils {
                 .toList();
     }
 
+    public static List<String> computeConceptsWithMisses(List<ChallengeQuizConceptStatResponse> conceptBreakdown) {
+        if (conceptBreakdown == null || conceptBreakdown.isEmpty()) {
+            return List.of();
+        }
+        return conceptBreakdown.stream()
+                .filter(stat -> stat != null && stat.totalQuestions() > 0)
+                .filter(stat -> stat.correctAnswers() < stat.totalQuestions())
+                .map(ChallengeQuizConceptStatResponse::concept)
+                .toList();
+    }
+
+    public static List<String> computeFullyCorrectKeyConcepts(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        if (quiz == null || quiz.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, ConceptCounter> counters = computeEffectiveKeyConceptCounters(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices
+        );
+        return counters.entrySet().stream()
+                .filter(entry -> entry.getValue().totalQuestions > 0)
+                .filter(entry -> entry.getValue().correctAnswers == entry.getValue().totalQuestions)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    public static List<String> computeKeyConceptsWithMisses(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        if (quiz == null || quiz.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, ConceptCounter> counters = computeEffectiveKeyConceptCounters(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices
+        );
+        return counters.entrySet().stream()
+                .filter(entry -> entry.getValue().totalQuestions > 0)
+                .filter(entry -> entry.getValue().correctAnswers < entry.getValue().totalQuestions)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    private static Map<String, ConceptCounter> computeEffectiveKeyConceptCounters(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices
+    ) {
+        Map<String, ConceptCounter> counters = new LinkedHashMap<>();
+        for (int index = 0; index < quiz.size(); index++) {
+            QuizItem item = quiz.get(index);
+            if (item == null) {
+                continue;
+            }
+            String concept = normalizeConcept(effectiveKeyConcept(item));
+            ConceptCounter counter = counters.computeIfAbsent(concept, ignored -> new ConceptCounter());
+            counter.totalQuestions += 1;
+            if (isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices)) {
+                counter.correctAnswers += 1;
+            }
+        }
+        return counters;
+    }
+
+    private static String effectiveKeyConcept(QuizItem item) {
+        if (item.keyConcept() != null && !item.keyConcept().isBlank()) {
+            return item.keyConcept();
+        }
+        return item.concept();
+    }
+
     private static String normalizeConcept(String concept) {
         if (concept == null) {
             return UNKNOWN_CONCEPT_LABEL;
