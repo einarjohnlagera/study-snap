@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.31.0 - Adoptable Study Plans
+
+**Status: In Progress**
+
+Theme: most learners don't assemble a study plan note-by-note — they want a ready-made, structured plan for their goal. This release lets a learner **adopt** a curated, ordered study plan in one tap (v1: admin-curated plans over already-public seeded notes, ALE/PNLE/LET). Adopt = snapshot copy (notes + linked Study Packs) into a personal Study Plan, then the existing learning loop. Curation, never AI-generated curriculum. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+_None yet._
+
+---
+
 ## v0.30.1 - Copy Flow Polish
 
 **Status: Released**

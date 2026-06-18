@@ -6,16 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.30.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.31.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.30.1 — Copy Flow Polish
+## Active release: v0.31.0 — Adoptable Study Plans (v1)
 
-Base branch for this release: `releases/v0.30.1`. A small, frontend-only UX patch on the public-library copy flow, scoped to reduce copy friction. Locked rules:
+Base branch for this release: `releases/v0.31.0`. Let a learner **adopt** a curated, ordered study plan in one tap instead of assembling notes one by one. v1 = admin-curated plans over already-public seeded notes (ALE/PNLE/LET); full scope in `ROADMAP.md`. Locked rules:
 
-- **Rename for clarity, not just brevity.** The card action is `Add to Library` (note + Study Pack), not `Save` (which read as bookmark next to the like). The copy success modal leads with `View Note` (the hub of the note's value); the Quick Review quick-action is **removed** (it under-utilized the note).
-- **One action on the card, the fork on detail.** The grid card keeps a single primary copy action on every breakpoint (no dropdown). The public note **detail** page carries the secondary `Copy as editable draft` (Draft, no Study Pack, so content stays editable) stacked under the primary.
-- **No backend, no new infra.** Reuse the existing `copyNote(id, { includeStudyPack })` endpoint and the existing `PUBLIC_NOTE_COPY_CLICKED` / `PUBLIC_NOTE_COPIED` analytics — no enum, quota, entity, or endpoint changes.
-- **Out of scope (do not build without explicit ask):** the v0.31.0 work (Adoptable Study Plans) and the v0.32.0 teacher-flow/bulk-quiz work.
+- **Adopt = snapshot copy, not a live link.** The entire learning loop (generation, `ConceptHealth`, Progress, "Next in this plan", the v0.30.0 exam→Progress recording) runs on **owned** notes, so a linked plan is inert. "Start this plan" copies the curated notes (with their linked Study Packs) into the user's library via `copyNote(id, ownerUserId, includeStudyPack=true)` (idempotent) and creates a personal Study Plan (`NoteCollection`) in the curated order. Later edits to the source plan do **not** propagate (point-in-time snapshot).
+- **Curation, never generation.** Sequencing is human/admin curation over existing seeded content — not AI-synthesized per user. The forbidden version is *"auto-generate a personalized plan."*
+- **Adopt is free; light copy; no new infra.** Adoption bills nothing (it is a copy, not a generation; quota applies later on regenerate + Challenge/Exam). The copy fan-out (N notes + N study packs, no LLM) uses per-item isolation — no async/bulk-generation job infrastructure, no new quota/entity/endpoint.
+- **One action on the card; the fork stays simple.** Surface the curated plan(s) on Dashboard/onboarding with one-tap adopt. The curated *source* plan needs an admin/public representation (collections are owner-private today) — design that source shape first; the adopt *output* is a normal user collection.
+- **Out of scope (do not build without explicit ask):** live-link / shared-progress plans and user/teacher-authored sharing of private notes (both ride with v0.32.0 teacher-flow); bulk *quiz* generation; Quick Look preview.
 
 ## Source-of-truth docs (read before implementing anything)
 

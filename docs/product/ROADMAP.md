@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.31.0 - Adoptable Study Plans` is the next release (not yet started).
+`v0.31.0 - Adoptable Study Plans` is the release currently in progress.
 
 `v0.30.1 - Copy Flow Polish` is the current documentation baseline (last released).
 
@@ -133,7 +133,9 @@ Teacher-flow polish and bulk *quiz* generation move to v0.32.0 (still no teacher
 
 ---
 
-## v0.31.0 (next) - Adoptable Study Plans (v1)
+## v0.31.0 - Adoptable Study Plans (v1, in progress)
+
+Base branch for this release: `releases/v0.31.0`.
 
 Theme: most learners don't want to assemble a study plan note-by-note — they want a ready-made, structured plan for their goal (a LET taker wants a LET reviewer plan, not a pile of filtered notes). Observed behavior: most users only add their own notes; the pre-filtered Dashboard helps them *find* exam-relevant public notes but still leaves them to self-assemble. This release lets a learner **adopt** a curated, ordered study plan in one tap.
 
