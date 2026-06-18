@@ -6,15 +6,15 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.30.0 - Readiness Signals` is the release currently in progress.
+`v0.31.0 - Adoptable Study Plans` is the next release (not yet started).
 
-`v0.29.1 - Bulk Generation Polish` is the current documentation baseline (last released).
+`v0.30.0 - Readiness Signals` is the current documentation baseline (last released).
 
-`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the previous baseline.
+`v0.29.1 - Bulk Generation Polish` is the previous baseline.
+
+`v0.29.0 - Bulk Generation & Generation-Context Correctness` is the release before that.
 
 `v0.28.0 - Feature Discoverability & Activation` is the release before that.
-
-`v0.27.0 - Material Import & Collections` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
 
@@ -83,7 +83,7 @@ Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0
 
 ---
 
-## v0.30.0 - Readiness Signals (in progress)
+## v0.30.0 - Readiness Signals (released)
 
 Base branch for this release: `releases/v0.30.0`.
 
@@ -102,7 +102,7 @@ Scope:
 
 - **Exam-mode results feed Progress** *(shipped)* — `LongExamService` (Long + Board) and `InterviewPracticeService` record concept-level signals into `ConceptHealth` on session completion, intersected with the source pack's `keyConcepts`.
 - **Source-constrained key concepts** *(shipped)* — Long Exam and Interview question generation emit a schema-enforced per-question `keyConcept` from the source pack's key concepts; recording prefers it and falls back to the free-form `concept` for legacy/pool questions.
-- **Weakness signal across all modes** *(in progress)* — add `lastIncorrectAt` and record missed concepts on completion in every practice mode; Progress shows a distinct struggling indicator.
+- **Weakness signal across all modes** *(shipped)* — `lastIncorrectAt` recorded on completion in every practice mode; Progress shows a distinct struggling indicator (Note Detail "Needs work").
 
 Teacher-flow polish and bulk *quiz* generation move to v0.32.0 (still no teacher users); v0.31.0 is now Adoptable Study Plans (v1). No readiness work is deferred.
 
