@@ -33,7 +33,9 @@ import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -44,6 +46,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -80,6 +83,7 @@ public class NoteCollectionService {
     private final ConceptHealthService conceptHealthService;
     private final AnalyticsService analyticsService;
     private final NoteService noteService;
+    private final TransactionOperations collectionTransactionOperations;
 
     @Transactional(readOnly = true)
     public List<NoteCollectionSummaryResponse> list(UUID userId) {
@@ -191,18 +195,32 @@ public class NoteCollectionService {
         return toDetailResponse(saved, items);
     }
 
-    @Transactional
     public AdoptStudyPlanResponse adopt(UUID sourceCollectionId, UUID userId) {
         NoteCollectionEntity source = collectionRepository
                 .findByIdAndVisibility(sourceCollectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
-        return collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceCollectionId)
-                .map(existing -> {
-                    int itemCount = itemRepository.findByCollectionIdOrderByPositionAsc(existing.getId()).size();
-                    trackStudyPlanAdopted(userId, sourceCollectionId, existing.getId(), itemCount, 0, true);
-                    return new AdoptStudyPlanResponse(existing.getId(), itemCount, 0, true);
-                })
-                .orElseGet(() -> createAdoptedPlan(source, userId));
+
+        // Fast idempotency path: an existing personal plan for this source is returned as-is.
+        Optional<NoteCollectionEntity> alreadyAdopted =
+                collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceCollectionId);
+        if (alreadyAdopted.isPresent()) {
+            return alreadyAdoptedResponse(userId, sourceCollectionId, alreadyAdopted.get());
+        }
+
+        // adopt() is intentionally non-transactional so each note copy runs in its own transaction:
+        // a single failed copy is isolated and never rolls back the whole adopt.
+        List<CopiedPlanItem> copiedItems = new ArrayList<>();
+        int skippedCount = copySourceItems(source, userId, copiedItems);
+
+        try {
+            return persistAdoptedPlan(source, userId, copiedItems, skippedCount);
+        } catch (DataIntegrityViolationException raceLost) {
+            // A concurrent first-adopt won the (owner_user_id, source_plan_id) unique index — return theirs.
+            NoteCollectionEntity winner = collectionRepository
+                    .findByOwnerUserIdAndSourcePlanId(userId, sourceCollectionId)
+                    .orElseThrow(() -> raceLost);
+            return alreadyAdoptedResponse(userId, sourceCollectionId, winner);
+        }
     }
 
     @Transactional
@@ -317,9 +335,8 @@ public class NoteCollectionService {
         }
     }
 
-    private AdoptStudyPlanResponse createAdoptedPlan(NoteCollectionEntity source, UUID userId) {
+    private int copySourceItems(NoteCollectionEntity source, UUID userId, List<CopiedPlanItem> copiedItems) {
         List<NoteCollectionItemEntity> sourceItems = itemRepository.findByCollectionIdOrderByPositionAsc(source.getId());
-        List<CopiedPlanItem> copiedItems = new ArrayList<>();
         int skippedCount = 0;
         for (NoteCollectionItemEntity sourceItem : sourceItems) {
             try {
@@ -340,24 +357,52 @@ public class NoteCollectionService {
                 );
             }
         }
+        return skippedCount;
+    }
 
-        Instant now = Instant.now();
-        NoteCollectionEntity collection = new NoteCollectionEntity();
-        collection.setId(UUID.randomUUID());
-        collection.setOwnerUserId(userId);
-        collection.setTitle(source.getTitle());
-        collection.setDescription(source.getDescription());
-        collection.setVisibility(CollectionVisibility.PRIVATE);
-        collection.setCourseProgram(source.getCourseProgram());
-        collection.setSourcePlanId(source.getId());
-        collection.setCreatedAt(now);
-        collection.setUpdatedAt(now);
-        NoteCollectionEntity saved = collectionRepository.save(collection);
+    private AdoptStudyPlanResponse persistAdoptedPlan(
+            NoteCollectionEntity source,
+            UUID userId,
+            List<CopiedPlanItem> copiedItems,
+            int skippedCount
+    ) {
+        return collectionTransactionOperations.execute(status -> {
+            Optional<NoteCollectionEntity> existing =
+                    collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, source.getId());
+            if (existing.isPresent()) {
+                return alreadyAdoptedResponse(userId, source.getId(), existing.get());
+            }
 
-        List<NoteCollectionItemEntity> items = buildAdoptedItems(saved.getId(), copiedItems, now);
-        itemRepository.saveAll(items);
-        trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
-        return new AdoptStudyPlanResponse(saved.getId(), items.size(), skippedCount, false);
+            Instant now = Instant.now();
+            NoteCollectionEntity collection = new NoteCollectionEntity();
+            collection.setId(UUID.randomUUID());
+            collection.setOwnerUserId(userId);
+            collection.setTitle(source.getTitle());
+            collection.setDescription(source.getDescription());
+            collection.setVisibility(CollectionVisibility.PRIVATE);
+            collection.setCourseProgram(source.getCourseProgram());
+            collection.setSourcePlanId(source.getId());
+            collection.setCreatedAt(now);
+            collection.setUpdatedAt(now);
+            // saveAndFlush so a concurrent first-adopt's unique-index violation surfaces here as a
+            // translated DataIntegrityViolationException (recovered in adopt()), not at commit.
+            NoteCollectionEntity saved = collectionRepository.saveAndFlush(collection);
+
+            List<NoteCollectionItemEntity> items = buildAdoptedItems(saved.getId(), copiedItems, now);
+            itemRepository.saveAll(items);
+            trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
+            return new AdoptStudyPlanResponse(saved.getId(), items.size(), skippedCount, false);
+        });
+    }
+
+    private AdoptStudyPlanResponse alreadyAdoptedResponse(
+            UUID userId,
+            UUID sourcePlanId,
+            NoteCollectionEntity existing
+    ) {
+        int itemCount = itemRepository.findByCollectionIdOrderByPositionAsc(existing.getId()).size();
+        trackStudyPlanAdopted(userId, sourcePlanId, existing.getId(), itemCount, 0, true);
+        return new AdoptStudyPlanResponse(existing.getId(), itemCount, 0, true);
     }
 
     private boolean isPublicSourceNote(UUID noteId) {
