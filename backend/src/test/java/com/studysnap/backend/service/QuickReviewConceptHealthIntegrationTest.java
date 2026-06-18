@@ -56,7 +56,8 @@ class QuickReviewConceptHealthIntegrationTest {
                     user_id uuid not null,
                     study_pack_id uuid not null,
                     concept varchar(500) not null,
-                    last_correct_at timestamp with time zone not null,
+                    last_correct_at timestamp with time zone,
+                    last_incorrect_at timestamp with time zone,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null,
                     constraint uq_concept_health_user_study_pack_concept

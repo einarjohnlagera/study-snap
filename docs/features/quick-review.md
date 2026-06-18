@@ -95,9 +95,11 @@ Meaning:
 ## ConceptHealth
 
 - on completion, Quick Review records concepts answered fully correctly in the session to `ConceptHealth`
+- on completion, Quick Review also records concepts missed in the session to `ConceptHealth.lastIncorrectAt`
 - a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
-- weak or partially correct concepts are not recorded as mastered
+- weak or partially correct concepts are recorded as missed, not mastered
 - the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved
+- a later fully-correct Quick Review updates `lastCorrectAt` and clears the struggling state derived from a newer `lastIncorrectAt`
 - ConceptHealth entries drive weak-area routing only when they have prior review history and are currently due; due entries with no `lastCorrectAt` remain not-started concepts
 
 ## Review history

@@ -41,23 +41,17 @@ public class ConceptHealthService {
         List<String> correctConceptNames,
         OffsetDateTime now
     ) {
-        if (correctConceptNames == null || correctConceptNames.isEmpty()) {
-            return;
-        }
+        recordAnswers(userId, studyPackId, correctConceptNames, now, true);
+    }
 
-        for (String rawConcept : correctConceptNames) {
-            String concept = normalizeConcept(rawConcept);
-            if (concept == null) {
-                continue;
-            }
-
-            ConceptHealthEntity entity = conceptHealthRepository
-                .findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, concept)
-                .orElseGet(() -> buildConceptHealth(userId, studyPackId, concept, now));
-            entity.setLastCorrectAt(now);
-            entity.setUpdatedAt(now);
-            conceptHealthRepository.save(entity);
-        }
+    @Transactional
+    public void recordIncorrectAnswers(
+        UUID userId,
+        UUID studyPackId,
+        List<String> incorrectConceptNames,
+        OffsetDateTime now
+    ) {
+        recordAnswers(userId, studyPackId, incorrectConceptNames, now, false);
     }
 
     @Transactional
@@ -68,28 +62,26 @@ public class ConceptHealthService {
         List<String> keyConcepts,
         OffsetDateTime now
     ) {
-        if (correctConceptNames == null || correctConceptNames.isEmpty() || keyConcepts == null || keyConcepts.isEmpty()) {
-            return;
-        }
-
-        Set<String> knownConcepts = keyConcepts.stream()
-            .map(this::normalizeConcept)
-            .filter(Objects::nonNull)
-            .collect(java.util.stream.Collectors.toSet());
-        if (knownConcepts.isEmpty()) {
-            return;
-        }
-
-        List<String> matchedConcepts = correctConceptNames.stream()
-            .map(this::normalizeConcept)
-            .filter(Objects::nonNull)
-            .filter(knownConcepts::contains)
-            .distinct()
-            .toList();
+        List<String> matchedConcepts = filterKnownConcepts(correctConceptNames, keyConcepts);
         if (matchedConcepts.isEmpty()) {
             return;
         }
         recordCorrectAnswers(userId, studyPackId, matchedConcepts, now);
+    }
+
+    @Transactional
+    public void recordIncorrectAnswersForKnownConcepts(
+        UUID userId,
+        UUID studyPackId,
+        List<String> incorrectConceptNames,
+        List<String> keyConcepts,
+        OffsetDateTime now
+    ) {
+        List<String> matchedConcepts = filterKnownConcepts(incorrectConceptNames, keyConcepts);
+        if (matchedConcepts.isEmpty()) {
+            return;
+        }
+        recordIncorrectAnswers(userId, studyPackId, matchedConcepts, now);
     }
 
     @Transactional(readOnly = true)
@@ -231,12 +223,66 @@ public class ConceptHealthService {
         OffsetDateTime now
     ) {
         OffsetDateTime lastCorrectAt = resolveLastCorrectAt(entity);
+        OffsetDateTime lastIncorrectAt = resolveLastIncorrectAt(entity);
         return new ConceptHealthEntryResponse(
             concept,
             lastCorrectAt,
+            lastIncorrectAt,
+            isStruggling(lastCorrectAt, lastIncorrectAt),
             isDue(lastCorrectAt, now),
             daysSinceReview(lastCorrectAt, now)
         );
+    }
+
+    private void recordAnswers(
+        UUID userId,
+        UUID studyPackId,
+        List<String> conceptNames,
+        OffsetDateTime now,
+        boolean correct
+    ) {
+        if (conceptNames == null || conceptNames.isEmpty()) {
+            return;
+        }
+
+        for (String rawConcept : conceptNames) {
+            String concept = normalizeConcept(rawConcept);
+            if (concept == null) {
+                continue;
+            }
+
+            ConceptHealthEntity entity = conceptHealthRepository
+                .findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, concept)
+                .orElseGet(() -> buildConceptHealth(userId, studyPackId, concept, now));
+            if (correct) {
+                entity.setLastCorrectAt(now);
+            } else {
+                entity.setLastIncorrectAt(now);
+            }
+            entity.setUpdatedAt(now);
+            conceptHealthRepository.save(entity);
+        }
+    }
+
+    private List<String> filterKnownConcepts(List<String> conceptNames, List<String> keyConcepts) {
+        if (conceptNames == null || conceptNames.isEmpty() || keyConcepts == null || keyConcepts.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> knownConcepts = keyConcepts.stream()
+            .map(this::normalizeConcept)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (knownConcepts.isEmpty()) {
+            return List.of();
+        }
+
+        return conceptNames.stream()
+            .map(this::normalizeConcept)
+            .filter(Objects::nonNull)
+            .filter(knownConcepts::contains)
+            .distinct()
+            .toList();
     }
 
     boolean isDue(OffsetDateTime lastCorrectAt, OffsetDateTime now) {
@@ -252,6 +298,14 @@ public class ConceptHealthService {
 
     private OffsetDateTime resolveLastCorrectAt(ConceptHealthEntity entity) {
         return entity == null ? null : entity.getLastCorrectAt();
+    }
+
+    private OffsetDateTime resolveLastIncorrectAt(ConceptHealthEntity entity) {
+        return entity == null ? null : entity.getLastIncorrectAt();
+    }
+
+    private boolean isStruggling(OffsetDateTime lastCorrectAt, OffsetDateTime lastIncorrectAt) {
+        return lastIncorrectAt != null && (lastCorrectAt == null || lastIncorrectAt.isAfter(lastCorrectAt));
     }
 
     private String normalizeConcept(String rawConcept) {

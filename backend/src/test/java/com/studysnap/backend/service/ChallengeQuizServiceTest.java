@@ -1163,6 +1163,12 @@ class ChallengeQuizServiceTest {
                 List.of("Mastered"),
                 session.getCompletedAt()
         );
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("Weak"),
+                session.getCompletedAt()
+        );
     }
 
     @Test
@@ -1203,6 +1209,12 @@ class ChallengeQuizServiceTest {
                 userId,
                 studyPackId,
                 List.of("Board Mastery"),
+                session.getCompletedAt()
+        );
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("Board Weakness"),
                 session.getCompletedAt()
         );
     }

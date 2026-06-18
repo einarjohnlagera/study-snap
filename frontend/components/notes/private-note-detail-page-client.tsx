@@ -2008,6 +2008,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           <li key={`${note.id}-concept-${index}`}>
                             <span className="inline-flex flex-wrap items-center gap-2">
                               <span>{concept}</span>
+                              {health?.isStruggling ? (
+                                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                                  Needs work
+                                </span>
+                              ) : null}
                               {health?.isDue && health.daysSinceReview !== null ? (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                                   Due — {health.daysSinceReview}d ago

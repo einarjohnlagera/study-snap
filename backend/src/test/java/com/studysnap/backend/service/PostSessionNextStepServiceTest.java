@@ -531,7 +531,7 @@ class PostSessionNextStepServiceTest {
         Integer daysSinceReview = lastCorrectAt == null
                 ? null
                 : Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(lastCorrectAt, NOW));
-        return new ConceptHealthEntryResponse(concept, lastCorrectAt, due, daysSinceReview);
+        return new ConceptHealthEntryResponse(concept, lastCorrectAt, null, false, due, daysSinceReview);
     }
 
     private UserEntity user(UUID userId, String studyGoal) {
