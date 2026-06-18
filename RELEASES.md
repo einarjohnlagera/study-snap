@@ -8,7 +8,7 @@ Theme: reduce friction in copying notes from the Public Library. A small, fronte
 
 ### Shipped
 
-_None yet._
+- **Public Library copy flow polish** — the card action is now `Add to Library` (copy/library icon), replacing `Save`, which read as a bookmark next to the like/heart; the disabled copied-state reads `In Library`. The post-copy success modal now leads with a single `View Note` action (the Quick Review quick-action was removed — it under-utilized the note) and states the payoff ("The note and its Study Pack are now in your library — open it to read, quiz yourself, and track your progress."). Fixed a duplicate close-button bug in that modal (`AppModal` already renders its own close; the modal no longer passes a second one). On the public note detail page, the two copy options are relabeled `Add to Library` (note + Study Pack) and `Copy as editable draft` (`includeStudyPack=false` → editable Draft, edit before generating). Frontend-only: reuses the existing `copyNote` `includeStudyPack` param and the existing `PUBLIC_NOTE_COPY_CLICKED` / `PUBLIC_NOTE_COPIED` analytics — no backend, quota, enum, or endpoint changes.
 
 ---
 

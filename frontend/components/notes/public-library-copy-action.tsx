@@ -3,7 +3,7 @@
 import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Check, Save } from "lucide-react";
+import { BookPlus, Check } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
@@ -11,13 +11,13 @@ import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent, type NoteStudyPackStatus } from "@/lib/api";
 import { buildPublicCopyIntentQuery, setCopyIntentCookie } from "@/lib/public-note-copy";
 
-const SAVE_BUTTON_LABEL = "Save";
-const SAVE_LOADING_LABEL = "Saving...";
-const SAVED_BUTTON_LABEL = "Saved";
+const SAVE_BUTTON_LABEL = "Add to Library";
+const SAVE_LOADING_LABEL = "Adding...";
+const SAVED_BUTTON_LABEL = "In Library";
 const COPY_ERROR_MESSAGE = "Could not copy note.";
 const CARD_COPY_SURFACE = "public_library_card";
-const AUTH_MODAL_TITLE = "Save this note";
-const AUTH_MODAL_BODY = "Create an account or log in to save notes to your library.";
+const AUTH_MODAL_TITLE = "Add this note to your library";
+const AUTH_MODAL_BODY = "Create an account or log in to add notes to your library.";
 const AUTH_LOGIN_LABEL = "Log In";
 const AUTH_SIGNUP_LABEL = "Sign Up";
 const COPIED_NOTE_FALLBACK_STUDY_PACK_STATUS: NoteStudyPackStatus = "DRAFT";
@@ -128,7 +128,7 @@ export function PublicLibraryCopyAction({
         loading={copying}
         loadingText={SAVE_LOADING_LABEL}
       >
-        <Save className="h-3.5 w-3.5" aria-hidden="true" />
+        <BookPlus className="h-3.5 w-3.5" aria-hidden="true" />
         <span>{SAVE_BUTTON_LABEL}</span>
       </Button>
       {copyError ? (

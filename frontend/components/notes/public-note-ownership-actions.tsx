@@ -179,27 +179,27 @@ export function PublicNoteOwnershipActions({
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <PublicSeoCopyCta
               noteId={noteId}
-              label="Copy Study Pack"
+              label="Add to Library"
               redirectTarget="generate"
               action="copy"
               analyticsEvent="PUBLIC_NOTE_COPY_CLICKED"
-              authModalTitle="Copy this Study Pack"
-              authModalBody="Create a free account or log in to copy this note and its Study Pack to your library."
+              authModalTitle="Add this note to your library"
+              authModalBody="Create a free account or log in to add this note and its Study Pack to your library."
               includeStudyPack
             />
             <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share this note" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-foreground/55">Want just the note without the Study Pack?</span>
+            <span className="text-xs text-foreground/55">Want to edit the content first?</span>
             <PublicSeoCopyCta
               noteId={noteId}
-              label="Copy note only"
+              label="Copy as editable draft"
               redirectTarget="library"
               action="copy"
               variant="outline"
               includeStudyPack={false}
-              authModalTitle="Copy this note"
-              authModalBody="Create a free account or log in to copy this note to your library."
+              authModalTitle="Copy as editable draft"
+              authModalBody="Create a free account or log in to copy this note as an editable draft."
             />
           </div>
         </div>
