@@ -442,6 +442,95 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
+    void completeAdaptiveSession_recordsMissedConceptsFromStoredSelections() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+        session.setTotalQuestions(2);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(
+                        new QuizItem("Adaptive Q1", List.of("A", "B", "C", "D"), "A", "Mastered", "Explanation"),
+                        new QuizItem("Adaptive Q2", List.of("A", "B", "C", "D"), "B", "Needs Practice", "Explanation")
+                ),
+                Map.of("selectedChoices", Map.of("0", "A", "1", "C"))
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(),
+                userId,
+                1,
+                2,
+                20,
+                List.of("Ignored fallback")
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Mastered")),
+                any(OffsetDateTime.class)
+        );
+        verify(conceptHealthService).recordIncorrectAnswers(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Needs Practice")),
+                any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
+    void completeAdaptiveSession_allWrongRecordsMissesAndIgnoresFrontendCorrectList() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+        session.setTotalQuestions(2);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(
+                        new QuizItem("Adaptive Q1", List.of("A", "B", "C", "D"), "A", "Mastered", "Explanation"),
+                        new QuizItem("Adaptive Q2", List.of("A", "B", "C", "D"), "B", "Needs Practice", "Explanation")
+                ),
+                Map.of("selectedChoices", Map.of("0", "B", "1", "C"))
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        adaptivePracticeService.completeAdaptiveSession(
+                sessionId.toString(),
+                userId,
+                0,
+                2,
+                20,
+                List.of("Ignored fallback")
+        );
+
+        verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Mastered", "Needs Practice")),
+                any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
     void completeAdaptiveSession_doesNotRecordConceptHealthWhenCorrectConceptNamesAreNull() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -467,6 +556,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         );
 
         verify(conceptHealthService, never()).recordCorrectAnswers(any(), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(any(), any(), any(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID ownerUserId) {

@@ -323,6 +323,12 @@ class QuickReviewSessionServiceTest {
                 List.of("Genetics"),
                 session.getCompletedAt()
         );
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("Cells"),
+                session.getCompletedAt()
+        );
     }
 
     @Test

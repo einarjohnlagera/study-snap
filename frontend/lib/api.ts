@@ -827,6 +827,8 @@ export type AdaptivePracticeCompleteRequest = {
 export type ConceptHealthEntry = {
   concept: string;
   lastCorrectAt: string | null;
+  lastIncorrectAt: string | null;
+  isStruggling: boolean;
   isDue: boolean;
   daysSinceReview: number | null;
 };

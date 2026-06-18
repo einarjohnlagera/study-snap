@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -21,6 +22,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 
@@ -318,8 +320,24 @@ public class QuickReviewAdaptivePracticeService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         quickReviewSessionRepository.save(session);
-        if (correctConceptNames != null && !correctConceptNames.isEmpty()) {
-            conceptHealthService.recordCorrectAnswers(userId, session.getStudyPackId(), correctConceptNames, now);
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = computeConceptBreakdownForCompletion(session);
+        List<String> correctConcepts;
+        List<String> missedConcepts;
+        if (conceptBreakdown.isEmpty()) {
+            // No stored quiz/selections to derive a breakdown — fall back to the frontend-reported
+            // correct concepts and record no misses (they cannot be computed reliably).
+            correctConcepts = correctConceptNames == null ? List.of() : correctConceptNames;
+            missedConcepts = List.of();
+        } else {
+            // The stored breakdown is authoritative: a concept is correct XOR missed, never both.
+            correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown);
+            missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
+        }
+        if (!correctConcepts.isEmpty()) {
+            conceptHealthService.recordCorrectAnswers(userId, session.getStudyPackId(), correctConcepts, now);
+        }
+        if (!missedConcepts.isEmpty()) {
+            conceptHealthService.recordIncorrectAnswers(userId, session.getStudyPackId(), missedConcepts, now);
         }
         return new SimpleMessageResponse(ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE);
     }
@@ -345,6 +363,20 @@ public class QuickReviewAdaptivePracticeService {
     private void markSessionForfeited(QuickReviewSessionEntity session) {
         session.setStatus(QuickReviewSessionStatus.FORFEITED);
         session.setCompletedAt(null);
+    }
+
+    private List<ChallengeQuizConceptStatResponse> computeConceptBreakdownForCompletion(QuickReviewSessionEntity session) {
+        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        if (quiz.isEmpty()) {
+            return List.of();
+        }
+        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices =
+            QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
+        if (selectedChoices.isEmpty() && selectedMultiChoices.isEmpty()) {
+            return List.of();
+        }
+        return QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices);
     }
 
     private StudyPackEntity findOwnedStudyPackOrThrow(UUID studyPackId, UUID userId) {

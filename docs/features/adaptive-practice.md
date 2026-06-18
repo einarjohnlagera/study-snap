@@ -56,3 +56,11 @@ The result screen should stay focused and should not compete with unrelated acti
 - generation and resume flow must be idempotent
 - active generation uses the shared generation lock
 - leaving an active Adaptive Practice session forfeits that session without refunding quota
+
+## ConceptHealth
+
+- on completion, Adaptive Practice records fully-correct concepts to `ConceptHealth.lastCorrectAt`
+- on completion, Adaptive Practice records missed concepts to `ConceptHealth.lastIncorrectAt`
+- a concept is missed when it appears in the session and is not fully correct (`correctAnswers < totalQuestions`)
+- forfeit paths do not record correct or missed ConceptHealth signals
+- a later fully-correct session updates `lastCorrectAt` and clears the struggling state derived from a newer `lastIncorrectAt`

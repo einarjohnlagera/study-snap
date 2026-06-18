@@ -716,6 +716,13 @@ class LongExamServiceTest {
             eq(List.of("Cells", "Genetics")),
             any(OffsetDateTime.class)
         );
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+            eq(userId),
+            eq(studyPackId),
+            eq(List.of("Cells")),
+            eq(List.of("Cells", "Genetics")),
+            any(OffsetDateTime.class)
+        );
     }
 
     @Test
@@ -814,6 +821,13 @@ class LongExamServiceTest {
             any(),
             any()
         );
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(
+            eq(userId),
+            eq(missingStudyPackId),
+            any(),
+            any(),
+            any()
+        );
     }
 
     @Test
@@ -853,6 +867,7 @@ class LongExamServiceTest {
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.LONG_EXAM_FORFEITED), eq(studyPackId),
             any());
         verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId) {

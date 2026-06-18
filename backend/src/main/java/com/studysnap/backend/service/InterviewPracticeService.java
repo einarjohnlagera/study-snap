@@ -229,7 +229,13 @@ public class InterviewPracticeService {
                 selectedChoices,
                 Map.of()
         );
+        List<String> missedConcepts = QuizSessionReviewUtils.computeKeyConceptsWithMisses(
+                quiz,
+                selectedChoices,
+                Map.of()
+        );
         recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
+        recordIncorrectConceptsForSourcePacks(userId, saved, missedConcepts, now);
         trackAnalytics(userId, AnalyticsEventType.INTERVIEW_PRACTICE_COMPLETED, session.getStudyPackId(), Map.of(
                 ANALYTICS_METADATA_SESSION_ID, session.getId().toString(),
                 ANALYTICS_METADATA_SCORE_PERCENTAGE, report.scorePercentage()
@@ -246,15 +252,49 @@ public class InterviewPracticeService {
         if (correctConcepts.isEmpty()) {
             return;
         }
+        recordConceptsForSourcePacks(userId, session, correctConcepts, now, true);
+    }
+
+    private void recordIncorrectConceptsForSourcePacks(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            List<String> incorrectConcepts,
+            OffsetDateTime now
+    ) {
+        if (incorrectConcepts.isEmpty()) {
+            return;
+        }
+        recordConceptsForSourcePacks(userId, session, incorrectConcepts, now, false);
+    }
+
+    private void recordConceptsForSourcePacks(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            List<String> concepts,
+            OffsetDateTime now,
+            boolean correct
+    ) {
         for (UUID studyPackId : resolveSourceStudyPackIds(session)) {
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                    .ifPresent(studyPack -> conceptHealthService.recordCorrectAnswersForKnownConcepts(
-                            userId,
-                            studyPackId,
-                            correctConcepts,
-                            getKeyConcepts(studyPack),
-                            now
-                    ));
+                    .ifPresent(studyPack -> {
+                        if (correct) {
+                            conceptHealthService.recordCorrectAnswersForKnownConcepts(
+                                    userId,
+                                    studyPackId,
+                                    concepts,
+                                    getKeyConcepts(studyPack),
+                                    now
+                            );
+                        } else {
+                            conceptHealthService.recordIncorrectAnswersForKnownConcepts(
+                                    userId,
+                                    studyPackId,
+                                    concepts,
+                                    getKeyConcepts(studyPack),
+                                    now
+                            );
+                        }
+                    });
         }
     }
 

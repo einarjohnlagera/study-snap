@@ -456,6 +456,13 @@ class InterviewPracticeServiceTest {
                 eq(List.of("Transactions", "Concurrency")),
                 any(OffsetDateTime.class)
         );
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Concurrency")),
+                eq(List.of("Transactions", "Concurrency")),
+                any(OffsetDateTime.class)
+        );
     }
 
     @Test
@@ -551,6 +558,13 @@ class InterviewPracticeServiceTest {
                 any(),
                 any()
         );
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(
+                eq(userId),
+                eq(missingStudyPackId),
+                any(),
+                any(),
+                any()
+        );
     }
 
     @Test
@@ -571,6 +585,7 @@ class InterviewPracticeServiceTest {
         assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(session.getCompletedAt()).isNotNull();
         verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID userId, UUID noteId, UUID studyPackId) {
