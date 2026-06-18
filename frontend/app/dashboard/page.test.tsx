@@ -9,7 +9,9 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   listNotes,
+  listCollections,
   listPublicNotes,
+  listPublicStudyPlans,
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { setAuthUser } from "@/lib/auth";
@@ -43,8 +45,10 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   getQuickReviewPerformanceSummary: jest.fn(),
+  listCollections: jest.fn(),
   listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
+  listPublicStudyPlans: jest.fn(),
   setStudyGoal: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -136,12 +140,14 @@ describe("DashboardPage profile variants", () => {
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     (listNotes as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
+    (listPublicStudyPlans as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
@@ -164,6 +170,8 @@ describe("DashboardPage profile variants", () => {
     (getGoalSummary as jest.Mock).mockResolvedValue(null);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    (listCollections as jest.Mock).mockResolvedValue([]);
   });
 
   it("renders the student dashboard with review-first sections", async () => {

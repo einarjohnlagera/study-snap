@@ -1,12 +1,15 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
+import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -18,6 +21,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
+import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -71,6 +75,7 @@ class NoteCollectionServiceTest {
     private static final String EARLIER_COLLECTION_TITLE = "Earlier";
     private static final String UPDATED_COLLECTION_TITLE = "Updated";
     private static final String UPDATED_COLLECTION_DESCRIPTION = "Updated description";
+    private static final String UPDATED_COURSE_PROGRAM = "Licensure Examination for Teachers";
     private static final String OLDEST_CONCEPT = "Oldest";
     private static final String OLDER_CONCEPT = "Older";
     private static final String NEVER_SEEN_CONCEPT = "Never Seen";
@@ -105,6 +110,9 @@ class NoteCollectionServiceTest {
     @Mock
     private AnalyticsService analyticsService;
 
+    @Mock
+    private NoteService noteService;
+
     private NoteCollectionService service;
 
     @BeforeEach
@@ -117,7 +125,8 @@ class NoteCollectionServiceTest {
                 generatedQuizRepository,
                 quizSessionHistoryService,
                 conceptHealthService,
-                analyticsService
+                analyticsService,
+                noteService
         );
     }
 
@@ -476,13 +485,151 @@ class NoteCollectionServiceTest {
 
         NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
                 UPDATED_COLLECTION_TITLE,
-                UPDATED_COLLECTION_DESCRIPTION
+                UPDATED_COLLECTION_DESCRIPTION,
+                UPDATED_COURSE_PROGRAM
         ));
 
         assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
         assertThat(result.description()).isEqualTo(UPDATED_COLLECTION_DESCRIPTION);
+        assertThat(result.courseProgram()).isEqualTo(UPDATED_COURSE_PROGRAM);
         assertThat(result.updatedAt()).isAfter(previousUpdatedAt);
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
+    }
+
+    @Test
+    void listPublic_filtersByNormalizedCourseProgramAndReturnsPublicPlansOnly() {
+        NoteCollectionEntity collection = buildCollection(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                COLLECTION_TITLE,
+                Instant.now()
+        );
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        collection.setCourseProgram(UPDATED_COURSE_PROGRAM);
+        when(collectionRepository.findByVisibilityAndCourseProgramOrderByUpdatedAtDesc(
+                CollectionVisibility.PUBLIC,
+                UPDATED_COURSE_PROGRAM
+        )).thenReturn(List.of(collection));
+        when(itemRepository.countItemsByCollectionIds(List.of(collection.getId())))
+                .thenReturn(List.of(countProjection(collection.getId(), 2)));
+
+        List<NoteCollectionSummaryResponse> result = service.listPublic("  " + UPDATED_COURSE_PROGRAM + "  ");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
+        assertThat(result.getFirst().courseProgram()).isEqualTo(UPDATED_COURSE_PROGRAM);
+        assertThat(result.getFirst().itemCount()).isEqualTo(2);
+    }
+
+    @Test
+    void updateVisibility_rejectsEmptyCollectionWhenPublishing() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.updateVisibility(collectionId, userId, CollectionVisibility.PUBLIC.name()))
+                .isInstanceOf(CollectionNotPublishableException.class);
+    }
+
+    @Test
+    void updateVisibility_rejectsPrivateItemWhenPublishing() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+
+        assertThatThrownBy(() -> service.updateVisibility(collectionId, userId, CollectionVisibility.PUBLIC.name()))
+                .isInstanceOf(CollectionNotPublishableException.class);
+    }
+
+    @Test
+    void updateVisibility_publishesWhenEveryItemIsPublic() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity item = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        note.setVisibility(NoteVisibility.PUBLIC);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
+        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        NoteCollectionDetailResponse result = service.updateVisibility(collectionId, userId, CollectionVisibility.PUBLIC.name());
+
+        assertThat(result.visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
+        assertThat(collection.getVisibility()).isEqualTo(CollectionVisibility.PUBLIC);
+    }
+
+    @Test
+    void adopt_returnsExistingPersonalPlanWhenAlreadyAdopted() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID personalPlanId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity existing = buildCollection(personalPlanId, userId, COLLECTION_TITLE, Instant.now());
+        existing.setSourcePlanId(sourcePlanId);
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId))
+                .thenReturn(Optional.of(existing));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(personalPlanId))
+                .thenReturn(List.of(buildItem(personalPlanId, UUID.randomUUID(), 0, null)));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.collectionId()).isEqualTo(personalPlanId);
+        assertThat(result.alreadyAdopted()).isTrue();
+        assertThat(result.copiedCount()).isEqualTo(1);
+        verify(noteService, never()).copyNote(any(), any(), eq(true));
+    }
+
+    @Test
+    void adopt_copiesPublicItemsAndSkipsUnavailableItems() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID privateNoteId = UUID.randomUUID();
+        UUID copiedNoteId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setCourseProgram(UPDATED_COURSE_PROGRAM);
+        NoteCollectionItemEntity firstItem = buildItem(sourcePlanId, firstNoteId, 0, WEEK_ONE_LABEL);
+        NoteCollectionItemEntity privateItem = buildItem(sourcePlanId, privateNoteId, 1, WEEK_TWO_LABEL);
+        NoteEntity publicNote = buildNote(firstNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        publicNote.setVisibility(NoteVisibility.PUBLIC);
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of(firstItem, privateItem));
+        when(noteRepository.findByIdAndVisibility(firstNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(publicNote));
+        when(noteRepository.findByIdAndVisibility(privateNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.empty());
+        when(noteService.copyNote(firstNoteId.toString(), userId, true)).thenReturn(noteResponse(copiedNoteId));
+        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.copiedCount()).isEqualTo(1);
+        assertThat(result.skippedCount()).isEqualTo(1);
+        assertThat(result.alreadyAdopted()).isFalse();
+        ArgumentCaptor<List<NoteCollectionItemEntity>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itemRepository).saveAll(itemsCaptor.capture());
+        assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getNoteId).containsExactly(copiedNoteId);
+        assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getLabel).containsExactly(WEEK_ONE_LABEL);
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).save(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getVisibility()).isEqualTo(CollectionVisibility.PRIVATE);
+        assertThat(collectionCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
     }
 
     @Test
@@ -787,6 +934,37 @@ class NoteCollectionServiceTest {
         generatedQuiz.setUpdatedAt(OffsetDateTime.parse(QUIZ_TIMESTAMP));
         generatedQuiz.setQuestions(List.of());
         return generatedQuiz;
+    }
+
+    private NoteResponse noteResponse(UUID noteId) {
+        return new NoteResponse(
+                noteId.toString(),
+                NOTE_TITLE_ONE,
+                BIOLOGY_SUBJECT,
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT.name(),
+                List.of(),
+                "content",
+                NoteVisibility.PRIVATE.name(),
+                OffsetDateTime.parse(BASE_TIMESTAMP),
+                OffsetDateTime.parse(BASE_TIMESTAMP),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                NoteStudyPackStatusResolver.DRAFT,
+                null,
+                List.of(),
+                List.of(),
+                null,
+                null,
+                false,
+                false,
+                false,
+                false
+        );
     }
 
     private NoteCollectionItemCountProjection countProjection(UUID collectionId, long itemCount) {

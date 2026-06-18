@@ -1,15 +1,18 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
+import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteCollectionService;
 import com.studysnap.backend.util.UuidParsingUtils;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -52,6 +56,21 @@ public class NoteCollectionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(user.userId(), request));
     }
 
+    @GetMapping("/public")
+    public List<NoteCollectionSummaryResponse> listPublic(
+            @RequestParam(value = "courseProgram", required = false) String courseProgram
+    ) {
+        return service.listPublic(courseProgram);
+    }
+
+    @GetMapping("/public/{id}")
+    public NoteCollectionDetailResponse getPublic(
+            @PathVariable String id
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.getPublic(collectionId);
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteCollectionDetailResponse get(
@@ -71,6 +90,27 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.updateMetadata(collectionId, user.userId(), request);
+    }
+
+    @PostMapping("/{id}/visibility")
+    @PreAuthorize("hasRole('ADMIN')")
+    public NoteCollectionDetailResponse updateVisibility(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateCollectionVisibilityRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.updateVisibility(collectionId, user.userId(), request.visibility());
+    }
+
+    @PostMapping("/{id}/adopt")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public AdoptStudyPlanResponse adopt(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.adopt(collectionId, user.userId());
     }
 
     @DeleteMapping("/{id}")
