@@ -1,11 +1,14 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
+import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
+import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
@@ -33,6 +36,7 @@ import static org.mockito.Mockito.when;
 class NoteCollectionControllerTest {
 
     private static final String PREAUTHORIZE_ROLES = "hasAnyRole('USER','ADMIN')";
+    private static final String PREAUTHORIZE_ADMIN = "hasRole('ADMIN')";
     private static final String COLLECTION_ID = "e2163cd7-6bf7-45e9-8a01-14002a8fd8f6";
     private static final String NOTE_ID = "5940c881-7f8c-48cb-a00c-6ebe34872976";
     private static final String COLLECTION_TITLE = "Biology Unit";
@@ -66,6 +70,12 @@ class NoteCollectionControllerTest {
         assertThat(NoteCollectionController.class
                 .getMethod("setOrder", String.class, SetNoteCollectionOrderRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("adopt", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("updateVisibility", String.class, UpdateCollectionVisibilityRequest.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ADMIN);
     }
 
     @Test
@@ -113,7 +123,7 @@ class NoteCollectionControllerTest {
     void patch_returnsUpdatedCollection() {
         NoteCollectionController controller = new NoteCollectionController(service);
         AuthenticatedUser user = authenticatedUser();
-        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null);
+        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null, null);
         NoteCollectionDetailResponse response = detailResponse();
         when(service.updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
 
@@ -121,6 +131,58 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
+    void listPublic_returnsPublishedCollectionsWithoutAuthentication() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionSummaryResponse response = summaryResponse();
+        when(service.listPublic("LET")).thenReturn(List.of(response));
+
+        List<NoteCollectionSummaryResponse> result = controller.listPublic("LET");
+
+        assertThat(result).containsExactly(response);
+        verify(service).listPublic("LET");
+    }
+
+    @Test
+    void getPublic_returnsPublishedCollectionWithoutAuthentication() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.getPublic(UUID.fromString(COLLECTION_ID))).thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.getPublic(COLLECTION_ID);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).getPublic(UUID.fromString(COLLECTION_ID));
+    }
+
+    @Test
+    void updateVisibility_delegatesAdminPublishRequest() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        UpdateCollectionVisibilityRequest request = new UpdateCollectionVisibilityRequest(CollectionVisibility.PUBLIC.name());
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.updateVisibility(UUID.fromString(COLLECTION_ID), user.userId(), request.visibility()))
+                .thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.updateVisibility(COLLECTION_ID, request, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).updateVisibility(UUID.fromString(COLLECTION_ID), user.userId(), request.visibility());
+    }
+
+    @Test
+    void adopt_returnsPersonalStudyPlanId() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        AdoptStudyPlanResponse response = new AdoptStudyPlanResponse(UUID.fromString(COLLECTION_ID), 3, 0, false);
+        when(service.adopt(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
+
+        AdoptStudyPlanResponse result = controller.adopt(COLLECTION_ID, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).adopt(UUID.fromString(COLLECTION_ID), user.userId());
     }
 
     @Test
@@ -229,7 +291,17 @@ class NoteCollectionControllerTest {
 
     private NoteCollectionSummaryResponse summaryResponse() {
         Instant now = Instant.parse("2026-04-01T00:00:00Z");
-        return new NoteCollectionSummaryResponse(UUID.fromString(COLLECTION_ID), COLLECTION_TITLE, null, 1, now, now);
+        return new NoteCollectionSummaryResponse(
+                UUID.fromString(COLLECTION_ID),
+                COLLECTION_TITLE,
+                null,
+                CollectionVisibility.PRIVATE.name(),
+                null,
+                null,
+                1,
+                now,
+                now
+        );
     }
 
     private NoteCollectionDetailResponse detailResponse() {
@@ -237,6 +309,9 @@ class NoteCollectionControllerTest {
         return new NoteCollectionDetailResponse(
                 UUID.fromString(COLLECTION_ID),
                 COLLECTION_TITLE,
+                null,
+                CollectionVisibility.PRIVATE.name(),
+                null,
                 null,
                 now,
                 now,

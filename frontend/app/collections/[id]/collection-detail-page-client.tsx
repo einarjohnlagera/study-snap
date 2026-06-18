@@ -24,16 +24,18 @@ import {
   removeCollectionItem,
   setCollectionItemOrder,
   updateCollection,
+  updateCollectionVisibility,
   type NoteCollectionDetail,
   type NoteCollectionItem,
   type NoteListItemResponse,
 } from "@/lib/api";
+import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
-type MutationKind = "add" | "delete" | "edit" | "remove" | "reorder" | null;
+type MutationKind = "add" | "delete" | "edit" | "publish" | "remove" | "reorder" | null;
 type NextPlanAction = {
   item: NoteCollectionItem;
   actionLabel: "Generate Study Pack" | "Study this note" | "Review due concepts";
@@ -472,6 +474,90 @@ function AddNotesModal({
   );
 }
 
+function AdminStudyPlanPublishCard({
+  collection,
+  publishing,
+  onSaved,
+  onMutating,
+}: Readonly<{
+  collection: NoteCollectionDetail;
+  publishing: boolean;
+  onSaved: (collection: NoteCollectionDetail) => void;
+  onMutating: (active: boolean) => void;
+}>) {
+  const [courseProgram, setCourseProgram] = useState(collection.courseProgram ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCourseProgram(collection.courseProgram ?? "");
+    setError(null);
+  }, [collection.courseProgram, collection.id]);
+
+  const saveCourseProgram = async () => {
+    onMutating(true);
+    setError(null);
+    try {
+      const saved = await updateCollection(collection.id, {
+        courseProgram: courseProgram.trim() || null,
+      });
+      onSaved(saved);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Could not save the course/program.");
+    } finally {
+      onMutating(false);
+    }
+  };
+
+  const toggleVisibility = async () => {
+    onMutating(true);
+    setError(null);
+    try {
+      const nextVisibility = collection.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
+      const saved = await updateCollectionVisibility(collection.id, nextVisibility);
+      onSaved(saved);
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Could not update publishing.");
+    } finally {
+      onMutating(false);
+    }
+  };
+
+  return (
+    <Card className="space-y-4 border-amber-500/25 bg-amber-500/5 p-4 sm:p-5">
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Admin</p>
+        <CardTitle>Study plan publishing</CardTitle>
+        <CardDescription>
+          Published plans are visible through the public study-plan read path and can be adopted by matching learners.
+        </CardDescription>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Course / Program</span>
+          <input
+            value={courseProgram}
+            onChange={(event) => setCourseProgram(event.target.value)}
+            placeholder="LET, PNLE, ALE..."
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+        <Button type="button" variant="outline" loading={publishing} loadingText="Saving..." onClick={saveCourseProgram}>
+          Save target
+        </Button>
+        <Button type="button" loading={publishing} loadingText="Updating..." onClick={toggleVisibility}>
+          {collection.visibility === "PUBLIC" ? "Unpublish" : "Publish as study plan"}
+        </Button>
+      </div>
+      <p className="text-xs text-foreground/60">
+        Current visibility: <span className="font-semibold">{collection.visibility}</span>
+      </p>
+      {error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p>
+      ) : null}
+    </Card>
+  );
+}
+
 function SortableCollectionItemRow({
   item,
   index,
@@ -583,6 +669,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const router = useRouter();
   const authUser = getAuthUser();
   const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
+  const isAdmin = authUser?.role === "ADMIN";
   const showWeakAreas = canViewConceptHealth(currentPlan);
   const upgradeCtas = useMemo(() => getUpgradeCtas(currentPlan), [currentPlan]);
   const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
@@ -596,6 +683,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -626,6 +714,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     void Promise.resolve().then(loadCollection);
   }, [loadCollection, router]);
+
+  useEffect(() => {
+    setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
+  }, [collectionId]);
 
   const refetchAfterFailure = async (message: string) => {
     setMutationError(message);
@@ -828,6 +920,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         collectionId={collectionId}
         canReviewDueConcepts={showWeakAreas}
       />
+
+      {skippedNoticeCount ? (
+        <Card className="border-amber-500/25 bg-amber-500/10 p-4 text-sm text-foreground/75">
+          {skippedNoticeCount} {skippedNoticeCount === 1 ? "item is" : "items are"} no longer available and were left out.
+        </Card>
+      ) : null}
+
+      {isAdmin ? (
+        <AdminStudyPlanPublishCard
+          collection={collection}
+          publishing={mutationKind === "publish"}
+          onMutating={(active) => setMutationKind(active ? "publish" : null)}
+          onSaved={(saved) => {
+            setCollection(saved);
+            setItems(sortItems(saved.items));
+          }}
+        />
+      ) : null}
 
       <div className="flex justify-end">
         <ResponsiveActionButton action="delete" label={`Delete ${labels.singular}`} variant="ghost" onClick={() => setDeleteOpen(true)} />

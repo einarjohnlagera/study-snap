@@ -23,7 +23,9 @@ It is not:
 - an AI-synthesized document
 - a Study Pack
 - a quota bucket
-- a public/shareable object in v1
+- a user- or teacher-shareable object in v1
+
+Admin-published collections are the v0.31.0 exception: an admin can publish a collection as an adoptable study plan over already-public notes. Learners do not study the source plan directly; adopting creates a private snapshot copy in their own library.
 
 **Study Plans vs saved library filters (do not consolidate).** A Study Plan is a *durable, ordered, named organizer* — the canonical way a learner groups notes by unit/grade level/preference. A saved library filter is a *transient quick lens* (a stored search/filter combo) over the whole library. They serve different jobs and both are intentionally kept: filters are how a learner narrows the library (including while assembling a plan from selection); the plan is the resulting durable grouping.
 
@@ -33,6 +35,9 @@ Fields:
 - `ownerUserId`
 - `title`
 - optional `description`
+- `visibility` (`PRIVATE` by default, `PUBLIC` only for admin-published plans)
+- optional `courseProgram`
+- optional `sourcePlanId` on adopted personal plans
 - ordered `items`
 - `createdAt`
 - `updatedAt`
@@ -63,7 +68,7 @@ Backend responses stay neutral: `title`, `description`, `items`.
 
 ## Ownership Rules
 
-Collections are owner-private in v1.
+Collections remain owner-private by default.
 
 - A collection can contain only notes owned by the requesting user.
 - Adding or ordering a note that does not exist or is not owned by the caller returns `NoteNotFoundException` / `404`.
@@ -73,6 +78,15 @@ Collections are owner-private in v1.
 - Deleting a collection deletes only the collection and item rows.
 - Deleting a note removes that note's collection item rows through the `note_collection_items.note_id` FK cascade.
 - Deleting a collection must never delete notes.
+- Existing owner-scoped endpoints must use `findByIdAndOwnerUserId` semantics and must not expose private collections to other users.
+
+Admin-published plans intentionally lift the read boundary only through public endpoints:
+
+- `visibility=PUBLIC` collections are world-readable through `/collections/public`.
+- `visibility=PRIVATE` collections are never returned by public endpoints and return `404` on public detail.
+- Publishing is admin-only and requires a non-empty collection where every item note is already `PUBLIC`.
+- Unpublishing returns the source collection to `PRIVATE`; adopted personal plans are unaffected.
+- User/teacher-authored collection sharing remains deferred.
 
 ## Generation And Quota Rules
 
@@ -101,6 +115,9 @@ Response item:
 - `id`
 - `title`
 - `description`
+- `visibility`
+- `courseProgram`
+- `sourcePlanId`
 - `itemCount`
 - `createdAt`
 - `updatedAt`
@@ -180,12 +197,66 @@ Request:
 
 - `title` optional, but if present it must be non-blank and max `150`
 - `description` optional and nullable
+- `courseProgram` optional and nullable; normalized with the same course/program normalization used by notes
 
 Behavior:
 
 - updates collection metadata
 - bumps `updatedAt`
 - returns full detail
+
+### Publish / Unpublish Study Plan
+
+`POST /collections/{id}/visibility`
+
+Admin-only request:
+
+- `visibility`: `PRIVATE` or `PUBLIC`
+
+Behavior:
+
+- publishing validates the collection is non-empty
+- publishing validates every item note still has `visibility=PUBLIC`
+- invalid publish attempts return `CollectionNotPublishableException` / `400`
+- unpublishing to `PRIVATE` is allowed
+- returns full detail
+
+### Public Plan List
+
+`GET /collections/public?courseProgram={value}`
+
+Behavior:
+
+- no authentication required
+- returns only `visibility=PUBLIC` collections
+- optional `courseProgram` filter is normalized before lookup
+- private collections are never included
+
+### Public Plan Detail
+
+`GET /collections/public/{id}`
+
+Behavior:
+
+- no authentication required
+- returns detail only when the collection is `PUBLIC`
+- private or missing collections return `CollectionNotFoundException` / `404`
+- stale private/deleted item notes are omitted from the public item payload rather than leaked
+
+### Adopt Study Plan
+
+`POST /collections/{id}/adopt`
+
+Behavior:
+
+- authenticated users can adopt only `PUBLIC` source collections
+- if the caller already owns a collection with `sourcePlanId={id}`, the endpoint returns that existing personal plan id instead of creating a duplicate
+- otherwise the endpoint iterates source items in saved order and calls `copyNote(noteId, userId, includeStudyPack=true)` for each still-public source note
+- each source item is isolated; private, deleted, or otherwise unavailable notes are skipped and counted instead of failing the whole adoption
+- the personal collection is `PRIVATE`, keeps `sourcePlanId={source id}`, mirrors the source title/description/courseProgram, and preserves copied item order plus labels
+- adoption bills no quota and makes no AI calls
+- `sourcePlanId` is lineage/idempotency only; source edits never sync into adopted personal plans
+- server analytics fires `STUDY_PLAN_ADOPTED` with `sourcePlanId`, `copiedCount`, `skippedCount`, and `alreadyAdopted`
 
 ### Delete Collection
 
@@ -246,6 +317,8 @@ Behavior:
 ## Error States
 
 - Collection not found or not owned by caller -> `CollectionNotFoundException` / `404`.
+- Private or missing public-plan source/detail -> `CollectionNotFoundException` / `404`.
+- Publish empty or any-private-note collection -> `CollectionNotPublishableException` / `400`.
 - Malformed collection path UUID -> `CollectionNotFoundException` / `404`.
 - Blank title on create or update -> `InvalidCollectionRequestException` / `400`.
 - Title over `150` characters -> `InvalidCollectionRequestException` / `400`.
@@ -261,6 +334,7 @@ The core Collections UI ships as the universal organization surface:
 
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
 - `/collections/[id]` shows one collection, its ordered note items, item labels, and note readiness hints.
+- Admins on `/collections/[id]` see a compact publishing panel for `courseProgram` targeting plus publish/unpublish controls.
 - `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
 - Entitled users see per-note due-concept counts and up to 3 concept names. Free users see no fabricated counts and may see one plan-aware upgrade affordance resolved through `getUpgradeCtas(currentPlan)`.
 - A frontend-only `Next in this plan` card derives one action from the already-returned ordered items. It never calls a recommendation endpoint or persists recommendation state.
@@ -329,5 +403,7 @@ Do not add these under the collection CRUD spine unless explicitly scoped later:
 - DOCX/shareable quiz-link generation directly from collections
 - collection-level AI synthesis
 - bulk generate across a collection
-- public/shareable collections
+- user/teacher-authored published or shared collections (admin-published plans shipped in v0.31.0; non-admin publishing stays deferred)
+- live-link or shared-progress adopted plans
+- plan browse directory
 - lesson-plan document parsing

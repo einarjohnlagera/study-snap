@@ -351,6 +351,7 @@ export type AnalyticsEventType =
   | "NOTE_CREATED"
   | "NOTES_BULK_IMPORTED"
   | "COLLECTION_CREATED"
+  | "STUDY_PLAN_ADOPTED"
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"
@@ -1268,6 +1269,9 @@ export type NoteCollectionSummary = {
   id: string;
   title: string;
   description: string | null;
+  visibility: "PRIVATE" | "PUBLIC";
+  courseProgram: string | null;
+  sourcePlanId: string | null;
   itemCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1298,10 +1302,20 @@ export type NoteCollectionDetail = {
   id: string;
   title: string;
   description: string | null;
+  visibility: "PRIVATE" | "PUBLIC";
+  courseProgram: string | null;
+  sourcePlanId: string | null;
   createdAt: string;
   updatedAt: string;
   progress: NoteCollectionProgress;
   items: NoteCollectionItem[];
+};
+
+export type AdoptStudyPlanResponse = {
+  collectionId: string;
+  copiedCount: number;
+  skippedCount: number;
+  alreadyAdopted: boolean;
 };
 
 export type SetCollectionItemOrderRequestItem = {
@@ -3527,6 +3541,21 @@ export async function listCollections(): Promise<NoteCollectionSummary[]> {
   return parseApiResponse<NoteCollectionSummary[]>(response, "Could not load collections.");
 }
 
+export async function listPublicStudyPlans(params?: {
+  courseProgram?: string | null;
+}): Promise<NoteCollectionSummary[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.courseProgram) {
+    searchParams.set("courseProgram", params.courseProgram);
+  }
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+  const response = await fetch(buildUrl(`/collections/public${query}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<NoteCollectionSummary[]>(response, "Could not load public study plans.");
+}
+
 export async function createCollection(request: {
   title: string;
   description?: string | null;
@@ -3558,7 +3587,7 @@ export async function getCollection(id: string): Promise<NoteCollectionDetail> {
 
 export async function updateCollection(
   id: string,
-  request: { title?: string; description?: string | null },
+  request: { title?: string; description?: string | null; courseProgram?: string | null },
 ): Promise<NoteCollectionDetail> {
   const response = await fetchWithAuth(
     `/collections/${id}`,
@@ -3570,6 +3599,34 @@ export async function updateCollection(
     true,
   );
   return parseApiResponse<NoteCollectionDetail>(response, "Could not update this collection.");
+}
+
+export async function updateCollectionVisibility(
+  id: string,
+  visibility: "PRIVATE" | "PUBLIC",
+): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/visibility`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ visibility }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not update this collection visibility.");
+}
+
+export async function adoptStudyPlan(id: string): Promise<AdoptStudyPlanResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/adopt`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+    },
+    true,
+  );
+  return parseApiResponse<AdoptStudyPlanResponse>(response, "Could not start this study plan.");
 }
 
 export async function deleteCollection(id: string): Promise<void> {

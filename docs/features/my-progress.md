@@ -57,6 +57,8 @@ Goal priority:
 
 The report is ConceptHealth-only. It does not read quiz-session `conceptBreakdown`, accuracy percentages, weak-concept lists, or dashboard Focus Areas data.
 
+Adopted study plans need no special Progress path. Adoption snapshot-copies public notes and linked Study Packs into owned notes, so all practice in an adopted plan writes the same owned-note ConceptHealth signals as any manually created Study Plan.
+
 Aggregation path:
 
 `concept_health.studyPackId -> study_packs.subject + study_packs.keyConcepts`

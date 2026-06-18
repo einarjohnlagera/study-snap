@@ -7,6 +7,8 @@ import {
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
+  updateCollection,
+  updateCollectionVisibility,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -50,6 +52,7 @@ jest.mock("@/lib/api", () => {
     removeCollectionItem: jest.fn(),
     setCollectionItemOrder: jest.fn(),
     updateCollection: jest.fn(),
+    updateCollectionVisibility: jest.fn(),
   };
 });
 
@@ -58,6 +61,9 @@ function collection(overrides: Record<string, unknown> = {}) {
     id: "collection-1",
     title: "Midterm Study Plan",
     description: "Weeks 1-4",
+    visibility: "PRIVATE",
+    courseProgram: null,
+    sourcePlanId: null,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
     progress: {
@@ -135,6 +141,8 @@ describe("CollectionDetailPageClient", () => {
     (listNotes as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
+    (updateCollection as jest.Mock).mockReset();
+    (updateCollectionVisibility as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
   });
@@ -357,6 +365,20 @@ describe("CollectionDetailPageClient", () => {
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
     expect(screen.queryByRole("button", { name: /Build exam from this/i })).not.toBeInTheDocument();
+  });
+
+  it("shows admin publishing controls only for admins", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (updateCollectionVisibility as jest.Mock).mockResolvedValue(collection({ visibility: "PUBLIC" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Study plan publishing")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Publish as study plan" }));
+
+    await waitFor(() => {
+      expect(updateCollectionVisibility).toHaveBeenCalledWith("collection-1", "PUBLIC");
+    });
   });
 
   it("reorders by move button using the full ordered set", async () => {

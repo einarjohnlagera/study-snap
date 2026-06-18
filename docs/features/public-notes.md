@@ -103,6 +103,8 @@ Copying a public note:
 - does not copy generated outputs or quiz/performance history
 - preserves attribution through `copiedFromNoteId` and `copiedFromUserId`
 
+Adoptable study plans reuse the public-note copy spine per source item, with `includeStudyPack=true`, so adopted plan notes become normal owned notes and feed Progress through the existing practice loop. The published source plan remains a snapshot source, not a live link.
+
 ## Copy On Signup
 
 When an unauthenticated visitor clicks a public note copy CTA and chooses `Sign Up`, the frontend stores the source note id in a short-lived `notelib-copy-intent` cookie.

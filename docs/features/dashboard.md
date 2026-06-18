@@ -140,6 +140,27 @@ Behavior by state:
 
 Applies to STUDENT, BOARD_EXAM, TEACHER, and PROFESSIONAL profile types.
 
+## Matching Study Plan Section
+
+v0.31.0 adds a learner-facing plan surface for STUDENT, BOARD_EXAM, and PROFESSIONAL dashboards.
+
+**Section title**: `Recommended {collectionLabel.singular}` using `getCollectionLabels(profileType)`
+**Data source**: `GET /collections/public?courseProgram=<value>` plus the user's `GET /collections` list to detect an already adopted `sourcePlanId`
+**CTA**:
+
+- `Start this plan` when the learner has not adopted the source plan
+- `Continue this plan` when a private collection with `sourcePlanId == sourcePlan.id` already exists
+
+Behavior by state:
+
+- `courseProgram` is set and a matching published plan exists → show the first matching plan card with item count and Start/Continue CTA
+- no matching plan exists → render nothing; do not show an empty shell
+- Start calls `POST /collections/{id}/adopt`, then routes to `/collections/{personalId}`
+- if adoption reports skipped items, show a non-blocking notice on the destination collection page
+- network errors keep the CTA in place and show an inline retryable error
+
+The section does not create a new Dashboard backend endpoint, quota, AI call, or plan store. Adopted plans are normal private collections, so the existing note -> Study Pack -> practice -> Progress loop handles all downstream work.
+
 ## First-study guidance
 
 Dashboard may also show first-study guidance for verified users who still have `studyPackCount == 0` and have not completed the separate product-onboarding tracker.

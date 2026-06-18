@@ -8,7 +8,7 @@ Theme: most learners don't assemble a study plan note-by-note — they want a re
 
 ### Shipped
 
-_None yet._
+- **Adoptable study plans** — Admin-published `NoteCollection` records can now act as public, course/program-targeted study plans. Learners see a matching plan on Dashboard, tap `Start this plan`, and NoteLib snapshot-copies the plan's public notes plus linked Study Packs into a private personal collection with `sourcePlanId` lineage/idempotency. Adoption uses existing public-note copy behavior, skips unavailable items, bills no quota, and fires `STUDY_PLAN_ADOPTED`.
 
 ---
 
