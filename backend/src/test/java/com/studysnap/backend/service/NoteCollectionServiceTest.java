@@ -36,7 +36,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -126,7 +128,8 @@ class NoteCollectionServiceTest {
                 quizSessionHistoryService,
                 conceptHealthService,
                 analyticsService,
-                noteService
+                noteService,
+                TransactionOperations.withoutTransaction()
         );
     }
 
@@ -580,7 +583,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity existing = buildCollection(personalPlanId, userId, COLLECTION_TITLE, Instant.now());
         existing.setSourcePlanId(sourcePlanId);
         when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
-        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId))
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId))
                 .thenReturn(Optional.of(existing));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(personalPlanId))
                 .thenReturn(List.of(buildItem(personalPlanId, UUID.randomUUID(), 0, null)));
@@ -614,7 +617,7 @@ class NoteCollectionServiceTest {
         when(noteRepository.findByIdAndVisibility(firstNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(publicNote));
         when(noteRepository.findByIdAndVisibility(privateNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.empty());
         when(noteService.copyNote(firstNoteId.toString(), userId, true)).thenReturn(noteResponse(copiedNoteId));
-        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
@@ -627,9 +630,81 @@ class NoteCollectionServiceTest {
         assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getNoteId).containsExactly(copiedNoteId);
         assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getLabel).containsExactly(WEEK_ONE_LABEL);
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
-        verify(collectionRepository).save(collectionCaptor.capture());
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
         assertThat(collectionCaptor.getValue().getVisibility()).isEqualTo(CollectionVisibility.PRIVATE);
         assertThat(collectionCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
+    }
+
+    @Test
+    void adopt_isolatesUnexpectedCopyFailureAndKeepsTheRest() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID failingNoteId = UUID.randomUUID();
+        UUID okNoteId = UUID.randomUUID();
+        UUID copiedNoteId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteEntity failingNote = buildNote(failingNoteId, sourceOwnerId, NOTE_TITLE_ONE);
+        failingNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity okNote = buildNote(okNoteId, sourceOwnerId, NOTE_TITLE_TWO);
+        okNote.setVisibility(NoteVisibility.PUBLIC);
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of(
+                buildItem(sourcePlanId, failingNoteId, 0, WEEK_ONE_LABEL),
+                buildItem(sourcePlanId, okNoteId, 1, WEEK_TWO_LABEL)
+        ));
+        when(noteRepository.findByIdAndVisibility(failingNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(failingNote));
+        when(noteRepository.findByIdAndVisibility(okNoteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(okNote));
+        when(noteService.copyNote(failingNoteId.toString(), userId, true)).thenThrow(new RuntimeException("copy boom"));
+        when(noteService.copyNote(okNoteId.toString(), userId, true)).thenReturn(noteResponse(copiedNoteId));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.copiedCount()).isEqualTo(1);
+        assertThat(result.skippedCount()).isEqualTo(1);
+        assertThat(result.alreadyAdopted()).isFalse();
+        ArgumentCaptor<List<NoteCollectionItemEntity>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(itemRepository).saveAll(itemsCaptor.capture());
+        assertThat(itemsCaptor.getValue()).extracting(NoteCollectionItemEntity::getNoteId).containsExactly(copiedNoteId);
+    }
+
+    @Test
+    void adopt_recoversFromConcurrentFirstAdoptRace() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID copiedNoteId = UUID.randomUUID();
+        UUID winnerPlanId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        NoteEntity publicNote = buildNote(noteId, sourceOwnerId, NOTE_TITLE_ONE);
+        publicNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteCollectionEntity winner = buildCollection(winnerPlanId, userId, COLLECTION_TITLE, Instant.now());
+        winner.setSourcePlanId(sourcePlanId);
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        // fast path empty on first lookup; the winner's row is found after the unique-index race.
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winner));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId))
+                .thenReturn(List.of(buildItem(sourcePlanId, noteId, 0, WEEK_ONE_LABEL)));
+        when(noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(publicNote));
+        when(noteService.copyNote(noteId.toString(), userId, true)).thenReturn(noteResponse(copiedNoteId));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate adopt"));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(winnerPlanId))
+                .thenReturn(List.of(buildItem(winnerPlanId, copiedNoteId, 0, WEEK_ONE_LABEL)));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.collectionId()).isEqualTo(winnerPlanId);
+        assertThat(result.alreadyAdopted()).isTrue();
     }
 
     @Test

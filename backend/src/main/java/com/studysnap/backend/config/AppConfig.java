@@ -64,6 +64,13 @@ public class AppConfig {
     }
 
     @Bean
+    public TransactionOperations collectionTransactionOperations(
+            PlatformTransactionManager transactionManager
+    ) {
+        return new TransactionTemplate(transactionManager);
+    }
+
+    @Bean
     public Clock systemClock() {
         return Clock.systemUTC();
     }
