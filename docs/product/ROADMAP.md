@@ -6,13 +6,13 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.30.1 - Copy Flow Polish` is the release currently in progress.
+`v0.31.0 - Adoptable Study Plans` is the next release (not yet started).
 
-`v0.30.0 - Readiness Signals` is the current documentation baseline (last released).
+`v0.30.1 - Copy Flow Polish` is the current documentation baseline (last released).
 
-`v0.31.0 - Adoptable Study Plans` is the next feature release (after the v0.30.1 patch).
+`v0.30.0 - Readiness Signals` is the previous baseline.
 
-`v0.29.1 - Bulk Generation Polish` is the previous baseline.
+`v0.29.1 - Bulk Generation Polish` is the release before that.
 
 `v0.29.0 - Bulk Generation & Generation-Context Correctness` is the release before that.
 
@@ -85,7 +85,7 @@ Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0
 
 ---
 
-## v0.30.1 - Copy Flow Polish (in progress)
+## v0.30.1 - Copy Flow Polish (released)
 
 Base branch for this release: `releases/v0.30.1`.
 

@@ -2,7 +2,7 @@
 
 ## v0.30.1 - Copy Flow Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: reduce friction in copying notes from the Public Library. A small, frontend-only UX pass on labeling, the post-copy modal, and an editable-draft option — no backend, no new infrastructure.
 
