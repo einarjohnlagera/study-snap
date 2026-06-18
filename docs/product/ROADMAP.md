@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.31.0 - Adoptable Study Plans` is the next release (not yet started).
+`v0.30.1 - Copy Flow Polish` is the release currently in progress.
 
 `v0.30.0 - Readiness Signals` is the current documentation baseline (last released).
+
+`v0.31.0 - Adoptable Study Plans` is the next feature release (after the v0.30.1 patch).
 
 `v0.29.1 - Bulk Generation Polish` is the previous baseline.
 
@@ -80,6 +82,29 @@ Theme: follow-up polish on the v0.29.0 bulk-generation flow, deferred to keep v0
 - **Partial-outcome reporting for bulk generation.** Shipped as a bounded terminal-outcome receipt: `POST /notes/bulk-generate` returns a `resultId`, the worker writes one owner-scoped `bulk_generation_result` receipt at batch completion with requested/created counts, exact failed topic strings, and quota-blocked topic strings, and `GET /notes/bulk-generate/results/{id}` returns then deletes it. The Library keeps the immediate `Queued N notes` toast, waits for the existing auto-refresh poller to settle, then reads the receipt and shows a dismissible banner only when content-generation failures or note-generation quota blocks occurred. `Retry these` pre-fills `/library/bulk-generate` only for genuine generation failures. This is the one v0.29.1 relaxation of the v0.29.0 no-progress-infrastructure rule: it is terminal, write-once/read-once, and expires after 24h; it is not a batch-job entity, live progress table, per-item status row, or new status enum.
 
 - **Open Bulk Generation to all users (gate-flip + quota-aware failure UX + discoverability).** Shipped: Bulk Generation is now available from the Library Create menu and `/library/bulk-generate` for authenticated, onboarded users; `POST /notes/bulk-generate` and `GET .../results/{id}` use the same `hasAnyRole('USER','ADMIN')` gate as other note endpoints. Non-admins keep the existing per-user note-generation quota path (`enforceLimits = role != ADMIN`), while ADMIN still bypasses. The receipt now distinguishes generation failures from note-generation quota blocks, the Library banner retries only generation failures and routes quota blocks through `getUpgradeCtas(currentPlan)`, the bulk page shows remaining note-generation quota when available, the single Note Create Generate-from-topic panel links to bulk generation, and Help includes `/help#bulk-generate`. Out of scope remains unchanged: no quota limit changes, no teacher-specific bulk flow, and no bulk *quiz* generation.
+
+---
+
+## v0.30.1 - Copy Flow Polish (in progress)
+
+Base branch for this release: `releases/v0.30.1`.
+
+Theme: very few users copy notes from the Public Library. A small, frontend-only UX pass to reduce that friction — clearer labeling, a post-copy modal that showcases the note instead of shortcutting it, and an editable-draft option for users who want to adapt content. This is a polish patch, not a feature release; the bigger activation bet (curated, adoptable plans) is v0.31.0.
+
+Locked direction:
+
+- **Rename for clarity.** The card action becomes `Add to Library` (note + Study Pack), replacing `Save` — which read as a bookmark next to the like (heart). Name the destination, not just a short verb; the icon changes from the save/bookmark glyph to a copy/library glyph.
+- **Modal showcases the note.** The post-copy success modal leads with `View Note` (the hub where the full Study Pack and every quiz/exam mode live) and **removes the Quick Review quick-action** (it under-utilized the note). Body copy states the payoff (editable copy + quizzable Study Pack that feeds Progress).
+- **One action on the card; the fork on detail.** The grid card keeps a single primary copy action on every breakpoint (no dropdown — bad for touch). The public note **detail** page carries the secondary `Copy as editable draft` (`copyNote(id, { includeStudyPack: false })` → Draft, no Study Pack, content stays editable) stacked under the primary.
+- **No backend, no new infra.** Reuse the existing `copyNote` `includeStudyPack` param and the existing `PUBLIC_NOTE_COPY_CLICKED` / `PUBLIC_NOTE_COPIED` analytics (the labeling change is measurable today). No enum, quota, entity, or endpoint changes.
+
+Scope:
+
+- **Card relabel** — `Save`/`Saved` → `Add to Library`/`In Library`, copy/library icon, auth-modal title updated.
+- **Copy success modal** — `View Note` as the sole primary action (Quick Review removed); value-stating body copy; the duplicate close-button bug fixed (`AppModal` already renders its own close; the modal no longer passes a second one).
+- **Editable-draft on detail** — secondary `Copy as editable draft` action on the public note detail page, stacked under the primary.
+
+Out of scope: backend changes, analytics enum additions (existing events suffice), a top-of-funnel "note opened from grid" event (optional follow-up), and Quick Look preview (a phase-2 bet only if measurement shows evaluation friction is the binding constraint).
 
 ---
 

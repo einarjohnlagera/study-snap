@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.30.1 - Copy Flow Polish
+
+**Status: In Progress**
+
+Theme: reduce friction in copying notes from the Public Library. A small, frontend-only UX pass on labeling, the post-copy modal, and an editable-draft option — no backend, no new infrastructure.
+
+### Shipped
+
+_None yet._
+
+---
+
 ## v0.30.0 - Readiness Signals
 
 **Status: Released**
