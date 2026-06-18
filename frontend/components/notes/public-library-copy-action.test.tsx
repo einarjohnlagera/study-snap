@@ -60,11 +60,10 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Saved" });
+    const button = screen.getByRole("button", { name: "In Library" });
     expect(button).toBeInTheDocument();
     expect(button).toBeDisabled();
     expect(screen.queryByText("Already in your library")).not.toBeInTheDocument();
-    expect(screen.queryByText("In Library")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open in My Library" })).not.toBeInTheDocument();
   });
 
@@ -81,7 +80,7 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Library" }));
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-3");
@@ -100,10 +99,10 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Library" }));
 
-    expect(screen.getByRole("dialog", { name: "Save this note" })).toBeInTheDocument();
-    expect(screen.getByText("Create an account or log in to save notes to your library.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Add this note to your library" })).toBeInTheDocument();
+    expect(screen.getByText("Create an account or log in to add notes to your library.")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -118,7 +117,7 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Library" }));
     fireEvent.click(screen.getByRole("button", { name: "Log In" }));
 
     expect(pushMock).toHaveBeenCalledWith(
@@ -127,7 +126,7 @@ describe("PublicLibraryCopyAction", () => {
 
     pushMock.mockReset();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Library" }));
     fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
 
     expect(pushMock).toHaveBeenCalledWith(
