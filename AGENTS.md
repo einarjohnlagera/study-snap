@@ -1129,6 +1129,7 @@ Rules:
 3. Always implement loading and error states.
 4. Use theme tokens (`bg-background`, `text-foreground`, etc.).
 5. Keep Note Detail unified; do not split Note vs Study Pack detail pages again.
+6. **Taxonomy / enumerated fields must use a shared combobox/dropdown, never a freetext `<input>`.** Course/program, learner level, subject, and target audience are all matched by normalization (e.g. a study plan's `courseProgram` is normalize-matched against the learner's profile value to surface it on the Dashboard); a freetext value that matches no learner silently never appears. Reach for `components/metadata/course-program-combobox.tsx`, `components/notes/subject-combobox.tsx`, or `components/ui/suggestion-combobox.tsx` first. This drift has recurred (Bulk Generate, then the Adoptable Study Plans publish card).
 
 ### Sonar / Code Smell Rules (Frontend)
 

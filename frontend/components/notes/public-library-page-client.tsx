@@ -496,6 +496,8 @@ export function PublicLibraryPageClient() {
   const [tagsFilterDraft, setTagsFilterDraft] = useState<string[]>([]);
   const [subjectComboOpen, setSubjectComboOpen] = useState(false);
   const [courseProgramComboOpen, setCourseProgramComboOpen] = useState(false);
+  const [subjectComboTyped, setSubjectComboTyped] = useState(false);
+  const [courseProgramComboTyped, setCourseProgramComboTyped] = useState(false);
   const subjectDropdownRef = useRef<HTMLDivElement>(null);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -941,7 +943,7 @@ export function PublicLibraryPageClient() {
   }, [availableSubjects, subjectPriorityComparator]);
 
   const filteredModalSubjects = useMemo(() => {
-    const query = subjectSearchQuery.trim().toLowerCase();
+    const query = subjectComboTyped ? subjectSearchQuery.trim().toLowerCase() : "";
     const programSubjects = courseProgramDraft !== ALL_COURSE_PROGRAMS
       ? subjectsForCourseProgram.get(courseProgramDraft)
       : null;
@@ -949,18 +951,18 @@ export function PublicLibraryPageClient() {
       (programSubjects === null || programSubjects === undefined || programSubjects.has(subject))
       && (query.length === 0 || subject.toLowerCase().includes(query))
     ));
-  }, [courseProgramDraft, displayedSubjects, subjectSearchQuery, subjectsForCourseProgram]);
+  }, [courseProgramDraft, displayedSubjects, subjectComboTyped, subjectSearchQuery, subjectsForCourseProgram]);
 
   const displayedCoursePrograms = useMemo(() => {
     return [...availableCoursePrograms].sort(courseProgramPriorityComparator);
   }, [availableCoursePrograms, courseProgramPriorityComparator]);
 
   const filteredModalCoursePrograms = useMemo(() => {
-    const query = courseProgramSearchQuery.trim().toLowerCase();
+    const query = courseProgramComboTyped ? courseProgramSearchQuery.trim().toLowerCase() : "";
     return displayedCoursePrograms.filter((courseProgram) => (
       query.length === 0 || courseProgram.toLowerCase().includes(query)
     ));
-  }, [courseProgramSearchQuery, displayedCoursePrograms]);
+  }, [courseProgramComboTyped, courseProgramSearchQuery, displayedCoursePrograms]);
 
   const displayedTags = useMemo(() => {
     return [...availableTags].sort(tagPriorityComparator);
@@ -1666,12 +1668,22 @@ export function PublicLibraryPageClient() {
                   type="text"
                   aria-label="Course / Program"
                   value={courseProgramComboOpen ? courseProgramSearchQuery : (courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : "")}
-                  onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                  onChange={(event) => { setCourseProgramSearchQuery(event.target.value); setCourseProgramComboTyped(true); }}
                   placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}
-                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramSearchQuery(""); }}
+                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramComboTyped(false); setCourseProgramSearchQuery(courseProgramDraft !== ALL_COURSE_PROGRAMS ? courseProgramDraft : ""); }}
                   onBlur={() => globalThis.setTimeout(() => setCourseProgramComboOpen(false), 150)}
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-14 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
+                {courseProgramDraft !== ALL_COURSE_PROGRAMS ? (
+                  <button
+                    type="button"
+                    aria-label="Clear course/program filter"
+                    onMouseDown={(event) => { event.preventDefault(); setCourseProgramDraft(ALL_COURSE_PROGRAMS); setCourseProgramSearchQuery(""); setCourseProgramComboTyped(false); setCourseProgramComboOpen(false); }}
+                    className="absolute right-8 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-foreground/45 transition-colors hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
                 <ChevronDown
                   className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${courseProgramComboOpen ? "rotate-180" : ""}`}
                   aria-hidden="true"
@@ -1713,12 +1725,22 @@ export function PublicLibraryPageClient() {
                   type="text"
                   aria-label="Subject"
                   value={subjectComboOpen ? subjectSearchQuery : (subjectFilterDraft !== ALL_SUBJECTS ? subjectFilterDraft : "")}
-                  onChange={(event) => setSubjectSearchQuery(event.target.value)}
+                  onChange={(event) => { setSubjectSearchQuery(event.target.value); setSubjectComboTyped(true); }}
                   placeholder={subjectComboOpen ? "Search subjects..." : "All"}
-                  onFocus={() => { setSubjectComboOpen(true); setSubjectSearchQuery(""); }}
+                  onFocus={() => { setSubjectComboOpen(true); setSubjectComboTyped(false); setSubjectSearchQuery(subjectFilterDraft !== ALL_SUBJECTS ? subjectFilterDraft : ""); }}
                   onBlur={() => globalThis.setTimeout(() => setSubjectComboOpen(false), 150)}
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-14 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
+                {subjectFilterDraft !== ALL_SUBJECTS ? (
+                  <button
+                    type="button"
+                    aria-label="Clear subject filter"
+                    onMouseDown={(event) => { event.preventDefault(); setSubjectFilterDraft(ALL_SUBJECTS); setSubjectSearchQuery(""); setSubjectComboTyped(false); setSubjectComboOpen(false); }}
+                    className="absolute right-8 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-foreground/45 transition-colors hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
                 <ChevronDown
                   className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${subjectComboOpen ? "rotate-180" : ""}`}
                   aria-hidden="true"

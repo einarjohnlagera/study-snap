@@ -20,6 +20,7 @@ import {
   Globe,
   Lock,
   Trash2,
+  X,
 } from "lucide-react";
 import {AppModal} from "@/components/ui/app-modal";
 import {Button} from "@/components/ui/button";
@@ -521,6 +522,8 @@ export default function LibraryPage() {
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
   const [subjectComboOpen, setSubjectComboOpen] = useState(false);
   const [courseProgramComboOpen, setCourseProgramComboOpen] = useState(false);
+  const [subjectComboTyped, setSubjectComboTyped] = useState(false);
+  const [courseProgramComboTyped, setCourseProgramComboTyped] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
   const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
@@ -938,11 +941,11 @@ export default function LibraryPage() {
   }, [availableSubjects, subjectPriorityComparator]);
 
   const filteredModalSubjects = useMemo(() => {
-    const query = subjectSearchQuery.trim().toLowerCase();
+    const query = subjectComboTyped ? subjectSearchQuery.trim().toLowerCase() : "";
     return displayedSubjects.filter((subject) => (
       query.length === 0 || subject.toLowerCase().includes(query)
     ));
-  }, [displayedSubjects, subjectSearchQuery]);
+  }, [displayedSubjects, subjectComboTyped, subjectSearchQuery]);
 
   const displayedTags = useMemo(() => {
     return [...availableTags].sort(tagPriorityComparator);
@@ -956,14 +959,14 @@ export default function LibraryPage() {
   }, [displayedTags, tagSearchQuery]);
 
   const filteredModalCoursePrograms = useMemo(() => {
-    const query = courseProgramSearchQuery.trim().toLowerCase();
+    const query = courseProgramComboTyped ? courseProgramSearchQuery.trim().toLowerCase() : "";
     const source = query.length === 0
       ? availableCoursePrograms.slice(0, COURSE_PROGRAM_LIMIT)
       : availableCoursePrograms;
     return source.filter((courseProgram) => (
       query.length === 0 || courseProgram.toLowerCase().includes(query)
     ));
-  }, [availableCoursePrograms, courseProgramSearchQuery]);
+  }, [availableCoursePrograms, courseProgramComboTyped, courseProgramSearchQuery]);
 
   const visiblePopularTags = useMemo(() => {
     const ordered = [
@@ -1882,12 +1885,22 @@ export default function LibraryPage() {
                 <input
                   type="text"
                   value={subjectComboOpen ? subjectSearchQuery : (selectedSubject !== ALL_SUBJECTS ? selectedSubject : "")}
-                  onChange={(event) => setSubjectSearchQuery(event.target.value)}
+                  onChange={(event) => { setSubjectSearchQuery(event.target.value); setSubjectComboTyped(true); }}
                   placeholder={subjectComboOpen ? "Search subjects..." : "All"}
-                  onFocus={() => { setSubjectComboOpen(true); setSubjectSearchQuery(""); }}
+                  onFocus={() => { setSubjectComboOpen(true); setSubjectComboTyped(false); setSubjectSearchQuery(selectedSubject !== ALL_SUBJECTS ? selectedSubject : ""); }}
                   onBlur={() => globalThis.setTimeout(() => setSubjectComboOpen(false), 150)}
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-14 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
+                {selectedSubject !== ALL_SUBJECTS ? (
+                  <button
+                    type="button"
+                    aria-label="Clear subject filter"
+                    onMouseDown={(event) => { event.preventDefault(); setSelectedSubject(ALL_SUBJECTS); setSubjectSearchQuery(""); setSubjectComboTyped(false); setSubjectComboOpen(false); }}
+                    className="absolute right-8 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-foreground/45 transition-colors hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
                 <ChevronDown
                   className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${subjectComboOpen ? "rotate-180" : ""}`}
                   aria-hidden="true"
@@ -1972,12 +1985,22 @@ export default function LibraryPage() {
                 <input
                   type="text"
                   value={courseProgramComboOpen ? courseProgramSearchQuery : (selectedCourseProgram !== ALL_COURSE_PROGRAMS ? selectedCourseProgram : "")}
-                  onChange={(event) => setCourseProgramSearchQuery(event.target.value)}
+                  onChange={(event) => { setCourseProgramSearchQuery(event.target.value); setCourseProgramComboTyped(true); }}
                   placeholder={courseProgramComboOpen ? "Search course or program..." : "All"}
-                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramSearchQuery(""); }}
+                  onFocus={() => { setCourseProgramComboOpen(true); setCourseProgramComboTyped(false); setCourseProgramSearchQuery(selectedCourseProgram !== ALL_COURSE_PROGRAMS ? selectedCourseProgram : ""); }}
                   onBlur={() => globalThis.setTimeout(() => setCourseProgramComboOpen(false), 150)}
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 pr-14 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
+                {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
+                  <button
+                    type="button"
+                    aria-label="Clear course/program filter"
+                    onMouseDown={(event) => { event.preventDefault(); setSelectedCourseProgram(ALL_COURSE_PROGRAMS); setCourseProgramSearchQuery(""); setCourseProgramComboTyped(false); setCourseProgramComboOpen(false); }}
+                    className="absolute right-8 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-foreground/45 transition-colors hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
                 <ChevronDown
                   className={`pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45 transition-transform duration-200 ${courseProgramComboOpen ? "rotate-180" : ""}`}
                   aria-hidden="true"

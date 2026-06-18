@@ -4,11 +4,13 @@ import {
   addCollectionItems,
   ApiRequestError,
   getCollection,
+  listCoursePrograms,
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
   updateCollection,
   updateCollectionVisibility,
+  updateNoteVisibility,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -48,11 +50,13 @@ jest.mock("@/lib/api", () => {
     ApiRequestError,
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
+    listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
     removeCollectionItem: jest.fn(),
     setCollectionItemOrder: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
+    updateNoteVisibility: jest.fn(),
   };
 });
 
@@ -143,6 +147,11 @@ describe("CollectionDetailPageClient", () => {
     (setCollectionItemOrder as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockReset();
+    (updateNoteVisibility as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (updateNoteVisibility as jest.Mock).mockResolvedValue(undefined);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
   });
@@ -367,18 +376,56 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: /Build exam from this/i })).not.toBeInTheDocument();
   });
 
-  it("shows admin publishing controls only for admins", async () => {
+  it("hides admin publish action for non-admins", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+
+    expect(screen.queryByRole("menuitem", { name: /Publish settings/ })).not.toBeInTheDocument();
+  });
+
+  it("publishes a study plan from the admin publish modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
-    (updateCollectionVisibility as jest.Mock).mockResolvedValue(collection({ visibility: "PUBLIC" }));
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET" }));
+    (updateCollectionVisibility as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET", visibility: "PUBLIC" }));
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("Study plan publishing")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Publish as study plan" }));
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Publish settings/ }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
 
     await waitFor(() => {
       expect(updateCollectionVisibility).toHaveBeenCalledWith("collection-1", "PUBLIC");
     });
+  });
+
+  it("makes private plan notes public from the publish modal", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET" }));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { ...note("note-1", "Cell Respiration"), visibility: "PRIVATE" },
+      { ...note("note-2", "Dosage Calculations"), visibility: "PUBLIC" },
+    ]);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Publish settings/ }));
+
+    const makePublicButton = await screen.findByRole("button", { name: "Make 1 public" });
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+
+    fireEvent.click(makePublicButton);
+
+    await waitFor(() => {
+      expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
+    });
+    expect(updateNoteVisibility).not.toHaveBeenCalledWith("note-2", "PUBLIC");
   });
 
   it("reorders by move button using the full ordered set", async () => {
