@@ -88,6 +88,10 @@ Switching from discovery to filter mode:
 - Clicking a subject chip or tag chip in the top rails → applies filter → filter mode
 - Changing the audience rail (`All`, `Student`, `Board Taker`) reloads Public Library for that note audience and updates the shareable URL
 
+Filter combobox behavior (Course/Program and Subject, shared with Private Library):
+- Focusing a combobox that already has a selection seeds the input with the current value and keeps it editable (you can backspace-refine instead of retyping); the full option list stays visible until you actually type, then it filters.
+- Each combobox shows an inline clear (`×`) button when a value is selected, resetting that filter to `All`.
+
 ## Ranking Audit Summary
 
 Current audit findings:

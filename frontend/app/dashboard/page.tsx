@@ -44,6 +44,7 @@ import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
 import { DashboardCommunityNotesSection } from "./dashboard-community-notes-section";
+import { DashboardStudyPlanSection } from "./dashboard-study-plan-section";
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
@@ -687,6 +688,10 @@ export default function DashboardPage() {
                   viewAllLabel="View All in Library"
                 />
               )}
+              <DashboardStudyPlanSection
+                courseProgram={profile?.courseProgram ?? null}
+                profileType={profile?.profileType ?? null}
+              />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}
                 viewerUserId={profile?.id ?? null}
@@ -763,6 +768,10 @@ export default function DashboardPage() {
               <DashboardWeeklyActivityCard
                 activity={overview?.weeklyActivity ?? null}
                 title="Study Activity This Week"
+              />
+              <DashboardStudyPlanSection
+                courseProgram={profile?.courseProgram ?? null}
+                profileType={profile?.profileType ?? null}
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}

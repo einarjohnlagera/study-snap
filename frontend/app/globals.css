@@ -164,6 +164,17 @@ body *::after {
   animation: motion-modal-enter var(--motion-duration-base) var(--motion-ease-emphasized);
 }
 
+/* Sheet modal panel: slide up from the bottom on mobile, scale-fade as a centered dialog on sm+ */
+.motion-sheet-panel {
+  animation: motion-modal-enter var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+
+@media (max-width: 639px) {
+  .motion-sheet-panel {
+    animation: motion-sheet-enter var(--motion-duration-base) var(--motion-ease-emphasized);
+  }
+}
+
 @keyframes motion-modal-enter {
   from {
     opacity: 0;

@@ -64,9 +64,8 @@ export function getCollectionTerminalAction(profileType: ProfileType | null | un
   if (profileType !== "TEACHER") {
     return null;
   }
-  const labels = getCollectionLabels(profileType);
   return {
     kind: "exam-builder",
-    label: `Build exam from this ${labels.singular}`,
+    label: "Build Exam",
   };
 }

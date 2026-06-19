@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 
 export type SuggestionComboboxOption = {
   value: string;
@@ -26,6 +26,7 @@ type SuggestionComboboxProps = {
   allowCustom?: boolean;
   toggleLabel?: string;
   customOptionLabel?: string;
+  inlineDropdown?: boolean;
 };
 
 function normalize(value: string): string {
@@ -54,11 +55,13 @@ export function SuggestionCombobox({
   allowCustom = true,
   toggleLabel = "Toggle suggestions",
   customOptionLabel = "Custom",
+  inlineDropdown = false,
 }: Readonly<SuggestionComboboxProps>) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [hasTypedSinceOpen, setHasTypedSinceOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const effectiveOptions = useMemo(
     () => groupedOptions ? groupedOptions.flatMap((group) => group.options) : options,
@@ -163,11 +166,21 @@ export function SuggestionCombobox({
     }
   };
 
+  const handleClear = () => {
+    onChange("");
+    setInputValue("");
+    setHasTypedSinceOpen(false);
+    inputRef.current?.focus();
+  };
+
+  const showClear = !disabled && activeInputValue.trim().length > 0;
+
   return (
     <div ref={rootRef} className="space-y-2">
       <div className="relative">
         <input
           id={id}
+          ref={inputRef}
           type="text"
           value={activeInputValue}
           aria-label={ariaLabel}
@@ -187,31 +200,43 @@ export function SuggestionCombobox({
           autoComplete="off"
           aria-autocomplete="list"
           aria-controls={`${id}-options`}
-          className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className={`h-11 w-full rounded-lg border border-border bg-background px-3 ${showClear ? "pr-16" : "pr-10"} text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-60`}
         />
-        <button
-          type="button"
-          onClick={() => {
-            setOpen((previous) => {
-              const nextOpen = !previous;
-              if (nextOpen) {
-                setInputValue(displayValue);
-                setHasTypedSinceOpen(false);
-              }
-              return nextOpen;
-            });
-          }}
-          disabled={disabled}
-          aria-label={toggleLabel}
-          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-foreground/60 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <ChevronDown className={`h-4 w-4 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
-        </button>
+        <div className="absolute inset-y-0 right-0 flex items-center">
+          {showClear ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              aria-label="Clear selection"
+              className="flex w-8 items-center justify-center text-foreground/60 transition-colors hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen((previous) => {
+                const nextOpen = !previous;
+                if (nextOpen) {
+                  setInputValue(displayValue);
+                  setHasTypedSinceOpen(false);
+                }
+                return nextOpen;
+              });
+            }}
+            disabled={disabled}
+            aria-label={toggleLabel}
+            className="flex w-10 items-center justify-center text-foreground/60 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
+          </button>
+        </div>
         {showDropdown ? (
           <div
             id={`${id}-options`}
             role="listbox"
-            className="motion-dropdown-panel absolute z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg"
+            className={`motion-dropdown-panel mt-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg ${inlineDropdown ? "relative" : "absolute z-30"}`}
           >
             {groupedOptions && !hasTypedSinceOpen
               ? groupedOptions.map((group) => (

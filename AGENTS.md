@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.30.1` (in progress); previous: `v0.30.0 - Readiness Signals`
+- `v0.31.0` (in progress); previous: `v0.30.1 - Copy Flow Polish`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1129,6 +1129,7 @@ Rules:
 3. Always implement loading and error states.
 4. Use theme tokens (`bg-background`, `text-foreground`, etc.).
 5. Keep Note Detail unified; do not split Note vs Study Pack detail pages again.
+6. **Taxonomy / enumerated fields must use a shared combobox/dropdown, never a freetext `<input>`.** Course/program, learner level, subject, and target audience are all matched by normalization (e.g. a study plan's `courseProgram` is normalize-matched against the learner's profile value to surface it on the Dashboard); a freetext value that matches no learner silently never appears. Reach for `components/metadata/course-program-combobox.tsx`, `components/notes/subject-combobox.tsx`, or `components/ui/suggestion-combobox.tsx` first. This drift has recurred (Bulk Generate, then the Adoptable Study Plans publish card).
 
 ### Sonar / Code Smell Rules (Frontend)
 
@@ -1490,7 +1491,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.30.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.31.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

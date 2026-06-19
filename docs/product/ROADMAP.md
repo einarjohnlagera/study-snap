@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.31.0 - Adoptable Study Plans` is the next release (not yet started).
+No release is currently in progress. `v0.31.1 - Adoptable Study Plans Discovery & Status` is the next candidate (see below).
 
-`v0.30.1 - Copy Flow Polish` is the current documentation baseline (last released).
+`v0.31.0 - Adoptable Study Plans` is the current documentation baseline (last released).
 
 `v0.30.0 - Readiness Signals` is the previous baseline.
 
@@ -133,7 +133,9 @@ Teacher-flow polish and bulk *quiz* generation move to v0.32.0 (still no teacher
 
 ---
 
-## v0.31.0 (next) - Adoptable Study Plans (v1)
+## v0.31.0 - Adoptable Study Plans (v1, released)
+
+Base branch for this release: `releases/v0.31.0`.
 
 Theme: most learners don't want to assemble a study plan note-by-note — they want a ready-made, structured plan for their goal (a LET taker wants a LET reviewer plan, not a pile of filtered notes). Observed behavior: most users only add their own notes; the pre-filtered Dashboard helps them *find* exam-relevant public notes but still leaves them to self-assemble. This release lets a learner **adopt** a curated, ordered study plan in one tap.
 
@@ -161,6 +163,20 @@ Deferred — explicitly, together (do not smuggle into v1):
 - **User/teacher-authored plan sharing of *private* notes.** Snapshot copy relies on the public-note copy path, which requires the notes to be public. A teacher sharing their *private* curated notes to students has no copy path today (it would need a share-grant mechanism). So teacher→student sharing of private content is a separate deferred piece even in snapshot form.
 
 Anti-drift: reuse `copyNote(..., includeStudyPack=true)`, the `NoteCollection` model, and `getCollectionLabels`; no new quota category; no async/bulk-generation infra; no AI curriculum synthesis; no relaxation of note/study-pack ownership checks; v1 is admin-curated plans over public seeded notes only.
+
+---
+
+## v0.31.1 (candidate) - Adoptable Study Plans Discovery & Status
+
+Theme: v0.31.0 ships the adopt mechanics but discovery is intentionally minimal — published plans surface **only** on the Dashboard, only the **top match** for the learner's profile course/program, and there is no onboarding entry or plan-completion signal. These are the natural follow-ups once the core loop is validated. Small, additive, no new architecture.
+
+Candidates:
+
+- **Onboarding surface for published plans.** v0.31.0's locked scope named "Dashboard/onboarding" but only the Dashboard card is wired (`DashboardStudyPlanSection`). Add the same one-tap adopt card to onboarding so a new learner can start a curated plan immediately. Reuse `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan`; no new endpoint.
+- **Browse / multi-match published plans.** The Dashboard shows only `publicPlans[0]`, so publishing several plans for the same course/program hides all but one. Add a lightweight way to see all published plans for the learner's course/program (a "browse plans" surface or "see more"). The public list endpoint (`GET /collections/public?courseProgram=`) already returns the full set; this is a frontend listing surface (Public Library is for *notes*, not plans).
+- **Plan progress/status badge.** Add a **Not started / In progress / Completed** badge on the Study Plans **list** (`/collections`), derived from practiced-vs-total notes. This is *execution status*, not mastery — no percentage, milestones, or streaks (those stay on Progress). Requires adding progress counts to `NoteCollectionSummary` (the list DTO carries only `itemCount` today); the detail page already shows the full rollup, so no detail change needed.
+
+Anti-drift: no new quota category, no async infra, no AI synthesis, no relaxation of ownership checks; the status badge must not duplicate Progress's mastery surface (no %/milestones/streaks on collections).
 
 ---
 

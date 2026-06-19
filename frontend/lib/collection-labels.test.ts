@@ -48,7 +48,7 @@ describe("getCollectionTerminalAction", () => {
   it("returns the teacher Exam Builder action", () => {
     expect(getCollectionTerminalAction("TEACHER")).toEqual({
       kind: "exam-builder",
-      label: "Build exam from this Lesson Plan",
+      label: "Build Exam",
     });
   });
 

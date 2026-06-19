@@ -1,5 +1,20 @@
 # RELEASES.md - NoteLib
 
+## v0.31.0 - Adoptable Study Plans
+
+**Status: Released**
+
+Theme: most learners don't assemble a study plan note-by-note — they want a ready-made, structured plan for their goal. This release lets a learner **adopt** a curated, ordered study plan in one tap (v1: admin-curated plans over already-public seeded notes, ALE/PNLE/LET). Adopt = snapshot copy (notes + linked Study Packs) into a personal Study Plan, then the existing learning loop. Curation, never AI-generated curriculum. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+- **Adoptable study plans** — Admin-published `NoteCollection` records can now act as public, course/program-targeted study plans. Learners see a matching plan on Dashboard, tap `Start this plan`, and NoteLib snapshot-copies the plan's public notes plus linked Study Packs into a private personal collection with `sourcePlanId` lineage/idempotency. Adoption uses existing public-note copy behavior, skips unavailable items, bills no quota, and fires `STUDY_PLAN_ADOPTED`.
+- **Study Plan Detail publish UX** — Edit / Publish settings / Delete now live in a single `⋯` context menu (mirroring Note Detail) instead of scattered buttons. Publishing moved into a dedicated modal with a constrained Course/Program **combobox** (no more freetext), a single `Publish` / `Unpublish` action, and a published/private indicator near the title. Admin detection is read reactively (SSR-safe), and the modal surfaces any still-private plan notes with a one-tap `Make N public` (plus per-row `Private` badges) so adopters never get a partial plan.
+- **Combobox polish** — Fixed the public/private Library filter comboboxes that wiped the current selection on focus (you can now edit the selected value instead of retyping), and added an inline clear (`×`) button across the shared `SuggestionCombobox` and both Library filters.
+- **Study Plan Detail UI polish** — Reworked the plan-detail header: `Build Exam` (renamed from `Build exam from this {singular}`) now sits at the bottom-left of the header card via a new `PageHeader` footer slot, leaving a clean badge + `⋯` cluster top-right; context-menu labels shortened (`Delete`); the published/private badge is now the one-tap publish control (gear affordance) instead of a `⋯` menu item. Redesigned the publish modal (status pill, in-flow combobox dropdown that no longer clips against the footer, single close affordance). Sheet modals now slide up from the bottom on mobile and scale-fade on desktop (`motion-sheet-panel`).
+
+---
+
 ## v0.30.1 - Copy Flow Polish
 
 **Status: Released**
