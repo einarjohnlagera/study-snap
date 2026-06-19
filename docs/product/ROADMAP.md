@@ -166,6 +166,20 @@ Anti-drift: reuse `copyNote(..., includeStudyPack=true)`, the `NoteCollection` m
 
 ---
 
+## v0.31.1 (candidate) - Adoptable Study Plans Discovery & Status
+
+Theme: v0.31.0 ships the adopt mechanics but discovery is intentionally minimal — published plans surface **only** on the Dashboard, only the **top match** for the learner's profile course/program, and there is no onboarding entry or plan-completion signal. These are the natural follow-ups once the core loop is validated. Small, additive, no new architecture.
+
+Candidates:
+
+- **Onboarding surface for published plans.** v0.31.0's locked scope named "Dashboard/onboarding" but only the Dashboard card is wired (`DashboardStudyPlanSection`). Add the same one-tap adopt card to onboarding so a new learner can start a curated plan immediately. Reuse `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan`; no new endpoint.
+- **Browse / multi-match published plans.** The Dashboard shows only `publicPlans[0]`, so publishing several plans for the same course/program hides all but one. Add a lightweight way to see all published plans for the learner's course/program (a "browse plans" surface or "see more"). The public list endpoint (`GET /collections/public?courseProgram=`) already returns the full set; this is a frontend listing surface (Public Library is for *notes*, not plans).
+- **Plan progress/status badge.** Add a **Not started / In progress / Completed** badge on the Study Plans **list** (`/collections`), derived from practiced-vs-total notes. This is *execution status*, not mastery — no percentage, milestones, or streaks (those stay on Progress). Requires adding progress counts to `NoteCollectionSummary` (the list DTO carries only `itemCount` today); the detail page already shows the full rollup, so no detail change needed.
+
+Anti-drift: no new quota category, no async infra, no AI synthesis, no relaxation of ownership checks; the status badge must not duplicate Progress's mastery surface (no %/milestones/streaks on collections).
+
+---
+
 ## v0.32.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
 Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
