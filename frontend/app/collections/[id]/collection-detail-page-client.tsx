@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Globe, Lock, MoreHorizontal, Search, X } from "lucide-react";
+import { GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -495,6 +495,7 @@ function PublishStudyPlanModal({
 }>) {
   const [courseProgram, setCourseProgram] = useState(collection.courseProgram ?? "");
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionsError, setSuggestionsError] = useState(false);
   const [savingCourseProgram, setSavingCourseProgram] = useState(false);
   const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [makingPublic, setMakingPublic] = useState(false);
@@ -522,24 +523,21 @@ function PublishStudyPlanModal({
     setError(null);
   }, [collection.courseProgram, collection.id, isOpen]);
 
+  const loadSuggestions = useCallback(async () => {
+    setSuggestionsError(false);
+    try {
+      setSuggestions(await listCoursePrograms("public"));
+    } catch {
+      setSuggestionsError(true);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-    let mounted = true;
-    void listCoursePrograms("public")
-      .then((result) => {
-        if (mounted) {
-          setSuggestions(result);
-        }
-      })
-      .catch(() => {
-        // Suggestions are optional; the field still works without them.
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [isOpen]);
+    void loadSuggestions();
+  }, [isOpen, loadSuggestions]);
 
   const persistCourseProgram = async (): Promise<NoteCollectionDetail | null> => {
     setSavingCourseProgram(true);
@@ -613,8 +611,7 @@ function PublishStudyPlanModal({
       description="Published plans are discoverable by matching learners and can be adopted into their library."
       onClose={onClose}
       actions={(
-        <>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Close</Button>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
           {isPublic ? (
             <>
               <Button type="button" variant="outline" loading={togglingVisibility} loadingText="Unpublishing..." disabled={busy} onClick={() => void handleUnpublish()}>
@@ -629,23 +626,20 @@ function PublishStudyPlanModal({
               Publish
             </Button>
           )}
-        </>
+        </div>
       )}
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
-          {isPublic ? (
-            <>
-              <Globe className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-              <span className="font-medium text-foreground">Published</span>
-            </>
-          ) : (
-            <>
-              <Lock className="h-4 w-4 text-foreground/55" aria-hidden="true" />
-              <span className="font-medium text-foreground">Private</span>
-            </>
-          )}
-        </div>
+        <span
+          className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
+            isPublic
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-border bg-muted/40 text-foreground/70"
+          }`}
+        >
+          {isPublic ? <Globe className="h-3.5 w-3.5" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+          {isPublic ? "Published" : "Private"}
+        </span>
 
         <div className="space-y-1.5">
           <span className="text-sm font-medium text-foreground">Course / Program</span>
@@ -657,8 +651,18 @@ function PublishStudyPlanModal({
             ariaLabel="Course / Program"
             context="profile"
             allowCustom={false}
+            inlineDropdown
           />
-          <p className="text-xs text-foreground/60">Learners with this course/program will see the plan on their dashboard.</p>
+          {suggestionsError && courseProgramOptions.length === 0 ? (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Could not load course/programs.{" "}
+              <button type="button" className="font-semibold underline" onClick={() => void loadSuggestions()}>
+                Retry
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs text-foreground/60">Learners with this course/program will see the plan on their dashboard.</p>
+          )}
         </div>
 
         {privateCount > 0 ? (
@@ -1073,36 +1077,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         title={collection.title}
         description={collection.description || `Organize the notes in this ${labels.singular.toLowerCase()}.`}
         actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-end">
-            {terminalAction?.kind === "exam-builder" ? (
-              <div className="max-w-xs space-y-1">
-                <ResponsiveActionButton
-                  action="open"
-                  label={terminalAction.label}
-                  disabled={quizReadyNoteIds.length === 0}
-                  onClick={openCollectionExamBuilder}
-                />
-                {quizReadyNoteIds.length === 0 ? (
-                  <p className="text-xs text-foreground/60">
-                    Generate a quiz for at least one note to build an exam.
-                  </p>
-                ) : hasNonQuizReadyItems ? (
-                  <p className="text-xs text-foreground/60">
-                    Only quiz-ready notes will be included.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+          <div className="flex items-center justify-end gap-2">
             {isAdmin ? (
-              <span className="inline-flex items-center gap-1 self-start rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70">
+              <button
+                type="button"
+                onClick={() => setPublishOpen(true)}
+                aria-label="Publish settings"
+                title="Publish settings"
+                className="motion-lift inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
+              >
                 {collection.visibility === "PUBLIC" ? (
                   <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
                 ) : (
                   <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
                 )}
-              </span>
+                <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
+              </button>
             ) : null}
-            <div className="relative shrink-0 self-start" ref={actionsMenuRef}>
+            <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
                 variant="outline"
@@ -1119,7 +1111,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                 <div
                   role="menu"
                   aria-label="Study plan actions"
-                  className="motion-dropdown-panel absolute right-0 top-12 z-20 w-52 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+                  className="motion-dropdown-panel absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
                 >
                   <button
                     type="button"
@@ -1129,30 +1121,38 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   >
                     <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
                   </button>
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => { setActionsMenuOpen(false); setPublishOpen(true); }}
-                    >
-                      <Globe className="h-4 w-4" aria-hidden="true" />
-                      <span>Publish settings</span>
-                    </button>
-                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
                     className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
                     onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
                   >
-                    <ResponsiveActionContent action="delete" label={`Delete ${labels.singular}`} showTextOnMobile iconClassName="h-4 w-4" />
+                    <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
                   </button>
                 </div>
               ) : null}
             </div>
           </div>
         )}
+        footer={terminalAction?.kind === "exam-builder" ? (
+          <div className="flex flex-col items-start gap-1">
+            <ResponsiveActionButton
+              action="open"
+              label={terminalAction.label}
+              disabled={quizReadyNoteIds.length === 0}
+              onClick={openCollectionExamBuilder}
+            />
+            {quizReadyNoteIds.length === 0 ? (
+              <p className="text-xs text-foreground/60">
+                Generate a quiz for at least one note to build an exam.
+              </p>
+            ) : hasNonQuizReadyItems ? (
+              <p className="text-xs text-foreground/60">
+                Only quiz-ready notes will be included.
+              </p>
+            ) : null}
+          </div>
+        ) : undefined}
       />
 
       <CollectionProgressSummary collection={collection} />

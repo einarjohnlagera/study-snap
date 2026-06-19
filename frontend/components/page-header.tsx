@@ -6,10 +6,11 @@ type PageHeaderProps = {
   title: string;
   description: string;
   actions?: React.ReactNode;
+  footer?: React.ReactNode;
   brandLogo?: boolean;
 };
 
-export function PageHeader({ eyebrow, title, description, actions, brandLogo = false }: Readonly<PageHeaderProps>) {
+export function PageHeader({ eyebrow, title, description, actions, footer, brandLogo = false }: Readonly<PageHeaderProps>) {
   return (
     <Card className="space-y-3 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -23,6 +24,7 @@ export function PageHeader({ eyebrow, title, description, actions, brandLogo = f
         </div>
         {actions ? <div className="w-full sm:w-auto">{actions}</div> : null}
       </div>
+      {footer ? <div className="pt-1">{footer}</div> : null}
     </Card>
   );
 }
