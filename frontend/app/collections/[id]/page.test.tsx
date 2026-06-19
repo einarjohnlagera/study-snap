@@ -336,7 +336,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const buildExamButton = await screen.findByRole("button", { name: "Build exam from this Lesson Plan" });
+    const buildExamButton = await screen.findByRole("button", { name: "Build Exam" });
     expect(buildExamButton).toBeEnabled();
     expect(screen.getByText("Only quiz-ready notes will be included.")).toBeInTheDocument();
 
@@ -359,7 +359,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const buildExamButton = await screen.findByRole("button", { name: "Build exam from this Lesson Plan" });
+    const buildExamButton = await screen.findByRole("button", { name: "Build Exam" });
     expect(buildExamButton).toBeDisabled();
     expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
 
@@ -373,16 +373,15 @@ describe("CollectionDetailPageClient", () => {
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
-    expect(screen.queryByRole("button", { name: /Build exam from this/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Build Exam/i })).not.toBeInTheDocument();
   });
 
   it("hides admin publish action for non-admins", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
 
-    expect(screen.queryByRole("menuitem", { name: /Publish settings/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish settings" })).not.toBeInTheDocument();
   });
 
   it("publishes a study plan from the admin publish modal", async () => {
@@ -393,8 +392,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Publish settings/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
 
@@ -414,8 +412,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Publish settings/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
 
     const makePublicButton = await screen.findByRole("button", { name: "Make 1 public" });
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();

@@ -16,6 +16,7 @@ type CourseProgramComboboxProps = {
   context?: CourseProgramFieldContext;
   errorText?: string | null;
   allowCustom?: boolean;
+  inlineDropdown?: boolean;
 };
 
 export function CourseProgramCombobox({
@@ -30,6 +31,7 @@ export function CourseProgramCombobox({
   context = "profile",
   errorText = null,
   allowCustom = true,
+  inlineDropdown = false,
 }: Readonly<CourseProgramComboboxProps>) {
   return (
     <div className="space-y-2">
@@ -45,6 +47,7 @@ export function CourseProgramCombobox({
         allowCustom={allowCustom}
         toggleLabel="Toggle course program suggestions"
         customOptionLabel="Custom"
+        inlineDropdown={inlineDropdown}
       />
       {errorText ? <p className="text-xs text-red-600 dark:text-red-400">{errorText}</p> : null}
     </div>

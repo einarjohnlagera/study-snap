@@ -26,6 +26,7 @@ type SuggestionComboboxProps = {
   allowCustom?: boolean;
   toggleLabel?: string;
   customOptionLabel?: string;
+  inlineDropdown?: boolean;
 };
 
 function normalize(value: string): string {
@@ -54,6 +55,7 @@ export function SuggestionCombobox({
   allowCustom = true,
   toggleLabel = "Toggle suggestions",
   customOptionLabel = "Custom",
+  inlineDropdown = false,
 }: Readonly<SuggestionComboboxProps>) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -234,7 +236,7 @@ export function SuggestionCombobox({
           <div
             id={`${id}-options`}
             role="listbox"
-            className="motion-dropdown-panel absolute z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg"
+            className={`motion-dropdown-panel mt-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg ${inlineDropdown ? "relative" : "absolute z-30"}`}
           >
             {groupedOptions && !hasTypedSinceOpen
               ? groupedOptions.map((group) => (
