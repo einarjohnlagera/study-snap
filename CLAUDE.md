@@ -6,17 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.31.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.31.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.31.0 — Adoptable Study Plans (v1)
+## Active release: v0.31.1 — Adoptable Study Plans Discovery & Status
 
-Base branch for this release: `releases/v0.31.0`. Let a learner **adopt** a curated, ordered study plan in one tap instead of assembling notes one by one. v1 = admin-curated plans over already-public seeded notes (ALE/PNLE/LET); full scope in `ROADMAP.md`. Locked rules:
+Base branch for this release: `releases/v0.31.1`. v0.31.0 shipped the adopt mechanics; v0.31.1 is the additive follow-up on **discovery and status** now that the core loop works. Small, additive, no new architecture. Full scope in `ROADMAP.md`. Locked rules:
 
-- **Adopt = snapshot copy, not a live link.** The entire learning loop (generation, `ConceptHealth`, Progress, "Next in this plan", the v0.30.0 exam→Progress recording) runs on **owned** notes, so a linked plan is inert. "Start this plan" copies the curated notes (with their linked Study Packs) into the user's library via `copyNote(id, ownerUserId, includeStudyPack=true)` (idempotent) and creates a personal Study Plan (`NoteCollection`) in the curated order. Later edits to the source plan do **not** propagate (point-in-time snapshot).
-- **Curation, never generation.** Sequencing is human/admin curation over existing seeded content — not AI-synthesized per user. The forbidden version is *"auto-generate a personalized plan."*
-- **Adopt is free; light copy; no new infra.** Adoption bills nothing (it is a copy, not a generation; quota applies later on regenerate + Challenge/Exam). The copy fan-out (N notes + N study packs, no LLM) uses per-item isolation — no async/bulk-generation job infrastructure, no new quota/entity/endpoint.
-- **One action on the card; the fork stays simple.** Surface the curated plan(s) on Dashboard/onboarding with one-tap adopt. The curated *source* plan needs an admin/public representation (collections are owner-private today) — design that source shape first; the adopt *output* is a normal user collection.
-- **Out of scope (do not build without explicit ask):** live-link / shared-progress plans and user/teacher-authored sharing of private notes (both ride with v0.32.0 teacher-flow); bulk *quiz* generation; Quick Look preview.
+- **Onboarding surface for published plans.** v0.31.0's scope named "Dashboard/onboarding" but only the Dashboard card (`DashboardStudyPlanSection`) is wired. Add the same one-tap adopt card to onboarding. Reuse `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan` — no new endpoint.
+- **Browse / multi-match published plans.** The Dashboard shows only `publicPlans[0]`, so publishing several plans per course/program hides all but one. Add a lightweight surface to see all published plans for the learner's course/program. `GET /collections/public?courseProgram=` already returns the full set; this is a frontend listing (Public Library is for *notes*, not plans).
+- **Plan progress/status badge.** Add a **Not started / In progress / Completed** badge on the Study Plans **list** (`/collections`), derived from practiced-vs-total notes. This is *execution status*, not mastery — **no percentage, milestones, or streaks** (those stay on Progress). Requires adding progress counts to `NoteCollectionSummary` (the list DTO carries only `itemCount` today); the detail page already shows the full rollup, so no detail change.
+- **Out of scope (do not build without explicit ask):** live-link / shared-progress plans and user/teacher-authored sharing of private notes (v0.32.0 teacher-flow); bulk *quiz* generation; any mastery surface on collections.
 
 ## Source-of-truth docs (read before implementing anything)
 

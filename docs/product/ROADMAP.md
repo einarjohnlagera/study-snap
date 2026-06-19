@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.31.1 - Adoptable Study Plans Discovery & Status` is the next candidate (see below).
+`v0.31.1 - Adoptable Study Plans Discovery & Status` is the release currently in progress.
 
 `v0.31.0 - Adoptable Study Plans` is the current documentation baseline (last released).
 
@@ -166,7 +166,9 @@ Anti-drift: reuse `copyNote(..., includeStudyPack=true)`, the `NoteCollection` m
 
 ---
 
-## v0.31.1 (candidate) - Adoptable Study Plans Discovery & Status
+## v0.31.1 - Adoptable Study Plans Discovery & Status (in progress)
+
+Base branch for this release: `releases/v0.31.1`.
 
 Theme: v0.31.0 ships the adopt mechanics but discovery is intentionally minimal — published plans surface **only** on the Dashboard, only the **top match** for the learner's profile course/program, and there is no onboarding entry or plan-completion signal. These are the natural follow-ups once the core loop is validated. Small, additive, no new architecture.
 
