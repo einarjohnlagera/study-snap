@@ -1,33 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Search, X } from "lucide-react";
+import { GripVertical, Globe, Lock, MoreHorizontal, Search, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { ResponsiveActionButton } from "@/components/ui/action-button";
-import { getAuthUser } from "@/lib/auth";
+import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
+import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
 import {
   addCollectionItems,
   ApiRequestError,
   deleteCollection,
   getCollection,
+  listCoursePrograms,
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
   updateCollection,
   updateCollectionVisibility,
+  updateNoteVisibility,
   type NoteCollectionDetail,
   type NoteCollectionItem,
   type NoteListItemResponse,
+  type NoteVisibility,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -474,87 +478,208 @@ function AddNotesModal({
   );
 }
 
-function AdminStudyPlanPublishCard({
+function PublishStudyPlanModal({
   collection,
-  publishing,
+  isOpen,
+  privateNoteIds,
+  onClose,
   onSaved,
-  onMutating,
+  onNotesPublished,
 }: Readonly<{
   collection: NoteCollectionDetail;
-  publishing: boolean;
+  isOpen: boolean;
+  privateNoteIds: string[];
+  onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
-  onMutating: (active: boolean) => void;
+  onNotesPublished: () => Promise<void> | void;
 }>) {
   const [courseProgram, setCourseProgram] = useState(collection.courseProgram ?? "");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [savingCourseProgram, setSavingCourseProgram] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
+  const [makingPublic, setMakingPublic] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isPublic = collection.visibility === "PUBLIC";
+  const trimmedCourseProgram = courseProgram.trim();
+  const courseProgramDirty = trimmedCourseProgram !== (collection.courseProgram ?? "").trim();
+  const busy = savingCourseProgram || togglingVisibility || makingPublic;
+  const privateCount = privateNoteIds.length;
+  const blockedByPrivateNotes = privateCount > 0;
+
+  // Publishing is a constrained surface: lock the field to known buckets, but keep
+  // the plan's existing value selectable even if the suggestion fetch omits it.
+  const courseProgramOptions = useMemo(() => {
+    const existing = (collection.courseProgram ?? "").trim();
+    return existing && !suggestions.includes(existing) ? [existing, ...suggestions] : suggestions;
+  }, [collection.courseProgram, suggestions]);
+
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
     setCourseProgram(collection.courseProgram ?? "");
     setError(null);
-  }, [collection.courseProgram, collection.id]);
+  }, [collection.courseProgram, collection.id, isOpen]);
 
-  const saveCourseProgram = async () => {
-    onMutating(true);
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    let mounted = true;
+    void listCoursePrograms("public")
+      .then((result) => {
+        if (mounted) {
+          setSuggestions(result);
+        }
+      })
+      .catch(() => {
+        // Suggestions are optional; the field still works without them.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen]);
+
+  const persistCourseProgram = async (): Promise<NoteCollectionDetail | null> => {
+    setSavingCourseProgram(true);
     setError(null);
     try {
-      const saved = await updateCollection(collection.id, {
-        courseProgram: courseProgram.trim() || null,
-      });
+      const saved = await updateCollection(collection.id, { courseProgram: trimmedCourseProgram || null });
       onSaved(saved);
+      return saved;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save the course/program.");
+      return null;
     } finally {
-      onMutating(false);
+      setSavingCourseProgram(false);
     }
   };
 
-  const toggleVisibility = async () => {
-    onMutating(true);
+  const handlePublish = async () => {
+    if (!trimmedCourseProgram) {
+      setError("Add a course/program so matching learners can find this plan.");
+      return;
+    }
+    if (blockedByPrivateNotes) {
+      setError("Make every note public before publishing this plan.");
+      return;
+    }
+    if (courseProgramDirty && !(await persistCourseProgram())) {
+      return;
+    }
+    setTogglingVisibility(true);
     setError(null);
     try {
-      const nextVisibility = collection.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
-      const saved = await updateCollectionVisibility(collection.id, nextVisibility);
+      const saved = await updateCollectionVisibility(collection.id, "PUBLIC");
       onSaved(saved);
     } catch (publishError) {
-      setError(publishError instanceof Error ? publishError.message : "Could not update publishing.");
+      setError(publishError instanceof Error ? publishError.message : "Could not publish this plan.");
     } finally {
-      onMutating(false);
+      setTogglingVisibility(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    setTogglingVisibility(true);
+    setError(null);
+    try {
+      const saved = await updateCollectionVisibility(collection.id, "PRIVATE");
+      onSaved(saved);
+    } catch (unpublishError) {
+      setError(unpublishError instanceof Error ? unpublishError.message : "Could not unpublish this plan.");
+    } finally {
+      setTogglingVisibility(false);
+    }
+  };
+
+  const handleMakePublic = async () => {
+    setMakingPublic(true);
+    setError(null);
+    try {
+      await Promise.all(privateNoteIds.map((noteId) => updateNoteVisibility(noteId, "PUBLIC")));
+      await onNotesPublished();
+    } catch (makePublicError) {
+      setError(makePublicError instanceof Error ? makePublicError.message : "Could not make these notes public.");
+    } finally {
+      setMakingPublic(false);
     }
   };
 
   return (
-    <Card className="space-y-4 border-amber-500/25 bg-amber-500/5 p-4 sm:p-5">
-      <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Admin</p>
-        <CardTitle>Study plan publishing</CardTitle>
-        <CardDescription>
-          Published plans are visible through the public study-plan read path and can be adopted by matching learners.
-        </CardDescription>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-        <label className="block space-y-1.5">
+    <AppModal
+      isOpen={isOpen}
+      title="Publish study plan"
+      description="Published plans are discoverable by matching learners and can be adopted into their library."
+      onClose={onClose}
+      actions={(
+        <>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Close</Button>
+          {isPublic ? (
+            <>
+              <Button type="button" variant="outline" loading={togglingVisibility} loadingText="Unpublishing..." disabled={busy} onClick={() => void handleUnpublish()}>
+                Unpublish
+              </Button>
+              <Button type="button" loading={savingCourseProgram} loadingText="Saving..." disabled={busy || !courseProgramDirty} onClick={() => void persistCourseProgram()}>
+                Save
+              </Button>
+            </>
+          ) : (
+            <Button type="button" loading={savingCourseProgram || togglingVisibility} loadingText="Publishing..." disabled={busy || blockedByPrivateNotes} onClick={() => void handlePublish()}>
+              Publish
+            </Button>
+          )}
+        </>
+      )}
+    >
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+          {isPublic ? (
+            <>
+              <Globe className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <span className="font-medium text-foreground">Published</span>
+            </>
+          ) : (
+            <>
+              <Lock className="h-4 w-4 text-foreground/55" aria-hidden="true" />
+              <span className="font-medium text-foreground">Private</span>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
           <span className="text-sm font-medium text-foreground">Course / Program</span>
-          <input
+          <CourseProgramCombobox
+            id="publish-course-program"
             value={courseProgram}
-            onChange={(event) => setCourseProgram(event.target.value)}
-            placeholder="LET, PNLE, ALE..."
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            suggestions={courseProgramOptions}
+            onChange={setCourseProgram}
+            ariaLabel="Course / Program"
+            context="profile"
+            allowCustom={false}
           />
-        </label>
-        <Button type="button" variant="outline" loading={publishing} loadingText="Saving..." onClick={saveCourseProgram}>
-          Save target
-        </Button>
-        <Button type="button" loading={publishing} loadingText="Updating..." onClick={toggleVisibility}>
-          {collection.visibility === "PUBLIC" ? "Unpublish" : "Publish as study plan"}
-        </Button>
+          <p className="text-xs text-foreground/60">Learners with this course/program will see the plan on their dashboard.</p>
+        </div>
+
+        {privateCount > 0 ? (
+          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              {privateCount} {privateCount === 1 ? "note is" : "notes are"} still private
+            </p>
+            <p className="text-xs text-foreground/70">
+              Adopters copy the notes in this plan, so private notes will be skipped. Make them public so the full plan can be adopted.
+            </p>
+            <Button type="button" size="sm" variant="outline" loading={makingPublic} loadingText="Making public..." disabled={busy} onClick={() => void handleMakePublic()}>
+              {`Make ${privateCount} public`}
+            </Button>
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p>
+        ) : null}
       </div>
-      <p className="text-xs text-foreground/60">
-        Current visibility: <span className="font-semibold">{collection.visibility}</span>
-      </p>
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p>
-      ) : null}
-    </Card>
+    </AppModal>
   );
 }
 
@@ -565,6 +690,7 @@ function SortableCollectionItemRow({
   disabled,
   collectionId,
   showWeakAreas,
+  isPrivate,
   onMove,
   onRemove,
   onLabelChange,
@@ -575,6 +701,7 @@ function SortableCollectionItemRow({
   disabled: boolean;
   collectionId: string;
   showWeakAreas: boolean;
+  isPrivate: boolean;
   onMove: (noteId: string, direction: "up" | "down") => void;
   onRemove: (noteId: string) => void;
   onLabelChange: (noteId: string, label: string) => void;
@@ -618,7 +745,15 @@ function SortableCollectionItemRow({
           <Link href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`} className="block rounded-lg p-1 -m-1 hover:bg-highlight">
             <h2 className="text-base font-semibold text-foreground">{getNoteTitle(item)}</h2>
             <p className="text-sm text-foreground/60">{getNoteMeta(item)}</p>
-            <p className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300">{getQuizReadinessHint(item)}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{getQuizReadinessHint(item)}</p>
+              {isPrivate ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+                  <Lock className="h-3 w-3" aria-hidden="true" />
+                  Private
+                </span>
+              ) : null}
+            </div>
           </Link>
           {showWeakAreas && item.dueConceptCount > 0 ? (
             <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
@@ -667,7 +802,10 @@ function SortableCollectionItemRow({
 
 export function CollectionDetailPageClient({ collectionId }: Readonly<{ collectionId: string }>) {
   const router = useRouter();
-  const authUser = getAuthUser();
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  useEffect(() => {
+    setAuthUser(getAuthUser());
+  }, []);
   const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
   const isAdmin = authUser?.role === "ADMIN";
   const showWeakAreas = canViewConceptHealth(currentPlan);
@@ -683,6 +821,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
 
   const sensors = useSensors(
@@ -718,6 +860,45 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
   }, [collectionId]);
+
+  const loadNoteVisibility = useCallback(async () => {
+    try {
+      const notes = await listNotes();
+      setNoteVisibility(new Map(notes.map((note) => [note.id, note.visibility])));
+    } catch {
+      // Visibility badges are admin-only progressive enhancement; ignore failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    void loadNoteVisibility();
+  }, [isAdmin, loadNoteVisibility]);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(target)) {
+        setActionsMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActionsMenuOpen(false);
+      }
+    };
+    globalThis.addEventListener("mousedown", handleOutsideClick);
+    globalThis.addEventListener("keydown", handleEscape);
+    return () => {
+      globalThis.removeEventListener("mousedown", handleOutsideClick);
+      globalThis.removeEventListener("keydown", handleEscape);
+    };
+  }, [actionsMenuOpen]);
 
   const refetchAfterFailure = async (message: string) => {
     setMutationError(message);
@@ -820,6 +1001,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const presentNoteIds = useMemo(() => new Set(items.map((item) => item.noteId)), [items]);
+  const privateNoteIds = useMemo(
+    () => (isAdmin ? items.filter((item) => noteVisibility.get(item.noteId) === "PRIVATE").map((item) => item.noteId) : []),
+    [isAdmin, items, noteVisibility],
+  );
   const itemIds = useMemo(() => items.map((item) => item.noteId), [items]);
   const quizReadyNoteIds = useMemo(
     () => items.filter(canIncludeCollectionItemInExam).map((item) => item.noteId),
@@ -888,7 +1073,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         title={collection.title}
         description={collection.description || `Organize the notes in this ${labels.singular.toLowerCase()}.`}
         actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-end">
             {terminalAction?.kind === "exam-builder" ? (
               <div className="max-w-xs space-y-1">
                 <ResponsiveActionButton
@@ -908,7 +1093,64 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                 ) : null}
               </div>
             ) : null}
-            <ResponsiveActionButton action="edit" label="Edit" variant="outline" onClick={() => setEditOpen(true)} />
+            {isAdmin ? (
+              <span className="inline-flex items-center gap-1 self-start rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70">
+                {collection.visibility === "PUBLIC" ? (
+                  <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
+                ) : (
+                  <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
+                )}
+              </span>
+            ) : null}
+            <div className="relative shrink-0 self-start" ref={actionsMenuRef}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 w-10 rounded-full px-0"
+                aria-label="Open study plan actions"
+                aria-haspopup="menu"
+                aria-expanded={actionsMenuOpen}
+                onClick={() => setActionsMenuOpen((open) => !open)}
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              {actionsMenuOpen ? (
+                <div
+                  role="menu"
+                  aria-label="Study plan actions"
+                  className="motion-dropdown-panel absolute right-0 top-12 z-20 w-52 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                    onClick={() => { setActionsMenuOpen(false); setEditOpen(true); }}
+                  >
+                    <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
+                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => { setActionsMenuOpen(false); setPublishOpen(true); }}
+                    >
+                      <Globe className="h-4 w-4" aria-hidden="true" />
+                      <span>Publish settings</span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
+                    onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
+                  >
+                    <ResponsiveActionContent action="delete" label={`Delete ${labels.singular}`} showTextOnMobile iconClassName="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
       />
@@ -926,22 +1168,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           {skippedNoticeCount} {skippedNoticeCount === 1 ? "item is" : "items are"} no longer available and were left out.
         </Card>
       ) : null}
-
-      {isAdmin ? (
-        <AdminStudyPlanPublishCard
-          collection={collection}
-          publishing={mutationKind === "publish"}
-          onMutating={(active) => setMutationKind(active ? "publish" : null)}
-          onSaved={(saved) => {
-            setCollection(saved);
-            setItems(sortItems(saved.items));
-          }}
-        />
-      ) : null}
-
-      <div className="flex justify-end">
-        <ResponsiveActionButton action="delete" label={`Delete ${labels.singular}`} variant="ghost" onClick={() => setDeleteOpen(true)} />
-      </div>
 
       {mutationError ? (
         <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -990,6 +1216,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     disabled={mutationInProgress}
                     collectionId={collectionId}
                     showWeakAreas={showWeakAreas}
+                    isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
                     onMove={handleMove}
                     onRemove={(noteId) => void handleRemove(noteId)}
                     onLabelChange={handleLabelChange}
@@ -1024,6 +1251,19 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         onClose={() => setAddOpen(false)}
         onAdd={handleAdd}
       />
+      {isAdmin ? (
+        <PublishStudyPlanModal
+          collection={collection}
+          isOpen={publishOpen}
+          privateNoteIds={privateNoteIds}
+          onClose={() => setPublishOpen(false)}
+          onSaved={(saved) => {
+            setCollection(saved);
+            setItems(sortItems(saved.items));
+          }}
+          onNotesPublished={loadNoteVisibility}
+        />
+      ) : null}
     </main>
   );
 }
