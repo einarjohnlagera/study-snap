@@ -1075,25 +1075,25 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       <PageHeader
         eyebrow={labels.singular.toUpperCase()}
         title={collection.title}
-        description={collection.description || `Organize the notes in this ${labels.singular.toLowerCase()}.`}
+        description={collection.description || undefined}
+        meta={isAdmin ? (
+          <button
+            type="button"
+            onClick={() => setPublishOpen(true)}
+            aria-label="Publish settings"
+            title="Publish settings"
+            className="motion-lift inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
+          >
+            {collection.visibility === "PUBLIC" ? (
+              <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
+            ) : (
+              <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
+            )}
+            <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
+          </button>
+        ) : undefined}
         actions={(
           <div className="flex items-center justify-end gap-2">
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={() => setPublishOpen(true)}
-                aria-label="Publish settings"
-                title="Publish settings"
-                className="motion-lift inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
-              >
-                {collection.visibility === "PUBLIC" ? (
-                  <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
-                ) : (
-                  <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
-                )}
-                <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
-              </button>
-            ) : null}
             <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
