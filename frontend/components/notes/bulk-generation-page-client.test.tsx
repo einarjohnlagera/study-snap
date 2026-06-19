@@ -62,8 +62,9 @@ describe("BulkGenerationPageClient", () => {
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });
     (getMyPlan as jest.Mock).mockResolvedValue({
-      limits: { noteGenerationsPerMonth: 10 },
-      remaining: { noteGenerationsRemaining: 7 },
+      limits: { noteGenerationsPerMonth: 10, studyPacksPerMonth: 10, ocrPerMonth: 20 },
+      remaining: { noteGenerationsRemaining: 7, studyPacksRemaining: 7, ocrRemaining: 20 },
+      usageCycle: { startsAt: "2026-06-01T00:00:00Z", endsAt: "2026-07-01T00:00:00Z" },
     });
     (getAuthUser as jest.Mock).mockReturnValue({ id: "admin-1", role: "ADMIN", profileType: null });
   });
@@ -102,8 +103,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
-    expect(await screen.findByText(/7/)).toBeInTheDocument();
-    expect(screen.getByText(/note generations remaining this cycle/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Capped by your 7 note generations left this cycle/i)).toBeInTheDocument();
   });
 
   it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
@@ -201,34 +201,78 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByRole("button", { name: "Remove topic 1" })).toBeDisabled();
   });
 
-  it("blocks submission with no topics", async () => {
+  it("disables the queue button with no topics", async () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
     fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Queue 0 notes" }));
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Add at least one topic");
+    expect(screen.getByRole("button", { name: "Queue 0 notes" })).toBeDisabled();
     expect(bulkGenerateNotes).not.toHaveBeenCalled();
   });
 
-  it("blocks submission over the topic cap", async () => {
+  it("disables adding topics once the 50 batch cap is reached", async () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
-    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
-    fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
     fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });
 
-    for (let index = 2; index <= 51; index += 1) {
+    for (let index = 2; index <= 50; index += 1) {
       fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
       fireEvent.change(screen.getByLabelText(new RegExp(`^Topic ${index}$`)), {
         target: { value: `Topic ${index}` },
       });
     }
-    fireEvent.click(screen.getByRole("button", { name: "Queue 51 notes" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent("up to 50 topics at once");
+    expect(screen.getByRole("button", { name: "+ Add topic" })).toBeDisabled();
+    expect(screen.queryByLabelText(/^Topic 51$/)).not.toBeInTheDocument();
+    expect(screen.getByText("50 / 50")).toBeInTheDocument();
+  });
+
+  it("caps topics at the remaining note generations for limited plans", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "student-1", role: "USER", profileType: "STUDENT" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      limits: { noteGenerationsPerMonth: 10, studyPacksPerMonth: 10, ocrPerMonth: 20 },
+      remaining: { noteGenerationsRemaining: 2, studyPacksRemaining: 5, ocrRemaining: 20 },
+      usageCycle: { startsAt: "2026-06-01T00:00:00Z", endsAt: "2026-07-01T00:00:00Z" },
+    });
+
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    // Near-limit (<= 2) shows the amber note-generation banner.
+    expect(await screen.findByText(/You have 2 note generations left this month/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
+    fireEvent.change(screen.getByLabelText(/^Topic 2$/), { target: { value: "Topic 2" } });
+
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ Add topic" })).toBeDisabled();
+  });
+
+  it("soft-confirms when topics exceed the Study Pack quota, then submits", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "student-1", role: "USER", profileType: "STUDENT" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      limits: { noteGenerationsPerMonth: 25, studyPacksPerMonth: 10, ocrPerMonth: 20 },
+      remaining: { noteGenerationsRemaining: 10, studyPacksRemaining: 1, ocrRemaining: 20 },
+      usageCycle: { startsAt: "2026-06-01T00:00:00Z", endsAt: "2026-07-01T00:00:00Z" },
+    });
+    (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({ resultId: "r1", queuedTopics: 2 });
+
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
+    fireEvent.change(screen.getByLabelText(/^Topic 2$/), { target: { value: "Topic 2" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Queue 2 notes" }));
+
+    expect(await screen.findByText(/won’t get Study Packs/i)).toBeInTheDocument();
     expect(bulkGenerateNotes).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate anyway" }));
+
+    await waitFor(() => expect(bulkGenerateNotes).toHaveBeenCalled());
   });
 });

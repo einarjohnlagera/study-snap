@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
+import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Toggle } from "@/components/ui/toggle";
+import { formatStudyPackResetDate } from "@/lib/plans";
 import {
   ApiRequestError,
   bulkGenerateNotes,
@@ -37,9 +40,10 @@ type TopicRow = {
   value: string;
 };
 
-type NoteGenerationQuota = {
-  remaining: number;
-  limit: number;
+type BulkGenerationQuota = {
+  noteGenRemaining: number;
+  studyPackRemaining: number;
+  resetLabel: string;
 };
 
 export function BulkGenerationPageClient() {
@@ -60,11 +64,21 @@ export function BulkGenerationPageClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
-  const [noteGenerationQuota, setNoteGenerationQuota] = useState<NoteGenerationQuota | null>(null);
+  const [quota, setQuota] = useState<BulkGenerationQuota | null>(null);
+  const [studyPackConfirmOpen, setStudyPackConfirmOpen] = useState(false);
+  const currentPlan = authUser?.planType ?? "FREE";
   const normalizedTopics = useMemo(
     () => topics.map((topic) => topic.value.trim()).filter(Boolean),
     [topics],
   );
+  const effectiveTopicCap = quota
+    ? Math.min(MAX_BULK_GENERATION_TOPICS, quota.noteGenRemaining)
+    : MAX_BULK_GENERATION_TOPICS;
+  const isNoteGenCapped = quota !== null && effectiveTopicCap < MAX_BULK_GENERATION_TOPICS;
+  const overCap = normalizedTopics.length > effectiveTopicCap;
+  const studyPackShortfall = quota
+    ? Math.max(0, normalizedTopics.length - quota.studyPackRemaining)
+    : 0;
 
   useEffect(() => {
     requireAuthenticatedOnboardedUser(router);
@@ -104,10 +118,14 @@ export function BulkGenerationPageClient() {
         }
       }
       if (!isAdmin && planResult.status === "fulfilled" && planResult.value) {
-        const remaining = planResult.value.remaining.noteGenerationsRemaining;
-        const limit = planResult.value.limits.noteGenerationsPerMonth;
-        if (typeof remaining === "number" && typeof limit === "number") {
-          setNoteGenerationQuota({ remaining, limit });
+        const noteGenRemaining = planResult.value.remaining.noteGenerationsRemaining;
+        const studyPackRemaining = planResult.value.remaining.studyPacksRemaining;
+        if (typeof noteGenRemaining === "number" && typeof studyPackRemaining === "number") {
+          setQuota({
+            noteGenRemaining,
+            studyPackRemaining,
+            resetLabel: formatStudyPackResetDate(planResult.value.usageCycle?.endsAt),
+          });
         }
       }
     });
@@ -126,6 +144,10 @@ export function BulkGenerationPageClient() {
     }
     if (normalizedTopics.length > MAX_BULK_GENERATION_TOPICS) {
       return `You can bulk generate up to ${MAX_BULK_GENERATION_TOPICS} topics at once.`;
+    }
+    if (quota && normalizedTopics.length > quota.noteGenRemaining) {
+      const excess = normalizedTopics.length - quota.noteGenRemaining;
+      return `You have ${quota.noteGenRemaining} note generation${quota.noteGenRemaining === 1 ? "" : "s"} left this cycle. Remove ${excess} topic${excess === 1 ? "" : "s"} to continue.`;
     }
     if (isTeacherOrAdmin && !courseProgram.trim()) {
       return "Enter a course or program for this batch.";
@@ -168,12 +190,15 @@ export function BulkGenerationPageClient() {
       const existingCount = current
         .filter((topic) => topic.value.trim() && !(replaceTarget && topic.id === id))
         .length;
-      const remainingSlots = Math.max(0, MAX_BULK_GENERATION_TOPICS - existingCount);
+      const remainingSlots = Math.max(0, effectiveTopicCap - existingCount);
       const accepted = parsed.slice(0, remainingSlots);
       const dropped = parsed.length - accepted.length;
       if (dropped > 0) {
+        const capReason = isNoteGenCapped
+          ? `your ${effectiveTopicCap} note generation${effectiveTopicCap === 1 ? "" : "s"} left this cycle`
+          : `the ${MAX_BULK_GENERATION_TOPICS} max`;
         setPasteNotice(
-          `Added ${accepted.length} topic${accepted.length === 1 ? "" : "s"} up to the ${MAX_BULK_GENERATION_TOPICS} max — ${dropped} more weren't added.`,
+          `Added ${accepted.length} topic${accepted.length === 1 ? "" : "s"} up to ${capReason} — ${dropped} more weren't added.`,
         );
       }
       if (accepted.length === 0) {
@@ -190,14 +215,27 @@ export function BulkGenerationPageClient() {
     });
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
+  const refreshQuota = useCallback(async () => {
+    if (isAdmin) {
       return;
     }
+    try {
+      const plan = await getMyPlan();
+      const noteGenRemaining = plan.remaining.noteGenerationsRemaining;
+      const studyPackRemaining = plan.remaining.studyPacksRemaining;
+      if (typeof noteGenRemaining === "number" && typeof studyPackRemaining === "number") {
+        setQuota({
+          noteGenRemaining,
+          studyPackRemaining,
+          resetLabel: formatStudyPackResetDate(plan.usageCycle?.endsAt),
+        });
+      }
+    } catch {
+      // Non-blocking: keep the last known quota if the refresh fails.
+    }
+  }, [isAdmin]);
 
+  const doSubmit = async () => {
     const request: BulkGenerateNotesRequest = {
       subject: subject.trim(),
       topics: normalizedTopics,
@@ -221,10 +259,28 @@ export function BulkGenerationPageClient() {
         router.replace("/dashboard");
         return;
       }
+      // The backend re-checks the note-generation quota at submit time and rejects
+      // when a stale client over-queues; surface that message and refresh the quota.
+      void refreshQuota();
       setError(submitError instanceof Error ? submitError.message : "Could not queue these notes.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    if (studyPackShortfall > 0) {
+      setStudyPackConfirmOpen(true);
+      return;
+    }
+    void doSubmit();
   };
 
   return (
@@ -242,12 +298,15 @@ export function BulkGenerationPageClient() {
       </header>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
-        {noteGenerationQuota ? (
-          <Card className="border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
-            You have <span className="font-semibold">{noteGenerationQuota.remaining}</span> of{" "}
-            <span className="font-semibold">{noteGenerationQuota.limit}</span> note generations remaining this cycle.
-            Bulk generation stops when that reaches 0.
-          </Card>
+        {quota && quota.noteGenRemaining <= 2 ? (
+          <NearLimitBanner
+            planType={currentPlan}
+            remainingCredits={quota.noteGenRemaining}
+            resetDateLabel={quota.resetLabel}
+            creditLabel="note generation"
+            ctaContext="note-generation-limit"
+            onUpgrade={() => router.push("/settings?section=plans")}
+          />
         ) : null}
 
         <Card className="space-y-5 p-5 sm:p-6">
@@ -327,13 +386,16 @@ export function BulkGenerationPageClient() {
                 <p className="mt-1 text-xs text-foreground/60">Each topic becomes a separate note. Each note&apos;s title and tags are generated automatically — the subject and other batch details apply to every note. Paste a list to add several at once — one topic per line.</p>
               </div>
               <span className={`text-sm font-medium ${
-                normalizedTopics.length > MAX_BULK_GENERATION_TOPICS
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-foreground/65"
+                overCap ? "text-red-600 dark:text-red-400" : "text-foreground/65"
               }`}>
-                {normalizedTopics.length} / {MAX_BULK_GENERATION_TOPICS}
+                {normalizedTopics.length} / {effectiveTopicCap}
               </span>
             </div>
+            {isNoteGenCapped ? (
+              <p className="text-xs text-foreground/60">
+                Capped by your {effectiveTopicCap} note generation{effectiveTopicCap === 1 ? "" : "s"} left this cycle.
+              </p>
+            ) : null}
 
             <div className="space-y-3">
               {topics.map((topic, index) => (
@@ -364,7 +426,8 @@ export function BulkGenerationPageClient() {
             <button
               type="button"
               onClick={addTopic}
-              className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+              disabled={topics.length >= effectiveTopicCap}
+              className="text-sm font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:text-foreground/40 disabled:no-underline dark:text-blue-400"
             >
               + Add topic
             </button>
@@ -373,9 +436,11 @@ export function BulkGenerationPageClient() {
           {pasteNotice ? (
             <p className="text-sm text-amber-600 dark:text-amber-400">{pasteNotice}</p>
           ) : null}
-          {normalizedTopics.length > MAX_BULK_GENERATION_TOPICS ? (
+          {overCap ? (
             <p className="text-sm text-red-600 dark:text-red-400">
-              You can bulk generate up to {MAX_BULK_GENERATION_TOPICS} topics at once.
+              {isNoteGenCapped
+                ? `You have ${effectiveTopicCap} note generation${effectiveTopicCap === 1 ? "" : "s"} left this cycle. Remove ${normalizedTopics.length - effectiveTopicCap} topic${normalizedTopics.length - effectiveTopicCap === 1 ? "" : "s"} to continue.`
+                : `You can bulk generate up to ${MAX_BULK_GENERATION_TOPICS} topics at once.`}
             </p>
           ) : null}
           {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
@@ -385,11 +450,33 @@ export function BulkGenerationPageClient() {
           <Link href="/library" className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-highlight">
             Cancel
           </Link>
-          <Button type="submit" loading={submitting} loadingText="Queueing notes...">
+          <Button type="submit" loading={submitting} loadingText="Queueing notes..." disabled={normalizedTopics.length === 0 || overCap}>
             Queue {normalizedTopics.length} note{normalizedTopics.length === 1 ? "" : "s"}
           </Button>
         </div>
       </form>
+
+      <AppModal
+        isOpen={studyPackConfirmOpen}
+        title="Some notes won’t get Study Packs"
+        description={quota
+          ? `You have ${quota.studyPackRemaining} Study Pack${quota.studyPackRemaining === 1 ? "" : "s"} left this cycle, but you’re queueing ${normalizedTopics.length}. ${studyPackShortfall} note${studyPackShortfall === 1 ? "" : "s"} will be created as drafts you can generate later. Continue?`
+          : undefined}
+        onClose={() => setStudyPackConfirmOpen(false)}
+        actions={(
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <Button type="button" variant="secondary" onClick={() => setStudyPackConfirmOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              loading={submitting}
+              loadingText="Queueing notes..."
+              onClick={() => { setStudyPackConfirmOpen(false); void doSubmit(); }}
+            >
+              Generate anyway
+            </Button>
+          </div>
+        )}
+      />
     </main>
   );
 }
