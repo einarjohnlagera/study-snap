@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.31.0 - Adoptable Study Plans` is the release currently in progress.
+No release is currently in progress. `v0.31.1 - Adoptable Study Plans Discovery & Status` is the next candidate (see below).
 
-`v0.30.1 - Copy Flow Polish` is the current documentation baseline (last released).
+`v0.31.0 - Adoptable Study Plans` is the current documentation baseline (last released).
 
 `v0.30.0 - Readiness Signals` is the previous baseline.
 
@@ -133,7 +133,7 @@ Teacher-flow polish and bulk *quiz* generation move to v0.32.0 (still no teacher
 
 ---
 
-## v0.31.0 - Adoptable Study Plans (v1, in progress)
+## v0.31.0 - Adoptable Study Plans (v1, released)
 
 Base branch for this release: `releases/v0.31.0`.
 
