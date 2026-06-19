@@ -84,6 +84,7 @@ Locked behavior:
 - There is no aggregate bulk-import quota category.
 - Bulk import never auto-generates, never sets `GENERATING`, never calls an LLM, and never creates a Study Pack.
 - The uploader creates one `DRAFT` per successful file and offers a skippable, user-initiated post-import step to add the created drafts to an existing or new collection.
+- The uploader surfaces remaining OCR/image-scan quota for awareness (v0.31.1): a subtle inline line ("N image scans (OCR) left this month — used only for photos and scanned PDFs"), escalating to the shared `NearLimitBanner` (credit-noun "image scan") when ≤ 2 remain. This reads `/me/plan` `ocrRemaining` only and is non-blocking (admins skip; DOCX/TXT/text-PDF imports consume no OCR, hence the clarifying copy). It adds no new quota category and no aggregate import gate.
 - Imported drafts are never added to a collection automatically.
 
 The single-file editor path remains extract-for-review only: `POST /notes/extract-text` returns text for insertion into the editor and must not auto-save.

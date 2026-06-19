@@ -208,4 +208,25 @@ class MePlanServiceTest {
         assertThat(response.usage().studyPacksUsed()).isEqualTo(5);
         assertThat(response.remaining().studyPacksRemaining()).isEqualTo(5);
     }
+
+    @Test
+    void resolvesRemainingNoteGenerationsFromPlanLimitAndMonthlyUsage() {
+        UUID userId = UUID.randomUUID();
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        0,
+                        0,
+                        0,
+                        0,
+                        3,
+                        0
+                ));
+
+        int remaining = mePlanService.getNoteGenerationsRemaining(userId);
+
+        assertThat(remaining).isEqualTo(2);
+    }
 }

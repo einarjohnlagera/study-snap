@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -53,6 +54,7 @@ public class NoteBulkGenerationService {
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final BulkGenerationResultService bulkGenerationResultService;
+    private final MePlanService mePlanService;
     private final int maxTopics;
     private final int throttleDelayMs;
 
@@ -67,6 +69,7 @@ public class NoteBulkGenerationService {
             UserRepository userRepository,
             OnboardingGuardService onboardingGuardService,
             BulkGenerationResultService bulkGenerationResultService,
+            MePlanService mePlanService,
             @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
@@ -80,6 +83,7 @@ public class NoteBulkGenerationService {
         this.userRepository = userRepository;
         this.onboardingGuardService = onboardingGuardService;
         this.bulkGenerationResultService = bulkGenerationResultService;
+        this.mePlanService = mePlanService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
@@ -92,6 +96,7 @@ public class NoteBulkGenerationService {
         onboardingGuardService.assertProfileComplete(ownerUserId);
         UserEntity owner = userRepository.findById(ownerUserId).orElseThrow(UserNotFoundException::new);
         NormalizedBatch batch = normalizeAndValidate(request, owner);
+        rejectIfNoteGenerationQuotaExceeded(batch, ownerUserId, enforceLimits);
         UUID resultId = UUID.randomUUID();
         taskDispatcher.execute(() -> processBatch(resultId, batch, ownerUserId, enforceLimits));
         return new BulkGenerateNotesResponse(
@@ -100,6 +105,21 @@ public class NoteBulkGenerationService {
                 batch.items().size(),
                 batch.rejectedTopics()
         );
+    }
+
+    private void rejectIfNoteGenerationQuotaExceeded(
+            NormalizedBatch batch,
+            UUID ownerUserId,
+            boolean enforceLimits
+    ) {
+        if (!enforceLimits) {
+            return;
+        }
+        int remaining = mePlanService.getNoteGenerationsRemaining(ownerUserId);
+        int requestedCount = batch.items().size();
+        if (requestedCount > remaining) {
+            throw new BulkNoteGenerationQuotaExceededException(remaining, requestedCount);
+        }
     }
 
     private void processBatch(UUID resultId, NormalizedBatch batch, UUID ownerUserId, boolean enforceLimits) {

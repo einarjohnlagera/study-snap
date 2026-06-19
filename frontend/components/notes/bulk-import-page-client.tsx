@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Trash2, Upload } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import {
   addCollectionItems,
   createCollection,
+  getMyPlan,
   importNotesBatch,
   listCollections,
   type BulkImportResult,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { formatStudyPackResetDate } from "@/lib/plans";
 import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
@@ -235,10 +238,36 @@ export function BulkImportPageClient() {
   const [submittedFileCount, setSubmittedFileCount] = useState(0);
   const [collectionModalOpen, setCollectionModalOpen] = useState(false);
   const [collectionSuccess, setCollectionSuccess] = useState<CollectionSuccess | null>(null);
+  const [ocrQuota, setOcrQuota] = useState<{ remaining: number; resetLabel: string } | null>(null);
 
   useEffect(() => {
     requireAuthenticatedOnboardedUser(router);
   }, [router]);
+
+  const isAdmin = getAuthUser()?.role === "ADMIN";
+  const currentPlan = getAuthUser()?.planType ?? "FREE";
+
+  useEffect(() => {
+    if (isAdmin) {
+      return;
+    }
+    let mounted = true;
+    void getMyPlan()
+      .then((plan) => {
+        if (mounted && typeof plan.remaining.ocrRemaining === "number") {
+          setOcrQuota({
+            remaining: plan.remaining.ocrRemaining,
+            resetLabel: formatStudyPackResetDate(plan.usageCycle?.endsAt),
+          });
+        }
+      })
+      .catch(() => {
+        // Awareness-only; the import flow works without the quota readout.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [isAdmin]);
 
   const collectionLabels = getCollectionLabels(getAuthUser()?.profileType);
   const capExceeded = files.length > MAX_BATCH_IMPORT_FILES;
@@ -278,6 +307,23 @@ export function BulkImportPageClient() {
         title="Import files"
         description="Upload up to 20 files to create one reviewable draft per file without generating Study Packs."
       />
+
+      {ocrQuota ? (
+        ocrQuota.remaining <= 2 ? (
+          <NearLimitBanner
+            planType={currentPlan}
+            remainingCredits={ocrQuota.remaining}
+            resetDateLabel={ocrQuota.resetLabel}
+            creditLabel="image scan"
+            ctaContext="general"
+            onUpgrade={() => router.push("/settings?section=plans")}
+          />
+        ) : (
+          <p className="text-xs text-foreground/60">
+            {ocrQuota.remaining} image scan{ocrQuota.remaining === 1 ? "" : "s"} (OCR) left this month — used only for photos and scanned PDFs.
+          </p>
+        )
+      ) : null}
 
       {!result ? (
         <Card className="space-y-5 p-4 sm:p-6">

@@ -4,11 +4,13 @@
 
 **Status: In Progress**
 
-Theme: v0.31.0 shipped the adopt mechanics, but discovery is intentionally minimal — published plans surface only on the Dashboard, only the top match for the learner's course/program, and there is no plan-completion signal. This patch adds the additive follow-ups: an onboarding adopt surface, a way to browse all matching published plans, and an execution-status badge on the Study Plans list. No new architecture. See `docs/product/ROADMAP.md` for full scope.
+Theme: v0.31.0 shipped the adopt mechanics, but discovery is intentionally minimal — published plans surface only on the Dashboard, only the top match for the learner's course/program, and there is no plan-completion signal. This patch adds the additive follow-ups: an onboarding adopt surface, a way to browse all matching published plans, and an execution-status badge on the Study Plans list. It also tightens bulk-tool quota awareness. No new architecture. See `docs/product/ROADMAP.md` for full scope.
 
 ### Shipped
 
-- _Work in progress._
+- **Bulk generate quota gate** — The Topics counter now folds the note-generation quota into its cap (`X / min(50, note generations left)`) with a helper line; `+ Add topic`, paste, and the Queue button are hard-capped at the remaining note generations, and a near-limit amber banner shows when ≤ 2 are left. When more topics are queued than Study Packs remain, a soft confirmation explains the extras stay as drafts (notes still get content) before proceeding. The backend also rejects stale-client over-quota batches at submit with a precise remove-count message before any work is queued.
+- **Bulk import OCR banner** — Bulk import (Draft-only, no Study Pack) now surfaces remaining OCR/image-scan quota as an inline line, escalating to a near-limit banner when ≤ 2 are left, worded so DOCX/TXT/text-PDF imports (which don't consume OCR) aren't confused.
+- **Shared near-limit banner** — `NearLimitBanner` is now generalized with a credit-noun prop so the same component covers Study Packs, note generations, and image scans without duplicated copy.
 
 ---
 

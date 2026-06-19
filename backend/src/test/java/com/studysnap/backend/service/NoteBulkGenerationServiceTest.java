@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
@@ -32,8 +33,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -64,11 +68,15 @@ class NoteBulkGenerationServiceTest {
     private OnboardingGuardService onboardingGuardService;
     @Mock
     private BulkGenerationResultService bulkGenerationResultService;
+    @Mock
+    private MePlanService mePlanService;
 
     private NoteBulkGenerationService service;
+    private StudyPackGenerationTaskDispatcher taskDispatcher;
 
     @BeforeEach
     void setUp() {
+        taskDispatcher = spy(new StudyPackGenerationTaskDispatcher(Runnable::run));
         service = new NoteBulkGenerationService(
                 noteGenerationService,
                 noteService,
@@ -76,10 +84,11 @@ class NoteBulkGenerationServiceTest {
                 llmStudyPackService,
                 contentModerationService,
                 generationContextResolver,
-                new StudyPackGenerationTaskDispatcher(Runnable::run),
+                taskDispatcher,
                 userRepository,
                 onboardingGuardService,
                 bulkGenerationResultService,
+                mePlanService,
                 50,
                 0
         );
@@ -159,6 +168,110 @@ class NoteBulkGenerationServiceTest {
                 eq(List.of()),
                 eq(List.of())
         );
+    }
+
+    @Test
+    void queueBatch_rejectsNonAdminWhenRequestedTopicsExceedRemainingNoteGenerations() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.USER, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(mePlanService.getNoteGenerationsRemaining(userId)).thenReturn(2);
+        BulkGenerateNotesRequest request = request(
+                List.of("Topic One", "Topic Two", "Topic Three"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, true))
+                .isInstanceOf(BulkNoteGenerationQuotaExceededException.class)
+                .hasMessage("You have 2 note generation(s) left this cycle. Remove 1 topic(s) to continue.")
+                .satisfies(exception -> {
+                    BulkNoteGenerationQuotaExceededException quotaException =
+                            (BulkNoteGenerationQuotaExceededException) exception;
+                    assertThat(quotaException.getRemaining()).isEqualTo(2);
+                    assertThat(quotaException.getRequestedCount()).isEqualTo(3);
+                });
+
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
+        verify(noteGenerationService, never()).generateFromTopic(any(), any());
+        verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
+        verify(bulkGenerationResultService, never()).recordResult(
+                any(UUID.class),
+                any(UUID.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyBoolean(),
+                anyInt(),
+                anyInt(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void queueBatch_allowsNonAdminWhenRequestedTopicsEqualRemainingNoteGenerations() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.USER, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(mePlanService.getNoteGenerationsRemaining(userId)).thenReturn(2);
+        BulkGenerateNotesRequest request = request(
+                List.of("Topic One", "Topic Two"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+                .thenReturn(context);
+        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
+                .thenReturn(new GenerateNoteFromTopicResponse("Generated content"));
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
+                .thenReturn(noteResponse("note-1"), noteResponse("note-2"));
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, true);
+
+        assertThat(response.queuedTopics()).isEqualTo(2);
+        verify(taskDispatcher).execute(any(Runnable.class));
+        verify(noteGenerationService, times(2)).generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId));
+        verify(bulkGenerationResultService).recordResult(
+                eq(response.resultId()),
+                eq(userId),
+                eq(SUBJECT),
+                eq(COURSE_PROGRAM),
+                eq(NoteTargetProfileType.STUDENT.name()),
+                eq(false),
+                eq(2),
+                eq(2),
+                eq(List.of()),
+                eq(List.of())
+        );
+    }
+
+    @Test
+    void queueBatch_adminSkipsSubmitTimeNoteGenerationQuotaGate() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Topic One", "Topic Two", "Topic Three"),
+                COURSE_PROGRAM,
+                NoteTargetProfileType.STUDENT,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+                .thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+                .thenReturn("Generated content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
+                .thenReturn(noteResponse("note-1"), noteResponse("note-2"), noteResponse("note-3"));
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
+
+        assertThat(response.queuedTopics()).isEqualTo(3);
+        verify(mePlanService, never()).getNoteGenerationsRemaining(userId);
+        verify(taskDispatcher).execute(any(Runnable.class));
+        verify(noteGenerationService, never()).generateFromTopic(any(), any());
+        verify(noteService, times(3)).create(any(UpsertNoteRequest.class), eq(userId));
     }
 
     @Test
@@ -273,6 +386,7 @@ class NoteBulkGenerationServiceTest {
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(mePlanService.getNoteGenerationsRemaining(userId)).thenReturn(3);
         when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
                 .thenReturn(context);
         when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
@@ -453,6 +567,7 @@ class NoteBulkGenerationServiceTest {
                 userRepository,
                 onboardingGuardService,
                 bulkGenerationResultService,
+                mePlanService,
                 1,
                 0
         );
