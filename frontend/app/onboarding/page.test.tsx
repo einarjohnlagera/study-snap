@@ -420,6 +420,7 @@ describe("OnboardingPage", () => {
         courseProgram: "AWS Certification",
         sourcePlanId: null,
         itemCount: 4,
+        notesPracticed: 0,
         createdAt: "2026-06-01T00:00:00Z",
         updatedAt: "2026-06-02T00:00:00Z",
       },

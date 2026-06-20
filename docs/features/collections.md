@@ -119,8 +119,19 @@ Response item:
 - `courseProgram`
 - `sourcePlanId`
 - `itemCount`
+- `notesPracticed`
 - `createdAt`
 - `updatedAt`
+
+`notesPracticed` is included so the owned `/collections` list can show a lightweight execution-status badge without opening every plan. It is derived from the same practice definition as the detail rollup: a note counts as practiced when its latest completed quiz-session timestamp resolves to non-null (`lastSessionCompletedAt != null`). `itemCount` remains the total-note count; do not add a redundant `totalNotes` field to the summary DTO.
+
+Owned-list status labels are frontend-derived from `notesPracticed` and `itemCount`:
+
+- `Not started` — `notesPracticed == 0`, including empty plans where `itemCount == 0`
+- `In progress` — `0 < notesPracticed < itemCount`
+- `Completed` — `itemCount > 0 && notesPracticed >= itemCount`
+
+This is execution status only: it answers whether the learner has practiced the plan's notes. It is not ConceptHealth mastery and must not add percentages, milestones, streaks, weakest-subject routing, or progress bars to collection list cards. Mastery remains owned by My Progress. The status badge is shown only on the authenticated user's owned `/collections` list and is not shown on `/collections/published` or public study-plan cards, where viewer-specific practice status has no meaning.
 
 ### Create Collection
 
@@ -176,7 +187,7 @@ The detail response also includes a read-only `progress` summary:
 
 `lastSessionCompletedAt` uses the same batched per-note completed-session source as the private Library note list. It covers completed supported quiz modes, including participating notes from multi-note sessions, without issuing one query per collection item. If session history cannot be resolved, item timestamps degrade to null and the notes count as not practiced rather than failing the collection response.
 
-The progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards remain lightweight and do not run progress aggregation.
+The detail progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards stay lightweight: they receive only `itemCount` plus the summary `notesPracticed` execution count and derive the three-label badge client-side.
 
 The rollup is profile-agnostic and presentation-neutral. Frontend profile labels still come only from `getCollectionLabels`; the backend returns the same counts for Study Plans, Review Sets, Lesson Plans, and Collections. It adds no persisted progress field, generated content, AI call, or quota category.
 

@@ -14,8 +14,38 @@ import { createCollection, listCollections, type NoteCollectionSummary } from "@
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 type LoadState = "loading" | "ready" | "error";
+type CollectionExecutionStatus = "not-started" | "in-progress" | "completed";
 
 const TITLE_MAX_LENGTH = 150;
+const COLLECTION_STATUS_LABELS: Record<CollectionExecutionStatus, string> = {
+  "not-started": "Not started",
+  "in-progress": "In progress",
+  completed: "Completed",
+};
+const COLLECTION_STATUS_CLASS_NAMES: Record<CollectionExecutionStatus, string> = {
+  "not-started": "border-border bg-muted/60 text-foreground/65",
+  "in-progress": "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200",
+  completed: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200",
+};
+
+function getCollectionExecutionStatus(collection: NoteCollectionSummary): CollectionExecutionStatus {
+  if (collection.itemCount <= 0 || collection.notesPracticed <= 0) {
+    return "not-started";
+  }
+  if (collection.notesPracticed >= collection.itemCount) {
+    return "completed";
+  }
+  return "in-progress";
+}
+
+function CollectionExecutionStatusBadge({ collection }: Readonly<{ collection: NoteCollectionSummary }>) {
+  const status = getCollectionExecutionStatus(collection);
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${COLLECTION_STATUS_CLASS_NAMES[status]}`}>
+      {COLLECTION_STATUS_LABELS[status]}
+    </span>
+  );
+}
 
 function formatRelativeUpdatedAt(value: string): string {
   const timestamp = new Date(value).getTime();
@@ -235,8 +265,11 @@ export function CollectionsPageClient() {
                     <p className="text-sm text-foreground/55">No description yet.</p>
                   )}
                 </div>
-                <div className="flex items-center justify-between text-sm text-foreground/60">
-                  <span>{formatItemCount(collection.itemCount)}</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{formatItemCount(collection.itemCount)}</span>
+                    <CollectionExecutionStatusBadge collection={collection} />
+                  </div>
                   <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>
                 </div>
               </Card>
