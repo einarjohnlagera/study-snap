@@ -92,4 +92,39 @@ describe("DashboardStudyPlanSection", () => {
     });
     expect(screen.queryByText("Recommended Study Plan")).not.toBeInTheDocument();
   });
+
+  it("shows a view-all link only when multiple plans match and a href is provided", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      publicPlan,
+      { ...publicPlan, id: "source-plan-2", title: "LET Reviewer Plan 2" },
+    ]);
+
+    render(
+      <DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" viewAllHref="/collections/published" />,
+    );
+
+    const viewAll = await screen.findByRole("link", { name: "See all 2 study plans" });
+    expect(viewAll).toHaveAttribute("href", "/collections/published");
+  });
+
+  it("does not show a view-all link without a href even when multiple plans match (onboarding card)", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      publicPlan,
+      { ...publicPlan, id: "source-plan-2", title: "LET Reviewer Plan 2" },
+    ]);
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
+
+    expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
+  });
+
+  it("does not show a view-all link when only one plan matches", async () => {
+    render(
+      <DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" viewAllHref="/collections/published" />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
+  });
 });

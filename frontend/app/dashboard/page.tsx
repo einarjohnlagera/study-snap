@@ -691,6 +691,7 @@ export default function DashboardPage() {
               <DashboardStudyPlanSection
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
+                viewAllHref="/collections/published"
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}
@@ -772,6 +773,7 @@ export default function DashboardPage() {
               <DashboardStudyPlanSection
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
+                viewAllHref="/collections/published"
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}

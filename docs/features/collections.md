@@ -354,6 +354,16 @@ The core Collections UI ships as the universal organization surface:
 
 Profile-aware labels are resolved only through `frontend/lib/collection-labels.ts`.
 
+### Browse published plans (`/collections/published`)
+
+The Dashboard card surfaces only the top matching published plan, so publishing several plans per course/program hides all but one. `/collections/published` is the lightweight browse surface that lists **all** published plans matched to the learner's course/program (v0.31.1).
+
+- Frontend-only listing. It reuses `GET /collections/public?courseProgram=` (via `listPublicStudyPlans`) plus the user's `GET /collections` to join each plan to an already-adopted personal collection (`sourcePlanId`) — no new endpoint.
+- This is a surface for *plans*, not the Public Library (which is for *notes*).
+- Each plan renders as a `PublicStudyPlanCard` with `Start this plan` (adopt → `POST /collections/{id}/adopt` → route to the new personal collection) or `Continue this plan` when already adopted. The skipped-note notice uses the shared `lib/study-plan-skipped-notice.ts` key, so the destination collection page shows the same one-time notice as Dashboard/onboarding adoption.
+- `courseProgram` and `profileType` come from `getMe()`; labels resolve through `getCollectionLabels`. It is reached via the `See all N {plural}` link on the Dashboard card (shown only when 2+ plans match).
+- States: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. `BackLink` returns to the Dashboard.
+
 The Study Plan remains an execution surface for one curated, ordered set. It does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on collection detail.
 
 | Profile | Singular | Plural / nav |
