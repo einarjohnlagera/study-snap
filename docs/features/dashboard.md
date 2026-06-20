@@ -161,6 +161,8 @@ Behavior by state:
 
 The section does not create a new Dashboard backend endpoint, quota, AI call, or plan store. Adopted plans are normal private collections, so the existing note -> Study Pack -> practice -> Progress loop handles all downstream work.
 
+The same `DashboardStudyPlanSection` card is also reused on the onboarding completion step (v0.31.1) as a supplementary adopt surface — see `onboarding.md`. There is no separate component or endpoint for that surface.
+
 ## First-study guidance
 
 Dashboard may also show first-study guidance for verified users who still have `studyPackCount == 0` and have not completed the separate product-onboarding tracker.
