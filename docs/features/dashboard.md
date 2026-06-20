@@ -163,6 +163,8 @@ The section does not create a new Dashboard backend endpoint, quota, AI call, or
 
 The same `DashboardStudyPlanSection` card is also reused on the onboarding completion step (v0.31.1) as a supplementary adopt surface — see `onboarding.md`. There is no separate component or endpoint for that surface.
 
+The card only renders the top match (`publicPlans[0]`). When more than one plan matches the learner's course/program and the Dashboard passes a `viewAllHref`, a `See all N {plural}` link appears below the card and routes to the browse surface (`/collections/published`) — see `collections.md`. The link is prop-gated so it does **not** appear on the onboarding card (onboarding does not pass `viewAllHref`). With zero or one match, no link is shown.
+
 ## First-study guidance
 
 Dashboard may also show first-study guidance for verified users who still have `studyPackCount == 0` and have not completed the separate product-onboarding tracker.
