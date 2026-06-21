@@ -79,6 +79,7 @@ Interaction:
 Shared list controls:
 
 - order is always `Search`, `Filter`, `Sort`, then notes list
+- the `Search` field shows an inline clear (`×`) button when it has text, mirroring the combobox clear affordance; clicking it runs the normal search-change path (live for the private library, debounced URL sync for the public library), not just a textbox reset. It is distinct from the filter panel's `Clear all`, which resets every active filter. Search inputs use a 16px font on mobile to avoid iOS Safari focus-zoom.
 - on mobile, `Filter` and `Sort` open shared bottom-sheet/modal controls instead of staying always visible
 
 Private Library filters:

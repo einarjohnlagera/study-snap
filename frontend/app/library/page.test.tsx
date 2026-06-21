@@ -243,6 +243,22 @@ describe("Library page", () => {
     });
   });
 
+  it("shows a clear button in the search field and resets the query when clicked", async () => {
+    render(<LibraryPage />);
+
+    const searchInput = await screen.findByLabelText("Search");
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: "cell" } });
+    expect(searchInput).toHaveValue("cell");
+
+    const clearButton = screen.getByRole("button", { name: "Clear search" });
+    fireEvent.click(clearButton);
+
+    expect(searchInput).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
+  });
+
   it("auto-refreshes the note list after a bulk queue so generated notes appear without a manual refresh", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "student-1",
