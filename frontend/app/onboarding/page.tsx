@@ -48,6 +48,7 @@ import {
   resolveRemainingUsageCredits,
 } from "@/lib/plans";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { DashboardStudyPlanSection } from "@/app/dashboard/dashboard-study-plan-section";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
@@ -1348,6 +1349,8 @@ export default function OnboardingPage() {
             Go to Dashboard
           </Button>
         </div>
+
+        <DashboardStudyPlanSection courseProgram={draft.courseProgram} profileType={profileType} />
 
         {completingOnboarding ? (
           <p className="text-sm text-foreground/60">Saving your profile...</p>

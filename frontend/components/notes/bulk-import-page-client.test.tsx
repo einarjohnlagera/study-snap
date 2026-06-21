@@ -3,6 +3,7 @@ import { BulkImportPageClient, MAX_BATCH_IMPORT_FILES } from "./bulk-import-page
 import {
   addCollectionItems,
   createCollection,
+  getMyPlan,
   importNotesBatch,
   listCollections,
 } from "@/lib/api";
@@ -28,6 +29,7 @@ jest.mock("@/lib/auth", () => ({
 jest.mock("@/lib/api", () => ({
   addCollectionItems: jest.fn(),
   createCollection: jest.fn(),
+  getMyPlan: jest.fn(),
   importNotesBatch: jest.fn(),
   listCollections: jest.fn(),
 }));
@@ -95,6 +97,11 @@ describe("BulkImportPageClient", () => {
     (importNotesBatch as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      limits: { ocrPerMonth: 20 },
+      remaining: { ocrRemaining: 20 },
+      usageCycle: { startsAt: "2026-06-01T00:00:00Z", endsAt: "2026-07-01T00:00:00Z" },
+    });
     (listCollections as jest.Mock).mockResolvedValue([]);
     (createCollection as jest.Mock).mockResolvedValue({ id: "collection-new", title: "Unit One" });
     (addCollectionItems as jest.Mock).mockResolvedValue({ id: "collection-1", title: "Existing Plan" });
@@ -195,6 +202,7 @@ describe("BulkImportPageClient", () => {
         title: "Existing Plan",
         description: null,
         itemCount: 4,
+        notesPracticed: 0,
         createdAt: "2026-06-12T00:00:00Z",
         updatedAt: "2026-06-12T00:00:00Z",
       },

@@ -21,4 +21,12 @@ public interface NoteCollectionItemRepository extends JpaRepository<NoteCollecti
             group by i.collectionId
             """)
     List<NoteCollectionItemCountProjection> countItemsByCollectionIds(@Param("collectionIds") List<UUID> collectionIds);
+
+    @Query("""
+            select i.collectionId as collectionId, i.noteId as noteId
+            from NoteCollectionItemEntity i
+            where i.collectionId in :collectionIds
+            order by i.collectionId asc, i.position asc
+            """)
+    List<NoteCollectionItemNoteProjection> findNoteIdsByCollectionIds(@Param("collectionIds") List<UUID> collectionIds);
 }

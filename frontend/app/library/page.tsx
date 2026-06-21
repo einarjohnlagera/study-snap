@@ -1460,14 +1460,28 @@ export default function LibraryPage() {
                 <label htmlFor="library-search" className="text-sm font-medium">
                   Search
                 </label>
-                <input
-                  id="library-search"
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search titles and tags..."
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
-                />
+                <div className="relative">
+                  <input
+                    id="library-search"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search titles and tags..."
+                    className={`h-10 w-full rounded-lg border border-border bg-background pl-3 ${
+                      searchQuery ? "pr-10" : "pr-3"
+                    } text-base text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600 sm:text-sm [&::-webkit-search-cancel-button]:hidden`}
+                  />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      aria-label="Clear search"
+                      className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-foreground/60 transition-colors hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">

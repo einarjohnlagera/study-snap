@@ -109,8 +109,16 @@ public class MePlanService {
         );
     }
 
+    public int getNoteGenerationsRemaining(UUID userId) {
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        UserUsageService.MonthlyUsage usage = userUsageService.getMonthlyUsage(userId, now);
+        int noteGenerationLimit = properties.getPricing().resolveMonthlyNoteGenerationLimit(planType);
+        return remaining(noteGenerationLimit, usage.noteGenerations());
+    }
+
     private int remaining(int limit, int used) {
-        return Math.max(0, limit - used);
+        return Math.clamp(limit - used, 0, Integer.MAX_VALUE);
     }
 
     private Integer remainingNullable(Integer limit, int used) {

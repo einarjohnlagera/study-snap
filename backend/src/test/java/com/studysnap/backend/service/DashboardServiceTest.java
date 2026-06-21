@@ -222,7 +222,9 @@ class DashboardServiceTest {
     void getOverview_returnsPerformanceFocusAreasAndWeeklyActivity() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
-        OffsetDateTime now = OffsetDateTime.now();
+        // Pin to a fixed mid-day instant: sub-hour offsets below cross calendar-day
+        // boundaries when run near midnight, making studyDays nondeterministic.
+        OffsetDateTime now = OffsetDateTime.parse("2026-05-23T12:00:00Z");
         QuickReviewSessionEntity quickReview = buildCompletedSession(userId, UUID.randomUUID(), bigDecimal(75), now.minusDays(3));
         QuickReviewSessionEntity challengeOne = buildCompletedChallengeSession(
                 userId,

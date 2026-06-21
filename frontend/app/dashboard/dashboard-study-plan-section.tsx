@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -13,42 +14,27 @@ import {
 } from "@/lib/api";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
+import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
+
+export { getStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 type DashboardStudyPlanSectionProps = {
   courseProgram: string | null;
   profileType: ProfileType | null;
+  viewAllHref?: string;
 };
-
-const SKIPPED_NOTICE_PREFIX = "notelib-study-plan-skipped-";
-
-function getSkippedNoticeKey(collectionId: string): string {
-  return `${SKIPPED_NOTICE_PREFIX}${collectionId}`;
-}
-
-export function getStudyPlanSkippedNotice(collectionId: string): number | null {
-  try {
-    const key = getSkippedNoticeKey(collectionId);
-    const raw = globalThis.sessionStorage?.getItem(key);
-    if (!raw) {
-      return null;
-    }
-    globalThis.sessionStorage?.removeItem(key);
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 export function DashboardStudyPlanSection({
   courseProgram,
   profileType,
+  viewAllHref,
 }: Readonly<DashboardStudyPlanSectionProps>) {
   const router = useRouter();
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
   const normalizedCourseProgram = useMemo(() => normalizeCourseProgram(courseProgram), [courseProgram]);
   const [plan, setPlan] = useState<NoteCollectionSummary | null>(null);
   const [adoptedPlan, setAdoptedPlan] = useState<NoteCollectionSummary | null>(null);
+  const [matchCount, setMatchCount] = useState(0);
   const [loadedCourseProgram, setLoadedCourseProgram] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +59,7 @@ export function DashboardStudyPlanSection({
         }
         const matchingPlan = publicPlans[0] ?? null;
         setPlan(matchingPlan);
+        setMatchCount(publicPlans.length);
         setAdoptedPlan(
           matchingPlan
             ? personalCollections.find((collection) => collection.sourcePlanId === matchingPlan.id) ?? null
@@ -83,6 +70,7 @@ export function DashboardStudyPlanSection({
       .catch(() => {
         if (!cancelled) {
           setPlan(null);
+          setMatchCount(0);
           setAdoptedPlan(null);
           setLoadedCourseProgram(normalizedCourseProgram);
         }
@@ -108,9 +96,7 @@ export function DashboardStudyPlanSection({
     setError(null);
     try {
       const result = await adoptStudyPlan(plan.id);
-      if (result.skippedCount > 0) {
-        globalThis.sessionStorage?.setItem(getSkippedNoticeKey(result.collectionId), String(result.skippedCount));
-      }
+      setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       router.push(`/collections/${result.collectionId}`);
     } catch (adoptError) {
       setError(adoptError instanceof Error ? adoptError.message : "Could not start this plan.");
@@ -144,6 +130,14 @@ export function DashboardStudyPlanSection({
           </p>
         ) : null}
       </Card>
+      {viewAllHref && matchCount > 1 ? (
+        <Link
+          href={viewAllHref}
+          className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+        >
+          See all {matchCount} {labels.plural.toLowerCase()}
+        </Link>
+      ) : null}
     </section>
   );
 }

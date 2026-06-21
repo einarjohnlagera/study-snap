@@ -123,6 +123,15 @@ Actions:
 
 The completion call persists onboarding completion through the existing backend flow and sets `onboardingCompletedAt`.
 
+#### Recommended plan adopt card
+
+Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Continue Studying` action.
+
+- The card self-hides when the learner's course/program has no published plan, so most tracks see Step 5 unchanged.
+- For tracks with a published plan, it offers one-tap adopt via the existing `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan` (no new endpoint).
+- Because reaching Step 5 already persists onboarding completion, tapping `Start this plan` and navigating to the adopted collection does not lose onboarding state.
+- The adopted-collection skipped-notice flow works unchanged: the same `sessionStorage` key is read by the collection detail page via `getStudyPlanSkippedNotice`.
+
 ## Deferred Personalization
 
 These inputs are **not** collected during onboarding:

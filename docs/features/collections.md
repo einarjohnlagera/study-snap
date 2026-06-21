@@ -119,8 +119,19 @@ Response item:
 - `courseProgram`
 - `sourcePlanId`
 - `itemCount`
+- `notesPracticed`
 - `createdAt`
 - `updatedAt`
+
+`notesPracticed` is included so the owned `/collections` list can show a lightweight execution-status badge without opening every plan. It is derived from the same practice definition as the detail rollup: a note counts as practiced when its latest completed quiz-session timestamp resolves to non-null (`lastSessionCompletedAt != null`). `itemCount` remains the total-note count; do not add a redundant `totalNotes` field to the summary DTO.
+
+Owned-list status labels are frontend-derived from `notesPracticed` and `itemCount`:
+
+- `Not started` — `notesPracticed == 0`, including empty plans where `itemCount == 0`
+- `In progress` — `0 < notesPracticed < itemCount`
+- `Completed` — `itemCount > 0 && notesPracticed >= itemCount`
+
+This is execution status only: it answers whether the learner has practiced the plan's notes. It is not ConceptHealth mastery and must not add percentages, milestones, streaks, weakest-subject routing, or progress bars to collection list cards. Mastery remains owned by My Progress. The status badge is shown only on the authenticated user's owned `/collections` list and is not shown on `/collections/published` or public study-plan cards, where viewer-specific practice status has no meaning.
 
 ### Create Collection
 
@@ -176,7 +187,7 @@ The detail response also includes a read-only `progress` summary:
 
 `lastSessionCompletedAt` uses the same batched per-note completed-session source as the private Library note list. It covers completed supported quiz modes, including participating notes from multi-note sessions, without issuing one query per collection item. If session history cannot be resolved, item timestamps degrade to null and the notes count as not practiced rather than failing the collection response.
 
-The progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards remain lightweight and do not run progress aggregation.
+The detail progress rollup is computed only for the collection detail response from the item data already assembled for that request. Collection list cards stay lightweight: they receive only `itemCount` plus the summary `notesPracticed` execution count and derive the three-label badge client-side.
 
 The rollup is profile-agnostic and presentation-neutral. Frontend profile labels still come only from `getCollectionLabels`; the backend returns the same counts for Study Plans, Review Sets, Lesson Plans, and Collections. It adds no persisted progress field, generated content, AI call, or quota category.
 
@@ -333,7 +344,8 @@ Behavior:
 The core Collections UI ships as the universal organization surface:
 
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
-- `/collections/[id]` shows one collection, its ordered note items, item labels, and note readiness hints.
+- `/collections/[id]` shows one collection, its ordered note items, item labels, and a per-note execution-status hint.
+- The per-note hint is a learner practice signal, not exam-readiness: `Needs Study Pack` (no `STUDY_PACK_READY` pack yet) → `Not started` (pack ready, `lastSessionCompletedAt == null`) → `Practiced` (`lastSessionCompletedAt != null`), with transient `Generating` / `Generation failed` states preserved for operational feedback. It deliberately does **not** show `Study Pack ready` / `Quiz ready` (the prior hint): plan-level Study Pack readiness already lives in the Progress rollup, and exam-eligibility (quiz-readiness) is surfaced on the Exam Builder, not here.
 - `/collections/[id]` header actions: `Edit` and `Delete` live in a single `⋯` context menu (short labels, mirroring Note Detail); the teacher terminal action (`Build Exam`) sits at the bottom-left of the header card via the `PageHeader` `footer` slot, not crammed into the action row. Admin status is read reactively (SSR-safe).
 - Admins see a published/private **status badge that is itself the publish control** (Notion-style): it sits **below the title** (mirroring Note Detail's visibility control), and clicking it (`aria-label="Publish settings"`, gear affordance) opens the publish modal. There is no separate `Publish settings` menu item or `Share` button. The boilerplate header description is omitted when the plan has no author-written description.
 - The publish modal (not an inline panel): a Course/Program **combobox locked to known buckets** (`CourseProgramCombobox` with `allowCustom={false}` + `inlineDropdown` so the options panel renders in-flow and is not clipped by the modal's overflow — the plan's existing value is always kept selectable), a single `Publish` (requires a non-empty course/program) / `Unpublish` action, and a `Save` for course/program edits while published. The `X` is the only close affordance (no redundant `Close` button).
@@ -353,6 +365,16 @@ The core Collections UI ships as the universal organization surface:
 - Opening a note from the detail page passes `ref=/collections/{id}`, so the note's back link returns to the collection with the profile-aware label (via `getCollectionLabels`) instead of falling back to Library.
 
 Profile-aware labels are resolved only through `frontend/lib/collection-labels.ts`.
+
+### Browse published plans (`/collections/published`)
+
+The Dashboard card surfaces only the top matching published plan, so publishing several plans per course/program hides all but one. `/collections/published` is the lightweight browse surface that lists **all** published plans matched to the learner's course/program (v0.31.1).
+
+- Frontend-only listing. It reuses `GET /collections/public?courseProgram=` (via `listPublicStudyPlans`) plus the user's `GET /collections` to join each plan to an already-adopted personal collection (`sourcePlanId`) — no new endpoint.
+- This is a surface for *plans*, not the Public Library (which is for *notes*).
+- Each plan renders as a `PublicStudyPlanCard` with `Start this plan` (adopt → `POST /collections/{id}/adopt` → route to the new personal collection) or `Continue this plan` when already adopted. The skipped-note notice uses the shared `lib/study-plan-skipped-notice.ts` key, so the destination collection page shows the same one-time notice as Dashboard/onboarding adoption.
+- `courseProgram` and `profileType` come from `getMe()`; labels resolve through `getCollectionLabels`. It is reached via the `See all N {plural}` link on the Dashboard card (shown only when 2+ plans match).
+- States: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. `BackLink` returns to the Dashboard.
 
 The Study Plan remains an execution surface for one curated, ordered set. It does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on collection detail.
 
@@ -388,6 +410,7 @@ The shipped Prompt B integrations make collections useful from both entry points
 - The collection detail terminal action resolves through the profile-aware terminal-action resolver. `TEACHER` receives `Build exam from this Lesson Plan`; all other profiles receive no terminal CTA for now.
 - The teacher terminal CTA passes the collection identity through `/library/exam-builder?collectionId={id}` and may also include ordered quiz-ready note IDs as a resilience fallback. The collection ID is the source of truth for initial sectioning.
 - Exam Builder fetches the collection and pre-seeds one section per distinct trimmed item label, in first-occurrence order. Only quiz-ready notes are included, notes keep collection position order, and unlabeled quiz-ready notes collapse into one trailing default section. Labels with no quiz-ready notes create no empty section.
+- When a collection contains notes without a generated quiz, the Exam Builder no longer drops them silently: it shows an amber `N of M notes excluded — no quiz generated yet` notice listing those note titles, so a teacher can see exactly which notes to generate quizzes for. This is the canonical place for the quiz-readiness blocker (it is not duplicated on the Study Plan detail rows). Amber, not red — a missing quiz is an incomplete state, not an error.
 - Collections with only unlabeled quiz-ready notes seed one default section. Teachers can still rename, reorder, add, rebalance, and replace the initial structure with an existing Exam Builder template.
 - The terminal CTA keeps the existing partial-readiness hint when some notes are skipped and disables with `Generate a quiz for at least one note to build an exam.` when none are quiz-ready.
 - This handoff is frontend-only. DOCX export and shareable quiz links remain Teacher/Admin-only, and no collection-level generation, analytics, quota, backend, or AI behavior is added.

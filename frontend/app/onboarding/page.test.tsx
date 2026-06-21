@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import OnboardingPage from "./page";
 import {
+  adoptStudyPlan,
   completeOnboarding,
   completeOnboardingProfileType,
   createNote,
@@ -9,6 +10,8 @@ import {
   getMe,
   getMyPlan,
   getNote,
+  listCollections,
+  listPublicStudyPlans,
   trackAnalyticsEvent,
   updateLearningProfileContext,
 } from "@/lib/api";
@@ -103,6 +106,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  adoptStudyPlan: jest.fn(),
   completeOnboarding: jest.fn(),
   completeOnboardingProfileType: jest.fn(),
   createNote: jest.fn(),
@@ -112,6 +116,8 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
   isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
+  listCollections: jest.fn(),
+  listPublicStudyPlans: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateLearningProfileContext: jest.fn(),
 }));
@@ -135,6 +141,11 @@ describe("OnboardingPage", () => {
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateLearningProfileContext as jest.Mock).mockReset();
+    (adoptStudyPlan as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockReset();
+    (listPublicStudyPlans as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockResolvedValue([]);
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
 
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -378,6 +389,77 @@ describe("OnboardingPage", () => {
     });
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1", { autoApplyMetadata: true });
     expect(routerMock.push).toHaveBeenCalledWith("/study-packs/study-pack-1");
+  });
+
+  it("surfaces a recommended adopt card on completion when the track has a published plan", async () => {
+    (generateNoteFromTopic as jest.Mock).mockResolvedValue({
+      content: "Newton's Laws study content",
+    });
+    (createNote as jest.Mock).mockResolvedValue({
+      ...readyNote,
+      studyPackId: null,
+      studyPackStatus: "DRAFT",
+      summary: null,
+      keyConcepts: [],
+      quiz: [],
+      title: null,
+    });
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue(readyNote);
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({
+      collectionId: "personal-plan-1",
+      copiedCount: 4,
+      skippedCount: 0,
+      alreadyAdopted: false,
+    });
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      {
+        id: "source-plan-1",
+        title: "AWS Certification Plan",
+        description: "A curated AWS Certification review sequence.",
+        visibility: "PUBLIC" as const,
+        courseProgram: "AWS Certification",
+        sourcePlanId: null,
+        itemCount: 4,
+        notesPracticed: 0,
+        createdAt: "2026-06-01T00:00:00Z",
+        updatedAt: "2026-06-02T00:00:00Z",
+      },
+    ]);
+
+    render(<OnboardingPage />);
+
+    expect(await screen.findByText("Welcome to NoteLib. Let's set things up.")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fillLearningProfile("COLLEGE", "AWS Certification");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+    fireEvent.change(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion..."), {
+      target: { value: "Newton's Laws of Motion" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate Note/ }));
+
+    const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
+    fireEvent.change(generatedNoteEditor, {
+      target: { value: "Edited Newton note content for onboarding so the study pack can start." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack →" }));
+
+    expect(await screen.findByText("Your Study Pack is ready.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("You just started your study loop.")).toBeInTheDocument();
+    expect(await screen.findByText("AWS Certification Plan")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start this plan" }));
+
+    await waitFor(() => {
+      expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");
+    });
   });
 
   it("switches between modes and only shows the active input surface", async () => {

@@ -1,5 +1,26 @@
 # RELEASES.md - NoteLib
 
+## v0.31.1 - Adoptable Study Plans Discovery & Status
+
+**Status: Released**
+
+Theme: v0.31.0 shipped the adopt mechanics, but discovery is intentionally minimal — published plans surface only on the Dashboard, only the top match for the learner's course/program, and there is no plan-completion signal. This patch adds the additive follow-ups: an onboarding adopt surface, a way to browse all matching published plans, and an execution-status badge on the Study Plans list. It also tightens bulk-tool quota awareness. No new architecture. See `docs/product/ROADMAP.md` for full scope.
+
+### Shipped
+
+- **Browse published plans** — New `/collections/published` surface lists every published plan matched to the learner's course/program, fixing the Dashboard's top-match-only blind spot when several plans are published per track. Frontend-only (reuses `GET /collections/public?courseProgram=` + `GET /collections`, no new endpoint); each plan adopts via the shared `PublicStudyPlanCard` with Start/Continue per adoption state and the shared skipped-notice key. Reached via a prop-gated `See all N plans` link on the Dashboard card (shown only with 2+ matches; never on the onboarding card). Handles loading, error/retry, no-course-program guidance, and empty states.
+- **Onboarding adopt surface** — The onboarding completion step (Step 5) now reuses the Dashboard's recommended-plan adopt card below `Continue Studying` / `Go to Dashboard`. For learners whose course/program has a published plan it offers one-tap adopt via the existing `listPublicStudyPlans` + `adoptStudyPlan` (no new endpoint); it self-hides for tracks with no published plan, leaving Step 5 unchanged. Completion is already persisted on Step 5, so adopting and navigating to the new collection doesn't lose onboarding state.
+- **Bulk generate quota gate** — The Topics counter now folds the note-generation quota into its cap (`X / min(50, note generations left)`) with a helper line; `+ Add topic`, paste, and the Queue button are hard-capped at the remaining note generations, and a near-limit amber banner shows when ≤ 2 are left. When more topics are queued than Study Packs remain, a soft confirmation explains the extras stay as drafts (notes still get content) before proceeding. The backend also rejects stale-client over-quota batches at submit with a precise remove-count message before any work is queued.
+- **Bulk import OCR banner** — Bulk import (Draft-only, no Study Pack) now surfaces remaining OCR/image-scan quota as an inline line, escalating to a near-limit banner when ≤ 2 are left, worded so DOCX/TXT/text-PDF imports (which don't consume OCR) aren't confused.
+- **Shared near-limit banner** — `NearLimitBanner` is now generalized with a credit-noun prop so the same component covers Study Packs, note generations, and image scans without duplicated copy.
+- **Study Plan list status badge** — `/collections` cards now show a subdued Not started / In progress / Completed execution-status badge derived from practiced notes vs. total notes, using the same completed-session signal as the detail rollup and staying off public browse and Dashboard plan cards.
+- **Library search clear button** — The Library and Public Library search fields now show an inline clear (`×`) button when they contain text, matching the combobox clear affordance; clearing runs the normal search path (live filter / debounced URL sync) and is distinct from the filter panel's `Clear all`. Search inputs also use a 16px mobile font to avoid iOS focus-zoom.
+- **Snappier Public Library search** — Public Library search no longer flashes the whole list to skeletons on every keystroke. It now uses stale-while-revalidate: the skeleton shows only on first load, and subsequent search/filter refetches keep the prior results (and search focus) on screen with a small `Searching…` indicator. The debounce dropped from 400ms to 250ms. URL sync is unchanged, so refresh-persistence, deep-linking, and sharing a pre-filtered view still work.
+- **Bulk generate submit-button fix** — The bulk-generate submit button is now a static `Generate` instead of a dynamic `Queue N notes`; the live topic count already shows in the `X / cap` counter above the fields, removing a duplicated label that could briefly read `0` on a dev recompile. Topic inputs now use a 16px font on mobile to stop iOS Safari's focus-zoom while typing.
+- **Study Plan per-note status + Exam Builder exclusion notice** — Study Plan detail rows now show a learner-facing execution status (`Needs Study Pack` → `Not started` → `Practiced`, plus transient generating/failed states) instead of the redundant `Study Pack ready` / `Quiz ready` hint. The quiz-readiness blocker moved to where teachers act on it: the Exam Builder now shows an amber `N of M notes excluded — no quiz generated yet` notice listing those notes instead of dropping them silently.
+
+---
+
 ## v0.31.0 - Adoptable Study Plans
 
 **Status: Released**

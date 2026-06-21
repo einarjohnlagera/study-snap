@@ -153,6 +153,7 @@ describe("Library page", () => {
         title: "Midterm Plan",
         description: null,
         itemCount: 2,
+        notesPracticed: 0,
         createdAt: "2026-03-24T00:00:00Z",
         updatedAt: "2026-03-24T00:00:00Z",
       },
@@ -240,6 +241,22 @@ describe("Library page", () => {
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library&ref=%2Flibrary");
     });
+  });
+
+  it("shows a clear button in the search field and resets the query when clicked", async () => {
+    render(<LibraryPage />);
+
+    const searchInput = await screen.findByLabelText("Search");
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: "cell" } });
+    expect(searchInput).toHaveValue("cell");
+
+    const clearButton = screen.getByRole("button", { name: "Clear search" });
+    fireEvent.click(clearButton);
+
+    expect(searchInput).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
   });
 
   it("auto-refreshes the note list after a bulk queue so generated notes appear without a manual refresh", async () => {
