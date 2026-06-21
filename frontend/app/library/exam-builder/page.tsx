@@ -471,6 +471,7 @@ export default function ExamBuilderPage() {
   const [addNotesTargetSectionId, setAddNotesTargetSectionId] = useState("");
   const [addingNotes, setAddingNotes] = useState(false);
   const [addNotesError, setAddNotesError] = useState<string | null>(null);
+  const [excludedNoQuizNotes, setExcludedNoQuizNotes] = useState<{ id: string; title: string }[]>([]);
   const examBuilderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -506,6 +507,7 @@ export default function ExamBuilderPage() {
     setShowAddNotesModal(false);
     setPendingAddNoteIds([]);
     setAddNotesError(null);
+    setExcludedNoQuizNotes([]);
   }, [collectionId, selectedNoteIdsFromQuery]);
 
   useEffect(() => {
@@ -545,6 +547,13 @@ export default function ExamBuilderPage() {
         setProfileSchoolName(me?.schoolName ?? null);
         setGeneratedQuizByNoteId(Object.fromEntries(generatedQuizzes));
         setSelectedNoteIds(collection ? selectedQuizReadyNotes.map((item) => item.id) : selectedNoteIdsFromQuery);
+        setExcludedNoQuizNotes(
+          collection
+            ? orderedCollectionItems
+                .filter((item) => !item.generatedQuizId)
+                .map((item) => ({ id: item.noteId, title: item.title?.trim() || "Untitled note" }))
+            : [],
+        );
         if (collection) {
           const questionCounts = Object.fromEntries(
             generatedQuizzes.map(([noteId, generatedQuiz]) => [noteId, generatedQuiz.questions.length]),
@@ -981,6 +990,23 @@ export default function ExamBuilderPage() {
         title="Exam Builder"
         description="Create a structured exam from selected notes."
       />
+
+      {!loading && !error && excludedNoQuizNotes.length > 0 ? (
+        <Card className="space-y-2 border-amber-500/30 bg-amber-500/10 p-4 sm:p-5">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            {excludedNoQuizNotes.length} of {excludedNoQuizNotes.length + selectedNoteIds.length}{" "}
+            {excludedNoQuizNotes.length + selectedNoteIds.length === 1 ? "note" : "notes"} excluded — no quiz generated yet
+          </p>
+          <ul className="list-disc space-y-0.5 pl-5 text-sm text-amber-800/90 dark:text-amber-200/90">
+            {excludedNoQuizNotes.map((note) => (
+              <li key={note.id}>{note.title}</li>
+            ))}
+          </ul>
+          <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+            Generate a quiz for these notes to include them in the exam.
+          </p>
+        </Card>
+      ) : null}
 
       {loading ? (
         <Card className="space-y-4 p-4 sm:p-6">

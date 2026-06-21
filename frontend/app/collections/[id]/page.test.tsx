@@ -172,6 +172,24 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
   });
 
+  it("shows three-state per-note execution status and drops the study-pack/quiz readiness hint", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Needs Pack Note", position: 0, studyPackStatus: "DRAFT", lastSessionCompletedAt: null },
+        { ...collection().items[1], noteId: "note-2", title: "Ready Unpracticed Note", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2", lastSessionCompletedAt: null },
+        { ...collection().items[1], noteId: "note-3", title: "Practiced Note", position: 2, studyPackStatus: "STUDY_PACK_READY", lastSessionCompletedAt: "2026-06-02T00:00:00Z" },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Needs Study Pack")).toBeInTheDocument();
+    expect(screen.getByText("Not started")).toBeInTheDocument();
+    expect(screen.getByText("Practiced")).toBeInTheDocument();
+    expect(screen.queryByText("Study Pack ready")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quiz ready")).not.toBeInTheDocument();
+  });
+
   it("renders the collection progress rollup", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
