@@ -199,6 +199,13 @@ Public Library filter presentation:
 - public filter rails use a right-edge fade affordance and `Browse all` text links for overflow.
 - `More Filters` is reserved for source filters (`By You`, `Official`, `Community`).
 
+Public Library search responsiveness:
+
+- Search is backend-driven (the corpus is server-paginated, so the full result set cannot be filtered client-side). Typing debounces ~250ms, then syncs the term to the URL, which drives the fetch.
+- The fetch is **stale-while-revalidate**: the full skeleton only shows on the *initial* load (`loading && !hasLoadedOnce`). On every subsequent search/filter refetch the previous results stay mounted — the search box keeps focus and the list does not collapse to skeletons — with a small `Searching…` indicator next to the result count. A refetch failure that still has stale results shows an inline `Couldn't refresh results` note instead of replacing the page with the error card.
+- Already-loaded items are also narrowed client-side by the live query (`filteredItems`) for instant feedback while the authoritative backend result is in flight. The URL sync is retained because it powers refresh-persistence, deep-linking, and sharing a pre-filtered view — not only sharing.
+- The search input hydrates from the URL only on genuine external changes (initial load, back/forward), keyed on the search term alone and guarded against the echo of the component's own debounced write (`lastSyncedSearchRef`). It must **not** be reset from the URL when a refetch resolves (which changes the available subject/tag lists) — doing so clobbers characters typed after the debounce fired and drops keystrokes during fast typing.
+
 Public Library filter persistence:
 
 - Filter state is reflected in URL query params (`view`, `search`, `subject`, `tag`, `audience`, `courseProgram`, `sort`); state is initialized from the URL on mount.
