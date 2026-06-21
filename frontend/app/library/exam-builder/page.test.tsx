@@ -212,6 +212,28 @@ describe("Exam Builder page", () => {
     expect(getGeneratedQuiz).toHaveBeenNthCalledWith(3, "note-77");
   });
 
+  it("surfaces a 'no quiz yet' exclusion notice for collection notes without a generated quiz", async () => {
+    collectionIdParam = "collection-1";
+    notesParam = "";
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      title: "Unit One",
+      description: null,
+      createdAt: "2026-06-01T00:00:00Z",
+      updatedAt: "2026-06-02T00:00:00Z",
+      items: [
+        { noteId: "note-99", title: "Quiz Ready Note", label: null, position: 0, generatedQuizId: "generated-99" },
+        { noteId: "note-42", title: "No Quiz Note", label: null, position: 1, generatedQuizId: null },
+      ],
+    });
+
+    render(<ExamBuilderPage />);
+
+    expect(await screen.findByText(/1 of 2 notes excluded/)).toBeInTheDocument();
+    expect(screen.getByText("No Quiz Note")).toBeInTheDocument();
+    expect(screen.getByText("Generate a quiz for these notes to include them in the exam.")).toBeInTheDocument();
+  });
+
   it("shows the existing load error state when the collection cannot be loaded", async () => {
     collectionIdParam = "missing-collection";
     notesParam = "";

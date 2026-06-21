@@ -65,20 +65,28 @@ function getNoteMeta(item: Pick<NoteCollectionItem, "subject" | "courseProgram">
   return [item.subject, item.courseProgram].filter(Boolean).join(" · ") || "No subject yet";
 }
 
-function getQuizReadinessHint(item: Pick<NoteCollectionItem, "studyPackStatus" | "generatedQuizId">): string {
-  if (item.generatedQuizId) {
-    return "Quiz ready";
-  }
-  if (item.studyPackStatus === "STUDY_PACK_READY") {
-    return "Study Pack ready";
-  }
+type NoteExecutionStatus = { label: string; className: string };
+
+// Per-note execution status for the Study Plan detail rows. This is a learner
+// signal — have I practiced this note yet — not exam-readiness. The steady-state
+// model is Needs Study Pack -> Not started -> Practiced; the transient
+// Generating / Generation failed states are kept for operational feedback.
+function getNoteExecutionStatus(
+  item: Pick<NoteCollectionItem, "studyPackStatus" | "lastSessionCompletedAt">,
+): NoteExecutionStatus {
   if (item.studyPackStatus === "GENERATING") {
-    return "Generating";
+    return { label: "Generating", className: "text-foreground/60" };
   }
   if (item.studyPackStatus === "FAILED") {
-    return "Generation failed";
+    return { label: "Generation failed", className: "text-red-700 dark:text-red-300" };
   }
-  return "Draft";
+  if (item.studyPackStatus !== "STUDY_PACK_READY") {
+    return { label: "Needs Study Pack", className: "text-amber-700 dark:text-amber-300" };
+  }
+  if (item.lastSessionCompletedAt !== null) {
+    return { label: "Practiced", className: "text-emerald-700 dark:text-emerald-300" };
+  }
+  return { label: "Not started", className: "text-foreground/60" };
 }
 
 function canIncludeCollectionItemInExam(item: Pick<NoteCollectionItem, "generatedQuizId">): boolean {
@@ -750,7 +758,7 @@ function SortableCollectionItemRow({
             <h2 className="text-base font-semibold text-foreground">{getNoteTitle(item)}</h2>
             <p className="text-sm text-foreground/60">{getNoteMeta(item)}</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{getQuizReadinessHint(item)}</p>
+              <p className={`text-xs font-medium ${getNoteExecutionStatus(item).className}`}>{getNoteExecutionStatus(item).label}</p>
               {isPrivate ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
                   <Lock className="h-3 w-3" aria-hidden="true" />
