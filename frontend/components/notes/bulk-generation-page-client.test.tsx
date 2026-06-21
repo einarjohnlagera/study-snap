@@ -117,7 +117,7 @@ describe("BulkGenerationPageClient", () => {
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     await fillAdminForm(["Prenatal Care", "Stages of Labor"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Queue 2 notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     await waitFor(() => {
       expect(bulkGenerateNotes).toHaveBeenCalledWith({
@@ -179,7 +179,7 @@ describe("BulkGenerationPageClient", () => {
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     await fillAdminForm(["Prenatal Care"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Queue 1 note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Connection lost.");
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
@@ -207,7 +207,7 @@ describe("BulkGenerationPageClient", () => {
     fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
     fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
 
-    expect(screen.getByRole("button", { name: "Queue 0 notes" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
     expect(bulkGenerateNotes).not.toHaveBeenCalled();
   });
 
@@ -266,7 +266,7 @@ describe("BulkGenerationPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
     fireEvent.change(screen.getByLabelText(/^Topic 2$/), { target: { value: "Topic 2" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Queue 2 notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     expect(await screen.findByText(/won’t get Study Packs/i)).toBeInTheDocument();
     expect(bulkGenerateNotes).not.toHaveBeenCalled();

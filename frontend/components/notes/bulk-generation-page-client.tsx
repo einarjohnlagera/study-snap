@@ -408,7 +408,7 @@ export function BulkGenerationPageClient() {
                     onPaste={(event) => handleTopicPaste(topic.id, event)}
                     maxLength={MAX_TOPIC_LENGTH}
                     placeholder={index === 0 ? "e.g. Newton's Laws of Motion" : `Topic ${index + 1}`}
-                    className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-base text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-sm"
                   />
                   <button
                     type="button"
@@ -451,7 +451,7 @@ export function BulkGenerationPageClient() {
             Cancel
           </Link>
           <Button type="submit" loading={submitting} loadingText="Queueing notes..." disabled={normalizedTopics.length === 0 || overCap}>
-            Queue {normalizedTopics.length} note{normalizedTopics.length === 1 ? "" : "s"}
+            Generate
           </Button>
         </div>
       </form>
