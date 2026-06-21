@@ -25,6 +25,7 @@ import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
+import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -92,10 +93,12 @@ public class NoteCollectionService {
             return List.of();
         }
         Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
+        Map<UUID, Integer> practicedCountsByCollectionId = loadPracticedCounts(userId, collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
-                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0)
+                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        practicedCountsByCollectionId.getOrDefault(collection.getId(), 0)
                 ))
                 .toList();
     }
@@ -116,7 +119,8 @@ public class NoteCollectionService {
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
-                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0)
+                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        0
                 ))
                 .toList();
     }
@@ -439,6 +443,37 @@ public class NoteCollectionService {
         return countsByCollectionId;
     }
 
+    private Map<UUID, Integer> loadPracticedCounts(UUID userId, List<NoteCollectionEntity> collections) {
+        Map<UUID, List<UUID>> noteIdsByCollectionId = loadNoteIdsByCollectionId(collections);
+        LinkedHashSet<UUID> allNoteIds = noteIdsByCollectionId.values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (allNoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, OffsetDateTime> completedAtByNoteId = loadLastSessionCompletedAt(userId, List.copyOf(allNoteIds));
+        Map<UUID, Integer> practicedCountsByCollectionId = new HashMap<>();
+        for (Map.Entry<UUID, List<UUID>> entry : noteIdsByCollectionId.entrySet()) {
+            int practicedCount = (int) entry.getValue().stream()
+                    .filter(noteId -> completedAtByNoteId.get(noteId) != null)
+                    .count();
+            practicedCountsByCollectionId.put(entry.getKey(), practicedCount);
+        }
+        return practicedCountsByCollectionId;
+    }
+
+    private Map<UUID, List<UUID>> loadNoteIdsByCollectionId(List<NoteCollectionEntity> collections) {
+        List<UUID> collectionIds = collections.stream().map(NoteCollectionEntity::getId).toList();
+        Map<UUID, List<UUID>> noteIdsByCollectionId = new HashMap<>();
+        for (NoteCollectionItemNoteProjection projection : itemRepository.findNoteIdsByCollectionIds(collectionIds)) {
+            noteIdsByCollectionId
+                    .computeIfAbsent(projection.getCollectionId(), ignored -> new ArrayList<>())
+                    .add(projection.getNoteId());
+        }
+        return noteIdsByCollectionId;
+    }
+
     private Map<UUID, NoteEntity> loadOwnedNotesByIdOrThrow(UUID userId, List<UUID> noteIds) {
         if (noteIds.isEmpty()) {
             return Map.of();
@@ -578,7 +613,11 @@ public class NoteCollectionService {
         collection.setUpdatedAt(now);
     }
 
-    private NoteCollectionSummaryResponse toSummaryResponse(NoteCollectionEntity collection, int itemCount) {
+    private NoteCollectionSummaryResponse toSummaryResponse(
+            NoteCollectionEntity collection,
+            int itemCount,
+            int notesPracticed
+    ) {
         return new NoteCollectionSummaryResponse(
                 collection.getId(),
                 collection.getTitle(),
@@ -587,6 +626,7 @@ public class NoteCollectionService {
                 collection.getCourseProgram(),
                 collection.getSourcePlanId(),
                 itemCount,
+                notesPracticed,
                 collection.getCreatedAt(),
                 collection.getUpdatedAt()
         );
@@ -726,6 +766,9 @@ public class NoteCollectionService {
     }
 
     private Map<UUID, OffsetDateTime> loadLastSessionCompletedAt(UUID userId, List<UUID> noteIds) {
+        if (noteIds.isEmpty()) {
+            return Map.of();
+        }
         try {
             Map<UUID, OffsetDateTime> resolved = quizSessionHistoryService
                     .findLatestSessionCompletedAtByNoteIds(userId, noteIds);

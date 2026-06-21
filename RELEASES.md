@@ -13,6 +13,7 @@ Theme: v0.31.0 shipped the adopt mechanics, but discovery is intentionally minim
 - **Bulk generate quota gate** — The Topics counter now folds the note-generation quota into its cap (`X / min(50, note generations left)`) with a helper line; `+ Add topic`, paste, and the Queue button are hard-capped at the remaining note generations, and a near-limit amber banner shows when ≤ 2 are left. When more topics are queued than Study Packs remain, a soft confirmation explains the extras stay as drafts (notes still get content) before proceeding. The backend also rejects stale-client over-quota batches at submit with a precise remove-count message before any work is queued.
 - **Bulk import OCR banner** — Bulk import (Draft-only, no Study Pack) now surfaces remaining OCR/image-scan quota as an inline line, escalating to a near-limit banner when ≤ 2 are left, worded so DOCX/TXT/text-PDF imports (which don't consume OCR) aren't confused.
 - **Shared near-limit banner** — `NearLimitBanner` is now generalized with a credit-noun prop so the same component covers Study Packs, note generations, and image scans without duplicated copy.
+- **Study Plan list status badge** — `/collections` cards now show a subdued Not started / In progress / Completed execution-status badge derived from practiced notes vs. total notes, using the same completed-session signal as the detail rollup and staying off public browse and Dashboard plan cards.
 
 ---
 

@@ -202,6 +202,7 @@ describe("BulkImportPageClient", () => {
         title: "Existing Plan",
         description: null,
         itemCount: 4,
+        notesPracticed: 0,
         createdAt: "2026-06-12T00:00:00Z",
         updatedAt: "2026-06-12T00:00:00Z",
       },

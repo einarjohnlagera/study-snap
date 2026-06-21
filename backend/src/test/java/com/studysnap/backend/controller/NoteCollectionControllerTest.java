@@ -299,6 +299,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 1,
+                0,
                 now,
                 now
         );

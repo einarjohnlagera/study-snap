@@ -1273,6 +1273,7 @@ export type NoteCollectionSummary = {
   courseProgram: string | null;
   sourcePlanId: string | null;
   itemCount: number;
+  notesPracticed: number;
   createdAt: string;
   updatedAt: string;
 };

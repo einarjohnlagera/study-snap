@@ -153,6 +153,7 @@ describe("Library page", () => {
         title: "Midterm Plan",
         description: null,
         itemCount: 2,
+        notesPracticed: 0,
         createdAt: "2026-03-24T00:00:00Z",
         updatedAt: "2026-03-24T00:00:00Z",
       },

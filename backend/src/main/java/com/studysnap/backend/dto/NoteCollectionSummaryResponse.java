@@ -11,6 +11,7 @@ public record NoteCollectionSummaryResponse(
         String courseProgram,
         UUID sourcePlanId,
         int itemCount,
+        int notesPracticed,
         Instant createdAt,
         Instant updatedAt
 ) {

@@ -26,6 +26,7 @@ import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
+import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -239,18 +240,116 @@ class NoteCollectionServiceTest {
     @Test
     void list_returnsCallerCollectionsOnlyNewestUpdatedFirst() {
         UUID userId = UUID.randomUUID();
+        UUID newerNoteId = UUID.randomUUID();
+        UUID olderNoteId = UUID.randomUUID();
         NoteCollectionEntity newer = buildCollection(UUID.randomUUID(), userId, NEWER_COLLECTION_TITLE, Instant.parse("2026-04-02T00:00:00Z"));
         NoteCollectionEntity older = buildCollection(UUID.randomUUID(), userId, EARLIER_COLLECTION_TITLE, Instant.parse(BASE_TIMESTAMP));
         when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(newer, older));
         when(itemRepository.countItemsByCollectionIds(List.of(newer.getId(), older.getId())))
                 .thenReturn(List.of(countProjection(newer.getId(), 2), countProjection(older.getId(), 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(newer.getId(), older.getId())))
+                .thenReturn(List.of(
+                        noteProjection(newer.getId(), newerNoteId),
+                        noteProjection(older.getId(), olderNoteId)
+                ));
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(eq(userId), anyList()))
+                .thenReturn(Map.of(newerNoteId, FIRST_PRACTICED_AT));
 
         List<NoteCollectionSummaryResponse> result = service.list(userId);
 
         assertThat(result).extracting(NoteCollectionSummaryResponse::title)
                 .containsExactly(NEWER_COLLECTION_TITLE, EARLIER_COLLECTION_TITLE);
         assertThat(result).extracting(NoteCollectionSummaryResponse::itemCount).containsExactly(2, 1);
+        assertThat(result).extracting(NoteCollectionSummaryResponse::notesPracticed).containsExactly(1, 0);
         verify(collectionRepository).findByOwnerUserIdOrderByUpdatedAtDesc(userId);
+        ArgumentCaptor<List<UUID>> noteIdsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(quizSessionHistoryService, times(1))
+                .findLatestSessionCompletedAtByNoteIds(eq(userId), noteIdsCaptor.capture());
+        assertThat(noteIdsCaptor.getValue()).containsExactlyInAnyOrder(newerNoteId, olderNoteId);
+    }
+
+    @Test
+    void list_returnsPracticedCountsForStatusBoundariesFromOnePracticeLookup() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity notStarted = buildCollection(UUID.randomUUID(), userId, "Not Started", Instant.parse("2026-04-04T00:00:00Z"));
+        NoteCollectionEntity inProgress = buildCollection(UUID.randomUUID(), userId, "In Progress", Instant.parse("2026-04-03T00:00:00Z"));
+        NoteCollectionEntity completed = buildCollection(UUID.randomUUID(), userId, "Completed", Instant.parse("2026-04-02T00:00:00Z"));
+        NoteCollectionEntity empty = buildCollection(UUID.randomUUID(), userId, "Empty", Instant.parse(BASE_TIMESTAMP));
+        UUID notStartedNoteId = UUID.randomUUID();
+        UUID inProgressPracticedNoteId = UUID.randomUUID();
+        UUID inProgressUnpracticedNoteId = UUID.randomUUID();
+        UUID completedFirstNoteId = UUID.randomUUID();
+        UUID completedSecondNoteId = UUID.randomUUID();
+        List<NoteCollectionEntity> collections = List.of(notStarted, inProgress, completed, empty);
+        List<UUID> collectionIds = collections.stream().map(NoteCollectionEntity::getId).toList();
+        List<UUID> noteIds = List.of(
+                notStartedNoteId,
+                inProgressPracticedNoteId,
+                inProgressUnpracticedNoteId,
+                completedFirstNoteId,
+                completedSecondNoteId
+        );
+        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(collections);
+        when(itemRepository.countItemsByCollectionIds(collectionIds)).thenReturn(List.of(
+                countProjection(notStarted.getId(), 1),
+                countProjection(inProgress.getId(), 2),
+                countProjection(completed.getId(), 2)
+        ));
+        when(itemRepository.findNoteIdsByCollectionIds(collectionIds)).thenReturn(List.of(
+                noteProjection(notStarted.getId(), notStartedNoteId),
+                noteProjection(inProgress.getId(), inProgressPracticedNoteId),
+                noteProjection(inProgress.getId(), inProgressUnpracticedNoteId),
+                noteProjection(completed.getId(), completedFirstNoteId),
+                noteProjection(completed.getId(), completedSecondNoteId)
+        ));
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(eq(userId), anyList())).thenReturn(Map.of(
+                inProgressPracticedNoteId, FIRST_PRACTICED_AT,
+                completedFirstNoteId, FIRST_PRACTICED_AT,
+                completedSecondNoteId, SECOND_PRACTICED_AT
+        ));
+
+        List<NoteCollectionSummaryResponse> result = service.list(userId);
+
+        assertThat(result).extracting(NoteCollectionSummaryResponse::itemCount).containsExactly(1, 2, 2, 0);
+        assertThat(result).extracting(NoteCollectionSummaryResponse::notesPracticed).containsExactly(0, 1, 2, 0);
+        ArgumentCaptor<List<UUID>> noteIdsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(quizSessionHistoryService, times(1))
+                .findLatestSessionCompletedAtByNoteIds(eq(userId), noteIdsCaptor.capture());
+        assertThat(noteIdsCaptor.getValue()).containsExactlyInAnyOrderElementsOf(noteIds);
+    }
+
+    @Test
+    void list_skipsPracticeLookupWhenEveryCollectionIsEmpty() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity empty = buildCollection(UUID.randomUUID(), userId, "Empty", Instant.parse(BASE_TIMESTAMP));
+        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(empty));
+        when(itemRepository.countItemsByCollectionIds(List.of(empty.getId()))).thenReturn(List.of());
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(empty.getId()))).thenReturn(List.of());
+
+        List<NoteCollectionSummaryResponse> result = service.list(userId);
+
+        assertThat(result.getFirst().itemCount()).isZero();
+        assertThat(result.getFirst().notesPracticed()).isZero();
+        verify(quizSessionHistoryService, never()).findLatestSessionCompletedAtByNoteIds(any(), any());
+    }
+
+    @Test
+    void list_degradesPracticeLookupFailureToZeroPracticedCounts() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(UUID.randomUUID(), userId, COLLECTION_TITLE, Instant.parse(BASE_TIMESTAMP));
+        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(collection));
+        when(itemRepository.countItemsByCollectionIds(List.of(collection.getId())))
+                .thenReturn(List.of(countProjection(collection.getId(), 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(collection.getId())))
+                .thenReturn(List.of(noteProjection(collection.getId(), noteId)));
+        when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId)))
+                .thenThrow(new IllegalStateException("session history unavailable"));
+
+        List<NoteCollectionSummaryResponse> result = service.list(userId);
+
+        assertThat(result.getFirst().itemCount()).isEqualTo(1);
+        assertThat(result.getFirst().notesPracticed()).isZero();
     }
 
     @Test
@@ -522,6 +621,8 @@ class NoteCollectionServiceTest {
         assertThat(result.getFirst().visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
         assertThat(result.getFirst().courseProgram()).isEqualTo(UPDATED_COURSE_PROGRAM);
         assertThat(result.getFirst().itemCount()).isEqualTo(2);
+        assertThat(result.getFirst().notesPracticed()).isZero();
+        verify(quizSessionHistoryService, never()).findLatestSessionCompletedAtByNoteIds(any(), any());
     }
 
     @Test
@@ -1052,6 +1153,20 @@ class NoteCollectionServiceTest {
             @Override
             public long getItemCount() {
                 return itemCount;
+            }
+        };
+    }
+
+    private NoteCollectionItemNoteProjection noteProjection(UUID collectionId, UUID noteId) {
+        return new NoteCollectionItemNoteProjection() {
+            @Override
+            public UUID getCollectionId() {
+                return collectionId;
+            }
+
+            @Override
+            public UUID getNoteId() {
+                return noteId;
             }
         };
     }

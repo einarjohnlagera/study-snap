@@ -62,6 +62,7 @@ describe("CollectionsPage", () => {
         courseProgram: null,
         sourcePlanId: null,
         itemCount: 2,
+        notesPracticed: 0,
         createdAt: "2026-06-01T00:00:00Z",
         updatedAt: "2026-06-02T00:00:00Z",
       },
@@ -73,6 +74,46 @@ describe("CollectionsPage", () => {
     const title = await screen.findByText("Midterm Plan");
     expect(title.closest("a")).toHaveAttribute("href", "/collections/collection-1");
     expect(screen.getByText("2 notes")).toBeInTheDocument();
+  });
+
+  it("shows Not started when no notes have been practiced", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ itemCount: 3, notesPracticed: 0 }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("Not started")).toBeInTheDocument();
+  });
+
+  it("shows In progress when some but not all notes have been practiced", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ itemCount: 3, notesPracticed: 1 }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("In progress")).toBeInTheDocument();
+  });
+
+  it("shows Completed when practiced notes cover the plan", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ itemCount: 3, notesPracticed: 3 }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("Completed")).toBeInTheDocument();
+  });
+
+  it("shows Not started for an empty plan", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ itemCount: 0, notesPracticed: 0 }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("Not started")).toBeInTheDocument();
   });
 
   it("shows profile-aware empty state when there are no collections", async () => {
@@ -126,3 +167,24 @@ describe("CollectionsPage", () => {
     });
   });
 });
+
+function buildCollectionSummary(overrides: Partial<{
+  id: string;
+  title: string;
+  description: string | null;
+  itemCount: number;
+  notesPracticed: number;
+}> = {}) {
+  return {
+    id: overrides.id ?? "collection-1",
+    title: overrides.title ?? "Midterm Plan",
+    description: overrides.description ?? "Weeks 1-4",
+    visibility: "PRIVATE" as const,
+    courseProgram: null,
+    sourcePlanId: null,
+    itemCount: overrides.itemCount ?? 2,
+    notesPracticed: overrides.notesPracticed ?? 0,
+    createdAt: "2026-06-01T00:00:00Z",
+    updatedAt: "2026-06-02T00:00:00Z",
+  };
+}
