@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.31.1 - Adoptable Study Plans Discovery & Status` is the release currently in progress.
+No release is currently in progress. `v0.31.2 - Analytics Integrity & Funnel Visibility` is the next candidate (parked, not yet kicked off).
 
-`v0.31.0 - Adoptable Study Plans` is the current documentation baseline (last released).
+`v0.31.1 - Adoptable Study Plans Discovery & Status` is the current documentation baseline (last released).
 
 `v0.30.0 - Readiness Signals` is the previous baseline.
 
@@ -166,7 +166,7 @@ Anti-drift: reuse `copyNote(..., includeStudyPack=true)`, the `NoteCollection` m
 
 ---
 
-## v0.31.1 - Adoptable Study Plans Discovery & Status (in progress)
+## v0.31.1 - Adoptable Study Plans Discovery & Status (released)
 
 Base branch for this release: `releases/v0.31.1`.
 

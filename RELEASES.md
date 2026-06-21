@@ -2,7 +2,7 @@
 
 ## v0.31.1 - Adoptable Study Plans Discovery & Status
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: v0.31.0 shipped the adopt mechanics, but discovery is intentionally minimal — published plans surface only on the Dashboard, only the top match for the learner's course/program, and there is no plan-completion signal. This patch adds the additive follow-ups: an onboarding adopt surface, a way to browse all matching published plans, and an execution-status badge on the Study Plans list. It also tightens bulk-tool quota awareness. No new architecture. See `docs/product/ROADMAP.md` for full scope.
 
