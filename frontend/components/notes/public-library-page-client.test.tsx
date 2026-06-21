@@ -290,7 +290,7 @@ describe("PublicLibraryPageClient", () => {
       expect(replaceMock).not.toHaveBeenCalledWith("/public/library?search=pyro", { scroll: false });
 
       act(() => {
-        jest.advanceTimersByTime(400);
+        jest.advanceTimersByTime(250);
       });
 
       expect(replaceMock).toHaveBeenCalledWith("/public/library?search=pyro", { scroll: false });
@@ -298,6 +298,69 @@ describe("PublicLibraryPageClient", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("keeps prior results visible with a searching indicator during a refetch (no skeleton flash)", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "note-a", title: "Alpha Note", subject: "Physics", tags: [] }),
+    ], 1));
+
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Alpha Note")).toBeInTheDocument();
+
+    let resolveSecond: (value: unknown) => void = () => {};
+    (listPublicNotes as jest.Mock).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSecond = resolve;
+      }),
+    );
+
+    // A refetch matching the stale item: it must stay visible (no skeleton swap) while the backend is in flight.
+    currentSearch = "?search=alpha";
+    rerender(<PublicLibraryPageClient />);
+
+    expect(screen.getByText("Alpha Note")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search")).toBeInTheDocument();
+    expect(screen.getByText("Searching…")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecond(publicNoteListResponse([
+        createPublicNote({ id: "note-a2", title: "Alpha Note Refreshed", subject: "Physics", tags: [] }),
+      ], 1));
+    });
+
+    expect(await screen.findByText("Alpha Note Refreshed")).toBeInTheDocument();
+    expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
+  });
+
+  it("does not drop characters typed after a debounced write when the URL echo arrives", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "n1", title: "Shock Basics", subject: "Nursing", tags: [] }),
+    ], 1));
+
+    const { rerender } = render(<PublicLibraryPageClient />);
+    const input = (await screen.findByLabelText("Search")) as HTMLInputElement;
+
+    jest.useFakeTimers();
+    try {
+      fireEvent.change(input, { target: { value: "sho" } });
+      act(() => {
+        jest.advanceTimersByTime(250);
+      });
+      expect(replaceMock).toHaveBeenCalledWith("/public/library?search=sho", { scroll: false });
+    } finally {
+      jest.useRealTimers();
+    }
+
+    // User keeps typing before the URL/refetch round-trips back.
+    fireEvent.change(input, { target: { value: "shock" } });
+
+    // The URL now catches up to our earlier debounced write — its echo must be
+    // ignored so the newer characters are not clobbered.
+    currentSearch = "?search=sho";
+    rerender(<PublicLibraryPageClient />);
+
+    expect(input.value).toBe("shock");
   });
 
   it("shows a clear button in the search field and resets the query when clicked", async () => {

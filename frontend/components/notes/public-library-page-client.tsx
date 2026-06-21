@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpDown, CheckCircle2, ChevronDown, Filter, X } from "lucide-react";
+import { ArrowUpDown, CheckCircle2, ChevronDown, Filter, Loader2, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -73,7 +73,7 @@ const MOBILE_SUCCESS_SHEET_MEDIA_QUERY = "(max-width: 639px)";
 const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
 const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
-const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 400;
+const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 250;
 const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
@@ -472,7 +472,12 @@ export function PublicLibraryPageClient() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tracks the last search term this component wrote to the URL, so the
+  // URL -> input hydration effect can ignore the echo of our own debounced
+  // write and never clobber characters typed after the debounce fired.
+  const lastSyncedSearchRef = useRef<string | null>(null);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [recentCoursePrograms, setRecentCoursePrograms] = useState<string[]>([]);
@@ -533,6 +538,7 @@ export function PublicLibraryPageClient() {
       setError(message);
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [effectiveAudience, parsedUrlFilters.courseProgram, parsedUrlFilters.creator, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
 
@@ -694,7 +700,6 @@ export function PublicLibraryPageClient() {
   }, [items]);
 
   useEffect(() => {
-    setSearchQuery(parsedUrlFilters.search ?? "");
     setSelectedTargetProfile(effectiveAudience);
     setSelectedSort(resolveSortOption(parsedUrlFilters.sort));
 
@@ -720,11 +725,22 @@ export function PublicLibraryPageClient() {
     availableTags,
     effectiveAudience,
     parsedUrlFilters.courseProgram,
-    parsedUrlFilters.search,
     parsedUrlFilters.sort,
     parsedUrlFilters.subject,
     parsedUrlFilters.tags,
   ]);
+
+  // Hydrate the search input from the URL only on genuine external changes
+  // (initial load, back/forward) — keyed on the search term alone so a refetch
+  // resolving (which changes available subject/tag lists) cannot reset the
+  // input mid-typing. The echo guard skips our own debounced URL writes.
+  useEffect(() => {
+    const urlSearch = parsedUrlFilters.search ?? null;
+    if (urlSearch === lastSyncedSearchRef.current) {
+      return;
+    }
+    setSearchQuery(parsedUrlFilters.search ?? "");
+  }, [parsedUrlFilters.search]);
 
   const subjectCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -805,6 +821,7 @@ export function PublicLibraryPageClient() {
       if ((nextSearch || null) === parsedUrlFilters.search) {
         return;
       }
+      lastSyncedSearchRef.current = nextSearch.length > 0 ? nextSearch : null;
       replacePublicLibraryFilters({
         ...parsedUrlFilters,
         search: nextSearch.length > 0 ? nextSearch : null,
@@ -1315,7 +1332,7 @@ export function PublicLibraryPageClient() {
         message="Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included."
       />
 
-      {loading ? (
+      {loading && !hasLoadedOnce ? (
         <div className="grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <Card key={`public-library-loading-${index}`} className="space-y-3 p-4 sm:p-6">
@@ -1325,7 +1342,7 @@ export function PublicLibraryPageClient() {
             </Card>
           ))}
         </div>
-      ) : error ? (
+      ) : error && items.length === 0 ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h2 className="text-xl font-semibold">Could not load public notes</h2>
           <p className="text-sm text-foreground/75">{error}</p>
@@ -1397,11 +1414,24 @@ export function PublicLibraryPageClient() {
 
             <div className="space-y-3 border-t border-border pt-3">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <p data-testid="note-count-pill" className="text-sm text-foreground/50">
-                  {hasActiveUrlFilters
-                    ? `${items.length} of ${total} notes`
-                    : `${total} notes`}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p data-testid="note-count-pill" className="text-sm text-foreground/50">
+                    {hasActiveUrlFilters
+                      ? `${items.length} of ${total} notes`
+                      : `${total} notes`}
+                  </p>
+                  {loading ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs text-foreground/50"
+                      aria-live="polite"
+                    >
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                      Searching…
+                    </span>
+                  ) : error ? (
+                    <span className="text-xs text-red-600 dark:text-red-400">Couldn’t refresh results</span>
+                  ) : null}
+                </div>
                 {!hasActiveFilters ? (
                   <p className="text-xs text-foreground/50">
                     Sorted by {PUBLIC_SORT_LABELS[selectedSort]}
@@ -1412,7 +1442,7 @@ export function PublicLibraryPageClient() {
             </div>
           </Card>
 
-          {!ctaDismissed && !parsedUrlFilters.courseProgram && !parsedUrlFilters.creator && !loading ? (
+          {!ctaDismissed && !parsedUrlFilters.courseProgram && !parsedUrlFilters.creator ? (
             <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <p className="text-sm text-foreground/75">
                 Studying for a specific exam or program? Browse notes by Course or Program.
@@ -1438,7 +1468,7 @@ export function PublicLibraryPageClient() {
             </Card>
           ) : null}
 
-          {!loading && selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
+          {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
             <Card className="flex flex-col gap-3 border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <p className="text-sm text-foreground/75">
                 Only a few{" "}
