@@ -14,6 +14,7 @@ Theme: v0.31.0 shipped the adopt mechanics, but discovery is intentionally minim
 - **Bulk import OCR banner** — Bulk import (Draft-only, no Study Pack) now surfaces remaining OCR/image-scan quota as an inline line, escalating to a near-limit banner when ≤ 2 are left, worded so DOCX/TXT/text-PDF imports (which don't consume OCR) aren't confused.
 - **Shared near-limit banner** — `NearLimitBanner` is now generalized with a credit-noun prop so the same component covers Study Packs, note generations, and image scans without duplicated copy.
 - **Study Plan list status badge** — `/collections` cards now show a subdued Not started / In progress / Completed execution-status badge derived from practiced notes vs. total notes, using the same completed-session signal as the detail rollup and staying off public browse and Dashboard plan cards.
+- **Library search clear button** — The Library and Public Library search fields now show an inline clear (`×`) button when they contain text, matching the combobox clear affordance; clearing runs the normal search path (live filter / debounced URL sync) and is distinct from the filter panel's `Clear all`. Search inputs also use a 16px mobile font to avoid iOS focus-zoom.
 
 ---
 

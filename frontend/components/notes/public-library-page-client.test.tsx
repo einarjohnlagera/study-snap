@@ -300,6 +300,25 @@ describe("PublicLibraryPageClient", () => {
     }
   });
 
+  it("shows a clear button in the search field and resets the query when clicked", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "note-1", title: "Pyrolysis Basics", subject: "Chemistry", tags: ["pyro"] }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    const input = await screen.findByLabelText("Search");
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "pyro" } });
+    expect(input).toHaveValue("pyro");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(input).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear search" })).not.toBeInTheDocument();
+  });
+
   it("updates the author badge when auth state hydrates after mount", async () => {
     currentAuthUser = null;
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
