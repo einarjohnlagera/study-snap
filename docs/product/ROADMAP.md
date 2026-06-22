@@ -227,6 +227,25 @@ Anti-drift: reuse the existing reminder-preference pattern (entity flag + reposi
 
 ---
 
+## v0.32.1 (candidate, parked) - Pricing Copy Reframe (One-Time Pass Clarity)
+
+**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Copy/UI polish patch after v0.32.0.
+
+Theme: the paid plans are **one-time, time-boxed passes with no auto-charge** (Xendit hosted checkout, manual renewal), but the pricing surface still reads like a recurring subscription — the Pro card is titled "90-Day Exam Pass" yet lists "/month" quotas and a "Manual renewal" footer, and shows two redundant CTAs. This mixed mental model (pass + monthly + renewal on one card) is a likely contributor to the upgrade-click → checkout drop-off. This patch reframes the copy so the one-time-pass model is unmistakable. **Copy + card layout only — no billing/quota mechanics change.**
+
+Scope:
+
+- **Lead with the model, not the price.** Each paid card headline states it plainly: one-time payment · N days full access · never auto-charged.
+- **Remove subscription cues.** Replace the "Manual renewal" footer with one-time-payment wording ("we never auto-charge — grab a pass again only when your next exam is near"); drop language that implies recurring billing.
+- **Reassure on data permanence.** State that notes, Study Packs, and progress stay in the user's library even after a pass ends (a real conversion objection for deadline-driven, no-income takers).
+- **All-access.** "Full access on web and mobile."
+- **Fix the card UI.** One CTA per card (e.g. "Get Pro — ₱599 / 90 days"); remove the duplicate "Go Pro" / "Go Pro — 90-Day Exam Pass" buttons and the redundant "90-Day Exam Pass: ₱599 for 90 days" header line.
+- **Reconcile the "/month" tension honestly.** Usage quotas reset monthly (`BillingUsageResetJob`), so a 90-day pass spans ~3 monthly refreshes. The copy must say this clearly ("usage limits refresh each month during your pass") rather than reading as a monthly sub.
+
+Anti-drift: all upgrade/pricing copy goes through `getUpgradeCtas(currentPlan)` in `src/config/plans.ts` (never hardcode in the cards). **No mechanics change** — quotas, pass durations, prices, and billing periods are untouched. If per-pass (rather than per-month) limits are ever wanted, that is a separate billing-mechanics change, explicitly NOT part of this copy patch.
+
+---
+
 ## v0.33.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
 Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
