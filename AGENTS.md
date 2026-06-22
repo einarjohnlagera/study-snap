@@ -349,6 +349,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Track product, growth, and upgrade events through the shared analytics event model.
 - Analytics must be non-blocking and must never break the primary user action if persistence fails.
+- Backend analytics must publish after the surrounding transaction commits (`AFTER_COMMIT`) and persist off-request through `analyticsTaskExecutor`; never write analytics mid-transaction.
 - Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
@@ -1521,6 +1522,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 - Never use a string literal for an analytics event name without first adding it to the `AnalyticsEventType` union in `frontend/lib/api.ts`.
 - All analytics calls are fire-and-forget (`void`). Do not `await` them or let failures block the primary flow.
+- Analytics events fire after the surrounding transaction commits through the `AFTER_COMMIT` event listener, and `analytics_events.user_id` has no hard FK to `users(id)`. Never reintroduce that FK or persist analytics mid-transaction.
 - Do not duplicate event tracking: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired once per quiz completion, not per question or per partial step.
 
 ### Content Moderation Anti-Drift
