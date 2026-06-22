@@ -37,6 +37,7 @@ import com.studysnap.backend.security.SecurityProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -125,6 +126,9 @@ class AuthServiceTest {
         assertThat(response.onboardingCompletedAt()).isNull();
         assertThat(response.productOnboardingCompletedAt()).isNull();
         assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
+        ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -218,7 +222,9 @@ class AuthServiceTest {
 
         assertThat(response.email()).isEqualTo("student@example.com");
         assertThat(response.emailVerifiedAt()).isNotNull();
-        verify(userRepository).save(any(UserEntity.class));
+        ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
         verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), any(Boolean.class));
@@ -601,6 +607,7 @@ class AuthServiceTest {
         user.setEngagementMode(EngagementMode.CONSISTENCY);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setWeeklySummaryRemindersEnabled(false);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
@@ -613,13 +620,15 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateStudyReminders(
             userId,
-            new UpdateStudyRemindersRequest(true, true)
+            new UpdateStudyRemindersRequest(true, true, true)
         );
 
         assertThat(response.inactivityRemindersEnabled()).isTrue();
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
+        assertThat(response.weeklySummaryRemindersEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
+        assertThat(user.getWeeklySummaryRemindersEnabled()).isTrue();
     }
 
     @Test

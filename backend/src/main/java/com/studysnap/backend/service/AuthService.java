@@ -143,6 +143,7 @@ public class AuthService {
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setWeeklySummaryRemindersEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
@@ -393,6 +394,7 @@ public class AuthService {
 
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
         user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
+        user.setWeeklySummaryRemindersEnabled(request.weeklySummaryRemindersEnabled());
         user.setUpdatedAt(OffsetDateTime.now());
 
         return toMeResponse(user);
@@ -506,6 +508,7 @@ public class AuthService {
                 user.getEngagementMode(),
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
+                Boolean.TRUE.equals(user.getWeeklySummaryRemindersEnabled()),
                 resolveThemePreference(user),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
@@ -736,6 +739,7 @@ public class AuthService {
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setWeeklySummaryRemindersEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);

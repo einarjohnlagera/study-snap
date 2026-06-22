@@ -368,6 +368,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Retention emails must log sends in `email_log` and respect same-type cooldowns before sending again.
 - `INACTIVITY` and `UNFINISHED_NOTE` should honor `inactivityRemindersEnabled`.
 - `WEAK_CONCEPT` should honor `weakConceptRemindersEnabled`.
+- `WEEKLY_SUMMARY` should honor `weeklySummaryRemindersEnabled`, which defaults off until the user opts in.
 - Reminder cadence may later vary by `Learning Style`, but V1 stores the inputs and uses fixed thresholds.
 
 ### Verification Email Rule

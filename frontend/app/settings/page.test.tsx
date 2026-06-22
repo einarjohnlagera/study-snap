@@ -70,6 +70,7 @@ const proProfile = {
   engagementMode: "FOCUSED",
   inactivityRemindersEnabled: false,
   weakConceptRemindersEnabled: false,
+  weeklySummaryRemindersEnabled: false,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
   onboardingCompletedAt: "2026-03-20T00:05:00Z",
   productOnboardingCompletedAt: null,
@@ -630,6 +631,7 @@ describe("Settings page cancellation flow", () => {
       engagementMode: "STREAK",
       inactivityRemindersEnabled: false,
       weakConceptRemindersEnabled: false,
+      weeklySummaryRemindersEnabled: false,
     });
 
     render(<SettingsPage />);
@@ -648,18 +650,21 @@ describe("Settings page cancellation flow", () => {
       ...proProfile,
       inactivityRemindersEnabled: true,
       weakConceptRemindersEnabled: true,
+      weeklySummaryRemindersEnabled: true,
     });
 
     render(<SettingsPage />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /Inactivity reminders/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Weak concept reminders/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Weekly summary email/i }));
     fireEvent.click(screen.getByRole("button", { name: "Save Study Reminders" }));
 
     await waitFor(() => {
       expect(updateStudyReminders).toHaveBeenCalledWith({
         inactivityRemindersEnabled: true,
         weakConceptRemindersEnabled: true,
+        weeklySummaryRemindersEnabled: true,
       });
     });
     expect(await screen.findByText("Study reminders updated.")).toBeInTheDocument();

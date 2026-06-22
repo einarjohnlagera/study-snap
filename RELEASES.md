@@ -8,7 +8,7 @@ Theme: give users real control over their account and the email we send them, an
 
 ### Shipped
 
-- _Nothing shipped yet._
+- **Weekly summary opt-in** — Added a per-account `weeklySummaryRemindersEnabled` preference, defaulting OFF for new and existing users, so the Sunday `WEEKLY_SUMMARY` retention email only sends to verified active users who explicitly enable it in Study Reminders. Inactivity and weak-concept reminder preferences are unchanged.
 
 ---
 
