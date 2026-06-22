@@ -17,7 +17,7 @@ import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
-import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
@@ -170,13 +170,13 @@ public class AuthController {
         return authService.updateEngagementMode(user.userId(), request);
     }
 
-    @PostMapping("/preferences/study-reminders")
+    @PostMapping("/preferences/email-preferences")
     @PreAuthorize("isAuthenticated()")
-    public MeResponse updateStudyReminders(
+    public MeResponse updateEmailPreferences(
             @AuthenticationPrincipal AuthenticatedUser user,
-            @Valid @RequestBody UpdateStudyRemindersRequest request
+            @Valid @RequestBody UpdateEmailPreferencesRequest request
     ) {
-        return authService.updateStudyReminders(user.userId(), request);
+        return authService.updateEmailPreferences(user.userId(), request);
     }
 
     @PostMapping("/preferences/theme")

@@ -10,7 +10,7 @@ import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
-import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
@@ -129,6 +129,7 @@ class AuthServiceTest {
         ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).save(savedUser.capture());
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
+        assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -225,6 +226,7 @@ class AuthServiceTest {
         ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).save(savedUser.capture());
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
+        assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), any(Boolean.class));
@@ -593,7 +595,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void updateStudyReminders_persistsReminderPreferences() {
+    void updateEmailPreferences_persistsEmailPreferences() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -608,6 +610,7 @@ class AuthServiceTest {
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
@@ -618,17 +621,19 @@ class AuthServiceTest {
                 null
             ));
 
-        MeResponse response = authService.updateStudyReminders(
+        MeResponse response = authService.updateEmailPreferences(
             userId,
-            new UpdateStudyRemindersRequest(true, true, true)
+            new UpdateEmailPreferencesRequest(true, true, true, true)
         );
 
         assertThat(response.inactivityRemindersEnabled()).isTrue();
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
         assertThat(response.weeklySummaryRemindersEnabled()).isTrue();
+        assertThat(response.marketingEmailsEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
         assertThat(user.getWeeklySummaryRemindersEnabled()).isTrue();
+        assertThat(user.getMarketingEmailsEnabled()).isTrue();
     }
 
     @Test

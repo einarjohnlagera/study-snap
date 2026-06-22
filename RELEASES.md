@@ -9,6 +9,7 @@ Theme: give users real control over their account and the email we send them, an
 ### Shipped
 
 - **Weekly summary opt-in** — Added a per-account `weeklySummaryRemindersEnabled` preference, defaulting OFF for new and existing users, so the Sunday `WEEKLY_SUMMARY` retention email only sends to verified active users who explicitly enable it in Study Reminders. Inactivity and weak-concept reminder preferences are unchanged.
+- **Email Preferences center** — Settings now has a dedicated Email Preferences section for four optional categories: study reminders, weak-concept nudges, weekly summary, and opt-in Product news & tips via `marketingEmailsEnabled` (default OFF). Re-engagement campaign sends and eligible counts now require the marketing opt-in, the old reminder write path is renamed to `POST /auth/preferences/email-preferences`, and transactional account/billing email is shown as always sent rather than as a toggle.
 
 ---
 

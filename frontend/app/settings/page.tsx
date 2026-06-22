@@ -24,7 +24,7 @@ import {
   logout,
   trackAnalyticsEvent,
   updateEngagementMode,
-  updateStudyReminders,
+  updateEmailPreferences,
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
@@ -190,8 +190,9 @@ export default function SettingsPage() {
   const [inactivityRemindersEnabled, setInactivityRemindersEnabled] = useState(false);
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
   const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
-  const [savingStudyReminders, setSavingStudyReminders] = useState(false);
-  const [studyRemindersMessage, setStudyRemindersMessage] = useState<string | null>(null);
+  const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
+  const [savingEmailPreferences, setSavingEmailPreferences] = useState(false);
+  const [emailPreferencesMessage, setEmailPreferencesMessage] = useState<string | null>(null);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
@@ -229,7 +230,7 @@ export default function SettingsPage() {
     setLoading(true);
     setError(null);
     setEngagementModeMessage(null);
-    setStudyRemindersMessage(null);
+    setEmailPreferencesMessage(null);
     try {
       const [me, usage, history, pricing] = await Promise.all([
         getMe(),
@@ -245,6 +246,7 @@ export default function SettingsPage() {
       setInactivityRemindersEnabled(me.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
+      setMarketingEmailsEnabled(me.marketingEmailsEnabled);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
@@ -309,6 +311,7 @@ export default function SettingsPage() {
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
+      setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update learning style.";
@@ -318,26 +321,28 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveStudyReminders = async () => {
-    setSavingStudyReminders(true);
-    setStudyRemindersMessage(null);
+  const handleSaveEmailPreferences = async () => {
+    setSavingEmailPreferences(true);
+    setEmailPreferencesMessage(null);
     try {
-      const updated = await updateStudyReminders({
+      const updated = await updateEmailPreferences({
         inactivityRemindersEnabled,
         weakConceptRemindersEnabled,
         weeklySummaryRemindersEnabled,
+        marketingEmailsEnabled,
       });
       setProfile(updated);
       setSelectedEngagementMode(updated.engagementMode);
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
-      setStudyRemindersMessage("Study reminders updated.");
+      setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
+      setEmailPreferencesMessage("Email preferences updated.");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update study reminders.";
-      setStudyRemindersMessage(message);
+      const message = err instanceof Error ? err.message : "Could not update email preferences.";
+      setEmailPreferencesMessage(message);
     } finally {
-      setSavingStudyReminders(false);
+      setSavingEmailPreferences(false);
     }
   };
 
@@ -624,8 +629,7 @@ export default function SettingsPage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Preferences</h2>
             <p className="text-sm text-foreground/70">
-              Keep NoteLib aligned with the way you study. Theme, Learning Style, and reminder preferences can all be
-              adjusted here anytime.
+              Keep NoteLib aligned with the way you study. Theme and Learning Style can be adjusted here anytime.
             </p>
             <div className="space-y-3 rounded-md border border-border bg-background p-4">
               <div className="space-y-1">
@@ -705,69 +709,91 @@ export default function SettingsPage() {
                 ) : null}
               </div>
             </div>
-            <div className="space-y-4 rounded-md border border-border bg-background p-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Study Reminders</p>
-                <p className="text-xs text-foreground/60">
-                  Control the types of reminders you want. Future reminder timing will follow your Learning Style.
-                </p>
-              </div>
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Email Preferences</h2>
+            <p className="text-sm text-foreground/70">
+              Choose which optional emails you get. Account and billing emails are always sent so you stay secure and informed.
+            </p>
+            <div className="space-y-3 rounded-md border border-border bg-background p-4">
               <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
                 <span className="space-y-1">
-                  <span className="block text-sm font-medium">Inactivity reminders</span>
+                  <span className="block text-sm font-medium">Study reminders</span>
                   <span className="block text-xs text-foreground/60">
-                    Get reminded to come back when you have not studied for a while.
+                    Nudges when you&apos;ve been inactive or left a note unfinished.
                   </span>
                 </span>
                 <input
                   type="checkbox"
                   checked={inactivityRemindersEnabled}
                   onChange={(event) => setInactivityRemindersEnabled(event.target.checked)}
-                  disabled={savingStudyReminders}
+                  disabled={savingEmailPreferences}
                 />
               </label>
               <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
                 <span className="space-y-1">
-                  <span className="block text-sm font-medium">Weak concept reminders</span>
+                  <span className="block text-sm font-medium">Weak-concept nudges</span>
                   <span className="block text-xs text-foreground/60">
-                    Get reminded to review topics you struggled with.
+                    A reminder to revisit concepts you missed on a quiz.
                   </span>
                 </span>
                 <input
                   type="checkbox"
                   checked={weakConceptRemindersEnabled}
                   onChange={(event) => setWeakConceptRemindersEnabled(event.target.checked)}
-                  disabled={savingStudyReminders}
+                  disabled={savingEmailPreferences}
                 />
               </label>
               <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
                 <span className="space-y-1">
-                  <span className="block text-sm font-medium">Weekly summary email</span>
+                  <span className="block text-sm font-medium">Weekly summary</span>
                   <span className="block text-xs text-foreground/60">
-                    Get a Sunday email with your weekly study progress summary.
+                    A Sunday recap of your week&apos;s study progress.
                   </span>
                 </span>
                 <input
                   type="checkbox"
                   checked={weeklySummaryRemindersEnabled}
                   onChange={(event) => setWeeklySummaryRemindersEnabled(event.target.checked)}
-                  disabled={savingStudyReminders}
+                  disabled={savingEmailPreferences}
                 />
               </label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <ResponsiveActionButton
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleSaveStudyReminders()}
-                  loading={savingStudyReminders}
-                  loadingText="Saving..."
-                  action="save"
-                  label="Save Study Reminders"
+              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Product news &amp; tips</span>
+                  <span className="block text-xs text-foreground/60">
+                    Occasional updates, study tips, and new features.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={marketingEmailsEnabled}
+                  onChange={(event) => setMarketingEmailsEnabled(event.target.checked)}
+                  disabled={savingEmailPreferences}
                 />
-                {studyRemindersMessage ? (
-                  <p className="text-xs text-foreground/60">{studyRemindersMessage}</p>
-                ) : null}
-              </div>
+              </label>
+            </div>
+            <div className="space-y-2 rounded-md border border-border bg-background p-4">
+              <p className="text-sm font-medium">Always sent</p>
+              <ul className="space-y-1 text-xs text-foreground/60">
+                <li>Account &amp; security — sign-in verification, password resets</li>
+                <li>Billing — payment receipts, plan-expiry reminders, refunds</li>
+              </ul>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <ResponsiveActionButton
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSaveEmailPreferences()}
+                loading={savingEmailPreferences}
+                loadingText="Saving..."
+                action="save"
+                label="Save email preferences"
+              />
+              {emailPreferencesMessage ? (
+                <p className="text-xs text-foreground/60">{emailPreferencesMessage}</p>
+              ) : null}
             </div>
           </Card>
 

@@ -25,6 +25,7 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus status);
+    List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus status);
 
     @Query("select u.id from UserEntity u")
     List<UUID> findAllUserIds();

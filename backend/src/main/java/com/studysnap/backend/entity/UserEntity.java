@@ -93,6 +93,9 @@ public class UserEntity {
     @Column(name = "weekly_summary_reminders_enabled", nullable = false)
     private Boolean weeklySummaryRemindersEnabled;
 
+    @Column(name = "marketing_emails_enabled", nullable = false)
+    private Boolean marketingEmailsEnabled;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "theme_preference", nullable = false, length = 16)
     private ThemePreference themePreference;

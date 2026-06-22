@@ -73,7 +73,7 @@ public class ReEngagementCampaignService {
 
     private java.util.stream.Stream<UserEntity> buildEligibleStream(OffsetDateTime now) {
         OffsetDateTime activityCutoff = now.minusDays(INACTIVITY_DAYS);
-        return userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE).stream()
+        return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE).stream()
                 .filter(user -> !alreadySent(user.getId()))
                 .filter(user -> isInactive(user.getId(), activityCutoff));
     }

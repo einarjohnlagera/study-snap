@@ -1,8 +1,9 @@
 package com.studysnap.backend.dto;
 
-public record UpdateStudyRemindersRequest(
+public record UpdateEmailPreferencesRequest(
         boolean inactivityRemindersEnabled,
         boolean weakConceptRemindersEnabled,
-        boolean weeklySummaryRemindersEnabled
+        boolean weeklySummaryRemindersEnabled,
+        boolean marketingEmailsEnabled
 ) {
 }
