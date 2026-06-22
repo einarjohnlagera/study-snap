@@ -227,22 +227,37 @@ Anti-drift: reuse the existing reminder-preference pattern (entity flag + reposi
 
 ---
 
-## v0.32.1 (candidate, parked) - Pricing Copy Reframe (One-Time Pass Clarity)
+## v0.32.1 (candidate, parked) - Monetization Surfacing & Pricing Clarity
 
-**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Copy/UI polish patch after v0.32.0.
+**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Patch after v0.32.0; mostly frontend.
 
-Theme: the paid plans are **one-time, time-boxed passes with no auto-charge** (Xendit hosted checkout, manual renewal), but the pricing surface still reads like a recurring subscription — the Pro card is titled "90-Day Exam Pass" yet lists "/month" quotas and a "Manual renewal" footer, and shows two redundant CTAs. This mixed mental model (pass + monthly + renewal on one card) is a likely contributor to the upgrade-click → checkout drop-off. This patch reframes the copy so the one-time-pass model is unmistakable. **Copy + card layout only — no billing/quota mechanics change.**
+Theme: the monetization leak is **conversion, not engagement** (prod ~2026-06: free-quota hit rate 0.0%, ~10 `UPGRADE_CLICKED` → 0 `SUBSCRIPTION_STARTED`). Two failure points: almost nobody **reaches** a paywall (premium exams aren't surfaced), and the few who click **drop at checkout** (the pricing surface reads like a recurring sub when plans are actually one-time passes). This release attacks the *surfacing/desire* half — surface the premium exams as paywall moments and clarify the pricing model — while the *checkout* half is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel. **Honest scope note:** these lift exposure + desire (top-of-funnel); they feed more clicks into a checkout that still converts ~0, so they must be paired with reading the checkout-conversion funnel, not sold as the conversion fix on their own.
 
-Scope:
+### Thread 1 — Premium-exam paywall at the Start CTA (revert)
 
-- **Lead with the model, not the price.** Each paid card headline states it plainly: one-time payment · N days full access · never auto-charged.
-- **Remove subscription cues.** Replace the "Manual renewal" footer with one-time-payment wording ("we never auto-charge — grab a pass again only when your next exam is near"); drop language that implies recurring billing.
-- **Reassure on data permanence.** State that notes, Study Packs, and progress stay in the user's library even after a pass ends (a real conversion objection for deadline-driven, no-income takers).
-- **All-access.** "Full access on web and mobile."
-- **Fix the card UI.** One CTA per card (e.g. "Get Pro — ₱599 / 90 days"); remove the duplicate "Go Pro" / "Go Pro — 90-Day Exam Pass" buttons and the redundant "90-Day Exam Pass: ₱599 for 90 days" header line.
-- **Reconcile the "/month" tension honestly.** Usage quotas reset monthly (`BillingUsageResetJob`), so a 90-day pass spans ~3 monthly refreshes. The copy must say this clearly ("usage limits refresh each month during your pass") rather than reading as a monthly sub.
+A FREE user clicking a premium exam (Long Exam / Board Exam / Interview Practice) should be able to open the exam prescreen and **see its strength**, then hit the paywall at the **Start CTA** — not be blocked at card-click. This reverts a prior change that moved the paywall to card-click (which hid the value). Recover the earlier CTA-paywall implementation from git history rather than re-deriving.
 
-Anti-drift: all upgrade/pricing copy goes through `getUpgradeCtas(currentPlan)` in `src/config/plans.ts` (never hardcode in the cards). **No mechanics change** — quotas, pass durations, prices, and billing periods are untouched. If per-pass (rather than per-month) limits are ever wanted, that is a separate billing-mechanics change, explicitly NOT part of this copy patch.
+- Frontend-mostly: move where `PaywallModal` fires for the three premium exams back to the Start CTA. Reuse `PaywallModal` + `getUpgradeCtas` (action-aware copy); keep the Pro badge (already on the cards) and make the Start CTA read as the unlock ("Unlock Long Exam — Pro") so the wall is expected, not bait-and-switch. Backend `FeatureGate` stays as defense-in-depth.
+
+### Thread 2 — "Exam this plan" for non-teachers (Study Plan → premium exam)
+
+Add a Study Plan CTA that launches **the profile's premium exam mode over the plan's notes**, pre-selected and capped at the existing per-exam note limit (a thin layer over the existing multi-note flow — the backend already supports multi-note for all three modes: `LongExamService` covers Long + Board, `InterviewPracticeService.resolveAdditionalNoteIds` covers Interview). Profile → mode mapping is driven by `exam-mode-visibility.ts` (no hardcoded profile checks):
+
+- Student → Long Exam · BOARD_EXAM → Board Exam (fixed set) · Professional → Interview Practice · Teacher → unchanged (keeps the DOCX Exam Builder) · profiles with no premium mode (e.g. PARENT) → CTA hidden.
+- Notes are pre-filtered to the plan and pre-selected up to the existing cap; for many-subject plans the user can trim within the plan's notes (selection never includes notes outside the plan). Pro-gated → lands on the Thread 1 Start-CTA paywall (synergy: a compelling "exam your whole plan" value moment).
+
+### Thread 3 — Pricing copy reframe (one-time pass clarity)
+
+The paid plans are **one-time, time-boxed passes with no auto-charge**, but the surface still reads like a recurring subscription — the Pro card is titled "90-Day Exam Pass" yet lists "/month" quotas and a "Manual renewal" footer, with two redundant CTAs. **Copy + card layout only — no billing/quota mechanics change.**
+
+- **Lead with the model, not the price:** each paid card headline states one-time payment · N days full access · never auto-charged.
+- **Remove subscription cues:** replace the "Manual renewal" footer with one-time wording ("we never auto-charge — grab a pass again only when your next exam is near").
+- **Reassure on data permanence:** notes, Study Packs, and progress stay in the library even after a pass ends.
+- **All-access:** "Full access on web and mobile."
+- **Fix the card UI:** one CTA per card (e.g. "Get Pro — ₱599 / 90 days"); remove the duplicate "Go Pro" / "Go Pro — 90-Day Exam Pass" buttons and the redundant header line.
+- **Reconcile the "/month" tension honestly:** quotas reset monthly (`BillingUsageResetJob`), so a 90-day pass spans ~3 monthly refreshes — say "usage limits refresh each month during your pass" rather than reading as a monthly sub.
+
+Anti-drift: all upgrade/pricing copy goes through `getUpgradeCtas(currentPlan)` in `src/config/plans.ts` (never hardcode in cards); premium-exam visibility goes through `exam-mode-visibility.ts` (no hardcoded profile checks); paywall copy is action-aware via `PaywallModal`/`resolvePaywallAction`. **No mechanics change** — quotas, pass durations, prices, billing periods, and exam-generation paths are untouched (per-pass limits or new multi-note generation are explicitly NOT in scope). Suggested split into separate slices: Thread 1 (small revert) and Thread 3 (copy) are quick; Thread 2 is a real feature — prompt it on its own.
 
 ---
 
