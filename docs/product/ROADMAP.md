@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.32.0 - Account & Communication Controls` is the next candidate (parked, not yet kicked off).
+`v0.32.0 - Account & Communication Controls` is the release currently in progress (base branch `releases/v0.32.0`).
 
 `v0.31.2 - Analytics Integrity & Funnel Visibility` is the current documentation baseline (last released).
 
@@ -201,9 +201,9 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 ---
 
-## v0.32.0 (candidate, parked) - Account & Communication Controls
+## v0.32.0 - Account & Communication Controls (in progress)
 
-**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is now a privacy / account-control / communication-preferences theme.
+Base branch for this release: `releases/v0.32.0`. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is a privacy / account-control / communication-preferences theme. The "additional candidates to consider" below are not yet scope-locked — prune/confirm them before building each slice.
 
 Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps. Today there is no account-deletion path, no unsubscribe link on recurring email, and email preferences are split across an ad-hoc "Study Reminders" card. This release consolidates account and communication controls into a coherent, compliant surface (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Mostly additive; some new endpoints + a destructive account-deletion flow that needs careful, transactional handling.
 

@@ -1,5 +1,17 @@
 # RELEASES.md - NoteLib
 
+## v0.32.0 - Account & Communication Controls
+
+**Status: In Progress**
+
+Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Consolidates account and communication controls into a coherent, compliant surface — account deletion, data export, an email-preferences center (replacing the ad-hoc Study Reminders card), a weekly-summary opt-in (default OFF), and a tokenized unsubscribe link — plus right-sized email deliverability hardening. Mostly additive; account deletion needs careful transactional handling. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+- _Nothing shipped yet._
+
+---
+
 ## v0.31.2 - Analytics Integrity & Funnel Visibility
 
 **Status: Released**
