@@ -57,6 +57,21 @@ Configured under:
 
 Retention emails use the existing `EmailService` / Resend integration and template rendering system.
 
+Optional retention and marketing emails include:
+
+- a visible footer link to `/unsubscribe?token=...`
+- `List-Unsubscribe` with the one-click API endpoint plus the support mailto fallback
+- `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+
+Unsubscribe categories map to the same Email Preferences flags:
+
+- `INACTIVITY` and `UNFINISHED_NOTE` -> `STUDY_REMINDERS` -> `inactivityRemindersEnabled`
+- `WEAK_CONCEPT` -> `WEAK_CONCEPT` -> `weakConceptRemindersEnabled`
+- `WEEKLY_SUMMARY` -> `WEEKLY_SUMMARY` -> `weeklySummaryRemindersEnabled`
+- `RE_ENGAGEMENT_2025` -> `MARKETING` -> `marketingEmailsEnabled`
+
+Transactional emails do not include unsubscribe links or one-click unsubscribe headers.
+
 ## Subscription Expiry Emails
 
 Subscription expiry emails are transactional billing alerts, not behavior-based retention emails. They use a separate `SubscriptionExpiryEmailService` and `SubscriptionExpiryEmailScheduler`, and are sent regardless of reminder preferences.

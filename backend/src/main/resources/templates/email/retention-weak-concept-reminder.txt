@@ -6,6 +6,8 @@ We noticed some topics that might need a bit more review:
 Practice here:
 {{adaptivePracticeUrl}}
 
+{{unsubscribeFooterText}}
+
 — NoteLib
 Turn Notes Into Quizzes
 https://notelib.app

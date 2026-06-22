@@ -752,6 +752,18 @@ export type SimpleMessageResponse = {
   message: string;
 };
 
+export type UnsubscribeCategory =
+  | "MARKETING"
+  | "WEEKLY_SUMMARY"
+  | "STUDY_REMINDERS"
+  | "WEAK_CONCEPT";
+
+export type EmailUnsubscribeResponse = {
+  category: UnsubscribeCategory;
+  displayName: string;
+  message: string;
+};
+
 export const ACCOUNT_PENDING_DELETION_CODE = "ACCOUNT_PENDING_DELETION";
 
 export type NeedsTextConfirmationResponse = {
@@ -1777,6 +1789,19 @@ export async function deleteAccount(confirmation: string): Promise<SimpleMessage
     true,
   );
   return parseApiResponse<SimpleMessageResponse>(response, "Could not delete account. Please try again.");
+}
+
+export async function unsubscribeEmail(token: string): Promise<EmailUnsubscribeResponse> {
+  const form = new URLSearchParams();
+  form.set("token", token);
+  const response = await fetch(buildUrl("/email/unsubscribe"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  });
+  return parseApiResponse<EmailUnsubscribeResponse>(response, "Could not unsubscribe from this email.");
 }
 
 export async function getMe(): Promise<MeResponse> {

@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,6 +57,8 @@ class RetentionServiceTest {
     private EmailTemplateService emailTemplateService;
     @Mock
     private EmailService emailService;
+    @Mock
+    private EmailUnsubscribeLinkService emailUnsubscribeLinkService;
 
     private RetentionService retentionService;
 
@@ -76,8 +79,19 @@ class RetentionServiceTest {
                 activityEventRepository,
                 emailLogRepository,
                 emailTemplateService,
-                emailService
+                emailService,
+                emailUnsubscribeLinkService
         );
+        lenient().when(emailUnsubscribeLinkService.buildContext(any(UUID.class), any(UnsubscribeCategory.class)))
+                .thenReturn(new EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext(
+                        "https://www.notelib.app/unsubscribe?token=test-token",
+                        "<p>unsubscribe</p>",
+                        "unsubscribe",
+                        Map.of(
+                                "List-Unsubscribe", "<https://www.notelib.app/api/email/unsubscribe?token=test-token>, <mailto:support@mail.notelib.app?subject=unsubscribe>",
+                                "List-Unsubscribe-Post", "List-Unsubscribe=One-Click"
+                        )
+                ));
     }
 
     @Test
@@ -189,7 +203,20 @@ class RetentionServiceTest {
 
         assertThat(summary.inactivitySent()).isEqualTo(1);
         assertThat(summary.weakConceptSent()).isZero();
-        verify(emailService).sendEmail(any(EmailMessage.class));
+        ArgumentCaptor<EmailMessage> emailCaptor = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(emailService).sendEmail(emailCaptor.capture());
+        assertThat(emailCaptor.getValue().headers())
+                .containsEntry("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+                .containsKey("List-Unsubscribe");
+        assertThat(emailCaptor.getValue().headers().get("List-Unsubscribe"))
+                .contains("/api/email/unsubscribe?token=test-token");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(eq("retention-inactivity-reminder"), paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue())
+                .containsEntry("unsubscribeUrl", "https://www.notelib.app/unsubscribe?token=test-token")
+                .containsEntry("unsubscribeFooterHtml", "<p>unsubscribe</p>")
+                .containsEntry("unsubscribeFooterText", "unsubscribe");
         ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
         verify(emailLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.INACTIVITY);

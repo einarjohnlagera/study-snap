@@ -7,6 +7,8 @@ Open your note here:
 
 When you are ready, generate your Study Pack to turn it into a summary, key concepts, and quiz.
 
+{{unsubscribeFooterText}}
+
 — NoteLib
 Turn Notes Into Quizzes
 https://notelib.app
