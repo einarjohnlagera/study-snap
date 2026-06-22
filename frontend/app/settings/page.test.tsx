@@ -3,6 +3,7 @@ import SettingsPage from "./page";
 import {
   cancelPremiumSubscription,
   createPremiumCheckoutSession,
+  deleteAccount,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
@@ -12,6 +13,7 @@ import {
   updateEmailPreferences,
 } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
+import { clearAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_SECTION_ID } from "@/lib/plans";
 
 const routerMock = {
@@ -27,6 +29,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/auth", () => ({
   buildLoginPath: jest.fn(() => "/login?reason=logged_out"),
+  clearAuthUser: jest.fn(),
   getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
   getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
   getSafeRedirectPath: (path: string | null | undefined) => (
@@ -46,6 +49,7 @@ jest.mock("@/lib/checkout-redirect", () => ({
 jest.mock("@/lib/api", () => ({
   cancelPremiumSubscription: jest.fn(),
   createPremiumCheckoutSession: jest.fn(),
+  deleteAccount: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getMyPlan: jest.fn(),
@@ -197,6 +201,8 @@ describe("Settings page cancellation flow", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
+    (deleteAccount as jest.Mock).mockReset();
+    (clearAuthUser as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
     (updateEmailPreferences as jest.Mock).mockReset();
 
@@ -219,6 +225,7 @@ describe("Settings page cancellation flow", () => {
     (requestEmailVerification as jest.Mock).mockResolvedValue({
       message: "Verification email sent. Please check your inbox.",
     });
+    (deleteAccount as jest.Mock).mockResolvedValue({ message: "Account deletion scheduled." });
   });
 
   it("shows the theme selector in Preferences", async () => {
@@ -524,6 +531,49 @@ describe("Settings page cancellation flow", () => {
     expect(emailPreferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(preferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(billingHeading.compareDocumentPosition(accountHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("requires DELETE confirmation before deleting the account", async () => {
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Account" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete account?" });
+    const confirmButton = within(dialog).getByRole("button", { name: "Delete Account" });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    expect(confirmButton).toBeEnabled();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(deleteAccount).toHaveBeenCalledWith("DELETE");
+      expect(clearAuthUser).toHaveBeenCalled();
+      expect(routerMock.push).toHaveBeenCalledWith("/login?reason=logged_out");
+      expect(routerMock.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("warns about remaining active paid access before account deletion", async () => {
+    const futureAccessEnd = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "PRO",
+      subscriptionStatus: "ACTIVE",
+      billingType: "MONTHLY",
+      currentPeriodStart: new Date().toISOString(),
+      currentPeriodEnd: futureAccessEnd,
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Account" }));
+
+    expect(await screen.findByText("You'll lose your remaining 5 days of access — no refund.")).toBeInTheDocument();
   });
 
   it("does not show OCR usage in the settings usage section", async () => {

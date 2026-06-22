@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.ChangePasswordRequest;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.ForgotPasswordRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
@@ -11,6 +12,7 @@ import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
+import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.ResetPasswordRequest;
 import com.studysnap.backend.dto.SignInMethodsResponse;
@@ -73,6 +75,26 @@ public class AuthController {
     @PostMapping("/logout")
     public SimpleMessageResponse logout(@Valid @RequestBody LogoutRequest request) {
         return authService.logout(request);
+    }
+
+    @PostMapping("/account/delete")
+    @PreAuthorize("isAuthenticated()")
+    public SimpleMessageResponse deleteAccount(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody DeleteAccountRequest request
+    ) {
+        return authService.requestAccountDeletion(user.userId(), request);
+    }
+
+    @PostMapping("/account/reactivate")
+    public AuthResponse reactivateAccount(
+            @Valid @RequestBody ReactivateAccountRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        String clientIp = resolveClientIp(servletRequest);
+        String rateLimitKey = request.email() == null ? "google" : request.email().trim().toLowerCase();
+        authRateLimitService.assertAllowed("reactivate", clientIp + ":" + rateLimitKey);
+        return authService.reactivateAccount(request, clientIp, servletRequest.getHeader(USER_AGENT));
     }
 
     @GetMapping("/me")

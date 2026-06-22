@@ -135,6 +135,9 @@ public class UserEntity {
     @Column(name = "email_verified_at")
     private OffsetDateTime emailVerifiedAt;
 
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
+
     @Column(name = "onboarding_completed_at")
     private OffsetDateTime onboardingCompletedAt;
 

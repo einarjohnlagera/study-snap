@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   cancelPremiumSubscription,
   createPremiumCheckoutSession,
+  deleteAccount,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
@@ -35,7 +36,7 @@ import {
   type MeResponse,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
-import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
+import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
@@ -170,6 +171,9 @@ const CANCELLATION_REASONS: Array<{
   { value: "OTHER", label: "Other" },
 ];
 
+const DELETE_ACCOUNT_CONFIRMATION = "DELETE";
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export default function SettingsPage() {
   const pathname = usePathname();
   const router = useRouter();
@@ -198,6 +202,10 @@ export default function SettingsPage() {
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellationError, setCancellationError] = useState<string | null>(null);
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deleteAccountConfirmation, setDeleteAccountConfirmation] = useState("");
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("MONTHLY");
@@ -343,6 +351,36 @@ export default function SettingsPage() {
       setEmailPreferencesMessage(message);
     } finally {
       setSavingEmailPreferences(false);
+    }
+  };
+
+  const handleOpenDeleteAccountModal = () => {
+    setDeleteAccountConfirmation("");
+    setDeleteAccountError(null);
+    setIsDeleteAccountModalOpen(true);
+  };
+
+  const handleCloseDeleteAccountModal = () => {
+    if (deletingAccount) {
+      return;
+    }
+    setIsDeleteAccountModalOpen(false);
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await deleteAccount(deleteAccountConfirmation);
+      clearAuthUser();
+      setIsDeleteAccountModalOpen(false);
+      startRouteProgress();
+      router.push(buildLoginPath({ reason: LOGIN_REASON_LOGGED_OUT }));
+      router.refresh();
+    } catch (err) {
+      setDeleteAccountError(err instanceof Error ? err.message : "Could not delete account. Please try again.");
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -599,6 +637,18 @@ export default function SettingsPage() {
   const cancellationScheduledLabel = cancellationAccessEndsAt
     ? `Access ends ${formatBillingDate(cancellationAccessEndsAt)}`
     : "Cancellation scheduled";
+  const deleteAccountAccessEndsAt = billingHistory?.currentPeriodEnd ?? profile?.subscription.premiumEndsAt ?? null;
+  const deleteAccountPaidDaysRemaining = (() => {
+    if (!isPaidPlanType(currentPlan) || !deleteAccountAccessEndsAt) {
+      return null;
+    }
+    const accessEndDate = new Date(deleteAccountAccessEndsAt);
+    if (Number.isNaN(accessEndDate.getTime())) {
+      return null;
+    }
+    const daysRemaining = Math.ceil((accessEndDate.getTime() - Date.now()) / MILLIS_PER_DAY);
+    return daysRemaining > 0 ? daysRemaining : null;
+  })();
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -1200,7 +1250,15 @@ export default function SettingsPage() {
                 action="signOut"
                 label="Sign Out"
               />
-              <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" disabled action="delete" label="Delete Account (Coming Soon)" />
+              <ResponsiveActionButton
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={handleOpenDeleteAccountModal}
+                disabled={signingOut}
+                action="delete"
+                label="Delete Account"
+              />
             </div>
           </Card>
         </div>
@@ -1269,6 +1327,66 @@ export default function SettingsPage() {
           </label>
           {cancellationError ? (
             <p className="text-sm text-red-600 dark:text-red-400">{cancellationError}</p>
+          ) : null}
+        </div>
+      </AppModal>
+      <AppModal
+        isOpen={isDeleteAccountModalOpen}
+        title="Delete account?"
+        description="Your account will be locked now and scheduled for permanent deletion after 30 days. You can reactivate by logging in again within the grace window."
+        onClose={handleCloseDeleteAccountModal}
+        panelClassName="max-w-[560px]"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <ResponsiveActionButton
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleCloseDeleteAccountModal}
+              disabled={deletingAccount}
+              action="back"
+              label="Keep Account"
+              showTextOnMobile
+            />
+            <ResponsiveActionButton
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => void handleConfirmDeleteAccount()}
+              disabled={deleteAccountConfirmation !== DELETE_ACCOUNT_CONFIRMATION}
+              loading={deletingAccount}
+              loadingText="Deleting..."
+              action="delete"
+              label="Delete Account"
+            />
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2 text-sm text-foreground/75">
+            <p>
+              During the grace window, login is blocked unless you choose to reactivate. Nothing is deleted immediately.
+            </p>
+            <p>
+              After 30 days, notes, Study Packs, progress, and quiz history will be removed. Public notes are kept anonymized, and billing records are retained.
+            </p>
+          </div>
+          {deleteAccountPaidDaysRemaining ? (
+            <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+              You&apos;ll lose your remaining {deleteAccountPaidDaysRemaining} days of access — no refund.
+            </p>
+          ) : null}
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-foreground">Type DELETE to confirm</span>
+            <input
+              value={deleteAccountConfirmation}
+              onChange={(event) => setDeleteAccountConfirmation(event.target.value)}
+              disabled={deletingAccount}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+              autoComplete="off"
+            />
+          </label>
+          {deleteAccountError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{deleteAccountError}</p>
           ) : null}
         </div>
       </AppModal>

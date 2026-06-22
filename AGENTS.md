@@ -333,6 +333,11 @@ Use these skills before writing prompts, before starting new features, and after
 - Preference values must persist in backend and be returned by `GET /auth/me`.
 - Future reminder cadence should be guided by `Learning Style`, but scheduling logic is a separate task.
 
+### Account Deletion Rule
+
+- Account deletion starts as a reversible soft-delete: set `PENDING_DELETION` + `deleted_at`, revoke sessions, block normal login, and allow reactivation during the 30-day grace window.
+- Phase 2 purge anonymizes public notes and financial records, removes private owned study data, and never deletes `analytics_events`.
+
 ### Upgrade CTA Rule
 
 - Upgrade CTAs must be plan-aware. Never hardcode `Go Pro` as the universal upgrade CTA.

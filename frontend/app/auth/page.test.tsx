@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
-import { copyNoteOnSignup, getMyPlan, login, loginWithGoogle } from "@/lib/api";
+import { ApiRequestError, copyNoteOnSignup, getMyPlan, login, loginWithGoogle, reactivateAccount } from "@/lib/api";
 
 const routerMock = {
   push: jest.fn(),
@@ -33,14 +33,19 @@ jest.mock("@/lib/auth", () => {
   };
 });
 
-jest.mock("@/lib/api", () => ({
-  copyNoteOnSignup: jest.fn(),
-  getMyPlan: jest.fn(),
-  login: jest.fn(),
-  loginWithGoogle: jest.fn(),
-  signup: jest.fn(),
-  trackAnalyticsEvent: jest.fn(),
-}));
+jest.mock("@/lib/api", () => {
+  const actual = jest.requireActual("@/lib/api");
+  return {
+    ...actual,
+    copyNoteOnSignup: jest.fn(),
+    getMyPlan: jest.fn(),
+    login: jest.fn(),
+    loginWithGoogle: jest.fn(),
+    reactivateAccount: jest.fn(),
+    signup: jest.fn(),
+    trackAnalyticsEvent: jest.fn(),
+  };
+});
 
 const verifiedAuthUser = {
   id: "user-1",
@@ -77,6 +82,7 @@ describe("AuthPage", () => {
     routerMock.refresh.mockReset();
     (login as jest.Mock).mockReset();
     (loginWithGoogle as jest.Mock).mockReset();
+    (reactivateAccount as jest.Mock).mockReset();
     (copyNoteOnSignup as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockResolvedValue(null);
@@ -146,6 +152,37 @@ describe("AuthPage", () => {
     });
     await waitFor(() => {
       expect(screen.queryByRole("heading", { name: "Log in to NoteLib" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("offers account reactivation when login returns pending deletion", async () => {
+    (login as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "This account is scheduled for deletion. Reactivate to keep it.",
+      { code: "ACCOUNT_PENDING_DELETION", status: 403 },
+    ));
+    (reactivateAccount as jest.Mock).mockResolvedValue(verifiedAuthUser);
+
+    const { container } = render(<AuthPage />);
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "note@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+    expect(await screen.findByRole("button", { name: "Reactivate account" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reactivate account" }));
+
+    await waitFor(() => {
+      expect(reactivateAccount).toHaveBeenCalledWith({
+        email: "note@example.com",
+        password: "password123",
+        keepSignedIn: false,
+      });
+      expect(setAuthUserMock).toHaveBeenCalled();
+      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
     });
   });
 
