@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
@@ -34,6 +35,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -65,6 +67,8 @@ class PaymentServiceTest {
     @Mock
     private WebhookEventService webhookEventService;
     @Mock
+    private AnalyticsService analyticsService;
+    @Mock
     private HttpClient httpClient;
     @Mock
     private HttpResponse<String> httpResponse;
@@ -87,6 +91,7 @@ class PaymentServiceTest {
                 subscriptionService,
                 pricingService,
                 webhookEventService,
+                analyticsService,
                 objectMapper,
                 httpClient,
                 FIXED_CLOCK
@@ -96,6 +101,9 @@ class PaymentServiceTest {
     @Test
     void createCheckoutSession_createsProMonthlyInvoiceUsingConfiguredAmount() throws Exception {
         UUID userId = UUID.randomUUID();
+        UUID transactionId = UUID.randomUUID();
+        PaymentTransactionEntity pendingTransaction = new PaymentTransactionEntity();
+        pendingTransaction.setId(transactionId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId)));
         when(pricingService.resolveCheckoutSelection(userId, PlanType.PRO, BillingCycle.MONTHLY, null, "PH"))
                 .thenReturn(buildSelection(PlanType.PRO, BillingCycle.MONTHLY, 30, "249.00", "249.00", "0.00", null));
@@ -106,7 +114,7 @@ class PaymentServiceTest {
                 {"invoice_url":"https://checkout.xendit.test/invoice_pro_monthly","expiry_date":"2026-04-30T04:00:00Z"}
                 """);
         when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(httpResponse);
-        when(paymentTransactionService.createPending(any())).thenReturn(Optional.of(new PaymentTransactionEntity()));
+        when(paymentTransactionService.createPending(any())).thenReturn(Optional.of(pendingTransaction));
 
         BillingCheckoutSessionResponse response = paymentService.createCheckoutSession(
                 userId,
@@ -117,6 +125,12 @@ class PaymentServiceTest {
         );
 
         assertThat(response.checkoutUrl()).isEqualTo("https://checkout.xendit.test/invoice_pro_monthly");
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.CHECKOUT_INITIATED),
+                eq(transactionId),
+                eq(Map.of("planType", "PRO", "billingCycle", "MONTHLY"))
+        );
 
         ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
         verify(httpClient).send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
@@ -193,6 +207,12 @@ class PaymentServiceTest {
         );
 
         assertThat(response.checkoutUrl()).isEqualTo("https://checkout.xendit.test/existing_invoice");
+        verify(analyticsService).trackEvent(
+                userId,
+                AnalyticsEventType.CHECKOUT_INITIATED,
+                plusPending.getId(),
+                Map.of("planType", "PLUS", "billingCycle", "MONTHLY")
+        );
         verify(httpClient, never()).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
         verify(paymentTransactionService, never()).createPending(any());
         verify(paymentTransactionService, never()).markFailed(any());
@@ -213,6 +233,33 @@ class PaymentServiceTest {
 
         verifyNoInteractions(httpClient);
         verify(paymentTransactionService, never()).createPending(any());
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
+    }
+
+    @Test
+    void createCheckoutSession_doesNotTrackCheckoutWhenInvoiceHasNoUrl() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId)));
+        when(pricingService.resolveCheckoutSelection(userId, PlanType.PRO, BillingCycle.MONTHLY, null, "PH"))
+                .thenReturn(buildSelection(PlanType.PRO, BillingCycle.MONTHLY, 30, "249.00", "249.00", "0.00", null));
+        when(paymentTransactionService.findPendingTransactions(userId, BillingProvider.XENDIT, PlanType.PRO))
+                .thenReturn(List.of());
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(httpResponse.body()).thenReturn("""
+                {"expiry_date":"2026-04-30T04:00:00Z"}
+                """);
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(httpResponse);
+
+        assertThatThrownBy(() -> paymentService.createCheckoutSession(
+                userId,
+                PlanType.PRO,
+                BillingCycle.MONTHLY,
+                "/dashboard",
+                "PH"
+        )).isInstanceOf(com.studysnap.backend.exception.PaymentCheckoutUnavailableException.class);
+
+        verify(paymentTransactionService, never()).createPending(any());
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
 
     @Test

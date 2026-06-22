@@ -371,6 +371,7 @@ export type AnalyticsEventType =
   | "PAYWALL_DISMISSED"
   | "FEATURE_LOCKED_CLICKED"
   | "UPGRADE_CLICKED"
+  | "CHECKOUT_INITIATED"
   | "SUBSCRIPTION_STARTED"
   | "PUBLIC_NOTE_VIEWED"
   | "PUBLIC_NOTE_COPIED"
@@ -564,6 +565,25 @@ export type AdminFunnelMetricsResponse = {
     usersGeneratedPack: number;
     usersStartedQuizWithin7Days: number;
     ratePercent: number;
+  };
+  retentionCohort: {
+    eligibleActivatedUsers: number;
+    returnedWeek2Users: number;
+    ratePercent: number;
+    weeklyCohorts: Array<{
+      weekStart: string;
+      cohortSize: number;
+      returnedCount: number;
+      ratePercent: number;
+    }>;
+  };
+  checkoutConversion: {
+    usersClickedUpgrade: number;
+    usersInitiatedCheckout: number;
+    usersSubscribed: number;
+    clickToCheckoutRatePercent: number;
+    checkoutToPaidRatePercent: number;
+    clickToPaidRatePercent: number;
   };
 };
 

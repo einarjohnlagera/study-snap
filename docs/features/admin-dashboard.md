@@ -76,6 +76,31 @@ Admin v1 tables should include:
 - recent feedback
 - one-click refund actions on Xendit recent premium upgrade rows that have a linked transaction
 
+## Funnel Metrics
+
+`GET /api/admin/funnel/metrics` powers the admin-only Conversion Funnel page.
+
+Current sections:
+
+- Activation: verified users, activated users, activation rate, median days to first Study Pack, and users stuck before generation.
+- Paywall & Value Loop: Free quota-hit rate, paywall conversion, and first-pack → quiz-start value-loop closure.
+- Checkout conversion: distinct users who clicked upgrade, distinct users who initiated checkout after an upgrade click, distinct users who subscribed after checkout, plus click→checkout, checkout→paid, and click→paid rates.
+- W1→W2 retention: eligible activated users, returned week-2 users, overall return rate, and the last 8 activation-week cohorts.
+
+Retention definitions:
+
+- Activation = a user's first `STUDY_PACK_GENERATED` analytics event.
+- Returned in week 2 = the user has at least one `analytics_events` row in `(firstPack + 7 days, firstPack + 14 days]`.
+- Eligible = the activation timestamp is at least 14 days before the report time, so the week-2 window is complete.
+- Weekly cohorts bucket eligible users by `date_trunc('week', firstPack)`.
+
+Checkout funnel definitions:
+
+- `UPGRADE_CLICKED` is the existing upgrade-intent event from frontend upgrade CTAs.
+- `CHECKOUT_INITIATED` is recorded after the backend successfully obtains or reuses a hosted Xendit checkout URL.
+- `SUBSCRIPTION_STARTED` is recorded after webhook-confirmed paid-plan activation.
+- The checkout step is forward-looking from the `CHECKOUT_INITIATED` deployment and is not backfilled for earlier checkout sessions.
+
 ## Refund Action
 
 - Refund buttons appear only for Recent Paid Upgrades rows where `provider=XENDIT` and a linked `transactionId` exists.

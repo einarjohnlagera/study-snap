@@ -56,6 +56,7 @@ Core usage and business events:
 - `ADAPTIVE_PRACTICE_STARTED`
 - `PAYWALL_VIEWED`
 - `UPGRADE_CLICKED`
+- `CHECKOUT_INITIATED`
 - `SUBSCRIPTION_STARTED`
 - `PUBLIC_NOTE_VIEWED`
 - `PUBLIC_NOTE_COPIED`
@@ -83,6 +84,10 @@ Feature-activation funnel events (v0.28.0):
 
 These form impression → click → use funnels: tip/recommendation shown → CTA click → feature use (an existing `*_STARTED` event, or `QUIZ_REVIEW_EXPORTED` for export). The events are browser-emitted via the analytics API and are fire-and-forget. The Challenge Quiz activation path is `DASHBOARD_RECOMMENDATION_SHOWN` → `DASHBOARD_RECOMMENDATION_CTA_CLICKED` → `CHALLENGE_QUIZ_STARTED`.
 
+Upgrade checkout funnel event:
+
+- `CHECKOUT_INITIATED` — backend-owned; fired by `PaymentService.createCheckoutSession(...)` after a hosted Xendit checkout URL is successfully created or reused. `entity_id` is the payment transaction id when available, and metadata is limited to `planType` and `billingCycle`. It is not fired when checkout creation fails.
+
 ## Tracking Sources
 
 Backend-owned events should be emitted from the services that complete the action, including:
@@ -97,6 +102,8 @@ Backend-owned events should be emitted from the services that complete the actio
 - public note copy
 - login
 - signup and verification lifecycle
+- checkout initiation after a hosted checkout URL is secured
+- webhook-confirmed subscription activation
 
 Frontend/browser-only events should use the analytics API for:
 
