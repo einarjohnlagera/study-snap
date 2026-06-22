@@ -1,19 +1,17 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AdminAnalyticsSummaryResponse;
-import com.studysnap.backend.entity.AnalyticsEventEntity;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.event.AnalyticsTrackingRequestedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.task.TaskExecutor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -26,20 +24,20 @@ public class AnalyticsService {
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
-    private final TaskExecutor analyticsTaskExecutor;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AnalyticsService(
             AnalyticsEventRepository analyticsEventRepository,
             UserRepository userRepository,
             NoteRepository noteRepository,
             StudyPackRepository studyPackRepository,
-            @Qualifier("analyticsTaskExecutor") TaskExecutor analyticsTaskExecutor
+            ApplicationEventPublisher eventPublisher
     ) {
         this.analyticsEventRepository = analyticsEventRepository;
         this.userRepository = userRepository;
         this.noteRepository = noteRepository;
         this.studyPackRepository = studyPackRepository;
-        this.analyticsTaskExecutor = analyticsTaskExecutor;
+        this.eventPublisher = eventPublisher;
     }
 
     public void trackEvent(UUID userId, AnalyticsEventType eventType, UUID entityId, Map<String, Object> metadata) {
@@ -49,10 +47,10 @@ public class AnalyticsService {
 
         Map<String, Object> safeMetadata = metadata == null ? Map.of() : new LinkedHashMap<>(metadata);
         try {
-            analyticsTaskExecutor.execute(() -> persistEvent(userId, eventType, entityId, safeMetadata));
+            eventPublisher.publishEvent(new AnalyticsTrackingRequestedEvent(userId, eventType, entityId, safeMetadata));
         } catch (Exception ex) {
             log.warn(
-                    "analytics_event_dispatch_failed userId={} eventType={} entityId={}",
+                    "analytics_event_publish_failed userId={} eventType={} entityId={}",
                     userId,
                     eventType,
                     entityId,
@@ -77,26 +75,5 @@ public class AnalyticsService {
                 analyticsEventRepository.countByEventType(AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED),
                 analyticsEventRepository.countByEventType(AnalyticsEventType.SUBSCRIPTION_STARTED)
         );
-    }
-
-    private void persistEvent(UUID userId, AnalyticsEventType eventType, UUID entityId, Map<String, Object> metadata) {
-        try {
-            AnalyticsEventEntity event = new AnalyticsEventEntity();
-            event.setId(UUID.randomUUID());
-            event.setUserId(userId);
-            event.setEventType(eventType);
-            event.setEntityId(entityId);
-            event.setMetadataJson(metadata);
-            event.setCreatedAt(OffsetDateTime.now());
-            analyticsEventRepository.save(event);
-        } catch (Exception ex) {
-            log.warn(
-                    "analytics_event_persist_failed userId={} eventType={} entityId={}",
-                    userId,
-                    eventType,
-                    entityId,
-                    ex
-            );
-        }
     }
 }

@@ -1,26 +1,29 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AdminAnalyticsSummaryResponse;
-import com.studysnap.backend.entity.AnalyticsEventEntity;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.event.AnalyticsTrackingRequestedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.core.task.TaskExecutor;
+import org.springframework.context.ApplicationEventPublisher;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,23 +38,24 @@ class AnalyticsServiceTest {
     private NoteRepository noteRepository;
     @Mock
     private StudyPackRepository studyPackRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private AnalyticsService analyticsService;
 
     @BeforeEach
     void setUp() {
-        TaskExecutor inlineExecutor = Runnable::run;
         analyticsService = new AnalyticsService(
                 analyticsEventRepository,
                 userRepository,
                 noteRepository,
                 studyPackRepository,
-                inlineExecutor
+                eventPublisher
         );
     }
 
     @Test
-    void trackEvent_persistsAnalyticsEvent() {
+    void trackEvent_publishesAnalyticsTrackingEvent() {
         UUID userId = UUID.randomUUID();
         UUID entityId = UUID.randomUUID();
 
@@ -62,20 +66,47 @@ class AnalyticsServiceTest {
                 Map.of("page", "landing")
         );
 
-        ArgumentCaptor<AnalyticsEventEntity> captor = ArgumentCaptor.forClass(AnalyticsEventEntity.class);
-        verify(analyticsEventRepository).save(captor.capture());
-        AnalyticsEventEntity saved = captor.getValue();
-        assertThat(saved.getUserId()).isEqualTo(userId);
-        assertThat(saved.getEntityId()).isEqualTo(entityId);
-        assertThat(saved.getEventType()).isEqualTo(AnalyticsEventType.LANDING_PAGE_VIEWED);
-        assertThat(saved.getMetadataJson()).containsEntry("page", "landing");
-        assertThat(saved.getCreatedAt()).isNotNull();
+        ArgumentCaptor<AnalyticsTrackingRequestedEvent> captor =
+                ArgumentCaptor.forClass(AnalyticsTrackingRequestedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        AnalyticsTrackingRequestedEvent event = captor.getValue();
+        assertThat(event.userId()).isEqualTo(userId);
+        assertThat(event.entityId()).isEqualTo(entityId);
+        assertThat(event.eventType()).isEqualTo(AnalyticsEventType.LANDING_PAGE_VIEWED);
+        assertThat(event.metadata()).containsEntry("page", "landing");
     }
 
     @Test
-    void trackEvent_swallowsPersistenceFailures() {
-        when(analyticsEventRepository.save(any(AnalyticsEventEntity.class)))
-                .thenThrow(new RuntimeException("db down"));
+    void trackEvent_snapshotsMetadataBeforePublishing() {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("page", "landing");
+
+        analyticsService.trackEvent(
+                UUID.randomUUID(),
+                AnalyticsEventType.LANDING_PAGE_VIEWED,
+                null,
+                metadata
+        );
+
+        metadata.put("page", "mutated");
+
+        ArgumentCaptor<AnalyticsTrackingRequestedEvent> captor =
+                ArgumentCaptor.forClass(AnalyticsTrackingRequestedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().metadata()).containsEntry("page", "landing");
+    }
+
+    @Test
+    void trackEvent_ignoresNullEventType() {
+        analyticsService.trackEvent(UUID.randomUUID(), null, null, Map.of());
+
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void trackEvent_swallowsPublishFailures() {
+        doThrow(new RuntimeException("listener down")).when(eventPublisher)
+                .publishEvent(any(AnalyticsTrackingRequestedEvent.class));
 
         assertThatCode(() -> analyticsService.trackEvent(
                 UUID.randomUUID(),

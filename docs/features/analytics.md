@@ -30,10 +30,18 @@ Indexes:
 - `user_id`
 - `created_at`
 
+`analytics_events.user_id` is intentionally nullable and indexed but has no hard foreign key to `users(id)`.
+Telemetry must survive referential timing during signup and account lifecycle changes; orphaned `user_id`
+values are acceptable for analytics reporting.
+
 ## Event Tracking Rule
 
 - Analytics must be fire-and-forget.
 - Tracking failures must never break note creation, generation, review, auth, billing, or copy flows.
+- Backend analytics persistence fires after the surrounding transaction commits via
+  `@TransactionalEventListener(AFTER_COMMIT, fallbackExecution = true)`.
+- The after-commit listener dispatches the actual database write to `analyticsTaskExecutor`, preserving
+  off-request, non-blocking persistence. Events fired outside a transaction use fallback execution.
 - Backend should record server-truth usage and conversion events.
 - Frontend may post browser-only funnel events through `POST /api/analytics/events`.
 

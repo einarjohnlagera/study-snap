@@ -8,7 +8,7 @@ Theme: the funnel and admin dashboards already exist and the core loop is health
 
 ### Shipped
 
-- _Nothing shipped yet._
+- **Analytics persistence integrity** — Analytics writes now publish an after-commit event before dispatching persistence to `analyticsTaskExecutor`, so signup lifecycle telemetry is recorded only after the signup transaction commits and rolled-back flows do not create phantom events. `analytics_events.user_id` no longer has a hard FK to `users(id)`, preventing referential timing from dropping `SIGNUP`, `SIGNUP_COMPLETED`, and `EMAIL_VERIFICATION_SENT` funnel events while preserving the nullable indexed column for reporting.
 
 ---
 
