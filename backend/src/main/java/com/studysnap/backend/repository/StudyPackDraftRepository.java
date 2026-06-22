@@ -12,5 +12,6 @@ public interface StudyPackDraftRepository extends JpaRepository<StudyPackDraftEn
             OffsetDateTime createdAtFromInclusive,
             OffsetDateTime createdAtToExclusive
     );
-}
 
+    void deleteByOwnerUserId(UUID ownerUserId);
+}

@@ -9,4 +9,6 @@ import java.util.UUID;
 
 public interface FeedbackRepository extends JpaRepository<FeedbackEntity, UUID> {
     List<FeedbackEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    void deleteByUserId(UUID userId);
 }

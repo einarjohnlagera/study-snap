@@ -426,6 +426,24 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_rejectsDeletedUserSentinel() {
+        UserEntity sentinel = activeUser(AccountPurgeService.DELETED_USER_ID, "deleted-user@notelib.internal");
+        sentinel.setStatus(UserStatus.SUSPENDED);
+        sentinel.setPasswordHash("hashed");
+
+        when(userRepository.findByEmailIgnoreCase("deleted-user@notelib.internal")).thenReturn(Optional.of(sentinel));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        LoginRequest request = new LoginRequest("deleted-user@notelib.internal", "password123", false);
+        assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+            .hasMessage("Invalid email, username, or password.");
+    }
+
+    @Test
     void requestAccountDeletion_setsPendingDeletionAndRevokesSessions() {
         UUID userId = UUID.randomUUID();
         UserEntity user = activeUser(userId, "current@example.com");

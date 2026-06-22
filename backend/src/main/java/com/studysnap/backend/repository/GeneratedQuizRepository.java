@@ -15,6 +15,7 @@ public interface GeneratedQuizRepository extends JpaRepository<GeneratedQuizEnti
     Optional<GeneratedQuizEntity> findByNoteId(UUID noteId);
     Optional<GeneratedQuizEntity> findByNoteIdAndOwnerUserId(UUID noteId, UUID ownerUserId);
     List<GeneratedQuizEntity> findByOwnerUserIdAndNoteIdIn(UUID ownerUserId, List<UUID> noteIds);
+    void deleteByOwnerUserId(UUID ownerUserId);
     List<GeneratedQuizEntity> findByNoteIdAndTargetLearnerLevelIsNotNullOrderByGeneratedAtDesc(
             UUID noteId,
             Pageable pageable

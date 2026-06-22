@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.InputType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
@@ -106,6 +107,34 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Double findMedianDaysFromVerifiedSignupToFirstPack();
 
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
+
+    @Modifying
+    @Query("""
+            update StudyPackEntity s
+            set s.ownerUserId = :nextOwnerUserId,
+                s.updatedAt = :updatedAt
+            where s.ownerUserId = :currentOwnerUserId
+              and s.noteId in :noteIds
+            """)
+    int reassignOwnerByOwnerUserIdAndNoteIdIn(
+            @Param("currentOwnerUserId") UUID currentOwnerUserId,
+            @Param("nextOwnerUserId") UUID nextOwnerUserId,
+            @Param("noteIds") Collection<UUID> noteIds,
+            @Param("updatedAt") OffsetDateTime updatedAt
+    );
+
+    @Modifying
+    @Query("""
+            delete from StudyPackEntity s
+            where s.ownerUserId = :ownerUserId
+              and (:retainedNoteIdsEmpty = true or s.noteId is null or s.noteId not in :retainedNoteIds)
+            """)
+    int deleteByOwnerUserIdExcludingNoteIds(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("retainedNoteIds") Collection<UUID> retainedNoteIds,
+            @Param("retainedNoteIdsEmpty") boolean retainedNoteIdsEmpty
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from StudyPackEntity s where s.id = :id and s.ownerUserId = :ownerUserId")
     Optional<StudyPackEntity> findByIdAndOwnerUserIdForUpdate(UUID id, UUID ownerUserId);
