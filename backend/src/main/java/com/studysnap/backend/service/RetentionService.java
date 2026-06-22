@@ -52,6 +52,7 @@ public class RetentionService {
     private final EmailLogRepository emailLogRepository;
     private final EmailTemplateService emailTemplateService;
     private final EmailService emailService;
+    private final EmailUnsubscribeLinkService emailUnsubscribeLinkService;
 
     @Transactional(readOnly = true)
     public List<InactiveUserReminder> findInactiveUsers() {
@@ -249,6 +250,7 @@ public class RetentionService {
                             "firstName", candidate.firstName(),
                             "resumeUrl", candidate.resumeUrl()
                     ),
+                    UnsubscribeCategory.STUDY_REMINDERS,
                     now
             )) {
                 sent += 1;
@@ -270,6 +272,7 @@ public class RetentionService {
                             "weakConceptList", formatWeakConcepts(candidate.weakConcepts()),
                             "adaptivePracticeUrl", candidate.adaptivePracticeUrl()
                     ),
+                    UnsubscribeCategory.WEAK_CONCEPT,
                     now
             )) {
                 sent += 1;
@@ -294,6 +297,7 @@ public class RetentionService {
                             "averageQuizScore", Integer.toString(candidate.averageQuizScore()),
                             "dashboardUrl", candidate.dashboardUrl()
                     ),
+                    UnsubscribeCategory.WEEKLY_SUMMARY,
                     now
             )) {
                 sent += 1;
@@ -308,16 +312,50 @@ public class RetentionService {
             RetentionEmailType emailType,
             String templateName,
             Map<String, String> parameters,
+            UnsubscribeCategory unsubscribeCategory,
             OffsetDateTime now
     ) {
         try {
-            EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(templateName, parameters);
-            emailService.sendEmail(new EmailMessage(email, rendered.subject(), rendered.htmlBody(), rendered.textBody()));
+            EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext unsubscribeContext = buildUnsubscribeContext(
+                    userId,
+                    emailType,
+                    unsubscribeCategory
+            );
+            Map<String, String> templateParameters = new java.util.LinkedHashMap<>(parameters);
+            templateParameters.put("unsubscribeUrl", unsubscribeContext.unsubscribeUrl());
+            templateParameters.put("unsubscribeFooterHtml", unsubscribeContext.htmlFooter());
+            templateParameters.put("unsubscribeFooterText", unsubscribeContext.textFooter());
+            EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(templateName, templateParameters);
+            emailService.sendEmail(new EmailMessage(
+                    email,
+                    rendered.subject(),
+                    rendered.htmlBody(),
+                    rendered.textBody(),
+                    unsubscribeContext.headers()
+            ));
             logEmailSent(userId, emailType, now);
             return true;
         } catch (RuntimeException ex) {
             log.warn("retention.email.send failed userId={} emailType={} message={}", userId, emailType, ex.getMessage());
             return false;
+        }
+    }
+
+    private EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext buildUnsubscribeContext(
+            UUID userId,
+            RetentionEmailType emailType,
+            UnsubscribeCategory unsubscribeCategory
+    ) {
+        try {
+            return emailUnsubscribeLinkService.buildContext(userId, unsubscribeCategory);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "retention.email.unsubscribe_link failed userId={} emailType={} message={}",
+                    userId,
+                    emailType,
+                    ex.getMessage()
+            );
+            return EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext.empty();
         }
     }
 

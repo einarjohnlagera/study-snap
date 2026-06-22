@@ -21,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,7 @@ class ReEngagementCampaignServiceTest {
     @Mock private EmailService emailService;
     @Mock private StudySnapProperties properties;
     @Mock private StudySnapProperties.Email emailProperties;
+    @Mock private EmailUnsubscribeLinkService emailUnsubscribeLinkService;
 
     private ReEngagementCampaignService service;
 
@@ -51,12 +53,22 @@ class ReEngagementCampaignServiceTest {
     void setUp() {
         service = new ReEngagementCampaignService(
                 userRepository, activityEventRepository, emailLogRepository,
-                emailTemplateService, emailService, properties
+                emailTemplateService, emailService, properties, emailUnsubscribeLinkService
         );
         lenient().when(properties.getEmail()).thenReturn(emailProperties);
         lenient().when(emailProperties.getAppBaseUrl()).thenReturn("https://notelib.app");
         lenient().when(emailTemplateService.render(anyString(), any()))
                 .thenReturn(new EmailTemplateService.RenderedEmailTemplate("subject", "<p>body</p>", "body"));
+        lenient().when(emailUnsubscribeLinkService.buildContext(any(UUID.class), eq(UnsubscribeCategory.MARKETING)))
+                .thenReturn(new EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext(
+                        "https://notelib.app/unsubscribe?token=marketing-token",
+                        "<p>unsubscribe</p>",
+                        "unsubscribe",
+                        Map.of(
+                                "List-Unsubscribe", "<https://notelib.app/api/email/unsubscribe?token=marketing-token>, <mailto:support@mail.notelib.app?subject=unsubscribe>",
+                                "List-Unsubscribe-Post", "List-Unsubscribe=One-Click"
+                        )
+                ));
     }
 
     @Test
@@ -173,6 +185,30 @@ class ReEngagementCampaignServiceTest {
         service.send(NOW);
 
         verify(emailLogRepository).save(any());
+    }
+
+    @Test
+    void send_includesMarketingUnsubscribeUrlAndHeaders() {
+        UserEntity user = activeUser(ProfileType.STUDENT);
+        stubEligible(user);
+
+        service.send(NOW);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(eq("re-engagement-student"), paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue())
+                .containsEntry("unsubscribeUrl", "https://notelib.app/unsubscribe?token=marketing-token")
+                .containsEntry("unsubscribeFooterHtml", "<p>unsubscribe</p>")
+                .containsEntry("unsubscribeFooterText", "unsubscribe");
+
+        ArgumentCaptor<EmailMessage> emailCaptor = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(emailService).sendEmail(emailCaptor.capture());
+        assertThat(emailCaptor.getValue().headers())
+                .containsEntry("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+                .containsKey("List-Unsubscribe");
+        assertThat(emailCaptor.getValue().headers().get("List-Unsubscribe"))
+                .contains("/api/email/unsubscribe?token=marketing-token");
     }
 
     @Test

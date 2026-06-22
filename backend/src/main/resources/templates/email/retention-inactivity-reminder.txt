@@ -8,6 +8,8 @@ Try doing a quick review today — it only takes a few minutes.
 Continue studying here:
 {{resumeUrl}}
 
+{{unsubscribeFooterText}}
+
 — NoteLib
 Turn Notes Into Quizzes
 https://notelib.app

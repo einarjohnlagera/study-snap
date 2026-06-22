@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -73,13 +74,15 @@ public class ResendEmailService implements EmailService {
     }
 
     private String serializePayload(EmailMessage message) {
-        Map<String, Object> payload = Map.of(
-                "from", properties.getEmail().getFrom(),
-                "to", List.of(message.to()),
-                "subject", message.subject(),
-                "html", message.htmlBody(),
-                "text", message.textBody()
-        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("from", properties.getEmail().getFrom());
+        payload.put("to", List.of(message.to()));
+        payload.put("subject", message.subject());
+        payload.put("html", message.htmlBody());
+        payload.put("text", message.textBody());
+        if (message.headers() != null && !message.headers().isEmpty()) {
+            payload.put("headers", message.headers());
+        }
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (IOException ex) {

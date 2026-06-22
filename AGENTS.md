@@ -376,6 +376,7 @@ Use these skills before writing prompts, before starting new features, and after
 - `WEEKLY_SUMMARY` should honor `weeklySummaryRemindersEnabled`, which defaults off until the user opts in.
 - `RE_ENGAGEMENT_2025` should honor `marketingEmailsEnabled`, which defaults off until the user opts in.
 - Transactional account and billing emails are never gated by optional email preferences.
+- Optional emails must carry a tokenized one-click unsubscribe that maps category to the existing preference flag; transactional emails never carry unsubscribe links or headers, and unsubscribe tokens must not include PII beyond the opaque user id.
 - Reminder cadence may later vary by `Learning Style`, but V1 stores the inputs and uses fixed thresholds.
 
 ### Verification Email Rule

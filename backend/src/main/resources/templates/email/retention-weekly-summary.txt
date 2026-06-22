@@ -12,6 +12,8 @@ Keep going — you’re making progress.
 Continue studying:
 {{dashboardUrl}}
 
+{{unsubscribeFooterText}}
+
 — NoteLib
 Turn Notes Into Quizzes
 https://notelib.app
