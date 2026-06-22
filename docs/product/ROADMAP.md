@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.31.2 - Analytics Integrity & Funnel Visibility` is the next candidate (parked, not yet kicked off).
+`v0.31.2 - Analytics Integrity & Funnel Visibility` is the release currently in progress (base branch `releases/v0.31.2`).
 
 `v0.31.1 - Adoptable Study Plans Discovery & Status` is the current documentation baseline (last released).
 
@@ -183,13 +183,13 @@ Anti-drift: no new quota category, no async infra, no AI synthesis, no relaxatio
 
 ---
 
-## v0.31.2 (candidate, parked) - Analytics Integrity & Funnel Visibility
+## v0.31.2 - Analytics Integrity & Funnel Visibility (in progress)
 
-**Status: parked — NOT kicked off.** Do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Recorded here so it isn't lost; v0.31.1 remains the active release.
+Base branch for this release: `releases/v0.31.2`.
 
 Theme: the funnel and admin dashboards already exist and the core loop is healthy (as of 2026-06-21: ~140 users, activation 67.2%, value-loop 57%, 306 packs/week). The real gaps are **data integrity in analytics** and **visibility into retention + where monetization leaks** — not the product loop itself. Small, additive, mostly backend; no new product surface for users.
 
-Candidates:
+Scope:
 
 - **Fix `analytics_events` FK violation (lost SIGNUP analytics).** Recurring prod WARN: `analytics_events_user_id_fkey` violated on `eventType=SIGNUP`. Root cause: `AuthService` fires `analyticsService.trackEvent(saved.getId(), SIGNUP, …)` right after `userRepository.save(user)`, but `trackEvent` dispatches to an async executor (`analytics-1`) whose own transaction often commits **before** the signup transaction commits → the user row isn't visible → FK fails. `persistEvent` catches it (non-fatal), but the SIGNUP / SIGNUP_COMPLETED / EMAIL_VERIFICATION_SENT events are **silently dropped, so signup-based funnel metrics undercount**. Fix direction: telemetry should not hard-FK to `users` — **drop the FK** (migration; keep `user_id` nullable + indexed) and/or fire analytics **after commit** (`@TransactionalEventListener(AFTER_COMMIT)`). FK defined in `V25__analytics_events.sql` (`user_id UUID REFERENCES users(id) ON DELETE SET NULL`). This is the only item actively degrading data quality right now → natural first slice.
 - **Analytics event audit.** Cross-check every `AnalyticsEventType` value against its fire site: flag events no longer emitted (or belonging to removed features), confirm the admin funnel/summary queries reference current events, and verify no events are silently dropping (the FK bug above is Exhibit A).
