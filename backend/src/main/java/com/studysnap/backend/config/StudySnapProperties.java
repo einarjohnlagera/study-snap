@@ -24,6 +24,7 @@ public class StudySnapProperties {
     private final Billing billing = new Billing();
     private final Email email = new Email();
     private final Retention retention = new Retention();
+    private final Account account = new Account();
 
     @Setter
     private String appName = "NoteLib";
@@ -378,5 +379,12 @@ public class StudySnapProperties {
         private int unfinishedNoteCooldownDays = 3;
         private int weeklyCooldownDays = 7;
         private int weakConceptThresholdPercent = 60;
+    }
+
+    @Getter
+    @Setter
+    public static class Account {
+        private int deletionGraceDays = 30;
+        private String purgeCron = "0 30 3 * * *";
     }
 }

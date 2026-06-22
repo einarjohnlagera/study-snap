@@ -14,4 +14,6 @@ public interface QuizShareLinkRepository extends JpaRepository<QuizShareLinkEnti
             UUID ownerUserId
     );
 
+    void deleteByOwnerUserId(UUID ownerUserId);
+
 }

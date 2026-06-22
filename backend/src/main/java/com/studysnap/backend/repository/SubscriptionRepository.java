@@ -17,6 +17,8 @@ import java.util.UUID;
 public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity, UUID> {
     Optional<SubscriptionEntity> findFirstByUser_IdOrderByCreatedAtDesc(UUID userId);
 
+    List<SubscriptionEntity> findByUser_Id(UUID userId);
+
     boolean existsByUser_IdAndPlanTypeIn(UUID userId, Collection<PlanType> planTypes);
 
     List<SubscriptionEntity> findByUser_IdAndStatusOrderByUpdatedAtDesc(

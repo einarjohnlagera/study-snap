@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ConceptHealthRepository extends JpaRepository<ConceptHealthEntity, UUID> {
+    void deleteByUserId(UUID userId);
+
     List<ConceptHealthEntity> findByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
 
     List<ConceptHealthEntity> findByUserIdAndStudyPackIdIn(UUID userId, List<UUID> studyPackIds);

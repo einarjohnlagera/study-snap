@@ -15,6 +15,10 @@ import java.util.UUID;
 public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEntity, UUID> {
     List<NoteCollectionEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
 
+    List<NoteCollectionEntity> findByOwnerUserId(UUID ownerUserId);
+
+    void deleteByOwnerUserId(UUID ownerUserId);
+
     Optional<NoteCollectionEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     Optional<NoteCollectionEntity> findByIdAndVisibility(UUID id, CollectionVisibility visibility);

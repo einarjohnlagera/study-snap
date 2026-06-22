@@ -15,6 +15,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
 
     Optional<UserUsageEntity> findByUserIdAndPeriodStart(UUID userId, OffsetDateTime periodStart);
 
+    void deleteByUserId(UUID userId);
+
     List<UserUsageEntity> findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
             OffsetDateTime periodStart,
             OffsetDateTime periodEnd

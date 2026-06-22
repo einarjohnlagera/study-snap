@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface PublicNoteLikeRepository extends JpaRepository<PublicNoteLikeEntity, UUID> {
     Optional<PublicNoteLikeEntity> findByNoteIdAndUserId(UUID noteId, UUID userId);
 
+    void deleteByUserId(UUID userId);
+
     @Query("""
             select l.noteId as noteId, count(l) as likeCount
             from PublicNoteLikeEntity l

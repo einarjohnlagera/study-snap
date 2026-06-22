@@ -14,6 +14,8 @@ public interface NoteCollectionItemRepository extends JpaRepository<NoteCollecti
 
     Optional<NoteCollectionItemEntity> findByCollectionIdAndNoteId(UUID collectionId, UUID noteId);
 
+    void deleteByCollectionIdIn(List<UUID> collectionIds);
+
     @Query("""
             select i.collectionId as collectionId, count(i.id) as itemCount
             from NoteCollectionItemEntity i

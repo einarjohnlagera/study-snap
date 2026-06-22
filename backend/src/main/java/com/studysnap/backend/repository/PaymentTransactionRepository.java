@@ -33,6 +33,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     );
 
     List<PaymentTransactionEntity> findByUser_IdOrderByCreatedAtDesc(UUID userId);
+    List<PaymentTransactionEntity> findByUser_Id(UUID userId);
     List<PaymentTransactionEntity> findByUser_IdInAndStatusOrderByCreatedAtDesc(
             Collection<UUID> userIds,
             PaymentTransactionStatus status

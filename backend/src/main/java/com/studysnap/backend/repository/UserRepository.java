@@ -26,8 +26,9 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus status);
+    List<UserEntity> findByStatusAndDeletedAtLessThanEqual(UserStatus status, OffsetDateTime deletedAt);
 
-    @Query("select u.id from UserEntity u")
+    @Query("select u.id from UserEntity u where u.status = com.studysnap.backend.entity.UserStatus.ACTIVE")
     List<UUID> findAllUserIds();
 
     @Query("select u.createdAt from UserEntity u where u.id = :userId")

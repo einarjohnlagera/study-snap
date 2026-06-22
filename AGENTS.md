@@ -336,7 +336,7 @@ Use these skills before writing prompts, before starting new features, and after
 ### Account Deletion Rule
 
 - Account deletion starts as a reversible soft-delete: set `PENDING_DELETION` + `deleted_at`, revoke sessions, block normal login, and allow reactivation during the 30-day grace window.
-- Phase 2 purge anonymizes public notes and financial records, removes private owned study data, and never deletes `analytics_events`.
+- The irreversible purge reassigns public notes, their retained Study Packs, and financial records to the fixed deleted-user sentinel, removes private owned study data, and never deletes `analytics_events`.
 
 ### Upgrade CTA Rule
 

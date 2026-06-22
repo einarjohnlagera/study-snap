@@ -4,6 +4,7 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -21,6 +22,23 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
     long countByVisibility(NoteVisibility visibility);
+    List<NoteEntity> findByOwnerUserIdAndVisibility(UUID ownerUserId, NoteVisibility visibility);
+    void deleteByOwnerUserIdAndVisibility(UUID ownerUserId, NoteVisibility visibility);
+
+    @Modifying
+    @Query("""
+            update NoteEntity n
+            set n.ownerUserId = :nextOwnerUserId,
+                n.updatedAt = :updatedAt
+            where n.ownerUserId = :currentOwnerUserId
+              and n.visibility = :visibility
+            """)
+    int reassignOwnerByOwnerUserIdAndVisibility(
+            @Param("currentOwnerUserId") UUID currentOwnerUserId,
+            @Param("nextOwnerUserId") UUID nextOwnerUserId,
+            @Param("visibility") NoteVisibility visibility,
+            @Param("updatedAt") OffsetDateTime updatedAt
+    );
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility visibility, NoteTargetProfileType targetProfileType);
