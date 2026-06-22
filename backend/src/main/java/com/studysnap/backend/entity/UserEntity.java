@@ -90,6 +90,9 @@ public class UserEntity {
     @Column(name = "weak_concept_reminders_enabled", nullable = false)
     private Boolean weakConceptRemindersEnabled;
 
+    @Column(name = "weekly_summary_reminders_enabled", nullable = false)
+    private Boolean weeklySummaryRemindersEnabled;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "theme_preference", nullable = false, length = 16)
     private ThemePreference themePreference;

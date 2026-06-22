@@ -663,6 +663,7 @@ export type MeResponse = {
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+  weeklySummaryRemindersEnabled: boolean;
   themePreference?: ThemePreference | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
@@ -688,6 +689,7 @@ export type UpdateEngagementModeRequest = {
 export type UpdateStudyRemindersRequest = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+  weeklySummaryRemindersEnabled: boolean;
 };
 
 export type UpdateThemePreferenceRequest = {

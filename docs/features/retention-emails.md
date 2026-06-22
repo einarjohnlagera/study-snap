@@ -18,6 +18,7 @@ Current reminders include:
 - `WEEKLY_SUMMARY`
   - trigger: weekly summary run every Sunday at `6:00 PM`
   - includes study packs created, quizzes taken, adaptive sessions, and average quiz score for the last `7` days
+  - gated by `weeklySummaryRemindersEnabled` (default off until the user opts in)
   - cooldown: `7` days
 
 ## Persistence
@@ -54,7 +55,7 @@ Retention emails use the existing `EmailService` / Resend integration and templa
 
 ## Subscription Expiry Emails
 
-Subscription expiry emails are transactional billing alerts, not behavior-based retention emails. They use a separate `SubscriptionExpiryEmailService` and `SubscriptionExpiryEmailScheduler`, and are sent regardless of `inactivityRemindersEnabled` or `weakConceptRemindersEnabled`.
+Subscription expiry emails are transactional billing alerts, not behavior-based retention emails. They use a separate `SubscriptionExpiryEmailService` and `SubscriptionExpiryEmailScheduler`, and are sent regardless of reminder preferences.
 
 Types:
 

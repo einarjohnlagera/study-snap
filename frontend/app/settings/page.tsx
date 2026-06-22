@@ -189,6 +189,7 @@ export default function SettingsPage() {
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
   const [inactivityRemindersEnabled, setInactivityRemindersEnabled] = useState(false);
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
+  const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
   const [savingStudyReminders, setSavingStudyReminders] = useState(false);
   const [studyRemindersMessage, setStudyRemindersMessage] = useState<string | null>(null);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
@@ -243,6 +244,7 @@ export default function SettingsPage() {
       setSelectedEngagementMode(me.engagementMode);
       setInactivityRemindersEnabled(me.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
+      setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
@@ -306,6 +308,7 @@ export default function SettingsPage() {
       setSelectedEngagementMode(updated.engagementMode);
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
+      setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update learning style.";
@@ -322,11 +325,13 @@ export default function SettingsPage() {
       const updated = await updateStudyReminders({
         inactivityRemindersEnabled,
         weakConceptRemindersEnabled,
+        weeklySummaryRemindersEnabled,
       });
       setProfile(updated);
       setSelectedEngagementMode(updated.engagementMode);
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
+      setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setStudyRemindersMessage("Study reminders updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update study reminders.";
@@ -732,6 +737,20 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={weakConceptRemindersEnabled}
                   onChange={(event) => setWeakConceptRemindersEnabled(event.target.checked)}
+                  disabled={savingStudyReminders}
+                />
+              </label>
+              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Weekly summary email</span>
+                  <span className="block text-xs text-foreground/60">
+                    Get a Sunday email with your weekly study progress summary.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={weeklySummaryRemindersEnabled}
+                  onChange={(event) => setWeeklySummaryRemindersEnabled(event.target.checked)}
                   disabled={savingStudyReminders}
                 />
               </label>

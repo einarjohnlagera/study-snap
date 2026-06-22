@@ -117,7 +117,7 @@ public class RetentionService {
 
     List<WeeklySummaryReminder> findWeeklySummaryUsers(OffsetDateTime now) {
         OffsetDateTime weekStart = now.minusDays(7);
-        return userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE).stream()
+        return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus.ACTIVE).stream()
                 .filter(user -> hasRecordedStudyActivity(user.getId()))
                 .filter(user -> cooldownElapsed(
                         user.getId(),

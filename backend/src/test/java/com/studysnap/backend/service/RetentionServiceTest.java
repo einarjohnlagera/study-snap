@@ -202,7 +202,7 @@ class RetentionServiceTest {
         OffsetDateTime weekStart = now.minusDays(7);
         UserEntity user = verifiedUser();
 
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
                 .thenReturn(true);
@@ -246,11 +246,24 @@ class RetentionServiceTest {
     }
 
     @Test
+    void findWeeklySummaryUsers_excludesUsersWhoHaveNotOptedIn() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        List<RetentionService.WeeklySummaryReminder> candidates = retentionService.findWeeklySummaryUsers(now);
+
+        assertThat(candidates).isEmpty();
+        verify(activityEventRepository, never()).existsByUserIdAndActivityTypeIn(any(UUID.class), anyCollection());
+    }
+
+    @Test
     void sendWeeklySummaryEmails_respectsCooldownAndDoesNotLogWhenSkipped() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
         UserEntity user = verifiedUser();
 
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
                 .thenReturn(true);
@@ -277,6 +290,7 @@ class RetentionServiceTest {
         user.setEmailVerifiedAt(OffsetDateTime.now(ZoneOffset.UTC).minusDays(20));
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(true);
+        user.setWeeklySummaryRemindersEnabled(true);
         return user;
     }
 
