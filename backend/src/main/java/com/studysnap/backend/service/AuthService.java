@@ -22,7 +22,7 @@ import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
-import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -144,6 +144,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
@@ -389,12 +390,13 @@ public class AuthService {
         return toMeResponse(user);
     }
 
-    public MeResponse updateStudyReminders(UUID userId, UpdateStudyRemindersRequest request) {
+    public MeResponse updateEmailPreferences(UUID userId, UpdateEmailPreferencesRequest request) {
         UserEntity user = findUserOrThrow(userId);
 
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
         user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
         user.setWeeklySummaryRemindersEnabled(request.weeklySummaryRemindersEnabled());
+        user.setMarketingEmailsEnabled(request.marketingEmailsEnabled());
         user.setUpdatedAt(OffsetDateTime.now());
 
         return toMeResponse(user);
@@ -509,6 +511,7 @@ public class AuthService {
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeeklySummaryRemindersEnabled()),
+                Boolean.TRUE.equals(user.getMarketingEmailsEnabled()),
                 resolveThemePreference(user),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
@@ -740,6 +743,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);

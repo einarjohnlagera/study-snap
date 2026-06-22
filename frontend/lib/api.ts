@@ -664,6 +664,7 @@ export type MeResponse = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
+  marketingEmailsEnabled: boolean;
   themePreference?: ThemePreference | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
@@ -686,10 +687,11 @@ export type UpdateEngagementModeRequest = {
   engagementMode: EngagementMode;
 };
 
-export type UpdateStudyRemindersRequest = {
+export type UpdateEmailPreferencesRequest = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
+  marketingEmailsEnabled: boolean;
 };
 
 export type UpdateThemePreferenceRequest = {
@@ -2139,9 +2141,9 @@ export async function updateEngagementMode(request: UpdateEngagementModeRequest)
   return me;
 }
 
-export async function updateStudyReminders(request: UpdateStudyRemindersRequest): Promise<MeResponse> {
+export async function updateEmailPreferences(request: UpdateEmailPreferencesRequest): Promise<MeResponse> {
   const response = await fetchWithAuth(
-    "/auth/preferences/study-reminders",
+    "/auth/preferences/email-preferences",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -2149,7 +2151,7 @@ export async function updateStudyReminders(request: UpdateStudyRemindersRequest)
     },
     true,
   );
-  const me = await parseApiResponse<MeResponse>(response, "Could not update study reminders. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update email preferences. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

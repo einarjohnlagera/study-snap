@@ -9,7 +9,7 @@ import {
   getMe,
   requestEmailVerification,
   updateEngagementMode,
-  updateStudyReminders,
+  updateEmailPreferences,
 } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { PLAN_BILLING_SECTION_ID } from "@/lib/plans";
@@ -55,7 +55,7 @@ jest.mock("@/lib/api", () => ({
   requestEmailVerification: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateEngagementMode: jest.fn(),
-  updateStudyReminders: jest.fn(),
+  updateEmailPreferences: jest.fn(),
 }));
 
 const proProfile = {
@@ -71,6 +71,7 @@ const proProfile = {
   inactivityRemindersEnabled: false,
   weakConceptRemindersEnabled: false,
   weeklySummaryRemindersEnabled: false,
+  marketingEmailsEnabled: false,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
   onboardingCompletedAt: "2026-03-20T00:05:00Z",
   productOnboardingCompletedAt: null,
@@ -197,7 +198,7 @@ describe("Settings page cancellation flow", () => {
     (cancelPremiumSubscription as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
-    (updateStudyReminders as jest.Mock).mockReset();
+    (updateEmailPreferences as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(proProfile);
     (getMyPlan as jest.Mock).mockResolvedValue(proUsageSummary);
@@ -511,13 +512,16 @@ describe("Settings page cancellation flow", () => {
     expect(descriptions[1]).toHaveTextContent("Pro Monthly");
   });
 
-  it("renders Preferences before Plan & Billing and Account", async () => {
+  it("renders Preferences and Email Preferences before Plan & Billing and Account", async () => {
     render(<SettingsPage />);
 
     const preferencesHeading = await screen.findByRole("heading", { name: "Preferences" });
+    const emailPreferencesHeading = screen.getByRole("heading", { name: "Email Preferences" });
     const billingHeading = screen.getByRole("heading", { name: "Plan & Billing" });
     const accountHeading = screen.getByRole("heading", { name: "Account" });
 
+    expect(preferencesHeading.compareDocumentPosition(emailPreferencesHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(emailPreferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(preferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(billingHeading.compareDocumentPosition(accountHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
@@ -632,6 +636,7 @@ describe("Settings page cancellation flow", () => {
       inactivityRemindersEnabled: false,
       weakConceptRemindersEnabled: false,
       weeklySummaryRemindersEnabled: false,
+      marketingEmailsEnabled: false,
     });
 
     render(<SettingsPage />);
@@ -645,28 +650,35 @@ describe("Settings page cancellation flow", () => {
     expect(await screen.findByText("Learning style updated.")).toBeInTheDocument();
   });
 
-  it("persists study reminder toggles", async () => {
-    (updateStudyReminders as jest.Mock).mockResolvedValue({
+  it("persists email preference toggles", async () => {
+    (updateEmailPreferences as jest.Mock).mockResolvedValue({
       ...proProfile,
       inactivityRemindersEnabled: true,
       weakConceptRemindersEnabled: true,
       weeklySummaryRemindersEnabled: true,
+      marketingEmailsEnabled: true,
     });
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("checkbox", { name: /Inactivity reminders/i }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Weak concept reminders/i }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Weekly summary email/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Study Reminders" }));
+    expect(await screen.findByRole("heading", { name: "Email Preferences" })).toBeInTheDocument();
+    expect(screen.getByText("Account & security — sign-in verification, password resets")).toBeInTheDocument();
+    expect(screen.getByText("Billing — payment receipts, plan-expiry reminders, refunds")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Study reminders/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Weak-concept nudges/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Weekly summary/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Product news & tips/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save email preferences" }));
 
     await waitFor(() => {
-      expect(updateStudyReminders).toHaveBeenCalledWith({
+      expect(updateEmailPreferences).toHaveBeenCalledWith({
         inactivityRemindersEnabled: true,
         weakConceptRemindersEnabled: true,
         weeklySummaryRemindersEnabled: true,
+        marketingEmailsEnabled: true,
       });
     });
-    expect(await screen.findByText("Study reminders updated.")).toBeInTheDocument();
+    expect(await screen.findByText("Email preferences updated.")).toBeInTheDocument();
   });
 });

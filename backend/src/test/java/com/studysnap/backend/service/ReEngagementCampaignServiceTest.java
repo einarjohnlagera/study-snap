@@ -122,7 +122,7 @@ class ReEngagementCampaignServiceTest {
     @Test
     void send_skipsUserAlreadySent() {
         UserEntity user = activeUser(ProfileType.STUDENT);
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailType(user.getId(), RetentionEmailType.RE_ENGAGEMENT_2025))
                 .thenReturn(true);
@@ -137,7 +137,7 @@ class ReEngagementCampaignServiceTest {
     @Test
     void send_skipsRecentlyActiveUser() {
         UserEntity user = activeUser(ProfileType.STUDENT);
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailType(user.getId(), RetentionEmailType.RE_ENGAGEMENT_2025))
                 .thenReturn(false);
@@ -179,7 +179,7 @@ class ReEngagementCampaignServiceTest {
     void send_returnsCorrectSentAndSkippedCounts() {
         UserEntity user1 = activeUser(ProfileType.STUDENT);
         UserEntity user2 = activeUser(ProfileType.PROFESSIONAL);
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user1, user2));
         when(emailLogRepository.existsByUserIdAndEmailType(any(), eq(RetentionEmailType.RE_ENGAGEMENT_2025)))
                 .thenReturn(false);
@@ -199,7 +199,7 @@ class ReEngagementCampaignServiceTest {
     void countEligible_returnsCorrectCount() {
         UserEntity user1 = activeUser(ProfileType.STUDENT);
         UserEntity user2 = activeUser(ProfileType.TEACHER);
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user1, user2));
         when(emailLogRepository.existsByUserIdAndEmailType(any(), eq(RetentionEmailType.RE_ENGAGEMENT_2025)))
                 .thenReturn(false);
@@ -213,6 +213,30 @@ class ReEngagementCampaignServiceTest {
         verify(emailService, never()).sendEmail(any());
     }
 
+    @Test
+    void countEligible_excludesUsersWhoHaveNotOptedInToMarketingEmails() {
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        int count = service.countEligible(NOW);
+
+        assertThat(count).isZero();
+        verify(activityEventRepository, never()).existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                any(), any(Collection.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void send_excludesUsersWhoHaveNotOptedInToMarketingEmails() {
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        ReEngagementSendResult result = service.send(NOW);
+
+        assertThat(result.sent()).isZero();
+        assertThat(result.skipped()).isZero();
+        verify(emailService, never()).sendEmail(any());
+    }
+
     // --- helpers ---
 
     private UserEntity activeUser(ProfileType profileType) {
@@ -222,11 +246,12 @@ class ReEngagementCampaignServiceTest {
         user.setFirstName("Test");
         user.setStatus(UserStatus.ACTIVE);
         user.setProfileType(profileType);
+        user.setMarketingEmailsEnabled(true);
         return user;
     }
 
     private void stubEligible(UserEntity user) {
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailType(user.getId(), RetentionEmailType.RE_ENGAGEMENT_2025))
                 .thenReturn(false);

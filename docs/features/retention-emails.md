@@ -20,6 +20,10 @@ Current reminders include:
   - includes study packs created, quizzes taken, adaptive sessions, and average quiz score for the last `7` days
   - gated by `weeklySummaryRemindersEnabled` (default off until the user opts in)
   - cooldown: `7` days
+- `RE_ENGAGEMENT_2025`
+  - trigger: admin-started re-engagement campaign for inactive verified users
+  - gated by `marketingEmailsEnabled` (default off until the user opts in)
+  - deduped by `email_log`
 
 ## Persistence
 
