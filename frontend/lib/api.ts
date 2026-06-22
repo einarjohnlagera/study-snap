@@ -625,6 +625,13 @@ export type GoogleConnectRequest = {
   code: string;
 };
 
+export type ReactivateAccountRequest = {
+  email?: string;
+  password?: string;
+  googleCode?: string;
+  keepSignedIn?: boolean;
+};
+
 export type AuthResponse = {
   userId: string;
   email: string;
@@ -671,7 +678,7 @@ export type MeResponse = {
   productOnboardingCompletedAt: string | null;
   studyPackCount: number;
   role: UserRole;
-  status: "ACTIVE" | "SUSPENDED";
+  status: "ACTIVE" | "SUSPENDED" | "PENDING_DELETION";
   planType: PlanType;
   subscription: SubscriptionPlanStatusResponse;
 };
@@ -744,6 +751,8 @@ export type CompleteOnboardingRequest = {
 export type SimpleMessageResponse = {
   message: string;
 };
+
+export const ACCOUNT_PENDING_DELETION_CODE = "ACCOUNT_PENDING_DELETION";
 
 export type NeedsTextConfirmationResponse = {
   status: "needs_text_confirmation";
@@ -1680,6 +1689,18 @@ export async function loginWithGoogle(request: GoogleAuthRequest): Promise<AuthU
   return toAuthUser(payload);
 }
 
+export async function reactivateAccount(request: ReactivateAccountRequest): Promise<AuthUser> {
+  const response = await fetch(buildUrl("/auth/account/reactivate"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  const payload = await parseApiResponse<AuthResponse>(response, "Could not reactivate account. Please try again.");
+  return toAuthUser(payload);
+}
+
 export async function getSignInMethods(): Promise<SignInMethodsResponse> {
   const response = await fetchWithAuth(
     "/auth/sign-in-methods",
@@ -1743,6 +1764,19 @@ export async function logout(): Promise<void> {
   } finally {
     clearAuthUser();
   }
+}
+
+export async function deleteAccount(confirmation: string): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    "/auth/account/delete",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ confirmation }),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not delete account. Please try again.");
 }
 
 export async function getMe(): Promise<MeResponse> {

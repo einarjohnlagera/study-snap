@@ -3,10 +3,12 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
@@ -24,6 +26,9 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserAuthProviderEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.exception.AccountDeletionConfirmationException;
+import com.studysnap.backend.exception.AccountPendingDeletionException;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidGoalException;
@@ -377,6 +382,122 @@ class AuthServiceTest {
     void login_throwsInvalidCredentialsException_whenUserDoesNotExist() {
         LoginRequest request = new LoginRequest("[email protected]", "password123", false);
         assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+            .hasMessage("Invalid email, username, or password.");
+    }
+
+    @Test
+    void login_returnsPendingDeletionErrorForPendingAccount() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.PENDING_DELETION);
+
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        LoginRequest request = new LoginRequest("current@example.com", "password123", false);
+        assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(AccountPendingDeletionException.class)
+            .hasMessage("This account is scheduled for deletion. Reactivate to keep it.");
+    }
+
+    @Test
+    void login_keepsSuspendedAccountOnGenericInvalidCredentials() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.SUSPENDED);
+
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        LoginRequest request = new LoginRequest("current@example.com", "password123", false);
+        assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+            .hasMessage("Invalid email, username, or password.");
+    }
+
+    @Test
+    void requestAccountDeletion_setsPendingDeletionAndRevokesSessions() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        authService.requestAccountDeletion(userId, new DeleteAccountRequest("DELETE"));
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_DELETION);
+        assertThat(user.getDeletedAt()).isNotNull();
+        assertThat(user.getUpdatedAt()).isNotNull();
+        verify(refreshTokenService).revokeAllForUser(userId);
+    }
+
+    @Test
+    void requestAccountDeletion_rejectsWrongConfirmation() {
+        UUID userId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> authService.requestAccountDeletion(userId, new DeleteAccountRequest("delete")))
+            .isInstanceOf(AccountDeletionConfirmationException.class)
+            .hasMessage("Type DELETE to confirm account deletion.");
+
+        verify(refreshTokenService, never()).revokeAllForUser(any(UUID.class));
+    }
+
+    @Test
+    void requestAccountDeletion_isIdempotentWhenAlreadyPending() {
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime deletedAt = OffsetDateTime.parse("2026-06-01T00:00:00Z");
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.PENDING_DELETION);
+        user.setDeletedAt(deletedAt);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        authService.requestAccountDeletion(userId, new DeleteAccountRequest("DELETE"));
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_DELETION);
+        assertThat(user.getDeletedAt()).isEqualTo(deletedAt);
+        verify(refreshTokenService).revokeAllForUser(userId);
+    }
+
+    @Test
+    void reactivateAccount_restoresPendingAccountAndLogsIn() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.PENDING_DELETION);
+        user.setDeletedAt(OffsetDateTime.parse("2026-06-01T00:00:00Z"));
+
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        AuthResponse response = authService.reactivateAccount(
+            new ReactivateAccountRequest("current@example.com", "password123", null, true),
+            "127.0.0.1",
+            "JUnit"
+        );
+
+        assertThat(response.userId()).isEqualTo(userId.toString());
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(user.getDeletedAt()).isNull();
+        verify(analyticsService).trackEvent(userId, AnalyticsEventType.LOGIN, userId, java.util.Map.of(
+            "keepSignedIn", true,
+            "reactivated", true
+        ));
+    }
+
+    @Test
+    void reactivateAccount_rejectsInvalidCredentials() {
+        when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(Optional.empty());
+        ReactivateAccountRequest request = new ReactivateAccountRequest("missing@example.com", "password123", null, false);
+
+        assertThatThrownBy(() -> authService.reactivateAccount(
             request,
             "127.0.0.1",
             "JUnit"
