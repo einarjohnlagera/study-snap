@@ -16,7 +16,7 @@ Base branch for this release: `releases/v0.31.2`. The funnel and admin dashboard
 - **Analytics event audit.** Cross-check every `AnalyticsEventType` value against its fire site: flag events no longer emitted (or belonging to removed features), confirm admin funnel/summary queries reference current events, and verify nothing is silently dropping (the FK bug is Exhibit A).
 - **Retention + monetization-conversion visibility.** Add a cross-week retention cohort (W1 activated → W2 returned) to `AdminFunnelService`, and add upgrade-click → checkout → paid drop-off instrumentation (the gap between `UPGRADE_CLICKED` and `SUBSCRIPTION_STARTED`). Monetization conversion — not engagement — is the leak.
 - **Anti-drift:** analytics/telemetry must be resilient (never fail or drop on referential timing); no PII in event metadata; admin-only surfaces; no change to the universal learning loop. Add any new analytics events to the `AnalyticsEventType` enum (Java + frontend) before firing.
-- **Out of scope (do not build without explicit ask):** any user-facing analytics surface; pricing/checkout product changes (this release only *measures* the leak); bulk *quiz* generation and teacher-flow (v0.32.0).
+- **Out of scope (do not build without explicit ask):** any user-facing analytics surface; pricing/checkout product changes (this release only *measures* the leak); bulk *quiz* generation and teacher-flow (v0.33.0).
 
 ## Source-of-truth docs (read before implementing anything)
 
