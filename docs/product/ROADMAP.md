@@ -6,11 +6,13 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.31.2 - Analytics Integrity & Funnel Visibility` is the release currently in progress (base branch `releases/v0.31.2`).
+No release is currently in progress. `v0.32.0 - Account & Communication Controls` is the next candidate (parked, not yet kicked off).
 
-`v0.31.1 - Adoptable Study Plans Discovery & Status` is the current documentation baseline (last released).
+`v0.31.2 - Analytics Integrity & Funnel Visibility` is the current documentation baseline (last released).
 
-`v0.30.0 - Readiness Signals` is the previous baseline.
+`v0.31.1 - Adoptable Study Plans Discovery & Status` is the previous baseline.
+
+`v0.30.0 - Readiness Signals` is the release before that.
 
 `v0.29.1 - Bulk Generation Polish` is the release before that.
 
@@ -183,7 +185,7 @@ Anti-drift: no new quota category, no async infra, no AI synthesis, no relaxatio
 
 ---
 
-## v0.31.2 - Analytics Integrity & Funnel Visibility (in progress)
+## v0.31.2 - Analytics Integrity & Funnel Visibility (released)
 
 Base branch for this release: `releases/v0.31.2`.
 

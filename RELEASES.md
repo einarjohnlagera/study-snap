@@ -2,7 +2,7 @@
 
 ## v0.31.2 - Analytics Integrity & Funnel Visibility
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: the funnel and admin dashboards already exist and the core loop is healthy — the real gaps are **data integrity in analytics** and **visibility into retention and where monetization leaks**, not the product loop itself. This release fixes the recurring `analytics_events` FK violation that silently drops SIGNUP analytics, audits every analytics event against its fire site, and adds retention-cohort + upgrade→checkout drop-off instrumentation. Small, additive, mostly backend; no new product surface for users. See `docs/product/ROADMAP.md` for full scope and locked rules.
 
