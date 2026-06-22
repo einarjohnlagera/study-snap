@@ -60,94 +60,517 @@ Capture → Generate → Review → Improve → Copy → Repeat
 
 ---
 
+# Community-First Growth Strategy
+
+People do not convert because they were sold to.
+
+People convert because:
+
+1. They answered.
+2. They learned.
+3. They trusted.
+4. They discovered NoteLib naturally.
+
+Engagement first.
+
+Trust second.
+
+Conversion third.
+
+---
+
 # Audience Priority
 
-Current priority audiences:
+Current priority based on actual performance:
 
-1. Architecture (ALE)
-2. LET
-3. PNLE
+## 1. LET
 
-Reason:
+Highest engagement audience.
 
-These currently produce the strongest engagement and discussion.
+Strengths:
+
+* reactions
+* comments
+* shares
+* discussions
+
+Best-performing category:
+
+Educational Psychology
+
+Highest Performing Topics
+
+1. Bandura
+2. Piaget
+3. Vygotsky
+4. Pavlov
+5. Bruner
 
 ---
 
-# Facebook Page Strategy
+## 2. PNLE
 
-Purpose:
+Strong engagement audience.
 
-* awareness
-* authority
-* educational discovery
+Strengths:
+
+* comments
+* practical discussions
+* repeat participation
+
+Best-performing category:
+
+Maternal and Child Nursing
 
 ---
 
-## Content Type
+## 3. CPALE
 
-Post:
+Highest conversion audience.
 
-* educational trivia
-* science
-* history
-* board exam related concepts
+Strengths:
+
+* note copies
+* signups
+* review intent
+
+Best-performing category:
+
+Financial Accounting
+
+---
+
+## 4. ALE
+
+Smaller audience.
+
+Requires highly relatable topics.
+
+Best-performing category:
+
+Climate Responsive Design
+
+---
+
+# Content Selection Rule
+
+DO NOT choose topics simply because they are trending.
+
+Choose topics based on:
+
+1. Historical engagement
+2. Historical conversions
+3. Exam relevance
+4. Audience familiarity
+5. Community feedback
+
+The best-performing posts are usually:
+
+* familiar
+* confidence-building
+* discussion-worthy
+* exam-relevant
+
+---
+
+# Proven Topic Strategy
+
+## LET
+
+Highest Engagement Topics
+
+* Bandura Social Learning Theory
+* Piaget Cognitive Development
+* Pavlov Classical Conditioning
+* Bruner Learning Theory
+* Skinner Reinforcement Theory
+
+Why they work:
+
+Teachers and reviewees can immediately relate.
+
+---
+
+## PNLE
+
+Highest Engagement Topics
+
+* Leopold's Maneuvers
+* Maternal & Child Nursing
+* Pharmacology
+* Drug Toxicities
+* Patient Assessment
+
+Why they work:
+
+Practical clinical scenarios outperform theory-heavy questions.
+
+---
+
+## CPALE
+
+Highest Conversion Topics
+
+* Debits and Credits
+* Accounting Equation
+* Financial Accounting
+* Adjusting Entries
+* Financial Statements
+
+Why they work:
+
+Reviewees actively seek accounting reviewers and practice questions.
+
+---
+
+## ALE
+
+Best Performing Topics
+
+* Climate Responsive Design
+* Sustainable Design
+* Building Technology
+* Building Utilities
+* National Building Code
+
+Why they work:
+
+They connect architecture concepts to real-world situations.
+
+---
+
+# Post Structure Framework
+
+Every post should follow:
+
+## 1. Hook
+
+Start with:
+
+* curiosity
+* relatable scenario
+* challenge
+* observation
 
 Examples:
 
-* Roman Architecture
-* How the Light Bulb Works
-* Why We Feel Nauseous After Exercise
-* Inflation and Purchasing Power
+"Ever notice how..."
+
+"A pregnant patient comes in..."
+
+"Every CPALE taker has answered this question before..."
+
+"Why do some buildings stay cooler..."
+
+Avoid:
+
+* Today let's study...
+* Here's a lesson...
+* Did you know...
 
 ---
 
-## Image Rules
+## 2. Context
+
+Provide 2–4 short sentences.
+
+Make the audience think:
+
+"I know something about this."
+
+or
+
+"I should know this."
+
+---
+
+## 3. Quiz Transition
+
+End with:
+
+Can you answer today's [EXAM] review question?
+
+📚 Answer in the image.
+
+---
+
+## 4. Hashtags
+
+Use 4–6 relevant hashtags.
+
+Avoid hashtag stuffing.
+
+---
+
+# Image Rules
 
 Image should contain:
 
-* title only
-* relevant image
+* actual quiz question
+* answer choices
+* clean layout
 
-Image should NOT contain:
+Avoid:
 
-* explanations
-* bullet points
-* infographic style content
-* large blocks of text
+* long explanations
+* infographics
+* large text blocks
 
-The post contains the explanation.
+The image should invite participation.
 
-The image creates curiosity.
-
----
-
-## Posting Frequency
-
-2 posts per day
-
-Recommended:
-
-* 9 AM
-* 7 PM
+The explanation comes later.
 
 ---
 
-# Success Metric
+# Engagement Lifecycle
 
-Primary:
+The post is only Step 1.
 
-* shares
+The actual growth loop is:
+
+Quiz Post
+↓
+Discussion Comment
+↓
+Answer Reveal
+↓
+Thank You Comment
+↓
+Public Library Visit
+↓
+Note Copy
+↓
+Signup
+
+---
+
+# Step 1 — Quiz Post
+
+Goal:
+
+Generate engagement.
+
+NOT signups.
+
+NOT app installs.
+
+NOT clicks.
+
+Success metric:
+
+Comments.
+
+---
+
+# Step 2 — Follow-Up Comment
+
+Post after engagement starts.
+
+Example:
+
+💬 What's your answer and why?
+
+Let's see how many future [RN / Teacher / CPA / Architect] get this one right.
+
+Goal:
+
+Increase discussion.
+
+---
+
+# Step 3 — Answer Reveal
+
+Structure:
+
+🎉 Thank you for joining today's challenge!
+
+✅ Correct Answer
+
+Short explanation
+
+Relevant NoteLib note
+
+Quiz challenge
+
+Question for future topics
+
+Goal:
+
+Teach first.
+
+Sell nothing.
+
+---
+
+# Step 4 — High Engagement Thank You Comment
+
+Use when:
+
+* engagement exceeds normal levels
+* signups increase
+* note copies increase
+
+Purpose:
+
+Build trust.
+
+Reward participation.
+
+Soft sell NoteLib naturally.
+
+Never hard sell.
+
+---
+
+# Soft Selling Strategy
+
+Never sell in the main post.
+
+Main post objective:
+
 * comments
+* shares
+* participation
 
-Secondary:
+Soft selling happens through:
 
-* reactions
+* answer reveal
+* thank-you comments
+* note recommendations
+* public library links
 
-Tertiary:
+Users should discover NoteLib naturally.
 
-* clicks
+---
+
+# LET Content Strategy
+
+Primary Subjects
+
+* Educational Psychology
+* Assessment of Learning
+* Curriculum Development
+* Professional Education
+
+Highest Performing Topics
+
+* Bandura
+* Piaget
+* Pavlov
+
+---
+
+# PNLE Content Strategy
+
+Primary Subjects
+
+* Maternal and Child Nursing
+* Medical-Surgical Nursing
+* Pharmacology
+* Pediatric Nursing
+
+Future Expansion
+
+* Fluid, Electrolyte, and Acid-Base Balance
+* Shock
+* Emergency Nursing
+* NCLEX-style content
+
+---
+
+# CPALE Content Strategy
+
+Primary Subjects
+
+* Financial Accounting
+* Auditing
+* Taxation
+* Cost Accounting
+* Financial Management
+
+Focus:
+
+Concept mastery and practice questions.
+
+---
+
+# ALE Content Strategy
+
+Primary Subjects
+
+* Architectural Design
+* Site Planning
+* Building Technology
+* Building Utilities
+* National Building Code
+
+Focus:
+
+Relatable real-world architecture problems.
+
+---
+
+# Posting Schedule
+
+Current Recommended Schedule
+
+9:00 AM
+LET
+
+12:00 NN
+CPALE
+
+3:00 PM
+ALE
+
+7:00 PM
+PNLE
+
+Adjust based on actual engagement data.
+
+---
+
+# Success Metrics
+
+Primary
+
+* Comments
+* Shares
+* Public Note Copies
+
+Secondary
+
+* Signups
+* Profile Visits
+
+Tertiary
+
+* Reactions
 
 Reason:
 
-Shares and comments indicate educational value.
+Comments indicate participation.
+
+Shares indicate value.
+
+Note copies indicate strong learning intent.
+
+Signups are the outcome.
+
+---
+
+# Long-Term Goal
+
+Build the largest free review and study community for:
+
+* LET
+* PNLE
+* CPALE
+* ALE
+* Future board exams
+
+The objective is not to make people use NoteLib.
+
+The objective is to help people learn.
+
+If we consistently help people learn, NoteLib growth becomes a natural consequence.

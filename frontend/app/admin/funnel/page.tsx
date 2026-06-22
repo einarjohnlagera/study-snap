@@ -29,6 +29,15 @@ function formatDays(value: number | null): string {
   }).format(value)} days`;
 }
 
+function formatWeek(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
+}
+
 type MetricCardProps = {
   label: string;
   value: string;
@@ -121,6 +130,38 @@ export default function AdminFunnelPage() {
     ] satisfies MetricCardProps[];
   }, [metrics]);
 
+  const checkoutCards = useMemo(() => {
+    if (!metrics) {
+      return [] as MetricCardProps[];
+    }
+    return [
+      {
+        label: "Upgrade Clicks",
+        value: formatMetric(metrics.checkoutConversion.usersClickedUpgrade),
+      },
+      {
+        label: "Checkout Initiated",
+        value: formatMetric(metrics.checkoutConversion.usersInitiatedCheckout),
+      },
+      {
+        label: "Paid Conversions",
+        value: formatMetric(metrics.checkoutConversion.usersSubscribed),
+      },
+      {
+        label: "Click to Checkout",
+        value: formatPercent(metrics.checkoutConversion.clickToCheckoutRatePercent),
+      },
+      {
+        label: "Checkout to Paid",
+        value: formatPercent(metrics.checkoutConversion.checkoutToPaidRatePercent),
+      },
+      {
+        label: "Click to Paid",
+        value: formatPercent(metrics.checkoutConversion.clickToPaidRatePercent),
+      },
+    ] satisfies MetricCardProps[];
+  }, [metrics]);
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       <header className="space-y-2">
@@ -161,6 +202,54 @@ export default function AdminFunnelPage() {
               {paywallCards.map((card) => (
                 <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
               ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">Checkout conversion</h2>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {checkoutCards.map((card) => (
+                <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">W1→W2 retention</h2>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)]">
+              <MetricCard
+                label="Returned in Week 2"
+                value={formatPercent(metrics.retentionCohort.ratePercent)}
+                detail={`${formatMetric(metrics.retentionCohort.returnedWeek2Users)} of ${formatMetric(metrics.retentionCohort.eligibleActivatedUsers)} eligible activated users`}
+              />
+              <Card className="overflow-hidden">
+                {metrics.retentionCohort.weeklyCohorts.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-foreground/55">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Week</th>
+                          <th className="px-4 py-3 font-semibold">Size</th>
+                          <th className="px-4 py-3 font-semibold">Returned</th>
+                          <th className="px-4 py-3 font-semibold">Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {metrics.retentionCohort.weeklyCohorts.map((cohort) => (
+                          <tr key={cohort.weekStart}>
+                            <td className="px-4 py-3 font-medium text-foreground">{formatWeek(cohort.weekStart)}</td>
+                            <td className="px-4 py-3 text-foreground/75">{formatMetric(cohort.cohortSize)}</td>
+                            <td className="px-4 py-3 text-foreground/75">{formatMetric(cohort.returnedCount)}</td>
+                            <td className="px-4 py-3 text-foreground/75">{formatPercent(cohort.ratePercent)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="p-5 text-sm text-foreground/65">No eligible retention cohorts yet.</p>
+                )}
+              </Card>
             </div>
           </section>
         </>

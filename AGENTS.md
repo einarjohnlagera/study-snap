@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.31.1` (in progress); previous: `v0.31.0 - Adoptable Study Plans`
+- `v0.31.2` (in progress); previous: `v0.31.1 - Adoptable Study Plans Discovery & Status`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -349,6 +349,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Track product, growth, and upgrade events through the shared analytics event model.
 - Analytics must be non-blocking and must never break the primary user action if persistence fails.
+- Backend analytics must publish after the surrounding transaction commits (`AFTER_COMMIT`) and persist off-request through `analyticsTaskExecutor`; never write analytics mid-transaction.
 - Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
@@ -1491,7 +1492,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.31.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.31.2`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
@@ -1521,6 +1522,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 - Never use a string literal for an analytics event name without first adding it to the `AnalyticsEventType` union in `frontend/lib/api.ts`.
 - All analytics calls are fire-and-forget (`void`). Do not `await` them or let failures block the primary flow.
+- Analytics events fire after the surrounding transaction commits through the `AFTER_COMMIT` event listener, and `analytics_events.user_id` has no hard FK to `users(id)`. Never reintroduce that FK or persist analytics mid-transaction.
 - Do not duplicate event tracking: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired once per quiz completion, not per question or per partial step.
 
 ### Content Moderation Anti-Drift

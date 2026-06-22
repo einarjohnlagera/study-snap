@@ -12,12 +12,14 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.UserUsageRepository;
+import com.studysnap.backend.repository.WeeklyRetentionCohortProjection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -79,6 +81,11 @@ class AdminFunnelServiceTest {
         assertThat(response.quotaHit().ratePercent()).isEqualTo(0.0);
         assertThat(response.paywallConversion().ratePercent()).isEqualTo(0.0);
         assertThat(response.valueLoop().ratePercent()).isEqualTo(0.0);
+        assertThat(response.retentionCohort().ratePercent()).isEqualTo(0.0);
+        assertThat(response.retentionCohort().weeklyCohorts()).isEmpty();
+        assertThat(response.checkoutConversion().clickToCheckoutRatePercent()).isEqualTo(0.0);
+        assertThat(response.checkoutConversion().checkoutToPaidRatePercent()).isEqualTo(0.0);
+        assertThat(response.checkoutConversion().clickToPaidRatePercent()).isEqualTo(0.0);
     }
 
     @Test
@@ -156,6 +163,57 @@ class AdminFunnelServiceTest {
         assertThat(response.paywallConversion().ratePercent()).isEqualTo(66.7);
     }
 
+    @Test
+    void getMetrics_retentionCohort_computesHeadlineAndWeeklyRates() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(any())).thenReturn(12L);
+        when(analyticsEventRepository.countReturnedWeek2Users(any())).thenReturn(5L);
+        when(analyticsEventRepository.findWeeklyRetentionCohorts(any())).thenReturn(List.of(
+                weeklyCohort(LocalDate.parse("2026-05-04"), 6, 3),
+                weeklyCohort(LocalDate.parse("2026-04-27"), 6, 2)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.retentionCohort().eligibleActivatedUsers()).isEqualTo(12);
+        assertThat(response.retentionCohort().returnedWeek2Users()).isEqualTo(5);
+        assertThat(response.retentionCohort().ratePercent()).isEqualTo(41.7);
+        assertThat(response.retentionCohort().weeklyCohorts()).hasSize(2);
+        assertThat(response.retentionCohort().weeklyCohorts().getFirst().weekStart()).isEqualTo("2026-05-04");
+        assertThat(response.retentionCohort().weeklyCohorts().getFirst().ratePercent()).isEqualTo(50.0);
+    }
+
+    @Test
+    void getMetrics_checkoutConversion_computesStepwiseRates() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.countDistinctUsersByEventType(AnalyticsEventType.UPGRADE_CLICKED)).thenReturn(10L);
+        when(analyticsEventRepository.countDistinctUsersWithEventAfterEvent(
+                AnalyticsEventType.UPGRADE_CLICKED,
+                AnalyticsEventType.CHECKOUT_INITIATED
+        )).thenReturn(4L);
+        when(analyticsEventRepository.countDistinctUsersWithEventAfterEvent(
+                AnalyticsEventType.CHECKOUT_INITIATED,
+                AnalyticsEventType.SUBSCRIPTION_STARTED
+        )).thenReturn(1L);
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.checkoutConversion().usersClickedUpgrade()).isEqualTo(10);
+        assertThat(response.checkoutConversion().usersInitiatedCheckout()).isEqualTo(4);
+        assertThat(response.checkoutConversion().usersSubscribed()).isEqualTo(1);
+        assertThat(response.checkoutConversion().clickToCheckoutRatePercent()).isEqualTo(40.0);
+        assertThat(response.checkoutConversion().checkoutToPaidRatePercent()).isEqualTo(25.0);
+        assertThat(response.checkoutConversion().clickToPaidRatePercent()).isEqualTo(10.0);
+    }
+
     private void stubBaseMetrics(
             long verifiedUsers,
             long activatedUsers,
@@ -183,6 +241,29 @@ class AdminFunnelServiceTest {
         )).thenReturn(usersUpgradedAfterPaywall);
         when(analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPack())
                 .thenReturn(usersStartedQuizWithin7Days);
+        when(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(any())).thenReturn(0L);
+        when(analyticsEventRepository.countReturnedWeek2Users(any())).thenReturn(0L);
+        when(analyticsEventRepository.findWeeklyRetentionCohorts(any())).thenReturn(List.of());
+        when(analyticsEventRepository.countDistinctUsersWithEventAfterEvent(any(), any())).thenReturn(0L);
+    }
+
+    private WeeklyRetentionCohortProjection weeklyCohort(LocalDate weekStart, long cohortSize, long returnedCount) {
+        return new WeeklyRetentionCohortProjection() {
+            @Override
+            public LocalDate getWeekStart() {
+                return weekStart;
+            }
+
+            @Override
+            public long getCohortSize() {
+                return cohortSize;
+            }
+
+            @Override
+            public long getReturnedCount() {
+                return returnedCount;
+            }
+        };
     }
 
     private UserUsageEntity buildUsage(UUID userId, int studyPackGenerations) {

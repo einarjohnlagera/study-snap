@@ -1,5 +1,19 @@
 # RELEASES.md - NoteLib
 
+## v0.31.2 - Analytics Integrity & Funnel Visibility
+
+**Status: Released**
+
+Theme: the funnel and admin dashboards already exist and the core loop is healthy — the real gaps are **data integrity in analytics** and **visibility into retention and where monetization leaks**, not the product loop itself. This release fixes the recurring `analytics_events` FK violation that silently drops SIGNUP analytics, audits every analytics event against its fire site, and adds retention-cohort + upgrade→checkout drop-off instrumentation. Small, additive, mostly backend; no new product surface for users. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+- **Analytics persistence integrity** — Analytics writes now publish an after-commit event before dispatching persistence to `analyticsTaskExecutor`, so signup lifecycle telemetry is recorded only after the signup transaction commits and rolled-back flows do not create phantom events. `analytics_events.user_id` no longer has a hard FK to `users(id)`, preventing referential timing from dropping `SIGNUP`, `SIGNUP_COMPLETED`, and `EMAIL_VERIFICATION_SENT` funnel events while preserving the nullable indexed column for reporting.
+- **Analytics event audit** — Audited the then-current 70 `AnalyticsEventType` values against every fire site (incl. the `eventType=` / `analyticsEvent=` prop and `trackOnboardingEvent` patterns) and the admin funnel/summary queries. Fixed the one live drop: `QUIZ_SHARE_LINK_CREATED` / `_OPENED` / `_TOGGLED` are fired by the share-link feature but were missing from the backend enum, so each POST `/analytics/events` was rejected with HTTP 400 and the event lost — they are now in the enum and recorded. Removed the never-fired `ONBOARDING_V2_GOAL_SELECTED` (no goal-selection step emits it). The audited set is consistent across frontend union and backend enum, and every admin-referenced event is live.
+- **Retention and checkout funnel visibility** — Admin Funnel now includes W1→W2 retention cohorts (first Study Pack activation, then any activity in the completed week-2 window) and an upgrade → checkout → paid conversion view. Added `CHECKOUT_INITIATED`, fired from successful Xendit checkout URL creation/reuse with only `planType` and `billingCycle` metadata, so admins can see whether upgrade intent drops before hosted checkout or after checkout. The checkout-step metric is forward-looking from deploy; historical checkout arrivals before this event are not backfilled.
+
+---
+
 ## v0.31.1 - Adoptable Study Plans Discovery & Status
 
 **Status: Released**

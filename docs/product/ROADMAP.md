@@ -6,11 +6,13 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.31.2 - Analytics Integrity & Funnel Visibility` is the next candidate (parked, not yet kicked off).
+No release is currently in progress. `v0.32.0 - Account & Communication Controls` is the next candidate (parked, not yet kicked off).
 
-`v0.31.1 - Adoptable Study Plans Discovery & Status` is the current documentation baseline (last released).
+`v0.31.2 - Analytics Integrity & Funnel Visibility` is the current documentation baseline (last released).
 
-`v0.30.0 - Readiness Signals` is the previous baseline.
+`v0.31.1 - Adoptable Study Plans Discovery & Status` is the previous baseline.
+
+`v0.30.0 - Readiness Signals` is the release before that.
 
 `v0.29.1 - Bulk Generation Polish` is the release before that.
 
@@ -47,7 +49,7 @@ Scope:
 - **`/library/bulk-generate` admin page** — enter one Subject plus topic rows, use the compact profile-aware `Course / Program · Target Audience` grid plus Public toggle, and submit; results surface as real notes in the Library that resolve `GENERATING → READY`.
 - **Quota wiring** — per-user pre-flight quota check (admin-bypassed) plus a cost/count preview before the batch starts.
 
-Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.32.0 collection-level bulk *quiz* generation over existing notes.
+Anti-drift: no new job/progress entity; reuse `NoteGenerationService`, the async Study Pack pipeline, `NoteService.create`, and the existing quota services; the admin gate is role-based and removable; no per-profile pipeline branches. This is bulk *content* (note + Study Pack) generation from topics — **distinct from** the v0.33.0 collection-level bulk *quiz* generation over existing notes.
 
 ### Workstream 2 — Generation-context correctness (learner level → course/program)
 
@@ -114,7 +116,7 @@ Base branch for this release: `releases/v0.30.0`.
 
 Theme: make Progress an **honest, complete readiness picture** for our actual users — students and exam-takers. The gap: practice in the exam modes never moves the Progress page. (Profile-type integrity was pulled forward into v0.29.0.)
 
-Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.32.0 (still no teacher users).
+Why later (after Bulk Generation): seeding content was the active bottleneck, so Bulk Generation took v0.29.0. The leverage here is still the students and exam-takers we *do* have — they need to trust that Progress reflects everything they've practiced. Teacher-flow polish and bulk *quiz* generation remain deferred to v0.33.0 (still no teacher users).
 
 Locked direction:
 
@@ -129,7 +131,7 @@ Scope:
 - **Source-constrained key concepts** *(shipped)* — Long Exam and Interview question generation emit a schema-enforced per-question `keyConcept` from the source pack's key concepts; recording prefers it and falls back to the free-form `concept` for legacy/pool questions.
 - **Weakness signal across all modes** *(shipped)* — `lastIncorrectAt` recorded on completion in every practice mode; Progress shows a distinct struggling indicator (Note Detail "Needs work").
 
-Teacher-flow polish and bulk *quiz* generation move to v0.32.0 (still no teacher users); v0.31.0 is now Adoptable Study Plans (v1). No readiness work is deferred.
+Teacher-flow polish and bulk *quiz* generation move to v0.33.0 (still no teacher users); v0.31.0 is now Adoptable Study Plans (v1). No readiness work is deferred.
 
 ---
 
@@ -139,7 +141,7 @@ Base branch for this release: `releases/v0.31.0`.
 
 Theme: most learners don't want to assemble a study plan note-by-note — they want a ready-made, structured plan for their goal (a LET taker wants a LET reviewer plan, not a pile of filtered notes). Observed behavior: most users only add their own notes; the pre-filtered Dashboard helps them *find* exam-relevant public notes but still leaves them to self-assemble. This release lets a learner **adopt** a curated, ordered study plan in one tap.
 
-Why now (over teacher-flow): this is the payoff of the two prior bets — **Bulk Generation** seeds the public exam content (ALE/PNLE/LET) and **Readiness Signals** make practice count. Adopt → practice → Progress reflects it. It serves the students/exam-takers we already have. Teacher-flow polish and bulk *quiz* generation are deferred to v0.32.0 (we still have no teacher users, so it is fine to defer).
+Why now (over teacher-flow): this is the payoff of the two prior bets — **Bulk Generation** seeds the public exam content (ALE/PNLE/LET) and **Readiness Signals** make practice count. Adopt → practice → Progress reflects it. It serves the students/exam-takers we already have. Teacher-flow polish and bulk *quiz* generation are deferred to v0.33.0 (we still have no teacher users, so it is fine to defer).
 
 The discriminating constraint that fixes the design: the **entire learning loop — generation, `ConceptHealth`, Progress, "Next in this plan," and the v0.30.0 exam→Progress recording — runs on *owned* notes.** A plan that merely *links* public notes is inert (it cannot feed Progress). Therefore **adopt = copy, not reference.**
 
@@ -159,7 +161,7 @@ Scope (v1 cut):
 
 Deferred — explicitly, together (do not smuggle into v1):
 
-- **Live-link / shared-progress plans.** The "original owner keeps the plan; adopters get their own progress on shared content; owner pushes updates" model is a **different architecture**, not a setting — it requires letting users practice/track progress on study packs they do **not** own, relaxing the `findByIdAndOwnerUserId` ownership gate across every read/practice path plus per-user progress overlays on shared content. That is the **teacher-monitoring / LMS shape**, which belongs with teacher-flow (v0.32.0, gated on having teacher users). **Do not offer both own-copy and link-copy** — that doubles the surface for two architectures.
+- **Live-link / shared-progress plans.** The "original owner keeps the plan; adopters get their own progress on shared content; owner pushes updates" model is a **different architecture**, not a setting — it requires letting users practice/track progress on study packs they do **not** own, relaxing the `findByIdAndOwnerUserId` ownership gate across every read/practice path plus per-user progress overlays on shared content. That is the **teacher-monitoring / LMS shape**, which belongs with teacher-flow (v0.33.0, gated on having teacher users). **Do not offer both own-copy and link-copy** — that doubles the surface for two architectures.
 - **User/teacher-authored plan sharing of *private* notes.** Snapshot copy relies on the public-note copy path, which requires the notes to be public. A teacher sharing their *private* curated notes to students has no copy path today (it would need a share-grant mechanism). So teacher→student sharing of private content is a separate deferred piece even in snapshot form.
 
 Anti-drift: reuse `copyNote(..., includeStudyPack=true)`, the `NoteCollection` model, and `getCollectionLabels`; no new quota category; no async/bulk-generation infra; no AI curriculum synthesis; no relaxation of note/study-pack ownership checks; v1 is admin-curated plans over public seeded notes only.
@@ -183,13 +185,13 @@ Anti-drift: no new quota category, no async infra, no AI synthesis, no relaxatio
 
 ---
 
-## v0.31.2 (candidate, parked) - Analytics Integrity & Funnel Visibility
+## v0.31.2 - Analytics Integrity & Funnel Visibility (released)
 
-**Status: parked — NOT kicked off.** Do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Recorded here so it isn't lost; v0.31.1 remains the active release.
+Base branch for this release: `releases/v0.31.2`.
 
 Theme: the funnel and admin dashboards already exist and the core loop is healthy (as of 2026-06-21: ~140 users, activation 67.2%, value-loop 57%, 306 packs/week). The real gaps are **data integrity in analytics** and **visibility into retention + where monetization leaks** — not the product loop itself. Small, additive, mostly backend; no new product surface for users.
 
-Candidates:
+Scope:
 
 - **Fix `analytics_events` FK violation (lost SIGNUP analytics).** Recurring prod WARN: `analytics_events_user_id_fkey` violated on `eventType=SIGNUP`. Root cause: `AuthService` fires `analyticsService.trackEvent(saved.getId(), SIGNUP, …)` right after `userRepository.save(user)`, but `trackEvent` dispatches to an async executor (`analytics-1`) whose own transaction often commits **before** the signup transaction commits → the user row isn't visible → FK fails. `persistEvent` catches it (non-fatal), but the SIGNUP / SIGNUP_COMPLETED / EMAIL_VERIFICATION_SENT events are **silently dropped, so signup-based funnel metrics undercount**. Fix direction: telemetry should not hard-FK to `users` — **drop the FK** (migration; keep `user_id` nullable + indexed) and/or fire analytics **after commit** (`@TransactionalEventListener(AFTER_COMMIT)`). FK defined in `V25__analytics_events.sql` (`user_id UUID REFERENCES users(id) ON DELETE SET NULL`). This is the only item actively degrading data quality right now → natural first slice.
 - **Analytics event audit.** Cross-check every `AnalyticsEventType` value against its fire site: flag events no longer emitted (or belonging to removed features), confirm the admin funnel/summary queries reference current events, and verify no events are silently dropping (the FK bug above is Exhibit A).
@@ -199,9 +201,35 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 ---
 
-## v0.32.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+## v0.32.0 (candidate, parked) - Account & Communication Controls
 
-Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is now a privacy / account-control / communication-preferences theme.
+
+Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps. Today there is no account-deletion path, no unsubscribe link on recurring email, and email preferences are split across an ad-hoc "Study Reminders" card. This release consolidates account and communication controls into a coherent, compliant surface (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Mostly additive; some new endpoints + a destructive account-deletion flow that needs careful, transactional handling.
+
+Scope:
+
+- **Account deletion (right to erasure).** A user-initiated delete with explicit confirmation, removing or anonymizing the account and owned data (notes, Study Packs, quiz/review sessions, collections, usage, auth providers, tokens). Decide hard-delete vs anonymize per table; `analytics_events.user_id` is already FK-free (v0.31.2) so orphaned ids are fine — do not delete telemetry rows on account deletion. Must be transactional and idempotent, invalidate sessions/refresh tokens, and be clearly irreversible in the UI. Consider a short soft-delete/grace window vs immediate purge.
+- **Data export / "Download my data" (portability).** Let a user export their own content (notes, Study Packs, sessions summary) as a downloadable file. Pairs with deletion to round out the privacy story. Owner-only, no PII beyond the user's own data.
+- **Email/communication preferences center + Settings redesign.** Replace the single "Study Reminders" card with a dedicated **Email Preferences** section that lists every optional email type (inactivity, weak-concept, weekly summary, future marketing/re-engagement) with per-type toggles, clearly separating **transactional** email (verification, password reset, receipts — always sent, shown as informational/non-toggleable) from **optional** email. **Design is Claude's lane** (information design of the preferences surface); per-toggle wiring reuses the existing reminder-flag pattern. Includes the **weekly-summary opt-in toggle** below.
+- **Weekly-summary opt-in flag.** Add `weekly_summary_reminders_enabled` (mirrors `inactivity_reminders_enabled` / `weak_concept_reminders_enabled` from `V28`) gating `RetentionService.findWeeklySummaryUsers`. **Decision (2026-06): default OFF (opt-in)** — column `NOT NULL DEFAULT FALSE`, existing users backfilled to disabled, new users created disabled; this immediately cuts the Sunday blast ~90% under the Resend cap, and users re-enable in the preferences center. 1:1 mirror of the existing reminder pattern. Codex prompt drafted: `docs/codex-prompts/weekly-summary-opt-out.md`.
+- **Tokenized one-click unsubscribe link (for optional emails).** Add an unsubscribe footer link to retention/marketing emails backed by a signed/opaque per-user token and an unauthenticated unsubscribe endpoint that flips the relevant preference without login. No PII in the token/link. Transactional emails are not unsubscribable. Closes the CAN-SPAM/GDPR one-click-unsubscribe gap; pairs with the preferences center.
+- **Email deliverability hardening (right-sized; mostly ops).** As of 2026-06 prod is on Resend's free tier (verify: ~100/day **and** ~3,000/month, ~2 req/s) with 142 users; all email types share one pool, so the Sunday `WEEKLY_SUMMARY` blast can exhaust the daily cap and then make verification / password-reset throw `BAD_GATEWAY` for the rest of the evening. **Primary fix is operational: upgrade the Resend tier (~$20/mo, ~50k/mo) — it moots the cap and the need for a priority queue; do not build a pending-email outbox to dodge ~$20/mo.** Immediate zero-code stopgap: `RETENTION_WEEKLY_CRON=-`. In-scope code hardening: retry-on-429 (or pace the blast under the rate limit) in `ResendEmailService` so a transactional email landing during a blast isn't dropped. A persistent priority outbox stays deferred unless volume genuinely approaches a paid limit; design rule if ever built — transactional sends immediately and is never gated, retention tolerates ~1 day and is dropped after ~1 week.
+
+Additional candidates to consider for the theme (prune at kickoff):
+
+- **Change email address** (with re-verification of the new address).
+- **Account deactivation** (reversible soft-disable) as a lighter alternative to full deletion.
+- **Marketing-consent capture** at signup + a clear transactional-vs-marketing taxonomy for all email types (also informs which emails get the unsubscribe link).
+- **Surface "weekly summary exists"** one-time nudge so the opt-in default OFF doesn't make the channel invisible (optional; only if we want to keep weekly reach).
+
+Anti-drift: reuse the existing reminder-preference pattern (entity flag + repository finder + `updateStudyReminders` + Settings card) — do not build a new preferences framework; no PII in unsubscribe tokens/links; account deletion must be transactional, idempotent, and never delete FK-free telemetry rows; do not build an email outbox/queue unless volume genuinely approaches the provider limit; no change to the universal learning loop.
+
+---
+
+## v0.33.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 

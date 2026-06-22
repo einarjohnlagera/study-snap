@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
@@ -34,6 +35,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -66,6 +68,8 @@ public class PaymentService {
     private static final String FIELD_ID = "id";
     private static final String FIELD_INVOICE_URL = "invoice_url";
     private static final String FIELD_EXPIRY_DATE = "expiry_date";
+    private static final String METADATA_PLAN_TYPE = "planType";
+    private static final String METADATA_BILLING_CYCLE = "billingCycle";
     private static final int INVOICE_DURATION_SECONDS = 86_400;
 
     private final StudySnapProperties properties;
@@ -74,6 +78,7 @@ public class PaymentService {
     private final SubscriptionService subscriptionService;
     private final PricingService pricingService;
     private final WebhookEventService webhookEventService;
+    private final AnalyticsService analyticsService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final Clock clock;
@@ -117,6 +122,12 @@ public class PaymentService {
                         transaction.getBillingCycle(),
                         transaction.getAmount(),
                         transaction.getExpiresAt()
+                );
+                trackCheckoutInitiated(
+                        userId,
+                        transaction.getId(),
+                        checkoutSelection.planType(),
+                        checkoutSelection.billingCycle()
                 );
                 return new BillingCheckoutSessionResponse(transaction.getCheckoutUrl());
             }
@@ -172,7 +183,41 @@ public class PaymentService {
                 invoiceCheckout.expiresAt(),
                 returnUrl == null ? "none" : returnUrl
         );
+        trackCheckoutInitiated(
+                userId,
+                pendingTransaction.get().getId(),
+                checkoutSelection.planType(),
+                checkoutSelection.billingCycle()
+        );
         return new BillingCheckoutSessionResponse(invoiceCheckout.checkoutUrl());
+    }
+
+    private void trackCheckoutInitiated(
+            UUID userId,
+            UUID transactionId,
+            PlanType planType,
+            BillingCycle billingCycle
+    ) {
+        try {
+            analyticsService.trackEvent(
+                    userId,
+                    AnalyticsEventType.CHECKOUT_INITIATED,
+                    transactionId,
+                    Map.of(
+                            METADATA_PLAN_TYPE, planType == null ? "UNKNOWN" : planType.name(),
+                            METADATA_BILLING_CYCLE, billingCycle == null ? "UNKNOWN" : billingCycle.name()
+                    )
+            );
+        } catch (Exception ex) {
+            log.warn(
+                    "billing.checkout.analytics_failed userId={} transactionId={} planType={} billingCycle={}",
+                    userId,
+                    transactionId,
+                    planType,
+                    billingCycle,
+                    ex
+            );
+        }
     }
 
     public void handleWebhook(String payload, String callbackToken) {

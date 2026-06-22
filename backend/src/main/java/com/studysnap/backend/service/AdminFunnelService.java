@@ -12,6 +12,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.UserUsageRepository;
+import com.studysnap.backend.repository.WeeklyRetentionCohortProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,13 +47,17 @@ public class AdminFunnelService {
         AdminFunnelMetricsResponse.QuotaHitMetrics quotaHit = getQuotaHitMetrics(now);
         AdminFunnelMetricsResponse.PaywallConversionMetrics paywallConversion = getPaywallConversionMetrics();
         AdminFunnelMetricsResponse.ValueLoopMetrics valueLoop = getValueLoopMetrics();
+        AdminFunnelMetricsResponse.RetentionCohortMetrics retentionCohort = getRetentionCohortMetrics(now);
+        AdminFunnelMetricsResponse.CheckoutConversionMetrics checkoutConversion = getCheckoutConversionMetrics();
 
         return new AdminFunnelMetricsResponse(
                 activation,
                 stuckUsers,
                 quotaHit,
                 paywallConversion,
-                valueLoop
+                valueLoop,
+                retentionCohort,
+                checkoutConversion
         );
     }
 
@@ -125,6 +130,57 @@ public class AdminFunnelService {
                 usersGeneratedPack,
                 usersStartedQuizWithin7Days,
                 ratePercent(usersStartedQuizWithin7Days, usersGeneratedPack)
+        );
+    }
+
+    private AdminFunnelMetricsResponse.RetentionCohortMetrics getRetentionCohortMetrics(OffsetDateTime now) {
+        long eligibleActivatedUsers = analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(now);
+        long returnedWeek2Users = analyticsEventRepository.countReturnedWeek2Users(now);
+        List<AdminFunnelMetricsResponse.WeeklyRetentionCohortMetrics> weeklyCohorts = analyticsEventRepository
+                .findWeeklyRetentionCohorts(now)
+                .stream()
+                .map(this::toWeeklyRetentionCohortMetrics)
+                .toList();
+
+        return new AdminFunnelMetricsResponse.RetentionCohortMetrics(
+                eligibleActivatedUsers,
+                returnedWeek2Users,
+                ratePercent(returnedWeek2Users, eligibleActivatedUsers),
+                weeklyCohorts
+        );
+    }
+
+    private AdminFunnelMetricsResponse.WeeklyRetentionCohortMetrics toWeeklyRetentionCohortMetrics(
+            WeeklyRetentionCohortProjection cohort
+    ) {
+        long cohortSize = cohort.getCohortSize();
+        long returnedCount = cohort.getReturnedCount();
+        return new AdminFunnelMetricsResponse.WeeklyRetentionCohortMetrics(
+                cohort.getWeekStart().toString(),
+                cohortSize,
+                returnedCount,
+                ratePercent(returnedCount, cohortSize)
+        );
+    }
+
+    private AdminFunnelMetricsResponse.CheckoutConversionMetrics getCheckoutConversionMetrics() {
+        long usersClickedUpgrade = analyticsEventRepository.countDistinctUsersByEventType(AnalyticsEventType.UPGRADE_CLICKED);
+        long usersInitiatedCheckout = analyticsEventRepository.countDistinctUsersWithEventAfterEvent(
+                AnalyticsEventType.UPGRADE_CLICKED,
+                AnalyticsEventType.CHECKOUT_INITIATED
+        );
+        long usersSubscribed = analyticsEventRepository.countDistinctUsersWithEventAfterEvent(
+                AnalyticsEventType.CHECKOUT_INITIATED,
+                AnalyticsEventType.SUBSCRIPTION_STARTED
+        );
+
+        return new AdminFunnelMetricsResponse.CheckoutConversionMetrics(
+                usersClickedUpgrade,
+                usersInitiatedCheckout,
+                usersSubscribed,
+                ratePercent(usersInitiatedCheckout, usersClickedUpgrade),
+                ratePercent(usersSubscribed, usersInitiatedCheckout),
+                ratePercent(usersSubscribed, usersClickedUpgrade)
         );
     }
 
