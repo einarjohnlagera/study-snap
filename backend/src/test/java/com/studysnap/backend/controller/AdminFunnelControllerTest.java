@@ -34,7 +34,9 @@ class AdminFunnelControllerTest {
                 new AdminFunnelMetricsResponse.StuckUsersMetrics(3),
                 new AdminFunnelMetricsResponse.QuotaHitMetrics(2, 5, 40.0),
                 new AdminFunnelMetricsResponse.PaywallConversionMetrics(6, 2, 33.3),
-                new AdminFunnelMetricsResponse.ValueLoopMetrics(4, 3, 75.0)
+                new AdminFunnelMetricsResponse.ValueLoopMetrics(4, 3, 75.0),
+                new AdminFunnelMetricsResponse.RetentionCohortMetrics(8, 3, 37.5, java.util.List.of()),
+                new AdminFunnelMetricsResponse.CheckoutConversionMetrics(10, 4, 1, 40.0, 25.0, 10.0)
         );
         when(adminFunnelService.getMetrics()).thenReturn(expected);
 
