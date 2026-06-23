@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class OcrRateLimitService {
     private static final Duration WINDOW = Duration.ofMinutes(1);
+    private static final long BUCKET_PURGE_INTERVAL_MS = 60_000L;
 
     private final StudySnapProperties properties;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
@@ -42,6 +44,23 @@ public class OcrRateLimitService {
             }
             bucket.count++;
         }
+    }
+
+    @Scheduled(fixedDelay = BUCKET_PURGE_INTERVAL_MS)
+    void purgeExpiredBuckets() {
+        purgeExpiredBuckets(OffsetDateTime.now());
+    }
+
+    void purgeExpiredBuckets(OffsetDateTime now) {
+        buckets.values().removeIf(bucket -> {
+            synchronized (bucket) {
+                return bucket.windowStart.plus(WINDOW).isBefore(now);
+            }
+        });
+    }
+
+    int trackedBucketCount() {
+        return buckets.size();
     }
 
     private int resolveRateLimitPerMinute(PlanType planType) {
