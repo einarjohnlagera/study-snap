@@ -31,7 +31,7 @@ Shared ownership rule:
 ### Board Exam Mode
 
 - strict exam-simulation presentation of the Challenge Quiz engine
-- Pro-only at entry
+- Pro-only at Start CTA; Free and Plus users may open the setup screen before the upgrade ask
 - consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month by default)
 - quota is deducted per source note at session start: 1 unit for a single-note exam, 2 units for a two-note exam, and 3 units for a three-note exam
 - generated question count scales with source count: `min(12 * sourceCount, 30)` so single-note stays at 12, two notes generate 24, and three notes cap at 30
@@ -51,7 +51,7 @@ Shared ownership rule:
 ### Long Exam Mode
 
 - Student-facing long-form exam mode; identity contract in `docs/product/EXAM_MODES.md`
-- Pro-only at launch, using the shared `LONG_EXAM` session discriminator
+- Pro-only at Start CTA, using the shared `LONG_EXAM` session discriminator; Free and Plus users may open the prestart setup before the upgrade ask
 - quota-limited separately from Challenge Quiz (`12` source-note units / month by default)
 - quota is deducted per source note at session start: `additionalStudyPackIds.size() + 1`
 - fixed question set generated at start (not progressive)

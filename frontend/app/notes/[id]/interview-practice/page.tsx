@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, BarChart3, Clock, MessageSquare } from "lucide-react";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -74,6 +75,8 @@ export default function InterviewPracticePage() {
   const [submittingComplete, setSubmittingComplete] = useState(false);
   const [report, setReport] = useState<InterviewReadinessReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [viewerPlanType, setViewerPlanType] = useState<"FREE" | "PLUS" | "PRO" | null>(null);
+  const [showInterviewPaywall, setShowInterviewPaywall] = useState(false);
   const completingRef = useRef(false);
   const modeSelectHref = note?.studyPackId ? `/study-packs/${note.studyPackId}/challenge-quiz` : noteHref;
 
@@ -88,6 +91,8 @@ export default function InterviewPracticePage() {
         ]);
         if (!active) return;
         const primaryCourseProgram = noteResult.courseProgram?.trim() ?? null;
+        setNote(noteResult);
+        setViewerPlanType(me.planType === "FREE" || me.planType === "PLUS" || me.planType === "PRO" ? me.planType : null);
         setAvailableNotes(
           notes.filter((item) => {
             if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
@@ -95,7 +100,7 @@ export default function InterviewPracticePage() {
             return true;
           }),
         );
-        if (me.profileType !== "PROFESSIONAL" || me.planType !== "PRO") {
+        if (me.profileType !== "PROFESSIONAL") {
           router.replace(noteHref);
           return;
         }
@@ -104,7 +109,6 @@ export default function InterviewPracticePage() {
           setPhase("error");
           return;
         }
-        setNote(noteResult);
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Could not load Interview Practice.");
@@ -159,6 +163,10 @@ export default function InterviewPracticePage() {
   }, []);
 
   const handleStart = useCallback(async () => {
+    if (viewerPlanType !== "PRO") {
+      setShowInterviewPaywall(true);
+      return;
+    }
     setPhase("generating");
     setError(null);
     try {
@@ -183,7 +191,7 @@ export default function InterviewPracticePage() {
       setError(err instanceof Error ? err.message : "Could not start Interview Practice.");
       setPhase("error");
     }
-  }, [additionalNoteIds, noteId, questionCount, resetQuestionState]);
+  }, [additionalNoteIds, noteId, questionCount, resetQuestionState, viewerPlanType]);
 
   const handleAnswer = useCallback(async () => {
     if (!sessionId || !currentQuestion || !selectedChoice || submittingAnswer) {
@@ -434,7 +442,7 @@ export default function InterviewPracticePage() {
                 className="w-full sm:w-auto"
                 onClick={() => void handleStart()}
               >
-                Start Interview Practice
+                {viewerPlanType === "PRO" ? "Start Interview Practice" : "Unlock Interview Practice - Pro"}
               </Button>
             </div>
           </div>
@@ -591,6 +599,14 @@ export default function InterviewPracticePage() {
       ) : null}
 
       <LeaveQuizModal />
+      {showInterviewPaywall ? (
+        <PaywallModal
+          isOpen={showInterviewPaywall}
+          variant="interview-practice-limit"
+          source="interview_practice_start"
+          onClose={() => setShowInterviewPaywall(false)}
+        />
+      ) : null}
     </main>
   );
 }

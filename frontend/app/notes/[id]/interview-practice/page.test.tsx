@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import InterviewPracticePage from "./page";
-import { getMe, getNote } from "@/lib/api";
+import { getMe, getNote, startInterviewPractice } from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ id: "note-1" }),
+  usePathname: () => "/notes/note-1/interview-practice",
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
@@ -28,12 +29,14 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   listNotes: jest.fn(() => Promise.resolve([])),
   startInterviewPractice: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("InterviewPracticePage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    (startInterviewPractice as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({
       profileType: "PROFESSIONAL",
       planType: "PRO",
@@ -66,5 +69,24 @@ describe("InterviewPracticePage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose another mode" }));
 
     expect(pushMock).toHaveBeenCalledWith("/study-packs/sp-1/challenge-quiz");
+  });
+
+  it("shows Interview Practice setup to Professional Plus users and opens the paywall from the Start CTA", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      profileType: "PROFESSIONAL",
+      planType: "PLUS",
+    });
+
+    render(<InterviewPracticePage />);
+
+    expect(await screen.findByRole("heading", { name: "Interview Practice" })).toBeInTheDocument();
+    expect(screen.getByText("Session length")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Unlock Interview Practice" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlock Interview Practice - Pro" }));
+
+    expect(await screen.findByRole("dialog", { name: "Unlock Interview Practice" })).toBeInTheDocument();
+    expect(startInterviewPractice).not.toHaveBeenCalled();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 });

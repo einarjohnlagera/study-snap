@@ -15,6 +15,7 @@ const replaceMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ id: "note-1" }),
+  usePathname: () => "/notes/note-1/long-exam",
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
@@ -107,6 +108,27 @@ describe("LongExamPage", () => {
     expect(screen.getByText("Mastery report at the end")).toBeInTheDocument();
     expect(screen.getByText("1 note · 25 questions")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Begin Long Exam" })).toBeInTheDocument();
+  });
+
+  it("shows Long Exam setup to free users and opens the paywall from the Start CTA", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      profileType: "STUDENT",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+
+    render(<LongExamPage />);
+
+    expect(await screen.findByRole("heading", { name: "Long Exam" })).toBeInTheDocument();
+    expect(screen.getByText("What to expect")).toBeInTheDocument();
+    expect(getActiveLongExamSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Long Exam Mode" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlock Long Exam - Pro" }));
+
+    expect(await screen.findByRole("dialog", { name: "Long Exam Mode" })).toBeInTheDocument();
+    expect(startLongExam).not.toHaveBeenCalled();
   });
 
   it("routes Choose another mode back to the shared mode picker", async () => {
