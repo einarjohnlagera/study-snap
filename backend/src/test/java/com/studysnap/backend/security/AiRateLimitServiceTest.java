@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
 import org.junit.jupiter.api.Test;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -36,5 +37,22 @@ class AiRateLimitServiceTest {
                 () -> service.assertAllowed(userId, PlanType.PRO, "study-pack")
         );
         assertEquals("TOO_MANY_REQUESTS", premiumError.getCode());
+    }
+
+    @Test
+    void purgeExpiredBuckets_evictsStaleBucketsButKeepsActive() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getLimits().setFreeAiRateLimitPerMinute(100);
+        AiRateLimitService service = new AiRateLimitService(properties);
+
+        service.assertAllowed(UUID.randomUUID(), PlanType.FREE, "study-pack");
+        service.assertAllowed(UUID.randomUUID(), PlanType.FREE, "study-pack");
+        assertEquals(2, service.trackedBucketCount());
+
+        service.purgeExpiredBuckets(OffsetDateTime.now());
+        assertEquals(2, service.trackedBucketCount());
+
+        service.purgeExpiredBuckets(OffsetDateTime.now().plusMinutes(5));
+        assertEquals(0, service.trackedBucketCount());
     }
 }
