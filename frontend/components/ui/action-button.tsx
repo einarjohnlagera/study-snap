@@ -8,6 +8,7 @@ import {
   BookOpen,
   Briefcase,
   Copy,
+  Download,
   Globe,
   HelpCircle,
   House,
@@ -40,6 +41,7 @@ export type ActionIconName =
   | "create"
   | "dashboard"
   | "delete"
+  | "download"
   | "edit"
   | "collections"
   | "library"
@@ -70,6 +72,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   create: Plus,
   dashboard: House,
   delete: Trash2,
+  download: Download,
   edit: Pencil,
   collections: Layers,
   library: BookOpen,

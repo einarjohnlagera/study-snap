@@ -1791,6 +1791,25 @@ export async function deleteAccount(confirmation: string): Promise<SimpleMessage
   return parseApiResponse<SimpleMessageResponse>(response, "Could not delete account. Please try again.");
 }
 
+export async function downloadMyData(): Promise<{ filename: string }> {
+  const response = await fetchWithAuth(
+    "/auth/account/export",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    return throwApiRequestError(response, "Could not download your data. Please try again.");
+  }
+  const blob = await response.blob();
+  const fallbackFilename = `notelib-export-${new Date().toISOString().slice(0, 10)}.json`;
+  const filename = extractDownloadFilename(response.headers.get("content-disposition"), fallbackFilename);
+  triggerBlobDownload(blob, filename);
+  return { filename };
+}
+
 export async function unsubscribeEmail(token: string): Promise<EmailUnsubscribeResponse> {
   const form = new URLSearchParams();
   form.set("token", token);

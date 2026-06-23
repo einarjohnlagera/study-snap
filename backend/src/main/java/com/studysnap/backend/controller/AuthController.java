@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.ChangePasswordRequest;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.DataExportResponse;
 import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.ForgotPasswordRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
@@ -23,10 +24,15 @@ import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
+import com.studysnap.backend.service.AccountDataExportService;
 import com.studysnap.backend.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,15 +42,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private static final String USER_AGENT = "User-Agent";
+    private static final String DATA_EXPORT_ACTION = "data-export";
+    private static final String DATA_EXPORT_FILENAME_PREFIX = "notelib-export-";
+    private static final String JSON_EXTENSION = ".json";
 
     private final AuthService authService;
     private final AuthRateLimitService authRateLimitService;
+    private final AccountDataExportService accountDataExportService;
 
     @PostMapping("/signup")
     public AuthResponse signup(@Valid @RequestBody SignupRequest request, HttpServletRequest servletRequest) {
@@ -84,6 +96,27 @@ public class AuthController {
             @Valid @RequestBody DeleteAccountRequest request
     ) {
         return authService.requestAccountDeletion(user.userId(), request);
+    }
+
+    @GetMapping("/account/export")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<DataExportResponse> exportAccountData(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        String userId = user.userId().toString();
+        authRateLimitService.assertAllowed(DATA_EXPORT_ACTION, userId);
+        DataExportResponse export = accountDataExportService.exportForUser(user.userId());
+        String filename = DATA_EXPORT_FILENAME_PREFIX + LocalDate.now() + JSON_EXTENSION;
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(filename)
+                                .build()
+                                .toString()
+                )
+                .body(export);
     }
 
     @PostMapping("/account/reactivate")
