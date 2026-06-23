@@ -886,6 +886,9 @@ public class NoteService {
         if (user == null) {
             return DEFAULT_AUTHOR_NAME;
         }
+        if (isDeletedUserSentinel(user)) {
+            return "Deleted user";
+        }
         String displayName = normalizeOptionalText(user.getDisplayName());
         if (displayName != null) {
             return displayName;
@@ -898,11 +901,18 @@ public class NoteService {
     }
 
     private String resolvePublicAuthorUsername(UserEntity user) {
+        if (isDeletedUserSentinel(user)) {
+            return null;
+        }
         return normalizeOptionalText(user == null ? null : user.getUsername());
     }
 
     private boolean isOfficialAuthor(UserEntity user) {
-        return user != null && user.getRole() == UserRole.ADMIN;
+        return user != null && user.getRole() == UserRole.ADMIN && !isDeletedUserSentinel(user);
+    }
+
+    private boolean isDeletedUserSentinel(UserEntity user) {
+        return user != null && AccountPurgeService.DELETED_USER_ID.equals(user.getId());
     }
 
     private boolean isCurrentUser(UUID ownerUserId, UUID viewerUserId) {

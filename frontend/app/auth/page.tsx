@@ -9,7 +9,17 @@ import { useRouteProgress } from "@/components/navigation/route-progress-provide
 import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { copyNoteOnSignup, getMyPlan, login, loginWithGoogle, signup, trackAnalyticsEvent } from "@/lib/api";
+import {
+  ACCOUNT_PENDING_DELETION_CODE,
+  ApiRequestError,
+  copyNoteOnSignup,
+  getMyPlan,
+  login,
+  loginWithGoogle,
+  reactivateAccount,
+  signup,
+  trackAnalyticsEvent,
+} from "@/lib/api";
 import {
   getAuthUser,
   LOGIN_REASON_AUTH_REQUIRED,
@@ -30,6 +40,7 @@ import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
 
 type Mode = "login" | "signup";
+type PendingDeletionCredential = { kind: "password" } | { kind: "google"; code: string };
 
 const EXAM_AUTH_INTENT = "exam";
 
@@ -53,7 +64,9 @@ function AuthPageContent() {
   const [password, setPassword] = useState("");
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [reactivatingAccount, setReactivatingAccount] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDeletionCredential, setPendingDeletionCredential] = useState<PendingDeletionCredential | null>(null);
   const hasTrackedSignupStartRef = useRef(false);
   const suppressAuthenticatedRedirectRef = useRef(false);
   const searchKey = searchParams.toString();
@@ -170,6 +183,15 @@ function AuthPageContent() {
     router.refresh();
   }, [hydrateAuthUser, router, startRouteProgress]);
 
+  const handlePendingDeletionError = useCallback((err: unknown, credential: PendingDeletionCredential) => {
+    if (err instanceof ApiRequestError && err.code === ACCOUNT_PENDING_DELETION_CODE) {
+      setPendingDeletionCredential(credential);
+      setError("This account is scheduled for deletion. Reactivate to keep it.");
+      return true;
+    }
+    return false;
+  }, []);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSubmit || loading) {
@@ -178,6 +200,7 @@ function AuthPageContent() {
 
     setLoading(true);
     setError(null);
+    setPendingDeletionCredential(null);
     try {
       const authUser =
         mode === "signup"
@@ -190,6 +213,9 @@ function AuthPageContent() {
           : await login({ email, password, keepSignedIn });
       await completeAuth(authUser, { clearCopyIntent: mode === "login" });
     } catch (err) {
+      if (mode === "login" && handlePendingDeletionError(err, { kind: "password" })) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not continue. Please try again.");
     } finally {
       setLoading(false);
@@ -202,6 +228,7 @@ function AuthPageContent() {
     }
     setLoading(true);
     setError(null);
+    setPendingDeletionCredential(null);
     try {
       suppressAuthenticatedRedirectRef.current = true;
       const authUser = await loginWithGoogle({ code, keepSignedIn });
@@ -237,11 +264,34 @@ function AuthPageContent() {
       router.refresh();
     } catch (err) {
       suppressAuthenticatedRedirectRef.current = false;
+      if (handlePendingDeletionError(err, { kind: "google", code })) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not continue with Google. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [hydrateAuthUser, keepSignedIn, loading, router, startRouteProgress]);
+  }, [handlePendingDeletionError, hydrateAuthUser, keepSignedIn, loading, router, startRouteProgress]);
+
+  const handleReactivateAccount = async () => {
+    if (!pendingDeletionCredential || reactivatingAccount) {
+      return;
+    }
+
+    setReactivatingAccount(true);
+    setError(null);
+    try {
+      const authUser = pendingDeletionCredential.kind === "google"
+        ? await reactivateAccount({ googleCode: pendingDeletionCredential.code, keepSignedIn })
+        : await reactivateAccount({ email, password, keepSignedIn });
+      setPendingDeletionCredential(null);
+      await completeAuth(authUser, { clearCopyIntent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reactivate account. Please try again.");
+    } finally {
+      setReactivatingAccount(false);
+    }
+  };
 
   if (authenticatedUser) {
     return null;
@@ -272,7 +322,10 @@ function AuthPageContent() {
             type="button"
             variant={mode === "login" ? "default" : "outline"}
             className="w-full"
-            onClick={() => setMode("login")}
+            onClick={() => {
+              setMode("login");
+              setPendingDeletionCredential(null);
+            }}
           >
             Log in
           </Button>
@@ -280,7 +333,10 @@ function AuthPageContent() {
             type="button"
             variant={mode === "signup" ? "default" : "outline"}
             className="w-full"
-            onClick={() => setMode("signup")}
+            onClick={() => {
+              setMode("signup");
+              setPendingDeletionCredential(null);
+            }}
           >
             Sign up
           </Button>
@@ -372,6 +428,21 @@ function AuthPageContent() {
           ) : null}
 
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+          {mode === "login" && pendingDeletionCredential ? (
+            <div className="space-y-3 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100">
+              <p>This account is scheduled for deletion. Reactivate within 30 days to keep your notes and study history.</p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => void handleReactivateAccount()}
+                loading={reactivatingAccount}
+                loadingText="Reactivating..."
+              >
+                Reactivate account
+              </Button>
+            </div>
+          ) : null}
 
           <Button
             type="submit"

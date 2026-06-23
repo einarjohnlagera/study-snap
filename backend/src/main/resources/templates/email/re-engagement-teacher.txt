@@ -12,6 +12,8 @@ Come back and see how much has changed.
 
 Go to Dashboard: {{dashboardUrl}}
 
+{{unsubscribeFooterText}}
+
 — NoteLib
 Turn Notes Into Quizzes
 https://notelib.app

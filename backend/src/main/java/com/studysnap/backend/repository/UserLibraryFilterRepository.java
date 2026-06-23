@@ -10,4 +10,5 @@ import java.util.UUID;
 public interface UserLibraryFilterRepository extends JpaRepository<UserLibraryFilterEntity, UUID> {
     List<UserLibraryFilterEntity> findByUserIdOrderByCreatedAtDesc(UUID userId);
     Optional<UserLibraryFilterEntity> findByIdAndUserId(UUID id, UUID userId);
+    void deleteByUserId(UUID userId);
 }

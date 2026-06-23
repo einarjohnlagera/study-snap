@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.ChangePasswordRequest;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.ForgotPasswordRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
@@ -11,6 +12,7 @@ import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
+import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.ResetPasswordRequest;
 import com.studysnap.backend.dto.SignInMethodsResponse;
@@ -22,7 +24,7 @@ import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
-import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -37,6 +39,8 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.AccountDeletionConfirmationException;
+import com.studysnap.backend.exception.AccountPendingDeletionException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidCurrentPasswordException;
 import com.studysnap.backend.exception.InvalidGoalException;
@@ -72,6 +76,7 @@ import java.util.UUID;
 public class AuthService {
     private static final int MAX_GOAL_LENGTH = 100;
     private static final int MAX_FOCUS_SUBJECT_LENGTH = 120;
+    private static final String ACCOUNT_DELETION_CONFIRMATION = "DELETE";
 
     private static final String RESERVED_DISPLAY_NAME_MESSAGE = "This display name is reserved. Please choose another name.";
     private static final String GOOGLE_EMAIL_NOT_VERIFIED_MESSAGE = "Google email must be verified before signing in.";
@@ -143,6 +148,8 @@ public class AuthService {
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
@@ -180,21 +187,18 @@ public class AuthService {
             registerFailedLogin(user);
             throw invalidCredentials();
         }
+        if (user.getStatus() == UserStatus.PENDING_DELETION) {
+            throw new AccountPendingDeletionException();
+        }
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw invalidCredentials();
         }
 
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
-        user.setLastLoginAt(OffsetDateTime.now());
-        user.setUpdatedAt(OffsetDateTime.now());
         boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
 
-        PlanType planType = subscriptionService.resolvePlan(user.getId());
-        analyticsService.trackEvent(user.getId(), AnalyticsEventType.LOGIN, user.getId(), Map.of(
+        return completeLogin(user, keepSignedIn, null, ipAddress, userAgent, Map.of(
                 "keepSignedIn", keepSignedIn
         ));
-        return buildAuthResponse(user, planType, keepSignedIn, null, ipAddress, userAgent);
     }
 
     public AuthResponse loginWithGoogle(GoogleAuthRequest request, String ipAddress, String userAgent) {
@@ -209,24 +213,18 @@ public class AuthService {
                 })
                 .orElseGet(() -> findOrCreateGoogleUser(googleIdentity, now));
 
+        if (user.getStatus() == UserStatus.PENDING_DELETION) {
+            throw new AccountPendingDeletionException();
+        }
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw invalidCredentials();
         }
-        if (user.getEmailVerifiedAt() == null && user.getEmail().equalsIgnoreCase(googleIdentity.email())) {
-            user.setEmailVerifiedAt(now);
-        }
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
-        user.setLastLoginAt(now);
-        user.setUpdatedAt(now);
 
         boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
-        PlanType planType = subscriptionService.resolvePlan(user.getId());
-        analyticsService.trackEvent(user.getId(), AnalyticsEventType.LOGIN, user.getId(), Map.of(
+        return completeGoogleLogin(user, googleIdentity, now, keepSignedIn, ipAddress, userAgent, Map.of(
                 "method", "google",
                 "keepSignedIn", keepSignedIn
         ));
-        return buildAuthResponse(user, planType, keepSignedIn, null, ipAddress, userAgent);
     }
 
     public SignInMethodsResponse connectGoogle(UUID userId, GoogleConnectRequest request) {
@@ -317,6 +315,31 @@ public class AuthService {
         return new SimpleMessageResponse("Logged out successfully.");
     }
 
+    public SimpleMessageResponse requestAccountDeletion(UUID userId, DeleteAccountRequest request) {
+        if (request == null || !ACCOUNT_DELETION_CONFIRMATION.equals(request.confirmation())) {
+            throw new AccountDeletionConfirmationException();
+        }
+        UserEntity user = findUserOrThrow(userId);
+        OffsetDateTime now = OffsetDateTime.now();
+        if (user.getStatus() != UserStatus.PENDING_DELETION) {
+            user.setStatus(UserStatus.PENDING_DELETION);
+            user.setDeletedAt(now);
+            user.setUpdatedAt(now);
+        }
+        refreshTokenService.revokeAllForUser(userId);
+        return new SimpleMessageResponse("Account deletion scheduled. You can reactivate within 30 days by logging in again.");
+    }
+
+    public AuthResponse reactivateAccount(ReactivateAccountRequest request, String ipAddress, String userAgent) {
+        if (request == null) {
+            throw invalidCredentials();
+        }
+        if (request.googleCode() != null && !request.googleCode().isBlank()) {
+            return reactivateWithGoogle(request, ipAddress, userAgent);
+        }
+        return reactivateWithPassword(request, ipAddress, userAgent);
+    }
+
     @Transactional(readOnly = true)
     public MeResponse getMe(UUID userId) {
         return toMeResponse(findUserOrThrow(userId));
@@ -388,11 +411,13 @@ public class AuthService {
         return toMeResponse(user);
     }
 
-    public MeResponse updateStudyReminders(UUID userId, UpdateStudyRemindersRequest request) {
+    public MeResponse updateEmailPreferences(UUID userId, UpdateEmailPreferencesRequest request) {
         UserEntity user = findUserOrThrow(userId);
 
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
         user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
+        user.setWeeklySummaryRemindersEnabled(request.weeklySummaryRemindersEnabled());
+        user.setMarketingEmailsEnabled(request.marketingEmailsEnabled());
         user.setUpdatedAt(OffsetDateTime.now());
 
         return toMeResponse(user);
@@ -506,6 +531,8 @@ public class AuthService {
                 user.getEngagementMode(),
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
+                Boolean.TRUE.equals(user.getWeeklySummaryRemindersEnabled()),
+                Boolean.TRUE.equals(user.getMarketingEmailsEnabled()),
                 resolveThemePreference(user),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
@@ -661,6 +688,98 @@ public class AuthService {
         );
     }
 
+    private AuthResponse completeLogin(
+            UserEntity user,
+            boolean keepSignedIn,
+            String deviceName,
+            String ipAddress,
+            String userAgent,
+            Map<String, Object> analyticsMetadata
+    ) {
+        OffsetDateTime now = OffsetDateTime.now();
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(now);
+        user.setUpdatedAt(now);
+
+        PlanType planType = subscriptionService.resolvePlan(user.getId());
+        analyticsService.trackEvent(user.getId(), AnalyticsEventType.LOGIN, user.getId(), analyticsMetadata);
+        return buildAuthResponse(user, planType, keepSignedIn, deviceName, ipAddress, userAgent);
+    }
+
+    private AuthResponse completeGoogleLogin(
+            UserEntity user,
+            GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity,
+            OffsetDateTime now,
+            boolean keepSignedIn,
+            String ipAddress,
+            String userAgent,
+            Map<String, Object> analyticsMetadata
+    ) {
+        if (user.getEmailVerifiedAt() == null && user.getEmail().equalsIgnoreCase(googleIdentity.email())) {
+            user.setEmailVerifiedAt(now);
+        }
+        return completeLogin(user, keepSignedIn, null, ipAddress, userAgent, analyticsMetadata);
+    }
+
+    private AuthResponse reactivateWithPassword(
+            ReactivateAccountRequest request,
+            String ipAddress,
+            String userAgent
+    ) {
+        String identifier = normalizeLoginIdentifier(request.email());
+        UserEntity user = resolveLoginUser(identifier);
+
+        if (user == null || isLocked(user)) {
+            throw invalidCredentials();
+        }
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            registerFailedLogin(user);
+            throw invalidCredentials();
+        }
+        if (user.getStatus() != UserStatus.PENDING_DELETION && user.getStatus() != UserStatus.ACTIVE) {
+            throw invalidCredentials();
+        }
+
+        reactivatePendingDeletion(user);
+        boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
+        return completeLogin(user, keepSignedIn, null, ipAddress, userAgent, Map.of(
+                "keepSignedIn", keepSignedIn,
+                "reactivated", true
+        ));
+    }
+
+    private AuthResponse reactivateWithGoogle(
+            ReactivateAccountRequest request,
+            String ipAddress,
+            String userAgent
+    ) {
+        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.googleCode());
+        OffsetDateTime now = OffsetDateTime.now();
+        UserEntity user = resolveExistingGoogleUser(googleIdentity, now);
+
+        if (user.getStatus() != UserStatus.PENDING_DELETION && user.getStatus() != UserStatus.ACTIVE) {
+            throw invalidCredentials();
+        }
+
+        reactivatePendingDeletion(user);
+        boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
+        return completeGoogleLogin(user, googleIdentity, now, keepSignedIn, ipAddress, userAgent, Map.of(
+                "method", "google",
+                "keepSignedIn", keepSignedIn,
+                "reactivated", true
+        ));
+    }
+
+    private void reactivatePendingDeletion(UserEntity user) {
+        if (user.getStatus() != UserStatus.PENDING_DELETION) {
+            return;
+        }
+        user.setStatus(UserStatus.ACTIVE);
+        user.setDeletedAt(null);
+        user.setUpdatedAt(OffsetDateTime.now());
+    }
+
     private GoogleIdentityTokenVerifier.GoogleIdentity verifyGoogleIdentity(String credential) {
         GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = googleIdentityTokenVerifier.verify(credential);
         if (!googleIdentity.emailVerified()) {
@@ -680,6 +799,22 @@ public class AuthService {
         return userRepository.findByEmailIgnoreCase(googleIdentity.email())
                 .map(existing -> linkGoogleProvider(existing, googleIdentity, now, false))
                 .orElseGet(() -> createGoogleUser(googleIdentity, now));
+    }
+
+    private UserEntity resolveExistingGoogleUser(
+            GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity,
+            OffsetDateTime now
+    ) {
+        return userAuthProviderRepository
+                .findByProviderAndProviderUserId(AuthProvider.GOOGLE, googleIdentity.subject())
+                .map(provider -> {
+                    provider.setProviderEmail(googleIdentity.email());
+                    provider.setUpdatedAt(now);
+                    return findUserOrThrow(provider.getUserId());
+                })
+                .orElseGet(() -> userRepository.findByEmailIgnoreCase(googleIdentity.email())
+                        .map(existing -> linkGoogleProvider(existing, googleIdentity, now, false))
+                        .orElseThrow(this::invalidCredentials));
     }
 
     private UserEntity linkGoogleProvider(
@@ -736,6 +871,8 @@ public class AuthService {
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);

@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.studysnap</groupId>
 	<artifactId>backend</artifactId>
-	<version>0.31.2</version>
+	<version>0.32.0</version>
 	<name>notelib-backend</name>
 	<description>Backend project of NoteLib</description>
 	<url/>
@@ -45,6 +45,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

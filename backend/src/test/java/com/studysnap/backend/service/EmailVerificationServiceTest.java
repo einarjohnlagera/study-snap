@@ -96,6 +96,7 @@ class EmailVerificationServiceTest {
         assertThat(sentEmail.to()).isEqualTo(user.getEmail());
         assertThat(sentEmail.subject()).isEqualTo("Verify your email for NoteLib");
         assertThat(sentEmail.htmlBody()).isEqualTo("<p>Verify</p>");
+        assertThat(sentEmail.headers()).isEmpty();
     }
 
     @Test

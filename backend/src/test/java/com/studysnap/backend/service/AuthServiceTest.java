@@ -3,14 +3,16 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
-import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
@@ -24,6 +26,9 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserAuthProviderEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.exception.AccountDeletionConfirmationException;
+import com.studysnap.backend.exception.AccountPendingDeletionException;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidGoalException;
@@ -37,6 +42,7 @@ import com.studysnap.backend.security.SecurityProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -125,6 +131,10 @@ class AuthServiceTest {
         assertThat(response.onboardingCompletedAt()).isNull();
         assertThat(response.productOnboardingCompletedAt()).isNull();
         assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
+        ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
+        assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -218,7 +228,10 @@ class AuthServiceTest {
 
         assertThat(response.email()).isEqualTo("student@example.com");
         assertThat(response.emailVerifiedAt()).isNotNull();
-        verify(userRepository).save(any(UserEntity.class));
+        ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
+        verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
+        assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), any(Boolean.class));
@@ -369,6 +382,140 @@ class AuthServiceTest {
     void login_throwsInvalidCredentialsException_whenUserDoesNotExist() {
         LoginRequest request = new LoginRequest("[email protected]", "password123", false);
         assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+            .hasMessage("Invalid email, username, or password.");
+    }
+
+    @Test
+    void login_returnsPendingDeletionErrorForPendingAccount() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.PENDING_DELETION);
+
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        LoginRequest request = new LoginRequest("current@example.com", "password123", false);
+        assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(AccountPendingDeletionException.class)
+            .hasMessage("This account is scheduled for deletion. Reactivate to keep it.");
+    }
+
+    @Test
+    void login_keepsSuspendedAccountOnGenericInvalidCredentials() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.SUSPENDED);
+
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        LoginRequest request = new LoginRequest("current@example.com", "password123", false);
+        assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+            .hasMessage("Invalid email, username, or password.");
+    }
+
+    @Test
+    void login_rejectsDeletedUserSentinel() {
+        UserEntity sentinel = activeUser(AccountPurgeService.DELETED_USER_ID, "deleted-user@notelib.internal");
+        sentinel.setStatus(UserStatus.SUSPENDED);
+        sentinel.setPasswordHash("hashed");
+
+        when(userRepository.findByEmailIgnoreCase("deleted-user@notelib.internal")).thenReturn(Optional.of(sentinel));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        LoginRequest request = new LoginRequest("deleted-user@notelib.internal", "password123", false);
+        assertThatThrownBy(() -> authService.login(
+            request,
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+            .hasMessage("Invalid email, username, or password.");
+    }
+
+    @Test
+    void requestAccountDeletion_setsPendingDeletionAndRevokesSessions() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        authService.requestAccountDeletion(userId, new DeleteAccountRequest("DELETE"));
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_DELETION);
+        assertThat(user.getDeletedAt()).isNotNull();
+        assertThat(user.getUpdatedAt()).isNotNull();
+        verify(refreshTokenService).revokeAllForUser(userId);
+    }
+
+    @Test
+    void requestAccountDeletion_rejectsWrongConfirmation() {
+        UUID userId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> authService.requestAccountDeletion(userId, new DeleteAccountRequest("delete")))
+            .isInstanceOf(AccountDeletionConfirmationException.class)
+            .hasMessage("Type DELETE to confirm account deletion.");
+
+        verify(refreshTokenService, never()).revokeAllForUser(any(UUID.class));
+    }
+
+    @Test
+    void requestAccountDeletion_isIdempotentWhenAlreadyPending() {
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime deletedAt = OffsetDateTime.parse("2026-06-01T00:00:00Z");
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.PENDING_DELETION);
+        user.setDeletedAt(deletedAt);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        authService.requestAccountDeletion(userId, new DeleteAccountRequest("DELETE"));
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_DELETION);
+        assertThat(user.getDeletedAt()).isEqualTo(deletedAt);
+        verify(refreshTokenService).revokeAllForUser(userId);
+    }
+
+    @Test
+    void reactivateAccount_restoresPendingAccountAndLogsIn() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStatus(UserStatus.PENDING_DELETION);
+        user.setDeletedAt(OffsetDateTime.parse("2026-06-01T00:00:00Z"));
+
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        AuthResponse response = authService.reactivateAccount(
+            new ReactivateAccountRequest("current@example.com", "password123", null, true),
+            "127.0.0.1",
+            "JUnit"
+        );
+
+        assertThat(response.userId()).isEqualTo(userId.toString());
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(user.getDeletedAt()).isNull();
+        verify(analyticsService).trackEvent(userId, AnalyticsEventType.LOGIN, userId, java.util.Map.of(
+            "keepSignedIn", true,
+            "reactivated", true
+        ));
+    }
+
+    @Test
+    void reactivateAccount_rejectsInvalidCredentials() {
+        when(userRepository.findByEmailIgnoreCase("missing@example.com")).thenReturn(Optional.empty());
+        ReactivateAccountRequest request = new ReactivateAccountRequest("missing@example.com", "password123", null, false);
+
+        assertThatThrownBy(() -> authService.reactivateAccount(
             request,
             "127.0.0.1",
             "JUnit"
@@ -587,7 +734,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void updateStudyReminders_persistsReminderPreferences() {
+    void updateEmailPreferences_persistsEmailPreferences() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -601,6 +748,8 @@ class AuthServiceTest {
         user.setEngagementMode(EngagementMode.CONSISTENCY);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
@@ -611,15 +760,19 @@ class AuthServiceTest {
                 null
             ));
 
-        MeResponse response = authService.updateStudyReminders(
+        MeResponse response = authService.updateEmailPreferences(
             userId,
-            new UpdateStudyRemindersRequest(true, true)
+            new UpdateEmailPreferencesRequest(true, true, true, true)
         );
 
         assertThat(response.inactivityRemindersEnabled()).isTrue();
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
+        assertThat(response.weeklySummaryRemindersEnabled()).isTrue();
+        assertThat(response.marketingEmailsEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
+        assertThat(user.getWeeklySummaryRemindersEnabled()).isTrue();
+        assertThat(user.getMarketingEmailsEnabled()).isTrue();
     }
 
     @Test

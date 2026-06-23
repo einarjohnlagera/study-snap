@@ -36,6 +36,7 @@ public class ReEngagementCampaignService {
     private final EmailTemplateService emailTemplateService;
     private final EmailService emailService;
     private final StudySnapProperties properties;
+    private final EmailUnsubscribeLinkService emailUnsubscribeLinkService;
 
     @Transactional(readOnly = true)
     public int countEligible() {
@@ -73,7 +74,7 @@ public class ReEngagementCampaignService {
 
     private java.util.stream.Stream<UserEntity> buildEligibleStream(OffsetDateTime now) {
         OffsetDateTime activityCutoff = now.minusDays(INACTIVITY_DAYS);
-        return userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE).stream()
+        return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus.ACTIVE).stream()
                 .filter(user -> !alreadySent(user.getId()))
                 .filter(user -> isInactive(user.getId(), activityCutoff));
     }
@@ -81,24 +82,38 @@ public class ReEngagementCampaignService {
     private boolean sendEmail(UserEntity user, OffsetDateTime now) {
         try {
             String templateName = resolveTemplateName(user.getProfileType());
+            EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext unsubscribeContext = buildUnsubscribeContext(user);
             EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(
                     templateName,
                     Map.of(
                             "firstName", resolveFirstName(user),
-                            "dashboardUrl", buildAbsoluteUrl("/dashboard")
+                            "dashboardUrl", buildAbsoluteUrl("/dashboard"),
+                            "unsubscribeUrl", unsubscribeContext.unsubscribeUrl(),
+                            "unsubscribeFooterHtml", unsubscribeContext.htmlFooter(),
+                            "unsubscribeFooterText", unsubscribeContext.textFooter()
                     )
             );
             emailService.sendEmail(new EmailMessage(
                     user.getEmail(),
                     rendered.subject(),
                     rendered.htmlBody(),
-                    rendered.textBody()
+                    rendered.textBody(),
+                    unsubscribeContext.headers()
             ));
             logEmailSent(user.getId(), now);
             return true;
         } catch (RuntimeException ex) {
             log.warn("re-engagement.send failed userId={} message={}", user.getId(), ex.getMessage());
             return false;
+        }
+    }
+
+    private EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext buildUnsubscribeContext(UserEntity user) {
+        try {
+            return emailUnsubscribeLinkService.buildContext(user.getId(), UnsubscribeCategory.MARKETING);
+        } catch (RuntimeException ex) {
+            log.warn("re-engagement.unsubscribe_link failed userId={} message={}", user.getId(), ex.getMessage());
+            return EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext.empty();
         }
     }
 

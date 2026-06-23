@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.32.0 - Account & Communication Controls
+
+**Status: Released**
+
+Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Consolidates account and communication controls into a coherent, compliant surface — account deletion, data export, an email-preferences center (replacing the ad-hoc Study Reminders card), a weekly-summary opt-in (default OFF), and a tokenized unsubscribe link — plus right-sized email deliverability hardening. Mostly additive; account deletion needs careful transactional handling. See `docs/product/ROADMAP.md` for full scope and locked rules.
+
+### Shipped
+
+- **Email deliverability hardening** — `ResendEmailService` now retries on HTTP 429 (rate limit), honoring the provider's `Retry-After` header and otherwise backing off exponentially (max 3 attempts, capped at 5s), so a transactional email landing during a retention/marketing send burst isn't dropped. IO and non-429 failures keep their existing behavior; the `HttpClient` is now injected (testable). The primary capacity fix remains operational (upgrade the Resend tier).
+- **Weekly summary opt-in** — Added a per-account `weeklySummaryRemindersEnabled` preference, defaulting OFF for new and existing users, so the Sunday `WEEKLY_SUMMARY` retention email only sends to verified active users who explicitly enable it in Study Reminders. Inactivity and weak-concept reminder preferences are unchanged.
+- **Email Preferences center** — Settings now has a dedicated Email Preferences section for four optional categories: study reminders, weak-concept nudges, weekly summary, and opt-in Product news & tips via `marketingEmailsEnabled` (default OFF). Re-engagement campaign sends and eligible counts now require the marketing opt-in, the old reminder write path is renamed to `POST /auth/preferences/email-preferences`, and transactional account/billing email is shown as always sent rather than as a toggle.
+- **Account deletion Phase 1** — Settings now lets users request account deletion with type-to-confirm `DELETE`, moving the account to `PENDING_DELETION`, recording `deleted_at`, revoking refresh tokens, and blocking normal login behind a reactivation path. Login now returns `ACCOUNT_PENDING_DELETION` for accounts in the 30-day grace window, and reactivation with valid password or Google credentials restores the account; irreversible purge/anonymization remains Phase 2.
+- **Account deletion Phase 2** — Added the scheduled irreversible purge for accounts past the 30-day `PENDING_DELETION` grace window. The job seeds and uses the fixed deleted-user sentinel, reassigns public notes and retained financial records to that sentinel, terminates active subscriptions, deletes private/personal practice data, leaves `analytics_events` untouched, and isolates each user purge in its own transaction for retryable failures.
+- **Tokenized email unsubscribe** — Optional retention and marketing emails now include a signed stateless unsubscribe link plus RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` headers. The unauthenticated one-click endpoint flips the matching Email Preferences flag idempotently without revealing account existence, and the public `/unsubscribe` confirmation page links users back to Settings to manage all email preferences.
+- **Owner-only data export** — Added `GET /auth/account/export` and a Settings `Download my data` button that return the authenticated user's own account basics, notes, Study Packs, collections, and aggregate practice summary as one rate-limited JSON attachment. The export is synchronous, principal-scoped, includes empty arrays for empty accounts, and intentionally excludes secrets/tokens, analytics, and financial records.
+- **Rate-limiter memory hotfix (prod OOM)** — The in-memory rate-limiter maps (`Auth`/`Ai`/`Ocr`) never evicted buckets, so unique keys accumulated forever; because `AuthRateLimitService` is keyed by client IP (and IP+email for login), an auth scan/credential-stuffing flood leaked heap until prod OOM'd and restarted. Each limiter now runs a scheduled 60s sweep that removes buckets whose window has fully elapsed, capping the maps at active keys. Shipped first as a hotfix on `main` (v0.31.2 line), then carried into this release via back-merge.
+
+---
+
 ## v0.31.2 - Analytics Integrity & Funnel Visibility
 
 **Status: Released**

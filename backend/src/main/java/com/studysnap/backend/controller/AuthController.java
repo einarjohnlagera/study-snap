@@ -4,6 +4,8 @@ import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.ChangePasswordRequest;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.DataExportResponse;
+import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.ForgotPasswordRequest;
 import com.studysnap.backend.dto.GoogleAuthRequest;
 import com.studysnap.backend.dto.GoogleConnectRequest;
@@ -11,20 +13,26 @@ import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
+import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.ResetPasswordRequest;
 import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
-import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
+import com.studysnap.backend.service.AccountDataExportService;
 import com.studysnap.backend.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,15 +42,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private static final String USER_AGENT = "User-Agent";
+    private static final String DATA_EXPORT_ACTION = "data-export";
+    private static final String DATA_EXPORT_FILENAME_PREFIX = "notelib-export-";
+    private static final String JSON_EXTENSION = ".json";
 
     private final AuthService authService;
     private final AuthRateLimitService authRateLimitService;
+    private final AccountDataExportService accountDataExportService;
 
     @PostMapping("/signup")
     public AuthResponse signup(@Valid @RequestBody SignupRequest request, HttpServletRequest servletRequest) {
@@ -73,6 +87,47 @@ public class AuthController {
     @PostMapping("/logout")
     public SimpleMessageResponse logout(@Valid @RequestBody LogoutRequest request) {
         return authService.logout(request);
+    }
+
+    @PostMapping("/account/delete")
+    @PreAuthorize("isAuthenticated()")
+    public SimpleMessageResponse deleteAccount(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody DeleteAccountRequest request
+    ) {
+        return authService.requestAccountDeletion(user.userId(), request);
+    }
+
+    @GetMapping("/account/export")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<DataExportResponse> exportAccountData(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        String userId = user.userId().toString();
+        authRateLimitService.assertAllowed(DATA_EXPORT_ACTION, userId);
+        DataExportResponse export = accountDataExportService.exportForUser(user.userId());
+        String filename = DATA_EXPORT_FILENAME_PREFIX + LocalDate.now() + JSON_EXTENSION;
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(filename)
+                                .build()
+                                .toString()
+                )
+                .body(export);
+    }
+
+    @PostMapping("/account/reactivate")
+    public AuthResponse reactivateAccount(
+            @Valid @RequestBody ReactivateAccountRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        String clientIp = resolveClientIp(servletRequest);
+        String rateLimitKey = request.email() == null ? "google" : request.email().trim().toLowerCase();
+        authRateLimitService.assertAllowed("reactivate", clientIp + ":" + rateLimitKey);
+        return authService.reactivateAccount(request, clientIp, servletRequest.getHeader(USER_AGENT));
     }
 
     @GetMapping("/me")
@@ -170,13 +225,13 @@ public class AuthController {
         return authService.updateEngagementMode(user.userId(), request);
     }
 
-    @PostMapping("/preferences/study-reminders")
+    @PostMapping("/preferences/email-preferences")
     @PreAuthorize("isAuthenticated()")
-    public MeResponse updateStudyReminders(
+    public MeResponse updateEmailPreferences(
             @AuthenticationPrincipal AuthenticatedUser user,
-            @Valid @RequestBody UpdateStudyRemindersRequest request
+            @Valid @RequestBody UpdateEmailPreferencesRequest request
     ) {
-        return authService.updateStudyReminders(user.userId(), request);
+        return authService.updateEmailPreferences(user.userId(), request);
     }
 
     @PostMapping("/preferences/theme")

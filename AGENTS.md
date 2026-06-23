@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.31.2` (in progress); previous: `v0.31.1 - Adoptable Study Plans Discovery & Status`
+- `v0.32.0` (in progress); previous: `v0.31.2 - Analytics Integrity & Funnel Visibility`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -333,6 +333,16 @@ Use these skills before writing prompts, before starting new features, and after
 - Preference values must persist in backend and be returned by `GET /auth/me`.
 - Future reminder cadence should be guided by `Learning Style`, but scheduling logic is a separate task.
 
+### Account Deletion Rule
+
+- Account deletion starts as a reversible soft-delete: set `PENDING_DELETION` + `deleted_at`, revoke sessions, block normal login, and allow reactivation during the 30-day grace window.
+- The irreversible purge reassigns public notes, their retained Study Packs, and financial records to the fixed deleted-user sentinel, removes private owned study data, and never deletes `analytics_events`.
+
+### Data Export Rule
+
+- Account data export must stay owner-only: resolve the requester from the authenticated principal, never accept a `userId` parameter, and query content through owner/user-scoped finders only.
+- Data export returns one synchronous JSON attachment and must exclude secrets/tokens, analytics events, and financial/billing records.
+
 ### Upgrade CTA Rule
 
 - Upgrade CTAs must be plan-aware. Never hardcode `Go Pro` as the universal upgrade CTA.
@@ -368,6 +378,10 @@ Use these skills before writing prompts, before starting new features, and after
 - Retention emails must log sends in `email_log` and respect same-type cooldowns before sending again.
 - `INACTIVITY` and `UNFINISHED_NOTE` should honor `inactivityRemindersEnabled`.
 - `WEAK_CONCEPT` should honor `weakConceptRemindersEnabled`.
+- `WEEKLY_SUMMARY` should honor `weeklySummaryRemindersEnabled`, which defaults off until the user opts in.
+- `RE_ENGAGEMENT_2025` should honor `marketingEmailsEnabled`, which defaults off until the user opts in.
+- Transactional account and billing emails are never gated by optional email preferences.
+- Optional emails must carry a tokenized one-click unsubscribe that maps category to the existing preference flag; transactional emails never carry unsubscribe links or headers, and unsubscribe tokens must not include PII beyond the opaque user id.
 - Reminder cadence may later vary by `Learning Style`, but V1 stores the inputs and uses fixed thresholds.
 
 ### Verification Email Rule
@@ -1492,7 +1506,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.31.2`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.32.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

@@ -625,6 +625,13 @@ export type GoogleConnectRequest = {
   code: string;
 };
 
+export type ReactivateAccountRequest = {
+  email?: string;
+  password?: string;
+  googleCode?: string;
+  keepSignedIn?: boolean;
+};
+
 export type AuthResponse = {
   userId: string;
   email: string;
@@ -663,13 +670,15 @@ export type MeResponse = {
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+  weeklySummaryRemindersEnabled: boolean;
+  marketingEmailsEnabled: boolean;
   themePreference?: ThemePreference | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   productOnboardingCompletedAt: string | null;
   studyPackCount: number;
   role: UserRole;
-  status: "ACTIVE" | "SUSPENDED";
+  status: "ACTIVE" | "SUSPENDED" | "PENDING_DELETION";
   planType: PlanType;
   subscription: SubscriptionPlanStatusResponse;
 };
@@ -685,9 +694,11 @@ export type UpdateEngagementModeRequest = {
   engagementMode: EngagementMode;
 };
 
-export type UpdateStudyRemindersRequest = {
+export type UpdateEmailPreferencesRequest = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+  weeklySummaryRemindersEnabled: boolean;
+  marketingEmailsEnabled: boolean;
 };
 
 export type UpdateThemePreferenceRequest = {
@@ -740,6 +751,20 @@ export type CompleteOnboardingRequest = {
 export type SimpleMessageResponse = {
   message: string;
 };
+
+export type UnsubscribeCategory =
+  | "MARKETING"
+  | "WEEKLY_SUMMARY"
+  | "STUDY_REMINDERS"
+  | "WEAK_CONCEPT";
+
+export type EmailUnsubscribeResponse = {
+  category: UnsubscribeCategory;
+  displayName: string;
+  message: string;
+};
+
+export const ACCOUNT_PENDING_DELETION_CODE = "ACCOUNT_PENDING_DELETION";
 
 export type NeedsTextConfirmationResponse = {
   status: "needs_text_confirmation";
@@ -1676,6 +1701,18 @@ export async function loginWithGoogle(request: GoogleAuthRequest): Promise<AuthU
   return toAuthUser(payload);
 }
 
+export async function reactivateAccount(request: ReactivateAccountRequest): Promise<AuthUser> {
+  const response = await fetch(buildUrl("/auth/account/reactivate"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  const payload = await parseApiResponse<AuthResponse>(response, "Could not reactivate account. Please try again.");
+  return toAuthUser(payload);
+}
+
 export async function getSignInMethods(): Promise<SignInMethodsResponse> {
   const response = await fetchWithAuth(
     "/auth/sign-in-methods",
@@ -1739,6 +1776,51 @@ export async function logout(): Promise<void> {
   } finally {
     clearAuthUser();
   }
+}
+
+export async function deleteAccount(confirmation: string): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    "/auth/account/delete",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ confirmation }),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not delete account. Please try again.");
+}
+
+export async function downloadMyData(): Promise<{ filename: string }> {
+  const response = await fetchWithAuth(
+    "/auth/account/export",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    return throwApiRequestError(response, "Could not download your data. Please try again.");
+  }
+  const blob = await response.blob();
+  const fallbackFilename = `notelib-export-${new Date().toISOString().slice(0, 10)}.json`;
+  const filename = extractDownloadFilename(response.headers.get("content-disposition"), fallbackFilename);
+  triggerBlobDownload(blob, filename);
+  return { filename };
+}
+
+export async function unsubscribeEmail(token: string): Promise<EmailUnsubscribeResponse> {
+  const form = new URLSearchParams();
+  form.set("token", token);
+  const response = await fetch(buildUrl("/email/unsubscribe"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  });
+  return parseApiResponse<EmailUnsubscribeResponse>(response, "Could not unsubscribe from this email.");
 }
 
 export async function getMe(): Promise<MeResponse> {
@@ -2137,9 +2219,9 @@ export async function updateEngagementMode(request: UpdateEngagementModeRequest)
   return me;
 }
 
-export async function updateStudyReminders(request: UpdateStudyRemindersRequest): Promise<MeResponse> {
+export async function updateEmailPreferences(request: UpdateEmailPreferencesRequest): Promise<MeResponse> {
   const response = await fetchWithAuth(
-    "/auth/preferences/study-reminders",
+    "/auth/preferences/email-preferences",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -2147,7 +2229,7 @@ export async function updateStudyReminders(request: UpdateStudyRemindersRequest)
     },
     true,
   );
-  const me = await parseApiResponse<MeResponse>(response, "Could not update study reminders. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update email preferences. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

@@ -2,7 +2,7 @@ import * as React from "react";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "default" | "secondary" | "outline" | "ghost";
+type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive" | "destructiveOutline";
 type ButtonSize = "default" | "sm";
 
 const buttonVariants = ({
@@ -24,6 +24,10 @@ const buttonVariants = ({
       "border border-border bg-background text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong dark:border-gray-600 dark:text-gray-200",
     variant === "ghost" &&
       "bg-transparent text-foreground/75 transition-colors hover:bg-highlight hover:text-foreground active:bg-highlight-strong dark:text-gray-300 dark:hover:text-gray-100",
+    variant === "destructive" &&
+      "bg-red-600 text-white shadow-sm transition-colors hover:bg-red-700 active:bg-red-800",
+    variant === "destructiveOutline" &&
+      "border border-red-500/50 bg-background text-red-600 transition-colors hover:border-red-500 hover:bg-red-50 active:bg-red-100 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-950/40",
     size === "default" && "h-10 px-4 py-2",
     size === "sm" && "h-9 px-3",
     className,

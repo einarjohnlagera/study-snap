@@ -12,6 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ActivityEventRepository extends JpaRepository<UserActivityEventEntity, UUID> {
+    void deleteByUserId(UUID userId);
+
     List<UserActivityEventEntity> findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
             UUID userId,
             ActivityType activityType,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Info, Sparkles } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
@@ -15,7 +16,10 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   cancelPremiumSubscription,
+  ApiRequestError,
   createPremiumCheckoutSession,
+  deleteAccount,
+  downloadMyData,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
@@ -24,7 +28,7 @@ import {
   logout,
   trackAnalyticsEvent,
   updateEngagementMode,
-  updateStudyReminders,
+  updateEmailPreferences,
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
@@ -35,7 +39,7 @@ import {
   type MeResponse,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
-import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
+import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
@@ -170,6 +174,10 @@ const CANCELLATION_REASONS: Array<{
   { value: "OTHER", label: "Other" },
 ];
 
+const DELETE_ACCOUNT_CONFIRMATION = "DELETE";
+const DATA_EXPORT_RATE_LIMIT_MESSAGE = "Please wait a moment before exporting again.";
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export default function SettingsPage() {
   const pathname = usePathname();
   const router = useRouter();
@@ -189,13 +197,21 @@ export default function SettingsPage() {
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
   const [inactivityRemindersEnabled, setInactivityRemindersEnabled] = useState(false);
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
-  const [savingStudyReminders, setSavingStudyReminders] = useState(false);
-  const [studyRemindersMessage, setStudyRemindersMessage] = useState<string | null>(null);
+  const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
+  const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
+  const [savingEmailPreferences, setSavingEmailPreferences] = useState(false);
+  const [emailPreferencesMessage, setEmailPreferencesMessage] = useState<string | null>(null);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellationError, setCancellationError] = useState<string | null>(null);
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deleteAccountConfirmation, setDeleteAccountConfirmation] = useState("");
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [dataExportMessage, setDataExportMessage] = useState<string | null>(null);
   const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("MONTHLY");
@@ -228,7 +244,7 @@ export default function SettingsPage() {
     setLoading(true);
     setError(null);
     setEngagementModeMessage(null);
-    setStudyRemindersMessage(null);
+    setEmailPreferencesMessage(null);
     try {
       const [me, usage, history, pricing] = await Promise.all([
         getMe(),
@@ -243,6 +259,8 @@ export default function SettingsPage() {
       setSelectedEngagementMode(me.engagementMode);
       setInactivityRemindersEnabled(me.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
+      setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
+      setMarketingEmailsEnabled(me.marketingEmailsEnabled);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
@@ -306,6 +324,8 @@ export default function SettingsPage() {
       setSelectedEngagementMode(updated.engagementMode);
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
+      setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
+      setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update learning style.";
@@ -315,24 +335,74 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveStudyReminders = async () => {
-    setSavingStudyReminders(true);
-    setStudyRemindersMessage(null);
+  const handleSaveEmailPreferences = async () => {
+    setSavingEmailPreferences(true);
+    setEmailPreferencesMessage(null);
     try {
-      const updated = await updateStudyReminders({
+      const updated = await updateEmailPreferences({
         inactivityRemindersEnabled,
         weakConceptRemindersEnabled,
+        weeklySummaryRemindersEnabled,
+        marketingEmailsEnabled,
       });
       setProfile(updated);
       setSelectedEngagementMode(updated.engagementMode);
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
-      setStudyRemindersMessage("Study reminders updated.");
+      setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
+      setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
+      setEmailPreferencesMessage("Email preferences updated.");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update study reminders.";
-      setStudyRemindersMessage(message);
+      const message = err instanceof Error ? err.message : "Could not update email preferences.";
+      setEmailPreferencesMessage(message);
     } finally {
-      setSavingStudyReminders(false);
+      setSavingEmailPreferences(false);
+    }
+  };
+
+  const handleOpenDeleteAccountModal = () => {
+    setDeleteAccountConfirmation("");
+    setDeleteAccountError(null);
+    setIsDeleteAccountModalOpen(true);
+  };
+
+  const handleDownloadMyData = async () => {
+    setExportingData(true);
+    setDataExportMessage(null);
+    try {
+      await downloadMyData();
+    } catch (err) {
+      if (err instanceof ApiRequestError && (err.status === 429 || err.code === "TOO_MANY_REQUESTS")) {
+        setDataExportMessage(DATA_EXPORT_RATE_LIMIT_MESSAGE);
+      } else {
+        setDataExportMessage(err instanceof Error ? err.message : "Could not download your data. Please try again.");
+      }
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleCloseDeleteAccountModal = () => {
+    if (deletingAccount) {
+      return;
+    }
+    setIsDeleteAccountModalOpen(false);
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await deleteAccount(deleteAccountConfirmation);
+      clearAuthUser();
+      setIsDeleteAccountModalOpen(false);
+      startRouteProgress();
+      router.push(buildLoginPath({ reason: LOGIN_REASON_LOGGED_OUT }));
+      router.refresh();
+    } catch (err) {
+      setDeleteAccountError(err instanceof Error ? err.message : "Could not delete account. Please try again.");
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -589,6 +659,18 @@ export default function SettingsPage() {
   const cancellationScheduledLabel = cancellationAccessEndsAt
     ? `Access ends ${formatBillingDate(cancellationAccessEndsAt)}`
     : "Cancellation scheduled";
+  const deleteAccountAccessEndsAt = billingHistory?.currentPeriodEnd ?? profile?.subscription.premiumEndsAt ?? null;
+  const deleteAccountPaidDaysRemaining = (() => {
+    if (!isPaidPlanType(currentPlan) || !deleteAccountAccessEndsAt) {
+      return null;
+    }
+    const accessEndDate = new Date(deleteAccountAccessEndsAt);
+    if (Number.isNaN(accessEndDate.getTime())) {
+      return null;
+    }
+    const daysRemaining = Math.ceil((accessEndDate.getTime() - Date.now()) / MILLIS_PER_DAY);
+    return daysRemaining > 0 ? daysRemaining : null;
+  })();
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -619,8 +701,7 @@ export default function SettingsPage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Preferences</h2>
             <p className="text-sm text-foreground/70">
-              Keep NoteLib aligned with the way you study. Theme, Learning Style, and reminder preferences can all be
-              adjusted here anytime.
+              Keep NoteLib aligned with the way you study. Theme and Learning Style can be adjusted here anytime.
             </p>
             <div className="space-y-3 rounded-md border border-border bg-background p-4">
               <div className="space-y-1">
@@ -700,55 +781,92 @@ export default function SettingsPage() {
                 ) : null}
               </div>
             </div>
-            <div className="space-y-4 rounded-md border border-border bg-background p-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Study Reminders</p>
-                <p className="text-xs text-foreground/60">
-                  Control the types of reminders you want. Future reminder timing will follow your Learning Style.
-                </p>
-              </div>
-              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Email Preferences</h2>
+            <p className="text-sm text-foreground/70">
+              Choose which optional emails you get. Account and billing emails are always sent so you stay secure and informed.
+            </p>
+            <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+              <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
-                  <span className="block text-sm font-medium">Inactivity reminders</span>
+                  <span className="block text-sm font-medium">Study reminders</span>
                   <span className="block text-xs text-foreground/60">
-                    Get reminded to come back when you have not studied for a while.
+                    Nudges when you&apos;ve been inactive or left a note unfinished.
                   </span>
                 </span>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  ariaLabel="Study reminders"
                   checked={inactivityRemindersEnabled}
-                  onChange={(event) => setInactivityRemindersEnabled(event.target.checked)}
-                  disabled={savingStudyReminders}
+                  onChange={setInactivityRemindersEnabled}
+                  disabled={savingEmailPreferences}
                 />
-              </label>
-              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+              </div>
+              <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
-                  <span className="block text-sm font-medium">Weak concept reminders</span>
+                  <span className="block text-sm font-medium">Weak-concept nudges</span>
                   <span className="block text-xs text-foreground/60">
-                    Get reminded to review topics you struggled with.
+                    A reminder to revisit concepts you missed on a quiz.
                   </span>
                 </span>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  ariaLabel="Weak-concept nudges"
                   checked={weakConceptRemindersEnabled}
-                  onChange={(event) => setWeakConceptRemindersEnabled(event.target.checked)}
-                  disabled={savingStudyReminders}
+                  onChange={setWeakConceptRemindersEnabled}
+                  disabled={savingEmailPreferences}
                 />
-              </label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <ResponsiveActionButton
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleSaveStudyReminders()}
-                  loading={savingStudyReminders}
-                  loadingText="Saving..."
-                  action="save"
-                  label="Save Study Reminders"
-                />
-                {studyRemindersMessage ? (
-                  <p className="text-xs text-foreground/60">{studyRemindersMessage}</p>
-                ) : null}
               </div>
+              <div className="flex items-start justify-between gap-4 p-4">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Weekly summary</span>
+                  <span className="block text-xs text-foreground/60">
+                    A Sunday recap of your week&apos;s study progress.
+                  </span>
+                </span>
+                <Checkbox
+                  ariaLabel="Weekly summary"
+                  checked={weeklySummaryRemindersEnabled}
+                  onChange={setWeeklySummaryRemindersEnabled}
+                  disabled={savingEmailPreferences}
+                />
+              </div>
+              <div className="flex items-start justify-between gap-4 p-4">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Product news &amp; tips</span>
+                  <span className="block text-xs text-foreground/60">
+                    Occasional updates, study tips, and new features.
+                  </span>
+                </span>
+                <Checkbox
+                  ariaLabel="Product news & tips"
+                  checked={marketingEmailsEnabled}
+                  onChange={setMarketingEmailsEnabled}
+                  disabled={savingEmailPreferences}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 rounded-md border border-blue-500/20 bg-blue-500/10 p-4 text-xs text-foreground/70">
+              <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground/90">Always sent</p>
+                <p>Account &amp; security — sign-in verification, password resets</p>
+                <p>Billing — payment receipts, plan-expiry reminders, refunds</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <ResponsiveActionButton
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSaveEmailPreferences()}
+                loading={savingEmailPreferences}
+                loadingText="Saving..."
+                action="save"
+                label="Save email preferences"
+              />
+              {emailPreferencesMessage ? (
+                <p className="text-xs text-foreground/60">{emailPreferencesMessage}</p>
+              ) : null}
             </div>
           </Card>
 
@@ -1155,8 +1273,30 @@ export default function SettingsPage() {
                 action="signOut"
                 label="Sign Out"
               />
-              <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" disabled action="delete" label="Delete Account (Coming Soon)" />
+              <ResponsiveActionButton
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => void handleDownloadMyData()}
+                loading={exportingData}
+                loadingText="Preparing..."
+                disabled={signingOut}
+                action="download"
+                label="Download my data"
+              />
+              <ResponsiveActionButton
+                type="button"
+                variant="destructiveOutline"
+                className="w-full sm:ml-auto sm:w-auto"
+                onClick={handleOpenDeleteAccountModal}
+                disabled={signingOut}
+                action="delete"
+                label="Delete Account"
+              />
             </div>
+            {dataExportMessage ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{dataExportMessage}</p>
+            ) : null}
           </Card>
         </div>
       ) : null}
@@ -1224,6 +1364,67 @@ export default function SettingsPage() {
           </label>
           {cancellationError ? (
             <p className="text-sm text-red-600 dark:text-red-400">{cancellationError}</p>
+          ) : null}
+        </div>
+      </AppModal>
+      <AppModal
+        isOpen={isDeleteAccountModalOpen}
+        title="Delete account?"
+        description="Your account will be locked now and scheduled for permanent deletion after 30 days. You can reactivate by logging in again within the grace window."
+        onClose={handleCloseDeleteAccountModal}
+        panelClassName="max-w-[560px]"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <ResponsiveActionButton
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleCloseDeleteAccountModal}
+              disabled={deletingAccount}
+              action="back"
+              label="Keep Account"
+              showTextOnMobile
+            />
+            <ResponsiveActionButton
+              type="button"
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => void handleConfirmDeleteAccount()}
+              disabled={deleteAccountConfirmation !== DELETE_ACCOUNT_CONFIRMATION}
+              loading={deletingAccount}
+              loadingText="Deleting..."
+              action="delete"
+              label="Delete Account"
+            />
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2 text-sm text-foreground/75">
+            <p>
+              During the grace window, login is blocked unless you choose to reactivate. Nothing is deleted immediately.
+            </p>
+            <p>
+              After 30 days, notes, Study Packs, progress, and quiz history will be removed. Public notes are kept anonymized, and billing records are retained.
+            </p>
+          </div>
+          {deleteAccountPaidDaysRemaining ? (
+            <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+              You&apos;ll lose your remaining {deleteAccountPaidDaysRemaining} days of access — no refund.
+            </p>
+          ) : null}
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-foreground">Type DELETE to confirm</span>
+            <input
+              value={deleteAccountConfirmation}
+              onChange={(event) => setDeleteAccountConfirmation(event.target.value)}
+              disabled={deletingAccount}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+              autoComplete="off"
+            />
+          </label>
+          {deleteAccountError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{deleteAccountError}</p>
           ) : null}
         </div>
       </AppModal>

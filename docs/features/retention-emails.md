@@ -18,7 +18,12 @@ Current reminders include:
 - `WEEKLY_SUMMARY`
   - trigger: weekly summary run every Sunday at `6:00 PM`
   - includes study packs created, quizzes taken, adaptive sessions, and average quiz score for the last `7` days
+  - gated by `weeklySummaryRemindersEnabled` (default off until the user opts in)
   - cooldown: `7` days
+- `RE_ENGAGEMENT_2025`
+  - trigger: admin-started re-engagement campaign for inactive verified users
+  - gated by `marketingEmailsEnabled` (default off until the user opts in)
+  - deduped by `email_log`
 
 ## Persistence
 
@@ -52,9 +57,26 @@ Configured under:
 
 Retention emails use the existing `EmailService` / Resend integration and template rendering system.
 
+`ResendEmailService` retries on HTTP `429` (rate limit) — honoring the `Retry-After` header, otherwise exponential backoff (max 3 attempts, capped at 5s) — so transactional email isn't dropped during a send burst. IO and non-429 errors are not retried. The real capacity fix is operational (upgrade the Resend tier).
+
+Optional retention and marketing emails include:
+
+- a visible footer link to `/unsubscribe?token=...`
+- `List-Unsubscribe` with the one-click API endpoint plus the support mailto fallback
+- `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+
+Unsubscribe categories map to the same Email Preferences flags:
+
+- `INACTIVITY` and `UNFINISHED_NOTE` -> `STUDY_REMINDERS` -> `inactivityRemindersEnabled`
+- `WEAK_CONCEPT` -> `WEAK_CONCEPT` -> `weakConceptRemindersEnabled`
+- `WEEKLY_SUMMARY` -> `WEEKLY_SUMMARY` -> `weeklySummaryRemindersEnabled`
+- `RE_ENGAGEMENT_2025` -> `MARKETING` -> `marketingEmailsEnabled`
+
+Transactional emails do not include unsubscribe links or one-click unsubscribe headers.
+
 ## Subscription Expiry Emails
 
-Subscription expiry emails are transactional billing alerts, not behavior-based retention emails. They use a separate `SubscriptionExpiryEmailService` and `SubscriptionExpiryEmailScheduler`, and are sent regardless of `inactivityRemindersEnabled` or `weakConceptRemindersEnabled`.
+Subscription expiry emails are transactional billing alerts, not behavior-based retention emails. They use a separate `SubscriptionExpiryEmailService` and `SubscriptionExpiryEmailScheduler`, and are sent regardless of reminder preferences.
 
 Types:
 

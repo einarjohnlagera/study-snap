@@ -90,6 +90,12 @@ public class UserEntity {
     @Column(name = "weak_concept_reminders_enabled", nullable = false)
     private Boolean weakConceptRemindersEnabled;
 
+    @Column(name = "weekly_summary_reminders_enabled", nullable = false)
+    private Boolean weeklySummaryRemindersEnabled;
+
+    @Column(name = "marketing_emails_enabled", nullable = false)
+    private Boolean marketingEmailsEnabled;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "theme_preference", nullable = false, length = 16)
     private ThemePreference themePreference;
@@ -128,6 +134,9 @@ public class UserEntity {
 
     @Column(name = "email_verified_at")
     private OffsetDateTime emailVerifiedAt;
+
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
 
     @Column(name = "onboarding_completed_at")
     private OffsetDateTime onboardingCompletedAt;

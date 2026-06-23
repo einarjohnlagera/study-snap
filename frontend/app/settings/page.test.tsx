@@ -3,15 +3,18 @@ import SettingsPage from "./page";
 import {
   cancelPremiumSubscription,
   createPremiumCheckoutSession,
+  deleteAccount,
+  downloadMyData,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
   getMe,
   requestEmailVerification,
   updateEngagementMode,
-  updateStudyReminders,
+  updateEmailPreferences,
 } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
+import { clearAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_SECTION_ID } from "@/lib/plans";
 
 const routerMock = {
@@ -27,6 +30,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/auth", () => ({
   buildLoginPath: jest.fn(() => "/login?reason=logged_out"),
+  clearAuthUser: jest.fn(),
   getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
   getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
   getSafeRedirectPath: (path: string | null | undefined) => (
@@ -44,8 +48,23 @@ jest.mock("@/lib/checkout-redirect", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    code: string | null;
+    action: string | null;
+    status: number;
+
+    constructor(message: string, options: { code?: string | null; action?: string | null; status: number }) {
+      super(message);
+      this.name = "ApiRequestError";
+      this.code = options.code ?? null;
+      this.action = options.action ?? null;
+      this.status = options.status;
+    }
+  },
   cancelPremiumSubscription: jest.fn(),
   createPremiumCheckoutSession: jest.fn(),
+  deleteAccount: jest.fn(),
+  downloadMyData: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getMyPlan: jest.fn(),
@@ -55,7 +74,7 @@ jest.mock("@/lib/api", () => ({
   requestEmailVerification: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateEngagementMode: jest.fn(),
-  updateStudyReminders: jest.fn(),
+  updateEmailPreferences: jest.fn(),
 }));
 
 const proProfile = {
@@ -70,6 +89,8 @@ const proProfile = {
   engagementMode: "FOCUSED",
   inactivityRemindersEnabled: false,
   weakConceptRemindersEnabled: false,
+  weeklySummaryRemindersEnabled: false,
+  marketingEmailsEnabled: false,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
   onboardingCompletedAt: "2026-03-20T00:05:00Z",
   productOnboardingCompletedAt: null,
@@ -195,8 +216,11 @@ describe("Settings page cancellation flow", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
+    (deleteAccount as jest.Mock).mockReset();
+    (downloadMyData as jest.Mock).mockReset();
+    (clearAuthUser as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
-    (updateStudyReminders as jest.Mock).mockReset();
+    (updateEmailPreferences as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(proProfile);
     (getMyPlan as jest.Mock).mockResolvedValue(proUsageSummary);
@@ -217,6 +241,8 @@ describe("Settings page cancellation flow", () => {
     (requestEmailVerification as jest.Mock).mockResolvedValue({
       message: "Verification email sent. Please check your inbox.",
     });
+    (deleteAccount as jest.Mock).mockResolvedValue({ message: "Account deletion scheduled." });
+    (downloadMyData as jest.Mock).mockResolvedValue({ filename: "notelib-export-2026-06-23.json" });
   });
 
   it("shows the theme selector in Preferences", async () => {
@@ -510,15 +536,93 @@ describe("Settings page cancellation flow", () => {
     expect(descriptions[1]).toHaveTextContent("Pro Monthly");
   });
 
-  it("renders Preferences before Plan & Billing and Account", async () => {
+  it("renders Preferences and Email Preferences before Plan & Billing and Account", async () => {
     render(<SettingsPage />);
 
     const preferencesHeading = await screen.findByRole("heading", { name: "Preferences" });
+    const emailPreferencesHeading = screen.getByRole("heading", { name: "Email Preferences" });
     const billingHeading = screen.getByRole("heading", { name: "Plan & Billing" });
     const accountHeading = screen.getByRole("heading", { name: "Account" });
 
+    expect(preferencesHeading.compareDocumentPosition(emailPreferencesHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(emailPreferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(preferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(billingHeading.compareDocumentPosition(accountHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("requires DELETE confirmation before deleting the account", async () => {
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Account" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete account?" });
+    const confirmButton = within(dialog).getByRole("button", { name: "Delete Account" });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    expect(confirmButton).toBeEnabled();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(deleteAccount).toHaveBeenCalledWith("DELETE");
+      expect(clearAuthUser).toHaveBeenCalled();
+      expect(routerMock.push).toHaveBeenCalledWith("/login?reason=logged_out");
+      expect(routerMock.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("downloads account data from the Account section", async () => {
+    render(<SettingsPage />);
+
+    const downloadButton = await screen.findByRole("button", { name: "Download my data" });
+    fireEvent.click(downloadButton);
+
+    expect(downloadButton).toHaveAttribute("aria-busy", "true");
+    await waitFor(() => {
+      expect(downloadMyData).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(downloadButton).toBeEnabled();
+    });
+  });
+
+  it("shows an inline error when account data download fails", async () => {
+    const { ApiRequestError } = jest.requireMock("@/lib/api") as typeof import("@/lib/api");
+    (downloadMyData as jest.Mock).mockRejectedValue(
+      new ApiRequestError("Too many requests.", {
+        code: "TOO_MANY_REQUESTS",
+        status: 429,
+      }),
+    );
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+
+    expect(await screen.findByText("Please wait a moment before exporting again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download my data" })).toBeEnabled();
+  });
+
+  it("warns about remaining active paid access before account deletion", async () => {
+    const futureAccessEnd = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "PRO",
+      subscriptionStatus: "ACTIVE",
+      billingType: "MONTHLY",
+      currentPeriodStart: new Date().toISOString(),
+      currentPeriodEnd: futureAccessEnd,
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Account" }));
+
+    expect(await screen.findByText("You'll lose your remaining 5 days of access — no refund.")).toBeInTheDocument();
   });
 
   it("does not show OCR usage in the settings usage section", async () => {
@@ -630,6 +734,8 @@ describe("Settings page cancellation flow", () => {
       engagementMode: "STREAK",
       inactivityRemindersEnabled: false,
       weakConceptRemindersEnabled: false,
+      weeklySummaryRemindersEnabled: false,
+      marketingEmailsEnabled: false,
     });
 
     render(<SettingsPage />);
@@ -643,25 +749,35 @@ describe("Settings page cancellation flow", () => {
     expect(await screen.findByText("Learning style updated.")).toBeInTheDocument();
   });
 
-  it("persists study reminder toggles", async () => {
-    (updateStudyReminders as jest.Mock).mockResolvedValue({
+  it("persists email preference toggles", async () => {
+    (updateEmailPreferences as jest.Mock).mockResolvedValue({
       ...proProfile,
       inactivityRemindersEnabled: true,
       weakConceptRemindersEnabled: true,
+      weeklySummaryRemindersEnabled: true,
+      marketingEmailsEnabled: true,
     });
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("checkbox", { name: /Inactivity reminders/i }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Weak concept reminders/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Study Reminders" }));
+    expect(await screen.findByRole("heading", { name: "Email Preferences" })).toBeInTheDocument();
+    expect(screen.getByText("Account & security — sign-in verification, password resets")).toBeInTheDocument();
+    expect(screen.getByText("Billing — payment receipts, plan-expiry reminders, refunds")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Study reminders/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Weak-concept nudges/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Weekly summary/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Product news & tips/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save email preferences" }));
 
     await waitFor(() => {
-      expect(updateStudyReminders).toHaveBeenCalledWith({
+      expect(updateEmailPreferences).toHaveBeenCalledWith({
         inactivityRemindersEnabled: true,
         weakConceptRemindersEnabled: true,
+        weeklySummaryRemindersEnabled: true,
+        marketingEmailsEnabled: true,
       });
     });
-    expect(await screen.findByText("Study reminders updated.")).toBeInTheDocument();
+    expect(await screen.findByText("Email preferences updated.")).toBeInTheDocument();
   });
 });

@@ -14,4 +14,6 @@ public interface BulkGenerationResultRepository extends JpaRepository<BulkGenera
     Optional<BulkGenerationResultEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     long deleteByCreatedAtBefore(OffsetDateTime threshold);
+
+    void deleteByOwnerUserId(UUID ownerUserId);
 }

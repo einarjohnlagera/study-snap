@@ -33,6 +33,8 @@ public record MeResponse(
         EngagementMode engagementMode,
         boolean inactivityRemindersEnabled,
         boolean weakConceptRemindersEnabled,
+        boolean weeklySummaryRemindersEnabled,
+        boolean marketingEmailsEnabled,
         ThemePreference themePreference,
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,

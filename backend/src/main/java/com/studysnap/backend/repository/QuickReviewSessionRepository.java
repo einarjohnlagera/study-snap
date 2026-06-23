@@ -18,6 +18,8 @@ import java.util.UUID;
 public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewSessionEntity, UUID> {
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
+    void deleteByUserId(UUID userId);
+
     Optional<QuickReviewSessionEntity> findByIdAndUserIdAndSessionMode(UUID id, UUID userId, QuickReviewSessionMode sessionMode);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -70,6 +72,8 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             UUID userId,
             Pageable pageable
     );
+
+    List<QuickReviewSessionEntity> findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(UUID userId);
 
     Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
             UUID userId,

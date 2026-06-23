@@ -7,4 +7,6 @@ import java.util.UUID;
 
 public interface PremiumWaitlistRepository extends JpaRepository<PremiumWaitlistEntity, UUID> {
     boolean existsByUserId(UUID userId);
+
+    void deleteByUserId(UUID userId);
 }
