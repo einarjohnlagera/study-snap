@@ -932,13 +932,17 @@ export default function LongExamPage() {
                                                     <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true"/>
                                                     <span>Generating from multiple notes may take up to a minute.</span>
                                                 </p>
-                                                <p className="text-sm text-foreground/70">
-                                                    This session will use {selectedSourceCount} of your {longExamRemaining} remaining Long Exam sessions.
-                                                </p>
-                                                {longExamSourceCountExceedsRemaining ? (
-                                                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                                                        Not enough Long Exam quota for {selectedSourceCount} notes. Remove a note or upgrade.
-                                                    </p>
+                                                {currentPlanType === "PRO" ? (
+                                                    <>
+                                                        <p className="text-sm text-foreground/70">
+                                                            This session will use {selectedSourceCount} of your {longExamRemaining} remaining Long Exam sessions.
+                                                        </p>
+                                                        {longExamSourceCountExceedsRemaining ? (
+                                                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                                                                Not enough Long Exam quota for {selectedSourceCount} notes. Remove a note or upgrade.
+                                                            </p>
+                                                        ) : null}
+                                                    </>
                                                 ) : null}
                                             </>
                                         ) : null}

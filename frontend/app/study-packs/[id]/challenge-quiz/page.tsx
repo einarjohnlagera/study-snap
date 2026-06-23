@@ -1729,13 +1729,17 @@ export default function ChallengeQuizPage() {
                         <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>Generating from multiple notes may take up to a minute.</span>
                       </p>
-                      <p className="text-sm text-foreground/70">
-                        This session will use {selectedBoardExamSourceCount} of your {boardExamRemaining} remaining Board Exam sessions.
-                      </p>
-                      {boardExamSourceCountExceedsRemaining ? (
-                        <p className="text-sm text-amber-700 dark:text-amber-300">
-                          Not enough Board Exam quota for {selectedBoardExamSourceCount} notes. Remove a note or upgrade.
-                        </p>
+                      {boardExamAvailable ? (
+                        <>
+                          <p className="text-sm text-foreground/70">
+                            This session will use {selectedBoardExamSourceCount} of your {boardExamRemaining} remaining Board Exam sessions.
+                          </p>
+                          {boardExamSourceCountExceedsRemaining ? (
+                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                              Not enough Board Exam quota for {selectedBoardExamSourceCount} notes. Remove a note or upgrade.
+                            </p>
+                          ) : null}
+                        </>
                       ) : null}
                     </>
                   ) : null}
