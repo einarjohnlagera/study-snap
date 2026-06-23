@@ -220,6 +220,12 @@ Study Plan detail now launches **the profile's premium exam mode over the plan's
 - Student → Long Exam · BOARD_EXAM → Board Exam (fixed set) · Professional → Interview Practice · Teacher → unchanged (keeps the DOCX Exam Builder) · profiles with no premium mode (e.g. PARENT) → CTA hidden.
 - Shipped as frontend-only: a profile-aware CTA (`Take the Long Exam` / `Take the Board Exam` / `Start Interview Practice`) routes with `collectionId`; each prescreen intersects that plan with the user's Study Pack-ready notes, scopes the picker to plan notes only, and pre-selects up to the existing cap. Eligibility is Study Pack readiness only (not a pre-generated quiz). Pro-gated users land on the Thread 1 Start-CTA paywall after seeing the plan-scoped setup.
 
+**Deferred polish within this release (candidates):**
+
+- **"Review first" advisory modal** — if the learner hasn't taken a Quick Review or Challenge Quiz on some/all of the plan's notes, surface an advisory before launching the premium exam recommending they review first, while still letting them continue. Optional polish; not required to ship Thread 2.
+- **Plan-launch back link target** — when a premium exam is launched from a Study Plan (`collectionId` present), the prescreen back link currently reads "← Note" and returns to the source note. It should return to the originating Study Plan (`/collections/{collectionId}`, profile-aware label e.g. "Study Plan" / "Review Set") so the user lands back where they started the exam.
+- **Plan note selection count + scoping copy** — a 3-note plan surfaces only 2 selectable notes in the prescreen picker because the primary note is implicit ("Built from …") and not shown in the additional-notes list, so it reads as "2 of 3." (All 3 are in fact included — the footer shows "3 notes · 25 questions".) Make the plan-scoped picker show all plan notes clearly (e.g. surface the primary as a fixed first entry, or reword to "Add up to N more notes from this plan"), and fix the stale "from this subject" copy on plan launches — plan launches are scoped to the plan, not the subject.
+
 ### Thread 3 — Pricing copy reframe (one-time pass clarity)
 
 The paid plans are **one-time, time-boxed passes with no auto-charge**, but the surface still reads like a recurring subscription — the Pro card is titled "90-Day Exam Pass" yet lists "/month" quotas and a "Manual renewal" footer, with two redundant CTAs. **Copy + card layout only — no billing/quota mechanics change.**
