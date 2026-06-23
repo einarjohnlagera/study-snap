@@ -6,13 +6,13 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.32.0 - Account & Communication Controls` is the release currently in progress (base branch `releases/v0.32.0`).
+No release is currently in progress. `v0.32.1 - Monetization Surfacing & Pricing Clarity` is the next candidate (parked, not yet kicked off).
 
-`v0.31.2 - Analytics Integrity & Funnel Visibility` is the current documentation baseline (last released).
+`v0.32.0 - Account & Communication Controls` is the current documentation baseline (last released).
 
-`v0.31.1 - Adoptable Study Plans Discovery & Status` is the previous baseline.
+`v0.31.2 - Analytics Integrity & Funnel Visibility` is the previous baseline.
 
-`v0.30.0 - Readiness Signals` is the release before that.
+`v0.31.1 - Adoptable Study Plans Discovery & Status` is the release before that.
 
 `v0.29.1 - Bulk Generation Polish` is the release before that.
 
@@ -201,7 +201,7 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 ---
 
-## v0.32.0 - Account & Communication Controls (in progress)
+## v0.32.0 - Account & Communication Controls (released)
 
 Base branch for this release: `releases/v0.32.0`. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is a privacy / account-control / communication-preferences theme. The "additional candidates to consider" below are not yet scope-locked — prune/confirm them before building each slice.
 

@@ -2,7 +2,7 @@
 
 ## v0.32.0 - Account & Communication Controls
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Consolidates account and communication controls into a coherent, compliant surface — account deletion, data export, an email-preferences center (replacing the ad-hoc Study Reminders card), a weekly-summary opt-in (default OFF), and a tokenized unsubscribe link — plus right-sized email deliverability hardening. Mostly additive; account deletion needs careful transactional handling. See `docs/product/ROADMAP.md` for full scope and locked rules.
 
@@ -15,6 +15,7 @@ Theme: give users real control over their account and the email we send them, an
 - **Account deletion Phase 2** — Added the scheduled irreversible purge for accounts past the 30-day `PENDING_DELETION` grace window. The job seeds and uses the fixed deleted-user sentinel, reassigns public notes and retained financial records to that sentinel, terminates active subscriptions, deletes private/personal practice data, leaves `analytics_events` untouched, and isolates each user purge in its own transaction for retryable failures.
 - **Tokenized email unsubscribe** — Optional retention and marketing emails now include a signed stateless unsubscribe link plus RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` headers. The unauthenticated one-click endpoint flips the matching Email Preferences flag idempotently without revealing account existence, and the public `/unsubscribe` confirmation page links users back to Settings to manage all email preferences.
 - **Owner-only data export** — Added `GET /auth/account/export` and a Settings `Download my data` button that return the authenticated user's own account basics, notes, Study Packs, collections, and aggregate practice summary as one rate-limited JSON attachment. The export is synchronous, principal-scoped, includes empty arrays for empty accounts, and intentionally excludes secrets/tokens, analytics, and financial records.
+- **Rate-limiter memory hotfix (prod OOM)** — The in-memory rate-limiter maps (`Auth`/`Ai`/`Ocr`) never evicted buckets, so unique keys accumulated forever; because `AuthRateLimitService` is keyed by client IP (and IP+email for login), an auth scan/credential-stuffing flood leaked heap until prod OOM'd and restarted. Each limiter now runs a scheduled 60s sweep that removes buckets whose window has fully elapsed, capping the maps at active keys. Shipped first as a hotfix on `main` (v0.31.2 line), then carried into this release via back-merge.
 
 ---
 
