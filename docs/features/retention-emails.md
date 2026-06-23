@@ -57,6 +57,8 @@ Configured under:
 
 Retention emails use the existing `EmailService` / Resend integration and template rendering system.
 
+`ResendEmailService` retries on HTTP `429` (rate limit) — honoring the `Retry-After` header, otherwise exponential backoff (max 3 attempts, capped at 5s) — so transactional email isn't dropped during a send burst. IO and non-429 errors are not retried. The real capacity fix is operational (upgrade the Resend tier).
+
 Optional retention and marketing emails include:
 
 - a visible footer link to `/unsubscribe?token=...`
