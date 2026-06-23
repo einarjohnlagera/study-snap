@@ -389,13 +389,32 @@ describe("CollectionDetailPageClient", () => {
   it("routes student collections to the Long Exam prescreen with the collection anchor", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Exam this plan" });
+    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
     expect(examButton).toBeEnabled();
-    expect(screen.getByText("Only quiz-ready notes will be included.")).toBeInTheDocument();
+    expect(screen.getByText("Only Study Pack-ready notes will be included.")).toBeInTheDocument();
 
     fireEvent.click(examButton);
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
+  });
+
+  it("enables the premium exam CTA for Study Pack-ready notes that have no generated quiz", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "STUDY_PACK_READY",
+        generatedQuizId: null,
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
+    expect(examButton).toBeEnabled();
+
+    fireEvent.click(examButton);
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
   });
 
   it("routes professional collections to Interview Practice with the collection anchor", async () => {
@@ -403,7 +422,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Exam this plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Interview Practice" }));
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-2/interview-practice?collectionId=collection-1");
   });
@@ -416,7 +435,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Exam this plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Take the Board Exam" }));
 
     expect(pushMock).toHaveBeenCalledWith("/study-packs/sp-2/challenge-quiz?collectionId=collection-1");
   });
@@ -426,7 +445,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Exam this plan" });
+    const examButton = await screen.findByRole("button", { name: "Take the Board Exam" });
     expect(examButton).toBeDisabled();
 
     fireEvent.click(examButton);
@@ -434,7 +453,7 @@ describe("CollectionDetailPageClient", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it("disables the premium exam CTA when no collection notes are quiz-ready", async () => {
+  it("disables the premium exam CTA when no collection notes are Study Pack-ready", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: collection().items.map((item) => ({
         ...item,
@@ -445,9 +464,9 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Exam this plan" });
+    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
     expect(examButton).toBeDisabled();
-    expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
+    expect(screen.getByText("Generate a Study Pack for at least one note to start an exam.")).toBeInTheDocument();
 
     fireEvent.click(examButton);
 
@@ -462,7 +481,9 @@ describe("CollectionDetailPageClient", () => {
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
     expect(screen.queryByRole("button", { name: /Build Exam/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Exam this plan" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Take the Long Exam|Take the Board Exam|Start Interview Practice/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides admin publish action for non-admins", async () => {

@@ -56,17 +56,17 @@ describe("getCollectionTerminalAction", () => {
     expect(getCollectionTerminalAction("STUDENT")).toEqual({
       kind: "premium-exam",
       mode: "long_exam",
-      label: "Exam this plan",
+      label: "Take the Long Exam",
     });
     expect(getCollectionTerminalAction("BOARD_EXAM")).toEqual({
       kind: "premium-exam",
       mode: "board_exam",
-      label: "Exam this plan",
+      label: "Take the Board Exam",
     });
     expect(getCollectionTerminalAction("PROFESSIONAL")).toEqual({
       kind: "premium-exam",
       mode: "interview",
-      label: "Exam this plan",
+      label: "Start Interview Practice",
     });
   });
 

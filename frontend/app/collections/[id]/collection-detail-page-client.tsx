@@ -17,7 +17,8 @@ import { CourseProgramCombobox } from "@/components/metadata/course-program-comb
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
 import {
-  getCollectionPrimaryExamItem,
+  getCollectionPremiumExamReadyNoteIds,
+  getCollectionPrimaryPremiumExamItem,
   getCollectionQuizReadyNoteIds,
   sortCollectionItemsByPosition,
 } from "@/lib/collection-exam";
@@ -1035,13 +1036,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     () => getCollectionQuizReadyNoteIds(items),
     [items],
   );
-  const primaryExamItem = useMemo(() => getCollectionPrimaryExamItem(items), [items]);
+  const premiumExamReadyNoteIds = useMemo(() => getCollectionPremiumExamReadyNoteIds(items), [items]);
+  const primaryExamItem = useMemo(() => getCollectionPrimaryPremiumExamItem(items), [items]);
   const noteStudyPackIdByNoteId = useMemo(
     () => new Map(noteListItems.map((noteItem) => [noteItem.id, noteItem.studyPackId])),
     [noteListItems],
   );
   const primaryExamStudyPackId = primaryExamItem ? noteStudyPackIdByNoteId.get(primaryExamItem.noteId) ?? null : null;
   const hasNonQuizReadyItems = quizReadyNoteIds.length < items.length;
+  const hasNonPremiumReadyItems = premiumExamReadyNoteIds.length < items.length;
   const mutationInProgress = mutationKind !== null;
   const premiumExamDisabled = noteListLoadFailed
     || !primaryExamItem
@@ -1191,13 +1194,23 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
               onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : openCollectionPremiumExam}
             />
-            {quizReadyNoteIds.length === 0 ? (
+            {terminalAction.kind === "exam-builder" ? (
+              quizReadyNoteIds.length === 0 ? (
+                <p className="text-xs text-foreground/60">
+                  Generate a quiz for at least one note to build an exam.
+                </p>
+              ) : hasNonQuizReadyItems ? (
+                <p className="text-xs text-foreground/60">
+                  Only quiz-ready notes will be included.
+                </p>
+              ) : null
+            ) : premiumExamReadyNoteIds.length === 0 ? (
               <p className="text-xs text-foreground/60">
-                Generate a quiz for at least one note to build an exam.
+                Generate a Study Pack for at least one note to start an exam.
               </p>
-            ) : hasNonQuizReadyItems || terminalAction.kind === "premium-exam" ? (
+            ) : hasNonPremiumReadyItems ? (
               <p className="text-xs text-foreground/60">
-                Only quiz-ready notes will be included.
+                Only Study Pack-ready notes will be included.
               </p>
             ) : null}
           </div>

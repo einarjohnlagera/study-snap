@@ -59,15 +59,17 @@ Profile-aware presentation is a frontend responsibility. The backend responses s
 
 | Profile | Frontend label | Primary terminal action |
 |---|---|---|
-| `TEACHER` | `Lesson Plan` | Combined sectioned DOCX + shareable quiz links through Exam Builder |
-| `STUDENT` | `Study Plan` | `Exam this plan` → Long Exam |
-| `BOARD_EXAM` | `Review Set` | `Exam this plan` → Board Exam setup |
-| `PROFESSIONAL` | `Collection` | `Exam this plan` → Interview Practice |
+| `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX + shareable quiz links through Exam Builder |
+| `STUDENT` | `Study Plan` | `Take the Long Exam` → Long Exam setup |
+| `BOARD_EXAM` | `Review Set` | `Take the Board Exam` → Board Exam setup |
+| `PROFESSIONAL` | `Collection` | `Start Interview Practice` → Interview Practice setup |
 | `PARENT` | `Collection` | No terminal action |
 
-The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in `frontend/lib/exam-mode-visibility.ts`. Do not hardcode profile checks in collection UI components.
+The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in `frontend/lib/exam-mode-visibility.ts`, and the profile-aware CTA labels live in `getCollectionTerminalAction`. Do not hardcode profile checks in collection UI components.
 
-The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its quiz-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap:
+Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Interview generate their own questions at start, so a note only needs a **ready Study Pack** (`canIncludeCollectionItemInPremiumExam` = `STUDY_PACK_READY`) — a pre-generated quiz is **not** required. The Teacher Exam Builder still requires a generated quiz (`canIncludeCollectionItemInExam` = `generatedQuizId`) because it exports that quiz.
+
+The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap:
 
 - Long Exam: primary note route plus up to 3 additional Study Pack ids
 - Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids

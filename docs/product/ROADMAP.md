@@ -218,7 +218,7 @@ Free and Plus users clicking a premium exam (Long Exam / Board Exam / Interview 
 Study Plan detail now launches **the profile's premium exam mode over the plan's notes**, pre-selected and capped at the existing per-exam note limit (a thin layer over the existing multi-note flow — the backend already supports multi-note for all three modes: `LongExamService` covers Long + Board, `InterviewPracticeService.resolveAdditionalNoteIds` covers Interview). Profile → mode mapping is driven by `resolvePlanPremiumExamMode` in `exam-mode-visibility.ts` (no hardcoded profile checks):
 
 - Student → Long Exam · BOARD_EXAM → Board Exam (fixed set) · Professional → Interview Practice · Teacher → unchanged (keeps the DOCX Exam Builder) · profiles with no premium mode (e.g. PARENT) → CTA hidden.
-- Shipped as frontend-only: the CTA routes with `collectionId`, each prescreen intersects that plan with the user's Study Pack-ready notes, scopes the picker to plan notes only, and pre-selects up to the existing cap. Pro-gated users land on the Thread 1 Start-CTA paywall after seeing the plan-scoped setup.
+- Shipped as frontend-only: a profile-aware CTA (`Take the Long Exam` / `Take the Board Exam` / `Start Interview Practice`) routes with `collectionId`; each prescreen intersects that plan with the user's Study Pack-ready notes, scopes the picker to plan notes only, and pre-selects up to the existing cap. Eligibility is Study Pack readiness only (not a pre-generated quiz). Pro-gated users land on the Thread 1 Start-CTA paywall after seeing the plan-scoped setup.
 
 ### Thread 3 — Pricing copy reframe (one-time pass clarity)
 

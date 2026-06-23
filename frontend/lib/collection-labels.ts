@@ -63,6 +63,12 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
   PROFESSIONAL: DEFAULT_LABELS,
 };
 
+const PREMIUM_EXAM_LABELS: Record<PlanPremiumExamMode, string> = {
+  long_exam: "Take the Long Exam",
+  board_exam: "Take the Board Exam",
+  interview: "Start Interview Practice",
+};
+
 export function getCollectionLabels(profileType: ProfileType | null | undefined): CollectionLabels {
   return LABELS_BY_PROFILE[profileType ?? "PROFESSIONAL"] ?? DEFAULT_LABELS;
 }
@@ -83,6 +89,6 @@ export function getCollectionTerminalAction(profileType: ProfileType | null | un
   return {
     kind: "premium-exam",
     mode: premiumMode,
-    label: "Exam this plan",
+    label: PREMIUM_EXAM_LABELS[premiumMode],
   };
 }
