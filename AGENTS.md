@@ -338,6 +338,11 @@ Use these skills before writing prompts, before starting new features, and after
 - Account deletion starts as a reversible soft-delete: set `PENDING_DELETION` + `deleted_at`, revoke sessions, block normal login, and allow reactivation during the 30-day grace window.
 - The irreversible purge reassigns public notes, their retained Study Packs, and financial records to the fixed deleted-user sentinel, removes private owned study data, and never deletes `analytics_events`.
 
+### Data Export Rule
+
+- Account data export must stay owner-only: resolve the requester from the authenticated principal, never accept a `userId` parameter, and query content through owner/user-scoped finders only.
+- Data export returns one synchronous JSON attachment and must exclude secrets/tokens, analytics events, and financial/billing records.
+
 ### Upgrade CTA Rule
 
 - Upgrade CTAs must be plan-aware. Never hardcode `Go Pro` as the universal upgrade CTA.

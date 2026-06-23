@@ -73,6 +73,8 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             Pageable pageable
     );
 
+    List<QuickReviewSessionEntity> findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(UUID userId);
+
     Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
             UUID userId,
             UUID studyPackId,

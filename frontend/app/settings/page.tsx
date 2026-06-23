@@ -15,8 +15,10 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   cancelPremiumSubscription,
+  ApiRequestError,
   createPremiumCheckoutSession,
   deleteAccount,
+  downloadMyData,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
@@ -172,6 +174,7 @@ const CANCELLATION_REASONS: Array<{
 ];
 
 const DELETE_ACCOUNT_CONFIRMATION = "DELETE";
+const DATA_EXPORT_RATE_LIMIT_MESSAGE = "Please wait a moment before exporting again.";
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export default function SettingsPage() {
@@ -206,6 +209,8 @@ export default function SettingsPage() {
   const [deleteAccountConfirmation, setDeleteAccountConfirmation] = useState("");
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [dataExportMessage, setDataExportMessage] = useState<string | null>(null);
   const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("MONTHLY");
@@ -358,6 +363,22 @@ export default function SettingsPage() {
     setDeleteAccountConfirmation("");
     setDeleteAccountError(null);
     setIsDeleteAccountModalOpen(true);
+  };
+
+  const handleDownloadMyData = async () => {
+    setExportingData(true);
+    setDataExportMessage(null);
+    try {
+      await downloadMyData();
+    } catch (err) {
+      if (err instanceof ApiRequestError && (err.status === 429 || err.code === "TOO_MANY_REQUESTS")) {
+        setDataExportMessage(DATA_EXPORT_RATE_LIMIT_MESSAGE);
+      } else {
+        setDataExportMessage(err instanceof Error ? err.message : "Could not download your data. Please try again.");
+      }
+    } finally {
+      setExportingData(false);
+    }
   };
 
   const handleCloseDeleteAccountModal = () => {
@@ -1243,6 +1264,17 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <ResponsiveActionButton
                 type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => void handleDownloadMyData()}
+                loading={exportingData}
+                loadingText="Preparing..."
+                disabled={signingOut}
+                action="download"
+                label="Download my data"
+              />
+              <ResponsiveActionButton
+                type="button"
                 className="w-full sm:w-auto"
                 onClick={() => void handleSignOut()}
                 loading={signingOut}
@@ -1260,6 +1292,9 @@ export default function SettingsPage() {
                 label="Delete Account"
               />
             </div>
+            {dataExportMessage ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{dataExportMessage}</p>
+            ) : null}
           </Card>
         </div>
       ) : null}

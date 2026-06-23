@@ -4,6 +4,7 @@ import {
   cancelPremiumSubscription,
   createPremiumCheckoutSession,
   deleteAccount,
+  downloadMyData,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
@@ -47,9 +48,23 @@ jest.mock("@/lib/checkout-redirect", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    code: string | null;
+    action: string | null;
+    status: number;
+
+    constructor(message: string, options: { code?: string | null; action?: string | null; status: number }) {
+      super(message);
+      this.name = "ApiRequestError";
+      this.code = options.code ?? null;
+      this.action = options.action ?? null;
+      this.status = options.status;
+    }
+  },
   cancelPremiumSubscription: jest.fn(),
   createPremiumCheckoutSession: jest.fn(),
   deleteAccount: jest.fn(),
+  downloadMyData: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getMyPlan: jest.fn(),
@@ -202,6 +217,7 @@ describe("Settings page cancellation flow", () => {
     (cancelPremiumSubscription as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (deleteAccount as jest.Mock).mockReset();
+    (downloadMyData as jest.Mock).mockReset();
     (clearAuthUser as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
     (updateEmailPreferences as jest.Mock).mockReset();
@@ -226,6 +242,7 @@ describe("Settings page cancellation flow", () => {
       message: "Verification email sent. Please check your inbox.",
     });
     (deleteAccount as jest.Mock).mockResolvedValue({ message: "Account deletion scheduled." });
+    (downloadMyData as jest.Mock).mockResolvedValue({ filename: "notelib-export-2026-06-23.json" });
   });
 
   it("shows the theme selector in Preferences", async () => {
@@ -554,6 +571,38 @@ describe("Settings page cancellation flow", () => {
       expect(routerMock.push).toHaveBeenCalledWith("/login?reason=logged_out");
       expect(routerMock.refresh).toHaveBeenCalled();
     });
+  });
+
+  it("downloads account data from the Account section", async () => {
+    render(<SettingsPage />);
+
+    const downloadButton = await screen.findByRole("button", { name: "Download my data" });
+    fireEvent.click(downloadButton);
+
+    expect(downloadButton).toHaveAttribute("aria-busy", "true");
+    await waitFor(() => {
+      expect(downloadMyData).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(downloadButton).toBeEnabled();
+    });
+  });
+
+  it("shows an inline error when account data download fails", async () => {
+    const { ApiRequestError } = jest.requireMock("@/lib/api") as typeof import("@/lib/api");
+    (downloadMyData as jest.Mock).mockRejectedValue(
+      new ApiRequestError("Too many requests.", {
+        code: "TOO_MANY_REQUESTS",
+        status: 429,
+      }),
+    );
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+
+    expect(await screen.findByText("Please wait a moment before exporting again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download my data" })).toBeEnabled();
   });
 
   it("warns about remaining active paid access before account deletion", async () => {
