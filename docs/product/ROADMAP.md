@@ -6,11 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.32.1 - Monetization Surfacing & Pricing Clarity` is the next candidate (parked, not yet kicked off).
+`v0.32.1 - Monetization Surfacing & Pricing Clarity` is in progress.
 
-`v0.32.0 - Account & Communication Controls` is the current documentation baseline (last released).
+`v0.32.0 - Account & Communication Controls` is the previous baseline (last released).
 
-`v0.31.2 - Analytics Integrity & Funnel Visibility` is the previous baseline.
+`v0.31.2 - Analytics Integrity & Funnel Visibility` is the release before that.
 
 `v0.31.1 - Adoptable Study Plans Discovery & Status` is the release before that.
 
@@ -201,35 +201,9 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 ---
 
-## v0.32.0 - Account & Communication Controls (released)
+## v0.32.1 - Monetization Surfacing & Pricing Clarity (in progress)
 
-Base branch for this release: `releases/v0.32.0`. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is a privacy / account-control / communication-preferences theme. The "additional candidates to consider" below are not yet scope-locked — prune/confirm them before building each slice.
-
-Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps. Today there is no account-deletion path, no unsubscribe link on recurring email, and email preferences are split across an ad-hoc "Study Reminders" card. This release consolidates account and communication controls into a coherent, compliant surface (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Mostly additive; some new endpoints + a destructive account-deletion flow that needs careful, transactional handling.
-
-Scope:
-
-- **Account deletion (right to erasure).** A user-initiated delete with explicit confirmation, removing or anonymizing the account and owned data (notes, Study Packs, quiz/review sessions, collections, usage, auth providers, tokens). Decide hard-delete vs anonymize per table; `analytics_events.user_id` is already FK-free (v0.31.2) so orphaned ids are fine — do not delete telemetry rows on account deletion. Must be transactional and idempotent, invalidate sessions/refresh tokens, and be clearly irreversible in the UI. Consider a short soft-delete/grace window vs immediate purge.
-- **Data export / "Download my data" (portability).** Let a user export their own content (notes, Study Packs, sessions summary) as a downloadable file. Pairs with deletion to round out the privacy story. Owner-only, no PII beyond the user's own data.
-- **Email/communication preferences center + Settings redesign.** Replace the single "Study Reminders" card with a dedicated **Email Preferences** section that lists every optional email type (inactivity, weak-concept, weekly summary, future marketing/re-engagement) with per-type toggles, clearly separating **transactional** email (verification, password reset, receipts — always sent, shown as informational/non-toggleable) from **optional** email. **Design is Claude's lane** (information design of the preferences surface); per-toggle wiring reuses the existing reminder-flag pattern. Includes the **weekly-summary opt-in toggle** below.
-- **Weekly-summary opt-in flag.** Add `weekly_summary_reminders_enabled` (mirrors `inactivity_reminders_enabled` / `weak_concept_reminders_enabled` from `V28`) gating `RetentionService.findWeeklySummaryUsers`. **Decision (2026-06): default OFF (opt-in)** — column `NOT NULL DEFAULT FALSE`, existing users backfilled to disabled, new users created disabled; this immediately cuts the Sunday blast ~90% under the Resend cap, and users re-enable in the preferences center. 1:1 mirror of the existing reminder pattern. Codex prompt drafted: `docs/codex-prompts/weekly-summary-opt-out.md`.
-- **Tokenized one-click unsubscribe link (for optional emails).** Add an unsubscribe footer link to retention/marketing emails backed by a signed/opaque per-user token and an unauthenticated unsubscribe endpoint that flips the relevant preference without login. No PII in the token/link. Transactional emails are not unsubscribable. Closes the CAN-SPAM/GDPR one-click-unsubscribe gap; pairs with the preferences center.
-- **Email deliverability hardening (right-sized; mostly ops).** As of 2026-06 prod is on Resend's free tier (verify: ~100/day **and** ~3,000/month, ~2 req/s) with 142 users; all email types share one pool, so the Sunday `WEEKLY_SUMMARY` blast can exhaust the daily cap and then make verification / password-reset throw `BAD_GATEWAY` for the rest of the evening. **Primary fix is operational: upgrade the Resend tier (~$20/mo, ~50k/mo) — it moots the cap and the need for a priority queue; do not build a pending-email outbox to dodge ~$20/mo.** Immediate zero-code stopgap: `RETENTION_WEEKLY_CRON=-`. In-scope code hardening: retry-on-429 (or pace the blast under the rate limit) in `ResendEmailService` so a transactional email landing during a blast isn't dropped. A persistent priority outbox stays deferred unless volume genuinely approaches a paid limit; design rule if ever built — transactional sends immediately and is never gated, retention tolerates ~1 day and is dropped after ~1 week.
-
-Additional candidates to consider for the theme (prune at kickoff):
-
-- **Change email address** (with re-verification of the new address).
-- **Account deactivation** (reversible soft-disable) as a lighter alternative to full deletion.
-- **Marketing-consent capture** at signup + a clear transactional-vs-marketing taxonomy for all email types (also informs which emails get the unsubscribe link).
-- **Surface "weekly summary exists"** one-time nudge so the opt-in default OFF doesn't make the channel invisible (optional; only if we want to keep weekly reach).
-
-Anti-drift: reuse the existing reminder-preference pattern (entity flag + repository finder + `updateStudyReminders` + Settings card) — do not build a new preferences framework; no PII in unsubscribe tokens/links; account deletion must be transactional, idempotent, and never delete FK-free telemetry rows; do not build an email outbox/queue unless volume genuinely approaches the provider limit; no change to the universal learning loop.
-
----
-
-## v0.32.1 (candidate, parked) - Monetization Surfacing & Pricing Clarity
-
-**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Patch after v0.32.0; mostly frontend.
+Base branch for this release: `releases/v0.32.1`. Patch after v0.32.0; mostly frontend.
 
 Theme: the monetization leak is **conversion, not engagement** (prod ~2026-06: free-quota hit rate 0.0%, ~10 `UPGRADE_CLICKED` → 0 `SUBSCRIPTION_STARTED`). Two failure points: almost nobody **reaches** a paywall (premium exams aren't surfaced), and the few who click **drop at checkout** (the pricing surface reads like a recurring sub when plans are actually one-time passes). This release attacks the *surfacing/desire* half — surface the premium exams as paywall moments and clarify the pricing model — while the *checkout* half is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel. **Honest scope note:** these lift exposure + desire (top-of-funnel); they feed more clicks into a checkout that still converts ~0, so they must be paired with reading the checkout-conversion funnel, not sold as the conversion fix on their own.
 
@@ -258,6 +232,32 @@ The paid plans are **one-time, time-boxed passes with no auto-charge**, but the 
 - **Reconcile the "/month" tension honestly:** quotas reset monthly (`BillingUsageResetJob`), so a 90-day pass spans ~3 monthly refreshes — say "usage limits refresh each month during your pass" rather than reading as a monthly sub.
 
 Anti-drift: all upgrade/pricing copy goes through `getUpgradeCtas(currentPlan)` in `src/config/plans.ts` (never hardcode in cards); premium-exam visibility goes through `exam-mode-visibility.ts` (no hardcoded profile checks); paywall copy is action-aware via `PaywallModal`/`resolvePaywallAction`. **No mechanics change** — quotas, pass durations, prices, billing periods, and exam-generation paths are untouched (per-pass limits or new multi-note generation are explicitly NOT in scope). Suggested split into separate slices: Thread 1 (small revert) and Thread 3 (copy) are quick; Thread 2 is a real feature — prompt it on its own.
+
+---
+
+## v0.32.0 - Account & Communication Controls (released)
+
+Base branch for this release: `releases/v0.32.0`. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is a privacy / account-control / communication-preferences theme. The "additional candidates to consider" below are not yet scope-locked — prune/confirm them before building each slice.
+
+Theme: give users real control over their account and the email we send them, and close the associated privacy/compliance gaps. Today there is no account-deletion path, no unsubscribe link on recurring email, and email preferences are split across an ad-hoc "Study Reminders" card. This release consolidates account and communication controls into a coherent, compliant surface (GDPR right-to-erasure + portability; CAN-SPAM/GDPR one-click unsubscribe). Mostly additive; some new endpoints + a destructive account-deletion flow that needs careful, transactional handling.
+
+Scope:
+
+- **Account deletion (right to erasure).** A user-initiated delete with explicit confirmation, removing or anonymizing the account and owned data (notes, Study Packs, quiz/review sessions, collections, usage, auth providers, tokens). Decide hard-delete vs anonymize per table; `analytics_events.user_id` is already FK-free (v0.31.2) so orphaned ids are fine — do not delete telemetry rows on account deletion. Must be transactional and idempotent, invalidate sessions/refresh tokens, and be clearly irreversible in the UI. Consider a short soft-delete/grace window vs immediate purge.
+- **Data export / "Download my data" (portability).** Let a user export their own content (notes, Study Packs, sessions summary) as a downloadable file. Pairs with deletion to round out the privacy story. Owner-only, no PII beyond the user's own data.
+- **Email/communication preferences center + Settings redesign.** Replace the single "Study Reminders" card with a dedicated **Email Preferences** section that lists every optional email type (inactivity, weak-concept, weekly summary, future marketing/re-engagement) with per-type toggles, clearly separating **transactional** email (verification, password reset, receipts — always sent, shown as informational/non-toggleable) from **optional** email. **Design is Claude's lane** (information design of the preferences surface); per-toggle wiring reuses the existing reminder-flag pattern. Includes the **weekly-summary opt-in toggle** below.
+- **Weekly-summary opt-in flag.** Add `weekly_summary_reminders_enabled` (mirrors `inactivity_reminders_enabled` / `weak_concept_reminders_enabled` from `V28`) gating `RetentionService.findWeeklySummaryUsers`. **Decision (2026-06): default OFF (opt-in)** — column `NOT NULL DEFAULT FALSE`, existing users backfilled to disabled, new users created disabled; this immediately cuts the Sunday blast ~90% under the Resend cap, and users re-enable in the preferences center. 1:1 mirror of the existing reminder pattern. Codex prompt drafted: `docs/codex-prompts/weekly-summary-opt-out.md`.
+- **Tokenized one-click unsubscribe link (for optional emails).** Add an unsubscribe footer link to retention/marketing emails backed by a signed/opaque per-user token and an unauthenticated unsubscribe endpoint that flips the relevant preference without login. No PII in the token/link. Transactional emails are not unsubscribable. Closes the CAN-SPAM/GDPR one-click-unsubscribe gap; pairs with the preferences center.
+- **Email deliverability hardening (right-sized; mostly ops).** As of 2026-06 prod is on Resend's free tier (verify: ~100/day **and** ~3,000/month, ~2 req/s) with 142 users; all email types share one pool, so the Sunday `WEEKLY_SUMMARY` blast can exhaust the daily cap and then make verification / password-reset throw `BAD_GATEWAY` for the rest of the evening. **Primary fix is operational: upgrade the Resend tier (~$20/mo, ~50k/mo) — it moots the cap and the need for a priority queue; do not build a pending-email outbox to dodge ~$20/mo.** Immediate zero-code stopgap: `RETENTION_WEEKLY_CRON=-`. In-scope code hardening: retry-on-429 (or pace the blast under the rate limit) in `ResendEmailService` so a transactional email landing during a blast isn't dropped. A persistent priority outbox stays deferred unless volume genuinely approaches a paid limit; design rule if ever built — transactional sends immediately and is never gated, retention tolerates ~1 day and is dropped after ~1 week.
+
+Additional candidates to consider for the theme (prune at kickoff):
+
+- **Change email address** (with re-verification of the new address).
+- **Account deactivation** (reversible soft-disable) as a lighter alternative to full deletion.
+- **Marketing-consent capture** at signup + a clear transactional-vs-marketing taxonomy for all email types (also informs which emails get the unsubscribe link).
+- **Surface "weekly summary exists"** one-time nudge so the opt-in default OFF doesn't make the channel invisible (optional; only if we want to keep weekly reach).
+
+Anti-drift: reuse the existing reminder-preference pattern (entity flag + repository finder + `updateStudyReminders` + Settings card) — do not build a new preferences framework; no PII in unsubscribe tokens/links; account deletion must be transactional, idempotent, and never delete FK-free telemetry rows; do not build an email outbox/queue unless volume genuinely approaches the provider limit; no change to the universal learning loop.
 
 ---
 
