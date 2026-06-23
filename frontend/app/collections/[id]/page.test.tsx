@@ -386,12 +386,83 @@ describe("CollectionDetailPageClient", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it("does not render a terminal CTA for non-teacher profiles", async () => {
+  it("routes student collections to the Long Exam prescreen with the collection anchor", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const examButton = await screen.findByRole("button", { name: "Exam this plan" });
+    expect(examButton).toBeEnabled();
+    expect(screen.getByText("Only quiz-ready notes will be included.")).toBeInTheDocument();
+
+    fireEvent.click(examButton);
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
+  });
+
+  it("routes professional collections to Interview Practice with the collection anchor", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "PROFESSIONAL", planType: "PLUS" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Exam this plan" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/interview-practice?collectionId=collection-1");
+  });
+
+  it("routes board exam collections through the primary note studyPackId resolved from listNotes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "FREE" });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { ...note("note-2", "Dosage Calculations"), studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Exam this plan" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/study-packs/sp-2/challenge-quiz?collectionId=collection-1");
+  });
+
+  it("disables the board exam collection CTA when the primary studyPackId cannot be resolved", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "FREE" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const examButton = await screen.findByRole("button", { name: "Exam this plan" });
+    expect(examButton).toBeDisabled();
+
+    fireEvent.click(examButton);
+
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("disables the premium exam CTA when no collection notes are quiz-ready", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "DRAFT",
+        generatedQuizId: null,
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const examButton = await screen.findByRole("button", { name: "Exam this plan" });
+    expect(examButton).toBeDisabled();
+    expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
+
+    fireEvent.click(examButton);
+
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("does not render a terminal CTA for parent profiles", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "PARENT", planType: "FREE" });
+
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
     expect(screen.queryByRole("button", { name: /Build Exam/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Exam this plan" })).not.toBeInTheDocument();
   });
 
   it("hides admin publish action for non-admins", async () => {

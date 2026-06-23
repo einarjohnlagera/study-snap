@@ -51,20 +51,29 @@ Each item stores:
 
 Item labels are neutral backend data. The Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
 
-## Profile-Agnostic Spine
+## Profile-Aware Terminal Actions
 
 The backend API must not branch on `ProfileType`.
 
-Profile-aware presentation is a future frontend responsibility:
+Profile-aware presentation is a frontend responsibility. The backend responses stay neutral: `title`, `description`, `items`.
 
-| Profile | Future frontend label | Future primary terminal action |
+| Profile | Frontend label | Primary terminal action |
 |---|---|---|
 | `TEACHER` | `Lesson Plan` | Combined sectioned DOCX + shareable quiz links through Exam Builder |
-| `STUDENT` | `Study Plan` | Study the set; generate or review per note |
-| `BOARD_EXAM` | `Review Set` | Practice across the set through existing multi-note exam flows |
-| `PROFESSIONAL` | `Collection` | Study the set; generate or review per note |
+| `STUDENT` | `Study Plan` | `Exam this plan` → Long Exam |
+| `BOARD_EXAM` | `Review Set` | `Exam this plan` → Board Exam setup |
+| `PROFESSIONAL` | `Collection` | `Exam this plan` → Interview Practice |
+| `PARENT` | `Collection` | No terminal action |
 
-Backend responses stay neutral: `title`, `description`, `items`.
+The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in `frontend/lib/exam-mode-visibility.ts`. Do not hardcode profile checks in collection UI components.
+
+The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its quiz-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap:
+
+- Long Exam: primary note route plus up to 3 additional Study Pack ids
+- Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
+- Interview Practice: primary note route plus up to 2 additional note ids
+
+If the collection cannot be loaded from a prescreen, the exam falls back to its normal single-note/same-subject setup. The Teacher Exam Builder path is unchanged and still receives the collection id plus quiz-ready note ids.
 
 ## Ownership Rules
 

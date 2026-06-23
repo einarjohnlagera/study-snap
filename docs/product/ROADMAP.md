@@ -213,12 +213,12 @@ Free and Plus users clicking a premium exam (Long Exam / Board Exam / Interview 
 
 - Shipped as frontend-mostly: `PaywallModal` fires from the Start CTA for the three premium exams. Mode-selection cards still show the Pro badge, Start CTAs read as unlock actions for non-Pro users, and backend `FeatureGate` remains defense-in-depth.
 
-### Thread 2 — "Exam this plan" for non-teachers (Study Plan → premium exam)
+### Thread 2 — "Exam this plan" for non-teachers (Study Plan → premium exam) (shipped)
 
-Add a Study Plan CTA that launches **the profile's premium exam mode over the plan's notes**, pre-selected and capped at the existing per-exam note limit (a thin layer over the existing multi-note flow — the backend already supports multi-note for all three modes: `LongExamService` covers Long + Board, `InterviewPracticeService.resolveAdditionalNoteIds` covers Interview). Profile → mode mapping is driven by `exam-mode-visibility.ts` (no hardcoded profile checks):
+Study Plan detail now launches **the profile's premium exam mode over the plan's notes**, pre-selected and capped at the existing per-exam note limit (a thin layer over the existing multi-note flow — the backend already supports multi-note for all three modes: `LongExamService` covers Long + Board, `InterviewPracticeService.resolveAdditionalNoteIds` covers Interview). Profile → mode mapping is driven by `resolvePlanPremiumExamMode` in `exam-mode-visibility.ts` (no hardcoded profile checks):
 
 - Student → Long Exam · BOARD_EXAM → Board Exam (fixed set) · Professional → Interview Practice · Teacher → unchanged (keeps the DOCX Exam Builder) · profiles with no premium mode (e.g. PARENT) → CTA hidden.
-- Notes are pre-filtered to the plan and pre-selected up to the existing cap; for many-subject plans the user can trim within the plan's notes (selection never includes notes outside the plan). Pro-gated → lands on the Thread 1 Start-CTA paywall (synergy: a compelling "exam your whole plan" value moment).
+- Shipped as frontend-only: the CTA routes with `collectionId`, each prescreen intersects that plan with the user's Study Pack-ready notes, scopes the picker to plan notes only, and pre-selects up to the existing cap. Pro-gated users land on the Thread 1 Start-CTA paywall after seeing the plan-scoped setup.
 
 ### Thread 3 — Pricing copy reframe (one-time pass clarity)
 

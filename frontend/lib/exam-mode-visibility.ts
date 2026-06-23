@@ -1,6 +1,7 @@
 import type { ProfileType } from "@/lib/api";
 
 export type ExamModeId = "challenge" | "long_exam" | "board_exam";
+export type PlanPremiumExamMode = "long_exam" | "board_exam" | "interview";
 
 export type ExamModeCard = {
   id: ExamModeId;
@@ -65,4 +66,19 @@ export function getAvailableExamModes(
       comingSoon: false,
     },
   ];
+}
+
+export function resolvePlanPremiumExamMode(
+  profileType: ProfileType | null | undefined,
+): PlanPremiumExamMode | null {
+  if (profileType === "STUDENT") {
+    return "long_exam";
+  }
+  if (profileType === "BOARD_EXAM") {
+    return "board_exam";
+  }
+  if (profileType === "PROFESSIONAL") {
+    return "interview";
+  }
+  return null;
 }

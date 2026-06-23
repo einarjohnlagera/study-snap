@@ -52,10 +52,26 @@ describe("getCollectionTerminalAction", () => {
     });
   });
 
-  it("returns null for non-teacher and default profiles", () => {
-    expect(getCollectionTerminalAction("STUDENT")).toBeNull();
-    expect(getCollectionTerminalAction("BOARD_EXAM")).toBeNull();
-    expect(getCollectionTerminalAction("PROFESSIONAL")).toBeNull();
+  it("returns premium exam actions for learner profiles", () => {
+    expect(getCollectionTerminalAction("STUDENT")).toEqual({
+      kind: "premium-exam",
+      mode: "long_exam",
+      label: "Exam this plan",
+    });
+    expect(getCollectionTerminalAction("BOARD_EXAM")).toEqual({
+      kind: "premium-exam",
+      mode: "board_exam",
+      label: "Exam this plan",
+    });
+    expect(getCollectionTerminalAction("PROFESSIONAL")).toEqual({
+      kind: "premium-exam",
+      mode: "interview",
+      label: "Exam this plan",
+    });
+  });
+
+  it("returns null for profiles without terminal actions", () => {
+    expect(getCollectionTerminalAction("PARENT")).toBeNull();
     expect(getCollectionTerminalAction(null)).toBeNull();
   });
 });

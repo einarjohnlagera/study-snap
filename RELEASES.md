@@ -9,10 +9,10 @@ Theme: the monetization leak is conversion, not engagement: premium exam value i
 ### Shipped
 
 - **Premium-exam Start CTA paywall** — Free and Plus users can now open the premium exam setup surfaces before seeing an upgrade ask: Board Exam Mode opens its pre-flight setup from mode selection, Long Exam opens its full prestart page, and Professional Interview Practice opens its session setup. The Pro paywall now fires from the Begin/Unlock Start CTA for those modes, while backend gates remain the final enforcement boundary.
+- **Study Plan premium exam CTA** — Non-teacher Study Plan detail pages now expose an `Exam this plan` action when the viewer profile maps to a premium exam mode: Student opens Long Exam, Board Exam opens Board Exam setup, and Professional opens Interview Practice. The launch carries only `collectionId`; each prescreen scopes its additional-note picker to quiz-ready notes from that plan, preselects up to the existing per-exam cap, and still relies on the Thread 1 Start-CTA paywall/backend gates for Free and Plus users.
 
 ### Planned Scope
 
-- **Study Plan premium exam CTA** — Add a non-teacher Study Plan action that launches the learner's profile-appropriate premium exam mode over the plan's notes, pre-selecting only notes from that plan up to existing per-exam limits. Visibility must be driven by `exam-mode-visibility.ts`, not hardcoded profile checks.
 - **One-time pass pricing clarity** — Reframe paid pricing surfaces around one-time payment, time-boxed access, no auto-charge, monthly usage refresh during the pass, and permanent library data. Copy and card layout only; no billing, quota, pass-duration, or checkout mechanics change.
 
 ---

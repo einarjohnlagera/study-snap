@@ -1,4 +1,5 @@
 import type { ProfileType } from "@/lib/api";
+import { resolvePlanPremiumExamMode, type PlanPremiumExamMode } from "@/lib/exam-mode-visibility";
 
 export type CollectionLabels = {
   singular: string;
@@ -10,10 +11,16 @@ export type CollectionLabels = {
   listDescription: string;
 };
 
-export type CollectionTerminalAction = {
-  kind: "exam-builder";
-  label: string;
-};
+export type CollectionTerminalAction =
+  | {
+    kind: "exam-builder";
+    label: string;
+  }
+  | {
+    kind: "premium-exam";
+    mode: PlanPremiumExamMode;
+    label: string;
+  };
 
 const DEFAULT_LABELS: CollectionLabels = {
   singular: "Collection",
@@ -61,11 +68,21 @@ export function getCollectionLabels(profileType: ProfileType | null | undefined)
 }
 
 export function getCollectionTerminalAction(profileType: ProfileType | null | undefined): CollectionTerminalAction | null {
-  if (profileType !== "TEACHER") {
+  if (profileType === "TEACHER") {
+    return {
+      kind: "exam-builder",
+      label: "Build Exam",
+    };
+  }
+
+  const premiumMode = resolvePlanPremiumExamMode(profileType);
+  if (!premiumMode) {
     return null;
   }
+
   return {
-    kind: "exam-builder",
-    label: "Build Exam",
+    kind: "premium-exam",
+    mode: premiumMode,
+    label: "Exam this plan",
   };
 }

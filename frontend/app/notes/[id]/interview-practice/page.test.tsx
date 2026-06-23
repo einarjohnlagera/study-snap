@@ -1,13 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import InterviewPracticePage from "./page";
-import { getMe, getNote, startInterviewPractice } from "@/lib/api";
+import { getCollection, getMe, getNote, listNotes, startInterviewPractice } from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
+let searchParamsMock = new URLSearchParams();
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ id: "note-1" }),
   usePathname: () => "/notes/note-1/interview-practice",
+  useSearchParams: () => searchParamsMock,
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
@@ -25,9 +27,10 @@ jest.mock("@/lib/api", () => ({
   answerInterviewPracticeQuestion: jest.fn(),
   completeInterviewPracticeSession: jest.fn(),
   forfeitInterviewPracticeSession: jest.fn(),
+  getCollection: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
-  listNotes: jest.fn(() => Promise.resolve([])),
+  listNotes: jest.fn(),
   startInterviewPractice: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -36,7 +39,10 @@ describe("InterviewPracticePage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    searchParamsMock = new URLSearchParams();
+    (getCollection as jest.Mock).mockReset();
     (startInterviewPractice as jest.Mock).mockReset();
+    (listNotes as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({
       profileType: "PROFESSIONAL",
       planType: "PRO",
@@ -46,7 +52,10 @@ describe("InterviewPracticePage", () => {
       title: "Backend Interview Prep",
       studyPackId: "sp-1",
       studyPackStatus: "STUDY_PACK_READY",
+      courseProgram: "Software Engineering",
     });
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (getCollection as jest.Mock).mockResolvedValue({ id: "collection-1", items: [] });
   });
 
   it("renders the polished prestart setup rhythm", async () => {
@@ -88,5 +97,47 @@ describe("InterviewPracticePage", () => {
     expect(await screen.findByRole("dialog", { name: "Unlock Interview Practice" })).toBeInTheDocument();
     expect(startInterviewPractice).not.toHaveBeenCalled();
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("scopes collection launches to plan notes and preselects up to the Interview Practice cap", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
+        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-4" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Interview Two", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Plan Interview Three", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-4", title: "Plan Interview Four", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-9", title: "Outside Interview Note", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<InterviewPracticePage />);
+
+    expect(await screen.findByRole("button", { name: /Plan Interview Two/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Interview Three/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Interview Four/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: /Outside Interview Note/ })).not.toBeInTheDocument();
+    expect(screen.getByText("3 notes · 5 questions")).toBeInTheDocument();
+  });
+
+  it("falls back to the normal source picker when collection lookup fails", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=missing");
+    (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Fallback Course Note", courseProgram: "Software Engineering", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Other Course Note", courseProgram: "Nursing", subject: "Backend", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<InterviewPracticePage />);
+
+    expect(await screen.findByRole("button", { name: /Fallback Course Note/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Other Course Note/ })).not.toBeInTheDocument();
+    expect(screen.getByText("1 note · 5 questions")).toBeInTheDocument();
   });
 });

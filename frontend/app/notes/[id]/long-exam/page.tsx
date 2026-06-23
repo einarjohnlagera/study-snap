@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import Link from "next/link";
-import {useParams, useRouter} from "next/navigation";
+import {useParams, useRouter, useSearchParams} from "next/navigation";
 import {BarChart3, BookOpen, Hourglass, ListChecks} from "lucide-react";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
     completeLongExamSession,
     forfeitLongExamSession,
     getActiveLongExamSession,
+    getCollection,
     getLongExamSession,
     getMe,
     getNote,
@@ -46,6 +47,7 @@ import {
     resolveDeadlineEpochSeconds,
     resolveRemainingSecondsFromDeadline,
 } from "@/lib/challenge-quiz-timer";
+import {resolveCollectionScopedSourceNotes} from "@/lib/collection-exam";
 import {resolveQuizCorrectIndex, resolveQuizItemGroupAt} from "@/lib/quiz";
 import {cn} from "@/lib/utils";
 import {getUpgradeCtas, type AppPlanType} from "@/src/config/plans";
@@ -157,6 +159,7 @@ function resolveSameSubjectSourceNotes(
 
 export default function LongExamPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const params = useParams<{ id: string }>();
     const noteId = useMemo(() => {
         if (!params?.id) {
@@ -164,6 +167,7 @@ export default function LongExamPage() {
         }
         return Array.isArray(params.id) ? params.id[0] : params.id;
     }, [params]);
+    const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
 
     const [phase, setPhase] = useState<LongExamPhase>("prestart");
     const [loading, setLoading] = useState(true);
@@ -307,9 +311,33 @@ export default function LongExamPage() {
             }
             try {
                 const notes = await listNotes();
-                setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
+                if (collectionId) {
+                    try {
+                        const collection = await getCollection(collectionId);
+                        const collectionSourceNotes = resolveCollectionScopedSourceNotes(
+                            collection,
+                            notes,
+                            noteDetail.id,
+                            {requireStudyPackId: true},
+                        );
+                        setAvailableSourceNotes(collectionSourceNotes);
+                        setSelectedAdditionalStudyPackIds(
+                            collectionSourceNotes
+                                .map((sourceNote) => sourceNote.studyPackId)
+                                .filter((studyPackId): studyPackId is string => Boolean(studyPackId))
+                                .slice(0, LONG_EXAM_MAX_ADDITIONAL_NOTES),
+                        );
+                    } catch {
+                        setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
+                        setSelectedAdditionalStudyPackIds([]);
+                    }
+                } else {
+                    setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
+                    setSelectedAdditionalStudyPackIds([]);
+                }
             } catch {
                 setAvailableSourceNotes([]);
+                setSelectedAdditionalStudyPackIds([]);
             }
             if (getAuthUser()?.planType !== "PRO") {
                 setActiveStartResponse(null);
@@ -362,7 +390,7 @@ export default function LongExamPage() {
         } finally {
             setLoading(false);
         }
-    }, [enterRunningFromStart, noteId, router, trackStarted]);
+    }, [collectionId, enterRunningFromStart, noteId, router, trackStarted]);
 
     useEffect(() => {
         void loadInitialState();
