@@ -36,6 +36,7 @@ import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   generateMoreChallengeQuizQuestions,
+  getCollection,
   getInProgressChallengeQuizSession,
   getMe,
   getMyStudyPack,
@@ -79,6 +80,7 @@ import {
   CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
   isModeSelectionChallengeQuizEntry,
 } from "@/lib/challenge-quiz-entry";
+import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
@@ -349,6 +351,7 @@ export default function ChallengeQuizPage() {
     () => isModeSelectionChallengeQuizEntry(searchParams.get(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM)),
     [searchParams],
   );
+  const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
@@ -435,9 +438,9 @@ export default function ChallengeQuizPage() {
     if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId) {
       return;
     }
-    setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
-    setPrestartStep(resolveInitialPrestartStep(viewerProfileType));
-  }, [challengeSession?.sessionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
+    setSelectedMode(collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
+    setPrestartStep(collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
+  }, [challengeSession?.sessionId, collectionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -512,6 +515,27 @@ export default function ChallengeQuizPage() {
     setSourceNotesError(null);
     try {
       const notes = await listNotes();
+      if (collectionId) {
+        try {
+          const collection = await getCollection(collectionId);
+          const collectionSourceNotes = resolveCollectionScopedSourceNotes(
+            collection,
+            notes,
+            noteDetail.id,
+            { requireStudyPackId: true },
+          );
+          setAvailableBoardExamSourceNotes(collectionSourceNotes);
+          setSelectedBoardExamAdditionalStudyPackIds(
+            collectionSourceNotes
+              .map((sourceNote) => sourceNote.studyPackId)
+              .filter((studyPackId): studyPackId is string => Boolean(studyPackId))
+              .slice(0, BOARD_EXAM_MAX_ADDITIONAL_NOTES),
+          );
+          return;
+        } catch {
+          // Fall back to the normal single-note/same-subject setup when the plan cannot be loaded.
+        }
+      }
       const sameSubjectNotes = resolveSameSubjectSourceNotes(noteDetail, notes);
       setAvailableBoardExamSourceNotes(sameSubjectNotes);
       setSelectedBoardExamAdditionalStudyPackIds((current) => {
@@ -525,7 +549,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setSourceNotesLoading(false);
     }
-  }, []);
+  }, [collectionId]);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
@@ -667,6 +691,8 @@ export default function ChallengeQuizPage() {
       void refreshBoardExamSourceNotes(detail);
       const authUser = getAuthUser();
       const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
+      const requestedPrestartMode = collectionId ? BOARD_EXAM_MODE : preferredMode;
+      const requestedPrestartStep: ChallengePrestartStep = collectionId ? "board-exam-setup" : resolveInitialPrestartStep(authUser?.profileType);
       const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO"
         ? authUser.planType
         : null;
@@ -684,8 +710,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
         setActivePaywallModal(null);
         setPhase("prestart");
         return;
@@ -706,8 +732,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -731,8 +757,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -760,7 +786,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, noteId, pathname, refreshBoardExamSourceNotes, router, sharedModeSelectionEntryRequested, syncProgressRef]);
+  }, [applyStartedSession, collectionId, noteId, pathname, refreshBoardExamSourceNotes, router, sharedModeSelectionEntryRequested, syncProgressRef]);
 
   useEffect(() => {
     void loadNote();

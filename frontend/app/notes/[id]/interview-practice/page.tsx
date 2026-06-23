@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, BarChart3, Clock, MessageSquare } from "lucide-react";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
@@ -13,6 +13,7 @@ import {
   answerInterviewPracticeQuestion,
   completeInterviewPracticeSession,
   forfeitInterviewPracticeSession,
+  getCollection,
   getMe,
   getNote,
   listNotes,
@@ -24,6 +25,7 @@ import {
   type QuizItem,
 } from "@/lib/api";
 import { BackLink } from "@/components/ui/back-link";
+import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
@@ -57,7 +59,9 @@ function resolveBandLabel(band: InterviewReadinessReportResponse["band"]) {
 export default function InterviewPracticePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const noteId = params.id;
+  const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const noteHref = `/notes/${noteId}`;
   const [phase, setPhase] = useState<InterviewPhase>("prestart");
   const [note, setNote] = useState<NoteResponse | null>(null);
@@ -93,13 +97,30 @@ export default function InterviewPracticePage() {
         const primaryCourseProgram = noteResult.courseProgram?.trim() ?? null;
         setNote(noteResult);
         setViewerPlanType(me.planType === "FREE" || me.planType === "PLUS" || me.planType === "PRO" ? me.planType : null);
-        setAvailableNotes(
-          notes.filter((item) => {
-            if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
-            if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
-            return true;
-          }),
-        );
+        const resolveDefaultAvailableNotes = () => notes.filter((item) => {
+          if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
+          if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
+          return true;
+        });
+        if (collectionId) {
+          try {
+            const collection = await getCollection(collectionId);
+            const collectionSourceNotes = resolveCollectionScopedSourceNotes(
+              collection,
+              notes,
+              noteResult.id,
+              { requireStudyPackId: false },
+            );
+            setAvailableNotes(collectionSourceNotes);
+            setAdditionalNoteIds(collectionSourceNotes.map((sourceNote) => sourceNote.id).slice(0, MAX_ADDITIONAL_NOTES));
+          } catch {
+            setAvailableNotes(resolveDefaultAvailableNotes());
+            setAdditionalNoteIds([]);
+          }
+        } else {
+          setAvailableNotes(resolveDefaultAvailableNotes());
+          setAdditionalNoteIds([]);
+        }
         if (me.profileType !== "PROFESSIONAL") {
           router.replace(noteHref);
           return;
@@ -119,7 +140,7 @@ export default function InterviewPracticePage() {
     return () => {
       active = false;
     };
-  }, [noteHref, noteId, router]);
+  }, [collectionId, noteHref, noteId, router]);
 
   useEffect(() => {
     if (phase !== "running" || critique) {

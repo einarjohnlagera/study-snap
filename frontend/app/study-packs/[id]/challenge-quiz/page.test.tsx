@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
+  getCollection,
   getInProgressChallengeQuizSession,
   getNote,
   getPostSessionNextStep,
@@ -51,6 +52,7 @@ jest.mock("@/hooks/use-billing-usage-summary", () => ({
 jest.mock("@/lib/api", () => ({
   completeChallengeQuizSession: jest.fn(),
   forfeitChallengeQuizSession: jest.fn(),
+  getCollection: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
@@ -96,6 +98,8 @@ describe("ChallengeQuizPage", () => {
     window.sessionStorage.clear();
     Element.prototype.scrollIntoView = jest.fn();
     (getAuthUser as jest.Mock).mockReset();
+    (getCollection as jest.Mock).mockReset();
+    (getCollection as jest.Mock).mockResolvedValue({ id: "collection-1", items: [] });
     (getNote as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockResolvedValue([]);
@@ -543,6 +547,51 @@ describe("ChallengeQuizPage", () => {
 
     expect(await screen.findByRole("dialog", { name: "Unlock Board Exam Mode" })).toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("opens Board Exam setup from a collection launch and scopes source notes to the plan", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
+        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-4" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Board Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Plan Board Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-4", title: "Plan Board Four", subject: "Biology", studyPackId: "sp-4", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-9", title: "Outside Board Note", subject: "Biology", studyPackId: "sp-9", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Choose your quiz mode" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Plan Board Two/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Board Three/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Board Four/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: /Outside Board Note/ })).not.toBeInTheDocument();
+  });
+
+  it("falls back to the normal Board Exam source picker when collection lookup fails", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=missing");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Fallback Board Note", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Other Board Subject", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Fallback Board Note/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Other Board Subject/ })).not.toBeInTheDocument();
   });
 
   it("shows the mode-selection screen first, then premium modal on click, for free users who exhausted Challenge Quiz credits", async () => {

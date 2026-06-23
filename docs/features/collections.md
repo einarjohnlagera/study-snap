@@ -51,20 +51,31 @@ Each item stores:
 
 Item labels are neutral backend data. The Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
 
-## Profile-Agnostic Spine
+## Profile-Aware Terminal Actions
 
 The backend API must not branch on `ProfileType`.
 
-Profile-aware presentation is a future frontend responsibility:
+Profile-aware presentation is a frontend responsibility. The backend responses stay neutral: `title`, `description`, `items`.
 
-| Profile | Future frontend label | Future primary terminal action |
+| Profile | Frontend label | Primary terminal action |
 |---|---|---|
-| `TEACHER` | `Lesson Plan` | Combined sectioned DOCX + shareable quiz links through Exam Builder |
-| `STUDENT` | `Study Plan` | Study the set; generate or review per note |
-| `BOARD_EXAM` | `Review Set` | Practice across the set through existing multi-note exam flows |
-| `PROFESSIONAL` | `Collection` | Study the set; generate or review per note |
+| `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX + shareable quiz links through Exam Builder |
+| `STUDENT` | `Study Plan` | `Take the Long Exam` → Long Exam setup |
+| `BOARD_EXAM` | `Review Set` | `Take the Board Exam` → Board Exam setup |
+| `PROFESSIONAL` | `Collection` | `Start Interview Practice` → Interview Practice setup |
+| `PARENT` | `Collection` | No terminal action |
 
-Backend responses stay neutral: `title`, `description`, `items`.
+The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in `frontend/lib/exam-mode-visibility.ts`, and the profile-aware CTA labels live in `getCollectionTerminalAction`. Do not hardcode profile checks in collection UI components.
+
+Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Interview generate their own questions at start, so a note only needs a **ready Study Pack** (`canIncludeCollectionItemInPremiumExam` = `STUDY_PACK_READY`) — a pre-generated quiz is **not** required. The Teacher Exam Builder still requires a generated quiz (`canIncludeCollectionItemInExam` = `generatedQuizId`) because it exports that quiz.
+
+The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap:
+
+- Long Exam: primary note route plus up to 3 additional Study Pack ids
+- Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
+- Interview Practice: primary note route plus up to 2 additional note ids
+
+If the collection cannot be loaded from a prescreen, the exam falls back to its normal single-note/same-subject setup. The Teacher Exam Builder path is unchanged and still receives the collection id plus quiz-ready note ids.
 
 ## Ownership Rules
 
