@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Info, Sparkles } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
@@ -787,70 +788,71 @@ export default function SettingsPage() {
             <p className="text-sm text-foreground/70">
               Choose which optional emails you get. Account and billing emails are always sent so you stay secure and informed.
             </p>
-            <div className="space-y-3 rounded-md border border-border bg-background p-4">
-              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+            <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+              <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Study reminders</span>
                   <span className="block text-xs text-foreground/60">
                     Nudges when you&apos;ve been inactive or left a note unfinished.
                   </span>
                 </span>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  ariaLabel="Study reminders"
                   checked={inactivityRemindersEnabled}
-                  onChange={(event) => setInactivityRemindersEnabled(event.target.checked)}
+                  onChange={setInactivityRemindersEnabled}
                   disabled={savingEmailPreferences}
                 />
-              </label>
-              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+              </div>
+              <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Weak-concept nudges</span>
                   <span className="block text-xs text-foreground/60">
                     A reminder to revisit concepts you missed on a quiz.
                   </span>
                 </span>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  ariaLabel="Weak-concept nudges"
                   checked={weakConceptRemindersEnabled}
-                  onChange={(event) => setWeakConceptRemindersEnabled(event.target.checked)}
+                  onChange={setWeakConceptRemindersEnabled}
                   disabled={savingEmailPreferences}
                 />
-              </label>
-              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+              </div>
+              <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Weekly summary</span>
                   <span className="block text-xs text-foreground/60">
                     A Sunday recap of your week&apos;s study progress.
                   </span>
                 </span>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  ariaLabel="Weekly summary"
                   checked={weeklySummaryRemindersEnabled}
-                  onChange={(event) => setWeeklySummaryRemindersEnabled(event.target.checked)}
+                  onChange={setWeeklySummaryRemindersEnabled}
                   disabled={savingEmailPreferences}
                 />
-              </label>
-              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+              </div>
+              <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Product news &amp; tips</span>
                   <span className="block text-xs text-foreground/60">
                     Occasional updates, study tips, and new features.
                   </span>
                 </span>
-                <input
-                  type="checkbox"
+                <Checkbox
+                  ariaLabel="Product news & tips"
                   checked={marketingEmailsEnabled}
-                  onChange={(event) => setMarketingEmailsEnabled(event.target.checked)}
+                  onChange={setMarketingEmailsEnabled}
                   disabled={savingEmailPreferences}
                 />
-              </label>
+              </div>
             </div>
-            <div className="space-y-2 rounded-md border border-border bg-background p-4">
-              <p className="text-sm font-medium">Always sent</p>
-              <ul className="space-y-1 text-xs text-foreground/60">
-                <li>Account &amp; security — sign-in verification, password resets</li>
-                <li>Billing — payment receipts, plan-expiry reminders, refunds</li>
-              </ul>
+            <div className="flex gap-3 rounded-md border border-blue-500/20 bg-blue-500/10 p-4 text-xs text-foreground/70">
+              <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground/90">Always sent</p>
+                <p>Account &amp; security — sign-in verification, password resets</p>
+                <p>Billing — payment receipts, plan-expiry reminders, refunds</p>
+              </div>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <ResponsiveActionButton
@@ -1264,17 +1266,6 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <ResponsiveActionButton
                 type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => void handleDownloadMyData()}
-                loading={exportingData}
-                loadingText="Preparing..."
-                disabled={signingOut}
-                action="download"
-                label="Download my data"
-              />
-              <ResponsiveActionButton
-                type="button"
                 className="w-full sm:w-auto"
                 onClick={() => void handleSignOut()}
                 loading={signingOut}
@@ -1286,6 +1277,17 @@ export default function SettingsPage() {
                 type="button"
                 variant="outline"
                 className="w-full sm:w-auto"
+                onClick={() => void handleDownloadMyData()}
+                loading={exportingData}
+                loadingText="Preparing..."
+                disabled={signingOut}
+                action="download"
+                label="Download my data"
+              />
+              <ResponsiveActionButton
+                type="button"
+                variant="destructiveOutline"
+                className="w-full sm:ml-auto sm:w-auto"
                 onClick={handleOpenDeleteAccountModal}
                 disabled={signingOut}
                 action="delete"
@@ -1385,6 +1387,7 @@ export default function SettingsPage() {
             />
             <ResponsiveActionButton
               type="button"
+              variant="destructive"
               className="w-full sm:w-auto"
               onClick={() => void handleConfirmDeleteAccount()}
               disabled={deleteAccountConfirmation !== DELETE_ACCOUNT_CONFIRMATION}
