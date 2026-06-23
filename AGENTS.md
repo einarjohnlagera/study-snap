@@ -112,6 +112,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Free users should see a soft paywall modal before any paid-plan quiz feature or Study Pack limit block attempts a paid conversion flow.
 - All paywalls must be context-aware. Never use generic upgrade prompts when the blocked action is known.
+- Premium exam paywalls for Long Exam, Board Exam Mode, and Interview Practice must fire from the Start CTA after the user can view the mode setup/prescreen, not from the mode-selection card click.
 - Shared paywalls must explain the specific blocked action, the upgrade value, and the strongest next plan path for that action.
 - Verified users who choose to upgrade should start the hosted checkout flow via `POST /api/payments/create`.
 - Frontend upgrade actions should redirect only to the backend-returned Xendit checkout URL.

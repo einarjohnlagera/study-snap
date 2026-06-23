@@ -205,7 +205,9 @@ export default function LongExamPage() {
     const longExamRemaining = Math.max(0, longExamMonthlyLimit - longExamUsedThisMonth);
     const longExamLimitReached = longExamMonthlyLimit > 0 && longExamUsedThisMonth >= longExamMonthlyLimit;
     const longExamSourceCountExceedsRemaining = selectedSourceCount > longExamRemaining;
-    const longExamUpgradeCtas = getUpgradeCtas((getAuthUser()?.planType ?? "FREE") as AppPlanType);
+    const currentPlanType = getAuthUser()?.planType ?? "FREE";
+    const longExamUpgradeCtas = getUpgradeCtas(currentPlanType as AppPlanType);
+    const longExamStartDisabled = !studyPackId || starting || (currentPlanType === "PRO" && (longExamLimitReached || longExamSourceCountExceedsRemaining));
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
     const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentQuestionIndex);
     const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
@@ -295,13 +297,6 @@ export default function LongExamPage() {
         if (!requireAuthenticatedOnboardedUser(router)) {
             return;
         }
-        const authUser = getAuthUser();
-        if (authUser?.planType !== "PRO") {
-            setShowLongExamPaywall(true);
-            setLoading(false);
-            return;
-        }
-
         try {
             const [noteDetail, me] = await Promise.all([getNote(noteId), getMe().catch(() => null)]);
             setNote(noteDetail);
@@ -315,6 +310,10 @@ export default function LongExamPage() {
                 setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
             } catch {
                 setAvailableSourceNotes([]);
+            }
+            if (getAuthUser()?.planType !== "PRO") {
+                setActiveStartResponse(null);
+                return;
             }
 
             const activeSession = await getActiveLongExamSession(noteDetail.studyPackId);
@@ -460,6 +459,10 @@ export default function LongExamPage() {
 
     const handleStartExam = useCallback(async () => {
         if (!studyPackId || starting) {
+            return;
+        }
+        if (getAuthUser()?.planType !== "PRO") {
+            setShowLongExamPaywall(true);
             return;
         }
         if (longExamSourceCountExceedsRemaining) {
@@ -760,22 +763,6 @@ export default function LongExamPage() {
         );
     }
 
-    if (showLongExamPaywall) {
-        return (
-            <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-                <PaywallModal
-                    isOpen={showLongExamPaywall}
-                    variant="long-exam-mode"
-                    source="long_exam_page_load"
-                    onClose={() => {
-                        setShowLongExamPaywall(false);
-                        router.push(noteDetailHref);
-                    }}
-                />
-            </main>
-        );
-    }
-
     return (
         <main
             className={cn(
@@ -1003,9 +990,11 @@ export default function LongExamPage() {
                                         type="button"
                                         className="w-full sm:w-auto"
                                         onClick={() => void handleStartExam()}
-                                        disabled={!studyPackId || starting || longExamLimitReached || longExamSourceCountExceedsRemaining}
+                                        disabled={longExamStartDisabled}
                                     >
-                                        {starting ? "Starting..." : "Begin Long Exam"}
+                                        {currentPlanType === "PRO"
+                                            ? starting ? "Starting..." : "Begin Long Exam"
+                                            : "Unlock Long Exam - Pro"}
                                     </Button>
                                 </div>
                             </div>
@@ -1242,6 +1231,14 @@ export default function LongExamPage() {
             ) : null}
 
             <LeaveQuizModal/>
+            {showLongExamPaywall ? (
+                <PaywallModal
+                    isOpen={showLongExamPaywall}
+                    variant="long-exam-mode"
+                    source="long_exam_start"
+                    onClose={() => setShowLongExamPaywall(false)}
+                />
+            ) : null}
 
             {toast ? <ToastMessage message={toast.message} tone={toast.tone}/> : null}
         </main>

@@ -376,7 +376,7 @@ describe("ChallengeQuizPage", () => {
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/interview-practice");
   });
 
-  it("opens the Interview Practice paywall for Professional non-Pro users", async () => {
+  it("routes Professional non-Pro users to Interview Practice setup instead of opening the paywall at mode selection", async () => {
     setupChallengePrestart(false, "PROFESSIONAL", "PLUS");
 
     render(<ChallengeQuizPage />);
@@ -385,8 +385,8 @@ describe("ChallengeQuizPage", () => {
     expect(within(interviewPracticeCard).getByText("Pro")).toBeInTheDocument();
     fireEvent.click(interviewPracticeCard);
 
-    expect(await screen.findByRole("dialog", { name: "Unlock Interview Practice" })).toBeInTheDocument();
-    expect(pushMock).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/interview-practice");
+    expect(screen.queryByRole("dialog", { name: "Unlock Interview Practice" })).not.toBeInTheDocument();
   });
 
   it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for students even when an in-progress session exists", async () => {
@@ -529,16 +529,19 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "Begin Board Exam" })).toBeInTheDocument();
   });
 
-  it("shows the Board Exam paywall for free Exam Reviewers from mode selection instead of entering setup", async () => {
-    setupChallengePrestart(false, "BOARD_EXAM", "FREE");
+  it("opens Board Exam setup for free Exam Reviewers and shows the paywall from the Start CTA", async () => {
+    setupChallengePrestart(false, "BOARD_EXAM", "FREE", { usedThisMonth: 5, monthlyLimit: 5 });
 
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     fireEvent.click(await getModeCard("Board Exam Mode"));
 
+    expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Unlock Board Exam Mode" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Unlock Board Exam - Pro" }));
+
     expect(await screen.findByRole("dialog", { name: "Unlock Board Exam Mode" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Board Exam Setup" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 

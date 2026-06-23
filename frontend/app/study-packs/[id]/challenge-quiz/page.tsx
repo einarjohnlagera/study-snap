@@ -1178,7 +1178,7 @@ export default function ChallengeQuizPage() {
     setSelectedMode(BOARD_EXAM_MODE);
     setError(null);
     if (!boardExamAvailable) {
-      openLockedFeaturePaywall("board-exam-mode", "board_exam_mode_selection");
+      setPrestartStep("board-exam-setup");
       return;
     }
     if (challengeQuizLimitReached) {
@@ -1197,20 +1197,12 @@ export default function ChallengeQuizPage() {
   }, [boardExamAvailable, boardExamLimitReached, challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
   const handleSelectLongExamMode = useCallback(() => {
     setError(null);
-    if (viewerPlanType !== "PRO") {
-      openLockedFeaturePaywall("long-exam-mode", "long_exam_mode_selection");
-      return;
-    }
     router.push(`/notes/${noteId}/long-exam`);
-  }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
+  }, [noteId, router]);
   const handleSelectInterviewPracticeMode = useCallback(() => {
     setError(null);
-    if (viewerPlanType !== "PRO") {
-      openLockedFeaturePaywall("interview-practice-limit", "interview_practice_mode_selection");
-      return;
-    }
     router.push(`/notes/${noteId}/interview-practice`);
-  }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
+  }, [noteId, router]);
   const returnToModeSelection = useCallback(() => {
     setError(null);
     setShowBoardExamStartModal(false);
@@ -1753,9 +1745,6 @@ export default function ChallengeQuizPage() {
               )}
             </div>
 
-            {!boardExamAvailable ? (
-              <p className="text-sm text-amber-700 dark:text-amber-300">Pro required to start Board Exam Mode.</p>
-            ) : null}
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your board exam...</p>
             ) : null}
@@ -1797,13 +1786,17 @@ export default function ChallengeQuizPage() {
                     type="button"
                     className="w-full sm:w-auto"
                     onClick={() => {
+                      if (!boardExamAvailable) {
+                        openLockedFeaturePaywall("board-exam-mode", "board_exam_start");
+                        return;
+                      }
                       setShowBoardExamStartModal(true);
                     }}
-                    disabled={challengeGenerationLocked || boardExamSourceCountExceedsRemaining}
+                    disabled={challengeGenerationLocked || (boardExamAvailable && boardExamSourceCountExceedsRemaining)}
                   >
                     {boardExamAvailable
                       ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
-                      : "Unlock Board Exam Mode"}
+                      : "Unlock Board Exam - Pro"}
                   </Button>
                 ) : null}
               </div>

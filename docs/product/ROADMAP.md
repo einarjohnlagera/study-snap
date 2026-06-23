@@ -207,11 +207,11 @@ Base branch for this release: `releases/v0.32.1`. Patch after v0.32.0; mostly fr
 
 Theme: the monetization leak is **conversion, not engagement** (prod ~2026-06: free-quota hit rate 0.0%, ~10 `UPGRADE_CLICKED` → 0 `SUBSCRIPTION_STARTED`). Two failure points: almost nobody **reaches** a paywall (premium exams aren't surfaced), and the few who click **drop at checkout** (the pricing surface reads like a recurring sub when plans are actually one-time passes). This release attacks the *surfacing/desire* half — surface the premium exams as paywall moments and clarify the pricing model — while the *checkout* half is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel. **Honest scope note:** these lift exposure + desire (top-of-funnel); they feed more clicks into a checkout that still converts ~0, so they must be paired with reading the checkout-conversion funnel, not sold as the conversion fix on their own.
 
-### Thread 1 — Premium-exam paywall at the Start CTA (revert)
+### Thread 1 — Premium-exam paywall at the Start CTA (shipped)
 
-A FREE user clicking a premium exam (Long Exam / Board Exam / Interview Practice) should be able to open the exam prescreen and **see its strength**, then hit the paywall at the **Start CTA** — not be blocked at card-click. This reverts a prior change that moved the paywall to card-click (which hid the value). Recover the earlier CTA-paywall implementation from git history rather than re-deriving.
+Free and Plus users clicking a premium exam (Long Exam / Board Exam / Interview Practice) can open the exam prescreen and **see its strength**, then hit the paywall at the **Start CTA** — not be blocked at card-click. This reverts the prior card-click paywall behavior that hid the value.
 
-- Frontend-mostly: move where `PaywallModal` fires for the three premium exams back to the Start CTA. Reuse `PaywallModal` + `getUpgradeCtas` (action-aware copy); keep the Pro badge (already on the cards) and make the Start CTA read as the unlock ("Unlock Long Exam — Pro") so the wall is expected, not bait-and-switch. Backend `FeatureGate` stays as defense-in-depth.
+- Shipped as frontend-mostly: `PaywallModal` fires from the Start CTA for the three premium exams. Mode-selection cards still show the Pro badge, Start CTAs read as unlock actions for non-Pro users, and backend `FeatureGate` remains defense-in-depth.
 
 ### Thread 2 — "Exam this plan" for non-teachers (Study Plan → premium exam)
 
