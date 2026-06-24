@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the latest release (last released). The next version has not been opened yet.
+`v0.32.2 - Conversion Diagnosis & Quota Honesty` is in progress.
 
-`v0.32.0 - Account & Communication Controls` is the previous baseline.
+`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the previous baseline (last released).
+
+`v0.32.0 - Account & Communication Controls` is the release before that.
 
 `v0.31.2 - Analytics Integrity & Funnel Visibility` is the release before that.
 
@@ -200,6 +202,28 @@ Scope:
 Anti-drift: analytics/telemetry must be resilient (never fail or drop on referential timing); no PII added to event metadata; admin-only surfaces; no change to the universal learning loop.
 
 ---
+
+## v0.32.2 - Conversion Diagnosis & Quota Honesty (in progress)
+
+Base branch for this release: `releases/v0.32.2`. Patch after v0.32.1; mostly frontend + analysis.
+
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion is still **~0 of 158 users**. Before changing pricing or quota, diagnose *where* the funnel actually breaks, and make the existing claims honest. **Anti-drift: do not raise exam quota numbers without funnel data.** At zero paying users, quota size is an unproven constraint, and multi-note exams (GPT-4.1) are the most expensive operation to serve — raising them gives away margin without evidence it drives conversion. No billing/quota mechanics change; this release is copy honesty + diagnosis + small fixes + one positioning exploration.
+
+### Thread 1 — Plan-launch prescreen polish
+
+When a premium exam is launched from a Study Plan (`collectionId` present), the Long/Board/Interview prescreen still shows a "Choose another mode" button — but there is no mode-selection screen to return to in that flow (the user came from the plan, not the Challenge Quiz mode grid). Hide it (or relabel to a plan-appropriate back action) when `collectionId` is present; leave the normal note-launched flow unchanged. Frontend-only.
+
+### Thread 2 — Quota-label honesty
+
+The Pro pricing card reads "Long Exam (12 sessions / month)" and "Board Exam Mode (10 sessions / month)", but the backend deducts quota **per source note** (`additionalStudyPackIds.size() + 1`): a single-note exam costs 1 unit, a 3-note exam costs 3. So "12 sessions" is really 12 source-note units — as few as 4 three-note exams — and a buyer expecting "12 exams" feels short-changed. Relabel the pricing/comparison surfaces to source-note units (through the shared plan config) and add a one-line clarifier that a multi-note exam uses multiple units. **Copy only — no quota mechanics or number change.**
+
+### Thread 3 — Conversion funnel diagnosis
+
+Diagnose why 0 of 158 convert before touching pricing or quota. Read the v0.31.2/v0.32.1 instrumentation end-to-end: paywall-reach rate, then `UPGRADE_CLICKED` → `CHECKOUT_INITIATED` → `SUBSCRIPTION_STARTED`. Identify the binding drop (nobody reaches a paywall / reaches but doesn't click / clicks but abandons checkout) and whether the 158 are even the buying audience. Output is a written finding (+ any missing instrumentation to close gaps), **not** a quota or price change — those wait on this evidence.
+
+### Thread 4 — Plus-tier reason-to-exist (exploration)
+
+Plus has **zero exam access**, so for an exam-prep audience it is a dead tier — learners skip to Pro or stay Free. Evaluate whether Plus needs a *taste* of Long Exam (or a repositioning) to justify itself. Exploration/decision this release; validate against the Thread 3 funnel finding before building anything. No change ships without that evidence.
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity (released)
 

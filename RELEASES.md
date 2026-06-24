@@ -1,5 +1,18 @@
 # RELEASES.md - NoteLib
 
+## v0.32.2 - Conversion Diagnosis & Quota Honesty
+
+**Status: In Progress**
+
+Theme: v0.32.1 surfaced the premium exams and reframed pricing — but conversion is still ~0 of 158 users. This patch is the honest follow-through: diagnose *where* the paywall→checkout funnel breaks before changing anything, make the pricing/quota claims accurate (the exam "sessions" are really per-source-note units), fix the plan-launched exam prescreen polish, and evaluate the thin Plus tier. **Anti-drift: do not raise exam quota numbers without funnel data** — at 0 paying users, quota size is not the proven constraint, and exams are the most expensive operation to serve. No billing/quota mechanics change; copy + diagnosis + small fixes. See `docs/product/ROADMAP.md` for full scope.
+
+### Planned Scope
+
+- **Plan-launch prescreen polish** — hide the "Choose another mode" button on Long/Board/Interview prescreens when the exam was launched from a Study Plan (`collectionId` present), since there is no mode-selection to return to in that flow.
+- **Quota-label honesty** — the pricing card shows "Long Exam (12 sessions / month)" and "Board Exam Mode (10 sessions / month)", but the quota deducts per source note (`additionalStudyPackIds.size() + 1`), so a multi-note exam consumes multiple. Relabel to source-note units and add a clarifier. Copy only — no quota mechanics or number change.
+- **Conversion funnel diagnosis** — read the v0.31.2/v0.32.1 paywall→checkout analytics (paywall-reach rate, `UPGRADE_CLICKED` → `CHECKOUT_INITIATED` → `SUBSCRIPTION_STARTED`) to locate where the 0/158 actually drop, before any pricing/quota change. Analysis (and any missing instrumentation), not a quota tweak.
+- **Plus-tier reason-to-exist (exploration)** — Plus currently has zero exam access, making it a dead tier for the exam-prep audience. Evaluate giving Plus a Long Exam taste or repositioning; validate against funnel data before building.
+
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity
 
 **Status: Released**

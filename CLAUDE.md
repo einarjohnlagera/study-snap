@@ -6,17 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.32.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.32.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.32.1 — Monetization Surfacing & Pricing Clarity
+## Active release: v0.32.2 — Conversion Diagnosis & Quota Honesty
 
-Base branch for this release: `releases/v0.32.1`. Improve monetization surfacing and pricing clarity without changing billing mechanics. The release attacks top-of-funnel exposure and desire: let Free users see premium exam prescreens before the paywall, add a Study Plan premium-exam entry point for non-teachers, and make one-time pass pricing read like one-time, time-boxed access rather than a recurring subscription. Full scope in `ROADMAP.md`. Locked rules:
+Base branch for this release: `releases/v0.32.2`. v0.32.1 surfaced the premium exams and reframed pricing, but conversion is still ~0 of 158 users. This patch is the honest follow-through: diagnose *where* the paywall→checkout funnel breaks before changing pricing or quota, make the existing claims accurate, fix the plan-launched exam prescreen polish, and evaluate the thin Plus tier. Full scope in `ROADMAP.md`. Locked rules:
 
-- **Premium exam paywall placement.** Free users should be able to open Long Exam, Board Exam, and Interview Practice prescreens and see the value before the paywall. The paywall belongs at the Start CTA for those modes, using `PaywallModal`, `resolvePaywallAction`, and `getUpgradeCtas`; backend feature gates stay as defense-in-depth.
-- **Study Plan premium exam entry.** Non-teacher Study Plans may offer a profile-appropriate premium exam CTA over that plan's notes only. Mode visibility comes from `exam-mode-visibility.ts`; do not hardcode profile checks. Preselect plan notes up to the existing per-exam cap and never include notes outside the plan.
-- **Pricing copy clarity.** Paid plan surfaces should frame Plus/Pro as one-time, time-boxed passes with no auto-charge. State that usage limits refresh monthly during the pass and that notes, Study Packs, and progress remain in the library after a pass ends.
-- **Anti-drift:** no billing mechanics change, no quota model change, no pass-duration or price change, no checkout shortcut, and no frontend-granted paid access. Upgrade/pricing copy goes through shared plan config (`getUpgradeCtas`, centralized plan copy/pricing surfaces), and checkout still uses backend-returned Xendit URLs.
-- **Out of scope:** per-pass quota redesign, new multi-note generation mechanics, new paid-state fields on `users`, teacher bulk quiz generation, and treating this release as the checkout conversion fix. Checkout conversion is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel.
+- **No exam quota number change without funnel data.** At zero paying users, quota size is an unproven constraint and multi-note exams (GPT-4.1) are the most expensive operation to serve. Do not raise Long Exam / Board Exam quotas (or any quota) this release; tune from real usage once payers exist.
+- **Quota-label honesty.** The exam quotas labelled "N sessions / month" are actually per-source-note units (`additionalStudyPackIds.size() + 1`). Relabel pricing/comparison surfaces to source-note units with a clarifier, through the shared plan config (`getUpgradeCtas`, centralized plan copy). Copy only — no quota mechanics change.
+- **Plan-launch prescreen polish.** Hide (or relabel) "Choose another mode" on Long/Board/Interview prescreens when launched from a Study Plan (`collectionId` present); leave the normal note-launched flow unchanged.
+- **Funnel diagnosis is analysis, not a change.** Reading the v0.31.2/v0.32.1 paywall→checkout instrumentation produces a written finding (and any missing instrumentation), not a pricing/quota edit. Pricing/Plus changes wait on that evidence.
+- **Anti-drift:** no billing mechanics change, no quota model or number change, no pass-duration or price change, no checkout shortcut, no frontend-granted paid access. Upgrade/pricing copy goes through shared plan config; checkout still uses backend-returned Xendit URLs.
+- **Out of scope:** raising exam quotas, per-pass quota redesign, new multi-note generation mechanics, new paid-state fields on `users`, and shipping any Plus-tier change before the funnel finding justifies it.
 
 ## Source-of-truth docs (read before implementing anything)
 
