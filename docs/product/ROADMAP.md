@@ -213,9 +213,17 @@ Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion w
 
 Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), value loop 58.8%, free-quota-hit 0.0% (study-pack-only), W1→W2 retention 5.6%. Corrected reading: checkout is **not** broken (the "6 → 0" is a metric-inception mismatch — see finding doc); the real constraint is retention. Output: `docs/product/conversion-funnel-finding.md`. Drives the priorities below.
 
-### Thread 1 — Retention diagnosis *(top priority)*
+> **Scope discipline:** this release ballooned past a patch. Thread 1 (re-engagement) is **the** priority; Threads 2–4 are secondary/low-effort and ship only if they don't delay Thread 1; Plus-tier stays deferred. Resist adding more.
 
-W1→W2 retention is 5.6% (recent cohorts ~0%): users activate (68.6%) and engage once (58.8%), then don't return. With ~0% returning users there is almost no one in-app to convert — this caps everything downstream. Diagnose the drop (no return reason, weak re-engagement hook, notification gaps) and define + ship one scoped lever to test this release.
+### Thread 1 — Turn on the re-engagement loop *(THE priority — a measured test, not a declared fix)*
+
+**Diagnosis:** the retention loop already exists (`RetentionEmailScheduler` → `RetentionService`, daily inactivity/weak-concept emails, EmailLog dedup + real-inactivity gating) and the return reason exists (due/weak concepts), but `AuthService.signup` creates every user with all reminder flags `false`, so the loop is **dark**. Reminders were defaulted off deliberately — Resend FREE tier is 100 emails/day and verification must not be starved.
+
+**Lever (build, then measure W1→W2 lift — this is *a* cause and the cheapest test, not proven to be *the* cause):**
+- **Budget-aware re-engagement sender** — a per-day send budget (config-driven, default 100) with a generous **transactional reserve** (default ~40) so verification always sends first; re-engagement drains only the remainder, counted from `email_logs`, with un-sent candidates rolling to the next daily run. No queue/outbox — guard on the existing daily dispatch. Prompt: `docs/codex-prompts/v0.32.2-budget-aware-reengagement.md`.
+- **Signup default flip — inactivity only** (`inactivityRemindersEnabled=true` for new users; weak-concept / weekly-summary / marketing stay opt-in). **Verify the inactivity template renders end-to-end before going live** — it has been a dark path.
+- **Bounce suppression** — a Resend bounce/complaint webhook populates a suppression list; all sends skip suppressed addresses (protects budget + sender reputation). Plus a **frontend signup email-typo suggestion** ("did you mean gmail.com?") to stop typo'd domains (e.g. `0gmail.com`) from bouncing — frontend-only, Claude-direct.
+- **Existing-user backfill — decided: backfill all to ON.** A migration sets `inactivity_reminders_enabled=true` for all existing users (other categories untouched). Low risk: the flag always defaulted `false`, so no one deliberately turned it off; unsubscribe remains the opt-out, and the budget guard ramps them over days. Now in the Codex prompt.
 
 ### Thread 2 — Close instrumentation gaps
 
@@ -232,6 +240,10 @@ Hide (or relabel) "Choose another mode" on Long/Board/Interview prescreens launc
 ### Deferred — Plus-tier reason-to-exist
 
 Plus has zero exam access (a dead tier for exam-prep). Deferred until checkout works and there is real conversion data to justify any tier change — pointless to reposition a paid tier no one can currently buy.
+
+### Parked strategic question — audience / ICP
+
+Bigger than any email or pricing mechanic: **are the ~153 users the people who would ever pay?** At 0 paying / 5.6% retention, mechanics-tuning on the wrong base won't convert. Not a code change — a product-discovery question (who are they, did they come for exam prep or one-off note help). Keep on the table so the release doesn't become tuning on a base that may be the wrong base.
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity (released)
 
