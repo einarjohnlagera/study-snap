@@ -38,6 +38,7 @@ import {
 } from "@/lib/public-note-copy";
 import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
+import { suggestEmailCorrection } from "@/lib/email-typo-suggestion";
 
 type Mode = "login" | "signup";
 type PendingDeletionCredential = { kind: "password" } | { kind: "google"; code: string };
@@ -67,6 +68,10 @@ function AuthPageContent() {
   const [reactivatingAccount, setReactivatingAccount] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingDeletionCredential, setPendingDeletionCredential] = useState<PendingDeletionCredential | null>(null);
+  const emailSuggestion = useMemo(
+    () => (mode === "signup" ? suggestEmailCorrection(email) : null),
+    [email, mode],
+  );
   const hasTrackedSignupStartRef = useRef(false);
   const suppressAuthenticatedRedirectRef = useRef(false);
   const searchKey = searchParams.toString();
@@ -393,6 +398,19 @@ function AuthPageContent() {
               autoComplete={mode === "login" ? "username" : "email"}
               required
             />
+            {emailSuggestion ? (
+              <p className="text-xs text-foreground/70">
+                Did you mean{" "}
+                <button
+                  type="button"
+                  className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400"
+                  onClick={() => setEmail(emailSuggestion)}
+                >
+                  {emailSuggestion}
+                </button>
+                ?
+              </p>
+            ) : null}
           </label>
 
           <label className="block space-y-2">
