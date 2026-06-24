@@ -17,6 +17,7 @@ import { CourseProgramCombobox } from "@/components/metadata/course-program-comb
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
 import {
+  canIncludeCollectionItemInPremiumExam,
   getCollectionPremiumExamReadyNoteIds,
   getCollectionPrimaryPremiumExamItem,
   getCollectionQuizReadyNoteIds,
@@ -837,6 +838,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
   const [noteListItems, setNoteListItems] = useState<NoteListItemResponse[]>([]);
   const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
+  const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
 
   const sensors = useSensors(
@@ -1037,6 +1039,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     [items],
   );
   const premiumExamReadyNoteIds = useMemo(() => getCollectionPremiumExamReadyNoteIds(items), [items]);
+  const unpracticedExamNoteCount = useMemo(
+    () => items.filter((item) => canIncludeCollectionItemInPremiumExam(item) && item.lastSessionCompletedAt === null).length,
+    [items],
+  );
   const primaryExamItem = useMemo(() => getCollectionPrimaryPremiumExamItem(items), [items]);
   const noteStudyPackIdByNoteId = useMemo(
     () => new Map(noteListItems.map((noteItem) => [noteItem.id, noteItem.studyPackId])),
@@ -1079,6 +1085,18 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     router.push(`/study-packs/${primaryExamStudyPackId}/challenge-quiz?${params.toString()}`);
   }, [collectionId, premiumExamDisabled, primaryExamItem, primaryExamStudyPackId, router, terminalAction]);
+
+  // Advise a quick review before examining a plan whose notes haven't been practiced yet.
+  const handlePremiumExamCta = useCallback(() => {
+    if (premiumExamDisabled || !primaryExamItem) {
+      return;
+    }
+    if (unpracticedExamNoteCount > 0) {
+      setShowReviewFirstModal(true);
+      return;
+    }
+    openCollectionPremiumExam();
+  }, [openCollectionPremiumExam, premiumExamDisabled, primaryExamItem, unpracticedExamNoteCount]);
 
   if (loadState === "loading") {
     return (
@@ -1192,7 +1210,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               action="open"
               label={terminalAction.label}
               disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
-              onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : openCollectionPremiumExam}
+              onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : handlePremiumExamCta}
             />
             {terminalAction.kind === "exam-builder" ? (
               quizReadyNoteIds.length === 0 ? (
@@ -1326,6 +1344,29 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           onNotesPublished={loadNoteVisibility}
         />
       ) : null}
+      <AppModal
+        isOpen={showReviewFirstModal}
+        title="Review before the exam?"
+        description={`You haven't practiced ${unpracticedExamNoteCount} of ${premiumExamReadyNoteIds.length} ${premiumExamReadyNoteIds.length === 1 ? "note" : "notes"} in this ${labels.singular.toLowerCase()} yet. A quick review or Challenge Quiz first usually makes the exam more useful — but you can jump straight in.`}
+        onClose={() => setShowReviewFirstModal(false)}
+        panelClassName="max-w-[440px]"
+        actions={(
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setShowReviewFirstModal(false)}>
+              Review first
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowReviewFirstModal(false);
+                openCollectionPremiumExam();
+              }}
+            >
+              Start the exam anyway
+            </Button>
+          </div>
+        )}
+      />
     </main>
   );
 }
