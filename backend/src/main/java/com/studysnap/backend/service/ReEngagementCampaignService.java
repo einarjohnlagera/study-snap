@@ -93,13 +93,16 @@ public class ReEngagementCampaignService {
                             "unsubscribeFooterText", unsubscribeContext.textFooter()
                     )
             );
-            emailService.sendEmail(new EmailMessage(
+            boolean sent = emailService.sendEmail(new EmailMessage(
                     user.getEmail(),
                     rendered.subject(),
                     rendered.htmlBody(),
                     rendered.textBody(),
                     unsubscribeContext.headers()
             ));
+            if (!sent) {
+                return false;
+            }
             logEmailSent(user.getId(), now);
             return true;
         } catch (RuntimeException ex) {

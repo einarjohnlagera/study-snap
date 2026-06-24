@@ -59,6 +59,7 @@ class ReEngagementCampaignServiceTest {
         lenient().when(emailProperties.getAppBaseUrl()).thenReturn("https://notelib.app");
         lenient().when(emailTemplateService.render(anyString(), any()))
                 .thenReturn(new EmailTemplateService.RenderedEmailTemplate("subject", "<p>body</p>", "body"));
+        lenient().when(emailService.sendEmail(any(EmailMessage.class))).thenReturn(true);
         lenient().when(emailUnsubscribeLinkService.buildContext(any(UUID.class), eq(UnsubscribeCategory.MARKETING)))
                 .thenReturn(new EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext(
                         "https://notelib.app/unsubscribe?token=marketing-token",

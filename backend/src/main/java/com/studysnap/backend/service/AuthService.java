@@ -146,7 +146,7 @@ public class AuthService {
         user.setCountryCode(null);
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
-        user.setInactivityRemindersEnabled(false);
+        user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
         user.setMarketingEmailsEnabled(false);
@@ -869,7 +869,7 @@ public class AuthService {
         user.setCountryCode(null);
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
-        user.setInactivityRemindersEnabled(false);
+        user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
         user.setMarketingEmailsEnabled(false);

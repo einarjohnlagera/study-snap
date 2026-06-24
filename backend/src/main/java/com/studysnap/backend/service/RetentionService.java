@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,6 +40,7 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int SESSION_LOOKBACK_LIMIT = 10;
+    private static final ZoneId EMAIL_BUDGET_ZONE = ZoneId.of("Asia/Manila");
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
             QuickReviewSessionMode.CHALLENGE
@@ -131,9 +133,16 @@ public class RetentionService {
     }
 
     DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
-        int inactivitySent = dispatchInactivityEmails(findInactiveUsers(now), now);
+        InactivityDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
         int weakConceptSent = dispatchWeakConceptEmails(findUsersWithWeakConcepts(now), now);
-        return new DailyRetentionDispatchSummary(inactivitySent, weakConceptSent);
+        return new DailyRetentionDispatchSummary(
+                inactivityDispatchResult.sent(),
+                weakConceptSent,
+                inactivityDispatchResult.budget(),
+                inactivityDispatchResult.sentToday(),
+                inactivityDispatchResult.attempted(),
+                inactivityDispatchResult.skippedForBudget()
+        );
     }
 
     WeeklyRetentionDispatchSummary sendWeeklySummaryEmails(OffsetDateTime now) {
@@ -259,6 +268,44 @@ public class RetentionService {
         return sent;
     }
 
+    private InactivityDispatchResult dispatchBudgetedInactivityEmails(OffsetDateTime now) {
+        if (!properties.getEmail().isReengagementEnabled()) {
+            log.info("retention.email.inactivity disabled");
+            return new InactivityDispatchResult(0, countEmailsSentToday(now), 0, 0, 0);
+        }
+
+        long sentToday = countEmailsSentToday(now);
+        int budget = resolveReengagementBudget(sentToday);
+        List<InactiveUserReminder> candidates = findInactiveUsers(now);
+        int attempted = Math.min(candidates.size(), budget);
+        int skippedForBudget = Math.max(0, candidates.size() - attempted);
+        int sent = dispatchInactivityEmails(candidates.stream().limit(attempted).toList(), now);
+        log.info(
+                "retention.email.inactivity.dispatch budget={} sentToday={} attempted={} sent={} skippedForBudget={}",
+                budget,
+                sentToday,
+                attempted,
+                sent,
+                skippedForBudget
+        );
+        return new InactivityDispatchResult(budget, sentToday, attempted, sent, skippedForBudget);
+    }
+
+    private long countEmailsSentToday(OffsetDateTime now) {
+        OffsetDateTime startOfDay = now.atZoneSameInstant(EMAIL_BUDGET_ZONE)
+                .toLocalDate()
+                .atStartOfDay(EMAIL_BUDGET_ZONE)
+                .toOffsetDateTime();
+        return emailLogRepository.countBySentAtGreaterThanEqual(startOfDay);
+    }
+
+    private int resolveReengagementBudget(long sentToday) {
+        int dailyLimit = Math.max(0, properties.getEmail().getDailyLimit());
+        int transactionalReserve = Math.max(0, properties.getEmail().getTransactionalReserve());
+        long budget = (long) dailyLimit - transactionalReserve - sentToday;
+        return (int) Math.clamp(budget, 0L, Integer.MAX_VALUE);
+    }
+
     private int dispatchWeakConceptEmails(List<WeakConceptReminder> candidates, OffsetDateTime now) {
         int sent = 0;
         for (WeakConceptReminder candidate : candidates) {
@@ -326,13 +373,16 @@ public class RetentionService {
             templateParameters.put("unsubscribeFooterHtml", unsubscribeContext.htmlFooter());
             templateParameters.put("unsubscribeFooterText", unsubscribeContext.textFooter());
             EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(templateName, templateParameters);
-            emailService.sendEmail(new EmailMessage(
+            boolean sent = emailService.sendEmail(new EmailMessage(
                     email,
                     rendered.subject(),
                     rendered.htmlBody(),
                     rendered.textBody(),
                     unsubscribeContext.headers()
             ));
+            if (!sent) {
+                return false;
+            }
             logEmailSent(userId, emailType, now);
             return true;
         } catch (RuntimeException ex) {
@@ -493,7 +543,20 @@ public class RetentionService {
 
     public record DailyRetentionDispatchSummary(
             int inactivitySent,
-            int weakConceptSent
+            int weakConceptSent,
+            int inactivityBudget,
+            long sentToday,
+            int inactivityAttempted,
+            int inactivitySkippedForBudget
+    ) {
+    }
+
+    private record InactivityDispatchResult(
+            int budget,
+            long sentToday,
+            int attempted,
+            int sent,
+            int skippedForBudget
     ) {
     }
 

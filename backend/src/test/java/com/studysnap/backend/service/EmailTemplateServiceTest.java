@@ -50,6 +50,27 @@ class EmailTemplateServiceTest {
     }
 
     @Test
+    void render_inactivityReminderTemplateWithRealData() {
+        EmailTemplateService.RenderedEmailTemplate rendered = service.render(
+                "retention-inactivity-reminder",
+                Map.of(
+                        "firstName", "Note",
+                        "resumeUrl", "https://notelib.test/dashboard",
+                        "unsubscribeUrl", "https://notelib.test/unsubscribe?token=abc",
+                        "unsubscribeFooterHtml", "<p><a href=\"https://notelib.test/unsubscribe?token=abc\">Unsubscribe</a></p>",
+                        "unsubscribeFooterText", "Unsubscribe: https://notelib.test/unsubscribe?token=abc"
+                )
+        );
+
+        assertThat(rendered.subject()).isNotBlank();
+        assertThat(rendered.htmlBody()).contains("Hi Note,");
+        assertThat(rendered.htmlBody()).contains("https://notelib.test/dashboard");
+        assertThat(rendered.htmlBody()).contains("https://notelib.test/unsubscribe?token=abc");
+        assertThat(rendered.textBody()).contains("Continue studying here:");
+        assertThat(rendered.textBody()).contains("Unsubscribe: https://notelib.test/unsubscribe?token=abc");
+    }
+
+    @Test
     void render_throwsWhenTemplateParameterIsMissing() {
         assertThatThrownBy(() -> service.render(
                 "verification-email",

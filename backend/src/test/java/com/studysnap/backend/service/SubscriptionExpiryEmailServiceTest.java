@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,6 +61,7 @@ class SubscriptionExpiryEmailServiceTest {
                 emailTemplateService,
                 emailService
         );
+        lenient().when(emailService.sendEmail(any(EmailMessage.class))).thenReturn(true);
     }
 
     @Test
@@ -244,10 +245,9 @@ class SubscriptionExpiryEmailServiceTest {
         )).thenReturn(false);
         when(emailTemplateService.render(eq("subscription-expiry-7-day"), any()))
                 .thenReturn(rendered("Your Plus plan expires in 7 days"));
-        doThrow(new RuntimeException("Resend unavailable"))
-                .doNothing()
-                .when(emailService)
-                .sendEmail(any(EmailMessage.class));
+        when(emailService.sendEmail(any(EmailMessage.class)))
+                .thenThrow(new RuntimeException("Resend unavailable"))
+                .thenReturn(true);
 
         SubscriptionExpiryEmailService.SubscriptionExpiryEmailDispatchSummary summary =
                 service.sendExpiryNotificationEmails(NOW);

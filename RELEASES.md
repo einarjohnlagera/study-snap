@@ -15,6 +15,13 @@ Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion w
 - **Plan-launch prescreen polish** *(secondary)* — hide "Choose another mode" on prescreens launched from a Study Plan (`collectionId` present).
 - **Plus-tier reason-to-exist** *(deferred)* — revisit once retention improves and there is real recent conversion data.
 
+### Shipped
+
+- **Budget-aware inactivity reminders** — The daily inactivity dispatch now sends only within the configured shared email pool (`studysnap.email.daily-limit`, default 100) after reserving transactional headroom (`studysnap.email.transactional-reserve`, default 40). The budget is computed from same-day `email_log` sends, skipped candidates are not logged and naturally roll to the next daily run, and `studysnap.email.reengagement-enabled=false` turns inactivity dispatch into a no-op without affecting transactional email.
+- **Inactivity reminders reachable by default** — New email/password and Google signups now default `inactivityRemindersEnabled=true`, while weak-concept, weekly-summary, and marketing preferences remain default-off. A migration backfills existing users to enable inactivity reminders only, preserving the other optional email flags.
+- **Resend suppression handling** — Added a signature-verified Resend webhook for bounce, complaint, and suppression events. Verified events upsert `suppressed_email`, and all Resend sends skip suppressed recipients with an `email.suppressed.skip` log entry instead of spending provider capacity or retrying bad addresses.
+- **Transactional budget accounting** — Successful verification and password-reset sends are now written to `email_log` so the re-engagement budget sees the same daily pool that transactional email uses. Transactional sends remain immediate and are never blocked by the re-engagement budget.
+
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity
 
 **Status: Released**

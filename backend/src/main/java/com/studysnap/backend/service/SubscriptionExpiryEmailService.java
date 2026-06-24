@@ -146,12 +146,15 @@ public class SubscriptionExpiryEmailService {
                     templateName,
                     buildTemplateParameters(subscription, user)
             );
-            emailService.sendEmail(new EmailMessage(
+            boolean sent = emailService.sendEmail(new EmailMessage(
                     user.getEmail(),
                     rendered.subject(),
                     rendered.htmlBody(),
                     rendered.textBody()
             ));
+            if (!sent) {
+                return false;
+            }
             logEmailSent(user.getId(), emailType, now);
             return true;
         } catch (RuntimeException ex) {

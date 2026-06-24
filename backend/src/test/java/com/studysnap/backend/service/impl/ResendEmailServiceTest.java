@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.EmailMessage;
+import com.studysnap.backend.service.SuppressedEmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -13,10 +14,12 @@ import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,6 +27,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 class ResendEmailServiceTest {
     private HttpClient httpClient;
+    private SuppressedEmailService suppressedEmailService;
     private ResendEmailService service;
 
     @BeforeEach
@@ -35,7 +39,8 @@ class ResendEmailServiceTest {
         when(email.getResendApiKey()).thenReturn("test-key");
         when(email.getFrom()).thenReturn("NoteLib <noreply@notelib.app>");
         when(email.getResendApiBaseUrl()).thenReturn(null);
-        service = new ResendEmailService(properties, new ObjectMapper(), httpClient);
+        suppressedEmailService = mock(SuppressedEmailService.class);
+        service = new ResendEmailService(properties, new ObjectMapper(), httpClient, suppressedEmailService);
     }
 
     private static EmailMessage message() {
@@ -61,6 +66,15 @@ class ResendEmailServiceTest {
 
         assertThatCode(() -> service.sendEmail(message)).doesNotThrowAnyException();
         verify(httpClient, times(1)).send(any(), any());
+    }
+
+    @Test
+    void skipsSuppressedRecipientWithoutCallingProvider() throws Exception {
+        EmailMessage message = message();
+        when(suppressedEmailService.isSuppressed(message.to())).thenReturn(true);
+
+        assertThat(service.sendEmail(message)).isFalse();
+        verify(httpClient, never()).send(any(), any());
     }
 
     @Test

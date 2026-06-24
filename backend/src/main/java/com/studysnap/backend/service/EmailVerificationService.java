@@ -73,12 +73,15 @@ public class EmailVerificationService {
                 )
         );
 
-        emailService.sendEmail(new EmailMessage(
+        boolean sent = emailService.sendEmail(new EmailMessage(
                 resolveVerificationTargetEmail(user),
                 renderedTemplate.subject(),
                 renderedTemplate.htmlBody(),
                 renderedTemplate.textBody()
         ));
+        if (sent) {
+            logEmailSent(user.getId(), RetentionEmailType.EMAIL_VERIFICATION, now);
+        }
     }
 
     public EmailVerificationResult verifyToken(String rawToken) {
@@ -188,17 +191,24 @@ public class EmailVerificationService {
                 )
         );
 
-        emailService.sendEmail(new EmailMessage(
+        boolean sent = emailService.sendEmail(new EmailMessage(
                 user.getEmail(),
                 renderedTemplate.subject(),
                 renderedTemplate.htmlBody(),
                 renderedTemplate.textBody()
         ));
+        if (!sent) {
+            return;
+        }
 
+        logEmailSent(user.getId(), RetentionEmailType.WELCOME, now);
+    }
+
+    private void logEmailSent(UUID userId, RetentionEmailType emailType, OffsetDateTime now) {
         EmailLogEntity logEntity = new EmailLogEntity();
         logEntity.setId(UUID.randomUUID());
-        logEntity.setUserId(user.getId());
-        logEntity.setEmailType(RetentionEmailType.WELCOME);
+        logEntity.setUserId(userId);
+        logEntity.setEmailType(emailType);
         logEntity.setSentAt(now);
         emailLogRepository.save(logEntity);
     }
