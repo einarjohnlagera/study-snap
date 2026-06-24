@@ -207,29 +207,25 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 Base branch for this release: `releases/v0.32.2`. Patch after v0.32.1; mostly frontend + analysis.
 
-Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. **Thread 3 (the funnel diagnosis) ran first and re-scoped this release.** The binding blocker is a **broken checkout** — 6 upgrade clicks → **0** `CHECKOUT_INITIATED` → 0 paid — with **near-zero W1→W2 retention (5.6%)** as the deeper leak. Activation (68.6%) and the value loop (58.8%) are healthy, and Free is **not** too generous (intent exists; the transaction is broken). Full data: `docs/product/conversion-funnel-finding.md`. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; checkout and retention are.
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. **Thread 3 (the funnel diagnosis) ran first and re-scoped this release.** The real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. (An initial read flagged a "broken checkout" from "6 upgrade clicks → 0 `CHECKOUT_INITIATED`"; that was a **metric-inception artifact** — `CHECKOUT_INITIATED` was added in v0.31.2 while `UPGRADE_CLICKED` is far older, and a live upgrade reached the real Xendit invoice. Checkout works.) Free is **not** too generous. Full data: `docs/product/conversion-funnel-finding.md`. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; retention is.
 
 ### Thread 3 — Conversion funnel diagnosis *(done)*
 
-Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), value loop 58.8%, free-quota-hit 0.0% (study-pack-only), **6 upgrade clicks → 0 checkout initiated → 0 paid**, W1→W2 retention 5.6%. The conversion failure is **mechanical** (checkout never opens), not pricing/quota/Free-generosity. Output: `docs/product/conversion-funnel-finding.md`. This finding drives the priorities below.
+Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), value loop 58.8%, free-quota-hit 0.0% (study-pack-only), W1→W2 retention 5.6%. Corrected reading: checkout is **not** broken (the "6 → 0" is a metric-inception mismatch — see finding doc); the real constraint is retention. Output: `docs/product/conversion-funnel-finding.md`. Drives the priorities below.
 
-### Thread 1 — Fix broken checkout *(P0)*
+### Thread 1 — Retention diagnosis *(top priority)*
 
-6 users clicked upgrade; 0 reached `CHECKOUT_INITIATED`. `PaymentService.create` throws before the Xendit invoice is created. Root-cause from prod logs (`billing.checkout` / `billing.xendit` / `PaymentCheckoutUnavailableException` around upgrade-click times), in priority: (1) Xendit prod config (`ensureCheckoutConfigured` — API key, return/callback URLs), (2) `createInvoice` API error / null `checkoutUrl`, (3) `resolveCheckoutSelection` plan/cycle/pricing error. Fix and verify a real checkout opens end-to-end. **This is the entire conversion engine — nothing else moves revenue until it works.**
+W1→W2 retention is 5.6% (recent cohorts ~0%): users activate (68.6%) and engage once (58.8%), then don't return. With ~0% returning users there is almost no one in-app to convert — this caps everything downstream. Diagnose the drop (no return reason, weak re-engagement hook, notification gaps) and define + ship one scoped lever to test this release.
 
-### Thread 2 — Retention diagnosis *(P1)*
+### Thread 2 — Close instrumentation gaps
 
-W1→W2 retention is 5.6% (recent cohorts ~0%): users activate (68.6%) and engage once (58.8%), then don't return. Diagnose the drop (no return reason, weak re-engagement hook, notification gaps) and define the smallest lever to test. Even a fixed checkout has almost no returning users to convert — this caps everything downstream. Diagnosis + one scoped experiment this release.
+(a) The funnel compares all-time metrics with different inception dates (`UPGRADE_CLICKED` old vs `CHECKOUT_INITIATED` since v0.31.2) — which produced the false "broken checkout." Add a **date-windowed / cohort funnel** so stages are only compared over a common window. (b) `getQuotaHitMetrics` measures only the study-pack quota — extend the free-quota-hit metric to quiz/adaptive/exam so "0% hit" is trustworthy.
 
-### Thread 3b — Close instrumentation gaps
-
-The diagnosis hit two blind spots: (a) `getQuotaHitMetrics` measures only the study-pack quota — extend the free-quota-hit metric to quiz/adaptive/exam so "0% hit" is trustworthy; (b) the create-checkout error path is silent in analytics — add a `CHECKOUT_FAILED` event (with failure reason) so the P0 is self-diagnosing on `/admin/funnel` instead of needing log spelunking.
-
-### Thread 4 — Quota-label honesty *(secondary, low-effort)*
+### Thread 3 — Quota-label honesty *(secondary, low-effort)*
 
 The Pro card's "Long Exam (12 sessions)" / "Board Exam (10 sessions)" are really per-source-note units (`additionalStudyPackIds.size() + 1`; a 3-note exam costs 3). Relabel to source-note units + a clarifier, through the shared plan config. **Copy only — no quota mechanics or number change.**
 
-### Thread 5 — Plan-launch prescreen polish *(secondary, low-effort)*
+### Thread 4 — Plan-launch prescreen polish *(secondary, low-effort)*
 
 Hide (or relabel) "Choose another mode" on Long/Board/Interview prescreens launched from a Study Plan (`collectionId` present); leave the note-launched flow unchanged. Frontend-only.
 

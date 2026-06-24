@@ -10,15 +10,15 @@ Current version: **v0.32.2** — see `RELEASES.md` for in-progress scope, `docs/
 
 ## Active release: v0.32.2 — Conversion Diagnosis & Quota Honesty
 
-Base branch for this release: `releases/v0.32.2`. The funnel diagnosis ran first and **re-scoped this release** (`docs/product/conversion-funnel-finding.md`): the binding blocker is a **broken checkout** — 6 upgrade clicks produced **0** `CHECKOUT_INITIATED` and 0 paid — with **near-zero W1→W2 retention (5.6%)** as the deeper leak. Activation (68.6%) and the value loop (58.8%) are healthy; Free is not too generous (intent exists, the transaction is broken). Full scope/priorities in `ROADMAP.md`. Locked rules:
+Base branch for this release: `releases/v0.32.2`. The funnel diagnosis ran first and **re-scoped this release** (`docs/product/conversion-funnel-finding.md`): the real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. An initial read flagged a "broken checkout" (6 upgrade clicks → 0 `CHECKOUT_INITIATED`); that was a **metric-inception artifact** (`CHECKOUT_INITIATED` added v0.31.2, `UPGRADE_CLICKED` far older) — a live upgrade reached the real Xendit invoice, so **checkout works**. Free is not too generous. Full scope/priorities in `ROADMAP.md`. Locked rules:
 
-- **Checkout fix is P0.** `PaymentService.create` throws before the Xendit invoice is created (suspects: `ensureCheckoutConfigured` config, `createInvoice` API error/null URL, `resolveCheckoutSelection`). Root-cause from prod logs, fix, and verify a real checkout opens end-to-end. Nothing else in this release moves revenue until this works.
-- **Retention is P1.** Diagnose why activated users don't return (5.6% W1→W2) and define one scoped lever; do not ship broad re-engagement infrastructure without that diagnosis.
-- **No exam quota number change.** Quota size is not the constraint (checkout + retention are). Do not raise Long Exam / Board Exam quotas this release; tune from usage once payers exist.
+- **Retention is the top priority.** Diagnose why activated users don't return (5.6% W1→W2) and define + ship one scoped lever; do not ship broad re-engagement infrastructure without that diagnosis.
+- **Checkout is NOT broken — do not "fix" it.** The "6 → 0" was an artifact of comparing metrics with different inception dates. No checkout code change unless a real failure is observed.
+- **No exam quota number change.** Quota size is not the constraint (retention is). Do not raise Long Exam / Board Exam quotas this release; tune from usage once payers exist.
 - **Quota-label honesty (copy only).** Exam quotas labelled "N sessions / month" are per-source-note units (`additionalStudyPackIds.size() + 1`); relabel through the shared plan config (`getUpgradeCtas`, centralized plan copy). No quota mechanics change.
-- **Close instrumentation gaps.** Extend free-quota-hit beyond study packs (quiz/adaptive/exam); add a `CHECKOUT_FAILED` analytics event so the P0 is self-diagnosing on `/admin/funnel`.
+- **Close instrumentation gaps.** Add a date-windowed / cohort funnel (so all-time stages with different inception dates aren't compared — what produced the false "broken checkout"); extend free-quota-hit beyond study packs (quiz/adaptive/exam).
 - **Anti-drift:** no billing mechanics change, no quota model or number change, no price change, no checkout shortcut, no frontend-granted paid access; checkout still uses backend-returned Xendit URLs.
-- **Out of scope / deferred:** raising exam quotas, per-pass quota redesign, and any Plus-tier change — deferred until checkout works and there is real conversion data to justify it.
+- **Out of scope / deferred:** raising exam quotas, per-pass quota redesign, and any Plus-tier change — deferred until retention improves and there is real recent conversion data.
 
 ## Source-of-truth docs (read before implementing anything)
 

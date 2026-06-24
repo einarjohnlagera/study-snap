@@ -4,17 +4,16 @@
 
 **Status: In Progress**
 
-Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. The funnel diagnosis ran first and **re-scoped this release**: the binding blocker is a **broken checkout** (6 upgrade clicks → 0 `CHECKOUT_INITIATED` → 0 paid), with **near-zero W1→W2 retention (5.6%)** as the deeper leak. Activation (68.6%) and the value loop (58.8%) are healthy; Free is not too generous (intent exists, the transaction is broken). **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; checkout and retention are. Full data in `docs/product/conversion-funnel-finding.md`; see `docs/product/ROADMAP.md` for sequencing.
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. The funnel diagnosis ran first and **re-scoped this release**: the real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. (An initial read flagged a "broken checkout" from 6 upgrade clicks → 0 `CHECKOUT_INITIATED`; that was a **metric-inception artifact** — `CHECKOUT_INITIATED` was added in v0.31.2 while `UPGRADE_CLICKED` is far older, and a live upgrade reached the real Xendit invoice. Checkout works.) Free is not too generous. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; retention is. Full data in `docs/product/conversion-funnel-finding.md`; see `docs/product/ROADMAP.md` for sequencing.
 
 ### Planned Scope (re-prioritized after the funnel diagnosis)
 
-- **Conversion funnel diagnosis** *(done)* — read prod `/admin/funnel`; finding written to `docs/product/conversion-funnel-finding.md`. Drives the priorities below.
-- **Fix broken checkout (P0)** — 6 upgrade clicks produced 0 Xendit checkouts; `PaymentService.create` throws before the invoice is created. Root-cause from prod logs (Xendit config / `createInvoice` / `resolveCheckoutSelection`), fix, and verify a real checkout opens end-to-end. This is the entire conversion engine.
-- **Retention diagnosis (P1)** — W1→W2 retention is 5.6% (recent cohorts ~0%). Diagnose why activated users don't return and define one scoped lever to test.
-- **Close instrumentation gaps** — extend free-quota-hit beyond study packs (quiz/adaptive/exam); add a `CHECKOUT_FAILED` analytics event so the P0 is self-diagnosing on `/admin/funnel`.
+- **Conversion funnel diagnosis** *(done)* — read prod `/admin/funnel`; finding written to `docs/product/conversion-funnel-finding.md`. Corrected reading: checkout works; retention is the constraint. Drives the priorities below.
+- **Retention diagnosis (top priority)** — W1→W2 retention is 5.6% (recent cohorts ~0%). Diagnose why activated users don't return and define + ship one scoped lever to test.
+- **Close instrumentation gaps** — add a date-windowed / cohort funnel (so all-time metrics with different inception dates aren't compared — what produced the false "broken checkout"); extend free-quota-hit beyond study packs (quiz/adaptive/exam).
 - **Quota-label honesty** *(secondary)* — relabel "Long Exam (12 sessions)" / "Board Exam (10 sessions)" as per-source-note units + clarifier, through the shared plan config. Copy only.
 - **Plan-launch prescreen polish** *(secondary)* — hide "Choose another mode" on prescreens launched from a Study Plan (`collectionId` present).
-- **Plus-tier reason-to-exist** *(deferred)* — pointless to reposition a paid tier no one can currently buy; revisit once checkout works and conversion data exists.
+- **Plus-tier reason-to-exist** *(deferred)* — revisit once retention improves and there is real recent conversion data.
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity
 
