@@ -207,23 +207,31 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 Base branch for this release: `releases/v0.32.2`. Patch after v0.32.1; mostly frontend + analysis.
 
-Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion is still **~0 of 158 users**. Before changing pricing or quota, diagnose *where* the funnel actually breaks, and make the existing claims honest. **Anti-drift: do not raise exam quota numbers without funnel data.** At zero paying users, quota size is an unproven constraint, and multi-note exams (GPT-4.1) are the most expensive operation to serve — raising them gives away margin without evidence it drives conversion. No billing/quota mechanics change; this release is copy honesty + diagnosis + small fixes + one positioning exploration.
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. **Thread 3 (the funnel diagnosis) ran first and re-scoped this release.** The real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. (An initial read flagged a "broken checkout" from "6 upgrade clicks → 0 `CHECKOUT_INITIATED`"; that was a **metric-inception artifact** — `CHECKOUT_INITIATED` was added in v0.31.2 while `UPGRADE_CLICKED` is far older, and a live upgrade reached the real Xendit invoice. Checkout works.) Free is **not** too generous. Full data: `docs/product/conversion-funnel-finding.md`. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; retention is.
 
-### Thread 1 — Plan-launch prescreen polish
+### Thread 3 — Conversion funnel diagnosis *(done)*
 
-When a premium exam is launched from a Study Plan (`collectionId` present), the Long/Board/Interview prescreen still shows a "Choose another mode" button — but there is no mode-selection screen to return to in that flow (the user came from the plan, not the Challenge Quiz mode grid). Hide it (or relabel to a plan-appropriate back action) when `collectionId` is present; leave the normal note-launched flow unchanged. Frontend-only.
+Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), value loop 58.8%, free-quota-hit 0.0% (study-pack-only), W1→W2 retention 5.6%. Corrected reading: checkout is **not** broken (the "6 → 0" is a metric-inception mismatch — see finding doc); the real constraint is retention. Output: `docs/product/conversion-funnel-finding.md`. Drives the priorities below.
 
-### Thread 2 — Quota-label honesty
+### Thread 1 — Retention diagnosis *(top priority)*
 
-The Pro pricing card reads "Long Exam (12 sessions / month)" and "Board Exam Mode (10 sessions / month)", but the backend deducts quota **per source note** (`additionalStudyPackIds.size() + 1`): a single-note exam costs 1 unit, a 3-note exam costs 3. So "12 sessions" is really 12 source-note units — as few as 4 three-note exams — and a buyer expecting "12 exams" feels short-changed. Relabel the pricing/comparison surfaces to source-note units (through the shared plan config) and add a one-line clarifier that a multi-note exam uses multiple units. **Copy only — no quota mechanics or number change.**
+W1→W2 retention is 5.6% (recent cohorts ~0%): users activate (68.6%) and engage once (58.8%), then don't return. With ~0% returning users there is almost no one in-app to convert — this caps everything downstream. Diagnose the drop (no return reason, weak re-engagement hook, notification gaps) and define + ship one scoped lever to test this release.
 
-### Thread 3 — Conversion funnel diagnosis
+### Thread 2 — Close instrumentation gaps
 
-Diagnose why 0 of 158 convert before touching pricing or quota. Read the v0.31.2/v0.32.1 instrumentation end-to-end: paywall-reach rate, then `UPGRADE_CLICKED` → `CHECKOUT_INITIATED` → `SUBSCRIPTION_STARTED`. Identify the binding drop (nobody reaches a paywall / reaches but doesn't click / clicks but abandons checkout) and whether the 158 are even the buying audience. Output is a written finding (+ any missing instrumentation to close gaps), **not** a quota or price change — those wait on this evidence.
+(a) The funnel compares all-time metrics with different inception dates (`UPGRADE_CLICKED` old vs `CHECKOUT_INITIATED` since v0.31.2) — which produced the false "broken checkout." Add a **date-windowed / cohort funnel** so stages are only compared over a common window. (b) `getQuotaHitMetrics` measures only the study-pack quota — extend the free-quota-hit metric to quiz/adaptive/exam so "0% hit" is trustworthy.
 
-### Thread 4 — Plus-tier reason-to-exist (exploration)
+### Thread 3 — Quota-label honesty *(secondary, low-effort)*
 
-Plus has **zero exam access**, so for an exam-prep audience it is a dead tier — learners skip to Pro or stay Free. Evaluate whether Plus needs a *taste* of Long Exam (or a repositioning) to justify itself. Exploration/decision this release; validate against the Thread 3 funnel finding before building anything. No change ships without that evidence.
+The Pro card's "Long Exam (12 sessions)" / "Board Exam (10 sessions)" are really per-source-note units (`additionalStudyPackIds.size() + 1`; a 3-note exam costs 3). Relabel to source-note units + a clarifier, through the shared plan config. **Copy only — no quota mechanics or number change.**
+
+### Thread 4 — Plan-launch prescreen polish *(secondary, low-effort)*
+
+Hide (or relabel) "Choose another mode" on Long/Board/Interview prescreens launched from a Study Plan (`collectionId` present); leave the note-launched flow unchanged. Frontend-only.
+
+### Deferred — Plus-tier reason-to-exist
+
+Plus has zero exam access (a dead tier for exam-prep). Deferred until checkout works and there is real conversion data to justify any tier change — pointless to reposition a paid tier no one can currently buy.
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity (released)
 

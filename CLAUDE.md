@@ -10,14 +10,15 @@ Current version: **v0.32.2** — see `RELEASES.md` for in-progress scope, `docs/
 
 ## Active release: v0.32.2 — Conversion Diagnosis & Quota Honesty
 
-Base branch for this release: `releases/v0.32.2`. v0.32.1 surfaced the premium exams and reframed pricing, but conversion is still ~0 of 158 users. This patch is the honest follow-through: diagnose *where* the paywall→checkout funnel breaks before changing pricing or quota, make the existing claims accurate, fix the plan-launched exam prescreen polish, and evaluate the thin Plus tier. Full scope in `ROADMAP.md`. Locked rules:
+Base branch for this release: `releases/v0.32.2`. The funnel diagnosis ran first and **re-scoped this release** (`docs/product/conversion-funnel-finding.md`): the real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. An initial read flagged a "broken checkout" (6 upgrade clicks → 0 `CHECKOUT_INITIATED`); that was a **metric-inception artifact** (`CHECKOUT_INITIATED` added v0.31.2, `UPGRADE_CLICKED` far older) — a live upgrade reached the real Xendit invoice, so **checkout works**. Free is not too generous. Full scope/priorities in `ROADMAP.md`. Locked rules:
 
-- **No exam quota number change without funnel data.** At zero paying users, quota size is an unproven constraint and multi-note exams (GPT-4.1) are the most expensive operation to serve. Do not raise Long Exam / Board Exam quotas (or any quota) this release; tune from real usage once payers exist.
-- **Quota-label honesty.** The exam quotas labelled "N sessions / month" are actually per-source-note units (`additionalStudyPackIds.size() + 1`). Relabel pricing/comparison surfaces to source-note units with a clarifier, through the shared plan config (`getUpgradeCtas`, centralized plan copy). Copy only — no quota mechanics change.
-- **Plan-launch prescreen polish.** Hide (or relabel) "Choose another mode" on Long/Board/Interview prescreens when launched from a Study Plan (`collectionId` present); leave the normal note-launched flow unchanged.
-- **Funnel diagnosis is analysis, not a change.** Reading the v0.31.2/v0.32.1 paywall→checkout instrumentation produces a written finding (and any missing instrumentation), not a pricing/quota edit. Pricing/Plus changes wait on that evidence.
-- **Anti-drift:** no billing mechanics change, no quota model or number change, no pass-duration or price change, no checkout shortcut, no frontend-granted paid access. Upgrade/pricing copy goes through shared plan config; checkout still uses backend-returned Xendit URLs.
-- **Out of scope:** raising exam quotas, per-pass quota redesign, new multi-note generation mechanics, new paid-state fields on `users`, and shipping any Plus-tier change before the funnel finding justifies it.
+- **Retention is the top priority.** Diagnose why activated users don't return (5.6% W1→W2) and define + ship one scoped lever; do not ship broad re-engagement infrastructure without that diagnosis.
+- **Checkout is NOT broken — do not "fix" it.** The "6 → 0" was an artifact of comparing metrics with different inception dates. No checkout code change unless a real failure is observed.
+- **No exam quota number change.** Quota size is not the constraint (retention is). Do not raise Long Exam / Board Exam quotas this release; tune from usage once payers exist.
+- **Quota-label honesty (copy only).** Exam quotas labelled "N sessions / month" are per-source-note units (`additionalStudyPackIds.size() + 1`); relabel through the shared plan config (`getUpgradeCtas`, centralized plan copy). No quota mechanics change.
+- **Close instrumentation gaps.** Add a date-windowed / cohort funnel (so all-time stages with different inception dates aren't compared — what produced the false "broken checkout"); extend free-quota-hit beyond study packs (quiz/adaptive/exam).
+- **Anti-drift:** no billing mechanics change, no quota model or number change, no price change, no checkout shortcut, no frontend-granted paid access; checkout still uses backend-returned Xendit URLs.
+- **Out of scope / deferred:** raising exam quotas, per-pass quota redesign, and any Plus-tier change — deferred until retention improves and there is real recent conversion data.
 
 ## Source-of-truth docs (read before implementing anything)
 
