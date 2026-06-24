@@ -341,8 +341,10 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "90 days" }));
-    fireEvent.click(screen.getByRole("button", { name: "Get Pro — ₱599 / 90 days" }));
+    // 3-month pass surfaces its own savings badge (₱599 vs three ₱249 passes ≈ 20%).
+    expect(await screen.findByText("Save 20%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^3 months/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Get Pro — ₱599 / 3 months" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
@@ -382,7 +384,7 @@ describe("Settings page cancellation flow", () => {
     render(<SettingsPage />);
 
     await screen.findByRole("button", { name: "Get Pro" });
-    expect(screen.queryByRole("button", { name: "Get Pro — ₱599 / 90 days" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get Pro — ₱599 / 3 months" })).not.toBeInTheDocument();
   });
 
   it("starts Pro annual checkout after switching to the 1-year pass", async () => {
@@ -443,7 +445,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    expect(await screen.findByText("90-Day Exam Pass · Won't auto-renew")).toBeInTheDocument();
+    expect(await screen.findByText("3-Month Pass · Won't auto-renew")).toBeInTheDocument();
   });
 
   it("shows cancel plan link for active Pro subscription", async () => {
