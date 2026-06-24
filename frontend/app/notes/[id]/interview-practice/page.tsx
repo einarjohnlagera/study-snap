@@ -25,6 +25,8 @@ import {
   type QuizItem,
 } from "@/lib/api";
 import { BackLink } from "@/components/ui/back-link";
+import { getAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +65,8 @@ export default function InterviewPracticePage() {
   const noteId = params.id;
   const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const noteHref = `/notes/${noteId}`;
+  const planBackHref = collectionId ? `/collections/${collectionId}` : noteHref;
+  const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
   const [phase, setPhase] = useState<InterviewPhase>("prestart");
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [availableNotes, setAvailableNotes] = useState<NoteListItemResponse[]>([]);
@@ -299,7 +303,7 @@ export default function InterviewPracticePage() {
             Leave Practice
           </Button>
         ) : (
-          <BackLink href={noteHref} label="Note" />
+          <BackLink href={planBackHref} label={planBackLabel} />
         )}
         {phase === "running" ? (
           <div className="text-right">
@@ -406,7 +410,9 @@ export default function InterviewPracticePage() {
                   Add context from more notes
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  Add up to {MAX_ADDITIONAL_NOTES} ready notes for a cross-domain session.
+                  {collectionId
+                    ? `Add up to ${MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                    : `Add up to ${MAX_ADDITIONAL_NOTES} ready notes for a cross-domain session.`}
                 </p>
               </div>
               <div className="mt-4 grid gap-2">
