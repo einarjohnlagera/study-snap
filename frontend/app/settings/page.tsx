@@ -540,7 +540,6 @@ export default function SettingsPage() {
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
   const annualAvailableForPro = proAnnualPricing?.available ?? (pricingConfig.price[displayRegion].pro.yearly !== null);
   const annualAvailableForPlus = plusAnnualPricing?.available ?? (pricingConfig.price[displayRegion].plus.yearly !== null);
-  const hasAnnualOption = annualAvailableForPro || annualAvailableForPlus;
   const freePlanConfig = PLANS.FREE;
   const plusPlanConfig = PLANS.PLUS;
   const proPlanConfig = PLANS.PRO;
@@ -557,7 +556,25 @@ export default function SettingsPage() {
     return `${formatPricingAmount(yearly, pricingConfig.price[displayRegion].currency)} / 1 year`;
   })();
   const effectivePlusCycle: BillingCycle = "MONTHLY";
-  const effectiveProCycle: BillingCycle = selectedCycle === "YEARLY" && annualAvailableForPro ? "YEARLY" : "MONTHLY";
+  const proExamCycleAvailable = proExamCyclePricing?.available ?? false;
+  const effectiveProCycle: BillingCycle =
+    selectedCycle === "EXAM_CYCLE" && proExamCycleAvailable
+      ? "EXAM_CYCLE"
+      : selectedCycle === "YEARLY" && annualAvailableForPro
+        ? "YEARLY"
+        : "MONTHLY";
+  const proSelectedPriceLabel =
+    effectiveProCycle === "EXAM_CYCLE"
+      ? (proExamCyclePriceLabel ?? proMonthlyPriceLabel)
+      : effectiveProCycle === "YEARLY"
+        ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
+        : proMonthlyPriceLabel;
+  // The monthly label carries the long intro string, so only suffix the CTA with
+  // the (short) price for the 90-day and annual passes — matches the marketing card.
+  const proCtaLabel = effectiveProCycle === "MONTHLY"
+    ? getPaidPlanCtaLabel("PRO")
+    : `${getPaidPlanCtaLabel("PRO")} — ${proSelectedPriceLabel}`;
+  const showPassLengthSelector = annualAvailableForPro || annualAvailableForPlus || proExamCycleAvailable;
 
   const formatBillingDate = (rawDate: string | null) => {
     if (!rawDate) {
@@ -948,7 +965,7 @@ export default function SettingsPage() {
             <div className="space-y-4 rounded-md border border-border bg-background p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Choose Your Plan</p>
-                {hasAnnualOption ? (
+                {showPassLengthSelector ? (
                   <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
                     <button
                       type="button"
@@ -959,24 +976,39 @@ export default function SettingsPage() {
                           : "text-foreground/60 hover:text-foreground"
                       }`}
                     >
-                      Monthly
+                      1 month
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCycle("YEARLY")}
-                      className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                        selectedCycle === "YEARLY"
-                          ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
-                          : "text-foreground/60 hover:text-foreground"
-                      }`}
-                    >
-                      Annual
-                      {proYearlySavingsPct ? (
-                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                          Save {proYearlySavingsPct}%
-                        </span>
-                      ) : null}
-                    </button>
+                    {proExamCycleAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCycle("EXAM_CYCLE")}
+                        className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                          selectedCycle === "EXAM_CYCLE"
+                            ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
+                            : "text-foreground/60 hover:text-foreground"
+                        }`}
+                      >
+                        90 days
+                      </button>
+                    ) : null}
+                    {annualAvailableForPro ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCycle("YEARLY")}
+                        className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                          selectedCycle === "YEARLY"
+                            ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
+                            : "text-foreground/60 hover:text-foreground"
+                        }`}
+                      >
+                        1 year
+                        {proYearlySavingsPct ? (
+                          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                            Save {proYearlySavingsPct}%
+                          </span>
+                        ) : null}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1012,8 +1044,8 @@ export default function SettingsPage() {
                     <p className="text-lg font-semibold text-foreground">{plusPlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{plusPlanConfig.description}</p>
                     <p className="text-xl font-semibold">{plusMonthlyPriceLabel}</p>
-                    {selectedCycle === "YEARLY" && !annualAvailableForPlus ? (
-                      <p className="text-xs text-foreground/50">Monthly billing only</p>
+                    {selectedCycle !== "MONTHLY" && !annualAvailableForPlus ? (
+                      <p className="text-xs text-foreground/50">Available as a 1-month pass</p>
                     ) : null}
                   </div>
                   <PlanFeatureList features={plusPlanConfig.features} />
@@ -1069,44 +1101,21 @@ export default function SettingsPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{proPlanConfig.name}</p>
                     <p className="text-lg font-semibold text-foreground">{proPlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{proPlanConfig.description}</p>
-                    <p className="text-xl font-semibold">
-                      {selectedCycle === "YEARLY" && annualAvailableForPro
-                        ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
-                        : proMonthlyPriceLabel}
-                    </p>
-                    {proExamCyclePriceLabel ? (
-                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                        90-Day Exam Pass: {proExamCyclePriceLabel}
-                      </p>
-                    ) : null}
+                    <p className="text-xl font-semibold">{proSelectedPriceLabel}</p>
                   </div>
                   <PlanFeatureList features={proPlanConfig.features} />
                   <p className="mb-5 text-xs text-foreground/55">{proPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan !== "PRO" ? (
-                      <>
-                        <ResponsiveActionButton
-                          type="button"
-                          className="w-full"
-                          onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
-                          loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
-                          loadingText="Redirecting..."
-                          action="studyPack"
-                          label={getPaidPlanCtaLabel("PRO")}
-                        />
-                        {proExamCyclePriceLabel ? (
-                          <ResponsiveActionButton
-                            type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => void handleStartCheckout("PRO", "EXAM_CYCLE")}
-                            loading={startingCheckoutKey === "PRO-EXAM_CYCLE"}
-                            loadingText="Redirecting..."
-                            action="studyPack"
-                            label={`Get Pro — ${proExamCyclePriceLabel}`}
-                          />
-                        ) : null}
-                      </>
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
+                        loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label={proCtaLabel}
+                      />
                     ) : (
                       <>
                         <Button variant="outline" className="w-full" disabled>Current Plan</Button>

@@ -63,6 +63,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 - **Intro pricing is a first-pass discount, not a recurrence.** Render as `₱149 for your first 1-month pass · ₱179 after` — never `first month, then ₱179/month`.
 - **Reassurances** live in shared constants in `plans.ts` (`PASS_MODEL_TAGLINE`, `PASS_QUOTA_REFRESH_NOTE`, `PASS_DATA_PERMANENCE_NOTE`, `PASS_ALL_ACCESS_NOTE`, `PASS_NO_AUTO_CHARGE_FOOTER`): one-time payment · never auto-charged; notes, Study Packs, and progress stay in the library after a pass ends; full access on desktop and mobile web (responsive web — there is no native app).
 - **Settings billing-status copy stays accurate** for an active pass (e.g. `Valid until …`, `Won't auto-renew`); only pre-purchase/marketing strings were reframed. No billing, quota, pass-duration, price, or checkout mechanics changed.
+- **Settings pass-length selector.** The Settings plans cards use one 3-segment selector (`1 month · 90 days · 1 year`, segments rendered by availability) instead of a `Monthly / Annual` toggle plus a separate exam-pass button. The selected length drives `effectiveProCycle`, a single Pro price line, and one CTA — `Get Pro` for the 1-month pass (the long monthly-intro string stays out of the button) and `Get Pro — <price>` for the 90-day / 1-year passes. Plus remains a 1-month pass only.
 
 ## Current plan messaging
 

@@ -341,7 +341,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    expect(await screen.findByText("90-Day Exam Pass: ₱599 / 90 days")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "90 days" }));
     fireEvent.click(screen.getByRole("button", { name: "Get Pro — ₱599 / 90 days" }));
 
     await waitFor(() => {
@@ -385,7 +385,7 @@ describe("Settings page cancellation flow", () => {
     expect(screen.queryByRole("button", { name: "Get Pro — ₱599 / 90 days" })).not.toBeInTheDocument();
   });
 
-  it("starts Pro annual checkout after switching to Annual tab", async () => {
+  it("starts Pro annual checkout after switching to the 1-year pass", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...proProfile,
       planType: "FREE",
@@ -406,8 +406,8 @@ describe("Settings page cancellation flow", () => {
     render(<SettingsPage />);
 
     await screen.findByRole("button", { name: "Get Pro" });
-    fireEvent.click(screen.getByRole("button", { name: /Annual/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Get Pro" }));
+    fireEvent.click(screen.getByRole("button", { name: /1 year/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Get Pro/ }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
