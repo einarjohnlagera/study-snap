@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +58,7 @@ class EmailVerificationServiceTest {
         properties.getEmail().setVerificationTokenHours(24);
         properties.getEmail().setResendCooldownSeconds(60);
         service = new EmailVerificationService(tokenRepository, userRepository, emailService, emailTemplateService, emailLogRepository, properties);
+        lenient().when(emailService.sendEmail(any(EmailMessage.class))).thenReturn(true);
     }
 
     @Test
@@ -97,6 +99,11 @@ class EmailVerificationServiceTest {
         assertThat(sentEmail.subject()).isEqualTo("Verify your email for NoteLib");
         assertThat(sentEmail.htmlBody()).isEqualTo("<p>Verify</p>");
         assertThat(sentEmail.headers()).isEmpty();
+        ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
+        verify(emailLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.EMAIL_VERIFICATION);
+        assertThat(logCaptor.getValue().getUserId()).isEqualTo(user.getId());
+        verify(emailLogRepository, never()).countBySentAtGreaterThanEqual(any(OffsetDateTime.class));
     }
 
     @Test

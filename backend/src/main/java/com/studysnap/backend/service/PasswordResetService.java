@@ -2,10 +2,13 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.entity.EmailLogEntity;
 import com.studysnap.backend.entity.PasswordResetTokenEntity;
+import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidPasswordResetTokenException;
+import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.PasswordResetTokenRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +43,7 @@ public class PasswordResetService {
     private final EmailTemplateService emailTemplateService;
     private final StudySnapProperties properties;
     private final PasswordEncoder passwordEncoder;
+    private final EmailLogRepository emailLogRepository;
 
     public SimpleMessageResponse sendPasswordResetEmail(String email) {
         String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
@@ -80,12 +84,15 @@ public class PasswordResetService {
                 )
         );
 
-        emailService.sendEmail(new EmailMessage(
+        boolean sent = emailService.sendEmail(new EmailMessage(
                 user.getEmail(),
                 renderedTemplate.subject(),
                 renderedTemplate.htmlBody(),
                 renderedTemplate.textBody()
         ));
+        if (sent) {
+            logEmailSent(user.getId(), now);
+        }
 
         return new SimpleMessageResponse(GENERIC_SUCCESS_MESSAGE);
     }
@@ -172,6 +179,15 @@ public class PasswordResetService {
             return "there";
         }
         return user.getFirstName().trim();
+    }
+
+    private void logEmailSent(UUID userId, OffsetDateTime now) {
+        EmailLogEntity entity = new EmailLogEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setUserId(userId);
+        entity.setEmailType(RetentionEmailType.PASSWORD_RESET);
+        entity.setSentAt(now);
+        emailLogRepository.save(entity);
     }
 
     private String generateRawToken() {

@@ -6,6 +6,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.EmailMessage;
 import com.studysnap.backend.service.EmailService;
+import com.studysnap.backend.service.SuppressedEmailService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,9 +44,14 @@ public class ResendEmailService implements EmailService {
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final SuppressedEmailService suppressedEmailService;
 
     @Override
-    public void sendEmail(EmailMessage message) {
+    public boolean sendEmail(EmailMessage message) {
+        if (suppressedEmailService.isSuppressed(message.to())) {
+            log.info("email.suppressed.skip recipient={}", message.to());
+            return false;
+        }
         ensureConfigured();
 
         String payload = serializePayload(message);
@@ -62,7 +68,7 @@ public class ResendEmailService implements EmailService {
             HttpResponse<String> response = executeSend(request);
             int statusCode = response.statusCode();
             if (statusCode >= 200 && statusCode < 300) {
-                return;
+                return true;
             }
             if (statusCode == HTTP_TOO_MANY_REQUESTS && attempt < MAX_SEND_ATTEMPTS) {
                 waitBeforeRetry(response, attempt);

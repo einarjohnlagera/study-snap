@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -92,6 +93,7 @@ class RetentionServiceTest {
                                 "List-Unsubscribe-Post", "List-Unsubscribe=One-Click"
                         )
                 ));
+        lenient().when(emailService.sendEmail(any(EmailMessage.class))).thenReturn(true);
     }
 
     @Test
@@ -192,6 +194,7 @@ class RetentionServiceTest {
         )).thenReturn(false);
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(any(UUID.class), any(RetentionEmailType.class), any(OffsetDateTime.class)))
                 .thenReturn(false);
+        when(emailLogRepository.countBySentAtGreaterThanEqual(any(OffsetDateTime.class))).thenReturn(0L);
         when(emailTemplateService.render(eq("retention-inactivity-reminder"), any()))
                 .thenReturn(new EmailTemplateService.RenderedEmailTemplate(
                         "Continue your study pack 📚",
@@ -221,6 +224,168 @@ class RetentionServiceTest {
         verify(emailLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.INACTIVITY);
         assertThat(logCaptor.getValue().getUserId()).isEqualTo(user.getId());
+    }
+
+    @Test
+    void sendDailyEmails_exhaustsInactivityBudgetWhenSentTodayAlreadyUsesRetentionPool() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(emailLogRepository.countBySentAtGreaterThanEqual(any(OffsetDateTime.class))).thenReturn(70L);
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
+                .thenReturn(true);
+        when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(user.getId()),
+                anyCollection(),
+                eq(now.minusDays(3))
+        )).thenReturn(false);
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.INACTIVITY,
+                now.minusDays(3)
+        )).thenReturn(false);
+
+        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails(now);
+
+        assertThat(summary.inactivitySent()).isZero();
+        assertThat(summary.inactivityBudget()).isZero();
+        assertThat(summary.sentToday()).isEqualTo(70L);
+        assertThat(summary.inactivityAttempted()).isZero();
+        assertThat(summary.inactivitySkippedForBudget()).isEqualTo(1);
+        verify(emailTemplateService, never()).render(eq("retention-inactivity-reminder"), any());
+        verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
+    }
+
+    @Test
+    void sendDailyEmails_capsInactivityBatchWithConfiguredBudget() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getEmail().setAppBaseUrl("https://www.notelib.app");
+        properties.getEmail().setDailyLimit(80);
+        properties.getEmail().setTransactionalReserve(25);
+        RetentionService budgetedService = new RetentionService(
+                properties,
+                userRepository,
+                studyPackRepository,
+                quickReviewSessionRepository,
+                activityEventRepository,
+                emailLogRepository,
+                emailTemplateService,
+                emailService,
+                emailUnsubscribeLinkService
+        );
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
+        UserEntity firstUser = verifiedUser(UUID.fromString("00000000-0000-0000-0000-000000000011"), "[email protected]");
+        UserEntity secondUser = verifiedUser(UUID.fromString("00000000-0000-0000-0000-000000000012"), "[email protected]");
+        UserEntity thirdUser = verifiedUser(UUID.fromString("00000000-0000-0000-0000-000000000013"), "[email protected]");
+
+        when(emailLogRepository.countBySentAtGreaterThanEqual(any(OffsetDateTime.class))).thenReturn(53L);
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(firstUser, secondUser, thirdUser));
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+        for (UserEntity user : List.of(firstUser, secondUser, thirdUser)) {
+            when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
+                    .thenReturn(true);
+            when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                    eq(user.getId()),
+                    anyCollection(),
+                    eq(now.minusDays(3))
+            )).thenReturn(false);
+            when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                    user.getId(),
+                    RetentionEmailType.INACTIVITY,
+                    now.minusDays(3)
+            )).thenReturn(false);
+        }
+        when(emailTemplateService.render(eq("retention-inactivity-reminder"), any()))
+                .thenReturn(new EmailTemplateService.RenderedEmailTemplate("Subject", "<p>Body</p>", "Body"));
+
+        RetentionService.DailyRetentionDispatchSummary summary = budgetedService.sendDailyEmails(now);
+
+        assertThat(summary.inactivityBudget()).isEqualTo(2);
+        assertThat(summary.inactivityAttempted()).isEqualTo(2);
+        assertThat(summary.inactivitySent()).isEqualTo(2);
+        assertThat(summary.inactivitySkippedForBudget()).isEqualTo(1);
+        ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
+        verify(emailLogRepository, org.mockito.Mockito.times(2)).save(logCaptor.capture());
+        assertThat(logCaptor.getAllValues())
+                .extracting(EmailLogEntity::getUserId)
+                .containsExactly(firstUser.getId(), secondUser.getId());
+    }
+
+    @Test
+    void sendDailyEmails_withDefaultLimitAndTenSentTodaySendsAtMostFiftyInactivityReminders() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
+        List<UserEntity> users = IntStream.rangeClosed(1, 51)
+                .mapToObj(index -> verifiedUser(
+                        UUID.fromString(String.format("00000000-0000-0000-0000-%012d", index)),
+                        "student" + index + "@example.com"
+                ))
+                .toList();
+
+        when(emailLogRepository.countBySentAtGreaterThanEqual(any(OffsetDateTime.class))).thenReturn(10L);
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(users);
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+        for (UserEntity user : users) {
+            when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
+                    .thenReturn(true);
+            when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                    eq(user.getId()),
+                    anyCollection(),
+                    eq(now.minusDays(3))
+            )).thenReturn(false);
+            when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                    user.getId(),
+                    RetentionEmailType.INACTIVITY,
+                    now.minusDays(3)
+            )).thenReturn(false);
+        }
+        when(emailTemplateService.render(eq("retention-inactivity-reminder"), any()))
+                .thenReturn(new EmailTemplateService.RenderedEmailTemplate("Subject", "<p>Body</p>", "Body"));
+
+        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails(now);
+
+        assertThat(summary.inactivityBudget()).isEqualTo(50);
+        assertThat(summary.inactivityAttempted()).isEqualTo(50);
+        assertThat(summary.inactivitySent()).isEqualTo(50);
+        assertThat(summary.inactivitySkippedForBudget()).isEqualTo(1);
+        verify(emailLogRepository, org.mockito.Mockito.times(50)).save(any(EmailLogEntity.class));
+    }
+
+    @Test
+    void sendDailyEmails_killSwitchSkipsInactivityDispatch() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getEmail().setReengagementEnabled(false);
+        RetentionService disabledService = new RetentionService(
+                properties,
+                userRepository,
+                studyPackRepository,
+                quickReviewSessionRepository,
+                activityEventRepository,
+                emailLogRepository,
+                emailTemplateService,
+                emailService,
+                emailUnsubscribeLinkService
+        );
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
+
+        when(emailLogRepository.countBySentAtGreaterThanEqual(any(OffsetDateTime.class))).thenReturn(10L);
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        RetentionService.DailyRetentionDispatchSummary summary = disabledService.sendDailyEmails(now);
+
+        assertThat(summary.inactivitySent()).isZero();
+        assertThat(summary.inactivityAttempted()).isZero();
+        assertThat(summary.inactivitySkippedForBudget()).isZero();
+        verify(userRepository, never()).findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE);
+        verify(emailService, never()).sendEmail(any(EmailMessage.class));
     }
 
     @Test
@@ -308,9 +473,13 @@ class RetentionServiceTest {
     }
 
     private UserEntity verifiedUser() {
+        return verifiedUser(UUID.fromString("00000000-0000-0000-0000-000000000001"), "[email protected]");
+    }
+
+    private UserEntity verifiedUser(UUID userId, String email) {
         UserEntity user = new UserEntity();
-        user.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        user.setEmail("[email protected]");
+        user.setId(userId);
+        user.setEmail(email);
         user.setFirstName("Note");
         user.setDisplayName("Note");
         user.setStatus(UserStatus.ACTIVE);

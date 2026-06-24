@@ -358,12 +358,16 @@ public class StudySnapProperties {
     public static class Email {
         private String resendApiKey = "";
         private String resendApiBaseUrl = "https://api.resend.com";
+        private String resendWebhookSecret = "";
         private String from = "";
         private String support = "support@mail.notelib.app";
         private String appBaseUrl = "http://localhost:3000";
         private int verificationTokenHours = 24;
         private int resendCooldownSeconds = 60;
         private int passwordResetTokenMinutes = 60;
+        private int dailyLimit = 100;
+        private int transactionalReserve = 40;
+        private boolean reengagementEnabled = true;
     }
 
     @Getter
