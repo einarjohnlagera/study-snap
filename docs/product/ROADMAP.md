@@ -222,9 +222,9 @@ Study Plan detail now launches **the profile's premium exam mode over the plan's
 
 **Deferred polish within this release (candidates):**
 
-- **"Review first" advisory modal** — if the learner hasn't taken a Quick Review or Challenge Quiz on some/all of the plan's notes, surface an advisory before launching the premium exam recommending they review first, while still letting them continue. Optional polish; not required to ship Thread 2.
-- **Plan-launch back link target** — when a premium exam is launched from a Study Plan (`collectionId` present), the prescreen back link currently reads "← Note" and returns to the source note. It should return to the originating Study Plan (`/collections/{collectionId}`, profile-aware label e.g. "Study Plan" / "Review Set") so the user lands back where they started the exam.
-- **Plan note selection count + scoping copy** — a 3-note plan surfaces only 2 selectable notes in the prescreen picker because the primary note is implicit ("Built from …") and not shown in the additional-notes list, so it reads as "2 of 3." (All 3 are in fact included — the footer shows "3 notes · 25 questions".) Make the plan-scoped picker show all plan notes clearly (e.g. surface the primary as a fixed first entry, or reword to "Add up to N more notes from this plan"), and fix the stale "from this subject" copy on plan launches — plan launches are scoped to the plan, not the subject.
+- **Plan-launch back link target** *(shipped)* — plan-launched Long/Board/Interview prescreens route their back link to `/collections/{collectionId}` with the profile-aware label (`Study Plan` / `Review Set` / `Collection`) instead of "← Note".
+- **Plan note selection count + scoping copy** *(shipped, reword approach)* — the plan-scoped picker now reads "Add up to N more notes from this plan" instead of "from this subject"; the primary note stays implicit ("Built from …") and the footer total ("3 notes · 25 questions") confirms all plan notes are included.
+- **"Review first" advisory modal** *(still deferred)* — if the learner hasn't taken a Quick Review or Challenge Quiz on some/all of the plan's notes, surface an advisory before launching the premium exam recommending they review first, while still letting them continue. Optional polish; not required to ship Thread 2.
 
 ### Thread 3 — Pricing copy reframe (one-time pass clarity) (shipped)
 

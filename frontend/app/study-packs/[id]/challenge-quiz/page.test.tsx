@@ -576,6 +576,8 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: /Plan Board Three/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Plan Board Four/ })).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByRole("button", { name: /Outside Board Note/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Add up to 2 more notes from this plan.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Review Set/ })).toHaveAttribute("href", "/collections/collection-1");
   });
 
   it("falls back to the normal Board Exam source picker when collection lookup fails", async () => {

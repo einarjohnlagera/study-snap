@@ -20,6 +20,7 @@ import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
 import {PaywallModal} from "@/components/billing/paywall-modal";
 import {ToastMessage} from "@/components/ui/toast-message";
 import {getAuthUser} from "@/lib/auth";
+import {getCollectionLabels} from "@/lib/collection-labels";
 import {
     completeLongExamSession,
     forfeitLongExamSession,
@@ -201,6 +202,8 @@ export default function LongExamPage() {
     const startedTrackedRef = useRef(false);
 
     const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : `/notes/${noteId}`), [note, noteId]);
+    const planBackHref = collectionId ? `/collections/${collectionId}` : noteDetailHref;
+    const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
     const studyPackId = note?.studyPackId ?? null;
     const modeSelectHref = studyPackId ? `/study-packs/${studyPackId}/challenge-quiz` : noteDetailHref;
     const totalQuestions = quiz.length;
@@ -781,7 +784,7 @@ export default function LongExamPage() {
     if (loading) {
         return (
             <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-                <BackLink href={noteDetailHref} label="Note" />
+                <BackLink href={planBackHref} label={planBackLabel} />
                 <Card className="space-y-4 p-4 sm:p-6">
                     <div className="h-4 w-36 animate-pulse rounded bg-foreground/10"/>
                     <div className="h-8 w-3/4 animate-pulse rounded bg-foreground/10"/>
@@ -812,7 +815,7 @@ export default function LongExamPage() {
                 />
             ) : (
                 <div className="flex items-center justify-between gap-3">
-                    <BackLink href={noteDetailHref} label="Note"/>
+                    <BackLink href={planBackHref} label={planBackLabel}/>
                 </div>
             )}
 
@@ -929,7 +932,9 @@ export default function LongExamPage() {
                                             Span this exam across more notes
                                         </h2>
                                         <p className="text-sm text-foreground/70">
-                                            Add up to 3 ready Study Packs from this subject.
+                                            {collectionId
+                                                ? `Add up to ${LONG_EXAM_MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                                                : `Add up to ${LONG_EXAM_MAX_ADDITIONAL_NOTES} ready Study Packs from this subject.`}
                                         </p>
                                     </div>
                                     <div className="mt-4 grid gap-2">

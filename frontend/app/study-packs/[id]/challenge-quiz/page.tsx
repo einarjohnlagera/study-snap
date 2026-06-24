@@ -28,6 +28,7 @@ import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
@@ -358,6 +359,8 @@ export default function ChallengeQuizPage() {
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const [generateMoreToast, setGenerateMoreToast] = useState<string | null>(null);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const planBackHref = collectionId ? `/collections/${collectionId}` : noteDetailHref;
+  const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const groupedLearnerLevels = useMemo(
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
@@ -1341,7 +1344,7 @@ export default function ChallengeQuizPage() {
         )
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <BackLink href={noteDetailHref} label="Note" />
+          <BackLink href={planBackHref} label={planBackLabel} />
         </div>
       )}
 
@@ -1700,7 +1703,9 @@ export default function ChallengeQuizPage() {
                   Span this exam across more notes
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  Add up to 2 ready Study Packs from this subject.
+                  {collectionId
+                    ? `Add up to ${BOARD_EXAM_MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                    : `Add up to ${BOARD_EXAM_MAX_ADDITIONAL_NOTES} ready Study Packs from this subject.`}
                 </p>
               </div>
               {sourceNotesLoading ? (

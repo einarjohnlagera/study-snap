@@ -77,6 +77,8 @@ The Study Plan premium-exam launch carries `collectionId` in the URL, not a call
 
 If the collection cannot be loaded from a prescreen, the exam falls back to its normal single-note/same-subject setup. The Teacher Exam Builder path is unchanged and still receives the collection id plus quiz-ready note ids.
 
+On a plan launch (`collectionId` present) the prescreen back link returns to the originating plan (`/collections/{collectionId}`) using the profile-aware label from `getCollectionLabels` (`Study Plan` / `Review Set` / `Collection`) rather than "← Note", and the additional-notes picker reads "Add up to N more notes from this plan" (the primary note stays implicit as "Built from …"; the footer total confirms all plan notes are included). Without `collectionId`, the back link and picker copy are unchanged.
+
 ## Ownership Rules
 
 Collections remain owner-private by default.
