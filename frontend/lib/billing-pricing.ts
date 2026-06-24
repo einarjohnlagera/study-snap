@@ -105,5 +105,21 @@ export function getExamCyclePriceLabel(
     return "Exam pass pricing unavailable";
   }
   const durationDays = cyclePricing.durationDays ?? 90;
-  return `${formatBillingAmount(cyclePricing.amount, currency)} / ${durationDays} days`;
+  return `${formatBillingAmount(cyclePricing.amount, currency)} / ${formatPassDuration(durationDays)}`;
+}
+
+// Express a pass duration in whole months for consistent labelling across surfaces
+// (e.g. a 90-day exam pass reads as "3 months", a 30-day pass as "1 month").
+export function formatPassDuration(durationDays: number): string {
+  const months = Math.max(1, Math.round(durationDays / 30));
+  return `${months} month${months === 1 ? "" : "s"}`;
+}
+
+// Percentage saved by a multi-cycle pass vs. buying the equivalent number of
+// regular 1-month passes. Returns 0 when not actually cheaper (callers guard on > 0).
+export function passSavingsPct(passAmount: number | null, monthlyAmount: number | null, cycles: number): number {
+  if (!passAmount || !monthlyAmount || cycles <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.round((1 - passAmount / (monthlyAmount * cycles)) * 100));
 }

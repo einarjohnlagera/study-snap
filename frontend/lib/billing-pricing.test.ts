@@ -1,4 +1,4 @@
-import { getExamCyclePriceLabel, resolveCyclePricing } from "./billing-pricing";
+import { formatPassDuration, getExamCyclePriceLabel, passSavingsPct, resolveCyclePricing } from "./billing-pricing";
 import type { BillingPricingResponse } from "./api";
 
 const pricing: BillingPricingResponse = {
@@ -24,6 +24,22 @@ describe("billing pricing helpers", () => {
   });
 
   it("formats the exam cycle price with its access duration", () => {
-    expect(getExamCyclePriceLabel(pricing, "PRO")).toBe("₱599 / 90 days");
+    expect(getExamCyclePriceLabel(pricing, "PRO")).toBe("₱599 / 3 months");
+  });
+
+  it("expresses pass durations in whole months", () => {
+    expect(formatPassDuration(30)).toBe("1 month");
+    expect(formatPassDuration(90)).toBe("3 months");
+    expect(formatPassDuration(365)).toBe("12 months");
+  });
+
+  it("computes pass savings vs. the equivalent regular monthly passes", () => {
+    // 90-day pass ₱599 vs three ₱249 monthly passes (₱747) ≈ 20% off
+    expect(passSavingsPct(599, 249, 3)).toBe(20);
+    // 1-year pass ₱1,999 vs twelve ₱249 monthly passes (₱2,988) ≈ 33% off
+    expect(passSavingsPct(1999, 249, 12)).toBe(33);
+    // not cheaper / missing inputs → 0 (callers guard on > 0)
+    expect(passSavingsPct(800, 249, 3)).toBe(0);
+    expect(passSavingsPct(null, 249, 3)).toBe(0);
   });
 });
