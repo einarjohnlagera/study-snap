@@ -2,7 +2,7 @@
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: the monetization leak is conversion, not engagement: premium exam value is under-surfaced, and pricing still reads like a recurring subscription even though paid plans are one-time, time-boxed passes. This patch focuses on top-of-funnel exposure and desire by moving premium exam paywalls back to the Start CTA, adding a Study Plan premium-exam entry point for non-teachers, and clarifying one-time pass pricing copy. Checkout conversion itself remains measured through the v0.31.2 funnel instrumentation. See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
 
