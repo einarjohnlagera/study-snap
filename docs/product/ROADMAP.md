@@ -224,7 +224,7 @@ Study Plan detail now launches **the profile's premium exam mode over the plan's
 
 - **Plan-launch back link target** *(shipped)* — plan-launched Long/Board/Interview prescreens route their back link to `/collections/{collectionId}` with the profile-aware label (`Study Plan` / `Review Set` / `Collection`) instead of "← Note".
 - **Plan note selection count + scoping copy** *(shipped, reword approach)* — the plan-scoped picker now reads "Add up to N more notes from this plan" instead of "from this subject"; the primary note stays implicit ("Built from …") and the footer total ("3 notes · 25 questions") confirms all plan notes are included.
-- **"Review first" advisory modal** *(still deferred)* — if the learner hasn't taken a Quick Review or Challenge Quiz on some/all of the plan's notes, surface an advisory before launching the premium exam recommending they review first, while still letting them continue. Optional polish; not required to ship Thread 2.
+- **"Review first" advisory modal** *(shipped)* — launching a plan's premium exam when one or more exam-eligible plan notes are unpracticed (`lastSessionCompletedAt === null`) surfaces a soft advisory ("Review before the exam?") with `Review first` / `Start the exam anyway`. Recommendation only — never blocks; routes straight through when all eligible notes are practiced. No persistence (re-evaluated each launch).
 
 ### Thread 3 — Pricing copy reframe (one-time pass clarity) (shipped)
 

@@ -404,6 +404,7 @@ describe("CollectionDetailPageClient", () => {
         ...item,
         studyPackStatus: "STUDY_PACK_READY",
         generatedQuizId: null,
+        lastSessionCompletedAt: "2026-06-02T00:00:00Z",
       })),
     }));
 
@@ -414,6 +415,45 @@ describe("CollectionDetailPageClient", () => {
 
     fireEvent.click(examButton);
 
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
+  });
+
+  it("advises review first when a plan note has not been practiced, then proceeds on confirm", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "STUDY_PACK_READY",
+        lastSessionCompletedAt: null,
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Take the Long Exam" }));
+
+    // Modal intercepts the launch; CTA does not route yet.
+    expect(await screen.findByText("Review before the exam?")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start the exam anyway" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
+  });
+
+  it("does not advise review when every plan note has been practiced", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "STUDY_PACK_READY",
+        lastSessionCompletedAt: "2026-06-02T00:00:00Z",
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Take the Long Exam" }));
+
+    expect(screen.queryByText("Review before the exam?")).not.toBeInTheDocument();
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
   });
 

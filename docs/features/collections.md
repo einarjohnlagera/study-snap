@@ -79,6 +79,8 @@ If the collection cannot be loaded from a prescreen, the exam falls back to its 
 
 On a plan launch (`collectionId` present) the prescreen back link returns to the originating plan (`/collections/{collectionId}`) using the profile-aware label from `getCollectionLabels` (`Study Plan` / `Review Set` / `Collection`) rather than "← Note", and the additional-notes picker reads "Add up to N more notes from this plan" (the primary note stays implicit as "Built from …"; the footer total confirms all plan notes are included). Without `collectionId`, the back link and picker copy are unchanged.
 
+Before launching, if one or more exam-eligible (Study Pack-ready) plan notes have not been practiced (`lastSessionCompletedAt === null`), the premium-exam CTA surfaces a soft advisory modal ("Review before the exam?") with `Review first` (stay on the plan) and `Start the exam anyway` (proceed). It is a recommendation, never a block, and routes straight through when every eligible note is already practiced. There is no persistence — it re-evaluates on each launch. The Teacher Exam Builder CTA is unaffected.
+
 ## Ownership Rules
 
 Collections remain owner-private by default.
