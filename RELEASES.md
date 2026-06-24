@@ -4,14 +4,17 @@
 
 **Status: In Progress**
 
-Theme: v0.32.1 surfaced the premium exams and reframed pricing — but conversion is still ~0 of 158 users. This patch is the honest follow-through: diagnose *where* the paywall→checkout funnel breaks before changing anything, make the pricing/quota claims accurate (the exam "sessions" are really per-source-note units), fix the plan-launched exam prescreen polish, and evaluate the thin Plus tier. **Anti-drift: do not raise exam quota numbers without funnel data** — at 0 paying users, quota size is not the proven constraint, and exams are the most expensive operation to serve. No billing/quota mechanics change; copy + diagnosis + small fixes. See `docs/product/ROADMAP.md` for full scope.
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. The funnel diagnosis ran first and **re-scoped this release**: the binding blocker is a **broken checkout** (6 upgrade clicks → 0 `CHECKOUT_INITIATED` → 0 paid), with **near-zero W1→W2 retention (5.6%)** as the deeper leak. Activation (68.6%) and the value loop (58.8%) are healthy; Free is not too generous (intent exists, the transaction is broken). **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; checkout and retention are. Full data in `docs/product/conversion-funnel-finding.md`; see `docs/product/ROADMAP.md` for sequencing.
 
-### Planned Scope
+### Planned Scope (re-prioritized after the funnel diagnosis)
 
-- **Plan-launch prescreen polish** — hide the "Choose another mode" button on Long/Board/Interview prescreens when the exam was launched from a Study Plan (`collectionId` present), since there is no mode-selection to return to in that flow.
-- **Quota-label honesty** — the pricing card shows "Long Exam (12 sessions / month)" and "Board Exam Mode (10 sessions / month)", but the quota deducts per source note (`additionalStudyPackIds.size() + 1`), so a multi-note exam consumes multiple. Relabel to source-note units and add a clarifier. Copy only — no quota mechanics or number change.
-- **Conversion funnel diagnosis** — read the v0.31.2/v0.32.1 paywall→checkout analytics (paywall-reach rate, `UPGRADE_CLICKED` → `CHECKOUT_INITIATED` → `SUBSCRIPTION_STARTED`) to locate where the 0/158 actually drop, before any pricing/quota change. Analysis (and any missing instrumentation), not a quota tweak.
-- **Plus-tier reason-to-exist (exploration)** — Plus currently has zero exam access, making it a dead tier for the exam-prep audience. Evaluate giving Plus a Long Exam taste or repositioning; validate against funnel data before building.
+- **Conversion funnel diagnosis** *(done)* — read prod `/admin/funnel`; finding written to `docs/product/conversion-funnel-finding.md`. Drives the priorities below.
+- **Fix broken checkout (P0)** — 6 upgrade clicks produced 0 Xendit checkouts; `PaymentService.create` throws before the invoice is created. Root-cause from prod logs (Xendit config / `createInvoice` / `resolveCheckoutSelection`), fix, and verify a real checkout opens end-to-end. This is the entire conversion engine.
+- **Retention diagnosis (P1)** — W1→W2 retention is 5.6% (recent cohorts ~0%). Diagnose why activated users don't return and define one scoped lever to test.
+- **Close instrumentation gaps** — extend free-quota-hit beyond study packs (quiz/adaptive/exam); add a `CHECKOUT_FAILED` analytics event so the P0 is self-diagnosing on `/admin/funnel`.
+- **Quota-label honesty** *(secondary)* — relabel "Long Exam (12 sessions)" / "Board Exam (10 sessions)" as per-source-note units + clarifier, through the shared plan config. Copy only.
+- **Plan-launch prescreen polish** *(secondary)* — hide "Choose another mode" on prescreens launched from a Study Plan (`collectionId` present).
+- **Plus-tier reason-to-exist** *(deferred)* — pointless to reposition a paid tier no one can currently buy; revisit once checkout works and conversion data exists.
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity
 
