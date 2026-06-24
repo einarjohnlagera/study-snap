@@ -11,6 +11,11 @@ import { formatBillingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel,
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import {
   type ComparisonValue,
+  PASS_ALL_ACCESS_NOTE,
+  PASS_DATA_PERMANENCE_NOTE,
+  PASS_MODEL_TAGLINE,
+  PASS_NO_AUTO_CHARGE_FOOTER,
+  PASS_QUOTA_REFRESH_NOTE,
   PLAN_COMPARISON_ROWS,
   TEACHER_PLUS_EXPORT_CALLOUT,
   getPaidPlanCtaLabel,
@@ -71,11 +76,11 @@ function resolveFallbackCycleLabel(planType: PaidPlanType, region: ReturnType<ty
 
   return {
     monthly: introAmount === null
-      ? `${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`
-      : `${formatBillingAmount(introAmount, regionPricing.currency)} first month, then ${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`,
+      ? `${formatBillingAmount(planPricing.monthly, regionPricing.currency)} / 1 month`
+      : `${formatBillingAmount(introAmount, regionPricing.currency)} for your first 1-month pass · ${formatBillingAmount(planPricing.monthly, regionPricing.currency)} after`,
     yearly: planPricing.yearly === null
       ? null
-      : `${formatBillingAmount(planPricing.yearly, regionPricing.currency)}/year`,
+      : `${formatBillingAmount(planPricing.yearly, regionPricing.currency)} / 1 year`,
   };
 }
 
@@ -125,10 +130,10 @@ function PlanCard({
         <CardDescription className="leading-relaxed">{description}</CardDescription>
       </div>
       <div className="space-y-1">
-        <p className="text-xl font-semibold text-foreground">{monthlyLabel}</p>
-        {yearlyLabel ? <p className="text-sm text-foreground/70">{yearlyLabel}</p> : null}
-        {examCycleLabel ? <p className="text-sm text-foreground/70">{examCycleLabel}</p> : null}
-        {introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
+        <p className="text-xl font-semibold text-foreground">{examCycleLabel ?? monthlyLabel}</p>
+        <p className="text-xs text-foreground/60">{PASS_MODEL_TAGLINE}</p>
+        <p className="text-xs text-foreground/60">{PASS_QUOTA_REFRESH_NOTE}</p>
+        {!examCycleLabel && introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
       </div>
       <FeatureList features={highlights} />
       {callout ? (
@@ -138,31 +143,41 @@ function PlanCard({
       ) : null}
       <div className="space-y-2">
         <PremiumUpgradeButton
-          label={ctaLabel}
-          source={`pricing_plans_section_${planType.toLowerCase()}_monthly`}
+          label={examCycleLabel ? `${ctaLabel} — ${examCycleLabel}` : ctaLabel}
+          source={examCycleLabel ? "pricing_plans_section_pro_exam_cycle" : `pricing_plans_section_${planType.toLowerCase()}_monthly`}
           planType={planType}
-          billingCycle="MONTHLY"
+          billingCycle={examCycleLabel ? "EXAM_CYCLE" : "MONTHLY"}
           className="w-full"
         />
-        {yearlyLabel ? (
-          <PremiumUpgradeButton
-            label={planType === "PLUS" ? `${ctaLabel} Yearly` : "Go Pro Yearly"}
-            source={`pricing_plans_section_${planType.toLowerCase()}_yearly`}
-            planType={planType}
-            billingCycle="YEARLY"
-            variant="outline"
-            className="w-full"
-          />
-        ) : null}
-        {examCycleLabel ? (
-          <PremiumUpgradeButton
-            label="Go Pro — 90-Day Exam Pass"
-            source="pricing_plans_section_pro_exam_cycle"
-            planType="PRO"
-            billingCycle="EXAM_CYCLE"
-            variant="outline"
-            className="w-full"
-          />
+        {examCycleLabel || yearlyLabel ? (
+          <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-foreground/60">
+            <span>Also available:</span>
+            {examCycleLabel ? (
+              <PremiumUpgradeButton
+                label={`1 month — ${monthlyLabel}`}
+                source={`pricing_plans_section_${planType.toLowerCase()}_monthly`}
+                planType={planType}
+                billingCycle="MONTHLY"
+                variant="ghost"
+                size="sm"
+                className="h-auto px-1 py-0 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+              />
+            ) : null}
+            {yearlyLabel ? (
+              <>
+                {examCycleLabel ? <span aria-hidden="true">·</span> : null}
+                <PremiumUpgradeButton
+                  label={`1 year — ${yearlyLabel}`}
+                  source={`pricing_plans_section_${planType.toLowerCase()}_yearly`}
+                  planType={planType}
+                  billingCycle="YEARLY"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-1 py-0 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+                />
+              </>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </Card>
@@ -196,14 +211,14 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
     : null;
 
   const plusIntroHint = billingPricing?.plus.monthly.introEligible && billingPricing.plus.monthly.introAmount !== null
-    ? `Intro offer: ${formatBillingAmount(billingPricing.plus.monthly.introAmount, billingPricing.currency)} for your first monthly checkout.`
+    ? `Intro offer: ${formatBillingAmount(billingPricing.plus.monthly.introAmount, billingPricing.currency)} on your first 1-month pass.`
     : pricingConfig.intro[displayRegion].plus.monthly !== null
-      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].plus.monthly, regionFallback.currency)} for your first monthly checkout.`
+      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].plus.monthly, regionFallback.currency)} on your first 1-month pass.`
       : null;
   const proIntroHint = billingPricing?.pro.monthly.introEligible && billingPricing.pro.monthly.introAmount !== null
-    ? `Intro offer: ${formatBillingAmount(billingPricing.pro.monthly.introAmount, billingPricing.currency)} for your first monthly checkout.`
+    ? `Intro offer: ${formatBillingAmount(billingPricing.pro.monthly.introAmount, billingPricing.currency)} on your first 1-month pass.`
     : pricingConfig.intro[displayRegion].pro.monthly !== null
-      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].pro.monthly, regionFallback.currency)} for your first monthly checkout.`
+      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].pro.monthly, regionFallback.currency)} on your first 1-month pass.`
       : null;
 
   return (
@@ -274,6 +289,10 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
         />
       </div>
 
+      <p className="text-sm leading-relaxed text-foreground/65">
+        {PASS_DATA_PERMANENCE_NOTE} {PASS_ALL_ACCESS_NOTE} {PASS_NO_AUTO_CHARGE_FOOTER}
+      </p>
+
       <Card className="overflow-hidden p-0">
         <div className="border-b border-border px-4 py-4 sm:px-6">
           <h3 className="text-lg font-semibold sm:text-xl">Plan comparison</h3>
@@ -314,16 +333,16 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
             <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
-            <p className="text-sm text-foreground/80">Plus: ₱{pricingConfig.price.PH.plus.monthly}/month</p>
-            <p className="text-sm text-foreground/80">Pro: ₱{pricingConfig.price.PH.pro.monthly}/month</p>
-            <p className="text-sm text-foreground/70">Pro yearly: ₱{pricingConfig.price.PH.pro.yearly?.toLocaleString()}</p>
-            <p className="text-xs text-foreground/60">Intro monthly offers: Plus ₱{pricingConfig.intro.PH.plus.monthly}, Pro ₱{pricingConfig.intro.PH.pro.monthly}</p>
+            <p className="text-sm text-foreground/80">Plus: ₱{pricingConfig.price.PH.plus.monthly} / 1-month pass</p>
+            <p className="text-sm text-foreground/80">Pro: ₱{pricingConfig.price.PH.pro.monthly} / 1-month pass</p>
+            <p className="text-sm text-foreground/70">Pro 1-year pass: ₱{pricingConfig.price.PH.pro.yearly?.toLocaleString()}</p>
+            <p className="text-xs text-foreground/60">First-pass intro: Plus ₱{pricingConfig.intro.PH.plus.monthly}, Pro ₱{pricingConfig.intro.PH.pro.monthly}</p>
           </div>
           <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
             <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>
-            <p className="text-sm text-foreground/80">Plus: ${pricingConfig.price.DEFAULT.plus.monthly}/month</p>
-            <p className="text-sm text-foreground/80">Pro: ${pricingConfig.price.DEFAULT.pro.monthly}/month</p>
-            <p className="text-sm text-foreground/70">Pro yearly: ${pricingConfig.price.DEFAULT.pro.yearly}/year</p>
+            <p className="text-sm text-foreground/80">Plus: ${pricingConfig.price.DEFAULT.plus.monthly} / 1-month pass</p>
+            <p className="text-sm text-foreground/80">Pro: ${pricingConfig.price.DEFAULT.pro.monthly} / 1-month pass</p>
+            <p className="text-sm text-foreground/70">Pro 1-year pass: ${pricingConfig.price.DEFAULT.pro.yearly}</p>
           </div>
         </div>
       </Card>
@@ -338,6 +357,8 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             { q: "Is NoteLib free?", a: "Yes. You can use the core note-to-study workflow for free up to the monthly limits." },
             { q: "Who is Plus for?", a: "Plus is for regular study sessions when Free limits start to feel tight but you do not need the advanced Pro features yet." },
             { q: "Who is Pro for?", a: "Pro is built for serious review and exam prep with Adaptive Practice, difficulty selection, Board Exam Mode, and the highest limits." },
+            { q: "Will I be charged again?", a: "No. Plus and Pro are one-time, time-boxed passes — they never auto-renew. Buy another pass when your next exam is near. Your usage limits refresh each month while a pass is active." },
+            { q: "What happens when my pass ends?", a: "Your notes, Study Packs, and progress stay in your library. You simply return to Free limits until you grab another pass." },
             { q: "Do prices vary by country?", a: "Yes. Backend pricing resolves your region and keeps PHP visibility clear for Xendit checkout." },
           ].map(({ q, a }) => (
             <div key={q} className="space-y-1">
@@ -383,8 +404,8 @@ export function SimplePricingSection() {
             <CardDescription className="text-sm leading-relaxed">{plusPlan.description}</CardDescription>
           </div>
           <div className="space-y-0.5">
-            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first month</p>
-            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly}/month</p>
+            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first 1-month pass</p>
+            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly} after · {PASS_MODEL_TAGLINE}</p>
           </div>
           <div className="grow">
             <FeatureList features={plusPlan.features} />
@@ -409,8 +430,8 @@ export function SimplePricingSection() {
             <CardDescription className="text-sm leading-relaxed">{proPlan.description}</CardDescription>
           </div>
           <div className="space-y-0.5">
-            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first month</p>
-            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly}/month</p>
+            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first 1-month pass</p>
+            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly} after · {PASS_MODEL_TAGLINE}</p>
           </div>
           <div className="grow">
             <FeatureList features={proPlan.features} />
@@ -422,7 +443,7 @@ export function SimplePricingSection() {
         </Card>
       </div>
       <p className="text-sm text-foreground/60">
-        Manual renewal. No automatic charges. Intro pricing applies to your first monthly checkout.
+        {PASS_QUOTA_REFRESH_NOTE} {PASS_DATA_PERMANENCE_NOTE} {PASS_NO_AUTO_CHARGE_FOOTER}
       </p>
     </section>
   );

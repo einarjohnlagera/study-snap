@@ -39,7 +39,7 @@ export default function PricingPage() {
               </Button>
             </Link>
             <PremiumUpgradeButton
-              label="Go Pro"
+              label="Get Pro"
               source="pricing_hero"
               planType="PRO"
               variant="outline"

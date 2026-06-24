@@ -24,6 +24,6 @@ describe("billing pricing helpers", () => {
   });
 
   it("formats the exam cycle price with its access duration", () => {
-    expect(getExamCyclePriceLabel(pricing, "PRO")).toBe("₱599 for 90 days");
+    expect(getExamCyclePriceLabel(pricing, "PRO")).toBe("₱599 / 90 days");
   });
 });

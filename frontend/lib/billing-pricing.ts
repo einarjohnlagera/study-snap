@@ -78,9 +78,9 @@ export function getBillingCyclePriceLabel(
     const monthlyAmount = formatBillingAmount(cyclePricing.amount, currency);
     if (cyclePricing.introEligible && cyclePricing.introAmount !== null) {
       const introAmount = formatBillingAmount(cyclePricing.introAmount, currency);
-      return `${introAmount} first month, then ${monthlyAmount}/month`;
+      return `${introAmount} for your first 1-month pass · ${monthlyAmount} after`;
     }
-    return `${monthlyAmount}/month`;
+    return `${monthlyAmount} / 1 month`;
   }
 
   if (billingCycle === "EXAM_CYCLE") {
@@ -90,9 +90,9 @@ export function getBillingCyclePriceLabel(
   const yearlyAmount = formatBillingAmount(cyclePricing.amount, currency);
   const yearlySavings = getYearlySavings(pricing, planType);
   if (yearlySavings > 0) {
-    return `${yearlyAmount}/year (Save ${formatBillingAmount(yearlySavings, currency)})`;
+    return `${yearlyAmount} / 1 year · save ${formatBillingAmount(yearlySavings, currency)}`;
   }
-  return `${yearlyAmount}/year`;
+  return `${yearlyAmount} / 1 year`;
 }
 
 export function getExamCyclePriceLabel(
@@ -105,5 +105,5 @@ export function getExamCyclePriceLabel(
     return "Exam pass pricing unavailable";
   }
   const durationDays = cyclePricing.durationDays ?? 90;
-  return `${formatBillingAmount(cyclePricing.amount, currency)} for ${durationDays} days`;
+  return `${formatBillingAmount(cyclePricing.amount, currency)} / ${durationDays} days`;
 }
