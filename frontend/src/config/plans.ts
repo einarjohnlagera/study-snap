@@ -18,6 +18,13 @@ export type PlanComparisonRow = {
 const EXPORT_HELPER = "PDF/DOCX for offline or classroom use";
 export const TEACHER_PLUS_EXPORT_CALLOUT = "Teachers get unlimited quiz exports on Plus.";
 
+// One-time pass framing — paid plans are time-boxed passes, not recurring subscriptions.
+export const PASS_MODEL_TAGLINE = "One-time payment · never auto-charged";
+export const PASS_QUOTA_REFRESH_NOTE = "Usage limits refresh each month during your pass.";
+export const PASS_DATA_PERMANENCE_NOTE = "Keep your notes, Study Packs, and progress after your pass ends.";
+export const PASS_ALL_ACCESS_NOTE = "Full access on desktop and mobile web.";
+export const PASS_NO_AUTO_CHARGE_FOOTER = "We never auto-charge — grab a pass again only when your next exam is near.";
+
 export const PLAN_ORDER: AppPlanType[] = ["FREE", "PLUS", "PRO"];
 
 export const PLANS: Record<AppPlanType, {
@@ -55,7 +62,7 @@ export const PLANS: Record<AppPlanType, {
     name: "Plus",
     title: "For regular study",
     description: "Perfect for students who want consistent review and better retention.",
-    ctaLabel: "Choose Plus",
+    ctaLabel: "Get Plus",
     adaptivePracticeMessage: "Train on weak areas (limited sessions)",
     features: [
       { label: `${pricingConfig.plus.studyPacksPerMonth} Study Packs / month` },
@@ -70,7 +77,7 @@ export const PLANS: Record<AppPlanType, {
     name: "Pro",
     title: "Best for exam prep",
     description: "Designed for serious learners preparing for board and entrance exams.",
-    ctaLabel: "Go Pro",
+    ctaLabel: "Get Pro",
     eyebrow: "Most popular",
     adaptivePracticeMessage: "Train on weak areas until you master them",
     features: [

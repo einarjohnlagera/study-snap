@@ -554,7 +554,7 @@ export default function SettingsPage() {
     if (proAnnualPricing?.available) return proAnnualPriceLabel;
     const yearly = pricingConfig.price[displayRegion].pro.yearly;
     if (!yearly) return null;
-    return `${formatPricingAmount(yearly, pricingConfig.price[displayRegion].currency)}/year`;
+    return `${formatPricingAmount(yearly, pricingConfig.price[displayRegion].currency)} / 1 year`;
   })();
   const effectivePlusCycle: BillingCycle = "MONTHLY";
   const effectiveProCycle: BillingCycle = selectedCycle === "YEARLY" && annualAvailableForPro ? "YEARLY" : "MONTHLY";
@@ -652,7 +652,7 @@ export default function SettingsPage() {
       ? "Valid until"
       : "Status";
   const subscriptionBillingCycleLabel = isPaidPlanType(subscriptionSummaryPlan)
-    ? `${formatSubscriptionBillingCycle(billingHistory?.billingType)} · Manual renewal`
+    ? `${formatSubscriptionBillingCycle(billingHistory?.billingType)} · Won't auto-renew`
     : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
   const cancellationAccessEndsAt = billingHistory?.cancellationEffectiveAt ?? billingHistory?.currentPeriodEnd ?? null;
@@ -1103,7 +1103,7 @@ export default function SettingsPage() {
                             loading={startingCheckoutKey === "PRO-EXAM_CYCLE"}
                             loadingText="Redirecting..."
                             action="studyPack"
-                            label="Go Pro — 90-Day Exam Pass"
+                            label={`Get Pro — ${proExamCyclePriceLabel}`}
                           />
                         ) : null}
                       </>
@@ -1128,7 +1128,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground/60">
-                Hosted checkout via Xendit. Access activates after payment confirmation. Manual renewal. ·{" "}
+                Hosted checkout via Xendit. Access activates after payment confirmation. One-time pass — we never auto-charge; usage limits refresh each month while a pass is active, and your library stays after it ends. ·{" "}
                 <Link href="/refund" className="underline underline-offset-2">
                   Refund Policy
                 </Link>

@@ -55,9 +55,9 @@ function buildFallbackMonthlyLabel(planType: "PLUS" | "PRO", region: ReturnType<
   const regularAmount = planType === "PLUS" ? regionPricing.plus.monthly : regionPricing.pro.monthly;
   const introAmount = planType === "PLUS" ? introPricing.plus.monthly : introPricing.pro.monthly;
   if (introAmount === null) {
-    return `${formatBillingAmount(regularAmount, regionPricing.currency)}/month`;
+    return `${formatBillingAmount(regularAmount, regionPricing.currency)} / 1 month`;
   }
-  return `${formatBillingAmount(introAmount, regionPricing.currency)} first month, then ${formatBillingAmount(regularAmount, regionPricing.currency)}/month`;
+  return `${formatBillingAmount(introAmount, regionPricing.currency)} for your first 1-month pass · ${formatBillingAmount(regularAmount, regionPricing.currency)} after`;
 }
 
 function resolvePaywallContext(

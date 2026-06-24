@@ -39,8 +39,8 @@ describe("PricingPlansSection", () => {
 
     render(<PricingPlansSection showHeading={false} />);
 
-    expect(screen.getByText("₱599 for 90 days")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go Pro — 90-Day Exam Pass" })).toBeInTheDocument();
+    expect(screen.getByText("₱599 / 90 days")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get Pro — ₱599 / 90 days" })).toBeInTheDocument();
   });
 
   it("does not render the exam-cycle checkout option for Plus or unavailable Pro pricing", () => {
@@ -65,7 +65,7 @@ describe("PricingPlansSection", () => {
 
     render(<PricingPlansSection showHeading={false} />);
 
-    expect(screen.queryByRole("button", { name: "Go Pro — 90-Day Exam Pass" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/for 90 days/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /\/ 90 days/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/90 days/)).not.toBeInTheDocument();
   });
 });

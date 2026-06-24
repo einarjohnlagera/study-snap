@@ -277,7 +277,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Choose Plus" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Get Plus" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
@@ -309,7 +309,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Go Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Get Pro" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
@@ -341,8 +341,8 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    expect(await screen.findByText("90-Day Exam Pass: ₱599 for 90 days")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Go Pro — 90-Day Exam Pass" }));
+    expect(await screen.findByText("90-Day Exam Pass: ₱599 / 90 days")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Get Pro — ₱599 / 90 days" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
@@ -381,8 +381,8 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    await screen.findByRole("button", { name: "Go Pro" });
-    expect(screen.queryByRole("button", { name: "Go Pro — 90-Day Exam Pass" })).not.toBeInTheDocument();
+    await screen.findByRole("button", { name: "Get Pro" });
+    expect(screen.queryByRole("button", { name: "Get Pro — ₱599 / 90 days" })).not.toBeInTheDocument();
   });
 
   it("starts Pro annual checkout after switching to Annual tab", async () => {
@@ -405,9 +405,9 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    await screen.findByRole("button", { name: "Go Pro" });
+    await screen.findByRole("button", { name: "Get Pro" });
     fireEvent.click(screen.getByRole("button", { name: /Annual/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Go Pro" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get Pro" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
@@ -425,7 +425,7 @@ describe("Settings page cancellation flow", () => {
     expect(
       screen.getByText("Your Pro access is active until Apr 1, 2026. Renew manually whenever you're ready."),
     ).toBeInTheDocument();
-    const cycleCells = screen.getAllByText(/Manual renewal/);
+    const cycleCells = screen.getAllByText(/Won't auto-renew/);
     expect(cycleCells.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -443,7 +443,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    expect(await screen.findByText("90-Day Exam Pass · Manual renewal")).toBeInTheDocument();
+    expect(await screen.findByText("90-Day Exam Pass · Won't auto-renew")).toBeInTheDocument();
   });
 
   it("shows cancel plan link for active Pro subscription", async () => {
