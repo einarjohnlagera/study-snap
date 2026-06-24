@@ -1258,7 +1258,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Choose Plus" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get Plus" })).not.toBeInTheDocument();
   });
 
   it("saves a new note after importing content", async () => {

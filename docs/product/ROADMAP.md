@@ -6,11 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No release is currently in progress. `v0.32.1 - Monetization Surfacing & Pricing Clarity` is the next candidate (parked, not yet kicked off).
+`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the latest release (last released). The next version has not been opened yet.
 
-`v0.32.0 - Account & Communication Controls` is the current documentation baseline (last released).
+`v0.32.0 - Account & Communication Controls` is the previous baseline.
 
-`v0.31.2 - Analytics Integrity & Funnel Visibility` is the previous baseline.
+`v0.31.2 - Analytics Integrity & Funnel Visibility` is the release before that.
 
 `v0.31.1 - Adoptable Study Plans Discovery & Status` is the release before that.
 
@@ -201,6 +201,50 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 ---
 
+## v0.32.1 - Monetization Surfacing & Pricing Clarity (released)
+
+Base branch for this release: `releases/v0.32.1`. Patch after v0.32.0; mostly frontend.
+
+Theme: the monetization leak is **conversion, not engagement** (prod ~2026-06: free-quota hit rate 0.0%, ~10 `UPGRADE_CLICKED` → 0 `SUBSCRIPTION_STARTED`). Two failure points: almost nobody **reaches** a paywall (premium exams aren't surfaced), and the few who click **drop at checkout** (the pricing surface reads like a recurring sub when plans are actually one-time passes). This release attacks the *surfacing/desire* half — surface the premium exams as paywall moments and clarify the pricing model — while the *checkout* half is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel. **Honest scope note:** these lift exposure + desire (top-of-funnel); they feed more clicks into a checkout that still converts ~0, so they must be paired with reading the checkout-conversion funnel, not sold as the conversion fix on their own.
+
+### Thread 1 — Premium-exam paywall at the Start CTA (shipped)
+
+Free and Plus users clicking a premium exam (Long Exam / Board Exam / Interview Practice) can open the exam prescreen and **see its strength**, then hit the paywall at the **Start CTA** — not be blocked at card-click. This reverts the prior card-click paywall behavior that hid the value.
+
+- Shipped as frontend-mostly: `PaywallModal` fires from the Start CTA for the three premium exams. Mode-selection cards still show the Pro badge, Start CTAs read as unlock actions for non-Pro users, and backend `FeatureGate` remains defense-in-depth.
+
+### Thread 2 — "Exam this plan" for non-teachers (Study Plan → premium exam) (shipped)
+
+Study Plan detail now launches **the profile's premium exam mode over the plan's notes**, pre-selected and capped at the existing per-exam note limit (a thin layer over the existing multi-note flow — the backend already supports multi-note for all three modes: `LongExamService` covers Long + Board, `InterviewPracticeService.resolveAdditionalNoteIds` covers Interview). Profile → mode mapping is driven by `resolvePlanPremiumExamMode` in `exam-mode-visibility.ts` (no hardcoded profile checks):
+
+- Student → Long Exam · BOARD_EXAM → Board Exam (fixed set) · Professional → Interview Practice · Teacher → unchanged (keeps the DOCX Exam Builder) · profiles with no premium mode (e.g. PARENT) → CTA hidden.
+- Shipped as frontend-only: a profile-aware CTA (`Take the Long Exam` / `Take the Board Exam` / `Start Interview Practice`) routes with `collectionId`; each prescreen intersects that plan with the user's Study Pack-ready notes, scopes the picker to plan notes only, and pre-selects up to the existing cap. Eligibility is Study Pack readiness only (not a pre-generated quiz). Pro-gated users land on the Thread 1 Start-CTA paywall after seeing the plan-scoped setup.
+
+**Deferred polish within this release (candidates):**
+
+- **Plan-launch back link target** *(shipped)* — plan-launched Long/Board/Interview prescreens route their back link to `/collections/{collectionId}` with the profile-aware label (`Study Plan` / `Review Set` / `Collection`) instead of "← Note".
+- **Plan note selection count + scoping copy** *(shipped, reword approach)* — the plan-scoped picker now reads "Add up to N more notes from this plan" instead of "from this subject"; the primary note stays implicit ("Built from …") and the footer total ("3 notes · 25 questions") confirms all plan notes are included.
+- **"Review first" advisory modal** *(shipped)* — launching a plan's premium exam when one or more exam-eligible plan notes are unpracticed (`lastSessionCompletedAt === null`) surfaces a soft advisory ("Review before the exam?") with `Review first` / `Start the exam anyway`. Recommendation only — never blocks; routes straight through when all eligible notes are practiced. No persistence (re-evaluated each launch).
+
+### Thread 3 — Pricing copy reframe (one-time pass clarity) (shipped)
+
+The paid plans are **one-time, time-boxed passes with no auto-charge**, but the surface read like a recurring subscription — "/month" prices, intro "first month, then …/month" copy, a "Manual renewal" footer, and redundant CTAs. **Copy + card layout only — no billing/quota mechanics changed.**
+
+Shipped: prices now read as duration (`₱X / 1 month` · `₱X / 3 months` · `₱X / 1 year`); intro reframed to a first-pass discount (`₱149 for your first 1-month pass · ₱179 after`); per-month quotas kept with the clarifier "usage limits refresh each month during your pass"; one-time-payment / never-auto-charged / library-permanence / desktop-and-mobile-web reassurances centralized in `plans.ts`; the Pro card collapsed to one hero `Get Pro — ₱X / 3 months` (the 3-month exam pass) plus a small `Also available: 1 month · 1 year` line; FAQ gained "Will I be charged again?". Settings plans cards unified the `Monthly / Annual` toggle + separate exam-pass button into one 3-segment pass-length selector (`1 month · 3 months · 1 year`) with state-aware `Save N%` badges on the 3-month and 1-year passes, driving a single price + CTA. The 90-day exam pass is displayed as "3 months" and an active pass's billing status reads "3-Month Pass". Reframed across the pricing page, landing pricing sections, settings plans cards, and the paywall modal; settings billing-status copy for an active pass stays accurate.
+
+**Deferred polish within this release (candidate):** mobile pricing-cards layout — explore a horizontal scroll-snap carousel (with a peek of the next card + dot affordance, condensed cards) as an alternative to the current vertical stack. Decision so far: keep vertical for the feature-heavy marketing cards (comparison-friendly, no discoverability/two-axis-scroll risk); a condensed scroll-snap is more defensible for the Settings cards. Prototype before committing.
+
+- **Lead with the model, not the price:** each paid card headline states one-time payment · N days full access · never auto-charged.
+- **Remove subscription cues:** replace the "Manual renewal" footer with one-time wording ("we never auto-charge — grab a pass again only when your next exam is near").
+- **Reassure on data permanence:** notes, Study Packs, and progress stay in the library even after a pass ends.
+- **All-access:** "Full access on web and mobile."
+- **Fix the card UI:** one CTA per card (e.g. "Get Pro — ₱599 / 90 days"); remove the duplicate "Go Pro" / "Go Pro — 90-Day Exam Pass" buttons and the redundant header line.
+- **Reconcile the "/month" tension honestly:** quotas reset monthly (`BillingUsageResetJob`), so a 90-day pass spans ~3 monthly refreshes — say "usage limits refresh each month during your pass" rather than reading as a monthly sub.
+
+Anti-drift: all upgrade/pricing copy goes through `getUpgradeCtas(currentPlan)` in `src/config/plans.ts` (never hardcode in cards); premium-exam visibility goes through `exam-mode-visibility.ts` (no hardcoded profile checks); paywall copy is action-aware via `PaywallModal`/`resolvePaywallAction`. **No mechanics change** — quotas, pass durations, prices, billing periods, and exam-generation paths are untouched (per-pass limits or new multi-note generation are explicitly NOT in scope). Suggested split into separate slices: Thread 1 (small revert) and Thread 3 (copy) are quick; Thread 2 is a real feature — prompt it on its own.
+
+---
+
 ## v0.32.0 - Account & Communication Controls (released)
 
 Base branch for this release: `releases/v0.32.0`. v0.32.0 was previously slated for teacher-flow / bulk quiz — that work is deferred to v0.33.0 (no teacher cohort yet); this major release is a privacy / account-control / communication-preferences theme. The "additional candidates to consider" below are not yet scope-locked — prune/confirm them before building each slice.
@@ -224,40 +268,6 @@ Additional candidates to consider for the theme (prune at kickoff):
 - **Surface "weekly summary exists"** one-time nudge so the opt-in default OFF doesn't make the channel invisible (optional; only if we want to keep weekly reach).
 
 Anti-drift: reuse the existing reminder-preference pattern (entity flag + repository finder + `updateStudyReminders` + Settings card) — do not build a new preferences framework; no PII in unsubscribe tokens/links; account deletion must be transactional, idempotent, and never delete FK-free telemetry rows; do not build an email outbox/queue unless volume genuinely approaches the provider limit; no change to the universal learning loop.
-
----
-
-## v0.32.1 (candidate, parked) - Monetization Surfacing & Pricing Clarity
-
-**Status: parked — NOT kicked off.** Recorded here so it isn't lost; do not open (no `RELEASES.md` section, no version bumps) until explicitly started. Patch after v0.32.0; mostly frontend.
-
-Theme: the monetization leak is **conversion, not engagement** (prod ~2026-06: free-quota hit rate 0.0%, ~10 `UPGRADE_CLICKED` → 0 `SUBSCRIPTION_STARTED`). Two failure points: almost nobody **reaches** a paywall (premium exams aren't surfaced), and the few who click **drop at checkout** (the pricing surface reads like a recurring sub when plans are actually one-time passes). This release attacks the *surfacing/desire* half — surface the premium exams as paywall moments and clarify the pricing model — while the *checkout* half is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel. **Honest scope note:** these lift exposure + desire (top-of-funnel); they feed more clicks into a checkout that still converts ~0, so they must be paired with reading the checkout-conversion funnel, not sold as the conversion fix on their own.
-
-### Thread 1 — Premium-exam paywall at the Start CTA (revert)
-
-A FREE user clicking a premium exam (Long Exam / Board Exam / Interview Practice) should be able to open the exam prescreen and **see its strength**, then hit the paywall at the **Start CTA** — not be blocked at card-click. This reverts a prior change that moved the paywall to card-click (which hid the value). Recover the earlier CTA-paywall implementation from git history rather than re-deriving.
-
-- Frontend-mostly: move where `PaywallModal` fires for the three premium exams back to the Start CTA. Reuse `PaywallModal` + `getUpgradeCtas` (action-aware copy); keep the Pro badge (already on the cards) and make the Start CTA read as the unlock ("Unlock Long Exam — Pro") so the wall is expected, not bait-and-switch. Backend `FeatureGate` stays as defense-in-depth.
-
-### Thread 2 — "Exam this plan" for non-teachers (Study Plan → premium exam)
-
-Add a Study Plan CTA that launches **the profile's premium exam mode over the plan's notes**, pre-selected and capped at the existing per-exam note limit (a thin layer over the existing multi-note flow — the backend already supports multi-note for all three modes: `LongExamService` covers Long + Board, `InterviewPracticeService.resolveAdditionalNoteIds` covers Interview). Profile → mode mapping is driven by `exam-mode-visibility.ts` (no hardcoded profile checks):
-
-- Student → Long Exam · BOARD_EXAM → Board Exam (fixed set) · Professional → Interview Practice · Teacher → unchanged (keeps the DOCX Exam Builder) · profiles with no premium mode (e.g. PARENT) → CTA hidden.
-- Notes are pre-filtered to the plan and pre-selected up to the existing cap; for many-subject plans the user can trim within the plan's notes (selection never includes notes outside the plan). Pro-gated → lands on the Thread 1 Start-CTA paywall (synergy: a compelling "exam your whole plan" value moment).
-
-### Thread 3 — Pricing copy reframe (one-time pass clarity)
-
-The paid plans are **one-time, time-boxed passes with no auto-charge**, but the surface still reads like a recurring subscription — the Pro card is titled "90-Day Exam Pass" yet lists "/month" quotas and a "Manual renewal" footer, with two redundant CTAs. **Copy + card layout only — no billing/quota mechanics change.**
-
-- **Lead with the model, not the price:** each paid card headline states one-time payment · N days full access · never auto-charged.
-- **Remove subscription cues:** replace the "Manual renewal" footer with one-time wording ("we never auto-charge — grab a pass again only when your next exam is near").
-- **Reassure on data permanence:** notes, Study Packs, and progress stay in the library even after a pass ends.
-- **All-access:** "Full access on web and mobile."
-- **Fix the card UI:** one CTA per card (e.g. "Get Pro — ₱599 / 90 days"); remove the duplicate "Go Pro" / "Go Pro — 90-Day Exam Pass" buttons and the redundant header line.
-- **Reconcile the "/month" tension honestly:** quotas reset monthly (`BillingUsageResetJob`), so a 90-day pass spans ~3 monthly refreshes — say "usage limits refresh each month during your pass" rather than reading as a monthly sub.
-
-Anti-drift: all upgrade/pricing copy goes through `getUpgradeCtas(currentPlan)` in `src/config/plans.ts` (never hardcode in cards); premium-exam visibility goes through `exam-mode-visibility.ts` (no hardcoded profile checks); paywall copy is action-aware via `PaywallModal`/`resolvePaywallAction`. **No mechanics change** — quotas, pass durations, prices, billing periods, and exam-generation paths are untouched (per-pass limits or new multi-note generation are explicitly NOT in scope). Suggested split into separate slices: Thread 1 (small revert) and Thread 3 (copy) are quick; Thread 2 is a real feature — prompt it on its own.
 
 ---
 

@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, BarChart3, Clock, MessageSquare } from "lucide-react";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   answerInterviewPracticeQuestion,
   completeInterviewPracticeSession,
   forfeitInterviewPracticeSession,
+  getCollection,
   getMe,
   getNote,
   listNotes,
@@ -23,6 +25,9 @@ import {
   type QuizItem,
 } from "@/lib/api";
 import { BackLink } from "@/components/ui/back-link";
+import { getAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
+import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
@@ -56,8 +61,12 @@ function resolveBandLabel(band: InterviewReadinessReportResponse["band"]) {
 export default function InterviewPracticePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const noteId = params.id;
+  const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const noteHref = `/notes/${noteId}`;
+  const planBackHref = collectionId ? `/collections/${collectionId}` : noteHref;
+  const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
   const [phase, setPhase] = useState<InterviewPhase>("prestart");
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [availableNotes, setAvailableNotes] = useState<NoteListItemResponse[]>([]);
@@ -74,6 +83,8 @@ export default function InterviewPracticePage() {
   const [submittingComplete, setSubmittingComplete] = useState(false);
   const [report, setReport] = useState<InterviewReadinessReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [viewerPlanType, setViewerPlanType] = useState<"FREE" | "PLUS" | "PRO" | null>(null);
+  const [showInterviewPaywall, setShowInterviewPaywall] = useState(false);
   const completingRef = useRef(false);
   const modeSelectHref = note?.studyPackId ? `/study-packs/${note.studyPackId}/challenge-quiz` : noteHref;
 
@@ -88,14 +99,33 @@ export default function InterviewPracticePage() {
         ]);
         if (!active) return;
         const primaryCourseProgram = noteResult.courseProgram?.trim() ?? null;
-        setAvailableNotes(
-          notes.filter((item) => {
-            if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
-            if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
-            return true;
-          }),
-        );
-        if (me.profileType !== "PROFESSIONAL" || me.planType !== "PRO") {
+        setNote(noteResult);
+        setViewerPlanType(me.planType === "FREE" || me.planType === "PLUS" || me.planType === "PRO" ? me.planType : null);
+        const resolveDefaultAvailableNotes = () => notes.filter((item) => {
+          if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
+          if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
+          return true;
+        });
+        if (collectionId) {
+          try {
+            const collection = await getCollection(collectionId);
+            const collectionSourceNotes = resolveCollectionScopedSourceNotes(
+              collection,
+              notes,
+              noteResult.id,
+              { requireStudyPackId: false },
+            );
+            setAvailableNotes(collectionSourceNotes);
+            setAdditionalNoteIds(collectionSourceNotes.map((sourceNote) => sourceNote.id).slice(0, MAX_ADDITIONAL_NOTES));
+          } catch {
+            setAvailableNotes(resolveDefaultAvailableNotes());
+            setAdditionalNoteIds([]);
+          }
+        } else {
+          setAvailableNotes(resolveDefaultAvailableNotes());
+          setAdditionalNoteIds([]);
+        }
+        if (me.profileType !== "PROFESSIONAL") {
           router.replace(noteHref);
           return;
         }
@@ -104,7 +134,6 @@ export default function InterviewPracticePage() {
           setPhase("error");
           return;
         }
-        setNote(noteResult);
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Could not load Interview Practice.");
@@ -115,7 +144,7 @@ export default function InterviewPracticePage() {
     return () => {
       active = false;
     };
-  }, [noteHref, noteId, router]);
+  }, [collectionId, noteHref, noteId, router]);
 
   useEffect(() => {
     if (phase !== "running" || critique) {
@@ -159,6 +188,10 @@ export default function InterviewPracticePage() {
   }, []);
 
   const handleStart = useCallback(async () => {
+    if (viewerPlanType !== "PRO") {
+      setShowInterviewPaywall(true);
+      return;
+    }
     setPhase("generating");
     setError(null);
     try {
@@ -183,7 +216,7 @@ export default function InterviewPracticePage() {
       setError(err instanceof Error ? err.message : "Could not start Interview Practice.");
       setPhase("error");
     }
-  }, [additionalNoteIds, noteId, questionCount, resetQuestionState]);
+  }, [additionalNoteIds, noteId, questionCount, resetQuestionState, viewerPlanType]);
 
   const handleAnswer = useCallback(async () => {
     if (!sessionId || !currentQuestion || !selectedChoice || submittingAnswer) {
@@ -270,7 +303,7 @@ export default function InterviewPracticePage() {
             Leave Practice
           </Button>
         ) : (
-          <BackLink href={noteHref} label="Note" />
+          <BackLink href={planBackHref} label={planBackLabel} />
         )}
         {phase === "running" ? (
           <div className="text-right">
@@ -377,7 +410,9 @@ export default function InterviewPracticePage() {
                   Add context from more notes
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  Add up to {MAX_ADDITIONAL_NOTES} ready notes for a cross-domain session.
+                  {collectionId
+                    ? `Add up to ${MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                    : `Add up to ${MAX_ADDITIONAL_NOTES} ready notes for a cross-domain session.`}
                 </p>
               </div>
               <div className="mt-4 grid gap-2">
@@ -434,7 +469,7 @@ export default function InterviewPracticePage() {
                 className="w-full sm:w-auto"
                 onClick={() => void handleStart()}
               >
-                Start Interview Practice
+                {viewerPlanType === "PRO" ? "Start Interview Practice" : "Unlock Interview Practice - Pro"}
               </Button>
             </div>
           </div>
@@ -591,6 +626,14 @@ export default function InterviewPracticePage() {
       ) : null}
 
       <LeaveQuizModal />
+      {showInterviewPaywall ? (
+        <PaywallModal
+          isOpen={showInterviewPaywall}
+          variant="interview-practice-limit"
+          source="interview_practice_start"
+          onClose={() => setShowInterviewPaywall(false)}
+        />
+      ) : null}
     </main>
   );
 }

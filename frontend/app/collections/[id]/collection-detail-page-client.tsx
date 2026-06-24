@@ -17,6 +17,13 @@ import { CourseProgramCombobox } from "@/components/metadata/course-program-comb
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
 import {
+  canIncludeCollectionItemInPremiumExam,
+  getCollectionPremiumExamReadyNoteIds,
+  getCollectionPrimaryPremiumExamItem,
+  getCollectionQuizReadyNoteIds,
+  sortCollectionItemsByPosition,
+} from "@/lib/collection-exam";
+import {
   addCollectionItems,
   ApiRequestError,
   deleteCollection,
@@ -48,10 +55,6 @@ type NextPlanAction = {
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
-
-function sortItems(items: NoteCollectionItem[]): NoteCollectionItem[] {
-  return [...items].sort((left, right) => left.position - right.position);
-}
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -87,10 +90,6 @@ function getNoteExecutionStatus(
     return { label: "Practiced", className: "text-emerald-700 dark:text-emerald-300" };
   }
   return { label: "Not started", className: "text-foreground/60" };
-}
-
-function canIncludeCollectionItemInExam(item: Pick<NoteCollectionItem, "generatedQuizId">): boolean {
-  return Boolean(item.generatedQuizId);
 }
 
 function canViewConceptHealth(currentPlan: AppPlanType): boolean {
@@ -837,6 +836,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
+  const [noteListItems, setNoteListItems] = useState<NoteListItemResponse[]>([]);
+  const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
+  const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
 
   const sensors = useSensors(
@@ -847,10 +849,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const loadCollection = useCallback(async () => {
     setLoadState("loading");
     setLoadError(null);
+    setNoteListLoadFailed(false);
     try {
-      const result = await getCollection(collectionId);
-      setCollection(result);
-      setItems(sortItems(result.items));
+      const [result, notesResult] = await Promise.allSettled([
+        getCollection(collectionId),
+        listNotes(),
+      ]);
+      if (result.status === "rejected") {
+        throw result.reason;
+      }
+      if (notesResult.status === "fulfilled") {
+        setNoteListItems(notesResult.value);
+      } else {
+        setNoteListItems([]);
+        setNoteListLoadFailed(true);
+      }
+      const collectionResult = result.value;
+      setCollection(collectionResult);
+      setItems(sortCollectionItemsByPosition(collectionResult.items));
       setLoadState("ready");
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 404) {
@@ -917,7 +933,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const result = await getCollection(collectionId);
       setCollection(result);
-      setItems(sortItems(result.items));
+      setItems(sortCollectionItemsByPosition(result.items));
     } catch {
       // Keep the visible error; the page-level retry can recover if this fails too.
     }
@@ -931,7 +947,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const saved = await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
       setCollection(saved);
-      setItems(sortItems(saved.items));
+      setItems(sortCollectionItemsByPosition(saved.items));
     } catch (error) {
       setItems(previousItems);
       await refetchAfterFailure(error instanceof Error ? error.message : "Could not save this collection order.");
@@ -977,7 +993,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       await removeCollectionItem(collectionId, noteId);
       const result = await getCollection(collectionId);
       setCollection(result);
-      setItems(sortItems(result.items));
+      setItems(sortCollectionItemsByPosition(result.items));
     } catch (error) {
       await refetchAfterFailure(error instanceof Error ? error.message : "Could not remove this note.");
     } finally {
@@ -991,7 +1007,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const result = await addCollectionItems(collectionId, noteIds);
       setCollection(result);
-      setItems(sortItems(result.items));
+      setItems(sortCollectionItemsByPosition(result.items));
     } catch (error) {
       await refetchAfterFailure(error instanceof Error ? error.message : "Could not add notes.");
       throw error;
@@ -1019,11 +1035,26 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   );
   const itemIds = useMemo(() => items.map((item) => item.noteId), [items]);
   const quizReadyNoteIds = useMemo(
-    () => items.filter(canIncludeCollectionItemInExam).map((item) => item.noteId),
+    () => getCollectionQuizReadyNoteIds(items),
     [items],
   );
+  const premiumExamReadyNoteIds = useMemo(() => getCollectionPremiumExamReadyNoteIds(items), [items]);
+  const unpracticedExamNoteCount = useMemo(
+    () => items.filter((item) => canIncludeCollectionItemInPremiumExam(item) && item.lastSessionCompletedAt === null).length,
+    [items],
+  );
+  const primaryExamItem = useMemo(() => getCollectionPrimaryPremiumExamItem(items), [items]);
+  const noteStudyPackIdByNoteId = useMemo(
+    () => new Map(noteListItems.map((noteItem) => [noteItem.id, noteItem.studyPackId])),
+    [noteListItems],
+  );
+  const primaryExamStudyPackId = primaryExamItem ? noteStudyPackIdByNoteId.get(primaryExamItem.noteId) ?? null : null;
   const hasNonQuizReadyItems = quizReadyNoteIds.length < items.length;
+  const hasNonPremiumReadyItems = premiumExamReadyNoteIds.length < items.length;
   const mutationInProgress = mutationKind !== null;
+  const premiumExamDisabled = noteListLoadFailed
+    || !primaryExamItem
+    || (terminalAction?.kind === "premium-exam" && terminalAction.mode === "board_exam" && !primaryExamStudyPackId);
 
   const openCollectionExamBuilder = useCallback(() => {
     if (quizReadyNoteIds.length === 0) {
@@ -1035,6 +1066,37 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     });
     router.push(`/library/exam-builder?${params.toString()}`);
   }, [collectionId, quizReadyNoteIds, router]);
+
+  const openCollectionPremiumExam = useCallback(() => {
+    if (terminalAction?.kind !== "premium-exam" || premiumExamDisabled || !primaryExamItem) {
+      return;
+    }
+    const params = new URLSearchParams({ collectionId });
+    if (terminalAction.mode === "long_exam") {
+      router.push(`/notes/${primaryExamItem.noteId}/long-exam?${params.toString()}`);
+      return;
+    }
+    if (terminalAction.mode === "interview") {
+      router.push(`/notes/${primaryExamItem.noteId}/interview-practice?${params.toString()}`);
+      return;
+    }
+    if (!primaryExamStudyPackId) {
+      return;
+    }
+    router.push(`/study-packs/${primaryExamStudyPackId}/challenge-quiz?${params.toString()}`);
+  }, [collectionId, premiumExamDisabled, primaryExamItem, primaryExamStudyPackId, router, terminalAction]);
+
+  // Advise a quick review before examining a plan whose notes haven't been practiced yet.
+  const handlePremiumExamCta = useCallback(() => {
+    if (premiumExamDisabled || !primaryExamItem) {
+      return;
+    }
+    if (unpracticedExamNoteCount > 0) {
+      setShowReviewFirstModal(true);
+      return;
+    }
+    openCollectionPremiumExam();
+  }, [openCollectionPremiumExam, premiumExamDisabled, primaryExamItem, unpracticedExamNoteCount]);
 
   if (loadState === "loading") {
     return (
@@ -1142,21 +1204,31 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             </div>
           </div>
         )}
-        footer={terminalAction?.kind === "exam-builder" ? (
+        footer={terminalAction ? (
           <div className="flex flex-col items-start gap-1">
             <ResponsiveActionButton
               action="open"
               label={terminalAction.label}
-              disabled={quizReadyNoteIds.length === 0}
-              onClick={openCollectionExamBuilder}
+              disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
+              onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : handlePremiumExamCta}
             />
-            {quizReadyNoteIds.length === 0 ? (
+            {terminalAction.kind === "exam-builder" ? (
+              quizReadyNoteIds.length === 0 ? (
+                <p className="text-xs text-foreground/60">
+                  Generate a quiz for at least one note to build an exam.
+                </p>
+              ) : hasNonQuizReadyItems ? (
+                <p className="text-xs text-foreground/60">
+                  Only quiz-ready notes will be included.
+                </p>
+              ) : null
+            ) : premiumExamReadyNoteIds.length === 0 ? (
               <p className="text-xs text-foreground/60">
-                Generate a quiz for at least one note to build an exam.
+                Generate a Study Pack for at least one note to start an exam.
               </p>
-            ) : hasNonQuizReadyItems ? (
+            ) : hasNonPremiumReadyItems ? (
               <p className="text-xs text-foreground/60">
-                Only quiz-ready notes will be included.
+                Only Study Pack-ready notes will be included.
               </p>
             ) : null}
           </div>
@@ -1242,7 +1314,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         onClose={() => setEditOpen(false)}
         onSaved={(saved) => {
           setCollection(saved);
-          setItems(sortItems(saved.items));
+          setItems(sortCollectionItemsByPosition(saved.items));
           setEditOpen(false);
         }}
       />
@@ -1267,11 +1339,34 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           onClose={() => setPublishOpen(false)}
           onSaved={(saved) => {
             setCollection(saved);
-            setItems(sortItems(saved.items));
+            setItems(sortCollectionItemsByPosition(saved.items));
           }}
           onNotesPublished={loadNoteVisibility}
         />
       ) : null}
+      <AppModal
+        isOpen={showReviewFirstModal}
+        title="Review before the exam?"
+        description={`You haven't practiced ${unpracticedExamNoteCount} of ${premiumExamReadyNoteIds.length} ${premiumExamReadyNoteIds.length === 1 ? "note" : "notes"} in this ${labels.singular.toLowerCase()} yet. A quick review or Challenge Quiz first usually makes the exam more useful — but you can jump straight in.`}
+        onClose={() => setShowReviewFirstModal(false)}
+        panelClassName="max-w-[440px]"
+        actions={(
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setShowReviewFirstModal(false)}>
+              Review first
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowReviewFirstModal(false);
+                openCollectionPremiumExam();
+              }}
+            >
+              Start the exam anyway
+            </Button>
+          </div>
+        )}
+      />
     </main>
   );
 }

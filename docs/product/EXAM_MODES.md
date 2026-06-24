@@ -38,7 +38,7 @@ Sub-modes are presentation/generation variants that share an existing engine dis
 
 | Sub-mode | Parent mode | Discriminator | Audience | Differentiator |
 |----------|-------------|---------------|----------|----------------|
-| Interview Practice | Adaptive Practice | `ADAPTIVE` + `subMode: "INTERVIEW"` | Professional profile, Pro plan only | Scenario-based questions + per-answer AI critique + Interview Readiness Report result framing |
+| Interview Practice | Adaptive Practice | `ADAPTIVE` + `subMode: "INTERVIEW"` | Professional profile, Pro plan at Start CTA | Scenario-based questions + per-answer AI critique + Interview Readiness Report result framing |
 
 Adding a new sub-mode requires updating this table and the parent feature doc. A sub-mode that requires a new persistence aggregate, new session lifecycle state, or its own engine logic is **not a sub-mode** — it must be promoted to a full mode and go through the 5-mode contract review.
 
@@ -280,7 +280,7 @@ Direction:
 
 Reasoning:
 
-- **Long Exam launches Pro-only** to control multi-note generation cost and to preserve Pro's "exam prep" identity. Plus already has a unique value prop in Adaptive Practice; it does not need Long Exam to differentiate at launch.
+- **Long Exam launches Pro-only at Start CTA** to control multi-note generation cost and to preserve Pro's "exam prep" identity while still letting Free and Plus users inspect the prestart setup. Plus already has a unique value prop in Adaptive Practice; it does not need Long Exam to differentiate at launch.
 - **Shared "Advanced Exam" quota bucket** for Long + Board was the v0.13.0 intent but was not implemented — at v0.14.0 both modes are gated by Pro plan only with no explicit per-mode cap. This is a known margin risk being addressed in v0.15+ (see below).
 - **Promote Long Exam to Plus only after** runtime usage data justifies the LLM cost — and only if Plus needs the differentiator. State this as a future direction, not a v1 decision.
 
@@ -377,7 +377,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - Teacher remains scoped to Quiz Preview / Export.
 - No new persistence aggregates per profile or per mode.
 - Professional Profile label overrides ("Certification Review", "Full Practice Exam") are display-only in `exam-mode-visibility.ts` and the mode-selection UI. Engine discriminators do not change.
-- Interview Practice (sub-mode of Adaptive Practice) carries its variant identity in session state JSONB only. No new `QuickReviewSessionMode` enum value. Pro-only at launch.
+- Interview Practice (sub-mode of Adaptive Practice) carries its variant identity in session state JSONB only. No new `QuickReviewSessionMode` enum value. Pro-only at Start CTA.
 
 ---
 

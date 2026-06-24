@@ -43,7 +43,9 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 
 - `Certification Review` — Challenge Quiz engine with professional-facing label
 - `Full Practice Exam` — Long Exam engine with professional-facing label
-- `Interview Practice` — Adaptive Practice sub-mode tile for Pro users; Free/Plus users see the Interview Practice paywall
+- `Interview Practice` — Adaptive Practice sub-mode tile for Professional users; Free/Plus users can open setup and see the Interview Practice paywall from the Start CTA
+
+Study Plan / Review Set detail can launch the learner's profile-appropriate premium exam via `collectionId`: Student → Long Exam, Board Exam → Board Exam setup, Professional → Interview Practice. Each prescreen restricts additional-note selection to quiz-ready notes from that plan and preselects only up to the mode's existing cap; Teacher remains on the DOCX Exam Builder path.
 
 ### Long Exam backend (v0.13.0)
 
@@ -56,8 +58,9 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 - Board Exam Mode is Pro-only
 - Board Exam Mode consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month; default configurable)
 - Board Exam quota is deducted **per source note** at session start — a 3-note session costs 3 quota units
-- The paywall for quota exhaustion fires at mode-card click (mode-selection step), not at the Begin Board Exam button
-- Free and Plus users who choose Board Exam Mode must hit the shared Pro upsell flow
+- Free and Plus users who choose Board Exam Mode can open the setup screen first; the Pro paywall fires from the Begin/Unlock Board Exam Start CTA so the strict exam flow is visible before the upgrade ask
+- Study Plan / Review Set launches deep-link into Board Exam setup and keep the additional Study Pack picker scoped to plan notes only; the Board Exam source-note cap and quota rules do not change
+- Board Exam quota exhaustion remains separate from Pro-only feature gating
 - monthly quiz-limit exhaustion is separate from Pro-only feature gating
 
 ## Generation and session behavior

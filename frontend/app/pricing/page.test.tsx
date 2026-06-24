@@ -73,9 +73,9 @@ describe("PricingPage", () => {
     expect(screen.getByText("For regular study")).toBeInTheDocument();
     expect(screen.getByText("Best for exam prep")).toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
-    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249/month"))).not.toHaveLength(0);
-    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱1,999/year"))).not.toHaveLength(0);
-    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱179/month"))).not.toHaveLength(0);
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249 after"))).not.toHaveLength(0);
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱1,999 / 1 year"))).not.toHaveLength(0);
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱179 after"))).not.toHaveLength(0);
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱149"))).not.toHaveLength(0);
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱199"))).not.toHaveLength(0);
     expect(screen.getAllByText("10 Study Packs / month")).not.toHaveLength(0);
@@ -93,17 +93,17 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
     expect(screen.getAllByText("Difficulty selection")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Choose Plus" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Go Pro" })).not.toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Go Pro Yearly" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Choose Plus Yearly" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get Plus" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Get Pro" })).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: /^1 year — ₱1,999 \/ 1 year/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Get Plus Yearly/ })).not.toBeInTheDocument();
     expect(screen.getByText("🇵🇭 Philippines pricing (PHP)")).toBeInTheDocument();
     expect(screen.getByText("🌍 International pricing")).toBeInTheDocument();
-    expect(screen.getByText("Plus: ₱179/month")).toBeInTheDocument();
-    expect(screen.getByText("Pro: ₱249/month")).toBeInTheDocument();
-    expect(screen.getByText("Pro yearly: ₱1,999")).toBeInTheDocument();
-    expect(screen.getByText("Pro: $4.99/month")).toBeInTheDocument();
-    expect(screen.getByText("Pro yearly: $39.99/year")).toBeInTheDocument();
+    expect(screen.getByText("Plus: ₱179 / 1-month pass")).toBeInTheDocument();
+    expect(screen.getByText("Pro: ₱249 / 1-month pass")).toBeInTheDocument();
+    expect(screen.getByText("Pro 1-year pass: ₱1,999")).toBeInTheDocument();
+    expect(screen.getByText("Pro: $4.99 / 1-month pass")).toBeInTheDocument();
+    expect(screen.getByText("Pro 1-year pass: $39.99")).toBeInTheDocument();
     expect(screen.getByText("Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.")).toBeInTheDocument();
     expect(screen.getByText("Plan comparison")).toBeInTheDocument();
     expect(
@@ -117,7 +117,7 @@ describe("PricingPage", () => {
 
     expect((await screen.findAllByRole("link", { name: "Get Started Free" }))[0]).toHaveAttribute("href", "/signup");
 
-    fireEvent.click((await screen.findAllByRole("button", { name: "Go Pro" }))[0]);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Get Pro" }))[0]);
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", billingCycle: null, returnUrl: "/pricing" });
@@ -128,7 +128,7 @@ describe("PricingPage", () => {
   it("starts yearly Pro checkout from the pricing card", async () => {
     render(<PricingPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Go Pro Yearly" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^1 year — ₱1,999 \/ 1 year/ }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", billingCycle: "YEARLY", returnUrl: "/pricing" });

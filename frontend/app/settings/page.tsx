@@ -40,7 +40,7 @@ import {
   type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
-import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
+import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, passSavingsPct, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -528,7 +528,6 @@ export default function SettingsPage() {
   const pdfExportsRemaining = usageSummary?.remaining.pdfExportsRemaining ?? null;
   const plusMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
   const proMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
-  const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
   const plusAnnualPricing = resolveCyclePricing(billingPricing, "PLUS", "YEARLY");
   const proAnnualPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
   const proExamCyclePricing = resolveCyclePricing(billingPricing, "PRO", "EXAM_CYCLE");
@@ -540,24 +539,46 @@ export default function SettingsPage() {
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
   const annualAvailableForPro = proAnnualPricing?.available ?? (pricingConfig.price[displayRegion].pro.yearly !== null);
   const annualAvailableForPlus = plusAnnualPricing?.available ?? (pricingConfig.price[displayRegion].plus.yearly !== null);
-  const hasAnnualOption = annualAvailableForPro || annualAvailableForPlus;
   const freePlanConfig = PLANS.FREE;
   const plusPlanConfig = PLANS.PLUS;
   const proPlanConfig = PLANS.PRO;
-  const proYearlySavingsPct = (() => {
-    const monthly = billingPricing?.pro.monthly.amount ?? pricingConfig.price[displayRegion].pro.monthly;
-    const yearly = billingPricing?.pro.yearly.amount ?? pricingConfig.price[displayRegion].pro.yearly;
-    if (!yearly || !monthly) return null;
-    return Math.round((1 - yearly / (monthly * 12)) * 100);
-  })();
+  const proRegularMonthlyAmount = billingPricing?.pro.monthly.amount ?? pricingConfig.price[displayRegion].pro.monthly;
+  const monthlyDurationDays = billingPricing?.pro.monthly.durationDays ?? 30;
+  const proYearlySavingsPct = passSavingsPct(
+    billingPricing?.pro.yearly.amount ?? pricingConfig.price[displayRegion].pro.yearly,
+    proRegularMonthlyAmount,
+    Math.round((proAnnualPricing?.durationDays ?? 365) / monthlyDurationDays),
+  );
+  const proExamCycleSavingsPct = passSavingsPct(
+    proExamCyclePricing?.amount ?? null,
+    proRegularMonthlyAmount,
+    Math.round((proExamCyclePricing?.durationDays ?? 90) / monthlyDurationDays),
+  );
   const proAnnualLabelForDisplay = (() => {
-    if (proAnnualPricing?.available) return proAnnualPriceLabel;
-    const yearly = pricingConfig.price[displayRegion].pro.yearly;
+    const yearly = proAnnualPricing?.amount ?? pricingConfig.price[displayRegion].pro.yearly;
     if (!yearly) return null;
-    return `${formatPricingAmount(yearly, pricingConfig.price[displayRegion].currency)}/year`;
+    return `${formatPricingAmount(yearly, billingPricing?.currency ?? pricingConfig.price[displayRegion].currency)} / 1 year`;
   })();
   const effectivePlusCycle: BillingCycle = "MONTHLY";
-  const effectiveProCycle: BillingCycle = selectedCycle === "YEARLY" && annualAvailableForPro ? "YEARLY" : "MONTHLY";
+  const proExamCycleAvailable = proExamCyclePricing?.available ?? false;
+  const effectiveProCycle: BillingCycle =
+    selectedCycle === "EXAM_CYCLE" && proExamCycleAvailable
+      ? "EXAM_CYCLE"
+      : selectedCycle === "YEARLY" && annualAvailableForPro
+        ? "YEARLY"
+        : "MONTHLY";
+  const proSelectedPriceLabel =
+    effectiveProCycle === "EXAM_CYCLE"
+      ? (proExamCyclePriceLabel ?? proMonthlyPriceLabel)
+      : effectiveProCycle === "YEARLY"
+        ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
+        : proMonthlyPriceLabel;
+  // The monthly label carries the long intro string, so only suffix the CTA with
+  // the (short) price for the 3-month and 1-year passes — matches the marketing card.
+  const proCtaLabel = effectiveProCycle === "MONTHLY"
+    ? getPaidPlanCtaLabel("PRO")
+    : `${getPaidPlanCtaLabel("PRO")} — ${proSelectedPriceLabel}`;
+  const showPassLengthSelector = annualAvailableForPro || annualAvailableForPlus || proExamCycleAvailable;
 
   const formatBillingDate = (rawDate: string | null) => {
     if (!rawDate) {
@@ -596,7 +617,7 @@ export default function SettingsPage() {
 
   const formatSubscriptionBillingCycle = (billingType: BillingCycle | null | undefined) => {
     if (billingType === "EXAM_CYCLE") {
-      return "90-Day Exam Pass";
+      return "3-Month Pass";
     }
     if (billingType === "YEARLY") {
       return "Yearly";
@@ -652,7 +673,7 @@ export default function SettingsPage() {
       ? "Valid until"
       : "Status";
   const subscriptionBillingCycleLabel = isPaidPlanType(subscriptionSummaryPlan)
-    ? `${formatSubscriptionBillingCycle(billingHistory?.billingType)} · Manual renewal`
+    ? `${formatSubscriptionBillingCycle(billingHistory?.billingType)} · Won't auto-renew`
     : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
   const cancellationAccessEndsAt = billingHistory?.cancellationEffectiveAt ?? billingHistory?.currentPeriodEnd ?? null;
@@ -948,7 +969,7 @@ export default function SettingsPage() {
             <div className="space-y-4 rounded-md border border-border bg-background p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Choose Your Plan</p>
-                {hasAnnualOption ? (
+                {showPassLengthSelector ? (
                   <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
                     <button
                       type="button"
@@ -959,24 +980,52 @@ export default function SettingsPage() {
                           : "text-foreground/60 hover:text-foreground"
                       }`}
                     >
-                      Monthly
+                      1 month
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCycle("YEARLY")}
-                      className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                        selectedCycle === "YEARLY"
-                          ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
-                          : "text-foreground/60 hover:text-foreground"
-                      }`}
-                    >
-                      Annual
-                      {proYearlySavingsPct ? (
-                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                          Save {proYearlySavingsPct}%
-                        </span>
-                      ) : null}
-                    </button>
+                    {proExamCycleAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCycle("EXAM_CYCLE")}
+                        className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                          selectedCycle === "EXAM_CYCLE"
+                            ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
+                            : "text-foreground/60 hover:text-foreground"
+                        }`}
+                      >
+                        3 months
+                        {proExamCycleSavingsPct > 0 ? (
+                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                            selectedCycle === "EXAM_CYCLE"
+                              ? "bg-white/20 text-white dark:bg-white/25 dark:text-slate-950"
+                              : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                          }`}>
+                            Save {proExamCycleSavingsPct}%
+                          </span>
+                        ) : null}
+                      </button>
+                    ) : null}
+                    {annualAvailableForPro ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCycle("YEARLY")}
+                        className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                          selectedCycle === "YEARLY"
+                            ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
+                            : "text-foreground/60 hover:text-foreground"
+                        }`}
+                      >
+                        1 year
+                        {proYearlySavingsPct > 0 ? (
+                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                            selectedCycle === "YEARLY"
+                              ? "bg-white/20 text-white dark:bg-white/25 dark:text-slate-950"
+                              : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                          }`}>
+                            Save {proYearlySavingsPct}%
+                          </span>
+                        ) : null}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1012,8 +1061,8 @@ export default function SettingsPage() {
                     <p className="text-lg font-semibold text-foreground">{plusPlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{plusPlanConfig.description}</p>
                     <p className="text-xl font-semibold">{plusMonthlyPriceLabel}</p>
-                    {selectedCycle === "YEARLY" && !annualAvailableForPlus ? (
-                      <p className="text-xs text-foreground/50">Monthly billing only</p>
+                    {selectedCycle !== "MONTHLY" && !annualAvailableForPlus ? (
+                      <p className="text-xs text-foreground/50">Available as a 1-month pass</p>
                     ) : null}
                   </div>
                   <PlanFeatureList features={plusPlanConfig.features} />
@@ -1069,44 +1118,21 @@ export default function SettingsPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{proPlanConfig.name}</p>
                     <p className="text-lg font-semibold text-foreground">{proPlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{proPlanConfig.description}</p>
-                    <p className="text-xl font-semibold">
-                      {selectedCycle === "YEARLY" && annualAvailableForPro
-                        ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
-                        : proMonthlyPriceLabel}
-                    </p>
-                    {proExamCyclePriceLabel ? (
-                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                        90-Day Exam Pass: {proExamCyclePriceLabel}
-                      </p>
-                    ) : null}
+                    <p className="text-xl font-semibold">{proSelectedPriceLabel}</p>
                   </div>
                   <PlanFeatureList features={proPlanConfig.features} />
                   <p className="mb-5 text-xs text-foreground/55">{proPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan !== "PRO" ? (
-                      <>
-                        <ResponsiveActionButton
-                          type="button"
-                          className="w-full"
-                          onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
-                          loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
-                          loadingText="Redirecting..."
-                          action="studyPack"
-                          label={getPaidPlanCtaLabel("PRO")}
-                        />
-                        {proExamCyclePriceLabel ? (
-                          <ResponsiveActionButton
-                            type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => void handleStartCheckout("PRO", "EXAM_CYCLE")}
-                            loading={startingCheckoutKey === "PRO-EXAM_CYCLE"}
-                            loadingText="Redirecting..."
-                            action="studyPack"
-                            label="Go Pro — 90-Day Exam Pass"
-                          />
-                        ) : null}
-                      </>
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
+                        loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label={proCtaLabel}
+                      />
                     ) : (
                       <>
                         <Button variant="outline" className="w-full" disabled>Current Plan</Button>
@@ -1128,7 +1154,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground/60">
-                Hosted checkout via Xendit. Access activates after payment confirmation. Manual renewal. ·{" "}
+                Hosted checkout via Xendit. Access activates after payment confirmation. One-time pass — we never auto-charge; usage limits refresh each month while a pass is active, and your library stays after it ends. ·{" "}
                 <Link href="/refund" className="underline underline-offset-2">
                   Refund Policy
                 </Link>

@@ -1,4 +1,4 @@
-import { getAvailableExamModes } from "./exam-mode-visibility";
+import { getAvailableExamModes, resolvePlanPremiumExamMode } from "./exam-mode-visibility";
 
 describe("getAvailableExamModes", () => {
   it("returns Challenge Quiz and Long Exam for STUDENT", () => {
@@ -88,5 +88,20 @@ describe("getAvailableExamModes", () => {
   it("does not include Board Exam for PROFESSIONAL", () => {
     const modes = getAvailableExamModes("PROFESSIONAL");
     expect(modes.some((m) => m.id === "board_exam")).toBe(false);
+  });
+});
+
+describe("resolvePlanPremiumExamMode", () => {
+  it("maps learner profiles to their Study Plan premium exam mode", () => {
+    expect(resolvePlanPremiumExamMode("STUDENT")).toBe("long_exam");
+    expect(resolvePlanPremiumExamMode("BOARD_EXAM")).toBe("board_exam");
+    expect(resolvePlanPremiumExamMode("PROFESSIONAL")).toBe("interview");
+  });
+
+  it("returns null for profiles without a Study Plan premium exam mode", () => {
+    expect(resolvePlanPremiumExamMode("TEACHER")).toBeNull();
+    expect(resolvePlanPremiumExamMode("PARENT")).toBeNull();
+    expect(resolvePlanPremiumExamMode(null)).toBeNull();
+    expect(resolvePlanPremiumExamMode(undefined)).toBeNull();
   });
 });

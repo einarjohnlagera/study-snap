@@ -28,6 +28,7 @@ import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
@@ -36,6 +37,7 @@ import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   generateMoreChallengeQuizQuestions,
+  getCollection,
   getInProgressChallengeQuizSession,
   getMe,
   getMyStudyPack,
@@ -79,6 +81,7 @@ import {
   CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
   isModeSelectionChallengeQuizEntry,
 } from "@/lib/challenge-quiz-entry";
+import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
@@ -349,12 +352,15 @@ export default function ChallengeQuizPage() {
     () => isModeSelectionChallengeQuizEntry(searchParams.get(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM)),
     [searchParams],
   );
+  const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const [generateMoreToast, setGenerateMoreToast] = useState<string | null>(null);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const planBackHref = collectionId ? `/collections/${collectionId}` : noteDetailHref;
+  const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const groupedLearnerLevels = useMemo(
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
@@ -435,9 +441,9 @@ export default function ChallengeQuizPage() {
     if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId) {
       return;
     }
-    setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
-    setPrestartStep(resolveInitialPrestartStep(viewerProfileType));
-  }, [challengeSession?.sessionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
+    setSelectedMode(collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
+    setPrestartStep(collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
+  }, [challengeSession?.sessionId, collectionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -512,6 +518,27 @@ export default function ChallengeQuizPage() {
     setSourceNotesError(null);
     try {
       const notes = await listNotes();
+      if (collectionId) {
+        try {
+          const collection = await getCollection(collectionId);
+          const collectionSourceNotes = resolveCollectionScopedSourceNotes(
+            collection,
+            notes,
+            noteDetail.id,
+            { requireStudyPackId: true },
+          );
+          setAvailableBoardExamSourceNotes(collectionSourceNotes);
+          setSelectedBoardExamAdditionalStudyPackIds(
+            collectionSourceNotes
+              .map((sourceNote) => sourceNote.studyPackId)
+              .filter((studyPackId): studyPackId is string => Boolean(studyPackId))
+              .slice(0, BOARD_EXAM_MAX_ADDITIONAL_NOTES),
+          );
+          return;
+        } catch {
+          // Fall back to the normal single-note/same-subject setup when the plan cannot be loaded.
+        }
+      }
       const sameSubjectNotes = resolveSameSubjectSourceNotes(noteDetail, notes);
       setAvailableBoardExamSourceNotes(sameSubjectNotes);
       setSelectedBoardExamAdditionalStudyPackIds((current) => {
@@ -525,7 +552,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setSourceNotesLoading(false);
     }
-  }, []);
+  }, [collectionId]);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
@@ -667,6 +694,8 @@ export default function ChallengeQuizPage() {
       void refreshBoardExamSourceNotes(detail);
       const authUser = getAuthUser();
       const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
+      const requestedPrestartMode = collectionId ? BOARD_EXAM_MODE : preferredMode;
+      const requestedPrestartStep: ChallengePrestartStep = collectionId ? "board-exam-setup" : resolveInitialPrestartStep(authUser?.profileType);
       const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO"
         ? authUser.planType
         : null;
@@ -684,8 +713,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
         setActivePaywallModal(null);
         setPhase("prestart");
         return;
@@ -706,8 +735,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -731,8 +760,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
+        setSelectedMode(requestedPrestartMode);
+        setPrestartStep(requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -760,7 +789,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, noteId, pathname, refreshBoardExamSourceNotes, router, sharedModeSelectionEntryRequested, syncProgressRef]);
+  }, [applyStartedSession, collectionId, noteId, pathname, refreshBoardExamSourceNotes, router, sharedModeSelectionEntryRequested, syncProgressRef]);
 
   useEffect(() => {
     void loadNote();
@@ -1178,7 +1207,7 @@ export default function ChallengeQuizPage() {
     setSelectedMode(BOARD_EXAM_MODE);
     setError(null);
     if (!boardExamAvailable) {
-      openLockedFeaturePaywall("board-exam-mode", "board_exam_mode_selection");
+      setPrestartStep("board-exam-setup");
       return;
     }
     if (challengeQuizLimitReached) {
@@ -1197,20 +1226,12 @@ export default function ChallengeQuizPage() {
   }, [boardExamAvailable, boardExamLimitReached, challengeQuizLimitReached, openLockedFeaturePaywall, viewerPlanType]);
   const handleSelectLongExamMode = useCallback(() => {
     setError(null);
-    if (viewerPlanType !== "PRO") {
-      openLockedFeaturePaywall("long-exam-mode", "long_exam_mode_selection");
-      return;
-    }
     router.push(`/notes/${noteId}/long-exam`);
-  }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
+  }, [noteId, router]);
   const handleSelectInterviewPracticeMode = useCallback(() => {
     setError(null);
-    if (viewerPlanType !== "PRO") {
-      openLockedFeaturePaywall("interview-practice-limit", "interview_practice_mode_selection");
-      return;
-    }
     router.push(`/notes/${noteId}/interview-practice`);
-  }, [noteId, openLockedFeaturePaywall, router, viewerPlanType]);
+  }, [noteId, router]);
   const returnToModeSelection = useCallback(() => {
     setError(null);
     setShowBoardExamStartModal(false);
@@ -1323,7 +1344,7 @@ export default function ChallengeQuizPage() {
         )
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <BackLink href={noteDetailHref} label="Note" />
+          <BackLink href={planBackHref} label={planBackLabel} />
         </div>
       )}
 
@@ -1682,7 +1703,9 @@ export default function ChallengeQuizPage() {
                   Span this exam across more notes
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  Add up to 2 ready Study Packs from this subject.
+                  {collectionId
+                    ? `Add up to ${BOARD_EXAM_MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                    : `Add up to ${BOARD_EXAM_MAX_ADDITIONAL_NOTES} ready Study Packs from this subject.`}
                 </p>
               </div>
               {sourceNotesLoading ? (
@@ -1737,13 +1760,17 @@ export default function ChallengeQuizPage() {
                         <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>Generating from multiple notes may take up to a minute.</span>
                       </p>
-                      <p className="text-sm text-foreground/70">
-                        This session will use {selectedBoardExamSourceCount} of your {boardExamRemaining} remaining Board Exam sessions.
-                      </p>
-                      {boardExamSourceCountExceedsRemaining ? (
-                        <p className="text-sm text-amber-700 dark:text-amber-300">
-                          Not enough Board Exam quota for {selectedBoardExamSourceCount} notes. Remove a note or upgrade.
-                        </p>
+                      {boardExamAvailable ? (
+                        <>
+                          <p className="text-sm text-foreground/70">
+                            This session will use {selectedBoardExamSourceCount} of your {boardExamRemaining} remaining Board Exam sessions.
+                          </p>
+                          {boardExamSourceCountExceedsRemaining ? (
+                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                              Not enough Board Exam quota for {selectedBoardExamSourceCount} notes. Remove a note or upgrade.
+                            </p>
+                          ) : null}
+                        </>
                       ) : null}
                     </>
                   ) : null}
@@ -1753,9 +1780,6 @@ export default function ChallengeQuizPage() {
               )}
             </div>
 
-            {!boardExamAvailable ? (
-              <p className="text-sm text-amber-700 dark:text-amber-300">Pro required to start Board Exam Mode.</p>
-            ) : null}
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your board exam...</p>
             ) : null}
@@ -1797,13 +1821,17 @@ export default function ChallengeQuizPage() {
                     type="button"
                     className="w-full sm:w-auto"
                     onClick={() => {
+                      if (!boardExamAvailable) {
+                        openLockedFeaturePaywall("board-exam-mode", "board_exam_start");
+                        return;
+                      }
                       setShowBoardExamStartModal(true);
                     }}
-                    disabled={challengeGenerationLocked || boardExamSourceCountExceedsRemaining}
+                    disabled={challengeGenerationLocked || (boardExamAvailable && boardExamSourceCountExceedsRemaining)}
                   >
                     {boardExamAvailable
                       ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"
-                      : "Unlock Board Exam Mode"}
+                      : "Unlock Board Exam - Pro"}
                   </Button>
                 ) : null}
               </div>

@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import {
   forfeitLongExamSession,
   getActiveLongExamSession,
+  getCollection,
   getMe,
   getNote,
   listNotes,
@@ -12,9 +13,12 @@ import {
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
+let searchParamsMock = new URLSearchParams();
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ id: "note-1" }),
+  usePathname: () => "/notes/note-1/long-exam",
+  useSearchParams: () => searchParamsMock,
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
@@ -40,6 +44,7 @@ jest.mock("@/lib/api", () => ({
   completeLongExamSession: jest.fn(),
   forfeitLongExamSession: jest.fn(),
   getActiveLongExamSession: jest.fn(),
+  getCollection: jest.fn(),
   getLongExamSession: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
@@ -54,7 +59,9 @@ describe("LongExamPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    searchParamsMock = new URLSearchParams();
     (forfeitLongExamSession as jest.Mock).mockReset();
+    (getCollection as jest.Mock).mockReset();
     (startLongExam as jest.Mock).mockReset();
     (getActiveLongExamSession as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -80,6 +87,10 @@ describe("LongExamPage", () => {
       monthlyLimit: 10,
     });
     (listNotes as jest.Mock).mockResolvedValue([]);
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [],
+    });
     (startLongExam as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
       status: "GENERATING",
@@ -107,6 +118,27 @@ describe("LongExamPage", () => {
     expect(screen.getByText("Mastery report at the end")).toBeInTheDocument();
     expect(screen.getByText("1 note · 25 questions")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Begin Long Exam" })).toBeInTheDocument();
+  });
+
+  it("shows Long Exam setup to free users and opens the paywall from the Start CTA", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      profileType: "STUDENT",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+
+    render(<LongExamPage />);
+
+    expect(await screen.findByRole("heading", { name: "Long Exam" })).toBeInTheDocument();
+    expect(screen.getByText("What to expect")).toBeInTheDocument();
+    expect(getActiveLongExamSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Long Exam Mode" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlock Long Exam - Pro" }));
+
+    expect(await screen.findByRole("dialog", { name: "Long Exam Mode" })).toBeInTheDocument();
+    expect(startLongExam).not.toHaveBeenCalled();
   });
 
   it("routes Choose another mode back to the shared mode picker", async () => {
@@ -140,6 +172,54 @@ describe("LongExamPage", () => {
     expect(await screen.findByText("Span this exam across more notes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Cell Transport/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Organic Chemistry/ })).not.toBeInTheDocument();
+  });
+
+  it("scopes collection launches to plan notes and preselects up to the Long Exam cap", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", profileType: "STUDENT" });
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
+        { noteId: "note-4", position: 3, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-4" },
+        { noteId: "note-5", position: 4, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-5" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Plan Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-4", title: "Plan Four", subject: "Biology", studyPackId: "sp-4", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-5", title: "Plan Five", subject: "Biology", studyPackId: "sp-5", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-9", title: "Outside Plan", subject: "Biology", studyPackId: "sp-9", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<LongExamPage />);
+
+    expect(await screen.findByRole("button", { name: /Plan Two/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Three/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Four/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Plan Five/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: /Outside Plan/ })).not.toBeInTheDocument();
+    expect(screen.getByText("4 notes · 25 questions")).toBeInTheDocument();
+    expect(screen.getByText("Add up to 3 more notes from this plan.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Study Plan/ })).toHaveAttribute("href", "/collections/collection-1");
+  });
+
+  it("falls back to the normal source picker when collection lookup fails", async () => {
+    searchParamsMock = new URLSearchParams("collectionId=missing");
+    (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Fallback Same Subject", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Other Subject", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<LongExamPage />);
+
+    expect(await screen.findByRole("button", { name: /Fallback Same Subject/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Other Subject/ })).not.toBeInTheDocument();
+    expect(screen.getByText("1 note · 25 questions")).toBeInTheDocument();
   });
 
   it("updates source summary and sends selected additional study pack ids", async () => {

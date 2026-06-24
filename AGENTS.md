@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.32.0` (in progress); previous: `v0.31.2 - Analytics Integrity & Funnel Visibility`
+- `v0.32.1` (in progress); previous: `v0.32.0 - Account & Communication Controls`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -112,6 +112,8 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Free users should see a soft paywall modal before any paid-plan quiz feature or Study Pack limit block attempts a paid conversion flow.
 - All paywalls must be context-aware. Never use generic upgrade prompts when the blocked action is known.
+- Premium exam paywalls for Long Exam, Board Exam Mode, and Interview Practice must fire from the Start CTA after the user can view the mode setup/prescreen, not from the mode-selection card click.
+- Study Plan premium-exam launch must route with `collectionId`, resolve profile-to-mode through `resolvePlanPremiumExamMode`, and scope additional-note pickers to quiz-ready notes from that plan only.
 - Shared paywalls must explain the specific blocked action, the upgrade value, and the strongest next plan path for that action.
 - Verified users who choose to upgrade should start the hosted checkout flow via `POST /api/payments/create`.
 - Frontend upgrade actions should redirect only to the backend-returned Xendit checkout URL.
@@ -1506,7 +1508,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.32.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.32.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

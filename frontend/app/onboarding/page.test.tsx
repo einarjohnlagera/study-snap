@@ -524,7 +524,7 @@ describe("OnboardingPage", () => {
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get Plus" }));
 
     expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
   });

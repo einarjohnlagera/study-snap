@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import Link from "next/link";
-import {useParams, useRouter} from "next/navigation";
+import {useParams, useRouter, useSearchParams} from "next/navigation";
 import {BarChart3, BookOpen, Hourglass, ListChecks} from "lucide-react";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
@@ -20,10 +20,12 @@ import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
 import {PaywallModal} from "@/components/billing/paywall-modal";
 import {ToastMessage} from "@/components/ui/toast-message";
 import {getAuthUser} from "@/lib/auth";
+import {getCollectionLabels} from "@/lib/collection-labels";
 import {
     completeLongExamSession,
     forfeitLongExamSession,
     getActiveLongExamSession,
+    getCollection,
     getLongExamSession,
     getMe,
     getNote,
@@ -46,6 +48,7 @@ import {
     resolveDeadlineEpochSeconds,
     resolveRemainingSecondsFromDeadline,
 } from "@/lib/challenge-quiz-timer";
+import {resolveCollectionScopedSourceNotes} from "@/lib/collection-exam";
 import {resolveQuizCorrectIndex, resolveQuizItemGroupAt} from "@/lib/quiz";
 import {cn} from "@/lib/utils";
 import {getUpgradeCtas, type AppPlanType} from "@/src/config/plans";
@@ -157,6 +160,7 @@ function resolveSameSubjectSourceNotes(
 
 export default function LongExamPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const params = useParams<{ id: string }>();
     const noteId = useMemo(() => {
         if (!params?.id) {
@@ -164,6 +168,7 @@ export default function LongExamPage() {
         }
         return Array.isArray(params.id) ? params.id[0] : params.id;
     }, [params]);
+    const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
 
     const [phase, setPhase] = useState<LongExamPhase>("prestart");
     const [loading, setLoading] = useState(true);
@@ -197,6 +202,8 @@ export default function LongExamPage() {
     const startedTrackedRef = useRef(false);
 
     const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : `/notes/${noteId}`), [note, noteId]);
+    const planBackHref = collectionId ? `/collections/${collectionId}` : noteDetailHref;
+    const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
     const studyPackId = note?.studyPackId ?? null;
     const modeSelectHref = studyPackId ? `/study-packs/${studyPackId}/challenge-quiz` : noteDetailHref;
     const totalQuestions = quiz.length;
@@ -205,7 +212,9 @@ export default function LongExamPage() {
     const longExamRemaining = Math.max(0, longExamMonthlyLimit - longExamUsedThisMonth);
     const longExamLimitReached = longExamMonthlyLimit > 0 && longExamUsedThisMonth >= longExamMonthlyLimit;
     const longExamSourceCountExceedsRemaining = selectedSourceCount > longExamRemaining;
-    const longExamUpgradeCtas = getUpgradeCtas((getAuthUser()?.planType ?? "FREE") as AppPlanType);
+    const currentPlanType = getAuthUser()?.planType ?? "FREE";
+    const longExamUpgradeCtas = getUpgradeCtas(currentPlanType as AppPlanType);
+    const longExamStartDisabled = !studyPackId || starting || (currentPlanType === "PRO" && (longExamLimitReached || longExamSourceCountExceedsRemaining));
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
     const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentQuestionIndex);
     const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
@@ -295,13 +304,6 @@ export default function LongExamPage() {
         if (!requireAuthenticatedOnboardedUser(router)) {
             return;
         }
-        const authUser = getAuthUser();
-        if (authUser?.planType !== "PRO") {
-            setShowLongExamPaywall(true);
-            setLoading(false);
-            return;
-        }
-
         try {
             const [noteDetail, me] = await Promise.all([getNote(noteId), getMe().catch(() => null)]);
             setNote(noteDetail);
@@ -312,9 +314,37 @@ export default function LongExamPage() {
             }
             try {
                 const notes = await listNotes();
-                setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
+                if (collectionId) {
+                    try {
+                        const collection = await getCollection(collectionId);
+                        const collectionSourceNotes = resolveCollectionScopedSourceNotes(
+                            collection,
+                            notes,
+                            noteDetail.id,
+                            {requireStudyPackId: true},
+                        );
+                        setAvailableSourceNotes(collectionSourceNotes);
+                        setSelectedAdditionalStudyPackIds(
+                            collectionSourceNotes
+                                .map((sourceNote) => sourceNote.studyPackId)
+                                .filter((studyPackId): studyPackId is string => Boolean(studyPackId))
+                                .slice(0, LONG_EXAM_MAX_ADDITIONAL_NOTES),
+                        );
+                    } catch {
+                        setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
+                        setSelectedAdditionalStudyPackIds([]);
+                    }
+                } else {
+                    setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
+                    setSelectedAdditionalStudyPackIds([]);
+                }
             } catch {
                 setAvailableSourceNotes([]);
+                setSelectedAdditionalStudyPackIds([]);
+            }
+            if (getAuthUser()?.planType !== "PRO") {
+                setActiveStartResponse(null);
+                return;
             }
 
             const activeSession = await getActiveLongExamSession(noteDetail.studyPackId);
@@ -363,7 +393,7 @@ export default function LongExamPage() {
         } finally {
             setLoading(false);
         }
-    }, [enterRunningFromStart, noteId, router, trackStarted]);
+    }, [collectionId, enterRunningFromStart, noteId, router, trackStarted]);
 
     useEffect(() => {
         void loadInitialState();
@@ -460,6 +490,10 @@ export default function LongExamPage() {
 
     const handleStartExam = useCallback(async () => {
         if (!studyPackId || starting) {
+            return;
+        }
+        if (getAuthUser()?.planType !== "PRO") {
+            setShowLongExamPaywall(true);
             return;
         }
         if (longExamSourceCountExceedsRemaining) {
@@ -750,28 +784,12 @@ export default function LongExamPage() {
     if (loading) {
         return (
             <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-                <BackLink href={noteDetailHref} label="Note" />
+                <BackLink href={planBackHref} label={planBackLabel} />
                 <Card className="space-y-4 p-4 sm:p-6">
                     <div className="h-4 w-36 animate-pulse rounded bg-foreground/10"/>
                     <div className="h-8 w-3/4 animate-pulse rounded bg-foreground/10"/>
                     <div className="h-24 w-full animate-pulse rounded bg-foreground/10"/>
                 </Card>
-            </main>
-        );
-    }
-
-    if (showLongExamPaywall) {
-        return (
-            <main className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
-                <PaywallModal
-                    isOpen={showLongExamPaywall}
-                    variant="long-exam-mode"
-                    source="long_exam_page_load"
-                    onClose={() => {
-                        setShowLongExamPaywall(false);
-                        router.push(noteDetailHref);
-                    }}
-                />
             </main>
         );
     }
@@ -797,7 +815,7 @@ export default function LongExamPage() {
                 />
             ) : (
                 <div className="flex items-center justify-between gap-3">
-                    <BackLink href={noteDetailHref} label="Note"/>
+                    <BackLink href={planBackHref} label={planBackLabel}/>
                 </div>
             )}
 
@@ -914,7 +932,9 @@ export default function LongExamPage() {
                                             Span this exam across more notes
                                         </h2>
                                         <p className="text-sm text-foreground/70">
-                                            Add up to 3 ready Study Packs from this subject.
+                                            {collectionId
+                                                ? `Add up to ${LONG_EXAM_MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                                                : `Add up to ${LONG_EXAM_MAX_ADDITIONAL_NOTES} ready Study Packs from this subject.`}
                                         </p>
                                     </div>
                                     <div className="mt-4 grid gap-2">
@@ -945,13 +965,17 @@ export default function LongExamPage() {
                                                     <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true"/>
                                                     <span>Generating from multiple notes may take up to a minute.</span>
                                                 </p>
-                                                <p className="text-sm text-foreground/70">
-                                                    This session will use {selectedSourceCount} of your {longExamRemaining} remaining Long Exam sessions.
-                                                </p>
-                                                {longExamSourceCountExceedsRemaining ? (
-                                                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                                                        Not enough Long Exam quota for {selectedSourceCount} notes. Remove a note or upgrade.
-                                                    </p>
+                                                {currentPlanType === "PRO" ? (
+                                                    <>
+                                                        <p className="text-sm text-foreground/70">
+                                                            This session will use {selectedSourceCount} of your {longExamRemaining} remaining Long Exam sessions.
+                                                        </p>
+                                                        {longExamSourceCountExceedsRemaining ? (
+                                                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                                                                Not enough Long Exam quota for {selectedSourceCount} notes. Remove a note or upgrade.
+                                                            </p>
+                                                        ) : null}
+                                                    </>
                                                 ) : null}
                                             </>
                                         ) : null}
@@ -1003,9 +1027,11 @@ export default function LongExamPage() {
                                         type="button"
                                         className="w-full sm:w-auto"
                                         onClick={() => void handleStartExam()}
-                                        disabled={!studyPackId || starting || longExamLimitReached || longExamSourceCountExceedsRemaining}
+                                        disabled={longExamStartDisabled}
                                     >
-                                        {starting ? "Starting..." : "Begin Long Exam"}
+                                        {currentPlanType === "PRO"
+                                            ? starting ? "Starting..." : "Begin Long Exam"
+                                            : "Unlock Long Exam - Pro"}
                                     </Button>
                                 </div>
                             </div>
@@ -1242,6 +1268,14 @@ export default function LongExamPage() {
             ) : null}
 
             <LeaveQuizModal/>
+            {showLongExamPaywall ? (
+                <PaywallModal
+                    isOpen={showLongExamPaywall}
+                    variant="long-exam-mode"
+                    source="long_exam_start"
+                    onClose={() => setShowLongExamPaywall(false)}
+                />
+            ) : null}
 
             {toast ? <ToastMessage message={toast.message} tone={toast.tone}/> : null}
         </main>
