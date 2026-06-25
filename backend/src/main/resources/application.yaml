@@ -27,6 +27,13 @@ server:
   port: ${SERVER_PORT:8080}
   servlet:
     context-path: /api
+  tomcat:
+    threads:
+      # Render Starter is 0.5 CPU / 512 MB. The Spring Boot default of 200 worker
+      # threads is pointless at 0.5 CPU and a native-memory hog (~1 MB stack each)
+      # that starves the heap. Cap it so the JVM fits the container.
+      max: ${SERVER_TOMCAT_THREADS_MAX:25}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:5}
 
 logging:
   level:
