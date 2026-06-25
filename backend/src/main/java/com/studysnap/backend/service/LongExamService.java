@@ -109,6 +109,7 @@ public class LongExamService {
     private static final int SECONDS_PER_QUESTION = 90;
     private static final int MAX_ADDITIONAL_SOURCE_COUNT = 3;
     private static final int MIN_QUESTIONS_PER_SOURCE = 3;
+    private static final int QUOTA_UNITS_PER_SESSION = 1;
     private static final BigDecimal ZERO_SCORE = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final List<QuickReviewSessionStatus> ACTIVE_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
@@ -151,7 +152,7 @@ public class LongExamService {
         int questionCount = resolveQuestionCount(userId);
         List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
         int sourceCount = additionalStudyPackIds.size() + 1;
-        assertLongExamQuotaAvailable(userId, planType, sourceCount);
+        assertLongExamQuotaAvailable(userId, planType, QUOTA_UNITS_PER_SESSION);
         AtomicBoolean createdSession = new AtomicBoolean(false);
         AtomicBoolean poolSourcedSession = new AtomicBoolean(false);
 
@@ -223,7 +224,7 @@ public class LongExamService {
             throw new LongExamGenerationFailedException();
         }
         if (createdSession.get()) {
-            userUsageService.incrementLongExamGenerationBy(userId, sourceCount, OffsetDateTime.now(ZoneOffset.UTC));
+            userUsageService.incrementLongExamGenerationBy(userId, QUOTA_UNITS_PER_SESSION, OffsetDateTime.now(ZoneOffset.UTC));
         }
         if (createdSession.get() && !poolSourcedSession.get() && additionalStudyPackIds.isEmpty()) {
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
@@ -540,10 +541,10 @@ public class LongExamService {
                 .orElse(null);
     }
 
-    private int assertLongExamQuotaAvailable(UUID userId, PlanType planType, int sourceCount) {
+    private int assertLongExamQuotaAvailable(UUID userId, PlanType planType, int quotaUnits) {
         long usedThisMonth = countLongExamUsedThisMonth(userId);
         int monthlyLimit = properties.getPricing().resolveMonthlyLongExamLimit(planType);
-        if (usedThisMonth + sourceCount <= monthlyLimit) {
+        if (usedThisMonth + quotaUnits <= monthlyLimit) {
             return (int) usedThisMonth;
         }
         throw new MonthlyLongExamLimitReachedException();

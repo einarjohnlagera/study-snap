@@ -78,8 +78,7 @@ describe("LongExamPage", () => {
       studyPackStatus: "STUDY_PACK_READY",
     });
     // No active session, but the endpoint still returns the caller's Long Exam quota
-    // (mirrors the backend's buildEmptyStartResponse). monthlyLimit must be high enough
-    // that selecting extra source notes does not trip the per-note quota gate.
+    // (mirrors the backend's buildEmptyStartResponse).
     (getActiveLongExamSession as jest.Mock).mockResolvedValue({
       sessionId: null,
       status: null,
@@ -246,6 +245,46 @@ describe("LongExamPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Cell Transport/ }));
     fireEvent.click(screen.getByRole("button", { name: /Genetics Lab/ }));
     expect(screen.getByText("3 notes · 25 questions")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Begin Long Exam" }));
+
+    expect(startLongExam).toHaveBeenCalledWith("sp-1", {
+      additionalStudyPackIds: ["sp-2", "sp-3"],
+    });
+  });
+
+  it("allows multi-note Long Exam starts when one session remains", async () => {
+    (getActiveLongExamSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      usedThisMonth: 9,
+      monthlyLimit: 10,
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-2",
+        title: "Cell Transport",
+        subject: "Biology",
+        studyPackId: "sp-2",
+        studyPackStatus: "STUDY_PACK_READY",
+      },
+      {
+        id: "note-3",
+        title: "Genetics Lab",
+        subject: "Biology",
+        studyPackId: "sp-3",
+        studyPackStatus: "STUDY_PACK_READY",
+      },
+    ]);
+
+    render(<LongExamPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Cell Transport/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Genetics Lab/ }));
+
+    expect(screen.getByText("This session uses 1 of your 1 remaining Long Exam sessions.")).toBeInTheDocument();
+    expect(screen.queryByText(/Not enough Long Exam quota/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Begin Long Exam" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Begin Long Exam" }));
 

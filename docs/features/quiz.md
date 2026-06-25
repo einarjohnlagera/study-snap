@@ -32,8 +32,8 @@ Shared ownership rule:
 
 - strict exam-simulation presentation of the Challenge Quiz engine
 - Pro-only at Start CTA; Free and Plus users may open the setup screen before the upgrade ask
-- consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month by default)
-- quota is deducted per source note at session start: 1 unit for a single-note exam, 2 units for a two-note exam, and 3 units for a three-note exam
+- consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` sessions / month by default)
+- quota is deducted per session at exam start: 1 unit per Board Exam regardless of note count; the source count still drives question-count scaling and multi-note generation
 - generated question count scales with source count: `min(12 * sourceCount, 30)` so single-note stays at 12, two notes generate 24, and three notes cap at 30
 - selected from the same mode-selection screen
 - Board Exam can also launch from a Study Plan / Review Set through `collectionId`; the setup opens directly, additional Study Pack choices are restricted to quiz-ready notes in that plan, and the existing 2-additional-note cap is unchanged
@@ -53,8 +53,8 @@ Shared ownership rule:
 
 - Student-facing long-form exam mode; identity contract in `docs/product/EXAM_MODES.md`
 - Pro-only at Start CTA, using the shared `LONG_EXAM` session discriminator; Free and Plus users may open the prestart setup before the upgrade ask
-- quota-limited separately from Challenge Quiz (`12` source-note units / month by default)
-- quota is deducted per source note at session start: `additionalStudyPackIds.size() + 1`
+- quota-limited separately from Challenge Quiz (`12` sessions / month by default)
+- quota is deducted per session at exam start: 1 unit per Long Exam regardless of note count; the source count still drives source refs, question distribution, and multi-note generation
 - fixed question set generated at start (not progressive)
 - prestart supports one primary note plus up to 3 additional same-subject Study Pack-ready notes
 - Long Exam can also launch from a Study Plan through `collectionId`; plan launch replaces the same-subject default picker with quiz-ready notes from that plan only and pre-selects up to the existing 3-additional-note cap

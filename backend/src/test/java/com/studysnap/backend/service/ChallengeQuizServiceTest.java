@@ -551,7 +551,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::questionCount)
                 .containsExactly(10, 10, 10);
-        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(3), any(OffsetDateTime.class));
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
         verify(examQuestionPoolService, never()).sampleQuestions(
                 eq(primaryStudyPackId),
                 eq(ExamQuestionPoolService.MODE_BOARD_EXAM),
@@ -609,7 +609,7 @@ class ChallengeQuizServiceTest {
                 .extracting(LongExamSourceNoteRef::questionCount)
                 .containsExactly(12, 12);
         assertThat(response.quiz()).hasSize(24);
-        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(2), any(OffsetDateTime.class));
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test
@@ -788,14 +788,19 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_blocksMultiNoteBoardExamWhenRemainingQuotaCannotCoverSourceCount() {
+    void startSession_allowsMultiNoteBoardExamWhenOneQuotaUnitRemains() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID additionalStudyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, additionalNoteId, userId);
+        additionalStudyPack.setTitle("Additional source");
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId),
                 eq(studyPackId),
@@ -832,19 +837,40 @@ class ChallengeQuizServiceTest {
                 9
         ));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
-
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
-                null,
-                "board_exam",
-                List.of(additionalStudyPackId.toString())
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class))).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                "Nursing",
+                List.of()
+        ));
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(),
+                any(),
+                any(),
+                any(),
+                eq(12),
+                eq("mixed"),
+                any(StudyPackGenerationContext.class)
+        )).thenReturn(
+                buildQuizWithPrefix("Primary", 12),
+                buildQuizWithPrefix("Additional", 12)
         );
-        String studyPackIdRaw = studyPackId.toString();
-        assertThatThrownBy(() -> challengeQuizService.startSession(studyPackIdRaw, userId, request))
-                .isInstanceOf(MonthlyBoardExamLimitReachedException.class);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
-        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(userUsageService, never()).incrementBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                studyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest(null, "board_exam", List.of(additionalStudyPackId.toString()))
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.quiz()).hasSize(24);
+        assertThat(response.boardExamUsedThisMonth()).isEqualTo(10);
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::questionCount)
+                .containsExactly(12, 12);
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test
