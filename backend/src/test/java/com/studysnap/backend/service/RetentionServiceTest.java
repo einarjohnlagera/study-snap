@@ -13,6 +13,8 @@ import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -143,11 +145,11 @@ class RetentionServiceTest {
         );
         challengeSession.setStudyPackId(UUID.fromString("00000000-0000-0000-0000-000000000101"));
         challengeSession.setNoteId(UUID.fromString("00000000-0000-0000-0000-000000000202"));
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 user.getId(),
                 QuickReviewSessionMode.CHALLENGE,
                 PageRequest.of(0, 1)
-        )).thenReturn(List.of(challengeSession));
+        )).thenReturn(List.of(toMetadataProjection(challengeSession)));
 
         QuickReviewSessionEntity adaptiveSession = completedSession(
                 user.getId(),
@@ -156,12 +158,12 @@ class RetentionServiceTest {
                 Map.of("weakConcepts", List.of("Mitosis"))
         );
         adaptiveSession.setStudyPackId(challengeSession.getStudyPackId());
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
                 user.getId(),
                 challengeSession.getStudyPackId(),
                 QuickReviewSessionMode.ADAPTIVE,
                 PageRequest.of(0, 10)
-        )).thenReturn(List.of(adaptiveSession));
+        )).thenReturn(List.of(toMetadataProjection(adaptiveSession)));
 
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(challengeSession.getStudyPackId());
@@ -418,12 +420,14 @@ class RetentionServiceTest {
                 activityEvent(user.getId(), ActivityType.COMPLETED_CHALLENGE_QUIZ, now.minusDays(4)),
                 activityEvent(user.getId(), ActivityType.STARTED_ADAPTIVE_PRACTICE, now.minusDays(3))
         ));
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeInAndCompletedAtBetweenOrderByCompletedAtDesc(
                 user.getId(),
-                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE),
+                weekStart,
+                now
         )).thenReturn(List.of(
-                completedScoredSession(user.getId(), QuickReviewSessionMode.QUICK_REVIEW, now.minusDays(5), "80"),
-                completedScoredSession(user.getId(), QuickReviewSessionMode.CHALLENGE, now.minusDays(4), "90")
+                toSummaryProjection(completedScoredSession(user.getId(), QuickReviewSessionMode.QUICK_REVIEW, now.minusDays(5), "80")),
+                toSummaryProjection(completedScoredSession(user.getId(), QuickReviewSessionMode.CHALLENGE, now.minusDays(4), "90"))
         ));
 
         List<RetentionService.WeeklySummaryReminder> candidates = retentionService.findWeeklySummaryUsers(now);
@@ -514,6 +518,43 @@ class RetentionServiceTest {
         QuickReviewSessionEntity session = completedSession(userId, mode, completedAt, Map.of());
         session.setScorePercentage(new BigDecimal(scorePercentage));
         return session;
+    }
+
+    private QuickReviewSessionSummaryProjection toSummaryProjection(QuickReviewSessionEntity session) {
+        return new QuickReviewSessionSummaryProjection(
+                session.getId(),
+                session.getUserId(),
+                session.getStudyPackId(),
+                session.getNoteId(),
+                session.getSessionMode(),
+                null,
+                null,
+                null,
+                session.getScorePercentage(),
+                null,
+                null,
+                null,
+                session.getCompletedAt()
+        );
+    }
+
+    private QuickReviewSessionMetadataProjection toMetadataProjection(QuickReviewSessionEntity session) {
+        return new QuickReviewSessionMetadataProjection(
+                session.getId(),
+                session.getUserId(),
+                session.getStudyPackId(),
+                session.getNoteId(),
+                session.getSessionMode(),
+                null,
+                null,
+                null,
+                session.getScorePercentage(),
+                null,
+                null,
+                session.getSessionMetadata(),
+                null,
+                session.getCompletedAt()
+        );
     }
 
     private UserActivityEventEntity activityEvent(UUID userId, ActivityType activityType, OffsetDateTime createdAt) {

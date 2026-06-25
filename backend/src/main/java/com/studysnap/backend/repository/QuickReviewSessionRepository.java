@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -16,6 +17,42 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewSessionEntity, UUID> {
+    String SESSION_SUMMARY_PROJECTION = """
+             new com.studysnap.backend.repository.QuickReviewSessionSummaryProjection(
+                q.id,
+                q.userId,
+                q.studyPackId,
+                q.noteId,
+                q.sessionMode,
+                q.status,
+                q.totalQuestions,
+                q.correctAnswers,
+                q.scorePercentage,
+                q.retryCount,
+                q.durationSeconds,
+                q.createdAt,
+                q.completedAt
+            )
+            """;
+    String SESSION_METADATA_PROJECTION = """
+             new com.studysnap.backend.repository.QuickReviewSessionMetadataProjection(
+                q.id,
+                q.userId,
+                q.studyPackId,
+                q.noteId,
+                q.sessionMode,
+                q.status,
+                q.totalQuestions,
+                q.correctAnswers,
+                q.scorePercentage,
+                q.retryCount,
+                q.durationSeconds,
+                q.sessionMetadata,
+                q.createdAt,
+                q.completedAt
+            )
+            """;
+
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
     void deleteByUserId(UUID userId);
@@ -74,6 +111,108 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     );
 
     List<QuickReviewSessionEntity> findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(UUID userId);
+
+    @Query("""
+            select """ + SESSION_SUMMARY_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode = :sessionMode
+              and q.completedAt is not null
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionSummaryProjection> findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            Pageable pageable
+    );
+
+    @Query("""
+            select """ + SESSION_SUMMARY_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode in :sessionModes
+              and q.completedAt is not null
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionSummaryProjection> findCompletedSessionSummariesByUserIdAndSessionModeInOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sessionModes") Collection<QuickReviewSessionMode> sessionModes
+    );
+
+    @Query("""
+            select """ + SESSION_SUMMARY_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.studyPackId = :studyPackId
+              and q.sessionMode = :sessionMode
+              and q.completedAt is not null
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionSummaryProjection> findCompletedSessionSummariesByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("studyPackId") UUID studyPackId,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            Pageable pageable
+    );
+
+    @Query("""
+            select """ + SESSION_SUMMARY_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode in :sessionModes
+              and q.completedAt >= :fromInclusive
+              and q.completedAt < :toExclusive
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionSummaryProjection> findCompletedSessionSummariesByUserIdAndSessionModeInAndCompletedAtBetweenOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sessionModes") Collection<QuickReviewSessionMode> sessionModes,
+            @Param("fromInclusive") OffsetDateTime fromInclusive,
+            @Param("toExclusive") OffsetDateTime toExclusive
+    );
+
+    @Query("""
+            select """ + SESSION_METADATA_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode = :sessionMode
+              and q.completedAt is not null
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionMetadataProjection> findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode
+    );
+
+    @Query("""
+            select """ + SESSION_METADATA_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode = :sessionMode
+              and q.completedAt is not null
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionMetadataProjection> findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            Pageable pageable
+    );
+
+    @Query("""
+            select """ + SESSION_METADATA_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.studyPackId = :studyPackId
+              and q.sessionMode = :sessionMode
+              and q.completedAt is not null
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionMetadataProjection> findCompletedSessionMetadataByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("studyPackId") UUID studyPackId,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            Pageable pageable
+    );
 
     Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
             UUID userId,
