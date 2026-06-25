@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdminFunnelPage from "./page";
 import { getAdminFunnelMetrics } from "@/lib/api";
 
@@ -65,7 +65,11 @@ describe("AdminFunnelPage", () => {
 
     render(<AdminFunnelPage />);
 
+    await waitFor(() => {
+      expect(getAdminFunnelMetrics).toHaveBeenCalledWith(30);
+    });
     expect(await screen.findByText("Checkout conversion")).toBeInTheDocument();
+    expect(screen.getAllByText("Event window: Last 30 days").length).toBeGreaterThan(0);
     expect(screen.getByText("Upgrade Clicks")).toBeInTheDocument();
     expect(screen.getByText("Checkout Initiated")).toBeInTheDocument();
     expect(screen.getByText("Paid Conversions")).toBeInTheDocument();
@@ -74,9 +78,10 @@ describe("AdminFunnelPage", () => {
     expect(screen.getByText("Checkout to Paid")).toBeInTheDocument();
     expect(screen.getByText("25.0%")).toBeInTheDocument();
     expect(screen.getByText("Click to Paid")).toBeInTheDocument();
-    expect(screen.getByText("10.0%")).toBeInTheDocument();
+    expect(screen.getAllByText("10.0%").length).toBeGreaterThan(0);
 
     expect(screen.getByText("W1→W2 retention")).toBeInTheDocument();
+    expect(screen.getByText("All-time eligible cohorts with completed week-2 windows")).toBeInTheDocument();
     expect(screen.getByText("Returned in Week 2")).toBeInTheDocument();
     expect(screen.getByText("5 of 12 eligible activated users")).toBeInTheDocument();
     expect(screen.getByText("May 4, 2026")).toBeInTheDocument();
@@ -107,6 +112,48 @@ describe("AdminFunnelPage", () => {
     expect(await screen.findByText("No eligible retention cohorts yet.")).toBeInTheDocument();
     expect(screen.getAllByText("0.0%").length).toBeGreaterThan(0);
   });
+
+  it("refetches metrics when the window selector changes and renders quota breakdown", async () => {
+    requireAdminUser.mockReturnValue(true);
+    (getAdminFunnelMetrics as jest.Mock).mockResolvedValue(buildMetricsResponse({
+      retentionCohort: {
+        eligibleActivatedUsers: 0,
+        returnedWeek2Users: 0,
+        ratePercent: 0,
+        weeklyCohorts: [],
+      },
+      checkoutConversion: {
+        usersClickedUpgrade: 2,
+        usersInitiatedCheckout: 1,
+        usersSubscribed: 0,
+        clickToCheckoutRatePercent: 50,
+        checkoutToPaidRatePercent: 0,
+        clickToPaidRatePercent: 0,
+      },
+    }));
+
+    render(<AdminFunnelPage />);
+
+    expect(await screen.findByText("Free quota hits")).toBeInTheDocument();
+    expect(screen.getByText("Any Free Quota Hit")).toBeInTheDocument();
+    expect(screen.getByText("Study Packs")).toBeInTheDocument();
+    expect(screen.getByText("Challenge Quiz")).toBeInTheDocument();
+    expect(screen.getByText("Adaptive Practice")).toBeInTheDocument();
+    expect(screen.getByText("Interview Practice")).toBeInTheDocument();
+    expect(screen.getAllByText("Not on Free").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Funnel window"), { target: { value: "7" } });
+
+    await waitFor(() => {
+      expect(getAdminFunnelMetrics).toHaveBeenLastCalledWith(7);
+    });
+
+    fireEvent.change(screen.getByLabelText("Funnel window"), { target: { value: "all" } });
+
+    await waitFor(() => {
+      expect(getAdminFunnelMetrics).toHaveBeenLastCalledWith(undefined);
+    });
+  });
 });
 
 function buildMetricsResponse(overrides: {
@@ -131,6 +178,8 @@ function buildMetricsResponse(overrides: {
   };
 }) {
   return {
+    windowDays: 30,
+    windowStartedAt: "2026-05-24T00:00:00Z",
     activation: {
       totalVerifiedUsers: 20,
       activatedUsers: 8,
@@ -144,6 +193,62 @@ function buildMetricsResponse(overrides: {
       freeUsersHitQuota: 2,
       totalFreeUsers: 10,
       ratePercent: 20,
+      quotaTypes: [
+        {
+          quotaType: "study_pack",
+          label: "Study Packs",
+          monthlyLimit: 10,
+          usersHitQuota: 0,
+          applicableFreeUsers: 10,
+          ratePercent: 0,
+          applicable: true,
+        },
+        {
+          quotaType: "quiz",
+          label: "Challenge Quiz",
+          monthlyLimit: 5,
+          usersHitQuota: 2,
+          applicableFreeUsers: 10,
+          ratePercent: 20,
+          applicable: true,
+        },
+        {
+          quotaType: "adaptive",
+          label: "Adaptive Practice",
+          monthlyLimit: 3,
+          usersHitQuota: 1,
+          applicableFreeUsers: 10,
+          ratePercent: 10,
+          applicable: true,
+        },
+        {
+          quotaType: "long_exam",
+          label: "Long Exam",
+          monthlyLimit: 0,
+          usersHitQuota: 0,
+          applicableFreeUsers: 0,
+          ratePercent: 0,
+          applicable: false,
+        },
+        {
+          quotaType: "board_exam",
+          label: "Board Exam",
+          monthlyLimit: 0,
+          usersHitQuota: 0,
+          applicableFreeUsers: 0,
+          ratePercent: 0,
+          applicable: false,
+        },
+        {
+          quotaType: "interview",
+          label: "Interview Practice",
+          monthlyLimit: 0,
+          usersHitQuota: 0,
+          applicableFreeUsers: 0,
+          ratePercent: 0,
+          applicable: false,
+        },
+      ],
     },
     paywallConversion: {
       usersSeenPaywall: 5,

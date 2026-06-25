@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 @Transactional(readOnly = true)
@@ -30,6 +31,18 @@ public class AdminFunnelService {
     private static final int STUCK_GENERATION_DAYS = 7;
     private static final double PERCENT_MULTIPLIER = 100.0;
     private static final double ONE_DECIMAL_PLACE = 10.0;
+    private static final String QUOTA_TYPE_STUDY_PACK = "study_pack";
+    private static final String QUOTA_TYPE_CHALLENGE_QUIZ = "quiz";
+    private static final String QUOTA_TYPE_ADAPTIVE_PRACTICE = "adaptive";
+    private static final String QUOTA_TYPE_LONG_EXAM = "long_exam";
+    private static final String QUOTA_TYPE_BOARD_EXAM = "board_exam";
+    private static final String QUOTA_TYPE_INTERVIEW_PRACTICE = "interview";
+    private static final String QUOTA_LABEL_STUDY_PACK = "Study Packs";
+    private static final String QUOTA_LABEL_CHALLENGE_QUIZ = "Challenge Quiz";
+    private static final String QUOTA_LABEL_ADAPTIVE_PRACTICE = "Adaptive Practice";
+    private static final String QUOTA_LABEL_LONG_EXAM = "Long Exam";
+    private static final String QUOTA_LABEL_BOARD_EXAM = "Board Exam";
+    private static final String QUOTA_LABEL_INTERVIEW_PRACTICE = "Interview Practice";
 
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
@@ -40,17 +53,25 @@ public class AdminFunnelService {
     private final StudySnapProperties properties;
 
     public AdminFunnelMetricsResponse getMetrics() {
+        return getMetrics(null);
+    }
+
+    public AdminFunnelMetricsResponse getMetrics(Integer windowDays) {
         OffsetDateTime now = OffsetDateTime.now();
+        Integer normalizedWindowDays = normalizeWindowDays(windowDays);
+        OffsetDateTime since = normalizedWindowDays == null ? null : now.minusDays(normalizedWindowDays);
 
         AdminFunnelMetricsResponse.ActivationMetrics activation = getActivationMetrics();
         AdminFunnelMetricsResponse.StuckUsersMetrics stuckUsers = getStuckUsersMetrics(now);
         AdminFunnelMetricsResponse.QuotaHitMetrics quotaHit = getQuotaHitMetrics(now);
-        AdminFunnelMetricsResponse.PaywallConversionMetrics paywallConversion = getPaywallConversionMetrics();
-        AdminFunnelMetricsResponse.ValueLoopMetrics valueLoop = getValueLoopMetrics();
+        AdminFunnelMetricsResponse.PaywallConversionMetrics paywallConversion = getPaywallConversionMetrics(since);
+        AdminFunnelMetricsResponse.ValueLoopMetrics valueLoop = getValueLoopMetrics(since);
         AdminFunnelMetricsResponse.RetentionCohortMetrics retentionCohort = getRetentionCohortMetrics(now);
-        AdminFunnelMetricsResponse.CheckoutConversionMetrics checkoutConversion = getCheckoutConversionMetrics();
+        AdminFunnelMetricsResponse.CheckoutConversionMetrics checkoutConversion = getCheckoutConversionMetrics(since);
 
         return new AdminFunnelMetricsResponse(
+                normalizedWindowDays,
+                since,
                 activation,
                 stuckUsers,
                 quotaHit,
@@ -88,7 +109,44 @@ public class AdminFunnelService {
 
         List<UserUsageEntity> currentPeriodUsage = userUsageRepository
                 .findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(now, now);
-        int freeMonthlyStudyPackLimit = properties.getPricing().getFreeMonthlyStudyPackLimit();
+        List<QuotaAccumulator> quotaAccumulators = List.of(
+                new QuotaAccumulator(
+                        QUOTA_TYPE_STUDY_PACK,
+                        QUOTA_LABEL_STUDY_PACK,
+                        properties.getPricing().resolveMonthlyStudyPackLimit(PlanType.FREE),
+                        UserUsageEntity::getStudyPackGenerations
+                ),
+                new QuotaAccumulator(
+                        QUOTA_TYPE_CHALLENGE_QUIZ,
+                        QUOTA_LABEL_CHALLENGE_QUIZ,
+                        properties.getPricing().resolveMonthlyChallengeQuizLimit(PlanType.FREE),
+                        UserUsageEntity::getChallengeQuizGenerations
+                ),
+                new QuotaAccumulator(
+                        QUOTA_TYPE_ADAPTIVE_PRACTICE,
+                        QUOTA_LABEL_ADAPTIVE_PRACTICE,
+                        properties.getPricing().resolveMonthlyAdaptivePracticeLimit(PlanType.FREE),
+                        UserUsageEntity::getAdaptiveQuizGenerations
+                ),
+                new QuotaAccumulator(
+                        QUOTA_TYPE_LONG_EXAM,
+                        QUOTA_LABEL_LONG_EXAM,
+                        properties.getPricing().resolveMonthlyLongExamLimit(PlanType.FREE),
+                        UserUsageEntity::getLongExamUsedThisMonth
+                ),
+                new QuotaAccumulator(
+                        QUOTA_TYPE_BOARD_EXAM,
+                        QUOTA_LABEL_BOARD_EXAM,
+                        properties.getPricing().resolveMonthlyBoardExamLimit(PlanType.FREE),
+                        UserUsageEntity::getBoardExamUsedThisMonth
+                ),
+                new QuotaAccumulator(
+                        QUOTA_TYPE_INTERVIEW_PRACTICE,
+                        QUOTA_LABEL_INTERVIEW_PRACTICE,
+                        properties.getPricing().resolveMonthlyInterviewPracticeLimit(PlanType.FREE),
+                        UserUsageEntity::getInterviewPracticeUsedThisMonth
+                )
+        );
 
         long totalFreeUsers = 0;
         long freeUsersHitQuota = 0;
@@ -97,8 +155,13 @@ public class AdminFunnelService {
                 continue;
             }
             totalFreeUsers++;
-            if (usage.getStudyPackGenerations() != null
-                    && usage.getStudyPackGenerations() >= freeMonthlyStudyPackLimit) {
+            boolean hitAnyQuota = false;
+            for (QuotaAccumulator quotaAccumulator : quotaAccumulators) {
+                if (quotaAccumulator.record(usage)) {
+                    hitAnyQuota = true;
+                }
+            }
+            if (hitAnyQuota) {
                 freeUsersHitQuota++;
             }
         }
@@ -106,16 +169,25 @@ public class AdminFunnelService {
         return new AdminFunnelMetricsResponse.QuotaHitMetrics(
                 freeUsersHitQuota,
                 totalFreeUsers,
-                ratePercent(freeUsersHitQuota, totalFreeUsers)
+                ratePercent(freeUsersHitQuota, totalFreeUsers),
+                quotaAccumulators.stream()
+                        .map(QuotaAccumulator::toMetrics)
+                        .toList()
         );
     }
 
-    private AdminFunnelMetricsResponse.PaywallConversionMetrics getPaywallConversionMetrics() {
-        long usersSeenPaywall = analyticsEventRepository.countDistinctUsersByEventType(AnalyticsEventType.PAYWALL_VIEWED);
-        long usersUpgradedAfterPaywall = analyticsEventRepository.countUsersUpgradedAfterPaywall(
-                AnalyticsEventType.PAYWALL_VIEWED,
-                AnalyticsEventType.SUBSCRIPTION_STARTED
-        );
+    private AdminFunnelMetricsResponse.PaywallConversionMetrics getPaywallConversionMetrics(OffsetDateTime since) {
+        long usersSeenPaywall = countDistinctUsersByEventType(AnalyticsEventType.PAYWALL_VIEWED, since);
+        long usersUpgradedAfterPaywall = since == null
+                ? analyticsEventRepository.countUsersUpgradedAfterPaywall(
+                        AnalyticsEventType.PAYWALL_VIEWED,
+                        AnalyticsEventType.SUBSCRIPTION_STARTED
+                )
+                : analyticsEventRepository.countUsersUpgradedAfterPaywallSince(
+                        AnalyticsEventType.PAYWALL_VIEWED,
+                        AnalyticsEventType.SUBSCRIPTION_STARTED,
+                        since
+                );
         return new AdminFunnelMetricsResponse.PaywallConversionMetrics(
                 usersSeenPaywall,
                 usersUpgradedAfterPaywall,
@@ -123,9 +195,11 @@ public class AdminFunnelService {
         );
     }
 
-    private AdminFunnelMetricsResponse.ValueLoopMetrics getValueLoopMetrics() {
-        long usersGeneratedPack = analyticsEventRepository.countDistinctUsersByEventType(AnalyticsEventType.STUDY_PACK_GENERATED);
-        long usersStartedQuizWithin7Days = analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPack();
+    private AdminFunnelMetricsResponse.ValueLoopMetrics getValueLoopMetrics(OffsetDateTime since) {
+        long usersGeneratedPack = countDistinctUsersByEventType(AnalyticsEventType.STUDY_PACK_GENERATED, since);
+        long usersStartedQuizWithin7Days = since == null
+                ? analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPack()
+                : analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPackSince(since);
         return new AdminFunnelMetricsResponse.ValueLoopMetrics(
                 usersGeneratedPack,
                 usersStartedQuizWithin7Days,
@@ -163,15 +237,17 @@ public class AdminFunnelService {
         );
     }
 
-    private AdminFunnelMetricsResponse.CheckoutConversionMetrics getCheckoutConversionMetrics() {
-        long usersClickedUpgrade = analyticsEventRepository.countDistinctUsersByEventType(AnalyticsEventType.UPGRADE_CLICKED);
-        long usersInitiatedCheckout = analyticsEventRepository.countDistinctUsersWithEventAfterEvent(
+    private AdminFunnelMetricsResponse.CheckoutConversionMetrics getCheckoutConversionMetrics(OffsetDateTime since) {
+        long usersClickedUpgrade = countDistinctUsersByEventType(AnalyticsEventType.UPGRADE_CLICKED, since);
+        long usersInitiatedCheckout = countDistinctUsersWithEventAfterEvent(
                 AnalyticsEventType.UPGRADE_CLICKED,
-                AnalyticsEventType.CHECKOUT_INITIATED
-        );
-        long usersSubscribed = analyticsEventRepository.countDistinctUsersWithEventAfterEvent(
                 AnalyticsEventType.CHECKOUT_INITIATED,
-                AnalyticsEventType.SUBSCRIPTION_STARTED
+                since
+        );
+        long usersSubscribed = countDistinctUsersWithEventAfterEvent(
+                AnalyticsEventType.CHECKOUT_INITIATED,
+                AnalyticsEventType.SUBSCRIPTION_STARTED,
+                since
         );
 
         return new AdminFunnelMetricsResponse.CheckoutConversionMetrics(
@@ -184,11 +260,87 @@ public class AdminFunnelService {
         );
     }
 
+    private long countDistinctUsersByEventType(AnalyticsEventType eventType, OffsetDateTime since) {
+        if (since == null) {
+            return analyticsEventRepository.countDistinctUsersByEventType(eventType);
+        }
+        return analyticsEventRepository.countDistinctUsersByEventTypeSince(eventType, since);
+    }
+
+    private long countDistinctUsersWithEventAfterEvent(
+            AnalyticsEventType earlierEventType,
+            AnalyticsEventType laterEventType,
+            OffsetDateTime since
+    ) {
+        if (since == null) {
+            return analyticsEventRepository.countDistinctUsersWithEventAfterEvent(earlierEventType, laterEventType);
+        }
+        return analyticsEventRepository.countDistinctUsersWithEventAfterEventSince(
+                earlierEventType,
+                laterEventType,
+                since
+        );
+    }
+
+    private Integer normalizeWindowDays(Integer windowDays) {
+        if (windowDays == null || windowDays <= 0) {
+            return null;
+        }
+        return windowDays;
+    }
+
     private double ratePercent(long numerator, long denominator) {
         if (denominator == 0) {
             return 0.0;
         }
         double rate = numerator * PERCENT_MULTIPLIER / denominator;
         return Math.round(rate * ONE_DECIMAL_PLACE) / ONE_DECIMAL_PLACE;
+    }
+
+    private final class QuotaAccumulator {
+        private final String quotaType;
+        private final String label;
+        private final int monthlyLimit;
+        private final Function<UserUsageEntity, Integer> usageReader;
+        private long applicableFreeUsers;
+        private long usersHitQuota;
+
+        private QuotaAccumulator(
+                String quotaType,
+                String label,
+                int monthlyLimit,
+                Function<UserUsageEntity, Integer> usageReader
+        ) {
+            this.quotaType = quotaType;
+            this.label = label;
+            this.monthlyLimit = monthlyLimit;
+            this.usageReader = usageReader;
+        }
+
+        private boolean record(UserUsageEntity usage) {
+            if (monthlyLimit <= 0) {
+                return false;
+            }
+            applicableFreeUsers++;
+            Integer usedValue = usageReader.apply(usage);
+            int used = usedValue == null ? 0 : usedValue;
+            if (used >= monthlyLimit) {
+                usersHitQuota++;
+                return true;
+            }
+            return false;
+        }
+
+        private AdminFunnelMetricsResponse.QuotaTypeHitMetrics toMetrics() {
+            return new AdminFunnelMetricsResponse.QuotaTypeHitMetrics(
+                    quotaType,
+                    label,
+                    monthlyLimit,
+                    usersHitQuota,
+                    applicableFreeUsers,
+                    ratePercent(usersHitQuota, applicableFreeUsers),
+                    monthlyLimit > 0
+            );
+        }
     }
 }

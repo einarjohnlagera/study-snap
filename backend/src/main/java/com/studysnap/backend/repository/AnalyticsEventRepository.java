@@ -45,7 +45,31 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
                     '""" + INTERVIEW_PRACTICE_STARTED_EVENT_TYPE + "'\n" + """
                 )
                 AND quiz.created_at >= fp.first_generated_at
-                AND quiz.created_at <= fp.first_generated_at + INTERVAL '7 days'
+                AND quiz.created_at <= fp.first_generated_at + INTERVAL '7' DAY
+            )
+            """;
+    String VALUE_LOOP_CLOSURE_SINCE_QUERY = """
+            SELECT COUNT(DISTINCT fp.user_id)
+            FROM (
+                SELECT ae.user_id, MIN(ae.created_at) AS first_generated_at
+                FROM analytics_events ae
+                WHERE ae.event_type = '""" + STUDY_PACK_GENERATED_EVENT_TYPE + "'\n" + """
+                  AND ae.created_at >= :since
+                GROUP BY ae.user_id
+            ) fp
+            WHERE EXISTS (
+                SELECT 1 FROM analytics_events quiz
+                WHERE quiz.user_id = fp.user_id
+                AND quiz.event_type IN (
+                    '""" + QUICK_REVIEW_STARTED_EVENT_TYPE + "',\n" + """
+                    '""" + CHALLENGE_QUIZ_STARTED_EVENT_TYPE + "',\n" + """
+                    '""" + ADAPTIVE_PRACTICE_STARTED_EVENT_TYPE + "',\n" + """
+                    '""" + BOARD_EXAM_STARTED_EVENT_TYPE + "',\n" + """
+                    '""" + LONG_EXAM_STARTED_EVENT_TYPE + "',\n" + """
+                    '""" + INTERVIEW_PRACTICE_STARTED_EVENT_TYPE + "'\n" + """
+                )
+                AND quiz.created_at >= fp.first_generated_at
+                AND quiz.created_at <= fp.first_generated_at + INTERVAL '7' DAY
             )
             """;
     String FIRST_PACK_CTE = """
@@ -97,6 +121,17 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
     @Query("""
             select count(distinct e.userId)
             from AnalyticsEventEntity e
+            where e.eventType = :eventType
+              and e.createdAt >= :since
+            """)
+    long countDistinctUsersByEventTypeSince(
+            @Param("eventType") AnalyticsEventType eventType,
+            @Param("since") OffsetDateTime since
+    );
+
+    @Query("""
+            select count(distinct e.userId)
+            from AnalyticsEventEntity e
             where e.eventType = :subscriptionStarted
               and exists (
                   select 1
@@ -109,6 +144,26 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
     long countUsersUpgradedAfterPaywall(
             @Param("paywallViewed") AnalyticsEventType paywallViewed,
             @Param("subscriptionStarted") AnalyticsEventType subscriptionStarted
+    );
+
+    @Query("""
+            select count(distinct e.userId)
+            from AnalyticsEventEntity e
+            where e.eventType = :subscriptionStarted
+              and e.createdAt >= :since
+              and exists (
+                  select 1
+                  from AnalyticsEventEntity paywall
+                  where paywall.userId = e.userId
+                    and paywall.eventType = :paywallViewed
+                    and paywall.createdAt >= :since
+                    and paywall.createdAt <= e.createdAt
+              )
+            """)
+    long countUsersUpgradedAfterPaywallSince(
+            @Param("paywallViewed") AnalyticsEventType paywallViewed,
+            @Param("subscriptionStarted") AnalyticsEventType subscriptionStarted,
+            @Param("since") OffsetDateTime since
     );
 
     @Query("""
@@ -128,8 +183,31 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
             @Param("laterEventType") AnalyticsEventType laterEventType
     );
 
+    @Query("""
+            select count(distinct later.userId)
+            from AnalyticsEventEntity later
+            where later.eventType = :laterEventType
+              and later.createdAt >= :since
+              and exists (
+                  select 1
+                  from AnalyticsEventEntity earlier
+                  where earlier.userId = later.userId
+                    and earlier.eventType = :earlierEventType
+                    and earlier.createdAt >= :since
+                    and earlier.createdAt <= later.createdAt
+              )
+            """)
+    long countDistinctUsersWithEventAfterEventSince(
+            @Param("earlierEventType") AnalyticsEventType earlierEventType,
+            @Param("laterEventType") AnalyticsEventType laterEventType,
+            @Param("since") OffsetDateTime since
+    );
+
     @Query(value = VALUE_LOOP_CLOSURE_QUERY, nativeQuery = true)
     long countUsersStartedQuizWithin7DaysOfFirstGeneratedPack();
+
+    @Query(value = VALUE_LOOP_CLOSURE_SINCE_QUERY, nativeQuery = true)
+    long countUsersStartedQuizWithin7DaysOfFirstGeneratedPackSince(@Param("since") OffsetDateTime since);
 
     @Query(value = ELIGIBLE_ACTIVATED_USERS_QUERY, nativeQuery = true)
     long countEligibleActivatedUsersForWeek2Retention(@Param("now") OffsetDateTime now);

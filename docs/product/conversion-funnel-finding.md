@@ -40,8 +40,8 @@ This conclusion never depended on the checkout read. The constraints are **reten
 
 ## Instrumentation gaps to close
 
-- **Funnel mixes metrics with different inception dates.** Comparing all-time `UPGRADE_CLICKED` (old) to `CHECKOUT_INITIATED` (since v0.31.2) is what produced the false "broken checkout." Add a **date-windowed / cohort funnel** (e.g. last-30-days, or "since each metric's inception") so stages are only compared over a common window.
-- **Free-quota-hit is study-pack-only.** `getQuotaHitMetrics` only checks `studyPackGenerations >= freeMonthlyStudyPackLimit`; quiz (5), adaptive (3), and exam limits aren't counted. Extend it so "0% hit" is trustworthy.
+- **Closed in v0.32.2: date-windowed funnel.** Admin Conversion Funnel now defaults event-based stages to a common 30-day window, with 7 / 30 / 90 / all-time options. All-time remains available, but it is no longer the default view that compares old `UPGRADE_CLICKED` data with newer `CHECKOUT_INITIATED` instrumentation.
+- **Closed in v0.32.2: quota-hit completeness.** `getQuotaHitMetrics` now reports current-period Free quota hits for Study Packs, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice plus an "any quota hit" aggregate. Quota types with a Free limit of `0` are shown as not applicable and excluded from that type's denominator.
 
 ## Re-prioritization for v0.32.2
 

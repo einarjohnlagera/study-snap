@@ -225,9 +225,9 @@ Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), va
 - **Bounce suppression** — a Resend bounce/complaint webhook populates a suppression list; all sends skip suppressed addresses (protects budget + sender reputation). Plus a **frontend signup email-typo suggestion** ("did you mean gmail.com?") to stop typo'd domains (e.g. `0gmail.com`) from bouncing — frontend-only, Claude-direct.
 - **Existing-user backfill — decided: backfill all to ON.** A migration sets `inactivity_reminders_enabled=true` for all existing users (other categories untouched). Low risk: the flag always defaulted `false`, so no one deliberately turned it off; unsubscribe remains the opt-out, and the budget guard ramps them over days. Now in the Codex prompt.
 
-### Thread 2 — Close instrumentation gaps
+### Thread 2 — Close instrumentation gaps *(shipped)*
 
-(a) The funnel compares all-time metrics with different inception dates (`UPGRADE_CLICKED` old vs `CHECKOUT_INITIATED` since v0.31.2) — which produced the false "broken checkout." Add a **date-windowed / cohort funnel** so stages are only compared over a common window. (b) `getQuotaHitMetrics` measures only the study-pack quota — extend the free-quota-hit metric to quiz/adaptive/exam so "0% hit" is trustworthy.
+(a) The funnel compared all-time metrics with different inception dates (`UPGRADE_CLICKED` old vs `CHECKOUT_INITIATED` since v0.31.2), which produced the false "broken checkout." Admin Conversion Funnel now defaults event-based stages to a common 30-day window, with 7 / 30 / 90 / all-time options and `windowDays` / `windowStartedAt` response metadata. (b) `getQuotaHitMetrics` no longer measures only study-pack quota: it now reports current-period Free hits by quota type plus an "any quota hit" aggregate, with 0-limit Free-unavailable types excluded from their own denominators.
 
 ### Thread 3 — Quota honesty via per-session deduction *(shipped)*
 

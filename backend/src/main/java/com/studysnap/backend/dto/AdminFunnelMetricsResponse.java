@@ -1,8 +1,11 @@
 package com.studysnap.backend.dto;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record AdminFunnelMetricsResponse(
+        Integer windowDays,
+        OffsetDateTime windowStartedAt,
         ActivationMetrics activation,
         StuckUsersMetrics stuckUsers,
         QuotaHitMetrics quotaHit,
@@ -27,7 +30,19 @@ public record AdminFunnelMetricsResponse(
     public record QuotaHitMetrics(
             long freeUsersHitQuota,
             long totalFreeUsers,
-            double ratePercent
+            double ratePercent,
+            List<QuotaTypeHitMetrics> quotaTypes
+    ) {
+    }
+
+    public record QuotaTypeHitMetrics(
+            String quotaType,
+            String label,
+            int monthlyLimit,
+            long usersHitQuota,
+            long applicableFreeUsers,
+            double ratePercent,
+            boolean applicable
     ) {
     }
 
