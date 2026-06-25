@@ -102,6 +102,48 @@ class AnalyticsEventRepositoryTest {
         )).isEqualTo(2);
     }
 
+    @Test
+    void windowedConversionQueries_excludeEarlierEventsBeforeWindow() {
+        OffsetDateTime since = NOW.minusDays(30);
+        UUID recentConvertedUser = UUID.randomUUID();
+        UUID oldClickRecentCheckoutUser = UUID.randomUUID();
+        UUID oldOnlyClickUser = UUID.randomUUID();
+
+        insertEvent(recentConvertedUser, AnalyticsEventType.UPGRADE_CLICKED, since.plusDays(1));
+        insertEvent(recentConvertedUser, AnalyticsEventType.CHECKOUT_INITIATED, since.plusDays(2));
+
+        insertEvent(oldClickRecentCheckoutUser, AnalyticsEventType.UPGRADE_CLICKED, since.minusDays(1));
+        insertEvent(oldClickRecentCheckoutUser, AnalyticsEventType.CHECKOUT_INITIATED, since.plusDays(2));
+
+        insertEvent(oldOnlyClickUser, AnalyticsEventType.UPGRADE_CLICKED, since.minusDays(2));
+
+        assertThat(analyticsEventRepository.countDistinctUsersByEventTypeSince(
+                AnalyticsEventType.UPGRADE_CLICKED,
+                since
+        )).isEqualTo(1);
+        assertThat(analyticsEventRepository.countDistinctUsersWithEventAfterEventSince(
+                AnalyticsEventType.UPGRADE_CLICKED,
+                AnalyticsEventType.CHECKOUT_INITIATED,
+                since
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void windowedValueLoop_usesFirstGeneratedPackInsideWindow() {
+        OffsetDateTime since = NOW.minusDays(30);
+        UUID windowUser = UUID.randomUUID();
+        UUID oldPackUser = UUID.randomUUID();
+
+        insertEvent(windowUser, AnalyticsEventType.STUDY_PACK_GENERATED, since.plusDays(2));
+        insertEvent(windowUser, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, since.plusDays(4));
+
+        insertEvent(oldPackUser, AnalyticsEventType.STUDY_PACK_GENERATED, since.minusDays(2));
+        insertEvent(oldPackUser, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, since.plusDays(1));
+
+        assertThat(analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPackSince(since))
+                .isEqualTo(1);
+    }
+
     private void insertEvent(UUID userId, AnalyticsEventType eventType, OffsetDateTime createdAt) {
         jdbcTemplate.update(
                 """

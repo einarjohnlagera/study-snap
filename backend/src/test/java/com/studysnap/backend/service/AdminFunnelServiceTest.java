@@ -27,6 +27,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,12 +75,15 @@ class AdminFunnelServiceTest {
 
         AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
 
+        assertThat(response.windowDays()).isNull();
+        assertThat(response.windowStartedAt()).isNull();
         assertThat(response.activation().totalVerifiedUsers()).isZero();
         assertThat(response.activation().activatedUsers()).isZero();
         assertThat(response.activation().activationRatePercent()).isEqualTo(0.0);
         assertThat(response.activation().medianDaysToFirstPack()).isNull();
         assertThat(response.stuckUsers().stuckUsersCount()).isZero();
         assertThat(response.quotaHit().ratePercent()).isEqualTo(0.0);
+        assertThat(response.quotaHit().quotaTypes()).hasSize(6);
         assertThat(response.paywallConversion().ratePercent()).isEqualTo(0.0);
         assertThat(response.valueLoop().ratePercent()).isEqualTo(0.0);
         assertThat(response.retentionCohort().ratePercent()).isEqualTo(0.0);
@@ -146,6 +151,34 @@ class AdminFunnelServiceTest {
         assertThat(response.quotaHit().totalFreeUsers()).isEqualTo(1);
         assertThat(response.quotaHit().freeUsersHitQuota()).isEqualTo(1);
         assertThat(response.quotaHit().ratePercent()).isEqualTo(100.0);
+        assertThat(quotaType(response, "study_pack").usersHitQuota()).isEqualTo(1);
+        assertThat(quotaType(response, "study_pack").applicableFreeUsers()).isEqualTo(1);
+        assertThat(quotaType(response, "long_exam").applicable()).isFalse();
+        assertThat(quotaType(response, "long_exam").applicableFreeUsers()).isZero();
+    }
+
+    @Test
+    void getMetrics_quotaHitBreakdown_countsQuizHitAndAnyQuotaHit() {
+        UUID freeUserId = UUID.randomUUID();
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        UserUsageEntity usage = buildUsage(freeUserId, 0);
+        usage.setChallengeQuizGenerations(5);
+        usage.setAdaptiveQuizGenerations(0);
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of(usage));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.quotaHit().totalFreeUsers()).isEqualTo(1);
+        assertThat(response.quotaHit().freeUsersHitQuota()).isEqualTo(1);
+        assertThat(response.quotaHit().ratePercent()).isEqualTo(100.0);
+        assertThat(quotaType(response, "study_pack").usersHitQuota()).isZero();
+        assertThat(quotaType(response, "quiz").usersHitQuota()).isEqualTo(1);
+        assertThat(quotaType(response, "quiz").ratePercent()).isEqualTo(100.0);
+        assertThat(quotaType(response, "interview").applicable()).isFalse();
+        assertThat(quotaType(response, "interview").applicableFreeUsers()).isZero();
     }
 
     @Test
@@ -214,6 +247,74 @@ class AdminFunnelServiceTest {
         assertThat(response.checkoutConversion().clickToPaidRatePercent()).isEqualTo(10.0);
     }
 
+    @Test
+    void getMetrics_withWindowDays_usesWindowedEventQueriesOnlyForEventStages() {
+        stubCumulativeMetrics(20, 8, 2.5, 1);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.countDistinctUsersByEventTypeSince(eq(AnalyticsEventType.PAYWALL_VIEWED), any()))
+                .thenReturn(5L);
+        when(analyticsEventRepository.countUsersUpgradedAfterPaywallSince(
+                eq(AnalyticsEventType.PAYWALL_VIEWED),
+                eq(AnalyticsEventType.SUBSCRIPTION_STARTED),
+                any()
+        )).thenReturn(2L);
+        when(analyticsEventRepository.countDistinctUsersByEventTypeSince(eq(AnalyticsEventType.STUDY_PACK_GENERATED), any()))
+                .thenReturn(9L);
+        when(analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPackSince(any()))
+                .thenReturn(3L);
+        when(analyticsEventRepository.countDistinctUsersByEventTypeSince(eq(AnalyticsEventType.UPGRADE_CLICKED), any()))
+                .thenReturn(4L);
+        when(analyticsEventRepository.countDistinctUsersWithEventAfterEventSince(
+                eq(AnalyticsEventType.UPGRADE_CLICKED),
+                eq(AnalyticsEventType.CHECKOUT_INITIATED),
+                any()
+        )).thenReturn(1L);
+        when(analyticsEventRepository.countDistinctUsersWithEventAfterEventSince(
+                eq(AnalyticsEventType.CHECKOUT_INITIATED),
+                eq(AnalyticsEventType.SUBSCRIPTION_STARTED),
+                any()
+        )).thenReturn(0L);
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics(30);
+
+        assertThat(response.windowDays()).isEqualTo(30);
+        assertThat(response.windowStartedAt()).isNotNull();
+        assertThat(response.paywallConversion().usersSeenPaywall()).isEqualTo(5);
+        assertThat(response.paywallConversion().usersUpgradedAfterPaywall()).isEqualTo(2);
+        assertThat(response.valueLoop().usersGeneratedPack()).isEqualTo(9);
+        assertThat(response.valueLoop().usersStartedQuizWithin7Days()).isEqualTo(3);
+        assertThat(response.checkoutConversion().usersClickedUpgrade()).isEqualTo(4);
+        assertThat(response.checkoutConversion().usersInitiatedCheckout()).isEqualTo(1);
+        assertThat(response.checkoutConversion().usersSubscribed()).isZero();
+        verify(analyticsEventRepository, never()).countDistinctUsersByEventType(any());
+        verify(analyticsEventRepository, never()).countUsersUpgradedAfterPaywall(any(), any());
+        verify(analyticsEventRepository, never()).countUsersStartedQuizWithin7DaysOfFirstGeneratedPack();
+        verify(analyticsEventRepository, never()).countDistinctUsersWithEventAfterEvent(any(), any());
+    }
+
+    @Test
+    void getMetrics_nonPositiveWindowDays_usesAllTimeEventQueries() {
+        stubBaseMetrics(0, 0, null, 0, 3, 1, 2);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics(0);
+
+        assertThat(response.windowDays()).isNull();
+        assertThat(response.windowStartedAt()).isNull();
+        assertThat(response.paywallConversion().usersSeenPaywall()).isEqualTo(3);
+        assertThat(response.valueLoop().usersStartedQuizWithin7Days()).isEqualTo(2);
+        verify(analyticsEventRepository, never()).countDistinctUsersByEventTypeSince(any(), any());
+        verify(analyticsEventRepository, never()).countUsersUpgradedAfterPaywallSince(any(), any(), any());
+        verify(analyticsEventRepository, never()).countUsersStartedQuizWithin7DaysOfFirstGeneratedPackSince(any());
+        verify(analyticsEventRepository, never()).countDistinctUsersWithEventAfterEventSince(any(), any(), any());
+    }
+
     private void stubBaseMetrics(
             long verifiedUsers,
             long activatedUsers,
@@ -223,10 +324,7 @@ class AdminFunnelServiceTest {
             long usersUpgradedAfterPaywall,
             long usersStartedQuizWithin7Days
     ) {
-        when(userRepository.countByEmailVerifiedAtIsNotNull()).thenReturn(verifiedUsers);
-        when(studyPackRepository.countDistinctOwnerUserIds()).thenReturn(activatedUsers);
-        when(studyPackRepository.findMedianDaysFromVerifiedSignupToFirstPack()).thenReturn(medianDaysToFirstPack);
-        when(noteRepository.countVerifiedUsersWithNotesBeforeAndNoStudyPacks(any())).thenReturn(stuckUsers);
+        stubCumulativeMetrics(verifiedUsers, activatedUsers, medianDaysToFirstPack, stuckUsers);
         when(analyticsEventRepository.countDistinctUsersByEventType(any())).thenAnswer(invocation -> {
             AnalyticsEventType eventType = invocation.getArgument(0, AnalyticsEventType.class);
             return switch (eventType) {
@@ -241,10 +339,22 @@ class AdminFunnelServiceTest {
         )).thenReturn(usersUpgradedAfterPaywall);
         when(analyticsEventRepository.countUsersStartedQuizWithin7DaysOfFirstGeneratedPack())
                 .thenReturn(usersStartedQuizWithin7Days);
+        when(analyticsEventRepository.countDistinctUsersWithEventAfterEvent(any(), any())).thenReturn(0L);
+    }
+
+    private void stubCumulativeMetrics(
+            long verifiedUsers,
+            long activatedUsers,
+            Double medianDaysToFirstPack,
+            long stuckUsers
+    ) {
+        when(userRepository.countByEmailVerifiedAtIsNotNull()).thenReturn(verifiedUsers);
+        when(studyPackRepository.countDistinctOwnerUserIds()).thenReturn(activatedUsers);
+        when(studyPackRepository.findMedianDaysFromVerifiedSignupToFirstPack()).thenReturn(medianDaysToFirstPack);
+        when(noteRepository.countVerifiedUsersWithNotesBeforeAndNoStudyPacks(any())).thenReturn(stuckUsers);
         when(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(any())).thenReturn(0L);
         when(analyticsEventRepository.countReturnedWeek2Users(any())).thenReturn(0L);
         when(analyticsEventRepository.findWeeklyRetentionCohorts(any())).thenReturn(List.of());
-        when(analyticsEventRepository.countDistinctUsersWithEventAfterEvent(any(), any())).thenReturn(0L);
     }
 
     private WeeklyRetentionCohortProjection weeklyCohort(LocalDate weekStart, long cohortSize, long returnedCount) {
@@ -274,6 +384,17 @@ class AdminFunnelServiceTest {
         usage.setPeriodStart(OffsetDateTime.now().minusDays(1));
         usage.setPeriodEnd(OffsetDateTime.now().plusDays(1));
         return usage;
+    }
+
+    private AdminFunnelMetricsResponse.QuotaTypeHitMetrics quotaType(
+            AdminFunnelMetricsResponse response,
+            String quotaType
+    ) {
+        return response.quotaHit().quotaTypes()
+                .stream()
+                .filter(metrics -> metrics.quotaType().equals(quotaType))
+                .findFirst()
+                .orElseThrow();
     }
 
 }

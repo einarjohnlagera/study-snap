@@ -542,6 +542,8 @@ export type AdminDashboardRecentEventsResponse = {
 };
 
 export type AdminFunnelMetricsResponse = {
+  windowDays: number | null;
+  windowStartedAt: string | null;
   activation: {
     totalVerifiedUsers: number;
     activatedUsers: number;
@@ -555,6 +557,15 @@ export type AdminFunnelMetricsResponse = {
     freeUsersHitQuota: number;
     totalFreeUsers: number;
     ratePercent: number;
+    quotaTypes: Array<{
+      quotaType: string;
+      label: string;
+      monthlyLimit: number;
+      usersHitQuota: number;
+      applicableFreeUsers: number;
+      ratePercent: number;
+      applicable: boolean;
+    }>;
   };
   paywallConversion: {
     usersSeenPaywall: number;
@@ -1983,9 +1994,10 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
 }
 
-export async function getAdminFunnelMetrics(): Promise<AdminFunnelMetricsResponse> {
+export async function getAdminFunnelMetrics(days?: number): Promise<AdminFunnelMetricsResponse> {
+  const query = typeof days === "number" && days > 0 ? `?days=${encodeURIComponent(String(days))}` : "";
   const response = await fetchWithAuth(
-    "/admin/funnel/metrics",
+    `/admin/funnel/metrics${query}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
