@@ -1,5 +1,28 @@
 # RELEASES.md - NoteLib
 
+## v0.33.0 - Study Plans as a Retention Engine
+
+**Status: In progress**
+
+Theme: the constraint carried over from v0.32.2 is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate but don't return (longest observed streak ~2 days). This release attacks retention through the natural trackable unit, the **Study Plan**: turn it from a static folder / one-time adoption surface into a **readiness journey** that gives a learner a number that only moves by returning to practice. **Track A** removes publish/discovery friction so curated plans actually reach learners (activation); **Track B** (headline) introduces **plan- and subject-scoped readiness** with charts (the retention lever). See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
+
+### Planned Scope
+
+**Track A — Study Plan publish & discovery polish (activation)**
+
+- **Decouple metadata-save from publishing.** Course/program and description persist independently of the Publish action, fixing the silent loss observed when Publish fails its notes validation (the typed course/program was discarded and the create-time description sometimes did not save). Publish stays gated on its existing rules (every note public, at least one note) with a clearer blocker message. The backend already exposes separate `updateMetadata` and `updateVisibility` endpoints; the fix is frontend sequencing in the publish modal + create flow.
+- **Surface recommended plans on the user's own Study Plans page.** Reuse the Dashboard "Recommended {plural}" section (course/program-scoped, `See all N` → `/collections/published`) on `/collections` rather than tabs, so a learner arriving with intent to organize also sees curated plans for their track. Scoped to the same course/program only (all-programs browse is Public Library's job).
+
+**Track B — Plan & subject readiness (retention, headline)**
+
+- **Plan- and subject-scoped readiness view** — per-plan readiness % + weak areas and per-subject readiness, expressed with charts/graphs, giving learners a reason to return and a visible signal that practice moves the number. **Deliberately reverses** the prior "Study Plans do not duplicate Progress" decision (`docs/features/collections.md`) on a *dedicated readiness surface* — the plan execution-detail rows keep their no-mastery rule.
+
+Locked anti-drift (see `ROADMAP.md` / `CLAUDE.md` for the full set): readiness reuses the existing ConceptHealth recency spine (no new mastery signal, no new persisted progress field on collections, no new generated content, no AI/LLM call); no quota / billing / price / checkout change; charts are the expression of readiness, never a standalone vanity dashboard. Teacher bulk-quiz / teacher-flow polish remain deferred (re-pointed to v0.34.0 candidate).
+
+### Shipped
+
+_(none yet)_
+
 ## v0.32.2 - Conversion Diagnosis & Quota Honesty
 
 **Status: Released**
