@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.32.2` (in progress); previous: `v0.32.1 - Monetization Surfacing & Pricing Clarity`
+Current release baseline: `v0.33.0 - Study Plans as a Retention Engine` (in progress); previous: `v0.32.2 - Conversion Diagnosis & Quota Honesty`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -398,16 +398,14 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 ## Roadmap
 
-Current release: `v0.32.2 - Conversion Diagnosis & Quota Honesty` (in progress)
+Current release: `v0.33.0 - Study Plans as a Retention Engine` (in progress)
 
-Planned for v0.32.2:
+Planned for v0.33.0:
 
-- **Plan-launch prescreen polish** — hide "Choose another mode" on exam prescreens launched from a Study Plan.
-- **Quota-label honesty** — relabel the exam "sessions" quotas as the per-source-note units they actually are.
-- **Conversion funnel diagnosis** — read the paywall→checkout analytics to locate where 0/158 users drop, before any pricing change.
-- **Plus-tier reason-to-exist** — evaluate giving the (currently exam-less) Plus tier a Long Exam taste.
+- **Track A — publish & discovery polish** — decouple Study Plan metadata-save from publishing (stop discarding course/program + description); surface course/program-scoped recommended plans on the user's own Study Plans page.
+- **Track B — plan & subject readiness (headline)** — per-plan and per-subject readiness % + weak areas with charts, reusing the existing ConceptHealth spine — a reason for activated users to return.
 
-No exam quota numbers change without funnel data.
+Readiness reuses ConceptHealth (no new signal/field/AI). No quota, billing, price, or checkout change. Teacher bulk-quiz / teacher-flow polish stay deferred (v0.34.0 candidate, gated on teacher users).
 
 See `docs/product/ROADMAP.md` for the full planned scope and implementation stances.
 

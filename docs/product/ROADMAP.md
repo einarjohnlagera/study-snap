@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.32.2 - Conversion Diagnosis & Quota Honesty` is the latest release (last released). The next version has not been opened yet.
+`v0.33.0 - Study Plans as a Retention Engine` is the current in-progress release (opened on `releases/v0.33.0`).
+
+`v0.32.2 - Conversion Diagnosis & Quota Honesty` is the latest released version.
 
 `v0.32.1 - Monetization Surfacing & Pricing Clarity` is the previous baseline.
 
@@ -23,6 +25,45 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.28.0 - Feature Discoverability & Activation` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.33.0 - Study Plans as a Retention Engine (in progress)
+
+Base branch for this release: `releases/v0.33.0`.
+
+Theme: the constraint carried over from v0.32.2 is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return; the longest observed streak is ~2 days. The diagnosis from v0.32.2 said: ship **one scoped retention lever**, not broad re-engagement infrastructure. The lever here is the **Study Plan as a trackable readiness journey**: today a plan is a static, ordered folder you adopt once (a one-time act with weak retention legs), with no signal of how ready you are or whether returning moves anything. This release gives a plan a **readiness number that only goes up when you come back to practice**, and clears the publish/discovery friction so curated plans actually reach the learners they're for.
+
+Why now (over teacher-flow / bulk quiz): we still have **no teacher cohort**, so that work defers again (v0.34.0 candidate). The leverage is the students and exam-takers we *do* have — readiness gives them a reason to return, which is the un-conflicted constraint.
+
+Two tracks, deliberately sequenced so the retention bet (B) is the headline and the activation polish (A) supports it:
+
+### Track A — Study Plan publish & discovery polish (activation)
+
+Friction found while seeding curated plans: publishing is clunky and silently drops metadata.
+
+- **Decouple metadata-save from publishing.** The backend already has separate endpoints — `updateMetadata` (title / description / course-program) and `updateVisibility` (publish, which validates notes). The publish modal's `handlePublish` validates notes *before* persisting course/program, so when publish fails (private/empty notes) the typed course/program is discarded; the create flow also drops description in some paths. Fix (frontend sequencing): **always persist metadata first / independently** (auto-save on blur or an always-available "Save details" action), and treat **Publish** as a separate gated action with a clear blocker message. Do **not** weaken publish validation — it still requires every note public + at least one note; it only stops throwing away metadata.
+- **Surface recommended plans on the user's own Study Plans page (`/collections`).** Reuse the existing Dashboard "Recommended {plural}" section (the recommended card + `See all N` link → `/collections/published`) rather than tabs — tabs hide discovery behind a click and add chrome to a near-empty page. Scoped to the learner's **own course/program only** (an all-programs browse is what Public Library does for *notes*; here it'd be noise). Place the learner's own plans first (workspace), recommended below — or recommended-first when they have zero owned plans (discovery-first when empty).
+
+### Track B — Plan & subject readiness (retention, headline)
+
+The reason-to-return. A learner studying for CPALE wants to see "how ready am I, and what's left," and watch that number move as they practice.
+
+- **Plan- and subject-scoped readiness view** — per-plan readiness % + weak areas, and per-subject readiness, expressed with **charts/graphs**. The readiness signal must reuse the existing **ConceptHealth recency spine** that already powers `/me/progress` and due-concept selection — aggregated/scoped to a plan's notes (and to subjects within it) rather than globally. Charts are the *expression* of that signal, not a separate vanity dashboard.
+
+Locked direction:
+
+- **Deliberate reversal of "plans don't duplicate Progress."** `docs/features/collections.md` states twice that no mastery %, weakest-subject, or readiness belongs on a Study Plan ("the Study Plan remains an execution surface for one curated, ordered set"). This release **consciously revisits** that — but on a **dedicated readiness surface**, not by cramming mastery bars onto the plan **execution-detail rows** (the action / next-step list keeps its no-mastery rule). Record the reversal in `collections.md` when shipping.
+- **Readiness is derived, not stored.** Reuse the ConceptHealth recency spine; **no new mastery signal, no new persisted progress field on collections, no new generated content, no new AI/LLM call.** Aggregation only (the same way `/me/progress` aggregates by Study Pack subject).
+- **Discovery stays course/program-scoped** (not all-programs); surface via the existing Dashboard "Recommended" pattern (not tabs).
+- **No quota / billing / price / checkout change; no new quota category; no per-profile pipeline fork.**
+
+Scope:
+
+- **Track A:** publish/create metadata decouple (frontend); recommended-plans section on `/collections` (frontend, reuse the Dashboard component).
+- **Track B:** a plan/subject readiness aggregation (backend, over ConceptHealth scoped to a collection's notes) + a frontend readiness surface with charts. This is multi-system — write a Codex prompt for the backend aggregation + a short design pass on where the readiness surface lives relative to the existing plan detail page.
+
+Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI); the Progress-separation reversal is scoped to a dedicated surface and recorded in `collections.md`; discovery is course/program-scoped; Track A must not weaken publish validation; charts express readiness, never stand alone. Out of scope / deferred: teacher bulk-quiz & teacher-flow polish (v0.34.0 candidate, gated on teacher users); live-link / shared-progress plans (different architecture — belongs with teacher-flow).
 
 ---
 
@@ -317,9 +358,9 @@ Anti-drift: reuse the existing reminder-preference pattern (entity flag + reposi
 
 ---
 
-## v0.33.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+## v0.34.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
-Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.33.0, before that v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. (v0.33.0 was repurposed for the Study Plans retention work above.) **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 
