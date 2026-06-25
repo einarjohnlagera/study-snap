@@ -2,7 +2,7 @@
 
 ## v0.32.2 - Conversion Diagnosis & Quota Honesty
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. The funnel diagnosis ran first and **re-scoped this release**: the real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. (An initial read flagged a "broken checkout" from 6 upgrade clicks → 0 `CHECKOUT_INITIATED`; that was a **metric-inception artifact** — `CHECKOUT_INITIATED` was added in v0.31.2 while `UPGRADE_CLICKED` is far older, and a live upgrade reached the real Xendit invoice. Checkout works.) Free is not too generous. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; retention is. Full data in `docs/product/conversion-funnel-finding.md`; see `docs/product/ROADMAP.md` for sequencing.
 

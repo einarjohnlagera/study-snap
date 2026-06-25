@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.32.2 - Conversion Diagnosis & Quota Honesty` is in progress.
+`v0.32.2 - Conversion Diagnosis & Quota Honesty` is the latest release (last released). The next version has not been opened yet.
 
-`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the previous baseline (last released).
+`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the previous baseline.
 
 `v0.32.0 - Account & Communication Controls` is the release before that.
 
@@ -203,7 +203,7 @@ Anti-drift: analytics/telemetry must be resilient (never fail or drop on referen
 
 ---
 
-## v0.32.2 - Conversion Diagnosis & Quota Honesty (in progress)
+## v0.32.2 - Conversion Diagnosis & Quota Honesty (released)
 
 Base branch for this release: `releases/v0.32.2`. Patch after v0.32.1; mostly frontend + analysis.
 
