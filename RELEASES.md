@@ -12,7 +12,7 @@ Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion w
 - **Retention diagnosis (top priority)** — W1→W2 retention is 5.6% (recent cohorts ~0%). Diagnose why activated users don't return and define + ship one scoped lever to test.
 - **Close instrumentation gaps** — add a date-windowed / cohort funnel (so all-time metrics with different inception dates aren't compared — what produced the false "broken checkout"); extend free-quota-hit beyond study packs (quiz/adaptive/exam).
 - **Quota-label honesty** *(secondary)* — relabel "Long Exam (12 sessions)" / "Board Exam (10 sessions)" as per-source-note units + clarifier, through the shared plan config. Copy only.
-- **Plan-launch prescreen polish** *(secondary)* — hide "Choose another mode" on prescreens launched from a Study Plan (`collectionId` present).
+- **Plan-launch prescreen polish** *(shipped)* — "Choose another mode" is hidden on the Long Exam, Interview Practice, and Board Exam prescreens when launched from a Study Plan (`collectionId` present), since there is no mode grid to return to and the back link already routes to the plan. Note-launched flows are unchanged.
 - **Plus-tier reason-to-exist** *(deferred)* — revisit once retention improves and there is real recent conversion data.
 
 ### Shipped

@@ -126,6 +126,7 @@ describe("InterviewPracticePage", () => {
     expect(screen.getByText("3 notes · 5 questions")).toBeInTheDocument();
     expect(screen.getByText("Add up to 2 more notes from this plan.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Collection/ })).toHaveAttribute("href", "/collections/collection-1");
+    expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
   });
 
   it("falls back to the normal source picker when collection lookup fails", async () => {

@@ -1807,15 +1807,17 @@ export default function ChallengeQuizPage() {
                 {selectedBoardExamSourceCount} {selectedBoardExamSourceCount === 1 ? "note" : "notes"} · Counts toward your monthly Board Exam usage.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={returnToModeSelection}
-                  disabled={challengeGenerationLocked}
-                >
-                  Choose another mode
-                </Button>
+                {collectionId ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={returnToModeSelection}
+                    disabled={challengeGenerationLocked}
+                  >
+                    Choose another mode
+                  </Button>
+                )}
                 {!boardExamLimitReached ? (
                   <Button
                     type="button"

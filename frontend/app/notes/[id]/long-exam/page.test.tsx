@@ -205,6 +205,7 @@ describe("LongExamPage", () => {
     expect(screen.getByText("4 notes · 25 questions")).toBeInTheDocument();
     expect(screen.getByText("Add up to 3 more notes from this plan.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Study Plan/ })).toHaveAttribute("href", "/collections/collection-1");
+    expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
   });
 
   it("falls back to the normal source picker when collection lookup fails", async () => {

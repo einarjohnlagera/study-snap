@@ -1014,15 +1014,17 @@ export default function LongExamPage() {
                                     {selectedSourceCount} {selectedSourceCount === 1 ? "note" : "notes"} · {expectedQuestionCount} questions
                                 </p>
                                 <div className="flex flex-col gap-2 sm:flex-row">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="w-full sm:w-auto"
-                                        onClick={() => router.push(modeSelectHref)}
-                                        disabled={starting}
-                                    >
-                                        Choose another mode
-                                    </Button>
+                                    {collectionId ? null : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full sm:w-auto"
+                                            onClick={() => router.push(modeSelectHref)}
+                                            disabled={starting}
+                                        >
+                                            Choose another mode
+                                        </Button>
+                                    )}
                                     <Button
                                         type="button"
                                         className="w-full sm:w-auto"
