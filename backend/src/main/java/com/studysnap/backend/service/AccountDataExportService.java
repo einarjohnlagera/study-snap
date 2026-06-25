@@ -16,6 +16,7 @@ import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AccountDataExportService {
     private static final String SCHEMA_VERSION = "1.0";
+    private static final int SESSION_EXPORT_BATCH_SIZE = 100;
 
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
@@ -49,8 +51,7 @@ public class AccountDataExportService {
                 .collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
         List<StudyPackEntity> studyPacks = studyPackRepository.findByOwnerUserId(userId);
         List<NoteCollectionEntity> collections = noteCollectionRepository.findByOwnerUserId(userId);
-        List<QuickReviewSessionEntity> completedSessions =
-                quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId);
+        DataExportResponse.PracticeSummary practiceSummary = buildPracticeSummary(userId);
 
         return new DataExportResponse(
                 new DataExportResponse.Meta(OffsetDateTime.now(), SCHEMA_VERSION),
@@ -60,7 +61,7 @@ public class AccountDataExportService {
                 collections.stream()
                         .map(collection -> toCollection(collection, notesById))
                         .toList(),
-                toPracticeSummary(completedSessions)
+                practiceSummary
         );
     }
 
@@ -125,17 +126,29 @@ public class AccountDataExportService {
         );
     }
 
-    private DataExportResponse.PracticeSummary toPracticeSummary(List<QuickReviewSessionEntity> completedSessions) {
+    private DataExportResponse.PracticeSummary buildPracticeSummary(UUID userId) {
         Map<QuickReviewSessionMode, Long> completedSessionsByMode = new EnumMap<>(QuickReviewSessionMode.class);
-        for (QuickReviewSessionEntity session : completedSessions) {
-            completedSessionsByMode.merge(session.getSessionMode(), 1L, Long::sum);
-        }
-        OffsetDateTime lastCompletedAt = completedSessions.stream()
-                .map(QuickReviewSessionEntity::getCompletedAt)
-                .findFirst()
-                .orElse(null);
+        OffsetDateTime lastCompletedAt = null;
+        long totalCompletedSessions = 0;
+        int page = 0;
+        List<QuickReviewSessionEntity> batch;
+        do {
+            batch = quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                    userId,
+                    PageRequest.of(page, SESSION_EXPORT_BATCH_SIZE)
+            );
+            for (QuickReviewSessionEntity session : batch) {
+                if (lastCompletedAt == null) {
+                    lastCompletedAt = session.getCompletedAt();
+                }
+                completedSessionsByMode.merge(session.getSessionMode(), 1L, Long::sum);
+                totalCompletedSessions++;
+            }
+            page++;
+        } while (batch.size() == SESSION_EXPORT_BATCH_SIZE);
+
         return new DataExportResponse.PracticeSummary(
-                completedSessions.size(),
+                totalCompletedSessions,
                 completedSessionsByMode,
                 lastCompletedAt
         );

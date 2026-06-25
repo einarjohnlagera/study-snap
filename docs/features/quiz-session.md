@@ -52,6 +52,12 @@ Rules:
 - note metadata should prefer current note values over older generated Study Pack metadata when both exist
 - if note metadata is missing, fallback display should still remain usable
 
+## Aggregate Read Safety
+
+`quick_review_sessions.session_state` stores the full quiz payload and is eager JSONB on `QuickReviewSessionEntity`. Dashboard summaries, note-performance summaries, retention checks, and other aggregate/list reads must use repository projections or SQL aggregates that select only scalar columns and, when weak-concept/focus-area logic needs it, `session_metadata`.
+
+Do not load unbounded lists of `QuickReviewSessionEntity` for aggregate screens or scheduled retention jobs. Single-session play/resume paths that genuinely read `sessionState` may still load the entity by id or latest active session, and `QuizSessionStateUtils` remains the owner for `sessionState` reads.
+
 ## Long Exam Multi-source State
 
 Long Exam sessions stay anchored to the primary `studyPackId`. When the user adds same-subject notes, additional source attribution is stored in `sessionState.sourceNoteRefs`.

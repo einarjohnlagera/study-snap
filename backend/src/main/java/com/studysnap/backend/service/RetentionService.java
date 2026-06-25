@@ -3,7 +3,6 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EmailLogEntity;
-import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -13,6 +12,8 @@ import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -160,8 +161,8 @@ public class RetentionService {
             return Optional.empty();
         }
 
-        QuickReviewSessionEntity latestChallenge = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        QuickReviewSessionMetadataProjection latestChallenge = quickReviewSessionRepository
+                .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                         user.getId(),
                         QuickReviewSessionMode.CHALLENGE,
                         PageRequest.of(0, 1)
@@ -169,37 +170,39 @@ public class RetentionService {
                 .stream()
                 .findFirst()
                 .orElse(null);
-        if (latestChallenge == null || latestChallenge.getCompletedAt() == null) {
+        if (latestChallenge == null || latestChallenge.completedAt() == null) {
             return Optional.empty();
         }
 
         OffsetDateTime cutoff = now.minusDays(properties.getRetention().getWeakConceptInactivityDays());
-        if (latestChallenge.getCompletedAt().isAfter(cutoff)) {
+        if (latestChallenge.completedAt().isAfter(cutoff)) {
             return Optional.empty();
         }
 
-        LinkedHashSet<String> remainingWeakConcepts = new LinkedHashSet<>(extractWeakConcepts(latestChallenge));
+        LinkedHashSet<String> remainingWeakConcepts = new LinkedHashSet<>(
+                extractWeakConcepts(latestChallenge.sessionMetadata())
+        );
         if (remainingWeakConcepts.isEmpty()) {
             return Optional.empty();
         }
 
-        quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
                 user.getId(),
-                latestChallenge.getStudyPackId(),
+                latestChallenge.studyPackId(),
                 QuickReviewSessionMode.ADAPTIVE,
                 PageRequest.of(0, SESSION_LOOKBACK_LIMIT)
         ).forEach(session -> {
-            if (session.getCompletedAt() == null || session.getCompletedAt().isBefore(latestChallenge.getCompletedAt())) {
+            if (session.completedAt() == null || session.completedAt().isBefore(latestChallenge.completedAt())) {
                 return;
             }
-            extractWeakConcepts(session).forEach(remainingWeakConcepts::remove);
+            extractWeakConcepts(session.sessionMetadata()).forEach(remainingWeakConcepts::remove);
         });
 
         if (remainingWeakConcepts.isEmpty()) {
             return Optional.empty();
         }
 
-        String noteTitle = studyPackRepository.findById(latestChallenge.getStudyPackId())
+        String noteTitle = studyPackRepository.findById(latestChallenge.studyPackId())
                 .map(StudyPackEntity::getTitle)
                 .filter(value -> !value.isBlank())
                 .orElse("your study pack");
@@ -208,10 +211,10 @@ public class RetentionService {
                 user.getId(),
                 user.getEmail(),
                 resolveFirstName(user),
-                latestChallenge.getNoteId(),
+                latestChallenge.noteId(),
                 noteTitle,
                 List.copyOf(remainingWeakConcepts).stream().limit(3).toList(),
-                buildAbsoluteUrl("/notes/" + latestChallenge.getNoteId() + "/adaptive-practice")
+                buildAbsoluteUrl("/notes/" + latestChallenge.noteId() + "/adaptive-practice")
         ));
     }
 
@@ -436,22 +439,21 @@ public class RetentionService {
     }
 
     private int calculateAverageQuizScore(UUID userId, OffsetDateTime fromInclusive, OffsetDateTime toExclusive) {
-        List<QuickReviewSessionEntity> completedQuizSessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionSummaryProjection> completedQuizSessions = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeInAndCompletedAtBetweenOrderByCompletedAtDesc(
                         userId,
-                        WEEKLY_SUMMARY_QUIZ_MODES
+                        WEEKLY_SUMMARY_QUIZ_MODES,
+                        fromInclusive,
+                        toExclusive
                 ).stream()
-                .filter(session -> session.getCompletedAt() != null)
-                .filter(session -> !session.getCompletedAt().isBefore(fromInclusive))
-                .filter(session -> session.getCompletedAt().isBefore(toExclusive))
-                .filter(session -> session.getScorePercentage() != null)
+                .filter(session -> session.scorePercentage() != null)
                 .toList();
         if (completedQuizSessions.isEmpty()) {
             return 0;
         }
 
         BigDecimal totalScore = completedQuizSessions.stream()
-                .map(QuickReviewSessionEntity::getScorePercentage)
+                .map(QuickReviewSessionSummaryProjection::scorePercentage)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return totalScore
@@ -465,11 +467,11 @@ public class RetentionService {
                 .count();
     }
 
-    private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
-        if (session.getSessionMetadata() == null) {
+    private List<String> extractWeakConcepts(Map<String, Object> sessionMetadata) {
+        if (sessionMetadata == null) {
             return List.of();
         }
-        Object raw = session.getSessionMetadata().get("weakConcepts");
+        Object raw = sessionMetadata.get("weakConcepts");
         if (!(raw instanceof List<?> rawList) || rawList.isEmpty()) {
             return List.of();
         }
