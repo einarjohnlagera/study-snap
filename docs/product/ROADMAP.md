@@ -233,9 +233,9 @@ Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), va
 
 The Pro card's "Long Exam (12 sessions)" / "Board Exam (10 sessions)" are really per-source-note units (`additionalStudyPackIds.size() + 1`; a 3-note exam costs 3). Relabel to source-note units + a clarifier, through the shared plan config. **Copy only — no quota mechanics or number change.**
 
-### Thread 4 — Plan-launch prescreen polish *(secondary, low-effort)*
+### Thread 4 — Plan-launch prescreen polish *(shipped)*
 
-Hide (or relabel) "Choose another mode" on Long/Board/Interview prescreens launched from a Study Plan (`collectionId` present); leave the note-launched flow unchanged. Frontend-only.
+"Choose another mode" is hidden on the Long Exam, Interview Practice, and Board Exam (board-exam-setup) prescreens when launched from a Study Plan (`collectionId` present) — there is no mode grid to return to in that flow, and the back link already routes to the plan. Note-launched flows are unchanged. Frontend-only.
 
 ### Deferred — Plus-tier reason-to-exist
 

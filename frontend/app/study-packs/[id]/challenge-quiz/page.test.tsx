@@ -578,6 +578,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("button", { name: /Outside Board Note/ })).not.toBeInTheDocument();
     expect(screen.getByText("Add up to 2 more notes from this plan.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Review Set/ })).toHaveAttribute("href", "/collections/collection-1");
+    expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
   });
 
   it("falls back to the normal Board Exam source picker when collection lookup fails", async () => {
