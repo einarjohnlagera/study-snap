@@ -141,6 +141,7 @@ public class ChallengeQuizService {
     private static final int MAX_BOARD_EXAM_TOTAL_QUESTIONS = 30;
     private static final int MAX_ADDITIONAL_BOARD_EXAM_SOURCE_COUNT = 2;
     private static final int MIN_BOARD_EXAM_QUESTIONS_PER_SOURCE = 3;
+    private static final int BOARD_EXAM_QUOTA_UNITS_PER_SESSION = 1;
     private static final int SECONDS_PER_QUESTION_CHALLENGE = 90;
     private static final int SECONDS_PER_QUESTION_BOARD_EXAM = 60;
     private static final String DEFAULT_SELECTED_DIFFICULTY = DIFFICULTY_MEDIUM;
@@ -198,7 +199,7 @@ public class ChallengeQuizService {
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
         int boardExamUsedThisMonth = 0;
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
-            boardExamUsedThisMonth = assertBoardExamQuotaAvailable(userId, planType, boardExamSourceCount);
+            boardExamUsedThisMonth = assertBoardExamQuotaAvailable(userId, planType, BOARD_EXAM_QUOTA_UNITS_PER_SESSION);
         }
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
         int quizCount = MODE_BOARD_EXAM.equals(selectedMode)
@@ -232,7 +233,7 @@ public class ChallengeQuizService {
                     ));
                     QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
                     userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
-                    userUsageService.incrementBoardExamGenerationBy(userId, boardExamSourceCount, saved.getCreatedAt());
+                    userUsageService.incrementBoardExamGenerationBy(userId, BOARD_EXAM_QUOTA_UNITS_PER_SESSION, saved.getCreatedAt());
                     try {
                         analyticsService.trackEvent(userId, AnalyticsEventType.BOARD_EXAM_STARTED, studyPackId, Map.of(
                                 ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
@@ -243,7 +244,7 @@ public class ChallengeQuizService {
                     } catch (RuntimeException ignored) {
                         // Analytics must never turn a successfully started Board Exam into a failed session.
                     }
-                    return toStartResponse(saved, studyPack, boardExamUsedThisMonth + boardExamSourceCount, planType);
+                    return toStartResponse(saved, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
                 }
             }
         }
@@ -297,7 +298,7 @@ public class ChallengeQuizService {
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
             userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
-                userUsageService.incrementBoardExamGenerationBy(userId, boardExamSourceCount, saved.getCreatedAt());
+                userUsageService.incrementBoardExamGenerationBy(userId, BOARD_EXAM_QUOTA_UNITS_PER_SESSION, saved.getCreatedAt());
             }
             try {
                 AnalyticsEventType startedEventType = MODE_BOARD_EXAM.equals(selectedMode)
@@ -313,7 +314,7 @@ public class ChallengeQuizService {
                 // Analytics must never turn a successfully generated quiz into a failed session.
             }
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
-                return toStartResponse(saved, studyPack, boardExamUsedThisMonth + boardExamSourceCount, planType);
+                return toStartResponse(saved, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
             }
             return toStartResponse(saved, studyPack, usedThisMonth + 1, planType);
         } catch (Exception ex) {
@@ -646,10 +647,10 @@ public class ChallengeQuizService {
         return Math.max(usedFromCountedSessions, usedFromUsage);
     }
 
-    private int assertBoardExamQuotaAvailable(UUID userId, PlanType planType, int sourceCount) {
+    private int assertBoardExamQuotaAvailable(UUID userId, PlanType planType, int quotaUnits) {
         long usedThisMonth = countBoardExamUsedThisMonth(userId);
         int monthlyLimit = properties.getPricing().resolveMonthlyBoardExamLimit(planType);
-        if (usedThisMonth + sourceCount <= monthlyLimit) {
+        if (usedThisMonth + quotaUnits <= monthlyLimit) {
             return (int) usedThisMonth;
         }
 

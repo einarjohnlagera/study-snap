@@ -402,11 +402,11 @@ class LongExamServiceTest {
             .extracting(source -> source.noteTitle() + ":" + source.questionCount())
             .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
         verify(examQuestionPoolService, never()).sampleQuestions(any(UUID.class), any(), anyInt(), any());
-        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(2), any(OffsetDateTime.class));
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test
-    void startSession_withTwoAdditionalNotesDeductsThreeLongExamUnits() {
+    void startSession_withTwoAdditionalNotesUsesOneLongExamUnitWhenOneSessionRemains() {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         UUID secondStudyPackId = UUID.randomUUID();
@@ -415,6 +415,20 @@ class LongExamServiceTest {
             BIOLOGY_SUBJECT);
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+            .thenReturn(new UserUsageService.MonthlyUsage(
+                OffsetDateTime.now().minusDays(1),
+                OffsetDateTime.now().plusDays(29),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                11,
+                0
+            ));
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
             .thenReturn(Optional.of(primaryStudyPack));
@@ -437,7 +451,7 @@ class LongExamServiceTest {
             new LongExamStartRequest(null, List.of(secondStudyPackId.toString(), thirdStudyPackId.toString()))
         );
 
-        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(3), any(OffsetDateTime.class));
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test
@@ -488,7 +502,7 @@ class LongExamServiceTest {
                 "Additional Biology 1:6",
                 "Additional Biology 2:6"
             );
-        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(4), any(OffsetDateTime.class));
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
     @Test

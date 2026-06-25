@@ -281,7 +281,7 @@ Direction:
 Reasoning:
 
 - **Long Exam launches Pro-only at Start CTA** to control multi-note generation cost and to preserve Pro's "exam prep" identity while still letting Free and Plus users inspect the prestart setup. Plus already has a unique value prop in Adaptive Practice; it does not need Long Exam to differentiate at launch.
-- **Shared "Advanced Exam" quota bucket** for Long + Board was the v0.13.0 intent but was not implemented — at v0.14.0 both modes are gated by Pro plan only with no explicit per-mode cap. This is a known margin risk being addressed in v0.15+ (see below).
+- **Long Exam and Board Exam use separate Pro monthly quotas** measured per exam session. Multi-note source counts still shape question-count and generation breadth, but they do not multiply quota deduction.
 - **Promote Long Exam to Plus only after** runtime usage data justifies the LLM cost — and only if Plus needs the differentiator. State this as a future direction, not a v1 decision.
 
 ### Future premium positioning opportunities (planning-only)
