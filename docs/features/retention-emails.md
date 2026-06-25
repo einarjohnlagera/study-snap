@@ -57,7 +57,23 @@ Configured under:
 
 Retention emails use the existing `EmailService` / Resend integration and template rendering system.
 
+Daily inactivity reminders are budgeted against the shared Resend daily pool so they cannot starve transactional mail:
+
+- `studysnap.email.daily-limit` defaults to `100`
+- `studysnap.email.transactional-reserve` defaults to `40`
+- `studysnap.email.reengagement-enabled` defaults to `true` and can disable inactivity dispatch without touching transactional sends
+
+The inactivity run computes `sentToday` from `email_log.sent_at >= start of the app day`, then sends at most:
+
+`max(0, dailyLimit - transactionalReserve - sentToday)`
+
+Candidates skipped by this budget are not written to `email_log`; they remain eligible for a later daily run if cooldown and activity gating still allow it. Verification, password reset, billing, and other transactional paths send immediately and are never gated by this re-engagement budget.
+
+New signups default `inactivityRemindersEnabled` to `true`. `weakConceptRemindersEnabled`, `weeklySummaryRemindersEnabled`, and `marketingEmailsEnabled` remain default-off.
+
 `ResendEmailService` retries on HTTP `429` (rate limit) — honoring the `Retry-After` header, otherwise exponential backoff (max 3 attempts, capped at 5s) — so transactional email isn't dropped during a send burst. IO and non-429 errors are not retried. The real capacity fix is operational (upgrade the Resend tier).
+
+Resend bounce, complaint, and suppression webhook events are accepted at `/webhooks/resend` only after Svix signature verification (`svix-id`, `svix-timestamp`, `svix-signature`) against `studysnap.email.resend-webhook-secret`. Verified events upsert the recipient into `suppressed_email`; all future sends skip suppressed addresses and log `email.suppressed.skip` instead of calling Resend.
 
 Optional retention and marketing emails include:
 

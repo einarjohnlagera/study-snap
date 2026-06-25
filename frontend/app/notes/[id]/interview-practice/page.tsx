@@ -456,14 +456,16 @@ export default function InterviewPracticePage() {
               {1 + additionalNoteIds.length} {1 + additionalNoteIds.length === 1 ? "note" : "notes"} · {questionCount} questions
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => router.push(modeSelectHref)}
-              >
-                Choose another mode
-              </Button>
+              {collectionId ? null : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => router.push(modeSelectHref)}
+                >
+                  Choose another mode
+                </Button>
+              )}
               <Button
                 type="button"
                 className="w-full sm:w-auto"

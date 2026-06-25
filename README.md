@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.32.1` (in progress); previous: `v0.32.0 - Account & Communication Controls`
+Current release baseline: `v0.32.2` (in progress); previous: `v0.32.1 - Monetization Surfacing & Pricing Clarity`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -398,13 +398,16 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 ## Roadmap
 
-Current release: `v0.32.1 - Monetization Surfacing & Pricing Clarity` (in progress)
+Current release: `v0.32.2 - Conversion Diagnosis & Quota Honesty` (in progress)
 
-Planned for v0.32.1:
+Planned for v0.32.2:
 
-- **Premium-exam Start CTA paywall** — let Free users preview premium exam prescreens before the upgrade ask.
-- **Study Plan premium exam CTA** — launch the learner's profile-appropriate premium exam mode over the plan's notes.
-- **One-time pass pricing clarity** — make Plus/Pro read as one-time, time-boxed passes with no auto-charge.
+- **Plan-launch prescreen polish** — hide "Choose another mode" on exam prescreens launched from a Study Plan.
+- **Quota-label honesty** — relabel the exam "sessions" quotas as the per-source-note units they actually are.
+- **Conversion funnel diagnosis** — read the paywall→checkout analytics to locate where 0/158 users drop, before any pricing change.
+- **Plus-tier reason-to-exist** — evaluate giving the (currently exam-less) Plus tier a Long Exam taste.
+
+No exam quota numbers change without funnel data.
 
 See `docs/product/ROADMAP.md` for the full planned scope and implementation stances.
 

@@ -202,6 +202,8 @@ describe("ChallengeQuizPage", () => {
     options: {
       usedThisMonth?: number;
       monthlyLimit?: number;
+      boardExamUsedThisMonth?: number;
+      boardExamMonthlyLimit?: number;
     } = {},
   ) {
     const resolvedPlanType = planType ?? (difficultySelectionAvailable ? "PRO" : "FREE");
@@ -245,8 +247,8 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: options.usedThisMonth ?? 0,
       monthlyLimit: options.monthlyLimit ?? (difficultySelectionAvailable ? 50 : 5),
-      boardExamUsedThisMonth: 0,
-      boardExamMonthlyLimit: 10,
+      boardExamUsedThisMonth: options.boardExamUsedThisMonth ?? 0,
+      boardExamMonthlyLimit: options.boardExamMonthlyLimit ?? 10,
       difficultySelectionAvailable,
       mode: "challenge",
       selectedDifficulty: "medium",
@@ -578,6 +580,28 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("button", { name: /Outside Board Note/ })).not.toBeInTheDocument();
     expect(screen.getByText("Add up to 2 more notes from this plan.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Review Set/ })).toHaveAttribute("href", "/collections/collection-1");
+    expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
+  });
+
+  it("allows multi-note Board Exam starts when one session remains", async () => {
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO", {
+      boardExamUsedThisMonth: 9,
+      boardExamMonthlyLimit: 10,
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Board Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Board Three", subject: "Biology", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await getModeCard("Board Exam Mode"));
+    fireEvent.click(await screen.findByRole("button", { name: /Board Two/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Board Three/ }));
+
+    expect(screen.getByText("This session uses 1 of your 1 remaining Board Exam sessions.")).toBeInTheDocument();
+    expect(screen.queryByText(/Not enough Board Exam quota/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Begin Board Exam" })).toBeEnabled();
   });
 
   it("falls back to the normal Board Exam source picker when collection lookup fails", async () => {

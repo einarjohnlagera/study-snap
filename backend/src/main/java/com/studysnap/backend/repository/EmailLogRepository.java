@@ -19,5 +19,7 @@ public interface EmailLogRepository extends JpaRepository<EmailLogEntity, UUID> 
 
     Optional<EmailLogEntity> findTopByEmailTypeOrderBySentAtDesc(RetentionEmailType emailType);
 
+    long countBySentAtGreaterThanEqual(OffsetDateTime sentAt);
+
     void deleteByUserId(UUID userId);
 }

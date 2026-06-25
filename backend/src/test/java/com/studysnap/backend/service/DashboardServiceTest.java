@@ -25,6 +25,8 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
@@ -181,7 +183,7 @@ class DashboardServiceTest {
     @Test
     void getMasterySnapshot_returnsEmptyWhenNoCompletedSessionsExist() {
         UUID userId = UUID.randomUUID();
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                 eq(userId),
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
@@ -205,11 +207,11 @@ class DashboardServiceTest {
         QuickReviewSessionEntity sessionB = buildCompletedSession(userId, secondPackId, bigDecimal(100), now.minusHours(8));
         QuickReviewSessionEntity sessionC = buildCompletedSession(userId, firstPackId, bigDecimal(50), now.minusHours(2));
 
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                 eq(userId),
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
-        )).thenReturn(List.of(sessionC, sessionB, sessionA));
+        )).thenReturn(toSummaryProjections(List.of(sessionC, sessionB, sessionA)));
 
         MasterySnapshotResponse response = dashboardService.getMasterySnapshot(userId);
 
@@ -249,14 +251,15 @@ class DashboardServiceTest {
                 )
         );
 
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId,
-                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
-        )).thenReturn(List.of(challengeTwo, challengeOne, quickReview));
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                QuickReviewSessionMode.QUICK_REVIEW,
+                Pageable.unpaged()
+        )).thenReturn(toSummaryProjections(List.of(quickReview)));
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId,
                 QuickReviewSessionMode.CHALLENGE
-        )).thenReturn(List.of(challengeTwo, challengeOne));
+        )).thenReturn(toMetadataProjections(List.of(challengeTwo, challengeOne)));
         when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(3L);
         when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
                 eq(userId),
@@ -290,11 +293,12 @@ class DashboardServiceTest {
     void getOverview_marksAdaptivePracticeAvailableForFreeUsersWithQuota() {
         UUID userId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId,
-                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+                QuickReviewSessionMode.QUICK_REVIEW,
+                Pageable.unpaged()
         )).thenReturn(List.of());
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId,
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(List.of());
@@ -1169,6 +1173,55 @@ class DashboardServiceTest {
         return session;
     }
 
+    private List<QuickReviewSessionSummaryProjection> toSummaryProjections(List<QuickReviewSessionEntity> sessions) {
+        return sessions.stream()
+                .map(this::toSummaryProjection)
+                .toList();
+    }
+
+    private QuickReviewSessionSummaryProjection toSummaryProjection(QuickReviewSessionEntity session) {
+        return new QuickReviewSessionSummaryProjection(
+                session.getId(),
+                session.getUserId(),
+                session.getStudyPackId(),
+                session.getNoteId(),
+                session.getSessionMode(),
+                session.getStatus(),
+                session.getTotalQuestions(),
+                session.getCorrectAnswers(),
+                session.getScorePercentage(),
+                session.getRetryCount(),
+                session.getDurationSeconds(),
+                session.getCreatedAt(),
+                session.getCompletedAt()
+        );
+    }
+
+    private List<QuickReviewSessionMetadataProjection> toMetadataProjections(List<QuickReviewSessionEntity> sessions) {
+        return sessions.stream()
+                .map(this::toMetadataProjection)
+                .toList();
+    }
+
+    private QuickReviewSessionMetadataProjection toMetadataProjection(QuickReviewSessionEntity session) {
+        return new QuickReviewSessionMetadataProjection(
+                session.getId(),
+                session.getUserId(),
+                session.getStudyPackId(),
+                session.getNoteId(),
+                session.getSessionMode(),
+                session.getStatus(),
+                session.getTotalQuestions(),
+                session.getCorrectAnswers(),
+                session.getScorePercentage(),
+                session.getRetryCount(),
+                session.getDurationSeconds(),
+                session.getSessionMetadata(),
+                session.getCreatedAt(),
+                session.getCompletedAt()
+        );
+    }
+
     private void stubLatestInProgressSession(UUID userId, QuickReviewSessionEntity session) {
         QuickReviewSessionMode sessionMode = session == null || session.getSessionMode() == null
                 ? QuickReviewSessionMode.QUICK_REVIEW
@@ -1213,11 +1266,16 @@ class DashboardServiceTest {
     }
 
     private void stubRecentQuickReviewSessions(UUID userId, List<QuickReviewSessionEntity> sessions) {
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        lenient().when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                 eq(userId),
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
-        )).thenReturn(sessions);
+        )).thenReturn(toSummaryProjections(sessions));
+        lenient().when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+                eq(userId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any(Pageable.class)
+        )).thenReturn(toMetadataProjections(sessions));
     }
 
     private void stubRecentQuickReviewSessions(
@@ -1225,11 +1283,16 @@ class DashboardServiceTest {
             List<QuickReviewSessionEntity> firstCall,
             List<QuickReviewSessionEntity> secondCall
     ) {
-        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        lenient().when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                 eq(userId),
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
-        )).thenReturn(firstCall, secondCall);
+        )).thenReturn(toSummaryProjections(secondCall));
+        lenient().when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+                eq(userId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any(Pageable.class)
+        )).thenReturn(toMetadataProjections(firstCall));
     }
 
     private void stubRecentQuickReviewSessionsForPack(
@@ -1237,12 +1300,12 @@ class DashboardServiceTest {
             UUID studyPackId,
             List<QuickReviewSessionEntity> sessions
     ) {
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        lenient().when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
                 eq(userId),
                 eq(studyPackId),
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
-        )).thenReturn(sessions);
+        )).thenReturn(toSummaryProjections(sessions));
     }
 
     private void stubChallengeSuggestionCandidate(UUID userId, ProfileType profileType) {

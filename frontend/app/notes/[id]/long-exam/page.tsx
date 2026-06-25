@@ -211,10 +211,9 @@ export default function LongExamPage() {
     const selectedSourceCount = 1 + selectedAdditionalStudyPackIds.length;
     const longExamRemaining = Math.max(0, longExamMonthlyLimit - longExamUsedThisMonth);
     const longExamLimitReached = longExamMonthlyLimit > 0 && longExamUsedThisMonth >= longExamMonthlyLimit;
-    const longExamSourceCountExceedsRemaining = selectedSourceCount > longExamRemaining;
     const currentPlanType = getAuthUser()?.planType ?? "FREE";
     const longExamUpgradeCtas = getUpgradeCtas(currentPlanType as AppPlanType);
-    const longExamStartDisabled = !studyPackId || starting || (currentPlanType === "PRO" && (longExamLimitReached || longExamSourceCountExceedsRemaining));
+    const longExamStartDisabled = !studyPackId || starting || (currentPlanType === "PRO" && longExamLimitReached);
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
     const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentQuestionIndex);
     const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
@@ -496,10 +495,6 @@ export default function LongExamPage() {
             setShowLongExamPaywall(true);
             return;
         }
-        if (longExamSourceCountExceedsRemaining) {
-            setError(`Not enough Long Exam quota for ${selectedSourceCount} notes. Remove a note or upgrade.`);
-            return;
-        }
         setStarting(true);
         setError(null);
         startedTrackedRef.current = false;
@@ -536,7 +531,7 @@ export default function LongExamPage() {
         } finally {
             setStarting(false);
         }
-    }, [enterRunningFromStart, longExamSourceCountExceedsRemaining, selectedAdditionalStudyPackIds, selectedSourceCount, starting, studyPackId, trackStarted]);
+    }, [enterRunningFromStart, selectedAdditionalStudyPackIds, starting, studyPackId, trackStarted]);
 
     const handleResumeActiveSession = useCallback(async () => {
         if (!activeStartResponse?.sessionId) {
@@ -968,13 +963,8 @@ export default function LongExamPage() {
                                                 {currentPlanType === "PRO" ? (
                                                     <>
                                                         <p className="text-sm text-foreground/70">
-                                                            This session will use {selectedSourceCount} of your {longExamRemaining} remaining Long Exam sessions.
+                                                            This session uses 1 of your {longExamRemaining} remaining Long Exam sessions.
                                                         </p>
-                                                        {longExamSourceCountExceedsRemaining ? (
-                                                            <p className="text-sm text-amber-700 dark:text-amber-300">
-                                                                Not enough Long Exam quota for {selectedSourceCount} notes. Remove a note or upgrade.
-                                                            </p>
-                                                        ) : null}
                                                     </>
                                                 ) : null}
                                             </>
@@ -1014,15 +1004,17 @@ export default function LongExamPage() {
                                     {selectedSourceCount} {selectedSourceCount === 1 ? "note" : "notes"} · {expectedQuestionCount} questions
                                 </p>
                                 <div className="flex flex-col gap-2 sm:flex-row">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="w-full sm:w-auto"
-                                        onClick={() => router.push(modeSelectHref)}
-                                        disabled={starting}
-                                    >
-                                        Choose another mode
-                                    </Button>
+                                    {collectionId ? null : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full sm:w-auto"
+                                            onClick={() => router.push(modeSelectHref)}
+                                            disabled={starting}
+                                        >
+                                            Choose another mode
+                                        </Button>
+                                    )}
                                     <Button
                                         type="button"
                                         className="w-full sm:w-auto"

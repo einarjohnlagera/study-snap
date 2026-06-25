@@ -4,6 +4,7 @@ import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.testutil.SqlCaptureStatementInspector;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector")
 @Transactional
 class QuickReviewSessionRepositoryTest {
 
@@ -285,6 +286,47 @@ class QuickReviewSessionRepositoryTest {
         assertThat(sessions).hasSize(1);
         assertThat(sessions.getFirst().getId()).isEqualTo(latestLowerScore.getId());
         assertThat(sessions.getFirst().getScorePercentage()).isEqualByComparingTo("60.00");
+    }
+
+    @Test
+    void projectionQueries_doNotSelectSessionState() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        saveSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusMinutes(15),
+                now.minusMinutes(5),
+                90
+        );
+
+        SqlCaptureStatementInspector.clear();
+
+        List<QuickReviewSessionSummaryProjection> summaries = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        PageRequest.of(0, 10)
+                );
+        List<QuickReviewSessionMetadataProjection> metadataRows = quickReviewSessionRepository
+                .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW
+                );
+
+        assertThat(summaries).hasSize(1);
+        assertThat(metadataRows).hasSize(1);
+        List<String> quickReviewSelects = SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().contains("from quick_review_sessions"))
+                .filter(sql -> sql.toLowerCase().startsWith("select"))
+                .toList();
+        assertThat(quickReviewSelects).isNotEmpty();
+        assertThat(quickReviewSelects)
+                .allSatisfy(sql -> assertThat(sql.toLowerCase()).doesNotContain("session_state"));
+        assertThat(quickReviewSelects)
+                .anySatisfy(sql -> assertThat(sql.toLowerCase()).contains("session_metadata"));
     }
 
     private QuickReviewSessionEntity saveSession(

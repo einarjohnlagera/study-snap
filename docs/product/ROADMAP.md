@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the latest release (last released). The next version has not been opened yet.
+`v0.32.2 - Conversion Diagnosis & Quota Honesty` is the latest release (last released). The next version has not been opened yet.
 
-`v0.32.0 - Account & Communication Controls` is the previous baseline.
+`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the previous baseline.
+
+`v0.32.0 - Account & Communication Controls` is the release before that.
 
 `v0.31.2 - Analytics Integrity & Funnel Visibility` is the release before that.
 
@@ -200,6 +202,50 @@ Scope:
 Anti-drift: analytics/telemetry must be resilient (never fail or drop on referential timing); no PII added to event metadata; admin-only surfaces; no change to the universal learning loop.
 
 ---
+
+## v0.32.2 - Conversion Diagnosis & Quota Honesty (released)
+
+Base branch for this release: `releases/v0.32.2`. Patch after v0.32.1; mostly frontend + analysis.
+
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. **Thread 3 (the funnel diagnosis) ran first and re-scoped this release.** The real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. (An initial read flagged a "broken checkout" from "6 upgrade clicks → 0 `CHECKOUT_INITIATED`"; that was a **metric-inception artifact** — `CHECKOUT_INITIATED` was added in v0.31.2 while `UPGRADE_CLICKED` is far older, and a live upgrade reached the real Xendit invoice. Checkout works.) Free is **not** too generous. Full data: `docs/product/conversion-funnel-finding.md`. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; retention is.
+
+### Thread 3 — Conversion funnel diagnosis *(done)*
+
+Read prod `/admin/funnel` (`AdminFunnelService`): activation 68.6% (105/153), value loop 58.8%, free-quota-hit 0.0% (study-pack-only), W1→W2 retention 5.6%. Corrected reading: checkout is **not** broken (the "6 → 0" is a metric-inception mismatch — see finding doc); the real constraint is retention. Output: `docs/product/conversion-funnel-finding.md`. Drives the priorities below.
+
+> **Scope discipline:** this release ballooned past a patch. Thread 1 (re-engagement) is **the** priority; Threads 2–4 are secondary/low-effort and ship only if they don't delay Thread 1; Plus-tier stays deferred. Resist adding more.
+
+### Thread 1 — Turn on the re-engagement loop *(THE priority — a measured test, not a declared fix)*
+
+**Diagnosis:** the retention loop already exists (`RetentionEmailScheduler` → `RetentionService`, daily inactivity/weak-concept emails, EmailLog dedup + real-inactivity gating) and the return reason exists (due/weak concepts), but `AuthService.signup` creates every user with all reminder flags `false`, so the loop is **dark**. Reminders were defaulted off deliberately — Resend FREE tier is 100 emails/day and verification must not be starved.
+
+**Lever (build, then measure W1→W2 lift — this is *a* cause and the cheapest test, not proven to be *the* cause):**
+- **Budget-aware re-engagement sender** — a per-day send budget (config-driven, default 100) with a generous **transactional reserve** (default ~40) so verification always sends first; re-engagement drains only the remainder, counted from `email_logs`, with un-sent candidates rolling to the next daily run. No queue/outbox — guard on the existing daily dispatch. Prompt: `docs/codex-prompts/v0.32.2-budget-aware-reengagement.md`.
+- **Signup default flip — inactivity only** (`inactivityRemindersEnabled=true` for new users; weak-concept / weekly-summary / marketing stay opt-in). **Verify the inactivity template renders end-to-end before going live** — it has been a dark path.
+- **Bounce suppression** — a Resend bounce/complaint webhook populates a suppression list; all sends skip suppressed addresses (protects budget + sender reputation). Plus a **frontend signup email-typo suggestion** ("did you mean gmail.com?") to stop typo'd domains (e.g. `0gmail.com`) from bouncing — frontend-only, Claude-direct.
+- **Existing-user backfill — decided: backfill all to ON.** A migration sets `inactivity_reminders_enabled=true` for all existing users (other categories untouched). Low risk: the flag always defaulted `false`, so no one deliberately turned it off; unsubscribe remains the opt-out, and the budget guard ramps them over days. Now in the Codex prompt.
+
+### Thread 2 — Close instrumentation gaps *(shipped)*
+
+(a) The funnel compared all-time metrics with different inception dates (`UPGRADE_CLICKED` old vs `CHECKOUT_INITIATED` since v0.31.2), which produced the false "broken checkout." Admin Conversion Funnel now defaults event-based stages to a common 30-day window, with 7 / 30 / 90 / all-time options and `windowDays` / `windowStartedAt` response metadata. (b) `getQuotaHitMetrics` no longer measures only study-pack quota: it now reports current-period Free hits by quota type plus an "any quota hit" aggregate, with 0-limit Free-unavailable types excluded from their own denominators.
+
+### Thread 3 — Quota honesty via per-session deduction *(shipped)*
+
+The Pro card's "Long Exam (12 sessions)" / "Board Exam (10 sessions)" were really per-source-note units (`additionalStudyPackIds.size() + 1`; a 3-note exam cost 3). Rather than relabel to the less-generous "source-note units", the deduction now runs per session: **1 unit per exam** (Long + Board), regardless of note count — so "12 / 10 sessions" is literally true *and* more generous, and the prescreen quota copy says "uses 1 of N remaining". The source count still drives question-count + generation; **the numbers (12/10) and the monthly reset stay the same.** This is a deliberate quota-**mechanic** change (the release's anti-drift line is updated to allow exactly this and nothing more).
+
+Rationale (advisor-checked): at zero payers, marginal generation cost is second-order — fixed infra ÷ 0 revenue is the constraint — and per-session is simpler, more generous, and honest-by-construction. The accepted tradeoff is that per-session removes the per-note cost governor (users will tend to max notes per exam); that's fine now (more notes = more value) and re-tunable later. **Hedge: revisit if multi-note volume drives cost once we have payers.** Rejected: per-week quotas (would confound the running re-engagement retention experiment and throttle bursty exam-cramming). After this, leave the quota numbers alone until the churn replies + retention experiment produce signal.
+
+### Thread 4 — Plan-launch prescreen polish *(shipped)*
+
+"Choose another mode" is hidden on the Long Exam, Interview Practice, and Board Exam (board-exam-setup) prescreens when launched from a Study Plan (`collectionId` present) — there is no mode grid to return to in that flow, and the back link already routes to the plan. Note-launched flows are unchanged. Frontend-only.
+
+### Deferred — Plus-tier reason-to-exist
+
+Plus has zero exam access (a dead tier for exam-prep). Deferred until checkout works and there is real conversion data to justify any tier change — pointless to reposition a paid tier no one can currently buy.
+
+### Parked strategic question — audience / ICP
+
+Bigger than any email or pricing mechanic: **are the ~153 users the people who would ever pay?** At 0 paying / 5.6% retention, mechanics-tuning on the wrong base won't convert. Not a code change — a product-discovery question (who are they, did they come for exam prep or one-off note help). Keep on the table so the release doesn't become tuning on a base that may be the wrong base.
 
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity (released)
 

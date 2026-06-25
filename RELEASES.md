@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.32.2 - Conversion Diagnosis & Quota Honesty
+
+**Status: Released**
+
+Theme: v0.32.1 surfaced the premium exams and reframed pricing, but conversion was still ~0 of ~153 verified users. The funnel diagnosis ran first and **re-scoped this release**: the real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. (An initial read flagged a "broken checkout" from 6 upgrade clicks → 0 `CHECKOUT_INITIATED`; that was a **metric-inception artifact** — `CHECKOUT_INITIATED` was added in v0.31.2 while `UPGRADE_CLICKED` is far older, and a live upgrade reached the real Xendit invoice. Checkout works.) Free is not too generous. **Anti-drift: do not raise exam quota numbers** — quota size is not the constraint; retention is. Full data in `docs/product/conversion-funnel-finding.md`; see `docs/product/ROADMAP.md` for sequencing.
+
+### Planned Scope (re-prioritized after the funnel diagnosis)
+
+- **Backend OOM fix — JVM heap + thread sizing** — recurring prod `OutOfMemoryError` (Render Starter, 0.5 CPU / 512 MB). Root cause: the container ran `java -jar` with no memory flags, so the JVM capped the heap at ~25% of RAM (~128 MB) while Spring Boot's default 200 Tomcat worker threads consumed native memory — starving the heap under load (all JSONB payloads were measured KB-scale, ruling out a "fat query"). Fix: `-XX:MaxRAMPercentage=50.0 -XX:+ExitOnOutOfMemoryError` in the Dockerfile and `server.tomcat.threads.max=25` (from 200) in `application.yaml`. A read-path projection change (session_state kept out of dashboard/retention aggregates) shipped alongside as defense-in-depth, not the root cause. Confirm via Render's memory graph over several days (flat-under-load = sized correctly; monotonic climb = a leak to hunt).
+- **Conversion funnel diagnosis** *(done)* — read prod `/admin/funnel`; finding written to `docs/product/conversion-funnel-finding.md`. Corrected reading: checkout works; retention is the constraint. Drives the priorities below.
+- **Retention diagnosis (top priority)** — W1→W2 retention is 5.6% (recent cohorts ~0%). Diagnose why activated users don't return and define + ship one scoped lever to test.
+- **Plan-launch prescreen polish** *(shipped)* — "Choose another mode" is hidden on the Long Exam, Interview Practice, and Board Exam prescreens when launched from a Study Plan (`collectionId` present), since there is no mode grid to return to and the back link already routes to the plan. Note-launched flows are unchanged.
+- **Plus-tier reason-to-exist** *(deferred)* — revisit once retention improves and there is real recent conversion data.
+
+### Shipped
+
+- **Quiz session aggregate OOM fix** — Dashboard and retention aggregate reads now use scalar/session-metadata projections that omit the eager `session_state` JSONB, preventing large completed-session histories from deserializing every question payload on GET/admin-style read paths. Dashboard overview loads Challenge history once for performance + focus areas, note-performance summaries preserve all-time values through scalar rows, retention weekly/weak-concept checks use bounded projection reads, and account data export processes completed sessions in batches instead of one unbounded entity list.
+- **Date-windowed conversion funnel + quota-hit completeness** — Admin Conversion Funnel now defaults event-based stages to a common 30-day window, with 7 / 30 / 90 / all-time options and response metadata (`windowDays`, `windowStartedAt`) so `UPGRADE_CLICKED` and newer `CHECKOUT_INITIATED` data are not compared across mismatched inception periods. Free quota-hit now reports current-period per-type hits for Study Packs, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice plus an "any quota hit" aggregate; Free-unavailable 0-limit types are excluded from their own denominators.
+- **Quota honesty via per-session deduction** — Long Exam and Board Exam now deduct **1 unit per session** instead of per source note, so the existing "12 / 10 sessions" plan copy is literal without changing quota numbers or the monthly reset. Multi-note source count still drives question-count, source refs, and generation breadth; prescreens now say "uses 1 of N remaining" and no longer block a multi-note exam when one session remains.
+- **Budget-aware inactivity reminders** — The daily inactivity dispatch now sends only within the configured shared email pool (`studysnap.email.daily-limit`, default 100) after reserving transactional headroom (`studysnap.email.transactional-reserve`, default 40). The budget is computed from same-day `email_log` sends, skipped candidates are not logged and naturally roll to the next daily run, and `studysnap.email.reengagement-enabled=false` turns inactivity dispatch into a no-op without affecting transactional email.
+- **Inactivity reminders reachable by default** — New email/password and Google signups now default `inactivityRemindersEnabled=true`, while weak-concept, weekly-summary, and marketing preferences remain default-off. A migration backfills existing users to enable inactivity reminders only, preserving the other optional email flags.
+- **Resend suppression handling** — Added a signature-verified Resend webhook for bounce, complaint, and suppression events. Verified events upsert `suppressed_email`, and all Resend sends skip suppressed recipients with an `email.suppressed.skip` log entry instead of spending provider capacity or retrying bad addresses.
+- **Transactional budget accounting** — Successful verification and password-reset sends are now written to `email_log` so the re-engagement budget sees the same daily pool that transactional email uses. Transactional sends remain immediate and are never blocked by the re-engagement budget.
+
 ## v0.32.1 - Monetization Surfacing & Pricing Clarity
 
 **Status: Released**

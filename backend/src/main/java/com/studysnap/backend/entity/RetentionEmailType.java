@@ -1,6 +1,8 @@
 package com.studysnap.backend.entity;
 
 public enum RetentionEmailType {
+    EMAIL_VERIFICATION,
+    PASSWORD_RESET,
     WELCOME,
     INACTIVITY,
     WEAK_CONCEPT,

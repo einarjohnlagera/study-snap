@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/analytics/events").permitAll()
                         .requestMatchers("/email/unsubscribe").permitAll()
                         .requestMatchers("/webhooks/xendit").permitAll()
+                        .requestMatchers("/webhooks/resend").permitAll()
                         .requestMatchers("/billing/pricing").permitAll()
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/notes/public/**").permitAll()

@@ -6,17 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.32.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.32.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.32.1 — Monetization Surfacing & Pricing Clarity
+## Active release: v0.32.2 — Conversion Diagnosis & Quota Honesty
 
-Base branch for this release: `releases/v0.32.1`. Improve monetization surfacing and pricing clarity without changing billing mechanics. The release attacks top-of-funnel exposure and desire: let Free users see premium exam prescreens before the paywall, add a Study Plan premium-exam entry point for non-teachers, and make one-time pass pricing read like one-time, time-boxed access rather than a recurring subscription. Full scope in `ROADMAP.md`. Locked rules:
+Base branch for this release: `releases/v0.32.2`. The funnel diagnosis ran first and **re-scoped this release** (`docs/product/conversion-funnel-finding.md`): the real, un-conflicted constraint is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return. An initial read flagged a "broken checkout" (6 upgrade clicks → 0 `CHECKOUT_INITIATED`); that was a **metric-inception artifact** (`CHECKOUT_INITIATED` added v0.31.2, `UPGRADE_CLICKED` far older) — a live upgrade reached the real Xendit invoice, so **checkout works**. Free is not too generous. Full scope/priorities in `ROADMAP.md`. Locked rules:
 
-- **Premium exam paywall placement.** Free users should be able to open Long Exam, Board Exam, and Interview Practice prescreens and see the value before the paywall. The paywall belongs at the Start CTA for those modes, using `PaywallModal`, `resolvePaywallAction`, and `getUpgradeCtas`; backend feature gates stay as defense-in-depth.
-- **Study Plan premium exam entry.** Non-teacher Study Plans may offer a profile-appropriate premium exam CTA over that plan's notes only. Mode visibility comes from `exam-mode-visibility.ts`; do not hardcode profile checks. Preselect plan notes up to the existing per-exam cap and never include notes outside the plan.
-- **Pricing copy clarity.** Paid plan surfaces should frame Plus/Pro as one-time, time-boxed passes with no auto-charge. State that usage limits refresh monthly during the pass and that notes, Study Packs, and progress remain in the library after a pass ends.
-- **Anti-drift:** no billing mechanics change, no quota model change, no pass-duration or price change, no checkout shortcut, and no frontend-granted paid access. Upgrade/pricing copy goes through shared plan config (`getUpgradeCtas`, centralized plan copy/pricing surfaces), and checkout still uses backend-returned Xendit URLs.
-- **Out of scope:** per-pass quota redesign, new multi-note generation mechanics, new paid-state fields on `users`, teacher bulk quiz generation, and treating this release as the checkout conversion fix. Checkout conversion is measured by the v0.31.2 `CHECKOUT_INITIATED` funnel.
+- **Retention is the top priority.** Diagnose why activated users don't return (5.6% W1→W2) and define + ship one scoped lever; do not ship broad re-engagement infrastructure without that diagnosis.
+- **Checkout is NOT broken — do not "fix" it.** The "6 → 0" was an artifact of comparing metrics with different inception dates. No checkout code change unless a real failure is observed.
+- **No exam quota number change.** Quota size is not the constraint (retention is). Do not raise Long Exam / Board Exam quotas this release; tune from usage once payers exist.
+- **Quota honesty via per-session deduction (deliberate mechanic change).** Long Exam and Board Exam now deduct **1 unit per session** instead of per source note, so "12 / 10 sessions" is literally true — no "source-note units" relabel needed. The quota check + increment use `1`; the source count still drives question-count and generation. **Numbers (12/10) and the monthly reset are unchanged.** Accepted tradeoff: per-session removes the per-note cost governor (users will tend to max notes per exam) — fine at zero payers, where more notes = more value, not waste. Hedge: revisit if multi-note volume drives cost once we have payers.
+- **Close instrumentation gaps.** Add a date-windowed / cohort funnel (so all-time stages with different inception dates aren't compared — what produced the false "broken checkout"); extend free-quota-hit beyond study packs (quiz/adaptive/exam).
+- **Anti-drift:** no billing mechanics change, **no quota number change and no quota-model change beyond the per-session deduction above**, no price change, no checkout shortcut, no frontend-granted paid access; checkout still uses backend-returned Xendit URLs.
+- **Out of scope / deferred:** raising exam quotas, per-pass quota redesign, and any Plus-tier change — deferred until retention improves and there is real recent conversion data.
 
 ## Source-of-truth docs (read before implementing anything)
 

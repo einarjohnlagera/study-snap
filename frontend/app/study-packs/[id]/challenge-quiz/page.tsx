@@ -809,7 +809,6 @@ export default function ChallengeQuizPage() {
   const selectedBoardExamSourceCount = 1 + selectedBoardExamAdditionalStudyPackIds.length;
   const boardExamRemaining = Math.max(0, boardExamMonthlyLimit - boardExamUsedThisMonth);
   const boardExamLimitReached = boardExamMonthlyLimit > 0 && boardExamUsedThisMonth >= boardExamMonthlyLimit;
-  const boardExamSourceCountExceedsRemaining = selectedBoardExamSourceCount > boardExamRemaining;
   const boardExamUpgradeCtas = getUpgradeCtas((viewerPlanType ?? "FREE") as AppPlanType);
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
   const currentMatchingGroup = !isBoardExamMode ? resolveQuizItemGroupAt(quiz, currentIndex) : null;
@@ -1763,13 +1762,8 @@ export default function ChallengeQuizPage() {
                       {boardExamAvailable ? (
                         <>
                           <p className="text-sm text-foreground/70">
-                            This session will use {selectedBoardExamSourceCount} of your {boardExamRemaining} remaining Board Exam sessions.
+                            This session uses 1 of your {boardExamRemaining} remaining Board Exam sessions.
                           </p>
-                          {boardExamSourceCountExceedsRemaining ? (
-                            <p className="text-sm text-amber-700 dark:text-amber-300">
-                              Not enough Board Exam quota for {selectedBoardExamSourceCount} notes. Remove a note or upgrade.
-                            </p>
-                          ) : null}
                         </>
                       ) : null}
                     </>
@@ -1807,15 +1801,17 @@ export default function ChallengeQuizPage() {
                 {selectedBoardExamSourceCount} {selectedBoardExamSourceCount === 1 ? "note" : "notes"} · Counts toward your monthly Board Exam usage.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={returnToModeSelection}
-                  disabled={challengeGenerationLocked}
-                >
-                  Choose another mode
-                </Button>
+                {collectionId ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={returnToModeSelection}
+                    disabled={challengeGenerationLocked}
+                  >
+                    Choose another mode
+                  </Button>
+                )}
                 {!boardExamLimitReached ? (
                   <Button
                     type="button"
@@ -1827,7 +1823,7 @@ export default function ChallengeQuizPage() {
                       }
                       setShowBoardExamStartModal(true);
                     }}
-                    disabled={challengeGenerationLocked || (boardExamAvailable && boardExamSourceCountExceedsRemaining)}
+                    disabled={challengeGenerationLocked}
                   >
                     {boardExamAvailable
                       ? challengeGenerationLocked ? "Starting..." : "Begin Board Exam"

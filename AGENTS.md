@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.32.1` (in progress); previous: `v0.32.0 - Account & Communication Controls`
+- `v0.32.2` (in progress); previous: `v0.32.1 - Monetization Surfacing & Pricing Clarity`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -383,6 +383,8 @@ Use these skills before writing prompts, before starting new features, and after
 - `WEEKLY_SUMMARY` should honor `weeklySummaryRemindersEnabled`, which defaults off until the user opts in.
 - `RE_ENGAGEMENT_2025` should honor `marketingEmailsEnabled`, which defaults off until the user opts in.
 - Transactional account and billing emails are never gated by optional email preferences.
+- Transactional email is never gated by the re-engagement daily budget; the budget only caps optional retention dispatch.
+- Resend bounce/complaint suppressions apply to all email sends; suppressed addresses are skipped instead of retried.
 - Optional emails must carry a tokenized one-click unsubscribe that maps category to the existing preference flag; transactional emails never carry unsubscribe links or headers, and unsubscribe tokens must not include PII beyond the opaque user id.
 - Reminder cadence may later vary by `Learning Style`, but V1 stores the inputs and uses fixed thresholds.
 
@@ -1508,7 +1510,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.32.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.32.2`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

@@ -133,6 +133,8 @@ class AuthServiceTest {
         assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
         ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getInactivityRemindersEnabled()).isTrue();
+        assertThat(savedUser.getValue().getWeakConceptRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
@@ -230,6 +232,8 @@ class AuthServiceTest {
         assertThat(response.emailVerifiedAt()).isNotNull();
         ArgumentCaptor<UserEntity> savedUser = ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).save(savedUser.capture());
+        assertThat(savedUser.getValue().getInactivityRemindersEnabled()).isTrue();
+        assertThat(savedUser.getValue().getWeakConceptRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));

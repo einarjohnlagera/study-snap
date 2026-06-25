@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -43,6 +44,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,15 +91,20 @@ class AccountDataExportServiceTest {
                 collectionItem(collectionId, foreignNoteId, 1),
                 collectionItem(collectionId, privateNoteId, 2)
         ));
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId))
-                .thenReturn(List.of(quickReview, challenge));
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of(quickReview, challenge));
 
         DataExportResponse export = service().exportForUser(userId);
 
         verify(noteRepository).findByOwnerUserIdOrderByUpdatedAtDesc(userId);
         verify(studyPackRepository).findByOwnerUserId(userId);
         verify(noteCollectionRepository).findByOwnerUserId(userId);
-        verify(quickReviewSessionRepository).findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId);
+        verify(quickReviewSessionRepository).findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        );
         assertThat(export.meta().schemaVersion()).isEqualTo("1.0");
         assertThat(export.account().email()).isEqualTo("note@example.com");
         assertThat(export.notes()).extracting(DataExportResponse.Note::id)
@@ -134,8 +142,10 @@ class AccountDataExportServiceTest {
         when(noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of());
         when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of());
         when(noteCollectionRepository.findByOwnerUserId(userId)).thenReturn(List.of());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId))
-                .thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of());
 
         DataExportResponse export = service().exportForUser(userId);
 

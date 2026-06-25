@@ -44,6 +44,13 @@ type MetricCardProps = {
   detail?: string;
 };
 
+const WINDOW_OPTIONS = [
+  { label: "Last 7 days", value: "7", days: 7 },
+  { label: "Last 30 days", value: "30", days: 30 },
+  { label: "Last 90 days", value: "90", days: 90 },
+  { label: "All-time", value: "all", days: null },
+] as const;
+
 function MetricCard({ label, value, detail }: Readonly<MetricCardProps>) {
   return (
     <Card className="space-y-2 p-4 sm:p-5">
@@ -57,6 +64,7 @@ function MetricCard({ label, value, detail }: Readonly<MetricCardProps>) {
 export default function AdminFunnelPage() {
   const router = useRouter();
   const [metrics, setMetrics] = useState<AdminFunnelMetricsResponse | null>(null);
+  const [selectedWindowDays, setSelectedWindowDays] = useState<number | null>(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +76,7 @@ export default function AdminFunnelPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getAdminFunnelMetrics();
+      const result = await getAdminFunnelMetrics(selectedWindowDays ?? undefined);
       setMetrics(result);
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 403) {
@@ -79,7 +87,7 @@ export default function AdminFunnelPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, selectedWindowDays]);
 
   useEffect(() => {
     void loadMetrics();
@@ -113,11 +121,6 @@ export default function AdminFunnelPage() {
     }
     return [
       {
-        label: "Free Quota Hit Rate",
-        value: formatPercent(metrics.quotaHit.ratePercent),
-        detail: `${formatMetric(metrics.quotaHit.freeUsersHitQuota)} of ${formatMetric(metrics.quotaHit.totalFreeUsers)} free users hit the monthly limit`,
-      },
-      {
         label: "Paywall Conversion",
         value: formatPercent(metrics.paywallConversion.ratePercent),
         detail: `${formatMetric(metrics.paywallConversion.usersUpgradedAfterPaywall)} of ${formatMetric(metrics.paywallConversion.usersSeenPaywall)} who saw the paywall upgraded`,
@@ -126,6 +129,19 @@ export default function AdminFunnelPage() {
         label: "Value Loop Closure",
         value: formatPercent(metrics.valueLoop.ratePercent),
         detail: `${formatMetric(metrics.valueLoop.usersStartedQuizWithin7Days)} of ${formatMetric(metrics.valueLoop.usersGeneratedPack)} who generated a pack started a quiz within 7 days`,
+      },
+    ] satisfies MetricCardProps[];
+  }, [metrics]);
+
+  const quotaCards = useMemo(() => {
+    if (!metrics) {
+      return [] as MetricCardProps[];
+    }
+    return [
+      {
+        label: "Any Free Quota Hit",
+        value: formatPercent(metrics.quotaHit.ratePercent),
+        detail: `${formatMetric(metrics.quotaHit.freeUsersHitQuota)} of ${formatMetric(metrics.quotaHit.totalFreeUsers)} current-period free users hit at least one applicable limit`,
       },
     ] satisfies MetricCardProps[];
   }, [metrics]);
@@ -162,6 +178,8 @@ export default function AdminFunnelPage() {
     ] satisfies MetricCardProps[];
   }, [metrics]);
 
+  const activeWindowLabel = metrics?.windowDays ? `Last ${metrics.windowDays} days` : "All-time";
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       <header className="space-y-2">
@@ -171,9 +189,26 @@ export default function AdminFunnelPage() {
           </Link>
         </div>
         <h1 className="text-3xl font-semibold text-foreground">Conversion Funnel</h1>
-        <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
-          Snapshot metrics for the signup → generate → practice → upgrade loop. All-time unless noted.
-        </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground/70">
+            Snapshot metrics for the signup → generate → practice → upgrade loop. Event-based stages use the selected common window; cumulative blocks are labeled separately.
+          </p>
+          <label className="flex w-full flex-col gap-2 text-sm font-medium text-foreground/70 sm:max-w-xs">
+            Funnel window
+            <select
+              className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm"
+              value={selectedWindowDays === null ? "all" : String(selectedWindowDays)}
+              onChange={(event) => {
+                const selected = WINDOW_OPTIONS.find((option) => option.value === event.target.value);
+                setSelectedWindowDays(selected?.days ?? null);
+              }}
+            >
+              {WINDOW_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </header>
 
       {loading ? (
@@ -188,7 +223,10 @@ export default function AdminFunnelPage() {
       ) : metrics ? (
         <>
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-foreground">Activation</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Activation</h2>
+              <p className="text-sm text-foreground/60">All-time activation and current stuck-user snapshot</p>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {activationCards.map((card) => (
                 <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
@@ -197,7 +235,54 @@ export default function AdminFunnelPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-foreground">Paywall &amp; Value Loop</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Free quota hits</h2>
+              <p className="text-sm text-foreground/60">Current billing period; Free-only limits with unavailable Free features excluded from that type&apos;s denominator</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {quotaCards.map((card) => (
+                <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
+              ))}
+            </div>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-foreground/55">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Quota</th>
+                      <th className="px-4 py-3 font-semibold">Free limit</th>
+                      <th className="px-4 py-3 font-semibold">Hit count</th>
+                      <th className="px-4 py-3 font-semibold">Denominator</th>
+                      <th className="px-4 py-3 font-semibold">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {metrics.quotaHit.quotaTypes.map((quota) => (
+                      <tr key={quota.quotaType}>
+                        <td className="px-4 py-3 font-medium text-foreground">{quota.label}</td>
+                        <td className="px-4 py-3 text-foreground/75">
+                          {quota.applicable ? formatMetric(quota.monthlyLimit) : "Not on Free"}
+                        </td>
+                        <td className="px-4 py-3 text-foreground/75">{formatMetric(quota.usersHitQuota)}</td>
+                        <td className="px-4 py-3 text-foreground/75">
+                          {quota.applicable ? formatMetric(quota.applicableFreeUsers) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-foreground/75">
+                          {quota.applicable ? formatPercent(quota.ratePercent) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Paywall &amp; Value Loop</h2>
+              <p className="text-sm text-foreground/60">Event window: {activeWindowLabel}</p>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {paywallCards.map((card) => (
                 <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
@@ -206,7 +291,10 @@ export default function AdminFunnelPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-foreground">Checkout conversion</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Checkout conversion</h2>
+              <p className="text-sm text-foreground/60">Event window: {activeWindowLabel}</p>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {checkoutCards.map((card) => (
                 <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
@@ -215,7 +303,10 @@ export default function AdminFunnelPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-foreground">W1→W2 retention</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">W1→W2 retention</h2>
+              <p className="text-sm text-foreground/60">All-time eligible cohorts with completed week-2 windows</p>
+            </div>
             <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)]">
               <MetricCard
                 label="Returned in Week 2"

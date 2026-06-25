@@ -16,9 +16,13 @@ public class RetentionEmailScheduler {
     public void runDaily() {
         RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
         log.info(
-                "retention.email.scheduler.daily sent inactivity={} weakConcept={}",
+                "retention.email.scheduler.daily sent inactivity={} weakConcept={} inactivityBudget={} sentToday={} inactivityAttempted={} inactivitySkippedForBudget={}",
                 summary.inactivitySent(),
-                summary.weakConceptSent()
+                summary.weakConceptSent(),
+                summary.inactivityBudget(),
+                summary.sentToday(),
+                summary.inactivityAttempted(),
+                summary.inactivitySkippedForBudget()
         );
     }
 

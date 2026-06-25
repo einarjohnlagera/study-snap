@@ -27,6 +27,13 @@ server:
   port: ${SERVER_PORT:8080}
   servlet:
     context-path: /api
+  tomcat:
+    threads:
+      # Render Starter is 0.5 CPU / 512 MB. The Spring Boot default of 200 worker
+      # threads is pointless at 0.5 CPU and a native-memory hog (~1 MB stack each)
+      # that starves the heap. Cap it so the JVM fits the container.
+      max: ${SERVER_TOMCAT_THREADS_MAX:25}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:5}
 
 logging:
   level:
@@ -372,11 +379,16 @@ studysnap:
   email:
     resend-api-key: ${RESEND_API_KEY:}
     resend-api-base-url: ${RESEND_API_BASE_URL:https://api.resend.com}
+    resend-webhook-secret: ${RESEND_WEBHOOK_SECRET:}
     from: ${EMAIL_FROM:}
     support: ${EMAIL_SUPPORT:support@mail.notelib.app}
     app-base-url: ${APP_BASE_URL:http://localhost:3000}
     verification-token-hours: ${EMAIL_VERIFICATION_TOKEN_HOURS:24}
     resend-cooldown-seconds: ${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:60}
+    password-reset-token-minutes: ${PASSWORD_RESET_TOKEN_MINUTES:60}
+    daily-limit: ${EMAIL_DAILY_LIMIT:100}
+    transactional-reserve: ${EMAIL_TRANSACTIONAL_RESERVE:40}
+    reengagement-enabled: ${EMAIL_REENGAGEMENT_ENABLED:true}
   retention:
     daily-cron: ${RETENTION_DAILY_CRON:0 45 2 * * *}
     weekly-cron: ${RETENTION_WEEKLY_CRON:0 0 18 * * SUN}

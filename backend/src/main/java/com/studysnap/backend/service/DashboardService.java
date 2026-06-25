@@ -30,6 +30,8 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.SummaryPreviewUtils;
@@ -189,14 +191,14 @@ public class DashboardService {
     }
 
     public MasterySnapshotResponse getMasterySnapshot(UUID userId) {
-        List<QuickReviewSessionEntity> recentCompletedSessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionSummaryProjection> recentCompletedSessions = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 30)
                 )
                 .stream()
-                .filter(session -> session.getStatus() == QuickReviewSessionStatus.COMPLETED)
+                .filter(session -> session.status() == QuickReviewSessionStatus.COMPLETED)
                 .toList();
 
         if (recentCompletedSessions.isEmpty()) {
@@ -216,7 +218,7 @@ public class DashboardService {
                 .divide(BigDecimal.valueOf(recentScores.size()), 2, RoundingMode.HALF_UP);
 
         int studyPacksReviewed = (int) recentCompletedSessions.stream()
-                .map(QuickReviewSessionEntity::getStudyPackId)
+                .map(QuickReviewSessionSummaryProjection::studyPackId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .count();
@@ -230,16 +232,21 @@ public class DashboardService {
 
     public DashboardOverviewResponse getOverview(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
-        List<QuickReviewSessionEntity> completedQuizSessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionSummaryProjection> completedQuickReviewSessions = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
-                        List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        Pageable.unpaged()
                 );
-        List<QuickReviewSessionEntity> completedChallengeSessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionMetadataProjection> completedChallengeSessions = quickReviewSessionRepository
+                .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
                         QuickReviewSessionMode.CHALLENGE
                 );
+        List<QuickReviewSessionSummaryProjection> completedQuizSessions = new ArrayList<>(completedQuickReviewSessions);
+        completedChallengeSessions.stream()
+                .map(this::toSummaryProjection)
+                .forEach(completedQuizSessions::add);
 
         DashboardPerformanceSummaryResponse performanceSummary = buildPerformanceSummary(
                 completedQuizSessions,
@@ -320,8 +327,8 @@ public class DashboardService {
             return Optional.empty();
         }
 
-        QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        QuickReviewSessionMetadataProjection latestCompletedSession = quickReviewSessionRepository
+                .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 1)
@@ -339,7 +346,7 @@ public class DashboardService {
         }
 
         Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(
-                latestCompletedSession.getStudyPackId(),
+                latestCompletedSession.studyPackId(),
                 userId
         );
         if (studyPack.isEmpty()) {
@@ -406,15 +413,15 @@ public class DashboardService {
     }
 
     private Optional<StudyPackEntity> findMostRecentlyReviewedStudyPack(UUID userId) {
-        List<QuickReviewSessionEntity> recentCompleted = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionSummaryProjection> recentCompleted = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 30)
                 );
 
-        for (QuickReviewSessionEntity session : recentCompleted) {
-            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
+        for (QuickReviewSessionSummaryProjection session : recentCompleted) {
+            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.studyPackId(), userId);
             if (studyPack.isPresent()) {
                 return studyPack;
             }
@@ -458,37 +465,37 @@ public class DashboardService {
     }
 
     private Optional<ContinueStudyingResponse> resolveLowScoreRecentRecommendation(UUID userId) {
-        List<QuickReviewSessionEntity> recentSessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionSummaryProjection> recentSessions = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 50)
                 );
 
-        Map<UUID, QuickReviewSessionEntity> latestSessionByStudyPack = new LinkedHashMap<>();
-        for (QuickReviewSessionEntity session : recentSessions) {
-            if (session.getStatus() != QuickReviewSessionStatus.COMPLETED) {
+        Map<UUID, QuickReviewSessionSummaryProjection> latestSessionByStudyPack = new LinkedHashMap<>();
+        for (QuickReviewSessionSummaryProjection session : recentSessions) {
+            if (session.status() != QuickReviewSessionStatus.COMPLETED) {
                 continue;
             }
-            UUID studyPackId = session.getStudyPackId();
+            UUID studyPackId = session.studyPackId();
             if (!latestSessionByStudyPack.containsKey(studyPackId)) {
                 latestSessionByStudyPack.put(studyPackId, session);
             }
         }
 
-        List<QuickReviewSessionEntity> weakestCandidates = latestSessionByStudyPack.values().stream()
+        List<QuickReviewSessionSummaryProjection> weakestCandidates = latestSessionByStudyPack.values().stream()
                 .filter(session -> scorePercentageOrZero(session).compareTo(PERFECT_SCORE) < 0)
                 .sorted(
-                        Comparator.comparing(this::scorePercentageOrZero)
+                        Comparator.comparing((QuickReviewSessionSummaryProjection session) -> scorePercentageOrZero(session))
                                 .thenComparing(
-                                        QuickReviewSessionEntity::getCompletedAt,
+                                        QuickReviewSessionSummaryProjection::completedAt,
                                         Comparator.nullsLast(Comparator.reverseOrder())
                                 )
                 )
                 .toList();
 
-        for (QuickReviewSessionEntity session : weakestCandidates) {
-            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
+        for (QuickReviewSessionSummaryProjection session : weakestCandidates) {
+            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.studyPackId(), userId);
             if (studyPack.isEmpty()) {
                 continue;
             }
@@ -497,8 +504,8 @@ public class DashboardService {
                     studyPack.get(),
                     ContinueStudyingReason.LOW_SCORE_RECENT,
                     scorePercentageOrZero(session),
-                    session.getCompletedAt(),
-                    findLastOpenedAt(userId, session.getStudyPackId()),
+                    session.completedAt(),
+                    findLastOpenedAt(userId, session.studyPackId()),
                     studyPack.get().getCreatedAt(),
                     null,
                     null,
@@ -514,6 +521,28 @@ public class DashboardService {
 
     private BigDecimal scorePercentageOrZero(QuickReviewSessionEntity session) {
         return session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
+    }
+
+    private BigDecimal scorePercentageOrZero(QuickReviewSessionSummaryProjection session) {
+        return session.scorePercentage() == null ? BigDecimal.ZERO : session.scorePercentage();
+    }
+
+    private QuickReviewSessionSummaryProjection toSummaryProjection(QuickReviewSessionMetadataProjection session) {
+        return new QuickReviewSessionSummaryProjection(
+                session.id(),
+                session.userId(),
+                session.studyPackId(),
+                session.noteId(),
+                session.sessionMode(),
+                session.status(),
+                session.totalQuestions(),
+                session.correctAnswers(),
+                session.scorePercentage(),
+                session.retryCount(),
+                session.durationSeconds(),
+                session.createdAt(),
+                session.completedAt()
+        );
     }
 
     private Optional<ContinueStudyingResponse> resolveSuggestedChallengeRecommendation(UUID userId) {
@@ -598,8 +627,8 @@ public class DashboardService {
     }
 
     private DashboardPerformanceSummaryResponse buildPerformanceSummary(
-            List<QuickReviewSessionEntity> completedQuizSessions,
-            List<QuickReviewSessionEntity> completedChallengeSessions,
+            List<QuickReviewSessionSummaryProjection> completedQuizSessions,
+            List<QuickReviewSessionMetadataProjection> completedChallengeSessions,
             long studyPacksCreated
     ) {
         BigDecimal averageQuizScore = null;
@@ -642,7 +671,7 @@ public class DashboardService {
     }
 
     private DashboardFocusAreasResponse buildFocusAreas(
-            List<QuickReviewSessionEntity> completedChallengeSessions,
+            List<QuickReviewSessionMetadataProjection> completedChallengeSessions,
             PlanType planType
     ) {
         Map<String, ConceptPerformanceAccumulator> conceptPerformance = aggregateConceptPerformance(completedChallengeSessions);
@@ -723,8 +752,8 @@ public class DashboardService {
                 continue;
             }
 
-            Optional<QuickReviewSessionEntity> latestSession = quickReviewSessionRepository
-                    .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+            Optional<QuickReviewSessionSummaryProjection> latestSession = quickReviewSessionRepository
+                    .findCompletedSessionSummariesByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
                             userId,
                             studyPackId,
                             QuickReviewSessionMode.QUICK_REVIEW,
@@ -736,8 +765,8 @@ public class DashboardService {
             return Optional.of(toResponse(
                     studyPack.get(),
                     ContinueStudyingReason.RECENTLY_OPENED,
-                    latestSession.map(QuickReviewSessionEntity::getScorePercentage).orElse(null),
-                    latestSession.map(QuickReviewSessionEntity::getCompletedAt).orElse(null),
+                    latestSession.map(QuickReviewSessionSummaryProjection::scorePercentage).orElse(null),
+                    latestSession.map(QuickReviewSessionSummaryProjection::completedAt).orElse(null),
                     openedEvent.getCreatedAt(),
                     studyPack.get().getCreatedAt(),
                     null,
@@ -926,11 +955,15 @@ public class DashboardService {
                 .count();
     }
 
-    private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
-        if (session.getSessionMetadata() == null) {
+    private List<String> extractWeakConcepts(QuickReviewSessionMetadataProjection session) {
+        return extractWeakConcepts(session.sessionMetadata());
+    }
+
+    private List<String> extractWeakConcepts(Map<String, Object> sessionMetadata) {
+        if (sessionMetadata == null) {
             return List.of();
         }
-        Object weakConceptsRaw = session.getSessionMetadata().get("weakConcepts");
+        Object weakConceptsRaw = sessionMetadata.get("weakConcepts");
         if (!(weakConceptsRaw instanceof List<?> weakConceptsList)) {
             return List.of();
         }
@@ -944,18 +977,20 @@ public class DashboardService {
                 .toList();
     }
 
-    private Map<String, ConceptPerformanceAccumulator> aggregateConceptPerformance(List<QuickReviewSessionEntity> challengeSessions) {
+    private Map<String, ConceptPerformanceAccumulator> aggregateConceptPerformance(
+            List<QuickReviewSessionMetadataProjection> challengeSessions
+    ) {
         Map<String, ConceptPerformanceAccumulator> conceptPerformance = new LinkedHashMap<>();
-        for (QuickReviewSessionEntity session : challengeSessions) {
-            for (ConceptBreakdownEntry entry : extractConceptBreakdown(session)) {
+        for (QuickReviewSessionMetadataProjection session : challengeSessions) {
+            for (ConceptBreakdownEntry entry : extractConceptBreakdown(session.sessionMetadata())) {
                 conceptPerformance.merge(
                         entry.conceptName(),
                         new ConceptPerformanceAccumulator(
                                 entry.conceptName(),
                                 entry.correctAnswers(),
                                 entry.totalQuestions(),
-                                session.getCompletedAt(),
-                                session.getNoteId() == null ? null : session.getNoteId().toString()
+                                session.completedAt(),
+                                session.noteId() == null ? null : session.noteId().toString()
                         ),
                         ConceptPerformanceAccumulator::merge
                 );
@@ -964,11 +999,11 @@ public class DashboardService {
         return conceptPerformance;
     }
 
-    private List<ConceptBreakdownEntry> extractConceptBreakdown(QuickReviewSessionEntity session) {
-        if (session.getSessionMetadata() == null) {
+    private List<ConceptBreakdownEntry> extractConceptBreakdown(Map<String, Object> sessionMetadata) {
+        if (sessionMetadata == null) {
             return List.of();
         }
-        Object conceptBreakdownRaw = session.getSessionMetadata().get("conceptBreakdown");
+        Object conceptBreakdownRaw = sessionMetadata.get("conceptBreakdown");
         if (!(conceptBreakdownRaw instanceof List<?> conceptBreakdownList)) {
             return List.of();
         }
@@ -1103,8 +1138,11 @@ public class DashboardService {
      * are the two modes that support session review navigation.
      */
     public List<NotePerformanceSummaryResponse> getNotePerformanceSummary(UUID userId, int limit) {
-        List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, REVIEWABLE_SESSION_MODES);
+        List<QuickReviewSessionSummaryProjection> sessions = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeInOrderByCompletedAtDesc(
+                        userId,
+                        REVIEWABLE_SESSION_MODES
+                );
 
         if (sessions.isEmpty()) {
             return List.of();
@@ -1120,15 +1158,15 @@ public class DashboardService {
                 String bestSessionMode
         ) {}
 
-        Map<UUID, List<QuickReviewSessionEntity>> byNote = new LinkedHashMap<>();
-        for (QuickReviewSessionEntity s : sessions) {
-            byNote.computeIfAbsent(s.getNoteId(), k -> new ArrayList<>()).add(s);
+        Map<UUID, List<QuickReviewSessionSummaryProjection>> byNote = new LinkedHashMap<>();
+        for (QuickReviewSessionSummaryProjection s : sessions) {
+            byNote.computeIfAbsent(s.noteId(), k -> new ArrayList<>()).add(s);
         }
 
         List<NoteStat> stats = new ArrayList<>();
         for (var entry : byNote.entrySet()) {
             UUID noteId = entry.getKey();
-            List<QuickReviewSessionEntity> noteSessions = entry.getValue();
+            List<QuickReviewSessionSummaryProjection> noteSessions = entry.getValue();
 
             BigDecimal bestScore = null;
             UUID bestSessionId = null;
@@ -1137,18 +1175,18 @@ public class DashboardService {
             BigDecimal totalScore = BigDecimal.ZERO;
             int validScoreCount = 0;
 
-            for (QuickReviewSessionEntity s : noteSessions) {
-                if (s.getScorePercentage() != null) {
-                    if (bestScore == null || s.getScorePercentage().compareTo(bestScore) > 0) {
-                        bestScore = s.getScorePercentage();
-                        bestSessionId = s.getId();
-                        bestSessionMode = s.getSessionMode().name();
+            for (QuickReviewSessionSummaryProjection s : noteSessions) {
+                if (s.scorePercentage() != null) {
+                    if (bestScore == null || s.scorePercentage().compareTo(bestScore) > 0) {
+                        bestScore = s.scorePercentage();
+                        bestSessionId = s.id();
+                        bestSessionMode = s.sessionMode().name();
                     }
-                    totalScore = totalScore.add(s.getScorePercentage());
+                    totalScore = totalScore.add(s.scorePercentage());
                     validScoreCount++;
                 }
-                if (s.getCompletedAt() != null && (lastAttemptedAt == null || s.getCompletedAt().isAfter(lastAttemptedAt))) {
-                    lastAttemptedAt = s.getCompletedAt();
+                if (s.completedAt() != null && (lastAttemptedAt == null || s.completedAt().isAfter(lastAttemptedAt))) {
+                    lastAttemptedAt = s.completedAt();
                 }
             }
 

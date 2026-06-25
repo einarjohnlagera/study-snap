@@ -3,7 +3,6 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EmailLogEntity;
-import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -13,6 +12,8 @@ import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,6 +41,7 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int SESSION_LOOKBACK_LIMIT = 10;
+    private static final ZoneId EMAIL_BUDGET_ZONE = ZoneId.of("Asia/Manila");
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
             QuickReviewSessionMode.CHALLENGE
@@ -131,9 +134,16 @@ public class RetentionService {
     }
 
     DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
-        int inactivitySent = dispatchInactivityEmails(findInactiveUsers(now), now);
+        InactivityDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
         int weakConceptSent = dispatchWeakConceptEmails(findUsersWithWeakConcepts(now), now);
-        return new DailyRetentionDispatchSummary(inactivitySent, weakConceptSent);
+        return new DailyRetentionDispatchSummary(
+                inactivityDispatchResult.sent(),
+                weakConceptSent,
+                inactivityDispatchResult.budget(),
+                inactivityDispatchResult.sentToday(),
+                inactivityDispatchResult.attempted(),
+                inactivityDispatchResult.skippedForBudget()
+        );
     }
 
     WeeklyRetentionDispatchSummary sendWeeklySummaryEmails(OffsetDateTime now) {
@@ -151,8 +161,8 @@ public class RetentionService {
             return Optional.empty();
         }
 
-        QuickReviewSessionEntity latestChallenge = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        QuickReviewSessionMetadataProjection latestChallenge = quickReviewSessionRepository
+                .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                         user.getId(),
                         QuickReviewSessionMode.CHALLENGE,
                         PageRequest.of(0, 1)
@@ -160,37 +170,39 @@ public class RetentionService {
                 .stream()
                 .findFirst()
                 .orElse(null);
-        if (latestChallenge == null || latestChallenge.getCompletedAt() == null) {
+        if (latestChallenge == null || latestChallenge.completedAt() == null) {
             return Optional.empty();
         }
 
         OffsetDateTime cutoff = now.minusDays(properties.getRetention().getWeakConceptInactivityDays());
-        if (latestChallenge.getCompletedAt().isAfter(cutoff)) {
+        if (latestChallenge.completedAt().isAfter(cutoff)) {
             return Optional.empty();
         }
 
-        LinkedHashSet<String> remainingWeakConcepts = new LinkedHashSet<>(extractWeakConcepts(latestChallenge));
+        LinkedHashSet<String> remainingWeakConcepts = new LinkedHashSet<>(
+                extractWeakConcepts(latestChallenge.sessionMetadata())
+        );
         if (remainingWeakConcepts.isEmpty()) {
             return Optional.empty();
         }
 
-        quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndStudyPackIdAndSessionModeOrderByCompletedAtDesc(
                 user.getId(),
-                latestChallenge.getStudyPackId(),
+                latestChallenge.studyPackId(),
                 QuickReviewSessionMode.ADAPTIVE,
                 PageRequest.of(0, SESSION_LOOKBACK_LIMIT)
         ).forEach(session -> {
-            if (session.getCompletedAt() == null || session.getCompletedAt().isBefore(latestChallenge.getCompletedAt())) {
+            if (session.completedAt() == null || session.completedAt().isBefore(latestChallenge.completedAt())) {
                 return;
             }
-            extractWeakConcepts(session).forEach(remainingWeakConcepts::remove);
+            extractWeakConcepts(session.sessionMetadata()).forEach(remainingWeakConcepts::remove);
         });
 
         if (remainingWeakConcepts.isEmpty()) {
             return Optional.empty();
         }
 
-        String noteTitle = studyPackRepository.findById(latestChallenge.getStudyPackId())
+        String noteTitle = studyPackRepository.findById(latestChallenge.studyPackId())
                 .map(StudyPackEntity::getTitle)
                 .filter(value -> !value.isBlank())
                 .orElse("your study pack");
@@ -199,10 +211,10 @@ public class RetentionService {
                 user.getId(),
                 user.getEmail(),
                 resolveFirstName(user),
-                latestChallenge.getNoteId(),
+                latestChallenge.noteId(),
                 noteTitle,
                 List.copyOf(remainingWeakConcepts).stream().limit(3).toList(),
-                buildAbsoluteUrl("/notes/" + latestChallenge.getNoteId() + "/adaptive-practice")
+                buildAbsoluteUrl("/notes/" + latestChallenge.noteId() + "/adaptive-practice")
         ));
     }
 
@@ -257,6 +269,44 @@ public class RetentionService {
             }
         }
         return sent;
+    }
+
+    private InactivityDispatchResult dispatchBudgetedInactivityEmails(OffsetDateTime now) {
+        if (!properties.getEmail().isReengagementEnabled()) {
+            log.info("retention.email.inactivity disabled");
+            return new InactivityDispatchResult(0, countEmailsSentToday(now), 0, 0, 0);
+        }
+
+        long sentToday = countEmailsSentToday(now);
+        int budget = resolveReengagementBudget(sentToday);
+        List<InactiveUserReminder> candidates = findInactiveUsers(now);
+        int attempted = Math.min(candidates.size(), budget);
+        int skippedForBudget = Math.max(0, candidates.size() - attempted);
+        int sent = dispatchInactivityEmails(candidates.stream().limit(attempted).toList(), now);
+        log.info(
+                "retention.email.inactivity.dispatch budget={} sentToday={} attempted={} sent={} skippedForBudget={}",
+                budget,
+                sentToday,
+                attempted,
+                sent,
+                skippedForBudget
+        );
+        return new InactivityDispatchResult(budget, sentToday, attempted, sent, skippedForBudget);
+    }
+
+    private long countEmailsSentToday(OffsetDateTime now) {
+        OffsetDateTime startOfDay = now.atZoneSameInstant(EMAIL_BUDGET_ZONE)
+                .toLocalDate()
+                .atStartOfDay(EMAIL_BUDGET_ZONE)
+                .toOffsetDateTime();
+        return emailLogRepository.countBySentAtGreaterThanEqual(startOfDay);
+    }
+
+    private int resolveReengagementBudget(long sentToday) {
+        int dailyLimit = Math.max(0, properties.getEmail().getDailyLimit());
+        int transactionalReserve = Math.max(0, properties.getEmail().getTransactionalReserve());
+        long budget = (long) dailyLimit - transactionalReserve - sentToday;
+        return (int) Math.clamp(budget, 0L, Integer.MAX_VALUE);
     }
 
     private int dispatchWeakConceptEmails(List<WeakConceptReminder> candidates, OffsetDateTime now) {
@@ -326,13 +376,16 @@ public class RetentionService {
             templateParameters.put("unsubscribeFooterHtml", unsubscribeContext.htmlFooter());
             templateParameters.put("unsubscribeFooterText", unsubscribeContext.textFooter());
             EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(templateName, templateParameters);
-            emailService.sendEmail(new EmailMessage(
+            boolean sent = emailService.sendEmail(new EmailMessage(
                     email,
                     rendered.subject(),
                     rendered.htmlBody(),
                     rendered.textBody(),
                     unsubscribeContext.headers()
             ));
+            if (!sent) {
+                return false;
+            }
             logEmailSent(userId, emailType, now);
             return true;
         } catch (RuntimeException ex) {
@@ -386,22 +439,21 @@ public class RetentionService {
     }
 
     private int calculateAverageQuizScore(UUID userId, OffsetDateTime fromInclusive, OffsetDateTime toExclusive) {
-        List<QuickReviewSessionEntity> completedQuizSessions = quickReviewSessionRepository
-                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        List<QuickReviewSessionSummaryProjection> completedQuizSessions = quickReviewSessionRepository
+                .findCompletedSessionSummariesByUserIdAndSessionModeInAndCompletedAtBetweenOrderByCompletedAtDesc(
                         userId,
-                        WEEKLY_SUMMARY_QUIZ_MODES
+                        WEEKLY_SUMMARY_QUIZ_MODES,
+                        fromInclusive,
+                        toExclusive
                 ).stream()
-                .filter(session -> session.getCompletedAt() != null)
-                .filter(session -> !session.getCompletedAt().isBefore(fromInclusive))
-                .filter(session -> session.getCompletedAt().isBefore(toExclusive))
-                .filter(session -> session.getScorePercentage() != null)
+                .filter(session -> session.scorePercentage() != null)
                 .toList();
         if (completedQuizSessions.isEmpty()) {
             return 0;
         }
 
         BigDecimal totalScore = completedQuizSessions.stream()
-                .map(QuickReviewSessionEntity::getScorePercentage)
+                .map(QuickReviewSessionSummaryProjection::scorePercentage)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return totalScore
@@ -415,11 +467,11 @@ public class RetentionService {
                 .count();
     }
 
-    private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
-        if (session.getSessionMetadata() == null) {
+    private List<String> extractWeakConcepts(Map<String, Object> sessionMetadata) {
+        if (sessionMetadata == null) {
             return List.of();
         }
-        Object raw = session.getSessionMetadata().get("weakConcepts");
+        Object raw = sessionMetadata.get("weakConcepts");
         if (!(raw instanceof List<?> rawList) || rawList.isEmpty()) {
             return List.of();
         }
@@ -493,7 +545,20 @@ public class RetentionService {
 
     public record DailyRetentionDispatchSummary(
             int inactivitySent,
-            int weakConceptSent
+            int weakConceptSent,
+            int inactivityBudget,
+            long sentToday,
+            int inactivityAttempted,
+            int inactivitySkippedForBudget
+    ) {
+    }
+
+    private record InactivityDispatchResult(
+            int budget,
+            long sentToday,
+            int attempted,
+            int sent,
+            int skippedForBudget
     ) {
     }
 
