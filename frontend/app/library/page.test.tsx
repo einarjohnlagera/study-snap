@@ -636,11 +636,15 @@ describe("Library page", () => {
     fireEvent.change(within(dialog).getByPlaceholderText("Study Plan title"), {
       target: { value: "Finals Plan" },
     });
+    fireEvent.change(within(dialog).getByPlaceholderText("Optional context for this study plan"), {
+      target: { value: "Cram set for finals" },
+    });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
 
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({
         title: "Finals Plan",
+        description: "Cram set for finals",
         noteIds: ["note-42", "note-99"],
       });
     });
@@ -669,7 +673,7 @@ describe("Library page", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
 
     await waitFor(() => {
-      expect(createCollection).toHaveBeenCalledWith({ title: "Empty Plan", noteIds: [] });
+      expect(createCollection).toHaveBeenCalledWith({ title: "Empty Plan", description: null, noteIds: [] });
     });
   });
 

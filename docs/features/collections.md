@@ -247,6 +247,8 @@ Behavior:
 - unpublishing to `PRIVATE` is allowed
 - returns full detail
 
+**Metadata save is decoupled from publishing (v0.33.0).** Course/program and description persist through `updateMetadata` (`PATCH /collections/{id}`) independently of the publish action, so a blocked publish never discards what the admin typed. In the publish modal (`PublishStudyPlanModal`): `handlePublish` persists a dirty course/program **before** the private-notes/empty gate, and the unpublished state exposes a standalone **Save** action (in addition to Publish) so course/program can be saved without attempting to publish. Publish validation itself is unchanged — every note public + at least one note, enforced on the backend. Do not re-couple these; the decouple is deliberate (it fixed silent course/program loss on a failed publish).
+
 ### Public Plan List
 
 `GET /collections/public?courseProgram={value}`
@@ -391,6 +393,8 @@ The Dashboard card surfaces only the top matching published plan, so publishing 
 - `courseProgram` and `profileType` come from `getMe()`; labels resolve through `getCollectionLabels`. It is reached via the `See all N {plural}` link on the Dashboard card (shown only when 2+ plans match).
 - States: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. `BackLink` returns to the Dashboard.
 
+**Recommended plans also surface on the user's own Study Plans page (`/collections`) (v0.33.0).** The same Dashboard "Recommended {singular}" section (`DashboardStudyPlanSection`) is reused below the user's own plans — course/program-scoped, self-hiding when no plan matches, with the same `See all N {plural}` link to `/collections/published`. It is **not** tabs, and it stays scoped to the learner's own course/program (an all-programs browse is the Public Library's job for *notes*). `/collections` fetches `courseProgram` via `getMe()` and reads `profileType` from `getAuthUser()`.
+
 The Study Plan remains an execution surface for one curated, ordered set. It does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on collection detail.
 
 | Profile | Singular | Plural / nav |
@@ -405,7 +409,7 @@ Do not hardcode those profile-specific names in page or component code. Componen
 Core UI behavior:
 
 - The app shell shows the profile-aware Collections nav item directly after Library.
-- `/collections` uses the authenticated page header pattern and opens a create modal with title max length `150`.
+- `/collections` uses the authenticated page header pattern and opens a create modal with a title (max length `150`) and an optional description field. The Library selection-mode create modal (split-button `{singular}`) also collects an optional description (v0.33.0) — both create paths now carry description through `createCollection`, so a plan built from a Library selection is no longer title-only.
 - `/collections/[id]` uses `BackLink href="/collections"` with the profile-aware plural label.
 - Item labels are editable text inputs with max length `120`.
 - Reorder uses drag-and-drop plus `Move up` / `Move down` buttons for accessibility.

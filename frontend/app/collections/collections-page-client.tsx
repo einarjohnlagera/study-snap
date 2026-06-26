@@ -10,8 +10,9 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
-import { createCollection, listCollections, type NoteCollectionSummary } from "@/lib/api";
+import { createCollection, getMe, listCollections, type NoteCollectionSummary } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { DashboardStudyPlanSection } from "@/app/dashboard/dashboard-study-plan-section";
 
 type LoadState = "loading" | "ready" | "error";
 type CollectionExecutionStatus = "not-started" | "in-progress" | "completed";
@@ -186,10 +187,12 @@ function CreateCollectionModal({
 export function CollectionsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const labels = useMemo(() => getCollectionLabels(getAuthUser()?.profileType), []);
+  const profileType = useMemo(() => getAuthUser()?.profileType ?? null, []);
+  const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [courseProgram, setCourseProgram] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(searchParams.get("new") === "1");
 
   const loadCollections = useCallback(async () => {
@@ -205,12 +208,22 @@ export function CollectionsPageClient() {
     }
   }, []);
 
+  const loadCourseProgram = useCallback(async () => {
+    try {
+      const me = await getMe();
+      setCourseProgram(me.courseProgram ?? null);
+    } catch {
+      setCourseProgram(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
     void Promise.resolve().then(loadCollections);
-  }, [loadCollections, router]);
+    void Promise.resolve().then(loadCourseProgram);
+  }, [loadCollections, loadCourseProgram, router]);
 
   const headerAction = (
     <ResponsiveActionButton
@@ -276,6 +289,14 @@ export function CollectionsPageClient() {
             </Link>
           ))}
         </div>
+      ) : null}
+
+      {loadState === "ready" ? (
+        <DashboardStudyPlanSection
+          courseProgram={courseProgram}
+          profileType={profileType}
+          viewAllHref="/collections/published"
+        />
       ) : null}
 
       <CreateCollectionModal

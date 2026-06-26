@@ -413,12 +413,14 @@ function CreatePlanModal({
   onCreated: (collectionId: string) => void;
 }>) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setTitle("");
+      setDescription("");
       setCreating(false);
       setSubmitError(null);
     }
@@ -433,7 +435,11 @@ function CreatePlanModal({
     setCreating(true);
     setSubmitError(null);
     try {
-      const saved = await createCollection({ title: trimmedTitle, noteIds: selectedNoteIds });
+      const saved = await createCollection({
+        title: trimmedTitle,
+        description: description.trim() || null,
+        noteIds: selectedNoteIds,
+      });
       onCreated(saved.id);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : `Could not create this ${singularLabel.toLowerCase()}.`);
@@ -476,6 +482,18 @@ function CreatePlanModal({
             }}
             placeholder={`${singularLabel} title`}
             className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Description</span>
+          <textarea
+            value={description}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              setSubmitError(null);
+            }}
+            placeholder={`Optional context for this ${singularLabel.toLowerCase()}`}
+            className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
           />
         </label>
         <Button
