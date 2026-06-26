@@ -215,6 +215,38 @@ Collection detail items also expose a read-only weak-area signal from the existi
 - Free users and notes without a Study Pack receive `0` and an empty list. Lookup failures also degrade to empty weak-area data without failing collection detail.
 - The backend remains profile-agnostic and does not branch on `ProfileType`.
 
+### Get Collection Readiness
+
+`GET /collections/{id}/readiness`
+
+Returns owner-scoped readiness for the authenticated user's own collection only. Missing, malformed, or not-owned ids return `CollectionNotFoundException` / `404`; public source plans are not served to non-owners through this endpoint.
+
+Response:
+
+- `collectionId`
+- `totalNotes`
+- `notesWithStudyPack`
+- `overallReadinessPercentage`
+- `totalConcepts`
+- `masteredConcepts`
+- `dueConcepts`
+- `notPracticedConcepts`
+- `subjects: SubjectProgressEntry[]`
+
+Aggregation rules:
+
+- Start from the collection's ordered notes, then load their owned Study Packs.
+- Notes without a Study Pack count toward `totalNotes` only.
+- `notesWithStudyPack` counts notes in the plan that have an owned Study Pack.
+- Only Study Packs with key concepts contribute concepts.
+- Subjects use the Study Pack subject; null or blank subjects group under `Other`.
+- Per-subject entries and overall counts reuse `ProgressReportService` concept classification and `masteryPercentage`, so plan readiness matches `/me/progress` for the same concept set.
+- `overallReadinessPercentage = round(masteredConcepts * 100 / totalConcepts)`, or `0` when `totalConcepts == 0`.
+- Empty plans, plans with notes but no Study Packs, and never-practiced Study Packs are valid `200` responses, not errors.
+- No new persisted readiness field, generated content, quota category, AI call, trend, snapshot, or batch/progress infrastructure is added.
+
+This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, scoped to the dedicated readiness detail route only. Collection detail execution rows, collection list cards, published-plan cards, and public source plans must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
+
 ### Update Metadata
 
 `PATCH /collections/{id}`
@@ -395,7 +427,16 @@ The Dashboard card surfaces only the top matching published plan, so publishing 
 
 **Recommended plans also surface on the user's own Study Plans page (`/collections`) (v0.33.0).** The same Dashboard "Recommended {singular}" section (`DashboardStudyPlanSection`) is reused below the user's own plans — course/program-scoped, self-hiding when no plan matches, with the same `See all N {plural}` link to `/collections/published`. It is **not** tabs, and it stays scoped to the learner's own course/program (an all-programs browse is the Public Library's job for *notes*). `/collections` fetches `courseProgram` via `getMe()` and reads `profileType` from `getAuthUser()`.
 
-The Study Plan remains an execution surface for one curated, ordered set. It does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on collection detail.
+The Study Plan remains an execution surface for one curated, ordered set. Collection detail itself does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on the execution-detail rows.
+
+The v0.33.0 exception is the dedicated readiness sub-route:
+
+- `/collections/[id]/readiness` is reached from a "Check readiness" CTA on `/collections/[id]`.
+- It uses profile-aware naming from `getCollectionLabels` for the header and back link.
+- It renders the shared `ReadinessSummary` component: overall ready percentage, mastered/due/not-started counts, and per-subject readiness bars.
+- It shows `{notesWithStudyPack} of {totalNotes} notes have Study Packs` and cross-links to `/progress`.
+- It distinguishes `404` not-found/not-owned from transient load failures with retry.
+- It fires `PLAN_READINESS_VIEWED` once on successful load.
 
 | Profile | Singular | Plural / nav |
 |---|---|---|

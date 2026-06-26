@@ -8,7 +8,9 @@ import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionProgressResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
+import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
@@ -47,6 +49,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -82,6 +85,7 @@ public class NoteCollectionService {
     private final GeneratedQuizRepository generatedQuizRepository;
     private final QuizSessionHistoryService quizSessionHistoryService;
     private final ConceptHealthService conceptHealthService;
+    private final ProgressReportService progressReportService;
     private final AnalyticsService analyticsService;
     private final NoteService noteService;
     private final TransactionOperations collectionTransactionOperations;
@@ -159,6 +163,45 @@ public class NoteCollectionService {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         return toDetailResponse(collection, items);
+    }
+
+    @Transactional(readOnly = true)
+    public PlanReadinessResponse getReadiness(UUID collectionId, UUID userId) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
+        List<StudyPackEntity> studyPacks = noteIds.isEmpty()
+                ? List.of()
+                : studyPackRepository.findByNoteIdIn(noteIds).stream()
+                        .filter(studyPack -> Objects.equals(userId, studyPack.getOwnerUserId()))
+                        .filter(studyPack -> studyPack.getNoteId() != null)
+                        .toList();
+        int notesWithStudyPack = (int) studyPacks.stream()
+                .map(StudyPackEntity::getNoteId)
+                .distinct()
+                .count();
+        List<SubjectProgressEntry> subjects = studyPacks.isEmpty()
+                ? List.of()
+                : progressReportService.buildSubjectProgressEntries(
+                        studyPacks,
+                        userId,
+                        OffsetDateTime.now()
+                );
+        int totalConcepts = subjects.stream().mapToInt(SubjectProgressEntry::totalConcepts).sum();
+        int masteredConcepts = subjects.stream().mapToInt(SubjectProgressEntry::masteredConcepts).sum();
+        int dueConcepts = subjects.stream().mapToInt(SubjectProgressEntry::dueConcepts).sum();
+        int notPracticedConcepts = subjects.stream().mapToInt(SubjectProgressEntry::notPracticedConcepts).sum();
+        return new PlanReadinessResponse(
+                collection.getId(),
+                items.size(),
+                notesWithStudyPack,
+                masteryPercentage(masteredConcepts, totalConcepts),
+                totalConcepts,
+                masteredConcepts,
+                dueConcepts,
+                notPracticedConcepts,
+                subjects
+        );
     }
 
     @Transactional(readOnly = true)
@@ -678,6 +721,13 @@ public class NoteCollectionService {
                 .filter(item -> item.lastSessionCompletedAt() != null)
                 .count();
         return new NoteCollectionProgressResponse(items.size(), notesWithStudyPack, notesPracticed);
+    }
+
+    private int masteryPercentage(int masteredConcepts, int totalConcepts) {
+        if (totalConcepts == 0) {
+            return 0;
+        }
+        return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
     private List<NoteCollectionItemResponse> toItemResponses(UUID userId, List<NoteCollectionItemEntity> items) {

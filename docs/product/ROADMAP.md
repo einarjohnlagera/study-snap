@@ -70,6 +70,12 @@ Locked direction:
 - **Discovery stays course/program-scoped** (not all-programs); surface via the existing Dashboard "Recommended" pattern (not tabs).
 - **No per-profile pipeline fork.**
 
+Status:
+
+- **Track A** shipped on `feature/study-plan-publish-discovery-polish`.
+- **Track B Prompt 1** shipped: owner-scoped plan readiness endpoint, dedicated `/collections/[id]/readiness` route, shared `ReadinessSummary`, and `PLAN_READINESS_VIEWED`.
+- **Track B Prompt 2** remains: note-detail readiness rollup plus the Free-gate signal/detail split.
+
 Scope:
 
 - **Track A:** publish/create metadata decouple (frontend); recommended-plans section on `/collections` (frontend, reuse the Dashboard component). _(shipped on `feature/study-plan-publish-discovery-polish`)_

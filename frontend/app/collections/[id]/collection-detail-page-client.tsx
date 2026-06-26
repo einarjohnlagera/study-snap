@@ -12,7 +12,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
+import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
@@ -1171,6 +1171,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         ) : undefined}
         actions={(
           <div className="flex items-center justify-end gap-2">
+            <ResponsiveActionLink
+              href={`/collections/${collectionId}/readiness`}
+              action="progress"
+              label="Check readiness"
+              variant="outline"
+              size="sm"
+            />
             <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
