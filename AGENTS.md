@@ -142,6 +142,15 @@ Use these skills before writing prompts, before starting new features, and after
 - Frontend readiness displays should reuse the shared `ReadinessSummary` component and vocabulary: `ready`, `mastered`, `due`, `not started`.
 - The readiness sub-route fires `PLAN_READINESS_VIEWED` once after a successful load.
 
+### Note Readiness Signal Rule
+
+- Private Note Detail may show a compact per-note readiness signal for owned notes with a ready Study Pack and key concepts.
+- The note signal must reuse the shared `ReadinessSummary` component and the same readiness vocabulary as Plan Readiness and My Progress.
+- The note readiness signal is available to Free users: `% ready`, `X/Y mastered`, due count, not-started count, and per-concept readiness status.
+- Per-concept review timing remains PLUS/PRO only: `daysSinceReview`, timestamp-backed timing fields, and `Due - Nd ago` style copy must not be exposed to Free.
+- This Free-gate split is a deliberate access/value-ladder change only. Do not change prices, quotas, pass durations, checkout behavior, generated content, AI calls, or persisted readiness fields.
+- Concept-health load failures must not hide or wipe note content; show a neutral readiness-unavailable state instead.
+
 ### Note Target Audience Rule
 
 - Target Audience is required on every note.

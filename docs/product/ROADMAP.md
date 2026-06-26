@@ -74,7 +74,7 @@ Status:
 
 - **Track A** shipped on `feature/study-plan-publish-discovery-polish`.
 - **Track B Prompt 1** shipped: owner-scoped plan readiness endpoint, dedicated `/collections/[id]/readiness` route, shared `ReadinessSummary`, and `PLAN_READINESS_VIEWED`.
-- **Track B Prompt 2** remains: note-detail readiness rollup plus the Free-gate signal/detail split.
+- **Track B Prompt 2** shipped: note-detail readiness rollup plus the Free-gate signal/detail split.
 
 Scope:
 

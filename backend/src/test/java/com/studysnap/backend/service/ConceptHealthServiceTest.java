@@ -8,9 +8,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
+import com.studysnap.backend.dto.ConceptReadinessStatus;
 import com.studysnap.backend.entity.ConceptHealthEntity;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import java.time.OffsetDateTime;
@@ -350,6 +352,64 @@ class ConceptHealthServiceTest {
     }
 
     @Test
+    void getConceptHealthForOwnedStudyPack_returnsReadinessSignalWithoutTimingForFreePlan() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        StudyPackEntity studyPack = studyPack(studyPackId, userId, List.of(CAPACITANCE_CONCEPT, NEVER_SEEN_CONCEPT));
+        ConceptHealthEntity staleHealth = conceptHealth(userId, studyPackId, CAPACITANCE_CONCEPT, now.minusDays(4));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId)).thenReturn(List.of(staleHealth));
+
+        List<ConceptHealthEntryResponse> response = conceptHealthService.getConceptHealthForOwnedStudyPack(
+            userId,
+            studyPackId.toString(),
+            now
+        );
+
+        assertThat(response).hasSize(2);
+        assertThat(response.getFirst()).satisfies(entry -> {
+            assertThat(entry.concept()).isEqualTo(CAPACITANCE_CONCEPT);
+            assertThat(entry.readinessStatus()).isEqualTo(ConceptReadinessStatus.DUE);
+            assertThat(entry.isDue()).isTrue();
+            assertThat(entry.lastCorrectAt()).isNull();
+            assertThat(entry.lastIncorrectAt()).isNull();
+            assertThat(entry.daysSinceReview()).isNull();
+        });
+        assertThat(response.get(1).readinessStatus()).isEqualTo(ConceptReadinessStatus.NOT_STARTED);
+        verify(featureGateService, never()).checkFeatureAccess(any(PlanType.class), any(Feature.class));
+        verify(featureGateService, never()).hasFeatureAccess(any(PlanType.class), any(Feature.class));
+    }
+
+    @Test
+    void getConceptHealthForOwnedStudyPack_returnsReviewTimingForPaidPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        StudyPackEntity studyPack = studyPack(studyPackId, userId, List.of(CAPACITANCE_CONCEPT));
+        ConceptHealthEntity staleHealth = conceptHealth(userId, studyPackId, CAPACITANCE_CONCEPT, now.minusDays(4));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(featureGateService.hasFeatureAccess(PlanType.PLUS, Feature.ADAPTIVE_QUIZ)).thenReturn(true);
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId)).thenReturn(List.of(staleHealth));
+
+        List<ConceptHealthEntryResponse> response = conceptHealthService.getConceptHealthForOwnedStudyPack(
+            userId,
+            studyPackId.toString(),
+            now
+        );
+
+        assertThat(response).singleElement().satisfies(entry -> {
+            assertThat(entry.readinessStatus()).isEqualTo(ConceptReadinessStatus.DUE);
+            assertThat(entry.lastCorrectAt()).isEqualTo(now.minusDays(4));
+            assertThat(entry.daysSinceReview()).isEqualTo(4);
+        });
+    }
+
+    @Test
     void getConceptHealth_marksRecentlyReviewedConceptAsCurrent() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -473,5 +533,13 @@ class ConceptHealthServiceTest {
         entity.setCreatedAt(createdAt);
         entity.setUpdatedAt(createdAt);
         return entity;
+    }
+
+    private StudyPackEntity studyPack(UUID studyPackId, UUID userId, List<String> keyConcepts) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setKeyConcepts(keyConcepts);
+        return studyPack;
     }
 }

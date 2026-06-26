@@ -97,6 +97,12 @@ The due threshold stays owned by `ConceptHealthService`; do not hardcode the day
 
 Plan readiness is a dedicated collection detail sub-route, not a replacement for My Progress. `/progress` remains the canonical subject-level detail surface for all owned Study Packs, goals, milestones, weakest-subject routing, and study-focus guidance. The plan route is a scoped readiness view for one saved set and cross-links back to `/progress` for the full subject dashboard.
 
+## Note Readiness Cross-Reference
+
+Private Note Detail reuses the same ConceptHealth recency spine for a compact per-note readiness signal. It does not replace `/progress`: Note Detail shows the high-traffic signal for one note (`% ready`, mastered count, due count, and not-started count), while `/progress` remains the canonical subject-level detail surface.
+
+The note signal is visible to Free users, matching `/progress` availability. Per-concept review timing remains a PLUS/PRO detail and must not leak through `daysSinceReview`, `lastCorrectAt`, or `lastIncorrectAt` for Free concept-health responses.
+
 ## Sort Order
 
 Subjects sort weakest-first:

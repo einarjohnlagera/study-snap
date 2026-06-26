@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
+import com.studysnap.backend.dto.ConceptReadinessStatus;
 import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.TodayFocusType;
@@ -531,7 +532,10 @@ class PostSessionNextStepServiceTest {
         Integer daysSinceReview = lastCorrectAt == null
                 ? null
                 : Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(lastCorrectAt, NOW));
-        return new ConceptHealthEntryResponse(concept, lastCorrectAt, null, false, due, daysSinceReview);
+        ConceptReadinessStatus status = lastCorrectAt == null
+                ? ConceptReadinessStatus.NOT_STARTED
+                : due ? ConceptReadinessStatus.DUE : ConceptReadinessStatus.MASTERED;
+        return new ConceptHealthEntryResponse(concept, status, lastCorrectAt, null, false, due, daysSinceReview);
     }
 
     private UserEntity user(UUID userId, String studyGoal) {
