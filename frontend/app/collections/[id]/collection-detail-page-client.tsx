@@ -562,15 +562,17 @@ function PublishStudyPlanModal({
   };
 
   const handlePublish = async () => {
+    // Persist the course/program first so a blocked publish never discards what the user typed.
+    // Saving metadata is decoupled from publishing: the field is kept even when the plan can't go public yet.
+    if (courseProgramDirty && !(await persistCourseProgram())) {
+      return;
+    }
     if (!trimmedCourseProgram) {
       setError("Add a course/program so matching learners can find this plan.");
       return;
     }
     if (blockedByPrivateNotes) {
-      setError("Make every note public before publishing this plan.");
-      return;
-    }
-    if (courseProgramDirty && !(await persistCourseProgram())) {
+      setError("Course/program saved. Make every note public before publishing this plan.");
       return;
     }
     setTogglingVisibility(true);
@@ -629,9 +631,14 @@ function PublishStudyPlanModal({
               </Button>
             </>
           ) : (
-            <Button type="button" loading={savingCourseProgram || togglingVisibility} loadingText="Publishing..." disabled={busy || blockedByPrivateNotes} onClick={() => void handlePublish()}>
-              Publish
-            </Button>
+            <>
+              <Button type="button" variant="outline" loading={savingCourseProgram && !togglingVisibility} loadingText="Saving..." disabled={busy || !courseProgramDirty} onClick={() => void persistCourseProgram()}>
+                Save
+              </Button>
+              <Button type="button" loading={togglingVisibility} loadingText="Publishing..." disabled={busy || blockedByPrivateNotes} onClick={() => void handlePublish()}>
+                Publish
+              </Button>
+            </>
           )}
         </div>
       )}

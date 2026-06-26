@@ -21,7 +21,9 @@ Locked anti-drift (see `ROADMAP.md` / `CLAUDE.md` for the full set): readiness r
 
 ### Shipped
 
-_(none yet)_
+- **Study Plan publish decouple — metadata no longer discarded on a blocked publish** (Track A). The publish modal (`PublishStudyPlanModal`) now persists a dirty course/program **before** the private-notes / empty-plan gate, and the unpublished state exposes a standalone **Save** action alongside Publish, so course/program (and description, via the existing edit/create paths) save independently of publishing. Publish validation is unchanged — every note public + at least one note, enforced on the backend — only the silent metadata loss is fixed. The backend already exposed separate `updateMetadata` / `updateVisibility` endpoints; this is frontend sequencing.
+- **Library selection-create now collects a description** (Track A). The Library split-button `{singular}` create modal added an optional description field and passes it through `createCollection`, matching the `/collections` modal. A plan built by multi-selecting notes in the Library is no longer title-only — fixing the "description wasn't saved" report (that path simply had no field).
+- **Recommended plans surfaced on the user's own Study Plans page** (Track A). `/collections` reuses the Dashboard "Recommended {singular}" section (`DashboardStudyPlanSection`) below the user's own plans — course/program-scoped, self-hiding when no plan matches, with the same `See all N` link to `/collections/published`. Not tabs; scoped to the learner's own course/program only.
 
 ## v0.32.2 - Conversion Diagnosis & Quota Honesty
 

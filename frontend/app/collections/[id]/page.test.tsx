@@ -575,6 +575,25 @@ describe("CollectionDetailPageClient", () => {
     expect(updateNoteVisibility).not.toHaveBeenCalledWith("note-2", "PUBLIC");
   });
 
+  it("offers a standalone Save action so course/program persists when publishing is blocked", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET" }));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { ...note("note-1", "Cell Respiration"), visibility: "PRIVATE" },
+      { ...note("note-2", "Dosage Calculations"), visibility: "PUBLIC" },
+    ]);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
+
+    // Publishing is blocked by the private note, but metadata save is decoupled: a standalone
+    // Save action remains so the course/program is never discarded just because publish can't proceed.
+    expect(await screen.findByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  });
+
   it("reorders by move button using the full ordered set", async () => {
     const reordered = collection({
       items: [
