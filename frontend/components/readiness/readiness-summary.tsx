@@ -125,6 +125,12 @@ type ReadinessSummaryProps = {
   dueConcepts: number;
   notPracticedConcepts: number;
   subjects: SubjectProgressEntry[];
+  variant?: "full" | "compact";
+  title?: string;
+  eyebrow?: string;
+  description?: string;
+  unavailable?: boolean;
+  unavailableDescription?: string;
   emptyTitle?: string;
   emptyDescription?: string;
 };
@@ -136,19 +142,58 @@ export function ReadinessSummary({
   dueConcepts,
   notPracticedConcepts,
   subjects,
+  variant = "full",
+  title = "How ready this set is right now",
+  eyebrow = "Overall readiness",
+  description,
+  unavailable = false,
+  unavailableDescription = "Readiness is unavailable right now.",
   emptyTitle = "No readiness yet",
   emptyDescription = "Generate Study Packs and practice to see readiness.",
 }: Readonly<ReadinessSummaryProps>) {
+  if (variant === "compact") {
+    return (
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              {eyebrow}
+            </p>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+              {unavailable ? (
+                <p className="text-sm text-foreground/70">{unavailableDescription}</p>
+              ) : totalConcepts > 0 ? (
+                <>
+                  <p className="text-sm font-medium text-foreground/80">
+                    {overallReadinessPercentage}% ready &middot; {masteredConcepts}/{totalConcepts} mastered &middot; {dueConcepts} due
+                  </p>
+                  <p className="text-sm text-foreground/65">
+                    {notPracticedConcepts} not started
+                    {description ? <> &middot; {description}</> : null}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-foreground/70">{emptyDescription}</p>
+              )}
+            </div>
+          </div>
+          <ReadinessRing percentage={unavailable ? 0 : overallReadinessPercentage} />
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card className="p-4 sm:p-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Overall readiness
+              {eyebrow}
             </p>
             <div className="space-y-1">
-              <h2 className="text-xl font-semibold tracking-tight">How ready this set is right now</h2>
+              <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
               {totalConcepts > 0 ? (
                 <p className="text-sm text-foreground/70">
                   {masteredConcepts} mastered &middot; {dueConcepts} due &middot; {notPracticedConcepts} not started

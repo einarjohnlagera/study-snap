@@ -56,4 +56,25 @@ describe("ReadinessSummary", () => {
     expect(screen.getByText("No readiness yet")).toBeInTheDocument();
     expect(screen.getAllByText("Generate Study Packs and practice to see readiness.")).toHaveLength(2);
   });
+
+  it("renders compact readiness for note detail reuse", () => {
+    render(
+      <ReadinessSummary
+        variant="compact"
+        title="Note readiness"
+        overallReadinessPercentage={50}
+        totalConcepts={4}
+        masteredConcepts={2}
+        dueConcepts={1}
+        notPracticedConcepts={1}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.getByText("Note readiness")).toBeInTheDocument();
+    expect(screen.getByText((content) => (
+      content.includes("50% ready") && content.includes("2/4 mastered") && content.includes("1 due")
+    ))).toBeInTheDocument();
+    expect(screen.getByText("1 not started")).toBeInTheDocument();
+  });
 });

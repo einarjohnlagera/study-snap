@@ -58,6 +58,37 @@ Recent Sessions:
 - multi-note Long Exam sessions appear on every participating note in the session source-note set.
 - when a Long Exam spans more than one note, show `Multi-note Long Exam · spans N notes` under its score line while preserving existing weak-concept context.
 
+## Per-Note Readiness
+
+Private Note Detail shows a compact readiness signal for owned notes whose Study Pack is ready and has key concepts.
+
+The signal renders through the shared `ReadinessSummary` component in compact mode and uses the same vocabulary as Plan Readiness and My Progress:
+
+- `ready`
+- `mastered`
+- `due`
+- `not started`
+
+The rollup is derived from the note's already-loaded `conceptHealth` response plus the note `keyConcepts`; it is not persisted and does not call AI. It shows:
+
+- overall `% ready`
+- `X/Y mastered`
+- due concept count
+- not-started concept count
+
+Free-gate split:
+
+- Free users can see the readiness signal and per-concept readiness status chips, including which concepts are `due`.
+- PLUS and PRO users keep the review-timing detail, including `Due - Nd ago`, timestamp-backed fields, and the `Needs work` struggling chip.
+- The backend concept-health response must redact review-timing fields for Free while still returning readiness status. Do not expose `daysSinceReview`, `lastCorrectAt`, or `lastIncorrectAt` to Free for note readiness.
+- Free users should see the existing upgrade affordance for review timing; upgrade CTA labels must remain plan-aware through the shared plan config.
+
+Error and empty states:
+
+- If concept-health loading fails, the note content remains visible and the readiness rollup shows a neutral unavailable state.
+- A ready Study Pack with no practiced concepts shows `0% ready` with concepts counted as `not started`.
+- Notes without a Study Pack or without key concepts do not show the readiness rollup.
+
 ## Note Detail Tabs
 
 `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` are view tabs, not action buttons.

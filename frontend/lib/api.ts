@@ -895,6 +895,7 @@ export type AdaptivePracticeCompleteRequest = {
 
 export type ConceptHealthEntry = {
   concept: string;
+  readinessStatus?: "MASTERED" | "DUE" | "NOT_STARTED";
   lastCorrectAt: string | null;
   lastIncorrectAt: string | null;
   isStruggling: boolean;

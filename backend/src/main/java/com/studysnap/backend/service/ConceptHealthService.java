@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
+import com.studysnap.backend.dto.ConceptReadinessStatus;
 import com.studysnap.backend.entity.ConceptHealthEntity;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
@@ -94,15 +95,14 @@ public class ConceptHealthService {
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
             .orElseThrow(StudyPackNotFoundException::new);
         PlanType planType = subscriptionService.resolvePlan(userId);
-        featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
-        return getConceptHealth(userId, studyPackId, getKeyConcepts(studyPack), now);
+        boolean includeReviewTiming = canViewConceptReviewTiming(planType);
+        return getConceptHealth(userId, studyPackId, getKeyConcepts(studyPack), now, includeReviewTiming);
     }
 
     @Transactional(readOnly = true)
     public boolean canViewConceptHealth(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
-        boolean hasPaidPlan = planType == PlanType.PLUS || planType == PlanType.PRO;
-        return hasPaidPlan && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
+        return canViewConceptReviewTiming(planType);
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +112,17 @@ public class ConceptHealthService {
         List<String> allConcepts,
         OffsetDateTime now
     ) {
+        return getConceptHealth(userId, studyPackId, allConcepts, now, true);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConceptHealthEntryResponse> getConceptHealth(
+        UUID userId,
+        UUID studyPackId,
+        List<String> allConcepts,
+        OffsetDateTime now,
+        boolean includeReviewTiming
+    ) {
         if (allConcepts == null || allConcepts.isEmpty()) {
             return List.of();
         }
@@ -120,7 +131,7 @@ public class ConceptHealthService {
         return allConcepts.stream()
             .map(this::normalizeConcept)
             .filter(Objects::nonNull)
-            .map(concept -> toResponse(concept, healthByConcept.get(concept), now))
+            .map(concept -> toResponse(concept, healthByConcept.get(concept), now, includeReviewTiming))
             .toList();
     }
 
@@ -220,17 +231,20 @@ public class ConceptHealthService {
     private ConceptHealthEntryResponse toResponse(
         String concept,
         ConceptHealthEntity entity,
-        OffsetDateTime now
+        OffsetDateTime now,
+        boolean includeReviewTiming
     ) {
         OffsetDateTime lastCorrectAt = resolveLastCorrectAt(entity);
         OffsetDateTime lastIncorrectAt = resolveLastIncorrectAt(entity);
+        ConceptReadinessStatus readinessStatus = resolveReadinessStatus(lastCorrectAt, now);
         return new ConceptHealthEntryResponse(
             concept,
-            lastCorrectAt,
-            lastIncorrectAt,
-            isStruggling(lastCorrectAt, lastIncorrectAt),
+            readinessStatus,
+            includeReviewTiming ? lastCorrectAt : null,
+            includeReviewTiming ? lastIncorrectAt : null,
+            includeReviewTiming && isStruggling(lastCorrectAt, lastIncorrectAt),
             isDue(lastCorrectAt, now),
-            daysSinceReview(lastCorrectAt, now)
+            includeReviewTiming ? daysSinceReview(lastCorrectAt, now) : null
         );
     }
 
@@ -306,6 +320,18 @@ public class ConceptHealthService {
 
     private boolean isStruggling(OffsetDateTime lastCorrectAt, OffsetDateTime lastIncorrectAt) {
         return lastIncorrectAt != null && (lastCorrectAt == null || lastIncorrectAt.isAfter(lastCorrectAt));
+    }
+
+    private boolean canViewConceptReviewTiming(PlanType planType) {
+        boolean hasPaidPlan = planType == PlanType.PLUS || planType == PlanType.PRO;
+        return hasPaidPlan && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
+    }
+
+    private ConceptReadinessStatus resolveReadinessStatus(OffsetDateTime lastCorrectAt, OffsetDateTime now) {
+        if (lastCorrectAt == null) {
+            return ConceptReadinessStatus.NOT_STARTED;
+        }
+        return isDue(lastCorrectAt, now) ? ConceptReadinessStatus.DUE : ConceptReadinessStatus.MASTERED;
     }
 
     private String normalizeConcept(String rawConcept) {
