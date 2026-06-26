@@ -170,6 +170,7 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/collections/collection-1/readiness");
   });
 
   it("shows three-state per-note execution status and drops the study-pack/quiz readiness hint", async () => {

@@ -91,6 +91,12 @@ ConceptHealth write sources:
 
 The due threshold stays owned by `ConceptHealthService`; do not hardcode the day count in progress-report code.
 
+## Plan Readiness Cross-Reference
+
+`GET /collections/{id}/readiness` reuses the same ConceptHealth spine and `ProgressReportService` classification for a single owned collection's Study Packs. For the same concept set, plan readiness must match `/me/progress`: mastered, due, not started, and `masteryPercentage` use the same rules and thresholds.
+
+Plan readiness is a dedicated collection detail sub-route, not a replacement for My Progress. `/progress` remains the canonical subject-level detail surface for all owned Study Packs, goals, milestones, weakest-subject routing, and study-focus guidance. The plan route is a scoped readiness view for one saved set and cross-links back to `/progress` for the full subject dashboard.
+
 ## Sort Order
 
 Subjects sort weakest-first:

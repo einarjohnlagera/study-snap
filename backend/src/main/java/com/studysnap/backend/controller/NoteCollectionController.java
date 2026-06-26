@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
+import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
@@ -79,6 +80,16 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.get(collectionId, user.userId());
+    }
+
+    @GetMapping("/{id}/readiness")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public PlanReadinessResponse getReadiness(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.getReadiness(collectionId, user.userId());
     }
 
     @PatchMapping("/{id}")

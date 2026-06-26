@@ -16,25 +16,26 @@ function UnsubscribePageContent() {
   const [message, setMessage] = useState("Unsubscribing...");
 
   useEffect(() => {
-    if (!token) {
-      setStatus("error");
-      setMessage("This unsubscribe link is invalid or has expired.");
-      return;
-    }
-
     let cancelled = false;
-    setStatus("loading");
-    setMessage("Unsubscribing...");
 
-    void unsubscribeEmail(token)
-      .then((response) => {
+    const run = async () => {
+      if (!token) {
+        setStatus("error");
+        setMessage("This unsubscribe link is invalid or has expired.");
+        return;
+      }
+
+      setStatus("loading");
+      setMessage("Unsubscribing...");
+
+      try {
+        const response = await unsubscribeEmail(token);
         if (cancelled) {
           return;
         }
         setStatus("success");
         setMessage(response.message || `You've been unsubscribed from ${response.displayName} emails.`);
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) {
           return;
         }
@@ -44,7 +45,10 @@ function UnsubscribePageContent() {
           return;
         }
         setMessage(error instanceof Error ? error.message : "Could not unsubscribe from this email.");
-      });
+      }
+    };
+
+    void Promise.resolve().then(run);
 
     return () => {
       cancelled = true;

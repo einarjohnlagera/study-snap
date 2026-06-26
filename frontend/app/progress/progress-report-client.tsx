@@ -10,6 +10,12 @@ import { PageHeader } from "@/components/page-header";
 import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
+import {
+  getReadinessAccentBorder,
+  getReadinessBarTone,
+  getReadinessTextColor,
+  isReadinessNotStarted,
+} from "@/components/readiness/readiness-summary";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -50,31 +56,6 @@ export const MILESTONES: GoalMilestone[] = [
   },
 ];
 
-function isNotStarted(entry: SubjectProgressEntry): boolean {
-  return entry.masteryPercentage === 0 && entry.notPracticedConcepts === entry.totalConcepts;
-}
-
-function getProgressBarTone(entry: SubjectProgressEntry): string {
-  if (isNotStarted(entry)) return "bg-foreground/20";
-  if (entry.masteryPercentage < 40) return "bg-rose-500";
-  if (entry.masteryPercentage < 60) return "bg-amber-500";
-  return "bg-blue-600 dark:bg-blue-400";
-}
-
-function getCardAccentBorder(entry: SubjectProgressEntry): string {
-  if (isNotStarted(entry)) return "border-l-4 border-l-foreground/20";
-  if (entry.masteryPercentage < 40) return "border-l-4 border-l-rose-500";
-  if (entry.masteryPercentage < 60) return "border-l-4 border-l-amber-500";
-  return "border-l-4 border-l-blue-500 dark:border-l-blue-400";
-}
-
-function getMasteryTextColor(entry: SubjectProgressEntry): string {
-  if (isNotStarted(entry)) return "text-foreground/50";
-  if (entry.masteryPercentage < 40) return "text-rose-600 dark:text-rose-400";
-  if (entry.masteryPercentage < 60) return "text-amber-600 dark:text-amber-400";
-  return "text-blue-600 dark:text-blue-400";
-}
-
 function ProgressHeader() {
   return (
     <div className="space-y-4">
@@ -89,17 +70,17 @@ function ProgressHeader() {
 }
 
 function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }>) {
-  const notStarted = isNotStarted(entry);
+  const notStarted = isReadinessNotStarted(entry);
   const fillWidth = notStarted ? 0 : entry.masteryPercentage;
 
   return (
-    <Card className={`space-y-4 p-4 sm:p-6 ${getCardAccentBorder(entry)}`}>
+    <Card className={`space-y-4 p-4 sm:p-6 ${getReadinessAccentBorder(entry)}`}>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">{entry.subject}</h2>
           <p className="text-sm text-foreground/60">{entry.totalConcepts} concepts tracked</p>
         </div>
-        <p className={`text-2xl font-semibold ${getMasteryTextColor(entry)}`}>{entry.masteryPercentage}%</p>
+        <p className={`text-2xl font-semibold ${getReadinessTextColor(entry)}`}>{entry.masteryPercentage}%</p>
       </div>
 
       <div className="space-y-2">
@@ -113,7 +94,7 @@ function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }
           className="h-3 overflow-hidden rounded-full bg-muted"
         >
           <div
-            className={`h-full rounded-full transition-all ${getProgressBarTone(entry)}`}
+            className={`h-full rounded-full transition-all ${getReadinessBarTone(entry)}`}
             style={{ width: `${fillWidth}%` }}
           />
         </div>
