@@ -45,25 +45,37 @@ Friction found while seeding curated plans: publishing is clunky and silently dr
 - **Decouple metadata-save from publishing.** The backend already has separate endpoints — `updateMetadata` (title / description / course-program) and `updateVisibility` (publish, which validates notes). The publish modal's `handlePublish` validates notes *before* persisting course/program, so when publish fails (private/empty notes) the typed course/program is discarded; the create flow also drops description in some paths. Fix (frontend sequencing): **always persist metadata first / independently** (auto-save on blur or an always-available "Save details" action), and treat **Publish** as a separate gated action with a clear blocker message. Do **not** weaken publish validation — it still requires every note public + at least one note; it only stops throwing away metadata.
 - **Surface recommended plans on the user's own Study Plans page (`/collections`).** Reuse the existing Dashboard "Recommended {plural}" section (the recommended card + `See all N` link → `/collections/published`) rather than tabs — tabs hide discovery behind a click and add chrome to a near-empty page. Scoped to the learner's **own course/program only** (an all-programs browse is what Public Library does for *notes*; here it'd be noise). Place the learner's own plans first (workspace), recommended below — or recommended-first when they have zero owned plans (discovery-first when empty).
 
-### Track B — Plan & subject readiness (retention, headline)
+### Track B — Readiness as a retention signal (headline)
 
-The reason-to-return. A learner studying for CPALE wants to see "how ready am I, and what's left," and watch that number move as they practice.
+The reason-to-return. A learner studying for CPALE wants to see "how ready am I, and what's due," and watch that number move as they practice. An audit (2026-06) found readiness already half-exists: `/me/progress` is a full subject-mastery dashboard **already available to all plans**, and note detail already shows per-concept "due for review" badges — **but gated to PLUS/PRO**, so the non-returning Free cohort can't see its own return trigger. The plan scope is the only one genuinely missing. So Track B is not "build a dashboard" — it is **place one ConceptHealth-derived readiness signal where it has reach**.
 
-- **Plan- and subject-scoped readiness view** — per-plan readiness % + weak areas, and per-subject readiness, expressed with **charts/graphs**. The readiness signal must reuse the existing **ConceptHealth recency spine** that already powers `/me/progress` and due-concept selection — aggregated/scoped to a plan's notes (and to subjects within it) rather than globally. Charts are the *expression* of that signal, not a separate vanity dashboard.
+**Organizing principle — signal vs. detail:**
+
+- **Signal** = a compact, glanceable summary ("62% ready · 3 due"). Goes at high-traffic touchpoints. In v0.33.0: the **per-note rollup** on note detail (data is already fetched there). _Dashboard plan-card + plan-list badges are a deliberate fast-follow → v0.34.0._
+- **Detail** = the full breakdown (overall ring + per-subject/per-concept bars). Goes on dedicated surfaces: the new **plan readiness sub-route** `/collections/[id]/readiness` (reached by a "Check readiness" CTA on plan detail, **not** a tab, **not** inline on the execution rows) and `/me/progress` (already built — not rebuilt; cross-linked).
+
+In v0.33.0 (confirmed with Claude — split into two Codex prompts: ① shared component + plan sub-route, ② note rollup + Free-gate):
+
+- **Plan readiness sub-route** — owner-scoped `GET /collections/{id}/readiness`: overall readiness % + per-subject `SubjectProgressEntry[]` scoped to the plan's notes, rendered with the existing CSS progress-bar pattern (no chart library) + an inline SVG ring.
+- **Per-note readiness rollup** on note detail — a compact "% ready · X/Y mastered · N due" computed from the already-fetched `conceptHealth`.
+- **Free-gate change (deliberate, value-ladder-preserving)** — ungate the note readiness **signal** to Free (rollup + which concepts are due); keep the per-concept review-**timing** detail ("Due — 3d ago") PLUS/PRO. This aligns note detail with `/me/progress` (already Free) — it removes an inconsistency, and gives the Free cohort the return trigger. It is an **access/value-ladder change, not a billing change**.
+- **Shared component + unified vocabulary** — one reusable `ReadinessSummary` consumed by the plan surface and the note rollup, and one readiness language (`ready / mastered / due / not started`) reconciled across note, plan, and Progress.
 
 Locked direction:
 
-- **Deliberate reversal of "plans don't duplicate Progress."** `docs/features/collections.md` states twice that no mastery %, weakest-subject, or readiness belongs on a Study Plan ("the Study Plan remains an execution surface for one curated, ordered set"). This release **consciously revisits** that — but on a **dedicated readiness surface**, not by cramming mastery bars onto the plan **execution-detail rows** (the action / next-step list keeps its no-mastery rule). Record the reversal in `collections.md` when shipping.
-- **Readiness is derived, not stored.** Reuse the ConceptHealth recency spine; **no new mastery signal, no new persisted progress field on collections, no new generated content, no new AI/LLM call.** Aggregation only (the same way `/me/progress` aggregates by Study Pack subject).
+- **Deliberate reversal of "plans don't duplicate Progress."** `docs/features/collections.md` states twice that no mastery %, weakest-subject, or readiness belongs on a Study Plan. This release **consciously revisits** that — but on the **dedicated readiness sub-route only**, never on the plan **execution-detail rows** (the action / next-step list keeps its no-mastery rule). Record the reversal in `collections.md` when shipping.
+- **Readiness is derived, not stored.** Reuse the ConceptHealth recency spine; **no new mastery signal, no new persisted progress field on collections, no new generated content, no new AI/LLM call.** Aggregation only, and plan/note readiness must **match `/me/progress`** for the same concepts (reuse `ProgressReportService` classification + `masteryPercentage`, extract shared logic — no new thresholds).
+- **Free-gate is access, not billing.** Ungating the readiness signal touches the existing `FeatureGateService` / `canViewConceptHealth` path only. **No price, quota, pass-duration, or checkout mechanics change** (those stay locked). The per-concept timing detail stays PLUS/PRO.
+- **No new chart dependency; charts express readiness, never a standalone vanity dashboard.** Reuse the `progress-report-client.tsx` bar pattern + inline SVG.
 - **Discovery stays course/program-scoped** (not all-programs); surface via the existing Dashboard "Recommended" pattern (not tabs).
-- **No quota / billing / price / checkout change; no new quota category; no per-profile pipeline fork.**
+- **No per-profile pipeline fork.**
 
 Scope:
 
-- **Track A:** publish/create metadata decouple (frontend); recommended-plans section on `/collections` (frontend, reuse the Dashboard component).
-- **Track B:** a plan/subject readiness aggregation (backend, over ConceptHealth scoped to a collection's notes) + a frontend readiness surface with charts. This is multi-system — write a Codex prompt for the backend aggregation + a short design pass on where the readiness surface lives relative to the existing plan detail page.
+- **Track A:** publish/create metadata decouple (frontend); recommended-plans section on `/collections` (frontend, reuse the Dashboard component). _(shipped on `feature/study-plan-publish-discovery-polish`)_
+- **Track B (two Codex prompts):** ① backend plan-readiness aggregation (over ConceptHealth scoped to a collection's notes) + the plan sub-route + the shared `ReadinessSummary` component; ② per-note rollup on note detail + the Free-gate signal/detail split. Multi-system — Codex prompts, then Claude audits the diff before commit.
 
-Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI); the Progress-separation reversal is scoped to a dedicated surface and recorded in `collections.md`; discovery is course/program-scoped; Track A must not weaken publish validation; charts express readiness, never stand alone. Out of scope / deferred: teacher bulk-quiz & teacher-flow polish (v0.34.0 candidate, gated on teacher users); live-link / shared-progress plans (different architecture — belongs with teacher-flow).
+Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI, matches `/me/progress`); the Progress-separation reversal is scoped to the dedicated sub-route and recorded in `collections.md`; the Free-gate is an access change, not a billing/quota/price/checkout change; discovery is course/program-scoped; Track A must not weaken publish validation; no new chart library. Out of scope / deferred: **dashboard + plan-list readiness badges (signal reach) → v0.34.0**; teacher bulk-quiz & teacher-flow polish (v0.34.0 candidate, gated on teacher users); live-link / shared-progress plans (different architecture — belongs with teacher-flow).
 
 ---
 
