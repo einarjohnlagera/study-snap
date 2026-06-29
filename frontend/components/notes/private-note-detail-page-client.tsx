@@ -196,10 +196,14 @@ function resolveConceptReadinessStatus(health: ConceptHealthEntry | undefined): 
   if (health.readinessStatus) {
     return health.readinessStatus;
   }
-  if (!health.lastCorrectAt) {
-    return "NOT_STARTED";
+  // Fallback when readinessStatus is absent. isDue is never redacted, so a
+  // not-due concept is reliably MASTERED even when Free responses null out
+  // lastCorrectAt. isDue is true for both due and never-practiced concepts;
+  // lastCorrectAt disambiguates when present (unredacted), otherwise NOT_STARTED.
+  if (!health.isDue) {
+    return "MASTERED";
   }
-  return health.isDue ? "DUE" : "MASTERED";
+  return health.lastCorrectAt ? "DUE" : "NOT_STARTED";
 }
 
 function getConceptStatusLabel(status: ConceptReadinessStatus): string {
@@ -2138,7 +2142,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                               ) : null}
                               {canViewConceptReviewTiming && health?.isDue && health.daysSinceReview !== null ? (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                                  Due - {health.daysSinceReview}d ago
+                                  Due — {health.daysSinceReview}d ago
                                 </span>
                               ) : null}
                               {conceptHealthLoadState === "loaded" && (!canViewConceptReviewTiming || !health?.isDue || health.daysSinceReview === null) ? (
