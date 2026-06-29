@@ -407,6 +407,20 @@ function AddNotesModal({
     });
   };
 
+  const allVisibleSelected = availableNotes.length > 0 && availableNotes.every((note) => selectedIds.has(note.id));
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (allVisibleSelected) {
+        availableNotes.forEach((note) => next.delete(note.id));
+      } else {
+        availableNotes.forEach((note) => next.add(note.id));
+      }
+      return next;
+    });
+  };
+
   const handleAdd = async () => {
     const noteIds = Array.from(selectedIds);
     if (noteIds.length === 0) {
@@ -461,6 +475,18 @@ function AddNotesModal({
         ) : null}
         {!loading && !error && hasAnyAvailableNotes && availableNotes.length === 0 ? (
           <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">No matching notes found.</p>
+        ) : null}
+        {!loading && !error && availableNotes.length > 0 ? (
+          <div className="flex items-center justify-between px-1">
+            <button
+              type="button"
+              onClick={toggleSelectAllVisible}
+              className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {allVisibleSelected ? "Deselect all" : `Select all${query.trim() ? " matching" : ""} (${availableNotes.length})`}
+            </button>
+            <span className="text-xs text-foreground/50">{selectedIds.size} selected</span>
+          </div>
         ) : null}
         <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
           {availableNotes.map((note) => (

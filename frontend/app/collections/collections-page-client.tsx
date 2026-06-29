@@ -296,6 +296,7 @@ export function CollectionsPageClient() {
           courseProgram={courseProgram}
           profileType={profileType}
           viewAllHref="/collections/published"
+          browseWhenEmpty
         />
       ) : null}
 

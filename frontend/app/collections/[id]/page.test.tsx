@@ -669,6 +669,27 @@ describe("CollectionDetailPageClient", () => {
     });
   });
 
+  it("selects all available notes from the picker with select-all", async () => {
+    (listNotes as jest.Mock).mockResolvedValue([
+      note("note-1", "Hidden Existing Note"),
+      note("note-3", "Chemistry Notes"),
+      note("note-4", "Biology Notes"),
+    ]);
+    (addCollectionItems as jest.Mock).mockResolvedValue(collection());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add notes" }));
+    await screen.findByText("Chemistry Notes");
+
+    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add selected" }));
+
+    await waitFor(() => {
+      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3", "note-4"]);
+    });
+  });
+
   it("renders not-found state for 404", async () => {
     (getCollection as jest.Mock).mockRejectedValue(new ApiRequestError("Not found", { status: 404 }));
 

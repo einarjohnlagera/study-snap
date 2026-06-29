@@ -61,6 +61,7 @@ Interaction:
 - note actions belong in Note Detail
 - Teacher/Admin Library adds a teacher-only `Select` mode instead of changing default card behavior:
   - each note shows a checkbox while selection mode is active
+  - the selection toolbar (shared by plan creation and teacher exam selection) has a `Select all` / `Deselect all` toggle scoped to the active filters — it selects all filter-matching notes (including those beyond the first display page, since the filtered set is computed client-side); deselect-all clears only the currently-filtered set (v0.33.0)
   - only notes with a stored `generatedQuiz` can be selected for exam export
   - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
   - selected notes open `Exam Builder`, where teachers can:
