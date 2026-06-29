@@ -94,6 +94,14 @@ describe("DashboardStudyPlanSection", () => {
     expect(screen.queryByText("Recommended Study Plan")).not.toBeInTheDocument();
   });
 
+  it("renders a browse empty state when browseWhenEmpty is set and no plan matches", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" browseWhenEmpty />);
+
+    expect(await screen.findByText(/No curated study plans for/i)).toBeInTheDocument();
+  });
+
   it("shows a view-all link only when multiple plans match and a href is provided", async () => {
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([
       publicPlan,

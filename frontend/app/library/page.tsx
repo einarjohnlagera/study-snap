@@ -1251,6 +1251,23 @@ export default function LibraryPage() {
     ));
   }, []);
 
+  const allFilteredSelected = sortedFilteredItems.length > 0
+    && sortedFilteredItems.every((item) => selectedNoteIds.includes(item.id));
+
+  const toggleSelectAllFiltered = useCallback(() => {
+    const filteredIds = sortedFilteredItems.map((item) => item.id);
+    setSelectedNoteIds((previous) => {
+      const allSelected = filteredIds.length > 0 && filteredIds.every((id) => previous.includes(id));
+      if (allSelected) {
+        const remove = new Set(filteredIds);
+        return previous.filter((id) => !remove.has(id));
+      }
+      const merged = new Set(previous);
+      filteredIds.forEach((id) => merged.add(id));
+      return Array.from(merged);
+    });
+  }, [sortedFilteredItems]);
+
   const openExamBuilder = useCallback(() => {
     if (selectedNoteIds.length === 0 || selectedQuizReadyCount === 0) {
       return;
@@ -1448,6 +1465,14 @@ export default function LibraryPage() {
                   ) : null}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={toggleSelectAllFiltered}
+                    disabled={sortedFilteredItems.length === 0}
+                  >
+                    {allFilteredSelected ? "Deselect all" : `Select all (${sortedFilteredItems.length})`}
+                  </Button>
                   <Button type="button" variant="outline" onClick={resetSelectionMode}>
                     Cancel
                   </Button>
