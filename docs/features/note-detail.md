@@ -79,7 +79,7 @@ The rollup is derived from the note's already-loaded `conceptHealth` response pl
 Free-gate split:
 
 - Free users can see the readiness signal and per-concept readiness status chips, including which concepts are `due`.
-- PLUS and PRO users keep the review-timing detail, including `Due - Nd ago`, timestamp-backed fields, and the `Needs work` struggling chip.
+- PLUS and PRO users keep the review-timing detail, including `Due — Nd ago`, timestamp-backed fields, and the `Needs work` struggling chip.
 - The backend concept-health response must redact review-timing fields for Free while still returning readiness status. Do not expose `daysSinceReview`, `lastCorrectAt`, or `lastIncorrectAt` to Free for note readiness.
 - Free users should see the existing upgrade affordance for review timing; upgrade CTA labels must remain plan-aware through the shared plan config.
 
