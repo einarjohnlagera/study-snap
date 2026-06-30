@@ -64,6 +64,7 @@ For Study Plan detail sections, there is no separate section entity or nested-pl
 - null or empty labels belong to a trailing **Ungrouped** bucket.
 - when no item in the plan has a label, detail renders the existing flat ordered list with no section headers.
 - reordering (drag-and-drop and Move up/down) is **scoped to within a section**: each section has its own `SortableContext`, and both reorder paths operate against the grouped display order (sections contiguous) so a within-section move never renumbers another section's positions or reorders the sections. Cross-section drag is a no-op and Move buttons are disabled at section boundaries; to move a note to a different section, change its `label` (the Section control). The flat (no-label) plan reorders globally as before.
+- the per-note **Section** control is the shared `SuggestionCombobox` (existing section names as suggestions + free-type a new one), and it **auto-saves on a short debounce** after the last change rather than on blur. Section headers are rendered as emphasized dividers, distinct from note titles.
 
 Sections are strictly sections within one plan. They are not child collections, independent plans, or module entities.
 
