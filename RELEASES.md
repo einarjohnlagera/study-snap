@@ -2,7 +2,7 @@
 
 ## v0.33.0 - Study Plans as a Retention Engine
 
-**Status: In progress**
+**Status: Released**
 
 Theme: the constraint carried over from v0.32.2 is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate but don't return (longest observed streak ~2 days). This release attacks retention through the natural trackable unit, the **Study Plan**: turn it from a static folder / one-time adoption surface into a **readiness journey** that gives a learner a number that only moves by returning to practice. **Track A** removes publish/discovery friction so curated plans actually reach learners (activation); **Track B** (headline) introduces **plan- and subject-scoped readiness** with charts (the retention lever). See `docs/product/ROADMAP.md` for full scope and anti-drift rules.
 
