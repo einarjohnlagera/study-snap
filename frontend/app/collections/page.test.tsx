@@ -78,6 +78,32 @@ describe("CollectionsPage", () => {
     expect(screen.getByText("2 notes")).toBeInTheDocument();
   });
 
+  it("shows course/program on the card instead of the description", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "collection-1",
+        title: "PNLE Mastery",
+        description: "A long description that should not appear on the card",
+        visibility: "PRIVATE",
+        courseProgram: "Nursing",
+        sourcePlanId: null,
+        parentCollectionId: null,
+        itemCount: 2,
+        childCount: 0,
+        notesPracticed: 0,
+        createdAt: "2026-06-01T00:00:00Z",
+        updatedAt: "2026-06-02T00:00:00Z",
+      },
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("PNLE Mastery")).toBeInTheDocument();
+    expect(screen.getByText("Nursing")).toBeInTheDocument();
+    expect(screen.queryByText("A long description that should not appear on the card")).not.toBeInTheDocument();
+    expect(screen.queryByText("No description yet.")).not.toBeInTheDocument();
+  });
+
   it("shows Not started when no notes have been practiced", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       buildCollectionSummary({ itemCount: 3, notesPracticed: 0 }),

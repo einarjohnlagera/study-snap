@@ -279,11 +279,9 @@ export function CollectionsPageClient() {
               <Card className="flex min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
                 <div className="space-y-2">
                   <CardTitle className="line-clamp-2">{collection.title}</CardTitle>
-                  {collection.description ? (
-                    <CardDescription className="line-clamp-2 text-sm">{collection.description}</CardDescription>
-                  ) : (
-                    <p className="text-sm text-foreground/55">No description yet.</p>
-                  )}
+                  {collection.courseProgram ? (
+                    <CardDescription className="line-clamp-1 text-sm">{collection.courseProgram}</CardDescription>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
                   <div className="flex flex-wrap items-center gap-2">
