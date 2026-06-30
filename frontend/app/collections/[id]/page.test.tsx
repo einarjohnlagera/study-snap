@@ -752,6 +752,29 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
   });
 
+  it("preserves course/program when editing the description", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy" }));
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy", description: "New notes" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const description = await screen.findByLabelText("Description");
+    fireEvent.change(description, { target: { value: "New notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalledWith("collection-1", {
+        title: "Midterm Study Plan",
+        description: "New notes",
+        courseProgram: "Accountancy",
+      });
+    });
+  });
+
   it("reorders by move button within a section and persists the grouped order", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [

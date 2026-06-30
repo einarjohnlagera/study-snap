@@ -409,6 +409,9 @@ function EditCollectionModal({
       const saved = await updateCollection(collection.id, {
         title: trimmedTitle,
         description: description.trim() || null,
+        // Send the current course/program so this title/description edit does not wipe it
+        // (updateMetadata overwrites every provided field; omitting one clears it).
+        courseProgram: collection.courseProgram,
       });
       onSaved(saved);
     } catch (submitError) {
@@ -720,7 +723,13 @@ function PublishStudyPlanModal({
     setSavingCourseProgram(true);
     setError(null);
     try {
-      const saved = await updateCollection(collection.id, { courseProgram: trimmedCourseProgram || null });
+      const saved = await updateCollection(collection.id, {
+        // Send the current title/description so saving course/program does not wipe them
+        // (updateMetadata overwrites every provided field; omitting one clears it).
+        title: collection.title,
+        description: collection.description,
+        courseProgram: trimmedCourseProgram || null,
+      });
       onSaved(saved);
       return saved;
     } catch (saveError) {
