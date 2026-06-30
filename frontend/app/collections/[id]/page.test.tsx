@@ -659,26 +659,45 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
   });
 
-  it("reorders by move button using the full ordered set", async () => {
-    const reordered = collection({
+  it("reorders by move button within a section and persists the grouped order", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [
-        { ...collection().items[1], position: 0 },
-        { ...collection().items[0], position: 1 },
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "Week 1", position: 0 },
+        { ...collection().items[1], noteId: "note-3", title: "Assessment", label: "Week 1", position: 1 },
+        { ...collection().items[0], noteId: "note-2", title: "Extra", label: null, position: 2 },
       ],
-    });
-    (setCollectionItemOrder as jest.Mock).mockResolvedValue(reordered);
+    }));
+    (setCollectionItemOrder as jest.Mock).mockResolvedValue(collection());
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    await screen.findByRole("heading", { level: 2, name: "Foundations" });
+    // first "Move down" belongs to note-1 (first item in the "Week 1" section)
     fireEvent.click(screen.getAllByRole("button", { name: "Move down" })[0]);
 
     await waitFor(() => {
       expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
-        { noteId: "note-2", label: null },
+        { noteId: "note-3", label: "Week 1" },
         { noteId: "note-1", label: "Week 1" },
+        { noteId: "note-2", label: null },
       ]);
     });
+  });
+
+  it("disables move buttons at section boundaries", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "Week 1", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Extra", label: null, position: 1 },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { level: 2, name: "Foundations" });
+    // each note is alone in its section, so every move button is a boundary and disabled
+    screen.getAllByRole("button", { name: "Move up" }).forEach((button) => expect(button).toBeDisabled());
+    screen.getAllByRole("button", { name: "Move down" }).forEach((button) => expect(button).toBeDisabled());
   });
 
   it("assigns a section through the existing order endpoint without changing other labels", async () => {

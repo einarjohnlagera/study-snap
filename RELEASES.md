@@ -17,6 +17,7 @@ Locked anti-drift: readiness stays Free (decided, not revisited); readiness deri
 ### Shipped
 
 - **Recommended card — already-owned state** (polish). The Recommended {singular} section (`DashboardStudyPlanSection`, on Dashboard and `/collections`) now detects when the learner already has the matched plan — either they **adopted** it (`sourcePlanId` match, as before) or they **own the published source itself** (`id` match, the admin/curator case). In both cases it shows an **"In your library"** badge and opens the existing plan instead of offering a re-adopt CTA — fixing the bug where an owner saw "Start this plan" and would self-adopt a redundant copy. CTA reads "Open this plan" for an owned source and "Continue this plan" for an adopted copy; only a genuinely not-yet-owned plan shows "Start this plan".
+- **Section reorder scoped to within a section** (polish). On the Study Plan detail page, drag-and-drop now uses a `SortableContext` **per section** and Move up/down operate within the item's section, so reordering a note no longer crosses a section boundary, snaps back, or reshuffles the section order via min-position. Both reorder paths run against the **grouped display order** (sections contiguous), so a within-section move never renumbers another section's positions; cross-section drag is a no-op and Move buttons are disabled at section boundaries. To move a note to a different section, change its **Section** (label). Frontend-only; flat (no-label) plans are unchanged.
 
 ---
 
