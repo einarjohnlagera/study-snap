@@ -17,7 +17,31 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
 
     List<NoteCollectionEntity> findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(UUID ownerUserId);
 
-    List<NoteCollectionEntity> findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(UUID parentCollectionId, UUID ownerUserId);
+    @Query("""
+            select collection
+            from NoteCollectionEntity collection
+            where collection.parentCollectionId = :parentCollectionId
+              and collection.ownerUserId = :ownerUserId
+            order by
+              case when collection.siblingPosition is null then 1 else 0 end,
+              collection.siblingPosition asc,
+              collection.updatedAt desc
+            """)
+    List<NoteCollectionEntity> findOrderedChildrenByParentCollectionIdAndOwnerUserId(
+            @Param("parentCollectionId") UUID parentCollectionId,
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
+    @Query("""
+            select coalesce(max(collection.siblingPosition), -1)
+            from NoteCollectionEntity collection
+            where collection.parentCollectionId = :parentCollectionId
+              and collection.ownerUserId = :ownerUserId
+            """)
+    int findMaxSiblingPosition(
+            @Param("parentCollectionId") UUID parentCollectionId,
+            @Param("ownerUserId") UUID ownerUserId
+    );
 
     List<NoteCollectionEntity> findByOwnerUserId(UUID ownerUserId);
 

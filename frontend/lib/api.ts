@@ -3786,6 +3786,19 @@ export async function setCollectionParent(id: string, parentId: string | null): 
   return parseApiResponse<NoteCollectionDetail>(response, "Could not update collection nesting.");
 }
 
+export async function reorderCollectionChildren(id: string, childIds: string[]): Promise<GoalCollectionDetailResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/children/order`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ childIds }),
+    },
+    true,
+  );
+  return parseApiResponse<GoalCollectionDetailResponse>(response, "Could not save subject order.");
+}
+
 export async function updateCollection(
   id: string,
   request: { title?: string; description?: string | null; courseProgram?: string | null },

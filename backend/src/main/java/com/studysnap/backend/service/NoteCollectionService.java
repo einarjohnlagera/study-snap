@@ -12,6 +12,7 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
+import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
@@ -81,6 +82,8 @@ public class NoteCollectionService {
     private static final String CHILD_HAS_CHILDREN_MESSAGE = "A collection with child plans cannot be nested under another goal.";
     private static final String GOAL_CANNOT_ACCEPT_NOTES_MESSAGE = "A goal collection cannot contain direct notes.";
     private static final String PARENT_WITH_NOTES_MESSAGE = "A collection must be empty before it can become a goal.";
+    private static final String CHILD_ORDER_SET_MISMATCH_MESSAGE = "Child order must include exactly the current child plans.";
+    private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
@@ -222,7 +225,7 @@ public class NoteCollectionService {
     public GoalCollectionDetailResponse getGoal(UUID collectionId, UUID userId) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         List<NoteCollectionEntity> children = collectionRepository
-                .findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(collectionId, userId);
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
         Map<UUID, Integer> itemCountsByCollectionId = children.isEmpty() ? Map.of() : loadItemCounts(children);
         List<GoalCollectionChildResponse> childResponses = children.stream()
                 .map(child -> toGoalChildResponse(child, userId, itemCountsByCollectionId.getOrDefault(child.getId(), 0)))
@@ -288,6 +291,7 @@ public class NoteCollectionService {
         if (parentId == null) {
             if (child.getParentCollectionId() != null) {
                 child.setParentCollectionId(null);
+                child.setSiblingPosition(null);
                 touch(child);
                 child = collectionRepository.save(child);
             }
@@ -302,10 +306,34 @@ public class NoteCollectionService {
         validateChildCanBeNested(child);
         if (!parentId.equals(child.getParentCollectionId())) {
             child.setParentCollectionId(parentId);
+            child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
             touch(child);
             child = collectionRepository.save(child);
         }
         return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
+    }
+
+    @Transactional
+    public GoalCollectionDetailResponse setChildrenOrder(
+            UUID collectionId,
+            UUID userId,
+            SetNoteCollectionChildrenOrderRequest request
+    ) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        List<UUID> submittedChildIds = extractSubmittedChildIds(request == null ? null : request.childIds());
+        List<NoteCollectionEntity> currentChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
+        validateSubmittedChildSetMatchesCurrent(currentChildren, submittedChildIds);
+
+        Map<UUID, NoteCollectionEntity> childById = currentChildren.stream()
+                .collect(Collectors.toMap(NoteCollectionEntity::getId, Function.identity()));
+        for (int index = 0; index < submittedChildIds.size(); index++) {
+            childById.get(submittedChildIds.get(index)).setSiblingPosition(index);
+        }
+        collectionRepository.saveAll(currentChildren);
+        touch(collection);
+        collectionRepository.save(collection);
+        return getGoal(collectionId, userId);
     }
 
     @Transactional
@@ -669,6 +697,24 @@ public class NoteCollectionService {
         return noteIds;
     }
 
+    private List<UUID> extractSubmittedChildIds(List<UUID> childIds) {
+        if (childIds == null || childIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> submittedChildIds = new ArrayList<>();
+        Set<UUID> seenChildIds = new HashSet<>();
+        for (UUID childId : childIds) {
+            if (childId == null) {
+                throw new InvalidCollectionRequestException(CHILD_ID_REQUIRED_MESSAGE);
+            }
+            if (!seenChildIds.add(childId)) {
+                throw new InvalidCollectionRequestException(CHILD_ORDER_SET_MISMATCH_MESSAGE);
+            }
+            submittedChildIds.add(childId);
+        }
+        return submittedChildIds;
+    }
+
     private void validateSubmittedSetMatchesCurrent(
             List<NoteCollectionItemEntity> currentItems,
             List<UUID> submittedNoteIds
@@ -679,6 +725,19 @@ public class NoteCollectionService {
         Set<UUID> submittedNoteIdSet = new HashSet<>(submittedNoteIds);
         if (currentItems.size() != submittedNoteIds.size() || !currentNoteIds.equals(submittedNoteIdSet)) {
             throw new InvalidCollectionRequestException(ORDER_SET_MISMATCH_MESSAGE);
+        }
+    }
+
+    private void validateSubmittedChildSetMatchesCurrent(
+            List<NoteCollectionEntity> currentChildren,
+            List<UUID> submittedChildIds
+    ) {
+        Set<UUID> currentChildIds = currentChildren.stream()
+                .map(NoteCollectionEntity::getId)
+                .collect(Collectors.toSet());
+        Set<UUID> submittedChildIdSet = new HashSet<>(submittedChildIds);
+        if (currentChildren.size() != submittedChildIds.size() || !currentChildIds.equals(submittedChildIdSet)) {
+            throw new InvalidCollectionRequestException(CHILD_ORDER_SET_MISMATCH_MESSAGE);
         }
     }
 
