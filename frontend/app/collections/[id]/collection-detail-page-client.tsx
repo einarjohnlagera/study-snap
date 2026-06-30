@@ -1050,27 +1050,47 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
+  // Reorder against the grouped display order (sections contiguous) so a within-section
+  // move never renumbers another section's positions or reorders the sections themselves.
+  const reorderTargetItems = () => (hasSections ? itemSections.flatMap((section) => section.items) : items);
+
+  const isSameSection = (a: NoteCollectionItem, b: NoteCollectionItem) =>
+    !hasSections || normalizeSectionName(a.label) === normalizeSectionName(b.label);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
     if (!overId || activeId === overId) {
       return;
     }
-    const activeIndex = items.findIndex((item) => item.noteId === activeId);
-    const overIndex = items.findIndex((item) => item.noteId === overId);
+    const orderedItems = reorderTargetItems();
+    const activeIndex = orderedItems.findIndex((item) => item.noteId === activeId);
+    const overIndex = orderedItems.findIndex((item) => item.noteId === overId);
     if (activeIndex < 0 || overIndex < 0) {
       return;
     }
-    void persistOrder(arrayMove(items, activeIndex, overIndex));
+    // Cross-section drag is a no-op; change a note's section with the Section control instead.
+    if (!isSameSection(orderedItems[activeIndex], orderedItems[overIndex])) {
+      return;
+    }
+    void persistOrder(arrayMove(orderedItems, activeIndex, overIndex));
   };
 
   const handleMove = (noteId: string, direction: "up" | "down") => {
-    const currentIndex = items.findIndex((item) => item.noteId === noteId);
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= items.length) {
+    const orderedItems = reorderTargetItems();
+    const currentIndex = orderedItems.findIndex((item) => item.noteId === noteId);
+    if (currentIndex < 0) {
       return;
     }
-    void persistOrder(arrayMove(items, currentIndex, targetIndex));
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= orderedItems.length) {
+      return;
+    }
+    // Stay within the section; boundaries are also disabled on the Move buttons.
+    if (!isSameSection(orderedItems[currentIndex], orderedItems[targetIndex])) {
+      return;
+    }
+    void persistOrder(arrayMove(orderedItems, currentIndex, targetIndex));
   };
 
   const handleLabelChange = (noteId: string, label: string) => {
@@ -1128,17 +1148,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     [isAdmin, items, noteVisibility],
   );
   const itemIds = useMemo(() => items.map((item) => item.noteId), [items]);
-  const itemIndexById = useMemo(
-    () => new Map(items.map((item, index) => [item.noteId, index])),
-    [items],
-  );
   const { hasSections, sections: itemSections, sectionNames } = useMemo(
     () => getCollectionItemSections(items),
     [items],
-  );
-  const sortableItemIds = useMemo(
-    () => (hasSections ? itemSections.flatMap((section) => section.items.map((item) => item.noteId)) : itemIds),
-    [hasSections, itemIds, itemSections],
   );
   const quizReadyNoteIds = useMemo(
     () => getCollectionQuizReadyNoteIds(items),
@@ -1398,24 +1410,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
-              {hasSections ? (
-                <div className="space-y-5">
-                  {itemSections.map((section) => (
-                    <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-                        <h3 data-testid="collection-section-heading" className="text-sm font-semibold text-foreground">{section.name}</h3>
-                        <span className="text-xs font-medium text-foreground/55">
-                          {section.items.length} {section.items.length === 1 ? "note" : "notes"}
-                        </span>
-                      </div>
+            {hasSections ? (
+              <div className="space-y-5">
+                {itemSections.map((section) => (
+                  <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+                      <h3 data-testid="collection-section-heading" className="text-sm font-semibold text-foreground">{section.name}</h3>
+                      <span className="text-xs font-medium text-foreground/55">
+                        {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+                      </span>
+                    </div>
+                    <SortableContext items={section.items.map((item) => item.noteId)} strategy={verticalListSortingStrategy}>
                       <ol className="space-y-3">
-                        {section.items.map((item) => (
+                        {section.items.map((item, localIndex) => (
                           <SortableCollectionItemRow
                             key={`${item.noteId}:${item.label ?? ""}`}
                             item={item}
-                            index={itemIndexById.get(item.noteId) ?? 0}
-                            itemCount={items.length}
+                            index={localIndex}
+                            itemCount={section.items.length}
                             disabled={mutationInProgress}
                             collectionId={collectionId}
                             showWeakAreas={showWeakAreas}
@@ -1427,10 +1439,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                           />
                         ))}
                       </ol>
-                    </section>
-                  ))}
-                </div>
-              ) : (
+                    </SortableContext>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
                 <ol className="space-y-3">
                   {items.map((item, index) => (
                     <SortableCollectionItemRow
@@ -1449,8 +1463,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     />
                   ))}
                 </ol>
-              )}
-            </SortableContext>
+              </SortableContext>
+            )}
           </DndContext>
         )}
       </Card>
