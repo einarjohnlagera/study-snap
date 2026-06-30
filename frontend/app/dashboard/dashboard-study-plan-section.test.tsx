@@ -83,6 +83,20 @@ describe("DashboardStudyPlanSection", () => {
     expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1");
   });
 
+  it("opens an owned source plan without re-adopting and shows the in-library badge", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { ...publicPlan, id: "source-plan-1", sourcePlanId: null }, // the user owns the published source itself
+    ]);
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
+
+    expect(await screen.findByText("In your library")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open this plan" }));
+
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/collections/source-plan-1");
+  });
+
   it("renders nothing when no matching plan exists", async () => {
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
 
