@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.33.1 - Study Plan polish & Curated Plan Coverage
+
+**Status: In progress**
+
+Theme: a patch in the study-plan line. v0.33.0 shipped the readiness *lever*, but a validation pull (`docs/product/journey-validation-pulls.md`) showed the plan-adoption retention bet was never testable — only **4 adoptions across ~153 users, 1 goal (Accountancy) with a ready plan, 0 post-adopt returns**. The binding constraint is **curated-plan coverage, not architecture**, so v0.33.1 leads with coverage (content/curation ops) plus two small UX-clarity polish items. The bigger "Journey" repositioning stays a gated future candidate.
+
+### Planned Scope
+
+- **Curated Plan Coverage (headline, content/curation ops).** Run the follow-up inventory query in `journey-validation-pulls.md` to decide **assemble** (build plans from seeded public notes already on hand) vs **seed** (Bulk Generation for thin goals). Target ≥1 complete, credible, Study-Pack-ready curated plan per goal the actual public learners have. No new architecture, no AI synthesis, no new endpoint/model.
+- **Recommended card — already-owned state (frontend).** Don't show a re-adopt CTA for a plan the user already owns or adopted; detect owned-source (not just `sourcePlanId`-adopted). Filtering already-owned plans (falling back to the existing empty state) is preferred over a badged dead card.
+- **Section drag refinement (frontend).** Scope drag-and-drop per section (a `SortableContext` per section) so cross-section drag stops being confusing; sections stay label-derived, no nested/umbrella plans.
+
+Locked anti-drift: readiness stays Free (decided, not revisited); readiness derived and matches `/me/progress`; sections stay label-derived with no mastery on rows/headers; no quota / billing / price / checkout change; no new chart library. Deferred: "Journey" Phase 2 (gated on coverage + adoption); teacher bulk-quiz & dashboard/plan-list readiness badges → v0.34.0.
+
+---
+
 ## v0.33.0 - Study Plans as a Retention Engine
 
 **Status: Released**

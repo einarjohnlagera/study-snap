@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.33.0 - Study Plans as a Retention Engine` (in progress); previous: `v0.32.2 - Conversion Diagnosis & Quota Honesty`
+Current release baseline: `v0.33.1 - Study Plan polish & Curated Plan Coverage` (in progress); previous: `v0.33.0 - Study Plans as a Retention Engine`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -398,14 +398,14 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 ## Roadmap
 
-Current release: `v0.33.0 - Study Plans as a Retention Engine` (in progress)
+Current release: `v0.33.1 - Study Plan polish & Curated Plan Coverage` (in progress)
 
-Planned for v0.33.0:
+Planned for v0.33.1:
 
-- **Track A — publish & discovery polish** — decouple Study Plan metadata-save from publishing (stop discarding course/program + description); surface course/program-scoped recommended plans on the user's own Study Plans page.
-- **Track B — plan & subject readiness (headline)** — per-plan and per-subject readiness % + weak areas with charts, reusing the existing ConceptHealth spine — a reason for activated users to return.
+- **Curated Plan Coverage (headline)** — assemble (or seed) ≥1 complete, Study-Pack-ready curated plan per goal the actual public learners have; content/curation ops, not new architecture (run the inventory query in `docs/product/journey-validation-pulls.md` to size assemble-vs-seed).
+- **Study Plan polish** — the recommended card no longer offers a re-adopt CTA for a plan the user already owns/adopted; section drag-and-drop scoped per section.
 
-Readiness reuses ConceptHealth (no new signal/field/AI). No quota, billing, price, or checkout change. Teacher bulk-quiz / teacher-flow polish stay deferred (v0.34.0 candidate, gated on teacher users).
+Readiness stays Free (decided, not revisited); reuses ConceptHealth (no new signal/field/AI). No quota, billing, price, or checkout change. The "Journey" repositioning and teacher bulk-quiz stay deferred (gated candidates).
 
 See `docs/product/ROADMAP.md` for the full planned scope and implementation stances.
 

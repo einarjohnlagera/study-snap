@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the current in-progress release (opened on `releases/v0.33.1`).
+
 `v0.33.0 - Study Plans as a Retention Engine` is the latest released version (on `releases/v0.33.0`).
 
 `v0.32.2 - Conversion Diagnosis & Quota Honesty` is the previous baseline.
@@ -85,32 +87,31 @@ Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI, matches `/me
 
 ---
 
-## v0.33.1 (candidate, polish) - Study Plan polish
+## v0.33.1 - Study Plan polish & Curated Plan Coverage (in progress)
 
-Small, frontend-only UX-clarity follow-ups to v0.33.0. No data-model or backend change.
+Base branch: `releases/v0.33.1`. A patch in the study-plan line. v0.33.0 shipped the readiness *lever*; the validation pull (`docs/product/journey-validation-pulls.md`) showed the plan-adoption retention bet was never testable — **4 adoptions / ~153 users, 1 goal (Accountancy) with a ready plan, 0 post-adopt returns**. The binding constraint is **curated-plan coverage, not architecture.** v0.33.1 leads with coverage plus two small UX-clarity polish items; the bigger "Journey" repositioning stays a gated candidate below.
 
-**Section drag refinement.** v0.33.0 added label-derived **sections (modules)** to Study Plan detail (grouping = the item `label`, order = the global `position`). Because a single drag context spans all sections, drag-and-drop has two confusing (non-destructive) behaviors: dragging an item across a section boundary does **not** reassign its section (the `label` wins on regroup), and dragging an item to the top can reorder the **sections** themselves via min-position. Move up/down and within-section reorder are correct; this is a UX-clarity polish, not a correctness fix. Candidate fix: scope drag-and-drop **per section** (a `SortableContext` per section so an item only reorders within its own section), or disable cross-section drag while sections are active. Reassigning a section stays the explicit **Section** control; section display order stays min-position-derived.
+**Curated Plan Coverage (headline — content/curation ops first).**
+- Run the follow-up inventory query (in `journey-validation-pulls.md`): does seeded public *note* content exist for the real top goals (just not assembled into plans) → cheap **assembly/curation ops**; or is there little content → a **seeding** job (Bulk Generation) first.
+- Target: ≥1 complete, credible, Study-Pack-ready curated plan per goal the **actual** public learners have (let the inventory say where they are — do not assume ALE/PNLE/LET).
+- Content/curation work, not new architecture. No new endpoint, model, or AI synthesis.
 
-**Recommended card already-owned state.** The `/collections` Recommended section can show a re-adopt CTA for a plan the learner already has. Adopted copies are already handled (the CTA reads "Continue this plan" via a `sourcePlanId` match); the gap is the **owned-source** case — an admin/curator viewing their *own published* plan sees "Start this plan", which would self-adopt a redundant copy. Fix: do not offer a re-adopt CTA for a plan the user already owns or adopted (detect owned-source, not just adopted). For a discovery surface, **filtering out** already-owned plans (falling back to the existing "no curated plans yet" empty state) is conceptually cleaner than a dead badged card; an "In your library" badge + "Open" CTA is an acceptable alternative. Correctness (no self-adopt) matters more than the presentation choice.
+**Recommended card — already-owned state (frontend).** The `/collections` Recommended section can show a re-adopt CTA for a plan the learner already has. Adopted copies are already handled ("Continue this plan" via a `sourcePlanId` match); the gap is the **owned-source** case — an admin/curator viewing their *own published* plan sees "Start this plan", which would self-adopt a redundant copy. Fix: do not offer a re-adopt CTA for a plan the user already owns or adopted (detect owned-source, not just adopted). **Filtering out** already-owned plans (falling back to the existing empty state) is conceptually cleaner than a dead badged card; an "In your library" badge + "Open" CTA is acceptable. Correctness (no self-adopt) > presentation.
 
-Anti-drift: sections stay label-derived (no section entity, no nested/umbrella plans); no mastery/readiness on rows or headers (execution rows keep their no-mastery rule); no backend change.
+**Section drag refinement (frontend).** v0.33.0's label-derived sections use a single drag context spanning all sections, so cross-section drag is confusing (non-destructive: the `label` wins on regroup; dragging to the top can reorder sections via min-position). Move up/down and within-section reorder are correct. Fix: scope drag-and-drop **per section** (a `SortableContext` per section), or disable cross-section drag while sections are active. Sections stay label-derived; display order stays min-position-derived.
+
+Anti-drift: readiness stays Free (decided, not revisited — see the Journey candidate); readiness derived and matches `/me/progress`; sections stay label-derived (no section entity, no nested/umbrella plans, no mastery on rows/headers); no quota / billing / price / checkout change; no new chart library; no AI synthesis.
 
 ---
 
-## Next-priority candidate - Curated Plan Coverage → "Journey" (guided goal-completion)
+## Journey (next-priority candidate, gated) - guided goal-completion
 
-Theme: post-v0.33.0, the readiness *lever* shipped but a validation pull (2026-06, see `docs/product/journey-validation-pulls.md`) showed the **plan-adoption retention bet was never actually testable** — only **4 total adoptions across ~153 users, exactly 1 goal (Accountancy) with a ready adoptable plan, and 0 post-adopt returns** (n far too small to read as a retention verdict). The binding constraint is **curated-plan coverage, not architecture.** This candidate is sequenced **coverage-first**, with the "Journey" repositioning gated behind it. Likely precedes the teacher-gated v0.34.0 below (still no teacher cohort).
-
-**Phase 1 — Curated plan coverage (the actual next bet).**
-- Run the follow-up inventory query (in `journey-validation-pulls.md`): does seeded public *note* content exist for your real top goals (it just isn't assembled into plans) → cheap **assembly/curation ops**; or is there little content → a **seeding** job (Bulk Generation) first.
-- Target: ≥1 complete, credible, Study-Pack-ready curated plan for each of the goals your **actual** public learners have (let the inventory tell you where they are — do not assume ALE/PNLE/LET).
-- This is content/curation work, not new architecture. No new endpoint, model, or AI synthesis.
-
-**Phase 2 — "Journey" repositioning (gated: only after Phase 1 + non-trivial adoption, e.g. ≥20–30 adoptions across covered goals, so Pull 1 becomes a real retention test).** The goal-first reframe of pieces **already shipped** — adopt (`STUDY_PLAN_ADOPTED`), the Not-started/In-progress/Completed badge, and v0.33.0 readiness — into one cohesive guided experience. Locked direction (decided with Claude, 2026-06):
+Gated on v0.33.1's Curated Plan Coverage landing **and** non-trivial adoption (re-run `journey-validation-pulls.md` Pull 1 — e.g. ≥20–30 adoptions across covered goals — so it becomes a real retention test). Likely precedes the teacher-gated v0.34.0 below (still no teacher cohort). The goal-first reframe of pieces **already shipped** — adopt (`STUDY_PLAN_ADOPTED`), the Not-started/In-progress/Completed badge, and v0.33.0 readiness — into one cohesive guided experience. Locked direction (decided with Claude, 2026-06):
 - **Curation-match, never AI synthesis.** "NoteLib chooses the notes" = an admin-curated plan *matched* to the learner's goal/course-program (the v0.31.0 adopt path), **not** an algorithm assembling a per-user plan. The latter trips the standing "Curation, never generation" rule and is explicitly out.
 - **Composition, not a rewrite.** Journey is repositioning shipped parts, not a new model/endpoint/pipeline.
 - **Unify readiness onto Progress — one surface, not two (decided 2026-06, post-sign-off concern).** Today there are two readiness surfaces: global `/me/progress` (no plan scope) and the plan readiness sub-route (`/collections/[id]/readiness`, scoped to one plan). They look redundant at low coverage / single-plan accounts, but the **plan scope is the whole value** and Progress can't express it today. Journey's resolution: give Progress a **per-plan/goal lens**, and make plan readiness *that lens* (a deep-link into scoped Progress) rather than a separate page — one readiness surface. Do **not** do the cheap version (redirect "Check readiness" → global Progress): it regresses the scoping. This subsumes the plan readiness sub-route into Progress; it does not delete the global view.
 - **Monetization is mid-journey, not at completion.** Adopt stays free (locked). The conversion moment is goal-commitment + exam-date urgency + premium walls hit *during* the journey (Board Exam mode, practice volume) — not a "finish → subscribe" reward (finishing for free gives no reason to pay; free-quota-hit is 0.0%).
+- **Readiness stays Free — decided 2026-06, not revisited.** The note readiness *signal* is Free by design: it is the return trigger for the non-returning cohort, `/me/progress` is already Free, readiness is derived (zero marginal cost), and at 0.0% free-quota-hit / 0 payers there is no paid cohort to cannibalize. Do **not** re-gate it to PLUS/PRO to chase revenue — clawing back a free feature is a trust hit and gates the wrong thing; build paid value via the mid-journey premium walls instead. PLUS/PRO keep only the per-concept review-*timing* detail.
 - **Retention pull = goal-gradient (a defined finish line), not streaks.** Legitimate, pressure-free, and distinct from the banned streak/guilt mechanics. Still depends on an external return trigger (the re-engagement email / exam deadline) to bring users back to *see* the bar move.
 - **Mastery principle (settled 2026-06):** mastery stays **per-study-pack**; **no reset**; readiness stays honest; do **not** engineer concept-name mastery transfer across adopted duplicates (a stronger note is a new pack with a clean slate; recency decay is the soft reset). The per-pack vs concept-global choice surfaces here — answer is per-pack (honest).
 
