@@ -11,6 +11,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
@@ -902,14 +903,24 @@ function SortableCollectionItemRow({
   };
 
   const [labelValue, setLabelValue] = useState(item.label ?? "");
-  const sectionOptionsId = `section-options-${item.noteId}`;
+  const sectionOptions = useMemo(
+    () => sectionNames.map((name) => ({ value: name, label: name })),
+    [sectionNames],
+  );
 
-  const commitLabel = () => {
-    const nextLabel = normalizeSectionName(labelValue);
-    if (normalizeSectionName(item.label) !== nextLabel) {
-      onLabelChange(item.noteId, nextLabel);
+  // Auto-save the section a short beat after the last change (typing or selecting),
+  // so the combobox behaves like the rest of the inline plan editing.
+  useEffect(() => {
+    if (disabled) {
+      return;
     }
-  };
+    const nextLabel = normalizeSectionName(labelValue);
+    if (normalizeSectionName(item.label) === nextLabel) {
+      return;
+    }
+    const handle = globalThis.setTimeout(() => onLabelChange(item.noteId, nextLabel), 500);
+    return () => globalThis.clearTimeout(handle);
+  }, [labelValue, item.label, item.noteId, onLabelChange, disabled]);
 
   return (
     <li
@@ -956,30 +967,18 @@ function SortableCollectionItemRow({
               ) : null}
             </div>
           ) : null}
-          <label className="block space-y-1.5" htmlFor={`section-${item.noteId}`}>
+          <div className="block space-y-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Section</span>
-            <input
+            <SuggestionCombobox
               id={`section-${item.noteId}`}
               value={labelValue}
-              list={sectionOptionsId}
-              maxLength={LABEL_MAX_LENGTH}
-              disabled={disabled}
-              onChange={(event) => setLabelValue(event.target.value)}
-              onBlur={commitLabel}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
+              options={sectionOptions}
+              onChange={(next) => setLabelValue(next.slice(0, LABEL_MAX_LENGTH))}
+              ariaLabel="Section"
               placeholder="Choose or type a section"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              disabled={disabled}
             />
-            <datalist id={sectionOptionsId}>
-              {sectionNames.map((sectionName) => (
-                <option key={sectionName} value={sectionName} />
-              ))}
-            </datalist>
-          </label>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -1498,6 +1497,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         eyebrow={labels.singular.toUpperCase()}
         title={collection.title}
         description={collection.description || undefined}
+        descriptionClassName="line-clamp-2"
         meta={isAdmin ? (
           <button
             type="button"
@@ -1658,7 +1658,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                 {itemSections.map((section) => (
                   <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-                      <h3 data-testid="collection-section-heading" className="text-sm font-semibold text-foreground">{section.name}</h3>
+                      <h3 data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">{section.name}</h3>
                       <span className="text-xs font-medium text-foreground/55">
                         {section.items.length} {section.items.length === 1 ? "note" : "notes"}
                       </span>
