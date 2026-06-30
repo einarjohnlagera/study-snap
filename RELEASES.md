@@ -14,6 +14,10 @@ Theme: a patch in the study-plan line. v0.33.0 shipped the readiness *lever*, bu
 
 Locked anti-drift: readiness stays Free (decided, not revisited); readiness derived and matches `/me/progress`; sections stay label-derived with no mastery on rows/headers; no quota / billing / price / checkout change; no new chart library. Deferred: "Journey" Phase 2 (gated on coverage + adoption); teacher bulk-quiz & dashboard/plan-list readiness badges → v0.34.0.
 
+### Shipped
+
+- **Recommended card — already-owned state** (polish). The Recommended {singular} section (`DashboardStudyPlanSection`, on Dashboard and `/collections`) now detects when the learner already has the matched plan — either they **adopted** it (`sourcePlanId` match, as before) or they **own the published source itself** (`id` match, the admin/curator case). In both cases it shows an **"In your library"** badge and opens the existing plan instead of offering a re-adopt CTA — fixing the bug where an owner saw "Start this plan" and would self-adopt a redundant copy. CTA reads "Open this plan" for an owned source and "Continue this plan" for an adopted copy; only a genuinely not-yet-owned plan shows "Start this plan".
+
 ---
 
 ## v0.33.0 - Study Plans as a Retention Engine

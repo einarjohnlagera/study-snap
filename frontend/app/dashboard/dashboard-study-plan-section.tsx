@@ -64,7 +64,9 @@ export function DashboardStudyPlanSection({
         setMatchCount(publicPlans.length);
         setAdoptedPlan(
           matchingPlan
-            ? personalCollections.find((collection) => collection.sourcePlanId === matchingPlan.id) ?? null
+            ? personalCollections.find(
+                (collection) => collection.id === matchingPlan.id || collection.sourcePlanId === matchingPlan.id,
+              ) ?? null
             : null,
         );
         setLoadedCourseProgram(normalizedCourseProgram);
@@ -108,6 +110,8 @@ export function DashboardStudyPlanSection({
   }
 
   const continuePlan = adoptedPlan ?? null;
+  const ownsSource = continuePlan?.id === plan.id;
+  const ctaLabel = continuePlan ? (ownsSource ? "Open this plan" : "Continue this plan") : "Start this plan";
 
   const handleStart = async () => {
     if (continuePlan) {
@@ -135,7 +139,14 @@ export function DashboardStudyPlanSection({
       </div>
       <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4 sm:p-6">
         <div className="space-y-1.5">
-          <CardTitle>{plan.title}</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>{plan.title}</CardTitle>
+            {continuePlan ? (
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                In your library
+              </span>
+            ) : null}
+          </div>
           <CardDescription>{plan.description || `${plan.itemCount} notes in saved order.`}</CardDescription>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -143,7 +154,7 @@ export function DashboardStudyPlanSection({
             {plan.itemCount} {plan.itemCount === 1 ? "note" : "notes"} curated for this track.
           </p>
           <Button type="button" loading={adopting} loadingText="Starting..." onClick={handleStart}>
-            {continuePlan ? "Continue this plan" : "Start this plan"}
+            {ctaLabel}
           </Button>
         </div>
         {error ? (
