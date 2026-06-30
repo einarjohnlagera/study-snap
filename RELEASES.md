@@ -2,7 +2,7 @@
 
 ## v0.33.1 - Study Plan polish & Curated Plan Coverage
 
-**Status: In progress**
+**Status: Released**
 
 Theme: the study-plan line. v0.33.0 shipped the readiness *lever*, but a validation pull (`docs/product/journey-validation-pulls.md`) showed the plan-adoption retention bet was never testable — only **4 adoptions across ~153 users, 1 goal (Accountancy) with a ready plan, 0 post-adopt returns**. The binding constraint is **curated-plan coverage**, so v0.33.1 leads with coverage (content/curation ops) plus two UX-clarity polish items. Scope was then **deliberately expanded** to include **Study Plan Hierarchy Phase 1** — one level of Goal → Subject-plan nesting — so curated plans can be built *with levels* from the start (a schema change that makes v0.33.1 a large "patch", accepted). Phases 2–4 of the hierarchy stay a future, validation-gated initiative.
 

@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the current in-progress release (opened on `releases/v0.33.1`).
+`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the latest released version (on `releases/v0.33.1`).
 
-`v0.33.0 - Study Plans as a Retention Engine` is the latest released version (on `releases/v0.33.0`).
+No next release has been kicked off yet.
+
+`v0.33.0 - Study Plans as a Retention Engine` is the previous baseline (on `releases/v0.33.0`).
 
 `v0.32.2 - Conversion Diagnosis & Quota Honesty` is the previous baseline.
 
@@ -87,7 +89,7 @@ Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI, matches `/me
 
 ---
 
-## v0.33.1 - Study Plan polish & Curated Plan Coverage (in progress)
+## v0.33.1 - Study Plan polish & Curated Plan Coverage (released)
 
 Base branch: `releases/v0.33.1`. The study-plan line. v0.33.0 shipped the readiness *lever*; the validation pull (`docs/product/journey-validation-pulls.md`) showed the plan-adoption retention bet was never testable — **4 adoptions / ~153 users, 1 goal (Accountancy) with a ready plan, 0 post-adopt returns**. The binding constraint is **curated-plan coverage.** v0.33.1 leads with coverage plus two UX-clarity polish items, and was **deliberately expanded** to include **Study Plan Hierarchy Phase 1** (one level of Goal → Subject nesting) so curated plans can be built *with levels* from the start — a schema change that makes v0.33.1 a large patch (accepted). Hierarchy Phases 2–4 stay a future, validation-gated initiative.
 
