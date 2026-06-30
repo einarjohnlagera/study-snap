@@ -4,6 +4,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   getCollection,
+  getCollectionGoal,
   listCoursePrograms,
   listNotes,
   removeCollectionItem,
@@ -50,6 +51,7 @@ jest.mock("@/lib/api", () => {
     ApiRequestError,
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
+    getCollectionGoal: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
     removeCollectionItem: jest.fn(),
@@ -68,6 +70,8 @@ function collection(overrides: Record<string, unknown> = {}) {
     visibility: "PRIVATE",
     courseProgram: null,
     sourcePlanId: null,
+    parentCollectionId: null,
+    childCount: 0,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
     progress: {
@@ -109,6 +113,52 @@ function collection(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function goalDetail(overrides: Record<string, unknown> = {}) {
+  return {
+    collectionId: "collection-1",
+    title: "LET Mastery",
+    description: "Full LET goal",
+    visibility: "PRIVATE",
+    courseProgram: null,
+    sourcePlanId: null,
+    parentCollectionId: null,
+    itemCount: 0,
+    childCount: 2,
+    overallReadinessPercentage: 45,
+    masteredConcepts: 9,
+    dueConcepts: 4,
+    notPracticedConcepts: 7,
+    totalConcepts: 20,
+    createdAt: "2026-06-01T00:00:00Z",
+    updatedAt: "2026-06-02T00:00:00Z",
+    children: [
+      {
+        collectionId: "child-1",
+        title: "Professional Education Mastery",
+        description: "Teaching foundations",
+        itemCount: 4,
+        overallReadinessPercentage: 50,
+        masteredConcepts: 5,
+        dueConcepts: 2,
+        notPracticedConcepts: 3,
+        totalConcepts: 10,
+      },
+      {
+        collectionId: "child-2",
+        title: "General Education Mastery",
+        description: null,
+        itemCount: 3,
+        overallReadinessPercentage: 40,
+        masteredConcepts: 4,
+        dueConcepts: 2,
+        notPracticedConcepts: 4,
+        totalConcepts: 10,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function note(id: string, title: string) {
   return {
     id,
@@ -142,6 +192,7 @@ describe("CollectionDetailPageClient", () => {
     replaceMock.mockReset();
     (addCollectionItems as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
+    (getCollectionGoal as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
@@ -154,6 +205,7 @@ describe("CollectionDetailPageClient", () => {
     (updateNoteVisibility as jest.Mock).mockResolvedValue(undefined);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
   });
 
   it("renders collection items in persisted order", async () => {
@@ -171,6 +223,47 @@ describe("CollectionDetailPageClient", () => {
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
     expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/collections/collection-1/readiness");
+  });
+
+  it("renders a goal view when the collection has children", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      description: "Full LET goal",
+      childCount: 2,
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("45% ready · 9/20 mastered · 4 due")).toBeInTheDocument();
+    expect(screen.getByText("Professional Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-1");
+    expect(screen.getByText("General Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-2");
+    expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
+  });
+
+  it("links an empty top-level plan to the goal builder instead of the old nest menu", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    expect(screen.getByRole("link", { name: "Build goal" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.queryByRole("menuitem", { name: /Nest under|Unnest/ })).not.toBeInTheDocument();
   });
 
   it("renders labeled items under section headers ordered by first item position", async () => {
@@ -659,26 +752,68 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
   });
 
-  it("reorders by move button using the full ordered set", async () => {
-    const reordered = collection({
-      items: [
-        { ...collection().items[1], position: 0 },
-        { ...collection().items[0], position: 1 },
-      ],
+  it("preserves course/program when editing the description", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy" }));
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy", description: "New notes" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const description = await screen.findByLabelText("Description");
+    fireEvent.change(description, { target: { value: "New notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalledWith("collection-1", {
+        title: "Midterm Study Plan",
+        description: "New notes",
+        courseProgram: "Accountancy",
+      });
     });
-    (setCollectionItemOrder as jest.Mock).mockResolvedValue(reordered);
+  });
+
+  it("reorders by move button within a section and persists the grouped order", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "Week 1", position: 0 },
+        { ...collection().items[1], noteId: "note-3", title: "Assessment", label: "Week 1", position: 1 },
+        { ...collection().items[0], noteId: "note-2", title: "Extra", label: null, position: 2 },
+      ],
+    }));
+    (setCollectionItemOrder as jest.Mock).mockResolvedValue(collection());
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    await screen.findByRole("heading", { level: 2, name: "Foundations" });
+    // first "Move down" belongs to note-1 (first item in the "Week 1" section)
     fireEvent.click(screen.getAllByRole("button", { name: "Move down" })[0]);
 
     await waitFor(() => {
       expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
-        { noteId: "note-2", label: null },
+        { noteId: "note-3", label: "Week 1" },
         { noteId: "note-1", label: "Week 1" },
+        { noteId: "note-2", label: null },
       ]);
     });
+  });
+
+  it("disables move buttons at section boundaries", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "Week 1", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Extra", label: null, position: 1 },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { level: 2, name: "Foundations" });
+    // each note is alone in its section, so every move button is a boundary and disabled
+    screen.getAllByRole("button", { name: "Move up" }).forEach((button) => expect(button).toBeDisabled());
+    screen.getAllByRole("button", { name: "Move down" }).forEach((button) => expect(button).toBeDisabled());
   });
 
   it("assigns a section through the existing order endpoint without changing other labels", async () => {

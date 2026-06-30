@@ -6,6 +6,9 @@ import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.GoalCollectionDetailResponse;
+import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
+import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
@@ -61,7 +64,16 @@ class NoteCollectionControllerTest {
                 .getMethod("getReadiness", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
+                .getMethod("getGoal", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
                 .getMethod("updateMetadata", String.class, UpdateNoteCollectionRequest.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("updateParent", String.class, SetNoteCollectionParentRequest.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("setChildrenOrder", String.class, SetNoteCollectionChildrenOrderRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("delete", String.class, AuthenticatedUser.class)
@@ -159,6 +171,20 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
+    void updateParent_delegatesParentRequest() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        SetNoteCollectionParentRequest request = new SetNoteCollectionParentRequest(UUID.randomUUID());
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.updateParent(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.updateParent(COLLECTION_ID, request, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).updateParent(UUID.fromString(COLLECTION_ID), user.userId(), request);
     }
 
     @Test
@@ -266,6 +292,21 @@ class NoteCollectionControllerTest {
     }
 
     @Test
+    void childrenOrder_returnsGoalCollection() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        UUID childId = UUID.randomUUID();
+        SetNoteCollectionChildrenOrderRequest request = new SetNoteCollectionChildrenOrderRequest(List.of(childId));
+        GoalCollectionDetailResponse response = goalDetailResponse();
+        when(service.setChildrenOrder(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
+
+        GoalCollectionDetailResponse result = controller.setChildrenOrder(COLLECTION_ID, request, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).setChildrenOrder(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
     void unknownCollectionExceptionCarriesNotFoundStatus() {
         NoteCollectionController controller = new NoteCollectionController(service);
         AuthenticatedUser user = authenticatedUser();
@@ -326,7 +367,9 @@ class NoteCollectionControllerTest {
                 CollectionVisibility.PRIVATE.name(),
                 null,
                 null,
+                null,
                 1,
+                0,
                 0,
                 now,
                 now
@@ -342,9 +385,34 @@ class NoteCollectionControllerTest {
                 CollectionVisibility.PRIVATE.name(),
                 null,
                 null,
+                null,
+                0,
                 now,
                 now,
                 new com.studysnap.backend.dto.NoteCollectionProgressResponse(0, 0, 0),
+                List.of()
+        );
+    }
+
+    private GoalCollectionDetailResponse goalDetailResponse() {
+        Instant now = Instant.parse("2026-04-01T00:00:00Z");
+        return new GoalCollectionDetailResponse(
+                UUID.fromString(COLLECTION_ID),
+                COLLECTION_TITLE,
+                null,
+                CollectionVisibility.PRIVATE.name(),
+                null,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                now,
+                now,
                 List.of()
         );
     }

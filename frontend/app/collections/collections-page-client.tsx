@@ -80,6 +80,13 @@ function formatItemCount(count: number): string {
   return `${count} ${count === 1 ? "note" : "notes"}`;
 }
 
+function formatCollectionScope(collection: NoteCollectionSummary): string {
+  if (collection.childCount > 0) {
+    return `${collection.childCount} ${collection.childCount === 1 ? "plan" : "plans"}`;
+  }
+  return formatItemCount(collection.itemCount);
+}
+
 function CollectionSkeletonGrid() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Loading collections">
@@ -272,16 +279,14 @@ export function CollectionsPageClient() {
               <Card className="flex min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
                 <div className="space-y-2">
                   <CardTitle className="line-clamp-2">{collection.title}</CardTitle>
-                  {collection.description ? (
-                    <CardDescription className="line-clamp-2 text-sm">{collection.description}</CardDescription>
-                  ) : (
-                    <p className="text-sm text-foreground/55">No description yet.</p>
-                  )}
+                  {collection.courseProgram ? (
+                    <CardDescription className="line-clamp-1 text-sm">{collection.courseProgram}</CardDescription>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span>{formatItemCount(collection.itemCount)}</span>
-                    <CollectionExecutionStatusBadge collection={collection} />
+                    <span>{formatCollectionScope(collection)}</span>
+                    {collection.childCount === 0 ? <CollectionExecutionStatusBadge collection={collection} /> : null}
                   </div>
                   <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>
                 </div>

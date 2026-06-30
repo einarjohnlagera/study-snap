@@ -38,6 +38,8 @@ Fields:
 - `visibility` (`PRIVATE` by default, `PUBLIC` only for admin-published plans)
 - optional `courseProgram`
 - optional `sourcePlanId` on adopted personal plans
+- optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
+- optional `siblingPosition`, used only to order child Subject plans under the same Goal
 - ordered `items`
 - `createdAt`
 - `updatedAt`
@@ -61,8 +63,62 @@ For Study Plan detail sections, there is no separate section entity or nested-pl
 - items within a section stay in `position` order.
 - null or empty labels belong to a trailing **Ungrouped** bucket.
 - when no item in the plan has a label, detail renders the existing flat ordered list with no section headers.
+- reordering (drag-and-drop and Move up/down) is **scoped to within a section**: each section has its own `SortableContext`, and both reorder paths operate against the grouped display order (sections contiguous) so a within-section move never renumbers another section's positions or reorders the sections. Cross-section drag is a no-op and Move buttons are disabled at section boundaries; to move a note to a different section, change its `label` (the Section control). The flat (no-label) plan reorders globally as before.
+- the per-note **Section** control is the shared `SuggestionCombobox` (existing section names as suggestions + free-type a new one), and it **auto-saves on a short debounce** after the last change rather than on blur. Section headers are rendered as emphasized dividers, distinct from note titles.
 
-Sections are strictly sections within one plan. Do not add parent/child collections, collection-of-collections, umbrella plans, or independently adoptable sub-plans for this behavior.
+Sections are strictly sections within one plan. They are not child collections, independent plans, or module entities.
+
+**Nested collections reversal (v0.33.1, scoped).** The older "do not add parent/child collections, collection-of-collections, umbrella plans, or independently adoptable sub-plans" rule is deliberately reversed only for one level of Study Plan hierarchy: a top-level **Goal** collection can contain child **Subject** plans through `note_collections.parent_collection_id`. This is constrained to two collection levels (Goal -> Subject) and does not change section behavior. Deeper nesting, per-module mastery/readiness, recursive adopt-the-whole-Goal, arbitrary curriculum metadata, and direct note items on a Goal remain out of scope.
+
+Hierarchy storage:
+
+- `note_collections.parent_collection_id UUID NULL REFERENCES note_collections(id) ON DELETE SET NULL`
+- `note_collections.sibling_position INTEGER NULL`, scoped only to sibling Subject plans under the same `parent_collection_id`
+- indexed by `parent_collection_id`
+- indexed by `(parent_collection_id, sibling_position)` for the builder / Goal child order
+- `NULL` means top-level. A top-level collection with children is treated as a Goal by the frontend.
+- a non-null parent means the collection is a child Subject plan and can still hold note items and label-derived sections.
+- deleting a Goal leaves child Subject plans as standalone top-level plans (`ON DELETE SET NULL`), never cascade-deletes them.
+- when a child is nested under a Goal, it receives the next `siblingPosition` after the current siblings; clearing its parent clears `siblingPosition`.
+
+Hierarchy constraints:
+
+- a child can be nested only under a parent collection owned by the same user
+- self-parent is rejected
+- parent must be top-level (`parentCollectionId == null`)
+- child must have no children of its own
+- the first implementation keeps Goals note-free: a collection must be empty before it can become a Goal, and a Goal cannot accept direct note items
+- these rules enforce the maximum two levels and make cycles impossible
+
+### Goal Builder Canvas
+
+The v0.33.1 builder turns hierarchy curation into one canvas:
+
+- Goal = canvas.
+- Subject plans = draggable, collapsible section blocks.
+- Notes = cards inside each Subject.
+
+The builder route is `/collections/{id}/builder`. It loads the authoritative Goal shape from `GET /collections/{id}/goal`, then loads each child Subject's notes through the existing collection detail endpoint. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
+
+The builder deliberately orchestrates existing collection endpoints:
+
+- add Subject plan = `POST /collections` to create an empty collection, then `PATCH /collections/{childId}/parent` to nest it under the Goal
+- rename Subject = `PATCH /collections/{childId}`
+- delete Subject = `DELETE /collections/{childId}`; notes are never deleted
+- add notes to a Subject = `POST /collections/{subjectId}/items`
+- reorder notes inside a Subject = `PUT /collections/{subjectId}/items/order`
+- move a note across Subjects = `DELETE /collections/{sourceSubjectId}/items/{noteId}` then `POST /collections/{targetSubjectId}/items`, followed by order save when needed
+
+The only new backend capability for the builder is sibling ordering for child Subject plans:
+
+- `PUT /collections/{id}/children/order`
+- request body: `{ "childIds": ["..."] }`
+- owner-scoped and transactional
+- the submitted ids must include exactly the current children of the Goal and every child must be owned by the caller
+- the service rewrites `siblingPosition` from `0..N-1`
+- `GET /collections/{id}/goal` returns children by `siblingPosition asc`, null positions last, with `updatedAt desc` as fallback
+
+Modules remain the existing per-note `label` / Section field inside a child Subject plan. The builder does not add a third drag level for modules, does not add module readiness, and does not reinterpret labels as hierarchy.
 
 ## Profile-Aware Terminal Actions
 
@@ -136,7 +192,7 @@ Base path: `/collections`
 
 `GET /collections`
 
-Returns lightweight summaries ordered by `updatedAt desc`.
+Returns lightweight summaries ordered by `updatedAt desc`. The owned list returns top-level collections only (`parentCollectionId == null`); nested Subject plans are reached from their Goal detail page.
 
 Response item:
 
@@ -146,12 +202,14 @@ Response item:
 - `visibility`
 - `courseProgram`
 - `sourcePlanId`
+- `parentCollectionId`
 - `itemCount`
+- `childCount`
 - `notesPracticed`
 - `createdAt`
 - `updatedAt`
 
-`notesPracticed` is included so the owned `/collections` list can show a lightweight execution-status badge without opening every plan. It is derived from the same practice definition as the detail rollup: a note counts as practiced when its latest completed quiz-session timestamp resolves to non-null (`lastSessionCompletedAt != null`). `itemCount` remains the total-note count; do not add a redundant `totalNotes` field to the summary DTO.
+`childCount` is included so a top-level Goal card can show how many child Subject plans it contains. `notesPracticed` is included so the owned `/collections` list can show a lightweight execution-status badge for childless leaf plans without opening every plan. It is derived from the same practice definition as the detail rollup: a note counts as practiced when its latest completed quiz-session timestamp resolves to non-null (`lastSessionCompletedAt != null`). `itemCount` remains the total-note count; do not add a redundant `totalNotes` field to the summary DTO.
 
 Owned-list status labels are frontend-derived from `notesPracticed` and `itemCount`:
 
@@ -159,7 +217,7 @@ Owned-list status labels are frontend-derived from `notesPracticed` and `itemCou
 - `In progress` — `0 < notesPracticed < itemCount`
 - `Completed` — `itemCount > 0 && notesPracticed >= itemCount`
 
-This is execution status only: it answers whether the learner has practiced the plan's notes. It is not ConceptHealth mastery and must not add percentages, milestones, streaks, weakest-subject routing, or progress bars to collection list cards. Mastery remains owned by My Progress. The status badge is shown only on the authenticated user's owned `/collections` list and is not shown on `/collections/published` or public study-plan cards, where viewer-specific practice status has no meaning.
+This is execution status only: it answers whether the learner has practiced the plan's notes. It is not ConceptHealth mastery and must not add percentages, milestones, streaks, weakest-subject routing, or progress bars to collection list cards. Goal list cards may show `childCount` ("N plans") but not readiness percentages. Mastery remains owned by My Progress. The status badge is shown only on childless collections in the authenticated user's owned `/collections` list and is not shown on `/collections/published` or public study-plan cards, where viewer-specific practice status has no meaning.
 
 ### Create Collection
 
@@ -228,6 +286,13 @@ Collection detail items also expose a read-only weak-area signal from the existi
 - Free users and notes without a Study Pack receive `0` and an empty list. Lookup failures also degrade to empty weak-area data without failing collection detail.
 - The backend remains profile-agnostic and does not branch on `ProfileType`.
 
+The detail response also exposes neutral hierarchy metadata:
+
+- `parentCollectionId`
+- `childCount`
+
+The frontend uses `childCount > 0` to render the Goal view. Childless plans render the existing flat detail unchanged.
+
 ### Get Collection Readiness
 
 `GET /collections/{id}/readiness`
@@ -259,6 +324,87 @@ Aggregation rules:
 - No new persisted readiness field, generated content, quota category, AI call, trend, snapshot, or batch/progress infrastructure is added.
 
 This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, scoped to the dedicated readiness detail route only. Collection detail execution rows, collection list cards, published-plan cards, and public source plans must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
+
+### Get Goal Detail
+
+`GET /collections/{id}/goal`
+
+Returns owner-scoped Goal detail for the authenticated user's own collection. Missing, malformed, or not-owned ids return `CollectionNotFoundException` / `404`. Children are returned in explicit sibling order (`siblingPosition asc`, nulls last, then `updatedAt desc` fallback).
+
+Response:
+
+- `collectionId`
+- `title`
+- `description`
+- `visibility`
+- `courseProgram`
+- `sourcePlanId`
+- `parentCollectionId`
+- `itemCount`
+- `childCount`
+- `overallReadinessPercentage`
+- `masteredConcepts`
+- `dueConcepts`
+- `notPracticedConcepts`
+- `totalConcepts`
+- `createdAt`
+- `updatedAt`
+- `children: GoalCollectionChildResponse[]`
+
+Each child response contains:
+
+- `collectionId`
+- `title`
+- `description`
+- `itemCount`
+- `overallReadinessPercentage`
+- `masteredConcepts`
+- `dueConcepts`
+- `notPracticedConcepts`
+- `totalConcepts`
+
+Goal readiness is deliberately cheap and derived from child Subject readiness counts:
+
+`overallReadinessPercentage = round(100 * sum(child.masteredConcepts) / sum(child.totalConcepts))`, or `0` when the summed denominator is `0`.
+
+Do not re-run concept classification over the merged Goal subtree. That would collapse same-named concepts across subjects (for example, "Assessment" in Professional Education and General Education) and lose the subject-weighted curriculum shape. If one child readiness computation fails, that child degrades to a zero/unavailable shape and the Goal response still succeeds. Empty Goals and children with no Study Packs return zero shapes.
+
+### Set / Clear Parent
+
+`PATCH /collections/{id}/parent`
+
+Request:
+
+- `parentId` nullable UUID
+
+Behavior:
+
+- `parentId = null` clears the parent; clearing an already top-level collection is a safe no-op.
+- non-null `parentId` nests the collection under another owned collection.
+- validation and write happen in one transaction.
+- child or parent not found / not owned returns `404`.
+- self-parent returns `400`.
+- parent that is not top-level returns `400`.
+- child that already has children returns `400`.
+- parent with direct note items returns `400`, because Phase 1 Goals are containers of Subject plans, not mixed note folders.
+- setting the current parent again is a safe no-op.
+
+### Reorder Goal Children
+
+`PUT /collections/{id}/children/order`
+
+Request:
+
+- `childIds`: ordered UUID list
+
+Behavior:
+
+- owner-scoped and transactional
+- validates the parent Goal belongs to the caller
+- validates the submitted ids include exactly the current child Subject plans of `{id}`
+- ids that are not children of the Goal or are not owned by the caller are rejected
+- rewrites child `siblingPosition` values from `0..N-1`
+- returns refreshed Goal detail
 
 ### Update Metadata
 
@@ -354,6 +500,7 @@ Behavior:
 - validates every note is owned by the caller before writing
 - dedupes the request list
 - skips notes already present in the collection
+- rejects adding notes to a collection that currently has child plans
 - appends new notes after the current highest position
 - bumps `updatedAt`
 - returns full detail
@@ -441,6 +588,8 @@ The Dashboard card surfaces only the top matching published plan, so publishing 
 - States: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. `BackLink` returns to the Dashboard.
 
 **Recommended plans also surface on the user's own Study Plans page (`/collections`) (v0.33.0).** The same Dashboard "Recommended {singular}" section (`DashboardStudyPlanSection`) is reused below the user's own plans — course/program-scoped, with the same `See all N {plural}` link to `/collections/published`. It is **not** tabs, and it stays scoped to the learner's own course/program (an all-programs browse is the Public Library's job for *notes*). `/collections` fetches `courseProgram` via `getMe()` and reads `profileType` from `getAuthUser()`. `/collections` passes `browseWhenEmpty` so that when the learner's course/program has no curated plan yet it renders an honest "No curated {plural} for {program} yet" empty state instead of nothing; the Dashboard omits the prop and still self-hides when no plan matches. No browse link is shown in the empty state — `/collections/published` is course/program-scoped and would be empty too, so coverage (seeding curated plans per program), not UI, is the gating constraint.
+
+If the learner already has the matched plan, the section shows an **"In your library"** badge and opens the existing plan instead of offering a re-adopt CTA. "Already has" means either they **adopted** it (a personal collection whose `sourcePlanId` equals the plan id) or they **own the published source itself** (a personal collection whose `id` equals the plan id — the admin/curator case). The CTA reads "Open this plan" for an owned source, "Continue this plan" for an adopted copy, and only "Start this plan" (which adopts) for a plan the learner does not yet own. This prevents an owner from self-adopting a redundant copy of their own published plan.
 
 The Study Plan remains an execution surface for one curated, ordered set. Collection detail itself does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on the execution-detail rows.
 

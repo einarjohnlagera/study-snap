@@ -4,18 +4,23 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-public record NoteCollectionDetailResponse(
-        UUID id,
+public record GoalCollectionDetailResponse(
+        UUID collectionId,
         String title,
         String description,
         String visibility,
         String courseProgram,
         UUID sourcePlanId,
         UUID parentCollectionId,
+        int itemCount,
         int childCount,
+        int overallReadinessPercentage,
+        int masteredConcepts,
+        int dueConcepts,
+        int notPracticedConcepts,
+        int totalConcepts,
         Instant createdAt,
         Instant updatedAt,
-        NoteCollectionProgressResponse progress,
-        List<NoteCollectionItemResponse> items
+        List<GoalCollectionChildResponse> children
 ) {
 }

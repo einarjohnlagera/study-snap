@@ -11,7 +11,9 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
+import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
@@ -28,6 +30,7 @@ import {
   ApiRequestError,
   deleteCollection,
   getCollection,
+  getCollectionGoal,
   listCoursePrograms,
   listNotes,
   removeCollectionItem,
@@ -35,6 +38,7 @@ import {
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
+  type GoalCollectionDetailResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
   type NoteListItemResponse,
@@ -217,6 +221,96 @@ function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCo
   );
 }
 
+function formatPlanCount(count: number): string {
+  return `${count} ${count === 1 ? "plan" : "plans"}`;
+}
+
+function clampPercentage(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
+function GoalDetailView({
+  goal,
+  labels,
+}: Readonly<{
+  goal: GoalCollectionDetailResponse;
+  labels: ReturnType<typeof getCollectionLabels>;
+}>) {
+  return (
+    <div className="space-y-6">
+      <ReadinessSummary
+        variant="compact"
+        title={`${goal.title} readiness`}
+        eyebrow={`${labels.goalSingular} readiness`}
+        overallReadinessPercentage={goal.overallReadinessPercentage}
+        totalConcepts={goal.totalConcepts}
+        masteredConcepts={goal.masteredConcepts}
+        dueConcepts={goal.dueConcepts}
+        notPracticedConcepts={goal.notPracticedConcepts}
+        subjects={[]}
+        emptyTitle="No readiness yet"
+        emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
+      />
+
+      <Card className="space-y-4 p-4 sm:p-6">
+        <div>
+          <CardTitle>{labels.subjectSingular}s</CardTitle>
+          <CardDescription>{formatPlanCount(goal.children.length)} in this {labels.goalSingular.toLowerCase()}.</CardDescription>
+        </div>
+
+        {goal.children.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <p className="text-sm text-foreground/70">
+              Nest {labels.singular.toLowerCase()}s under this {labels.goalSingular.toLowerCase()} to build the curriculum.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {goal.children.map((child) => (
+              <Link key={child.collectionId} href={`/collections/${child.collectionId}`} className="group block">
+                <Card className="h-full space-y-4 p-4 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
+                  <div className="space-y-1">
+                    <CardTitle className="line-clamp-2 text-base">{child.title}</CardTitle>
+                    {child.description ? (
+                      <CardDescription className="line-clamp-2 text-sm">{child.description}</CardDescription>
+                    ) : (
+                      <p className="text-sm text-foreground/55">No description yet.</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-foreground/60">{child.itemCount} {child.itemCount === 1 ? "note" : "notes"}</span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">
+                        {child.overallReadinessPercentage}% ready
+                      </span>
+                    </div>
+                    <div
+                      role="progressbar"
+                      aria-label={`${child.title} readiness`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={child.overallReadinessPercentage}
+                      className="h-2 overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        className="h-full rounded-full bg-blue-600 transition-[width] dark:bg-blue-400"
+                        style={{ width: `${clampPercentage(child.overallReadinessPercentage)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-foreground/60">
+                      {child.masteredConcepts}/{child.totalConcepts} mastered · {child.dueConcepts} due · {child.notPracticedConcepts} not started
+                    </p>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 function NextInPlanCard({
   items,
   collectionId,
@@ -315,6 +409,9 @@ function EditCollectionModal({
       const saved = await updateCollection(collection.id, {
         title: trimmedTitle,
         description: description.trim() || null,
+        // Send the current course/program so this title/description edit does not wipe it
+        // (updateMetadata overwrites every provided field; omitting one clears it).
+        courseProgram: collection.courseProgram,
       });
       onSaved(saved);
     } catch (submitError) {
@@ -626,7 +723,13 @@ function PublishStudyPlanModal({
     setSavingCourseProgram(true);
     setError(null);
     try {
-      const saved = await updateCollection(collection.id, { courseProgram: trimmedCourseProgram || null });
+      const saved = await updateCollection(collection.id, {
+        // Send the current title/description so saving course/program does not wipe them
+        // (updateMetadata overwrites every provided field; omitting one clears it).
+        title: collection.title,
+        description: collection.description,
+        courseProgram: trimmedCourseProgram || null,
+      });
       onSaved(saved);
       return saved;
     } catch (saveError) {
@@ -809,14 +912,24 @@ function SortableCollectionItemRow({
   };
 
   const [labelValue, setLabelValue] = useState(item.label ?? "");
-  const sectionOptionsId = `section-options-${item.noteId}`;
+  const sectionOptions = useMemo(
+    () => sectionNames.map((name) => ({ value: name, label: name })),
+    [sectionNames],
+  );
 
-  const commitLabel = () => {
-    const nextLabel = normalizeSectionName(labelValue);
-    if (normalizeSectionName(item.label) !== nextLabel) {
-      onLabelChange(item.noteId, nextLabel);
+  // Auto-save the section a short beat after the last change (typing or selecting),
+  // so the combobox behaves like the rest of the inline plan editing.
+  useEffect(() => {
+    if (disabled) {
+      return;
     }
-  };
+    const nextLabel = normalizeSectionName(labelValue);
+    if (normalizeSectionName(item.label) === nextLabel) {
+      return;
+    }
+    const handle = globalThis.setTimeout(() => onLabelChange(item.noteId, nextLabel), 500);
+    return () => globalThis.clearTimeout(handle);
+  }, [labelValue, item.label, item.noteId, onLabelChange, disabled]);
 
   return (
     <li
@@ -863,30 +976,18 @@ function SortableCollectionItemRow({
               ) : null}
             </div>
           ) : null}
-          <label className="block space-y-1.5" htmlFor={`section-${item.noteId}`}>
+          <div className="block space-y-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Section</span>
-            <input
+            <SuggestionCombobox
               id={`section-${item.noteId}`}
               value={labelValue}
-              list={sectionOptionsId}
-              maxLength={LABEL_MAX_LENGTH}
-              disabled={disabled}
-              onChange={(event) => setLabelValue(event.target.value)}
-              onBlur={commitLabel}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
+              options={sectionOptions}
+              onChange={(next) => setLabelValue(next.slice(0, LABEL_MAX_LENGTH))}
+              ariaLabel="Section"
               placeholder="Choose or type a section"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              disabled={disabled}
             />
-            <datalist id={sectionOptionsId}>
-              {sectionNames.map((sectionName) => (
-                <option key={sectionName} value={sectionName} />
-              ))}
-            </datalist>
-          </label>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -919,6 +1020,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const terminalAction = useMemo(() => getCollectionTerminalAction(authUser?.profileType), [authUser?.profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
+  const [goalDetail, setGoalDetail] = useState<GoalCollectionDetailResponse | null>(null);
   const [items, setItems] = useState<NoteCollectionItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -959,7 +1061,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         setNoteListLoadFailed(true);
       }
       const collectionResult = result.value;
+      const goalResult = collectionResult.childCount > 0
+        ? await getCollectionGoal(collectionId)
+        : null;
       setCollection(collectionResult);
+      setGoalDetail(goalResult);
       setItems(sortCollectionItemsByPosition(collectionResult.items));
       setLoadState("ready");
     } catch (error) {
@@ -1027,6 +1133,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const result = await getCollection(collectionId);
       setCollection(result);
+      setGoalDetail(result.childCount > 0 ? await getCollectionGoal(collectionId) : null);
       setItems(sortCollectionItemsByPosition(result.items));
     } catch {
       // Keep the visible error; the page-level retry can recover if this fails too.
@@ -1050,27 +1157,47 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
+  // Reorder against the grouped display order (sections contiguous) so a within-section
+  // move never renumbers another section's positions or reorders the sections themselves.
+  const reorderTargetItems = () => (hasSections ? itemSections.flatMap((section) => section.items) : items);
+
+  const isSameSection = (a: NoteCollectionItem, b: NoteCollectionItem) =>
+    !hasSections || normalizeSectionName(a.label) === normalizeSectionName(b.label);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
     if (!overId || activeId === overId) {
       return;
     }
-    const activeIndex = items.findIndex((item) => item.noteId === activeId);
-    const overIndex = items.findIndex((item) => item.noteId === overId);
+    const orderedItems = reorderTargetItems();
+    const activeIndex = orderedItems.findIndex((item) => item.noteId === activeId);
+    const overIndex = orderedItems.findIndex((item) => item.noteId === overId);
     if (activeIndex < 0 || overIndex < 0) {
       return;
     }
-    void persistOrder(arrayMove(items, activeIndex, overIndex));
+    // Cross-section drag is a no-op; change a note's section with the Section control instead.
+    if (!isSameSection(orderedItems[activeIndex], orderedItems[overIndex])) {
+      return;
+    }
+    void persistOrder(arrayMove(orderedItems, activeIndex, overIndex));
   };
 
   const handleMove = (noteId: string, direction: "up" | "down") => {
-    const currentIndex = items.findIndex((item) => item.noteId === noteId);
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= items.length) {
+    const orderedItems = reorderTargetItems();
+    const currentIndex = orderedItems.findIndex((item) => item.noteId === noteId);
+    if (currentIndex < 0) {
       return;
     }
-    void persistOrder(arrayMove(items, currentIndex, targetIndex));
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= orderedItems.length) {
+      return;
+    }
+    // Stay within the section; boundaries are also disabled on the Move buttons.
+    if (!isSameSection(orderedItems[currentIndex], orderedItems[targetIndex])) {
+      return;
+    }
+    void persistOrder(arrayMove(orderedItems, currentIndex, targetIndex));
   };
 
   const handleLabelChange = (noteId: string, label: string) => {
@@ -1087,6 +1214,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       await removeCollectionItem(collectionId, noteId);
       const result = await getCollection(collectionId);
       setCollection(result);
+      setGoalDetail(result.childCount > 0 ? await getCollectionGoal(collectionId) : null);
       setItems(sortCollectionItemsByPosition(result.items));
     } catch (error) {
       await refetchAfterFailure(error instanceof Error ? error.message : "Could not remove this note.");
@@ -1128,17 +1256,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     [isAdmin, items, noteVisibility],
   );
   const itemIds = useMemo(() => items.map((item) => item.noteId), [items]);
-  const itemIndexById = useMemo(
-    () => new Map(items.map((item, index) => [item.noteId, index])),
-    [items],
-  );
   const { hasSections, sections: itemSections, sectionNames } = useMemo(
     () => getCollectionItemSections(items),
     [items],
-  );
-  const sortableItemIds = useMemo(
-    () => (hasSections ? itemSections.flatMap((section) => section.items.map((item) => item.noteId)) : itemIds),
-    [hasSections, itemIds, itemSections],
   );
   const quizReadyNoteIds = useMemo(
     () => getCollectionQuizReadyNoteIds(items),
@@ -1245,6 +1365,140 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     );
   }
 
+  if (goalDetail) {
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <BackLink href="/collections" label={labels.plural} />
+        <PageHeader
+          eyebrow={labels.goalSingular.toUpperCase()}
+          title={collection.title}
+          description={collection.description || undefined}
+          meta={isAdmin ? (
+            <button
+              type="button"
+              onClick={() => setPublishOpen(true)}
+              aria-label="Publish settings"
+              title="Publish settings"
+              className="motion-lift inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
+            >
+              {collection.visibility === "PUBLIC" ? (
+                <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
+              ) : (
+                <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
+              )}
+              <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
+            </button>
+          ) : undefined}
+        actions={(
+            <div className="flex items-center justify-end gap-2">
+              <ResponsiveActionLink
+                href={`/collections/${collectionId}/builder`}
+                action="edit"
+                label="Build"
+                variant="outline"
+                size="sm"
+              />
+              <div className="relative shrink-0" ref={actionsMenuRef}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-10 rounded-full px-0"
+                  aria-label="Open study plan actions"
+                  aria-haspopup="menu"
+                  aria-expanded={actionsMenuOpen}
+                  onClick={() => setActionsMenuOpen((open) => !open)}
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                {actionsMenuOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="Study plan actions"
+                    className="motion-dropdown-panel absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => { setActionsMenuOpen(false); setEditOpen(true); }}
+                    >
+                      <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
+                      onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
+                    >
+                      <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+        />
+
+        {mutationError ? (
+          <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+            <p className="text-sm">{mutationError}</p>
+            <button type="button" aria-label="Dismiss error" onClick={() => setMutationError(null)}>
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </Card>
+        ) : null}
+
+        <GoalDetailView goal={goalDetail} labels={labels} />
+
+        <EditCollectionModal
+          collection={collection}
+          isOpen={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(saved) => {
+            setCollection(saved);
+            setGoalDetail((previous) => previous ? {
+              ...previous,
+              title: saved.title,
+              description: saved.description,
+              visibility: saved.visibility,
+              courseProgram: saved.courseProgram,
+              updatedAt: saved.updatedAt,
+            } : previous);
+            setItems(sortCollectionItemsByPosition(saved.items));
+            setEditOpen(false);
+          }}
+        />
+        <DeleteCollectionModal
+          isOpen={deleteOpen}
+          title={collection.title}
+          deleting={mutationKind === "delete"}
+          onClose={() => setDeleteOpen(false)}
+          onConfirm={() => void handleDelete()}
+        />
+        {isAdmin ? (
+          <PublishStudyPlanModal
+            collection={collection}
+            isOpen={publishOpen}
+            privateNoteIds={privateNoteIds}
+            onClose={() => setPublishOpen(false)}
+            onSaved={(saved) => {
+              setCollection(saved);
+              setGoalDetail((previous) => previous ? {
+                ...previous,
+                visibility: saved.visibility,
+                courseProgram: saved.courseProgram,
+                updatedAt: saved.updatedAt,
+              } : previous);
+              setItems(sortCollectionItemsByPosition(saved.items));
+            }}
+            onNotesPublished={loadNoteVisibility}
+          />
+        ) : null}
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <BackLink href="/collections" label={labels.plural} />
@@ -1252,6 +1506,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         eyebrow={labels.singular.toUpperCase()}
         title={collection.title}
         description={collection.description || undefined}
+        descriptionClassName="line-clamp-2"
         meta={isAdmin ? (
           <button
             type="button"
@@ -1277,6 +1532,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               variant="outline"
               size="sm"
             />
+            {collection.parentCollectionId === null && collection.childCount === 0 && items.length === 0 ? (
+              <ResponsiveActionLink
+                href={`/collections/${collectionId}/builder`}
+                action="edit"
+                label={`Build ${labels.goalSingular.toLowerCase()}`}
+                variant="outline"
+                size="sm"
+              />
+            ) : null}
             <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
@@ -1398,24 +1662,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
-              {hasSections ? (
-                <div className="space-y-5">
-                  {itemSections.map((section) => (
-                    <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-                        <h3 data-testid="collection-section-heading" className="text-sm font-semibold text-foreground">{section.name}</h3>
-                        <span className="text-xs font-medium text-foreground/55">
-                          {section.items.length} {section.items.length === 1 ? "note" : "notes"}
-                        </span>
-                      </div>
+            {hasSections ? (
+              <div className="space-y-5">
+                {itemSections.map((section) => (
+                  <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+                      <h3 data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">{section.name}</h3>
+                      <span className="text-xs font-medium text-foreground/55">
+                        {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+                      </span>
+                    </div>
+                    <SortableContext items={section.items.map((item) => item.noteId)} strategy={verticalListSortingStrategy}>
                       <ol className="space-y-3">
-                        {section.items.map((item) => (
+                        {section.items.map((item, localIndex) => (
                           <SortableCollectionItemRow
                             key={`${item.noteId}:${item.label ?? ""}`}
                             item={item}
-                            index={itemIndexById.get(item.noteId) ?? 0}
-                            itemCount={items.length}
+                            index={localIndex}
+                            itemCount={section.items.length}
                             disabled={mutationInProgress}
                             collectionId={collectionId}
                             showWeakAreas={showWeakAreas}
@@ -1427,10 +1691,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                           />
                         ))}
                       </ol>
-                    </section>
-                  ))}
-                </div>
-              ) : (
+                    </SortableContext>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
                 <ol className="space-y-3">
                   {items.map((item, index) => (
                     <SortableCollectionItemRow
@@ -1449,8 +1715,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     />
                   ))}
                 </ol>
-              )}
-            </SortableContext>
+              </SortableContext>
+            )}
           </DndContext>
         )}
       </Card>

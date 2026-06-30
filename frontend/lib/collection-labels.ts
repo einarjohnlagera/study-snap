@@ -4,6 +4,8 @@ import { resolvePlanPremiumExamMode, type PlanPremiumExamMode } from "@/lib/exam
 export type CollectionLabels = {
   singular: string;
   plural: string;
+  goalSingular: string;
+  subjectSingular: string;
   navLabel: string;
   newCtaLabel: string;
   emptyTitle: string;
@@ -25,6 +27,8 @@ export type CollectionTerminalAction =
 const DEFAULT_LABELS: CollectionLabels = {
   singular: "Collection",
   plural: "Collections",
+  goalSingular: "Goal",
+  subjectSingular: "Collection",
   navLabel: "Collections",
   newCtaLabel: "New Collection",
   emptyTitle: "No collections yet",
@@ -36,6 +40,8 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
   TEACHER: {
     singular: "Lesson Plan",
     plural: "Lesson Plans",
+    goalSingular: "Course",
+    subjectSingular: "Unit",
     navLabel: "Lesson Plans",
     newCtaLabel: "New Lesson Plan",
     emptyTitle: "No lesson plans yet",
@@ -45,6 +51,8 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
   STUDENT: {
     singular: "Study Plan",
     plural: "Study Plans",
+    goalSingular: "Goal",
+    subjectSingular: "Subject Plan",
     navLabel: "Study Plans",
     newCtaLabel: "New Study Plan",
     emptyTitle: "No study plans yet",
@@ -54,6 +62,8 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
   BOARD_EXAM: {
     singular: "Review Set",
     plural: "Review Sets",
+    goalSingular: "Goal",
+    subjectSingular: "Subject Plan",
     navLabel: "Review Sets",
     newCtaLabel: "New Review Set",
     emptyTitle: "No review sets yet",

@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.33.0 - Study Plans as a Retention Engine` (in progress); previous: `v0.32.2 - Conversion Diagnosis & Quota Honesty`
+- `v0.33.1 - Study Plan polish & Curated Plan Coverage` (in progress); previous: `v0.33.0 - Study Plans as a Retention Engine`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -141,6 +141,15 @@ Use these skills before writing prompts, before starting new features, and after
 - Collection detail execution rows, collection list cards, published-plan cards, and public source plans must keep the no-mastery rule: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing there.
 - Frontend readiness displays should reuse the shared `ReadinessSummary` component and vocabulary: `ready`, `mastered`, `due`, `not started`.
 - The readiness sub-route fires `PLAN_READINESS_VIEWED` once after a successful load.
+
+### Study Plan Hierarchy Rule
+
+- Study Plan nesting is constrained to exactly two collection levels: top-level Goal collections may contain child Subject plans, and Subject plans may contain note items and label-derived sections.
+- The only hierarchy storage is nullable `note_collections.parent_collection_id`; deleting a Goal must set child `parent_collection_id` to null rather than cascading child collections.
+- Backend hierarchy logic must stay profile-neutral. Goal/Subject wording is frontend-only through `getCollectionLabels`; services and API contracts must not branch on `ProfileType`.
+- Set/clear parent must be owner-scoped and enforce: parent exists and is owned by the caller, parent is top-level, child is not self, and child has no children.
+- Goal readiness is derived from child readiness counts only: `round(100 × Σ child.masteredConcepts / Σ child.totalConcepts)`, or `0` when total is `0`. Do not re-run concept classification over merged Goal notes, persist readiness, add thresholds, or call AI.
+- Deeper nesting, recursive Goal adoption, direct note items on Goals, and per-module readiness remain out of scope unless explicitly introduced by a future release rule.
 
 ### Note Readiness Signal Rule
 
@@ -1528,7 +1537,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.33.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.33.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

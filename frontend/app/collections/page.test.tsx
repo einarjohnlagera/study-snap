@@ -61,7 +61,9 @@ describe("CollectionsPage", () => {
         visibility: "PRIVATE",
         courseProgram: null,
         sourcePlanId: null,
+        parentCollectionId: null,
         itemCount: 2,
+        childCount: 0,
         notesPracticed: 0,
         createdAt: "2026-06-01T00:00:00Z",
         updatedAt: "2026-06-02T00:00:00Z",
@@ -74,6 +76,32 @@ describe("CollectionsPage", () => {
     const title = await screen.findByText("Midterm Plan");
     expect(title.closest("a")).toHaveAttribute("href", "/collections/collection-1");
     expect(screen.getByText("2 notes")).toBeInTheDocument();
+  });
+
+  it("shows course/program on the card instead of the description", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "collection-1",
+        title: "PNLE Mastery",
+        description: "A long description that should not appear on the card",
+        visibility: "PRIVATE",
+        courseProgram: "Nursing",
+        sourcePlanId: null,
+        parentCollectionId: null,
+        itemCount: 2,
+        childCount: 0,
+        notesPracticed: 0,
+        createdAt: "2026-06-01T00:00:00Z",
+        updatedAt: "2026-06-02T00:00:00Z",
+      },
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("PNLE Mastery")).toBeInTheDocument();
+    expect(screen.getByText("Nursing")).toBeInTheDocument();
+    expect(screen.queryByText("A long description that should not appear on the card")).not.toBeInTheDocument();
+    expect(screen.queryByText("No description yet.")).not.toBeInTheDocument();
   });
 
   it("shows Not started when no notes have been practiced", async () => {
@@ -104,6 +132,17 @@ describe("CollectionsPage", () => {
     render(<CollectionsPage />);
 
     expect(await screen.findByText("Completed")).toBeInTheDocument();
+  });
+
+  it("shows child plan count for a goal card", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ itemCount: 0, childCount: 3 }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("3 plans")).toBeInTheDocument();
+    expect(screen.queryByText("Not started")).not.toBeInTheDocument();
   });
 
   it("shows Not started for an empty plan", async () => {
@@ -149,8 +188,15 @@ describe("CollectionsPage", () => {
       visibility: "PRIVATE",
       courseProgram: null,
       sourcePlanId: null,
+      parentCollectionId: null,
+      childCount: 0,
       createdAt: "2026-06-01T00:00:00Z",
       updatedAt: "2026-06-01T00:00:00Z",
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
       items: [],
     });
 
@@ -173,6 +219,7 @@ function buildCollectionSummary(overrides: Partial<{
   title: string;
   description: string | null;
   itemCount: number;
+  childCount: number;
   notesPracticed: number;
 }> = {}) {
   return {
@@ -182,7 +229,9 @@ function buildCollectionSummary(overrides: Partial<{
     visibility: "PRIVATE" as const,
     courseProgram: null,
     sourcePlanId: null,
+    parentCollectionId: null,
     itemCount: overrides.itemCount ?? 2,
+    childCount: overrides.childCount ?? 0,
     notesPracticed: overrides.notesPracticed ?? 0,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",

@@ -15,6 +15,34 @@ import java.util.UUID;
 public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEntity, UUID> {
     List<NoteCollectionEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
 
+    List<NoteCollectionEntity> findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(UUID ownerUserId);
+
+    @Query("""
+            select collection
+            from NoteCollectionEntity collection
+            where collection.parentCollectionId = :parentCollectionId
+              and collection.ownerUserId = :ownerUserId
+            order by
+              case when collection.siblingPosition is null then 1 else 0 end,
+              collection.siblingPosition asc,
+              collection.updatedAt desc
+            """)
+    List<NoteCollectionEntity> findOrderedChildrenByParentCollectionIdAndOwnerUserId(
+            @Param("parentCollectionId") UUID parentCollectionId,
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
+    @Query("""
+            select coalesce(max(collection.siblingPosition), -1)
+            from NoteCollectionEntity collection
+            where collection.parentCollectionId = :parentCollectionId
+              and collection.ownerUserId = :ownerUserId
+            """)
+    int findMaxSiblingPosition(
+            @Param("parentCollectionId") UUID parentCollectionId,
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
     List<NoteCollectionEntity> findByOwnerUserId(UUID ownerUserId);
 
     void deleteByOwnerUserId(UUID ownerUserId);
@@ -31,6 +59,16 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
     );
 
     Optional<NoteCollectionEntity> findByOwnerUserIdAndSourcePlanId(UUID ownerUserId, UUID sourcePlanId);
+
+    long countByParentCollectionId(UUID parentCollectionId);
+
+    @Query("""
+            select collection.parentCollectionId as collectionId, count(collection.id) as childCount
+            from NoteCollectionEntity collection
+            where collection.parentCollectionId in :collectionIds
+            group by collection.parentCollectionId
+            """)
+    List<NoteCollectionChildCountProjection> countChildrenByCollectionIds(@Param("collectionIds") List<UUID> collectionIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

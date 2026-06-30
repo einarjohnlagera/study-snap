@@ -3,12 +3,16 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
+import com.studysnap.backend.dto.GoalCollectionChildResponse;
+import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionProgressResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
+import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
@@ -26,6 +30,7 @@ import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
@@ -72,6 +77,13 @@ public class NoteCollectionService {
     private static final String INVALID_VISIBILITY_MESSAGE = "Collection visibility must be PRIVATE or PUBLIC.";
     private static final String EMPTY_PUBLISH_MESSAGE = "Add at least one public note before publishing this study plan.";
     private static final String PRIVATE_NOTE_PUBLISH_MESSAGE = "Every note in a published study plan must be public.";
+    private static final String SELF_PARENT_MESSAGE = "A collection cannot be nested under itself.";
+    private static final String PARENT_NOT_TOP_LEVEL_MESSAGE = "A collection can only be nested under a top-level goal.";
+    private static final String CHILD_HAS_CHILDREN_MESSAGE = "A collection with child plans cannot be nested under another goal.";
+    private static final String GOAL_CANNOT_ACCEPT_NOTES_MESSAGE = "A goal collection cannot contain direct notes.";
+    private static final String PARENT_WITH_NOTES_MESSAGE = "A collection must be empty before it can become a goal.";
+    private static final String CHILD_ORDER_SET_MISMATCH_MESSAGE = "Child order must include exactly the current child plans.";
+    private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
@@ -92,16 +104,19 @@ public class NoteCollectionService {
 
     @Transactional(readOnly = true)
     public List<NoteCollectionSummaryResponse> list(UUID userId) {
-        List<NoteCollectionEntity> collections = collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId);
+        List<NoteCollectionEntity> collections =
+                collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId);
         if (collections.isEmpty()) {
             return List.of();
         }
         Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
+        Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         Map<UUID, Integer> practicedCountsByCollectionId = loadPracticedCounts(userId, collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
                         itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         practicedCountsByCollectionId.getOrDefault(collection.getId(), 0)
                 ))
                 .toList();
@@ -120,10 +135,12 @@ public class NoteCollectionService {
             return List.of();
         }
         Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
+        Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
                         itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         0
                 ))
                 .toList();
@@ -205,6 +222,41 @@ public class NoteCollectionService {
     }
 
     @Transactional(readOnly = true)
+    public GoalCollectionDetailResponse getGoal(UUID collectionId, UUID userId) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
+        Map<UUID, Integer> itemCountsByCollectionId = children.isEmpty() ? Map.of() : loadItemCounts(children);
+        List<GoalCollectionChildResponse> childResponses = children.stream()
+                .map(child -> toGoalChildResponse(child, userId, itemCountsByCollectionId.getOrDefault(child.getId(), 0)))
+                .toList();
+        int totalConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::totalConcepts).sum();
+        int masteredConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::masteredConcepts).sum();
+        int dueConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum();
+        int notPracticedConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
+        int itemCount = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId).size();
+        return new GoalCollectionDetailResponse(
+                collection.getId(),
+                collection.getTitle(),
+                collection.getDescription(),
+                collection.getVisibility().name(),
+                collection.getCourseProgram(),
+                collection.getSourcePlanId(),
+                collection.getParentCollectionId(),
+                itemCount,
+                childResponses.size(),
+                masteryPercentage(masteredConcepts, totalConcepts),
+                masteredConcepts,
+                dueConcepts,
+                notPracticedConcepts,
+                totalConcepts,
+                collection.getCreatedAt(),
+                collection.getUpdatedAt(),
+                childResponses
+        );
+    }
+
+    @Transactional(readOnly = true)
     public NoteCollectionDetailResponse getPublic(UUID collectionId) {
         NoteCollectionEntity collection = collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
@@ -226,6 +278,62 @@ public class NoteCollectionService {
         NoteCollectionEntity saved = collectionRepository.save(collection);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         return toDetailResponse(saved, items);
+    }
+
+    @Transactional
+    public NoteCollectionDetailResponse updateParent(
+            UUID collectionId,
+            UUID userId,
+            SetNoteCollectionParentRequest request
+    ) {
+        NoteCollectionEntity child = getOwnedCollectionOrThrow(collectionId, userId);
+        UUID parentId = request == null ? null : request.parentId();
+        if (parentId == null) {
+            if (child.getParentCollectionId() != null) {
+                child.setParentCollectionId(null);
+                child.setSiblingPosition(null);
+                touch(child);
+                child = collectionRepository.save(child);
+            }
+            return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
+        }
+        if (parentId.equals(collectionId)) {
+            throw new InvalidCollectionRequestException(SELF_PARENT_MESSAGE);
+        }
+
+        NoteCollectionEntity parent = getOwnedCollectionOrThrow(parentId, userId);
+        validateParentCanAcceptChild(parent);
+        validateChildCanBeNested(child);
+        if (!parentId.equals(child.getParentCollectionId())) {
+            child.setParentCollectionId(parentId);
+            child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
+            touch(child);
+            child = collectionRepository.save(child);
+        }
+        return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
+    }
+
+    @Transactional
+    public GoalCollectionDetailResponse setChildrenOrder(
+            UUID collectionId,
+            UUID userId,
+            SetNoteCollectionChildrenOrderRequest request
+    ) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        List<UUID> submittedChildIds = extractSubmittedChildIds(request == null ? null : request.childIds());
+        List<NoteCollectionEntity> currentChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
+        validateSubmittedChildSetMatchesCurrent(currentChildren, submittedChildIds);
+
+        Map<UUID, NoteCollectionEntity> childById = currentChildren.stream()
+                .collect(Collectors.toMap(NoteCollectionEntity::getId, Function.identity()));
+        for (int index = 0; index < submittedChildIds.size(); index++) {
+            childById.get(submittedChildIds.get(index)).setSiblingPosition(index);
+        }
+        collectionRepository.saveAll(currentChildren);
+        touch(collection);
+        collectionRepository.save(collection);
+        return getGoal(collectionId, userId);
     }
 
     @Transactional
@@ -279,6 +387,9 @@ public class NoteCollectionService {
     @Transactional
     public NoteCollectionDetailResponse addItems(UUID collectionId, UUID userId, AddNoteCollectionItemsRequest request) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        if (collectionRepository.countByParentCollectionId(collectionId) > 0) {
+            throw new InvalidCollectionRequestException(GOAL_CANNOT_ACCEPT_NOTES_MESSAGE);
+        }
         List<UUID> orderedNoteIds = dedupeNoteIds(request == null ? null : request.noteIds());
         loadOwnedNotesByIdOrThrow(userId, orderedNoteIds);
 
@@ -353,6 +464,21 @@ public class NoteCollectionService {
     private NoteCollectionEntity getOwnedCollectionOrThrow(UUID collectionId, UUID userId) {
         return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
                 .orElseThrow(CollectionNotFoundException::new);
+    }
+
+    private void validateParentCanAcceptChild(NoteCollectionEntity parent) {
+        if (parent.getParentCollectionId() != null) {
+            throw new InvalidCollectionRequestException(PARENT_NOT_TOP_LEVEL_MESSAGE);
+        }
+        if (!itemRepository.findByCollectionIdOrderByPositionAsc(parent.getId()).isEmpty()) {
+            throw new InvalidCollectionRequestException(PARENT_WITH_NOTES_MESSAGE);
+        }
+    }
+
+    private void validateChildCanBeNested(NoteCollectionEntity child) {
+        if (collectionRepository.countByParentCollectionId(child.getId()) > 0) {
+            throw new InvalidCollectionRequestException(CHILD_HAS_CHILDREN_MESSAGE);
+        }
     }
 
     private void validatePublishable(UUID collectionId) {
@@ -486,6 +612,15 @@ public class NoteCollectionService {
         return countsByCollectionId;
     }
 
+    private Map<UUID, Integer> loadChildCounts(List<NoteCollectionEntity> collections) {
+        List<UUID> collectionIds = collections.stream().map(NoteCollectionEntity::getId).toList();
+        Map<UUID, Integer> countsByCollectionId = new HashMap<>();
+        for (NoteCollectionChildCountProjection projection : collectionRepository.countChildrenByCollectionIds(collectionIds)) {
+            countsByCollectionId.put(projection.getCollectionId(), Math.toIntExact(projection.getChildCount()));
+        }
+        return countsByCollectionId;
+    }
+
     private Map<UUID, Integer> loadPracticedCounts(UUID userId, List<NoteCollectionEntity> collections) {
         Map<UUID, List<UUID>> noteIdsByCollectionId = loadNoteIdsByCollectionId(collections);
         LinkedHashSet<UUID> allNoteIds = noteIdsByCollectionId.values().stream()
@@ -562,6 +697,24 @@ public class NoteCollectionService {
         return noteIds;
     }
 
+    private List<UUID> extractSubmittedChildIds(List<UUID> childIds) {
+        if (childIds == null || childIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> submittedChildIds = new ArrayList<>();
+        Set<UUID> seenChildIds = new HashSet<>();
+        for (UUID childId : childIds) {
+            if (childId == null) {
+                throw new InvalidCollectionRequestException(CHILD_ID_REQUIRED_MESSAGE);
+            }
+            if (!seenChildIds.add(childId)) {
+                throw new InvalidCollectionRequestException(CHILD_ORDER_SET_MISMATCH_MESSAGE);
+            }
+            submittedChildIds.add(childId);
+        }
+        return submittedChildIds;
+    }
+
     private void validateSubmittedSetMatchesCurrent(
             List<NoteCollectionItemEntity> currentItems,
             List<UUID> submittedNoteIds
@@ -572,6 +725,19 @@ public class NoteCollectionService {
         Set<UUID> submittedNoteIdSet = new HashSet<>(submittedNoteIds);
         if (currentItems.size() != submittedNoteIds.size() || !currentNoteIds.equals(submittedNoteIdSet)) {
             throw new InvalidCollectionRequestException(ORDER_SET_MISMATCH_MESSAGE);
+        }
+    }
+
+    private void validateSubmittedChildSetMatchesCurrent(
+            List<NoteCollectionEntity> currentChildren,
+            List<UUID> submittedChildIds
+    ) {
+        Set<UUID> currentChildIds = currentChildren.stream()
+                .map(NoteCollectionEntity::getId)
+                .collect(Collectors.toSet());
+        Set<UUID> submittedChildIdSet = new HashSet<>(submittedChildIds);
+        if (currentChildren.size() != submittedChildIds.size() || !currentChildIds.equals(submittedChildIdSet)) {
+            throw new InvalidCollectionRequestException(CHILD_ORDER_SET_MISMATCH_MESSAGE);
         }
     }
 
@@ -659,6 +825,7 @@ public class NoteCollectionService {
     private NoteCollectionSummaryResponse toSummaryResponse(
             NoteCollectionEntity collection,
             int itemCount,
+            int childCount,
             int notesPracticed
     ) {
         return new NoteCollectionSummaryResponse(
@@ -668,7 +835,9 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getSourcePlanId(),
+                collection.getParentCollectionId(),
                 itemCount,
+                childCount,
                 notesPracticed,
                 collection.getCreatedAt(),
                 collection.getUpdatedAt()
@@ -687,6 +856,8 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getSourcePlanId(),
+                collection.getParentCollectionId(),
+                Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
                 toProgressResponse(itemResponses),
@@ -706,6 +877,8 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getSourcePlanId(),
+                collection.getParentCollectionId(),
+                Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
                 toProgressResponse(itemResponses),
@@ -728,6 +901,40 @@ public class NoteCollectionService {
             return 0;
         }
         return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
+    }
+
+    private GoalCollectionChildResponse toGoalChildResponse(
+            NoteCollectionEntity child,
+            UUID userId,
+            int itemCount
+    ) {
+        try {
+            PlanReadinessResponse readiness = getReadiness(child.getId(), userId);
+            return new GoalCollectionChildResponse(
+                    child.getId(),
+                    child.getTitle(),
+                    child.getDescription(),
+                    itemCount,
+                    readiness.overallReadinessPercentage(),
+                    readiness.masteredConcepts(),
+                    readiness.dueConcepts(),
+                    readiness.notPracticedConcepts(),
+                    readiness.totalConcepts()
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Could not load child collection readiness collectionId={} userId={}", child.getId(), userId, exception);
+            return new GoalCollectionChildResponse(
+                    child.getId(),
+                    child.getTitle(),
+                    child.getDescription(),
+                    itemCount,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+            );
+        }
     }
 
     private List<NoteCollectionItemResponse> toItemResponses(UUID userId, List<NoteCollectionItemEntity> items) {
