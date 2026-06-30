@@ -49,7 +49,20 @@ Each item stores:
 - `position`
 - `createdAt`
 
-Item labels are neutral backend data. The Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
+Item labels are neutral backend data. The Study Plan detail page uses them as frontend-only section/module names, and the Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
+
+For Study Plan detail sections, there is no separate section entity or nested-plan model:
+
+- `position` is the single source of truth for item order.
+- trimmed, non-empty `label` is the single source of truth for grouping.
+- labels are user-defined free text, not course/program, subject, learner level, audience, or taxonomy data.
+- a section is the set of items sharing the same case-sensitive trimmed non-empty label.
+- section display order follows the minimum `position` among the section's items.
+- items within a section stay in `position` order.
+- null or empty labels belong to a trailing **Ungrouped** bucket.
+- when no item in the plan has a label, detail renders the existing flat ordered list with no section headers.
+
+Sections are strictly sections within one plan. Do not add parent/child collections, collection-of-collections, umbrella plans, or independently adoptable sub-plans for this behavior.
 
 ## Profile-Aware Terminal Actions
 
@@ -393,7 +406,7 @@ Behavior:
 The core Collections UI ships as the universal organization surface:
 
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
-- `/collections/[id]` shows one collection, its ordered note items, item labels, and a per-note execution-status hint.
+- `/collections/[id]` shows one collection, its ordered note items, label-derived sections when present, and a per-note execution-status hint.
 - The per-note hint is a learner practice signal, not exam-readiness: `Needs Study Pack` (no `STUDY_PACK_READY` pack yet) → `Not started` (pack ready, `lastSessionCompletedAt == null`) → `Practiced` (`lastSessionCompletedAt != null`), with transient `Generating` / `Generation failed` states preserved for operational feedback. It deliberately does **not** show `Study Pack ready` / `Quiz ready` (the prior hint): plan-level Study Pack readiness already lives in the Progress rollup, and exam-eligibility (quiz-readiness) is surfaced on the Exam Builder, not here.
 - `/collections/[id]` header actions: `Edit` and `Delete` live in a single `⋯` context menu (short labels, mirroring Note Detail); the teacher terminal action (`Build Exam`) sits at the bottom-left of the header card via the `PageHeader` `footer` slot, not crammed into the action row. Admin status is read reactively (SSR-safe).
 - Admins see a published/private **status badge that is itself the publish control** (Notion-style): it sits **below the title** (mirroring Note Detail's visibility control), and clicking it (`aria-label="Publish settings"`, gear affordance) opens the publish modal. There is no separate `Publish settings` menu item or `Share` button. The boilerplate header description is omitted when the plan has no author-written description.
@@ -402,6 +415,8 @@ The core Collections UI ships as the universal organization surface:
 - `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
 - Entitled users see per-note due-concept counts and up to 3 concept names. Free users see no fabricated counts and may see one plan-aware upgrade affordance resolved through `getUpgradeCtas(currentPlan)`.
 - A frontend-only `Next in this plan` card derives one action from the already-returned ordered items. It never calls a recommendation endpoint or persists recommendation state.
+- When at least one item has a trimmed non-empty `label`, `/collections/[id]` groups the notes under section headers (`section name + item count`). Section order follows the first/minimum `position` in each section, items stay in `position` order within each section, and null/empty labels render under a trailing **Ungrouped** section. When no item has a label, the page renders the existing flat list unchanged with no section headers.
+- Section headers and item rows are execution organization only. They must not show readiness, mastery percentages, subject mastery, milestones, goals, streaks, weakest-subject routing, or progress bars; readiness remains on `/collections/[id]/readiness`.
 - The next-action phases are evaluated globally in this order, choosing the first matching note in saved order within each phase:
   1. First note without `STUDY_PACK_READY` -> `Generate Study Pack`.
   2. When all Study Packs are ready, first note with no completed practice -> `Study this note`.
@@ -452,7 +467,7 @@ Core UI behavior:
 - The app shell shows the profile-aware Collections nav item directly after Library.
 - `/collections` uses the authenticated page header pattern and opens a create modal with a title (max length `150`) and an optional description field. The Library selection-mode create modal (split-button `{singular}`) also collects an optional description (v0.33.0) — both create paths now carry description through `createCollection`, so a plan built from a Library selection is no longer title-only.
 - `/collections/[id]` uses `BackLink href="/collections"` with the profile-aware plural label.
-- Item labels are editable text inputs with max length `120`.
+- Item labels are edited as per-item **Section** assignment controls with max length `120`: users can choose an existing section name from the current plan, type a new free-text section, or clear the value to return the item to Ungrouped. The control still persists through `PUT /collections/{id}/items/order`; no new mutation, DTO field, endpoint, taxonomy, or backend interpretation is added.
 - Reorder uses drag-and-drop plus `Move up` / `Move down` buttons for accessibility.
 - Reorder/relabel persists through `PUT /collections/{id}/items/order` with the full ordered item set.
 - The in-detail note picker uses the user's own notes from the Library note-list API and excludes notes already in the collection.
