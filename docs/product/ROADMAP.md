@@ -106,6 +106,28 @@ Anti-drift: readiness stays Free (decided, not revisited — see the Journey can
 
 ---
 
+## Plan detail view/edit redesign (candidate, gated on curating one real plan)
+
+Theme: the leaf Study Plan detail still reads like a permanent edit form. v0.33.1 shipped the cheap readability wins (emphasized section headers, Section combobox, header description) but deliberately **deferred the larger view/edit split** — its shape (especially the compact-card spec) is guesswork until a real ~35-note plan exists to design against. The compact card was being spec'd against a 3-note plan; a real plan would likely also demand collapsible sections, sticky/jump-to-section headers, and search-within-plan — none of which are knowable from the armchair.
+
+**Gate:** curate **one real plan** (PNLE-scale) first, then design against it. This is the same curation that validates appetite — so it is the natural gate.
+
+Scope (design against the real plan, don't pre-spec):
+- **View mode by default** — opening a plan shows a clean, **compact** read view: each note = title · subject · practiced badge · concepts due, tight spacing (plans hold many notes). No Section field, no Move buttons, no edit chrome.
+- **A separate edit mode** (its own toggle, *not* the ⋯→Edit metadata modal which stays title/description) revealing the structural controls.
+- **Edit-mode behaviors not yet delivered:** inline **section rename** at the leaf; **sections reorderable** at the leaf (drag / move up-down — today leaf section order is min-position-derived); **assign a note to a section by dragging** across sections (today only the combobox does it — cross-section drag is a no-op). The dropdown/combobox assignment already shipped.
+- Likely-needed-at-scale (confirm with the real plan, don't assume): collapsible sections, sticky/jump-to-section headers, search-within-plan.
+
+Anti-drift: do **not** build a third parallel editor — whether edit is an inline toggle, a modal, or a generalization of the Goal Builder is under-determined until one curation session; decide then. Sections stay label-derived; readiness stays derived + Free; no `ProfileType` branching.
+
+---
+
+## Deeper plan nesting — study-plan-within-a-study-plan (candidate, nice-to-have)
+
+The 2-level Goal → Subject model is intentionally constrained. Going to 3+ levels is **feasible but a real project, not a constraint flip** (`parent_collection_id` is self-referential so the *column* supports depth, but every shipped invariant assumes 2): N-level needs real ancestor-walk **cycle detection** (today 2-level makes cycles impossible by construction); **recursive readiness rollup** (today sums *direct* children; the no-cross-subject-dedup rule gets thornier each level); **adopt-recursion**; per-level `sibling_position`; and a tree/breadcrumb builder UX. Genuinely nice-to-have, later — see `docs/product/STUDY_PLAN_HIERARCHY_PLAN.md`.
+
+---
+
 ## Journey (next-priority candidate, gated) - guided goal-completion
 
 Gated on v0.33.1's Curated Plan Coverage landing **and** non-trivial adoption (re-run `journey-validation-pulls.md` Pull 1 — e.g. ≥20–30 adoptions across covered goals — so it becomes a real retention test). Likely precedes the teacher-gated v0.34.0 below (still no teacher cohort). The goal-first reframe of pieces **already shipped** — adopt (`STUDY_PLAN_ADOPTED`), the Not-started/In-progress/Completed badge, and v0.33.0 readiness — into one cohesive guided experience. Locked direction (decided with Claude, 2026-06):
