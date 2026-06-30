@@ -636,15 +636,51 @@ describe("Library page", () => {
     fireEvent.change(within(dialog).getByPlaceholderText("Study Plan title"), {
       target: { value: "Finals Plan" },
     });
+    fireEvent.change(within(dialog).getByPlaceholderText("Optional context for this study plan"), {
+      target: { value: "Cram set for finals" },
+    });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
 
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({
         title: "Finals Plan",
+        description: "Cram set for finals",
         noteIds: ["note-42", "note-99"],
       });
     });
     expect(pushMock).toHaveBeenCalledWith("/collections/collection-1");
+  });
+
+  it("selects all filtered notes with select-all when building a Study Plan", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    (createCollection as jest.Mock).mockResolvedValue({ id: "collection-3", title: "All Notes Plan" });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Create options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Study Plan/ }));
+
+    await screen.findByText("Pick notes for your new Study Plan");
+    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Study Plan" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("Study Plan title"), {
+      target: { value: "All Notes Plan" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalled();
+    });
+    const call = (createCollection as jest.Mock).mock.calls[0][0];
+    expect(call.noteIds).toHaveLength(3);
+    expect(call.noteIds).toEqual(expect.arrayContaining(["note-42", "note-99", "note-77"]));
   });
 
   it("allows creating an empty Study Plan with no notes selected", async () => {
@@ -669,7 +705,7 @@ describe("Library page", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create Study Plan" }));
 
     await waitFor(() => {
-      expect(createCollection).toHaveBeenCalledWith({ title: "Empty Plan", noteIds: [] });
+      expect(createCollection).toHaveBeenCalledWith({ title: "Empty Plan", description: null, noteIds: [] });
     });
   });
 

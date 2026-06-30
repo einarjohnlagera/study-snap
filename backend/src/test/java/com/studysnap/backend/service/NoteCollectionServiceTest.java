@@ -6,7 +6,9 @@ import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
+import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
@@ -111,6 +113,9 @@ class NoteCollectionServiceTest {
     private ConceptHealthService conceptHealthService;
 
     @Mock
+    private ProgressReportService progressReportService;
+
+    @Mock
     private AnalyticsService analyticsService;
 
     @Mock
@@ -128,6 +133,7 @@ class NoteCollectionServiceTest {
                 generatedQuizRepository,
                 quizSessionHistoryService,
                 conceptHealthService,
+                progressReportService,
                 analyticsService,
                 noteService,
                 TransactionOperations.withoutTransaction()
@@ -447,6 +453,88 @@ class NoteCollectionServiceTest {
         assertThat(result.progress().notesPracticed()).isZero();
         assertThat(result.items()).isEmpty();
         verify(quizSessionHistoryService, never()).findLatestSessionCompletedAtByNoteIds(any(), any());
+    }
+
+    @Test
+    void getReadiness_returnsOwnerScopedPlanReadinessFromSharedProgressAggregation() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        UUID biologyNoteId = UUID.randomUUID();
+        UUID otherNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        List<NoteCollectionItemEntity> items = List.of(
+                buildItem(collectionId, draftNoteId, 0, null),
+                buildItem(collectionId, biologyNoteId, 1, null),
+                buildItem(collectionId, otherNoteId, 2, null)
+        );
+        StudyPackEntity biologyPack = buildStudyPack(biologyNoteId, List.of("Cells", "DNA", "Mitosis"));
+        biologyPack.setOwnerUserId(userId);
+        StudyPackEntity otherPack = buildStudyPack(otherNoteId, List.of("Practice"));
+        otherPack.setOwnerUserId(userId);
+        StudyPackEntity foreignPack = buildStudyPack(UUID.randomUUID(), List.of("Hidden"));
+        foreignPack.setOwnerUserId(UUID.randomUUID());
+        List<SubjectProgressEntry> subjects = List.of(
+                new SubjectProgressEntry(BIOLOGY_SUBJECT, 3, 2, 1, 0, 67),
+                new SubjectProgressEntry("Other", 1, 0, 0, 1, 0)
+        );
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
+        when(studyPackRepository.findByNoteIdIn(List.of(draftNoteId, biologyNoteId, otherNoteId)))
+                .thenReturn(List.of(biologyPack, otherPack, foreignPack));
+        when(progressReportService.buildSubjectProgressEntries(eq(List.of(biologyPack, otherPack)), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(subjects);
+
+        PlanReadinessResponse result = service.getReadiness(collectionId, userId);
+
+        assertThat(result.collectionId()).isEqualTo(collectionId);
+        assertThat(result.totalNotes()).isEqualTo(3);
+        assertThat(result.notesWithStudyPack()).isEqualTo(2);
+        assertThat(result.totalConcepts()).isEqualTo(4);
+        assertThat(result.masteredConcepts()).isEqualTo(2);
+        assertThat(result.dueConcepts()).isEqualTo(1);
+        assertThat(result.notPracticedConcepts()).isEqualTo(1);
+        assertThat(result.overallReadinessPercentage()).isEqualTo(50);
+        assertThat(result.subjects()).containsExactlyElementsOf(subjects);
+    }
+
+    @Test
+    void getReadiness_returnsZeroShapeForEmptyPlanWithoutProgressAggregation() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        PlanReadinessResponse result = service.getReadiness(collectionId, userId);
+
+        assertThat(result.totalNotes()).isZero();
+        assertThat(result.notesWithStudyPack()).isZero();
+        assertThat(result.overallReadinessPercentage()).isZero();
+        assertThat(result.totalConcepts()).isZero();
+        assertThat(result.subjects()).isEmpty();
+        verify(studyPackRepository, never()).findByNoteIdIn(anyList());
+        verify(progressReportService, never()).buildSubjectProgressEntries(anyList(), any(), any());
+    }
+
+    @Test
+    void getReadiness_returnsZeroShapeForPlanWithNotesButNoStudyPacks() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+
+        PlanReadinessResponse result = service.getReadiness(collectionId, userId);
+
+        assertThat(result.totalNotes()).isEqualTo(1);
+        assertThat(result.notesWithStudyPack()).isZero();
+        assertThat(result.overallReadinessPercentage()).isZero();
+        assertThat(result.subjects()).isEmpty();
+        verify(progressReportService, never()).buildSubjectProgressEntries(anyList(), any(), any());
     }
 
     @Test

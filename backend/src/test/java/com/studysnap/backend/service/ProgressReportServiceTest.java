@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ProgressReportServiceTest {
+    private static final String WHITESPACE = "  ";
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-06-04T12:00:00Z");
 
     @Mock
@@ -137,6 +138,29 @@ class ProgressReportServiceTest {
 
         assertThat(response.subjects()).isEmpty();
         verifyNoInteractions(conceptHealthRepository);
+    }
+
+    @Test
+    void buildSubjectProgressEntries_reusesProgressClassificationForProvidedPacks() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity biologyPack = studyPack("Biology", List.of("Cells", "DNA"));
+        StudyPackEntity otherPack = studyPack(WHITESPACE, List.of("Orientation"));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, biologyPack.getId())).thenReturn(List.of(
+                health(biologyPack.getId(), "Cells", NOW.minusDays(1)),
+                health(biologyPack.getId(), "DNA", NOW.minusDays(5))
+        ));
+        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, otherPack.getId())).thenReturn(List.of());
+
+        List<SubjectProgressEntry> subjects = progressReportService.buildSubjectProgressEntries(
+                List.of(biologyPack, otherPack),
+                userId,
+                NOW
+        );
+
+        assertThat(subjects).containsExactly(
+                new SubjectProgressEntry("Biology", 2, 1, 1, 0, 50),
+                new SubjectProgressEntry("Other", 1, 0, 0, 1, 0)
+        );
     }
 
     @Test

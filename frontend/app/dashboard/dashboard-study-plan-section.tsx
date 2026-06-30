@@ -22,12 +22,14 @@ type DashboardStudyPlanSectionProps = {
   courseProgram: string | null;
   profileType: ProfileType | null;
   viewAllHref?: string;
+  browseWhenEmpty?: boolean;
 };
 
 export function DashboardStudyPlanSection({
   courseProgram,
   profileType,
   viewAllHref,
+  browseWhenEmpty = false,
 }: Readonly<DashboardStudyPlanSectionProps>) {
   const router = useRouter();
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
@@ -81,8 +83,28 @@ export function DashboardStudyPlanSection({
     };
   }, [normalizedCourseProgram]);
 
-  if (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram || !plan) {
+  if (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram) {
     return null;
+  }
+
+  if (!plan) {
+    if (!browseWhenEmpty) {
+      return null;
+    }
+    return (
+      <section className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold sm:text-xl">Recommended {labels.singular}</h2>
+          <p className="text-xs text-foreground/65">{normalizedCourseProgram}</p>
+        </div>
+        <Card className="space-y-1.5 border-dashed p-4 sm:p-6">
+          <CardTitle>No curated {labels.plural.toLowerCase()} for {normalizedCourseProgram} yet</CardTitle>
+          <CardDescription>
+            We add curated {labels.plural.toLowerCase()} per track. Check back soon, or build your own above.
+          </CardDescription>
+        </Card>
+      </section>
+    );
   }
 
   const continuePlan = adoptedPlan ?? null;

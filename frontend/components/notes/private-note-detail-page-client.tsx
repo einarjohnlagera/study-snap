@@ -13,6 +13,7 @@ import { CourseProgramCombobox } from "@/components/metadata/course-program-comb
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
 import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
+import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -62,6 +63,7 @@ import {
   type NoteResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
+  type SubjectProgressEntry,
   type QuickReviewPerformanceSummaryResponse,
   type TeacherQuizQuestionCount,
 } from "@/lib/api";
@@ -111,10 +113,15 @@ import {
 import { PUBLIC_NOTE_COPY_QUERY_PARAMS } from "@/lib/public-note-copy";
 import { resolvePaywallContextTypeFromVariant } from "@/lib/paywall-content";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 import Link from "next/link";
 
 const COPIED_STUDY_PACK_REGENERATE_HINT_ID = "copied-study-pack-regenerate-hint";
 const COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE = "This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.";
+const NOTE_READINESS_SUBJECT = "This note";
+
+type ConceptHealthLoadState = "idle" | "loading" | "loaded" | "error";
+type ConceptReadinessStatus = NonNullable<ConceptHealthEntry["readinessStatus"]>;
 
 function stateChip(status: NoteStudyPackStatus) {
   if (status === "STUDY_PACK_READY") {
@@ -176,6 +183,87 @@ function buildShareUrl(subject: string | null, title: string | null) {
     return path;
   }
   return new URL(path, globalThis.location.origin).toString();
+}
+
+function normalizeConceptKey(concept: string): string {
+  return concept.trim().toLowerCase();
+}
+
+function resolveConceptReadinessStatus(health: ConceptHealthEntry | undefined): ConceptReadinessStatus {
+  if (!health) {
+    return "NOT_STARTED";
+  }
+  if (health.readinessStatus) {
+    return health.readinessStatus;
+  }
+  // Fallback when readinessStatus is absent. isDue is never redacted, so a
+  // not-due concept is reliably MASTERED even when Free responses null out
+  // lastCorrectAt. isDue is true for both due and never-practiced concepts;
+  // lastCorrectAt disambiguates when present (unredacted), otherwise NOT_STARTED.
+  if (!health.isDue) {
+    return "MASTERED";
+  }
+  return health.lastCorrectAt ? "DUE" : "NOT_STARTED";
+}
+
+function getConceptStatusLabel(status: ConceptReadinessStatus): string {
+  switch (status) {
+    case "MASTERED": return "Mastered";
+    case "DUE": return "Due";
+    case "NOT_STARTED": return "Not started";
+    default: return "Not started";
+  }
+}
+
+function getConceptStatusChipClass(status: ConceptReadinessStatus): string {
+  switch (status) {
+    case "MASTERED": return "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300";
+    case "DUE": return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+    case "NOT_STARTED": return "bg-muted text-foreground/50";
+    default: return "bg-muted text-foreground/50";
+  }
+}
+
+function buildNoteReadinessEntry(
+  keyConcepts: string[],
+  conceptHealthByName: Map<string, ConceptHealthEntry>,
+): SubjectProgressEntry | null {
+  const uniqueConcepts = Array.from(
+    new Map(
+      keyConcepts
+        .map((concept) => concept.trim())
+        .filter(Boolean)
+        .map((concept) => [normalizeConceptKey(concept), concept]),
+    ).values(),
+  );
+
+  if (uniqueConcepts.length === 0) {
+    return null;
+  }
+
+  let masteredConcepts = 0;
+  let dueConcepts = 0;
+  let notPracticedConcepts = 0;
+
+  for (const concept of uniqueConcepts) {
+    const status = resolveConceptReadinessStatus(conceptHealthByName.get(normalizeConceptKey(concept)));
+    if (status === "MASTERED") {
+      masteredConcepts += 1;
+    } else if (status === "DUE") {
+      dueConcepts += 1;
+    } else {
+      notPracticedConcepts += 1;
+    }
+  }
+
+  return {
+    subject: NOTE_READINESS_SUBJECT,
+    totalConcepts: uniqueConcepts.length,
+    masteredConcepts,
+    dueConcepts,
+    notPracticedConcepts,
+    masteryPercentage: Math.round((masteredConcepts * 100) / uniqueConcepts.length),
+  };
 }
 
 function normalizeMetadataInput(value: string): string | null {
@@ -272,6 +360,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
   const [recentSessionHistory, setRecentSessionHistory] = useState<RecentQuizSessionHistoryItem[]>([]);
   const [conceptHealth, setConceptHealth] = useState<ConceptHealthEntry[] | null>(null);
+  const [conceptHealthLoadState, setConceptHealthLoadState] = useState<ConceptHealthLoadState>("idle");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -683,7 +772,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const currentPlan = usageSummary?.plan ?? (isPaidPlan ? (getAuthUser()?.planType ?? "FREE") : "FREE");
-  const canViewConceptHealth = currentPlan === "PLUS" || currentPlan === "PRO";
+  const canViewConceptReviewTiming = currentPlan === "PLUS" || currentPlan === "PRO";
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
   const hasAdaptivePracticeQuota = (usageSummary?.limits.adaptivePracticePerMonth ?? 0) > 0;
@@ -697,43 +786,62 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const conceptHealthByName = useMemo(() => {
     const byName = new Map<string, ConceptHealthEntry>();
     for (const entry of conceptHealth ?? []) {
-      byName.set(entry.concept, entry);
+      byName.set(normalizeConceptKey(entry.concept), entry);
     }
     return byName;
   }, [conceptHealth]);
-  const dueConceptCount = useMemo(
-    () => note?.keyConcepts.filter((concept) => conceptHealthByName.get(concept)?.isDue).length ?? 0,
+  const noteReadinessEntry = useMemo(
+    () => buildNoteReadinessEntry(note?.keyConcepts ?? [], conceptHealthByName),
     [conceptHealthByName, note?.keyConcepts],
   );
+  const dueConceptCount = useMemo(
+    () => noteReadinessEntry?.dueConcepts ?? 0,
+    [noteReadinessEntry],
+  );
+  const shouldShowNoteReadiness = Boolean(
+    isStudyPackReady
+    && note?.studyPackId
+    && noteReadinessEntry
+    && noteReadinessEntry.totalConcepts > 0
+    && (conceptHealthLoadState === "loaded" || conceptHealthLoadState === "error"),
+  );
+  const conceptHealthUnavailable = shouldShowNoteReadiness && conceptHealthLoadState === "error";
+  const reviewTimingUpgradeCopy = dueConceptCount > 0
+    ? `Review timing for ${dueConceptCount} due concept${dueConceptCount === 1 ? "" : "s"} is available on Plus and Pro.`
+    : "Review timing is available on Plus and Pro.";
+  const reviewTimingUpgradeCta = getUpgradeCtas(currentPlan as AppPlanType, "adaptive-practice").primary?.label ?? "Upgrade";
   useEffect(() => {
     if (
-      activeStudyPackTab !== "key-concepts"
-      || !note?.studyPackId
+      !note?.studyPackId
       || note.studyPackStatus !== "STUDY_PACK_READY"
-      || !canViewConceptHealth
+      || note.keyConcepts.length === 0
     ) {
       setConceptHealth(null);
+      setConceptHealthLoadState("idle");
       return;
     }
 
     let active = true;
     setConceptHealth(null);
+    setConceptHealthLoadState("loading");
     void getConceptHealth(note.studyPackId)
       .then((entries) => {
         if (active) {
           setConceptHealth(entries);
+          setConceptHealthLoadState("loaded");
         }
       })
       .catch(() => {
         if (active) {
           setConceptHealth([]);
+          setConceptHealthLoadState("error");
         }
       });
 
     return () => {
       active = false;
     };
-  }, [activeStudyPackTab, canViewConceptHealth, note?.studyPackId, note?.studyPackStatus]);
+  }, [note?.keyConcepts.length, note?.studyPackId, note?.studyPackStatus]);
   const showFirstStudyPackSuccessBanner = !isTeacherMode && firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
   const availableCourseProgramSuggestions = useMemo(
@@ -1975,6 +2083,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </p>
             </Card>
 
+            {shouldShowNoteReadiness && noteReadinessEntry ? (
+              <ReadinessSummary
+                variant="compact"
+                title="Note readiness"
+                description="Practice to move due concepts toward mastered."
+                overallReadinessPercentage={noteReadinessEntry.masteryPercentage}
+                totalConcepts={noteReadinessEntry.totalConcepts}
+                masteredConcepts={noteReadinessEntry.masteredConcepts}
+                dueConcepts={noteReadinessEntry.dueConcepts}
+                notPracticedConcepts={noteReadinessEntry.notPracticedConcepts}
+                subjects={[noteReadinessEntry]}
+                unavailable={conceptHealthUnavailable}
+                unavailableDescription="Readiness is unavailable right now. Your note content is still available."
+              />
+            ) : null}
+
             {activeStudyPackTab === "summary" ? (
               <NoteDetailSummaryCard
                 summary={
@@ -2003,24 +2127,27 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <>
                     <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
                       {note.keyConcepts.map((concept, index) => {
-                        const health = canViewConceptHealth ? conceptHealthByName.get(concept) : null;
+                        const health = conceptHealthLoadState === "loaded"
+                          ? conceptHealthByName.get(normalizeConceptKey(concept))
+                          : undefined;
+                        const readinessStatus = resolveConceptReadinessStatus(health);
                         return (
                           <li key={`${note.id}-concept-${index}`}>
                             <span className="inline-flex flex-wrap items-center gap-2">
                               <span>{concept}</span>
-                              {health?.isStruggling ? (
+                              {canViewConceptReviewTiming && health?.isStruggling ? (
                                 <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
                                   Needs work
                                 </span>
                               ) : null}
-                              {health?.isDue && health.daysSinceReview !== null ? (
+                              {canViewConceptReviewTiming && health?.isDue && health.daysSinceReview !== null ? (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                                   Due — {health.daysSinceReview}d ago
                                 </span>
                               ) : null}
-                              {health?.isDue && health.daysSinceReview === null ? (
-                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/50">
-                                  Not yet practiced
+                              {conceptHealthLoadState === "loaded" && (!canViewConceptReviewTiming || !health?.isDue || health.daysSinceReview === null) ? (
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getConceptStatusChipClass(readinessStatus)}`}>
+                                  {getConceptStatusLabel(readinessStatus)}
                                 </span>
                               ) : null}
                             </span>
@@ -2028,7 +2155,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         );
                       })}
                     </ul>
-                    {canViewConceptHealth && dueConceptCount > 0 ? (
+                    {canViewConceptReviewTiming && dueConceptCount > 0 ? (
                       <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-foreground/80">
                         <span>You have {dueConceptCount} concept(s) due for review.</span>{" "}
                         <Link
@@ -2037,6 +2164,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         >
                           Start Adaptive Practice
                         </Link>
+                      </div>
+                    ) : null}
+                    {!canViewConceptReviewTiming && conceptHealthLoadState === "loaded" ? (
+                      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground/75">
+                        <span>{reviewTimingUpgradeCopy}</span>{" "}
+                        <button
+                          type="button"
+                          className="font-medium text-blue-700 underline underline-offset-4 dark:text-blue-300"
+                          onClick={() => openPaywallModal("adaptive-practice", "private_note_detail_review_timing")}
+                        >
+                          {reviewTimingUpgradeCta}
+                        </button>
                       </div>
                     ) : null}
                   </>

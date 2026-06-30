@@ -5,7 +5,9 @@ import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
+import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
+import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.CollectionVisibility;
@@ -54,6 +56,9 @@ class NoteCollectionControllerTest {
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("get", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("getReadiness", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("updateMetadata", String.class, UpdateNoteCollectionRequest.class, AuthenticatedUser.class)
@@ -117,6 +122,29 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).get(UUID.fromString(COLLECTION_ID), user.userId());
+    }
+
+    @Test
+    void getReadiness_returnsCollectionReadiness() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        PlanReadinessResponse response = new PlanReadinessResponse(
+                UUID.fromString(COLLECTION_ID),
+                2,
+                1,
+                50,
+                2,
+                1,
+                0,
+                1,
+                List.of(new SubjectProgressEntry("Biology", 2, 1, 0, 1, 50))
+        );
+        when(service.getReadiness(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
+
+        PlanReadinessResponse result = controller.getReadiness(COLLECTION_ID, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).getReadiness(UUID.fromString(COLLECTION_ID), user.userId());
     }
 
     @Test

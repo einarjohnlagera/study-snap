@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.32.2 - Conversion Diagnosis & Quota Honesty` is the latest release (last released). The next version has not been opened yet.
+`v0.33.0 - Study Plans as a Retention Engine` is the latest released version (on `releases/v0.33.0`).
 
-`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the previous baseline.
+`v0.32.2 - Conversion Diagnosis & Quota Honesty` is the previous baseline.
+
+`v0.32.1 - Monetization Surfacing & Pricing Clarity` is the release before that.
 
 `v0.32.0 - Account & Communication Controls` is the release before that.
 
@@ -23,6 +25,96 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.28.0 - Feature Discoverability & Activation` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.33.0 - Study Plans as a Retention Engine (released)
+
+Base branch for this release: `releases/v0.33.0`.
+
+Theme: the constraint carried over from v0.32.2 is **near-zero W1→W2 retention (5.6%, recent cohorts ~0%)** — users activate (68.6%) and engage once (58.8%), then don't return; the longest observed streak is ~2 days. The diagnosis from v0.32.2 said: ship **one scoped retention lever**, not broad re-engagement infrastructure. The lever here is the **Study Plan as a trackable readiness journey**: today a plan is a static, ordered folder you adopt once (a one-time act with weak retention legs), with no signal of how ready you are or whether returning moves anything. This release gives a plan a **readiness number that only goes up when you come back to practice**, and clears the publish/discovery friction so curated plans actually reach the learners they're for.
+
+Why now (over teacher-flow / bulk quiz): we still have **no teacher cohort**, so that work defers again (v0.34.0 candidate). The leverage is the students and exam-takers we *do* have — readiness gives them a reason to return, which is the un-conflicted constraint.
+
+Two tracks, deliberately sequenced so the retention bet (B) is the headline and the activation polish (A) supports it:
+
+### Track A — Study Plan publish & discovery polish (activation)
+
+Friction found while seeding curated plans: publishing is clunky and silently drops metadata.
+
+- **Decouple metadata-save from publishing.** The backend already has separate endpoints — `updateMetadata` (title / description / course-program) and `updateVisibility` (publish, which validates notes). The publish modal's `handlePublish` validates notes *before* persisting course/program, so when publish fails (private/empty notes) the typed course/program is discarded; the create flow also drops description in some paths. Fix (frontend sequencing): **always persist metadata first / independently** (auto-save on blur or an always-available "Save details" action), and treat **Publish** as a separate gated action with a clear blocker message. Do **not** weaken publish validation — it still requires every note public + at least one note; it only stops throwing away metadata.
+- **Surface recommended plans on the user's own Study Plans page (`/collections`).** Reuse the existing Dashboard "Recommended {plural}" section (the recommended card + `See all N` link → `/collections/published`) rather than tabs — tabs hide discovery behind a click and add chrome to a near-empty page. Scoped to the learner's **own course/program only** (an all-programs browse is what Public Library does for *notes*; here it'd be noise). Place the learner's own plans first (workspace), recommended below — or recommended-first when they have zero owned plans (discovery-first when empty).
+
+### Track B — Readiness as a retention signal (headline)
+
+The reason-to-return. A learner studying for CPALE wants to see "how ready am I, and what's due," and watch that number move as they practice. An audit (2026-06) found readiness already half-exists: `/me/progress` is a full subject-mastery dashboard **already available to all plans**, and note detail already shows per-concept "due for review" badges — **but gated to PLUS/PRO**, so the non-returning Free cohort can't see its own return trigger. The plan scope is the only one genuinely missing. So Track B is not "build a dashboard" — it is **place one ConceptHealth-derived readiness signal where it has reach**.
+
+**Organizing principle — signal vs. detail:**
+
+- **Signal** = a compact, glanceable summary ("62% ready · 3 due"). Goes at high-traffic touchpoints. In v0.33.0: the **per-note rollup** on note detail (data is already fetched there). _Dashboard plan-card + plan-list badges are a deliberate fast-follow → v0.34.0._
+- **Detail** = the full breakdown (overall ring + per-subject/per-concept bars). Goes on dedicated surfaces: the new **plan readiness sub-route** `/collections/[id]/readiness` (reached by a "Check readiness" CTA on plan detail, **not** a tab, **not** inline on the execution rows) and `/me/progress` (already built — not rebuilt; cross-linked).
+
+In v0.33.0 (confirmed with Claude — split into two Codex prompts: ① shared component + plan sub-route, ② note rollup + Free-gate):
+
+- **Plan readiness sub-route** — owner-scoped `GET /collections/{id}/readiness`: overall readiness % + per-subject `SubjectProgressEntry[]` scoped to the plan's notes, rendered with the existing CSS progress-bar pattern (no chart library) + an inline SVG ring.
+- **Per-note readiness rollup** on note detail — a compact "% ready · X/Y mastered · N due" computed from the already-fetched `conceptHealth`.
+- **Free-gate change (deliberate, value-ladder-preserving)** — ungate the note readiness **signal** to Free (rollup + which concepts are due); keep the per-concept review-**timing** detail ("Due — 3d ago") PLUS/PRO. This aligns note detail with `/me/progress` (already Free) — it removes an inconsistency, and gives the Free cohort the return trigger. It is an **access/value-ladder change, not a billing change**.
+- **Shared component + unified vocabulary** — one reusable `ReadinessSummary` consumed by the plan surface and the note rollup, and one readiness language (`ready / mastered / due / not started`) reconciled across note, plan, and Progress.
+
+Locked direction:
+
+- **Deliberate reversal of "plans don't duplicate Progress."** `docs/features/collections.md` states twice that no mastery %, weakest-subject, or readiness belongs on a Study Plan. This release **consciously revisits** that — but on the **dedicated readiness sub-route only**, never on the plan **execution-detail rows** (the action / next-step list keeps its no-mastery rule). Record the reversal in `collections.md` when shipping.
+- **Readiness is derived, not stored.** Reuse the ConceptHealth recency spine; **no new mastery signal, no new persisted progress field on collections, no new generated content, no new AI/LLM call.** Aggregation only, and plan/note readiness must **match `/me/progress`** for the same concepts (reuse `ProgressReportService` classification + `masteryPercentage`, extract shared logic — no new thresholds).
+- **Free-gate is access, not billing.** Ungating the readiness signal touches the existing `FeatureGateService` / `canViewConceptHealth` path only. **No price, quota, pass-duration, or checkout mechanics change** (those stay locked). The per-concept timing detail stays PLUS/PRO.
+- **No new chart dependency; charts express readiness, never a standalone vanity dashboard.** Reuse the `progress-report-client.tsx` bar pattern + inline SVG.
+- **Discovery stays course/program-scoped** (not all-programs); surface via the existing Dashboard "Recommended" pattern (not tabs).
+- **No per-profile pipeline fork.**
+
+Status:
+
+- **Track A** shipped on `feature/study-plan-publish-discovery-polish`.
+- **Track B Prompt 1** shipped: owner-scoped plan readiness endpoint, dedicated `/collections/[id]/readiness` route, shared `ReadinessSummary`, and `PLAN_READINESS_VIEWED`.
+- **Track B Prompt 2** shipped: note-detail readiness rollup plus the Free-gate signal/detail split.
+
+Scope:
+
+- **Track A:** publish/create metadata decouple (frontend); recommended-plans section on `/collections` (frontend, reuse the Dashboard component). _(shipped on `feature/study-plan-publish-discovery-polish`)_
+- **Track B (two Codex prompts):** ① backend plan-readiness aggregation (over ConceptHealth scoped to a collection's notes) + the plan sub-route + the shared `ReadinessSummary` component; ② per-note rollup on note detail + the Free-gate signal/detail split. Multi-system — Codex prompts, then Claude audits the diff before commit.
+
+Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI, matches `/me/progress`); the Progress-separation reversal is scoped to the dedicated sub-route and recorded in `collections.md`; the Free-gate is an access change, not a billing/quota/price/checkout change; discovery is course/program-scoped; Track A must not weaken publish validation; no new chart library. Out of scope / deferred: **dashboard + plan-list readiness badges (signal reach) → v0.34.0**; teacher bulk-quiz & teacher-flow polish (v0.34.0 candidate, gated on teacher users); live-link / shared-progress plans (different architecture — belongs with teacher-flow).
+
+---
+
+## v0.33.1 (candidate, polish) - Study Plan polish
+
+Small, frontend-only UX-clarity follow-ups to v0.33.0. No data-model or backend change.
+
+**Section drag refinement.** v0.33.0 added label-derived **sections (modules)** to Study Plan detail (grouping = the item `label`, order = the global `position`). Because a single drag context spans all sections, drag-and-drop has two confusing (non-destructive) behaviors: dragging an item across a section boundary does **not** reassign its section (the `label` wins on regroup), and dragging an item to the top can reorder the **sections** themselves via min-position. Move up/down and within-section reorder are correct; this is a UX-clarity polish, not a correctness fix. Candidate fix: scope drag-and-drop **per section** (a `SortableContext` per section so an item only reorders within its own section), or disable cross-section drag while sections are active. Reassigning a section stays the explicit **Section** control; section display order stays min-position-derived.
+
+**Recommended card already-owned state.** The `/collections` Recommended section can show a re-adopt CTA for a plan the learner already has. Adopted copies are already handled (the CTA reads "Continue this plan" via a `sourcePlanId` match); the gap is the **owned-source** case — an admin/curator viewing their *own published* plan sees "Start this plan", which would self-adopt a redundant copy. Fix: do not offer a re-adopt CTA for a plan the user already owns or adopted (detect owned-source, not just adopted). For a discovery surface, **filtering out** already-owned plans (falling back to the existing "no curated plans yet" empty state) is conceptually cleaner than a dead badged card; an "In your library" badge + "Open" CTA is an acceptable alternative. Correctness (no self-adopt) matters more than the presentation choice.
+
+Anti-drift: sections stay label-derived (no section entity, no nested/umbrella plans); no mastery/readiness on rows or headers (execution rows keep their no-mastery rule); no backend change.
+
+---
+
+## Next-priority candidate - Curated Plan Coverage → "Journey" (guided goal-completion)
+
+Theme: post-v0.33.0, the readiness *lever* shipped but a validation pull (2026-06, see `docs/product/journey-validation-pulls.md`) showed the **plan-adoption retention bet was never actually testable** — only **4 total adoptions across ~153 users, exactly 1 goal (Accountancy) with a ready adoptable plan, and 0 post-adopt returns** (n far too small to read as a retention verdict). The binding constraint is **curated-plan coverage, not architecture.** This candidate is sequenced **coverage-first**, with the "Journey" repositioning gated behind it. Likely precedes the teacher-gated v0.34.0 below (still no teacher cohort).
+
+**Phase 1 — Curated plan coverage (the actual next bet).**
+- Run the follow-up inventory query (in `journey-validation-pulls.md`): does seeded public *note* content exist for your real top goals (it just isn't assembled into plans) → cheap **assembly/curation ops**; or is there little content → a **seeding** job (Bulk Generation) first.
+- Target: ≥1 complete, credible, Study-Pack-ready curated plan for each of the goals your **actual** public learners have (let the inventory tell you where they are — do not assume ALE/PNLE/LET).
+- This is content/curation work, not new architecture. No new endpoint, model, or AI synthesis.
+
+**Phase 2 — "Journey" repositioning (gated: only after Phase 1 + non-trivial adoption, e.g. ≥20–30 adoptions across covered goals, so Pull 1 becomes a real retention test).** The goal-first reframe of pieces **already shipped** — adopt (`STUDY_PLAN_ADOPTED`), the Not-started/In-progress/Completed badge, and v0.33.0 readiness — into one cohesive guided experience. Locked direction (decided with Claude, 2026-06):
+- **Curation-match, never AI synthesis.** "NoteLib chooses the notes" = an admin-curated plan *matched* to the learner's goal/course-program (the v0.31.0 adopt path), **not** an algorithm assembling a per-user plan. The latter trips the standing "Curation, never generation" rule and is explicitly out.
+- **Composition, not a rewrite.** Journey is repositioning shipped parts, not a new model/endpoint/pipeline.
+- **Unify readiness onto Progress — one surface, not two (decided 2026-06, post-sign-off concern).** Today there are two readiness surfaces: global `/me/progress` (no plan scope) and the plan readiness sub-route (`/collections/[id]/readiness`, scoped to one plan). They look redundant at low coverage / single-plan accounts, but the **plan scope is the whole value** and Progress can't express it today. Journey's resolution: give Progress a **per-plan/goal lens**, and make plan readiness *that lens* (a deep-link into scoped Progress) rather than a separate page — one readiness surface. Do **not** do the cheap version (redirect "Check readiness" → global Progress): it regresses the scoping. This subsumes the plan readiness sub-route into Progress; it does not delete the global view.
+- **Monetization is mid-journey, not at completion.** Adopt stays free (locked). The conversion moment is goal-commitment + exam-date urgency + premium walls hit *during* the journey (Board Exam mode, practice volume) — not a "finish → subscribe" reward (finishing for free gives no reason to pay; free-quota-hit is 0.0%).
+- **Retention pull = goal-gradient (a defined finish line), not streaks.** Legitimate, pressure-free, and distinct from the banned streak/guilt mechanics. Still depends on an external return trigger (the re-engagement email / exam deadline) to bring users back to *see* the bar move.
+- **Mastery principle (settled 2026-06):** mastery stays **per-study-pack**; **no reset**; readiness stays honest; do **not** engineer concept-name mastery transfer across adopted duplicates (a stronger note is a new pack with a clean slate; recency decay is the soft reset). The per-pack vs concept-global choice surfaces here — answer is per-pack (honest).
+
+Anti-drift: no AI curriculum synthesis; no third readiness surface (Journey subsumes plan-readiness into a Progress lens); adopt stays free; no streaks; curated-match only; mastery stays per-pack. Validation gate: re-run `journey-validation-pulls.md` Pull 1 once adoption is non-trivial before committing to the Phase 2 build.
 
 ---
 
@@ -317,9 +409,9 @@ Anti-drift: reuse the existing reminder-preference pattern (entity flag + reposi
 
 ---
 
-## v0.33.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+## v0.34.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
-Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
+Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.33.0, before that v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. (v0.33.0 was repurposed for the Study Plans retention work above.) **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 
 Locked direction:
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CollectionDetailPageClient } from "./collection-detail-page-client";
 import {
   addCollectionItems,
@@ -159,8 +159,8 @@ describe("CollectionDetailPageClient", () => {
   it("renders collection items in persisted order", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [
-        { ...collection().items[0], position: 1 },
-        { ...collection().items[1], position: 0 },
+        { ...collection().items[0], label: null, position: 1 },
+        { ...collection().items[1], label: null, position: 0 },
       ],
     }));
 
@@ -170,6 +170,71 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/collections/collection-1/readiness");
+  });
+
+  it("renders labeled items under section headers ordered by first item position", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "  General Education  ", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Assessment", label: "Professional Education", position: 2 },
+        { ...collection().items[0], noteId: "note-3", title: "Teaching Methods", label: "Professional Education", position: 1 },
+      ],
+      progress: {
+        totalNotes: 3,
+        notesWithStudyPack: 1,
+        notesPracticed: 1,
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const notesCard = await screen.findByText("3 notes in saved order.");
+    const notesRegion = notesCard.closest("div")?.parentElement?.parentElement;
+    expect(notesRegion).not.toBeNull();
+    const regionText = notesRegion?.textContent ?? "";
+    expect(regionText.indexOf("General Education")).toBeLessThan(regionText.indexOf("Professional Education"));
+    expect(regionText.indexOf("Teaching Methods")).toBeLessThan(regionText.indexOf("Assessment"));
+
+    expect(screen.getByRole("heading", { level: 3, name: "General Education" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Professional Education" })).toBeInTheDocument();
+    expect(within(screen.getByRole("heading", { level: 3, name: "Professional Education" }).parentElement!).getByText("2 notes")).toBeInTheDocument();
+  });
+
+  it("renders null and empty labels in an Ungrouped section after named sections", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Early Ungrouped", label: " ", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Named Module", label: "Major Specialization", position: 1 },
+        { ...collection().items[0], noteId: "note-3", title: "Null Ungrouped", label: null, position: 2 },
+      ],
+      progress: {
+        totalNotes: 3,
+        notesWithStudyPack: 1,
+        notesPracticed: 1,
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const namedHeader = await screen.findByRole("heading", { level: 3, name: "Major Specialization" });
+    const ungroupedHeader = screen.getByRole("heading", { level: 3, name: "Ungrouped" });
+    expect(Boolean(namedHeader.compareDocumentPosition(ungroupedHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByRole("heading", { level: 2, name: "Early Ungrouped" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Null Ungrouped" })).toBeInTheDocument();
+  });
+
+  it("renders the flat list without section headers when no item has a label", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({ ...item, label: null })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Cell Respiration" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Dosage Calculations" })).toBeInTheDocument();
+    expect(screen.queryAllByTestId("collection-section-heading")).toHaveLength(0);
+    expect(screen.queryByRole("heading", { name: "Ungrouped" })).not.toBeInTheDocument();
   });
 
   it("shows three-state per-note execution status and drops the study-pack/quiz readiness hint", async () => {
@@ -575,6 +640,25 @@ describe("CollectionDetailPageClient", () => {
     expect(updateNoteVisibility).not.toHaveBeenCalledWith("note-2", "PUBLIC");
   });
 
+  it("offers a standalone Save action so course/program persists when publishing is blocked", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET" }));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { ...note("note-1", "Cell Respiration"), visibility: "PRIVATE" },
+      { ...note("note-2", "Dosage Calculations"), visibility: "PUBLIC" },
+    ]);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
+
+    // Publishing is blocked by the private note, but metadata save is decoupled: a standalone
+    // Save action remains so the course/program is never discarded just because publish can't proceed.
+    expect(await screen.findByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  });
+
   it("reorders by move button using the full ordered set", async () => {
     const reordered = collection({
       items: [
@@ -595,6 +679,61 @@ describe("CollectionDetailPageClient", () => {
         { noteId: "note-1", label: "Week 1" },
       ]);
     });
+  });
+
+  it("assigns a section through the existing order endpoint without changing other labels", async () => {
+    const flatCollection = collection({
+      items: collection().items.map((item) => ({ ...item, label: null })),
+    });
+    const savedCollection = collection({
+      items: [
+        { ...collection().items[0], label: null, position: 0 },
+        { ...collection().items[1], label: "Professional Education", position: 1 },
+      ],
+    });
+    (getCollection as jest.Mock).mockResolvedValue(flatCollection);
+    (setCollectionItemOrder as jest.Mock).mockResolvedValue(savedCollection);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    const sectionInputs = screen.getAllByLabelText("Section");
+    fireEvent.change(sectionInputs[1], { target: { value: "Professional Education" } });
+    fireEvent.blur(sectionInputs[1]);
+
+    await waitFor(() => {
+      expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
+        { noteId: "note-1", label: null },
+        { noteId: "note-2", label: "Professional Education" },
+      ]);
+    });
+    expect(await screen.findByRole("heading", { level: 3, name: "Professional Education" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Ungrouped" })).toBeInTheDocument();
+  });
+
+  it("clears a section assignment back to Ungrouped through the order endpoint", async () => {
+    const savedCollection = collection({
+      items: [
+        { ...collection().items[0], label: null, position: 0 },
+        { ...collection().items[1], label: null, position: 1 },
+      ],
+    });
+    (setCollectionItemOrder as jest.Mock).mockResolvedValue(savedCollection);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    const sectionInputs = screen.getAllByLabelText("Section");
+    fireEvent.change(sectionInputs[0], { target: { value: "" } });
+    fireEvent.blur(sectionInputs[0]);
+
+    await waitFor(() => {
+      expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
+        { noteId: "note-1", label: null },
+        { noteId: "note-2", label: null },
+      ]);
+    });
+    expect(screen.queryAllByTestId("collection-section-heading")).toHaveLength(0);
   });
 
   it("removes a collection item", async () => {
@@ -646,6 +785,27 @@ describe("CollectionDetailPageClient", () => {
 
     await waitFor(() => {
       expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3"]);
+    });
+  });
+
+  it("selects all available notes from the picker with select-all", async () => {
+    (listNotes as jest.Mock).mockResolvedValue([
+      note("note-1", "Hidden Existing Note"),
+      note("note-3", "Chemistry Notes"),
+      note("note-4", "Biology Notes"),
+    ]);
+    (addCollectionItems as jest.Mock).mockResolvedValue(collection());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add notes" }));
+    await screen.findByText("Chemistry Notes");
+
+    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add selected" }));
+
+    await waitFor(() => {
+      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3", "note-4"]);
     });
   });
 

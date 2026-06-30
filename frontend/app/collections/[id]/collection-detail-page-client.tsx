@@ -12,7 +12,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
+import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
@@ -52,12 +52,62 @@ type NextPlanAction = {
   actionLabel: "Generate Study Pack" | "Study this note" | "Review due concepts";
   description: string;
 };
+type CollectionItemSection = {
+  id: string;
+  name: string;
+  items: NoteCollectionItem[];
+};
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
+const UNGROUPED_SECTION_NAME = "Ungrouped";
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
+}
+
+function normalizeSectionName(label: string | null | undefined): string {
+  return label?.trim() ?? "";
+}
+
+function getCollectionItemSections(items: NoteCollectionItem[]): { hasSections: boolean; sections: CollectionItemSection[]; sectionNames: string[] } {
+  const groupedSections = new Map<string, CollectionItemSection>();
+  const ungroupedItems: NoteCollectionItem[] = [];
+
+  sortCollectionItemsByPosition(items).forEach((item) => {
+    const sectionName = normalizeSectionName(item.label);
+    if (!sectionName) {
+      ungroupedItems.push(item);
+      return;
+    }
+
+    const existingSection = groupedSections.get(sectionName);
+    if (existingSection) {
+      existingSection.items.push(item);
+      return;
+    }
+
+    groupedSections.set(sectionName, {
+      id: `section:${sectionName}`,
+      name: sectionName,
+      items: [item],
+    });
+  });
+
+  const sections = Array.from(groupedSections.values());
+  if (ungroupedItems.length > 0) {
+    sections.push({
+      id: "section:ungrouped",
+      name: UNGROUPED_SECTION_NAME,
+      items: ungroupedItems,
+    });
+  }
+
+  return {
+    hasSections: groupedSections.size > 0,
+    sections,
+    sectionNames: Array.from(groupedSections.keys()),
+  };
 }
 
 function getNoteTitle(item: Pick<NoteCollectionItem, "title" | "noteId">): string {
@@ -407,6 +457,20 @@ function AddNotesModal({
     });
   };
 
+  const allVisibleSelected = availableNotes.length > 0 && availableNotes.every((note) => selectedIds.has(note.id));
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (allVisibleSelected) {
+        availableNotes.forEach((note) => next.delete(note.id));
+      } else {
+        availableNotes.forEach((note) => next.add(note.id));
+      }
+      return next;
+    });
+  };
+
   const handleAdd = async () => {
     const noteIds = Array.from(selectedIds);
     if (noteIds.length === 0) {
@@ -461,6 +525,18 @@ function AddNotesModal({
         ) : null}
         {!loading && !error && hasAnyAvailableNotes && availableNotes.length === 0 ? (
           <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">No matching notes found.</p>
+        ) : null}
+        {!loading && !error && availableNotes.length > 0 ? (
+          <div className="flex items-center justify-between px-1">
+            <button
+              type="button"
+              onClick={toggleSelectAllVisible}
+              className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {allVisibleSelected ? "Deselect all" : `Select all${query.trim() ? " matching" : ""} (${availableNotes.length})`}
+            </button>
+            <span className="text-xs text-foreground/50">{selectedIds.size} selected</span>
+          </div>
         ) : null}
         <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
           {availableNotes.map((note) => (
@@ -562,15 +638,17 @@ function PublishStudyPlanModal({
   };
 
   const handlePublish = async () => {
+    // Persist the course/program first so a blocked publish never discards what the user typed.
+    // Saving metadata is decoupled from publishing: the field is kept even when the plan can't go public yet.
+    if (courseProgramDirty && !(await persistCourseProgram())) {
+      return;
+    }
     if (!trimmedCourseProgram) {
       setError("Add a course/program so matching learners can find this plan.");
       return;
     }
     if (blockedByPrivateNotes) {
-      setError("Make every note public before publishing this plan.");
-      return;
-    }
-    if (courseProgramDirty && !(await persistCourseProgram())) {
+      setError("Course/program saved. Make every note public before publishing this plan.");
       return;
     }
     setTogglingVisibility(true);
@@ -629,9 +707,14 @@ function PublishStudyPlanModal({
               </Button>
             </>
           ) : (
-            <Button type="button" loading={savingCourseProgram || togglingVisibility} loadingText="Publishing..." disabled={busy || blockedByPrivateNotes} onClick={() => void handlePublish()}>
-              Publish
-            </Button>
+            <>
+              <Button type="button" variant="outline" loading={savingCourseProgram && !togglingVisibility} loadingText="Saving..." disabled={busy || !courseProgramDirty} onClick={() => void persistCourseProgram()}>
+                Save
+              </Button>
+              <Button type="button" loading={togglingVisibility} loadingText="Publishing..." disabled={busy || blockedByPrivateNotes} onClick={() => void handlePublish()}>
+                Publish
+              </Button>
+            </>
           )}
         </div>
       )}
@@ -702,6 +785,7 @@ function SortableCollectionItemRow({
   collectionId,
   showWeakAreas,
   isPrivate,
+  sectionNames,
   onMove,
   onRemove,
   onLabelChange,
@@ -713,6 +797,7 @@ function SortableCollectionItemRow({
   collectionId: string;
   showWeakAreas: boolean;
   isPrivate: boolean;
+  sectionNames: string[];
   onMove: (noteId: string, direction: "up" | "down") => void;
   onRemove: (noteId: string) => void;
   onLabelChange: (noteId: string, label: string) => void;
@@ -724,10 +809,12 @@ function SortableCollectionItemRow({
   };
 
   const [labelValue, setLabelValue] = useState(item.label ?? "");
+  const sectionOptionsId = `section-options-${item.noteId}`;
 
   const commitLabel = () => {
-    if ((item.label ?? "") !== labelValue.trim()) {
-      onLabelChange(item.noteId, labelValue.trim());
+    const nextLabel = normalizeSectionName(labelValue);
+    if (normalizeSectionName(item.label) !== nextLabel) {
+      onLabelChange(item.noteId, nextLabel);
     }
   };
 
@@ -776,10 +863,12 @@ function SortableCollectionItemRow({
               ) : null}
             </div>
           ) : null}
-          <label className="block space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Label</span>
+          <label className="block space-y-1.5" htmlFor={`section-${item.noteId}`}>
+            <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Section</span>
             <input
+              id={`section-${item.noteId}`}
               value={labelValue}
+              list={sectionOptionsId}
               maxLength={LABEL_MAX_LENGTH}
               disabled={disabled}
               onChange={(event) => setLabelValue(event.target.value)}
@@ -789,9 +878,14 @@ function SortableCollectionItemRow({
                   event.currentTarget.blur();
                 }
               }}
-              placeholder="Week, topic, or section"
+              placeholder="Choose or type a section"
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
+            <datalist id={sectionOptionsId}>
+              {sectionNames.map((sectionName) => (
+                <option key={sectionName} value={sectionName} />
+              ))}
+            </datalist>
           </label>
         </div>
 
@@ -1034,6 +1128,18 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     [isAdmin, items, noteVisibility],
   );
   const itemIds = useMemo(() => items.map((item) => item.noteId), [items]);
+  const itemIndexById = useMemo(
+    () => new Map(items.map((item, index) => [item.noteId, index])),
+    [items],
+  );
+  const { hasSections, sections: itemSections, sectionNames } = useMemo(
+    () => getCollectionItemSections(items),
+    [items],
+  );
+  const sortableItemIds = useMemo(
+    () => (hasSections ? itemSections.flatMap((section) => section.items.map((item) => item.noteId)) : itemIds),
+    [hasSections, itemIds, itemSections],
+  );
   const quizReadyNoteIds = useMemo(
     () => getCollectionQuizReadyNoteIds(items),
     [items],
@@ -1164,6 +1270,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         ) : undefined}
         actions={(
           <div className="flex items-center justify-end gap-2">
+            <ResponsiveActionLink
+              href={`/collections/${collectionId}/readiness`}
+              action="progress"
+              label="Check readiness"
+              variant="outline"
+              size="sm"
+            />
             <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
@@ -1285,24 +1398,58 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-              <ol className="space-y-3">
-                {items.map((item, index) => (
-                  <SortableCollectionItemRow
-                    key={`${item.noteId}:${item.label ?? ""}`}
-                    item={item}
-                    index={index}
-                    itemCount={items.length}
-                    disabled={mutationInProgress}
-                    collectionId={collectionId}
-                    showWeakAreas={showWeakAreas}
-                    isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
-                    onMove={handleMove}
-                    onRemove={(noteId) => void handleRemove(noteId)}
-                    onLabelChange={handleLabelChange}
-                  />
-                ))}
-              </ol>
+            <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
+              {hasSections ? (
+                <div className="space-y-5">
+                  {itemSections.map((section) => (
+                    <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+                        <h3 data-testid="collection-section-heading" className="text-sm font-semibold text-foreground">{section.name}</h3>
+                        <span className="text-xs font-medium text-foreground/55">
+                          {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+                        </span>
+                      </div>
+                      <ol className="space-y-3">
+                        {section.items.map((item) => (
+                          <SortableCollectionItemRow
+                            key={`${item.noteId}:${item.label ?? ""}`}
+                            item={item}
+                            index={itemIndexById.get(item.noteId) ?? 0}
+                            itemCount={items.length}
+                            disabled={mutationInProgress}
+                            collectionId={collectionId}
+                            showWeakAreas={showWeakAreas}
+                            isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                            sectionNames={sectionNames}
+                            onMove={handleMove}
+                            onRemove={(noteId) => void handleRemove(noteId)}
+                            onLabelChange={handleLabelChange}
+                          />
+                        ))}
+                      </ol>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <ol className="space-y-3">
+                  {items.map((item, index) => (
+                    <SortableCollectionItemRow
+                      key={`${item.noteId}:${item.label ?? ""}`}
+                      item={item}
+                      index={index}
+                      itemCount={items.length}
+                      disabled={mutationInProgress}
+                      collectionId={collectionId}
+                      showWeakAreas={showWeakAreas}
+                      isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                      sectionNames={sectionNames}
+                      onMove={handleMove}
+                      onRemove={(noteId) => void handleRemove(noteId)}
+                      onLabelChange={handleLabelChange}
+                    />
+                  ))}
+                </ol>
+              )}
             </SortableContext>
           </DndContext>
         )}

@@ -262,6 +262,18 @@ export type ProgressReportResponse = {
   profileType?: ProfileType | null;
 };
 
+export type PlanReadinessResponse = {
+  collectionId: string;
+  totalNotes: number;
+  notesWithStudyPack: number;
+  overallReadinessPercentage: number;
+  totalConcepts: number;
+  masteredConcepts: number;
+  dueConcepts: number;
+  notPracticedConcepts: number;
+  subjects: SubjectProgressEntry[];
+};
+
 export type DashboardConceptInsightResponse = {
   conceptName: string;
   accuracyPercentage: number;
@@ -352,6 +364,7 @@ export type AnalyticsEventType =
   | "NOTES_BULK_IMPORTED"
   | "COLLECTION_CREATED"
   | "STUDY_PLAN_ADOPTED"
+  | "PLAN_READINESS_VIEWED"
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"
@@ -882,6 +895,7 @@ export type AdaptivePracticeCompleteRequest = {
 
 export type ConceptHealthEntry = {
   concept: string;
+  readinessStatus?: "MASTERED" | "DUE" | "NOT_STARTED";
   lastCorrectAt: string | null;
   lastIncorrectAt: string | null;
   isStruggling: boolean;
@@ -3697,6 +3711,18 @@ export async function getCollection(id: string): Promise<NoteCollectionDetail> {
     true,
   );
   return parseApiResponse<NoteCollectionDetail>(response, "Could not load this collection.");
+}
+
+export async function getPlanReadiness(id: string): Promise<PlanReadinessResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/readiness`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<PlanReadinessResponse>(response, "Could not load plan readiness.");
 }
 
 export async function updateCollection(

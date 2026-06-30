@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.32.2` (in progress); previous: `v0.32.1 - Monetization Surfacing & Pricing Clarity`
+- `v0.33.0 - Study Plans as a Retention Engine` (in progress); previous: `v0.32.2 - Conversion Diagnosis & Quota Honesty`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -132,6 +132,24 @@ Use these skills before writing prompts, before starting new features, and after
 - Study Pack usage increments only after a successful Study Pack is persisted.
 - Saving a note, opening generation surfaces, failed generations, and failed retries must not consume Study Pack quota.
 - Frontend warning/blocking surfaces should use `GET /api/me/plan` remaining values and must not recalculate quota from local note lists.
+
+### Study Plan Readiness Rule
+
+- Plan readiness is allowed only on the dedicated owner-scoped route `/collections/[id]/readiness` backed by `GET /collections/{id}/readiness`.
+- The endpoint must resolve the collection exactly like `NoteCollectionService.get(collectionId, userId)`: missing, malformed, public-source, or not-owned plans return `CollectionNotFoundException` / `404`.
+- Plan readiness must reuse `ProgressReportService` ConceptHealth classification and `masteryPercentage`; do not invent thresholds, persist readiness fields, add generated content, or call AI/LLM.
+- Collection detail execution rows, collection list cards, published-plan cards, and public source plans must keep the no-mastery rule: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing there.
+- Frontend readiness displays should reuse the shared `ReadinessSummary` component and vocabulary: `ready`, `mastered`, `due`, `not started`.
+- The readiness sub-route fires `PLAN_READINESS_VIEWED` once after a successful load.
+
+### Note Readiness Signal Rule
+
+- Private Note Detail may show a compact per-note readiness signal for owned notes with a ready Study Pack and key concepts.
+- The note signal must reuse the shared `ReadinessSummary` component and the same readiness vocabulary as Plan Readiness and My Progress.
+- The note readiness signal is available to Free users: `% ready`, `X/Y mastered`, due count, not-started count, and per-concept readiness status.
+- Per-concept review timing remains PLUS/PRO only: `daysSinceReview`, timestamp-backed timing fields, and `Due - Nd ago` style copy must not be exposed to Free.
+- This Free-gate split is a deliberate access/value-ladder change only. Do not change prices, quotas, pass durations, checkout behavior, generated content, AI calls, or persisted readiness fields.
+- Concept-health load failures must not hide or wipe note content; show a neutral readiness-unavailable state instead.
 
 ### Note Target Audience Rule
 
@@ -1510,7 +1528,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.32.2`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.33.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

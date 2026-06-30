@@ -49,7 +49,20 @@ Each item stores:
 - `position`
 - `createdAt`
 
-Item labels are neutral backend data. The Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
+Item labels are neutral backend data. The Study Plan detail page uses them as frontend-only section/module names, and the Teacher Exam Builder frontend uses them as initial section/week/topic names, but the backend does not interpret them.
+
+For Study Plan detail sections, there is no separate section entity or nested-plan model:
+
+- `position` is the single source of truth for item order.
+- trimmed, non-empty `label` is the single source of truth for grouping.
+- labels are user-defined free text, not course/program, subject, learner level, audience, or taxonomy data.
+- a section is the set of items sharing the same case-sensitive trimmed non-empty label.
+- section display order follows the minimum `position` among the section's items.
+- items within a section stay in `position` order.
+- null or empty labels belong to a trailing **Ungrouped** bucket.
+- when no item in the plan has a label, detail renders the existing flat ordered list with no section headers.
+
+Sections are strictly sections within one plan. Do not add parent/child collections, collection-of-collections, umbrella plans, or independently adoptable sub-plans for this behavior.
 
 ## Profile-Aware Terminal Actions
 
@@ -215,6 +228,38 @@ Collection detail items also expose a read-only weak-area signal from the existi
 - Free users and notes without a Study Pack receive `0` and an empty list. Lookup failures also degrade to empty weak-area data without failing collection detail.
 - The backend remains profile-agnostic and does not branch on `ProfileType`.
 
+### Get Collection Readiness
+
+`GET /collections/{id}/readiness`
+
+Returns owner-scoped readiness for the authenticated user's own collection only. Missing, malformed, or not-owned ids return `CollectionNotFoundException` / `404`; public source plans are not served to non-owners through this endpoint.
+
+Response:
+
+- `collectionId`
+- `totalNotes`
+- `notesWithStudyPack`
+- `overallReadinessPercentage`
+- `totalConcepts`
+- `masteredConcepts`
+- `dueConcepts`
+- `notPracticedConcepts`
+- `subjects: SubjectProgressEntry[]`
+
+Aggregation rules:
+
+- Start from the collection's ordered notes, then load their owned Study Packs.
+- Notes without a Study Pack count toward `totalNotes` only.
+- `notesWithStudyPack` counts notes in the plan that have an owned Study Pack.
+- Only Study Packs with key concepts contribute concepts.
+- Subjects use the Study Pack subject; null or blank subjects group under `Other`.
+- Per-subject entries and overall counts reuse `ProgressReportService` concept classification and `masteryPercentage`, so plan readiness matches `/me/progress` for the same concept set.
+- `overallReadinessPercentage = round(masteredConcepts * 100 / totalConcepts)`, or `0` when `totalConcepts == 0`.
+- Empty plans, plans with notes but no Study Packs, and never-practiced Study Packs are valid `200` responses, not errors.
+- No new persisted readiness field, generated content, quota category, AI call, trend, snapshot, or batch/progress infrastructure is added.
+
+This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, scoped to the dedicated readiness detail route only. Collection detail execution rows, collection list cards, published-plan cards, and public source plans must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
+
 ### Update Metadata
 
 `PATCH /collections/{id}`
@@ -246,6 +291,8 @@ Behavior:
 - invalid publish attempts return `CollectionNotPublishableException` / `400`
 - unpublishing to `PRIVATE` is allowed
 - returns full detail
+
+**Metadata save is decoupled from publishing (v0.33.0).** Course/program and description persist through `updateMetadata` (`PATCH /collections/{id}`) independently of the publish action, so a blocked publish never discards what the admin typed. In the publish modal (`PublishStudyPlanModal`): `handlePublish` persists a dirty course/program **before** the private-notes/empty gate, and the unpublished state exposes a standalone **Save** action (in addition to Publish) so course/program can be saved without attempting to publish. Publish validation itself is unchanged — every note public + at least one note, enforced on the backend. Do not re-couple these; the decouple is deliberate (it fixed silent course/program loss on a failed publish).
 
 ### Public Plan List
 
@@ -359,7 +406,7 @@ Behavior:
 The core Collections UI ships as the universal organization surface:
 
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
-- `/collections/[id]` shows one collection, its ordered note items, item labels, and a per-note execution-status hint.
+- `/collections/[id]` shows one collection, its ordered note items, label-derived sections when present, and a per-note execution-status hint.
 - The per-note hint is a learner practice signal, not exam-readiness: `Needs Study Pack` (no `STUDY_PACK_READY` pack yet) → `Not started` (pack ready, `lastSessionCompletedAt == null`) → `Practiced` (`lastSessionCompletedAt != null`), with transient `Generating` / `Generation failed` states preserved for operational feedback. It deliberately does **not** show `Study Pack ready` / `Quiz ready` (the prior hint): plan-level Study Pack readiness already lives in the Progress rollup, and exam-eligibility (quiz-readiness) is surfaced on the Exam Builder, not here.
 - `/collections/[id]` header actions: `Edit` and `Delete` live in a single `⋯` context menu (short labels, mirroring Note Detail); the teacher terminal action (`Build Exam`) sits at the bottom-left of the header card via the `PageHeader` `footer` slot, not crammed into the action row. Admin status is read reactively (SSR-safe).
 - Admins see a published/private **status badge that is itself the publish control** (Notion-style): it sits **below the title** (mirroring Note Detail's visibility control), and clicking it (`aria-label="Publish settings"`, gear affordance) opens the publish modal. There is no separate `Publish settings` menu item or `Share` button. The boilerplate header description is omitted when the plan has no author-written description.
@@ -368,6 +415,8 @@ The core Collections UI ships as the universal organization surface:
 - `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
 - Entitled users see per-note due-concept counts and up to 3 concept names. Free users see no fabricated counts and may see one plan-aware upgrade affordance resolved through `getUpgradeCtas(currentPlan)`.
 - A frontend-only `Next in this plan` card derives one action from the already-returned ordered items. It never calls a recommendation endpoint or persists recommendation state.
+- When at least one item has a trimmed non-empty `label`, `/collections/[id]` groups the notes under section headers (`section name + item count`). Section order follows the first/minimum `position` in each section, items stay in `position` order within each section, and null/empty labels render under a trailing **Ungrouped** section. When no item has a label, the page renders the existing flat list unchanged with no section headers.
+- Section headers and item rows are execution organization only. They must not show readiness, mastery percentages, subject mastery, milestones, goals, streaks, weakest-subject routing, or progress bars; readiness remains on `/collections/[id]/readiness`.
 - The next-action phases are evaluated globally in this order, choosing the first matching note in saved order within each phase:
   1. First note without `STUDY_PACK_READY` -> `Generate Study Pack`.
   2. When all Study Packs are ready, first note with no completed practice -> `Study this note`.
@@ -391,7 +440,18 @@ The Dashboard card surfaces only the top matching published plan, so publishing 
 - `courseProgram` and `profileType` come from `getMe()`; labels resolve through `getCollectionLabels`. It is reached via the `See all N {plural}` link on the Dashboard card (shown only when 2+ plans match).
 - States: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. `BackLink` returns to the Dashboard.
 
-The Study Plan remains an execution surface for one curated, ordered set. It does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on collection detail.
+**Recommended plans also surface on the user's own Study Plans page (`/collections`) (v0.33.0).** The same Dashboard "Recommended {singular}" section (`DashboardStudyPlanSection`) is reused below the user's own plans — course/program-scoped, with the same `See all N {plural}` link to `/collections/published`. It is **not** tabs, and it stays scoped to the learner's own course/program (an all-programs browse is the Public Library's job for *notes*). `/collections` fetches `courseProgram` via `getMe()` and reads `profileType` from `getAuthUser()`. `/collections` passes `browseWhenEmpty` so that when the learner's course/program has no curated plan yet it renders an honest "No curated {plural} for {program} yet" empty state instead of nothing; the Dashboard omits the prop and still self-hides when no plan matches. No browse link is shown in the empty state — `/collections/published` is course/program-scoped and would be empty too, so coverage (seeding curated plans per program), not UI, is the gating constraint.
+
+The Study Plan remains an execution surface for one curated, ordered set. Collection detail itself does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on the execution-detail rows.
+
+The v0.33.0 exception is the dedicated readiness sub-route:
+
+- `/collections/[id]/readiness` is reached from a "Check readiness" CTA on `/collections/[id]`.
+- It uses profile-aware naming from `getCollectionLabels` for the header and back link.
+- It renders the shared `ReadinessSummary` component: overall ready percentage, mastered/due/not-started counts, and per-subject readiness bars.
+- It shows `{notesWithStudyPack} of {totalNotes} notes have Study Packs` and cross-links to `/progress`.
+- It distinguishes `404` not-found/not-owned from transient load failures with retry.
+- It fires `PLAN_READINESS_VIEWED` once on successful load.
 
 | Profile | Singular | Plural / nav |
 |---|---|---|
@@ -405,9 +465,9 @@ Do not hardcode those profile-specific names in page or component code. Componen
 Core UI behavior:
 
 - The app shell shows the profile-aware Collections nav item directly after Library.
-- `/collections` uses the authenticated page header pattern and opens a create modal with title max length `150`.
+- `/collections` uses the authenticated page header pattern and opens a create modal with a title (max length `150`) and an optional description field. The Library selection-mode create modal (split-button `{singular}`) also collects an optional description (v0.33.0) — both create paths now carry description through `createCollection`, so a plan built from a Library selection is no longer title-only.
 - `/collections/[id]` uses `BackLink href="/collections"` with the profile-aware plural label.
-- Item labels are editable text inputs with max length `120`.
+- Item labels are edited as per-item **Section** assignment controls with max length `120`: users can choose an existing section name from the current plan, type a new free-text section, or clear the value to return the item to Ungrouped. The control still persists through `PUT /collections/{id}/items/order`; no new mutation, DTO field, endpoint, taxonomy, or backend interpretation is added.
 - Reorder uses drag-and-drop plus `Move up` / `Move down` buttons for accessibility.
 - Reorder/relabel persists through `PUT /collections/{id}/items/order` with the full ordered item set.
 - The in-detail note picker uses the user's own notes from the Library note-list API and excludes notes already in the collection.
@@ -418,7 +478,7 @@ Core UI behavior:
 
 The shipped Prompt B integrations make collections useful from both entry points:
 
-- The Library header is a split button: primary `New Note` plus a caret menu (`Note` / `Import files` / `{singular}`). There is no standalone `Select` button. Choosing `{singular}` enters Library **selection mode** — filter and multi-select notes, then `Create {singular}` (a title modal → `createCollection`); creating with zero notes (an empty plan) is allowed. This is the universal way to create a plan, leveraging the Library's filters; the Study Plan detail's "Add notes" picker still handles adding notes to an *existing* plan.
+- The Library header is a split button: primary `New Note` plus a caret menu (`Note` / `Import files` / `{singular}`). There is no standalone `Select` button. Choosing `{singular}` enters Library **selection mode** — filter and multi-select notes, then `Create {singular}` (a title modal → `createCollection`); creating with zero notes (an empty plan) is allowed. This is the universal way to create a plan, leveraging the Library's filters; the Study Plan detail's "Add notes" picker still handles adding notes to an *existing* plan. Both surfaces offer a **Select all / Deselect all** toggle scoped to the active search/filter (v0.33.0): the Library selects all notes matching the current filters (including those beyond the first display page, since the filtered set is fully computed client-side), and the detail "Add notes" picker selects all eligible notes matching the search (notes already in the plan stay excluded). Deselect-all only clears the currently-filtered set, so selections made under a different filter persist.
 - Teachers reach `Build exam` (Exam Builder) from the same selection — both `Create {singular}` and `Build exam` act on the selected notes; no separate Select entry.
 - Library selection accepts any owned note, including `DRAFT` notes without a generated quiz. Quiz readiness is not a plan membership requirement (it is only required for `Build exam`).
 - The Library teacher-only `Build exam` action remains gated to Teacher/Admin exam workflows. If the selection mixes ready and non-ready notes, the action proceeds with the selected note IDs and the Exam Builder filters to quiz-ready notes; if zero selected notes are quiz-ready, the action is disabled with recovery copy.

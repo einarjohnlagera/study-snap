@@ -842,6 +842,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getConceptHealth as jest.Mock).mockResolvedValue([
       {
         concept: "Cells",
+        readinessStatus: "DUE",
         lastCorrectAt: "2026-03-20T10:00:00Z",
         lastIncorrectAt: "2026-03-21T10:00:00Z",
         isStruggling: true,
@@ -850,6 +851,7 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       {
         concept: "Genetics",
+        readinessStatus: "MASTERED",
         lastCorrectAt: "2026-03-21T10:00:00Z",
         lastIncorrectAt: "2026-03-20T10:00:00Z",
         isStruggling: false,
@@ -867,6 +869,156 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(await screen.findByText("Needs work")).toBeInTheDocument();
     expect(screen.getByText("Due — 1d ago")).toBeInTheDocument();
+  });
+
+  it("shows note readiness signal to Free while keeping review timing gated", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells", "Genetics", "Evolution"],
+      generatedQuiz: null,
+    });
+    (getConceptHealth as jest.Mock).mockResolvedValue([
+      {
+        concept: "Cells",
+        readinessStatus: "MASTERED",
+        lastCorrectAt: null,
+        lastIncorrectAt: null,
+        isStruggling: false,
+        isDue: false,
+        daysSinceReview: null,
+      },
+      {
+        concept: "Genetics",
+        readinessStatus: "DUE",
+        lastCorrectAt: null,
+        lastIncorrectAt: null,
+        isStruggling: false,
+        isDue: true,
+        daysSinceReview: null,
+      },
+      {
+        concept: "Evolution",
+        readinessStatus: "NOT_STARTED",
+        lastCorrectAt: null,
+        lastIncorrectAt: null,
+        isStruggling: false,
+        isDue: true,
+        daysSinceReview: null,
+      },
+    ]);
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Note readiness")).toBeInTheDocument();
+    expect(screen.getByText((content) => (
+      content.includes("33% ready") && content.includes("1/3 mastered") && content.includes("1 due")
+    ))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Mastered")).toBeInTheDocument();
+    expect(screen.getByText("Due")).toBeInTheDocument();
+    expect(screen.getByText("Not started")).toBeInTheDocument();
+    expect(screen.queryByText(/Due — \d+d ago/)).not.toBeInTheDocument();
+    expect(screen.getByText("Review timing for 1 due concept is available on Plus and Pro.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toBeInTheDocument();
+  });
+
+  it("derives readiness from isDue when readinessStatus is absent", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells", "Genetics", "Evolution"],
+      generatedQuiz: null,
+    });
+    // readinessStatus omitted — the fallback must key off the never-redacted isDue
+    // flag. A not-due concept is reliably MASTERED even when lastCorrectAt is redacted
+    // to null (Free); timing present disambiguates DUE; the doubly-degenerate
+    // due+redacted case conservatively falls back to NOT_STARTED.
+    (getConceptHealth as jest.Mock).mockResolvedValue([
+      {
+        concept: "Cells",
+        lastCorrectAt: null,
+        lastIncorrectAt: null,
+        isStruggling: false,
+        isDue: false,
+        daysSinceReview: null,
+      },
+      {
+        concept: "Genetics",
+        lastCorrectAt: "2026-05-01T09:00:00Z",
+        lastIncorrectAt: null,
+        isStruggling: false,
+        isDue: true,
+        daysSinceReview: null,
+      },
+      {
+        concept: "Evolution",
+        lastCorrectAt: null,
+        lastIncorrectAt: null,
+        isStruggling: false,
+        isDue: true,
+        daysSinceReview: null,
+      },
+    ]);
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Note readiness")).toBeInTheDocument();
+    // Cells (not due) → mastered rather than collapsing to not started; Genetics
+    // (due + timing present) → due; Evolution (due + redacted) → not started.
+    expect(screen.getByText((content) => (
+      content.includes("33% ready") && content.includes("1/3 mastered") && content.includes("1 due")
+    ))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Mastered")).toBeInTheDocument();
+    expect(screen.getByText("Due")).toBeInTheDocument();
+    expect(screen.getByText("Not started")).toBeInTheDocument();
+  });
+
+  it("keeps note content visible when note readiness cannot load", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+    (getConceptHealth as jest.Mock).mockRejectedValue(new Error("network"));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Generated summary")).toBeInTheDocument();
+    expect(await screen.findByText("Readiness is unavailable right now. Your note content is still available.")).toBeInTheDocument();
   });
 
   it("keeps Target Level out of non-teacher note detail", async () => {

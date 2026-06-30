@@ -102,9 +102,25 @@ public class ProgressReportService {
         );
     }
 
+    public List<SubjectProgressEntry> buildSubjectProgressEntries(
+            List<StudyPackEntity> studyPacks,
+            UUID userId,
+            OffsetDateTime now
+    ) {
+        return groupQualifyingPacksBySubject(studyPacks).entrySet().stream()
+                .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
+                .filter(Objects::nonNull)
+                .sorted(subjectProgressComparator())
+                .toList();
+    }
+
     private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(UUID userId) {
+        return groupQualifyingPacksBySubject(studyPackRepository.findByOwnerUserId(userId));
+    }
+
+    private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(List<StudyPackEntity> studyPacks) {
         Map<String, List<StudyPackEntity>> packsBySubject = new LinkedHashMap<>();
-        for (StudyPackEntity studyPack : studyPackRepository.findByOwnerUserId(userId)) {
+        for (StudyPackEntity studyPack : studyPacks) {
             if (!hasKeyConcepts(studyPack)) {
                 continue;
             }
