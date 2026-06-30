@@ -85,6 +85,16 @@ Anti-drift: readiness reuses ConceptHealth (no new signal/field/AI, matches `/me
 
 ---
 
+## v0.33.1 (candidate, polish) - Study Plan section drag refinement
+
+Theme: v0.33.0 added label-derived **sections (modules)** to Study Plan detail (grouping = the item `label`, order = the global `position`). Because a single drag context spans all sections, drag-and-drop has two confusing (non-destructive) behaviors: dragging an item across a section boundary does **not** reassign its section (the `label` wins on regroup), and dragging an item to the top can reorder the **sections** themselves via min-position. Move up/down and within-section reorder are correct; this is a UX-clarity polish, not a correctness fix.
+
+Candidate fix (frontend-only, no data-model change): scope drag-and-drop **per section** (a `SortableContext` per section so an item only reorders within its own section), or disable cross-section drag while sections are active. Reassigning a section stays the explicit **Section** control; section display order stays min-position-derived.
+
+Anti-drift: sections stay label-derived (no section entity, no nested/umbrella plans); no mastery/readiness on rows or headers (execution rows keep their no-mastery rule); no backend change.
+
+---
+
 ## v0.29.0 - Bulk Generation & Generation-Context Correctness (released)
 
 Base branch for this release: `releases/v0.29.0`.
