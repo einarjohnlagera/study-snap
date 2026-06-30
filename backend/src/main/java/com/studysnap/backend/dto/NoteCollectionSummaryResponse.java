@@ -10,7 +10,9 @@ public record NoteCollectionSummaryResponse(
         String visibility,
         String courseProgram,
         UUID sourcePlanId,
+        UUID parentCollectionId,
         int itemCount,
+        int childCount,
         int notesPracticed,
         Instant createdAt,
         Instant updatedAt

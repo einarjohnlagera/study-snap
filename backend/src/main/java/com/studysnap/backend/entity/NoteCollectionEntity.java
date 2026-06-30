@@ -42,6 +42,9 @@ public class NoteCollectionEntity {
     @Column(name = "source_plan_id")
     private UUID sourcePlanId;
 
+    @Column(name = "parent_collection_id")
+    private UUID parentCollectionId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
