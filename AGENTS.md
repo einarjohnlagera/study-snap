@@ -142,6 +142,15 @@ Use these skills before writing prompts, before starting new features, and after
 - Frontend readiness displays should reuse the shared `ReadinessSummary` component and vocabulary: `ready`, `mastered`, `due`, `not started`.
 - The readiness sub-route fires `PLAN_READINESS_VIEWED` once after a successful load.
 
+### Study Plan Hierarchy Rule
+
+- Study Plan nesting is constrained to exactly two collection levels: top-level Goal collections may contain child Subject plans, and Subject plans may contain note items and label-derived sections.
+- The only hierarchy storage is nullable `note_collections.parent_collection_id`; deleting a Goal must set child `parent_collection_id` to null rather than cascading child collections.
+- Backend hierarchy logic must stay profile-neutral. Goal/Subject wording is frontend-only through `getCollectionLabels`; services and API contracts must not branch on `ProfileType`.
+- Set/clear parent must be owner-scoped and enforce: parent exists and is owned by the caller, parent is top-level, child is not self, and child has no children.
+- Goal readiness is derived from child readiness counts only: `round(100 × Σ child.masteredConcepts / Σ child.totalConcepts)`, or `0` when total is `0`. Do not re-run concept classification over merged Goal notes, persist readiness, add thresholds, or call AI.
+- Deeper nesting, recursive Goal adoption, direct note items on Goals, and per-module readiness remain out of scope unless explicitly introduced by a future release rule.
+
 ### Note Readiness Signal Rule
 
 - Private Note Detail may show a compact per-note readiness signal for owned notes with a ready Study Pack and key concepts.

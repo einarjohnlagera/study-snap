@@ -80,6 +80,13 @@ function formatItemCount(count: number): string {
   return `${count} ${count === 1 ? "note" : "notes"}`;
 }
 
+function formatCollectionScope(collection: NoteCollectionSummary): string {
+  if (collection.childCount > 0) {
+    return `${collection.childCount} ${collection.childCount === 1 ? "plan" : "plans"}`;
+  }
+  return formatItemCount(collection.itemCount);
+}
+
 function CollectionSkeletonGrid() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Loading collections">
@@ -280,8 +287,8 @@ export function CollectionsPageClient() {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span>{formatItemCount(collection.itemCount)}</span>
-                    <CollectionExecutionStatusBadge collection={collection} />
+                    <span>{formatCollectionScope(collection)}</span>
+                    {collection.childCount === 0 ? <CollectionExecutionStatusBadge collection={collection} /> : null}
                   </div>
                   <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>
                 </div>

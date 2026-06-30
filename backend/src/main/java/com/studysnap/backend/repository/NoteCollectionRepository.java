@@ -15,6 +15,10 @@ import java.util.UUID;
 public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEntity, UUID> {
     List<NoteCollectionEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
 
+    List<NoteCollectionEntity> findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(UUID ownerUserId);
+
+    List<NoteCollectionEntity> findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(UUID parentCollectionId, UUID ownerUserId);
+
     List<NoteCollectionEntity> findByOwnerUserId(UUID ownerUserId);
 
     void deleteByOwnerUserId(UUID ownerUserId);
@@ -31,6 +35,16 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
     );
 
     Optional<NoteCollectionEntity> findByOwnerUserIdAndSourcePlanId(UUID ownerUserId, UUID sourcePlanId);
+
+    long countByParentCollectionId(UUID parentCollectionId);
+
+    @Query("""
+            select collection.parentCollectionId as collectionId, count(collection.id) as childCount
+            from NoteCollectionEntity collection
+            where collection.parentCollectionId in :collectionIds
+            group by collection.parentCollectionId
+            """)
+    List<NoteCollectionChildCountProjection> countChildrenByCollectionIds(@Param("collectionIds") List<UUID> collectionIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

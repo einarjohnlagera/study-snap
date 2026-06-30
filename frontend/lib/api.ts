@@ -274,6 +274,38 @@ export type PlanReadinessResponse = {
   subjects: SubjectProgressEntry[];
 };
 
+export type GoalCollectionChildResponse = {
+  collectionId: string;
+  title: string;
+  description: string | null;
+  itemCount: number;
+  overallReadinessPercentage: number;
+  masteredConcepts: number;
+  dueConcepts: number;
+  notPracticedConcepts: number;
+  totalConcepts: number;
+};
+
+export type GoalCollectionDetailResponse = {
+  collectionId: string;
+  title: string;
+  description: string | null;
+  visibility: "PRIVATE" | "PUBLIC";
+  courseProgram: string | null;
+  sourcePlanId: string | null;
+  parentCollectionId: string | null;
+  itemCount: number;
+  childCount: number;
+  overallReadinessPercentage: number;
+  masteredConcepts: number;
+  dueConcepts: number;
+  notPracticedConcepts: number;
+  totalConcepts: number;
+  createdAt: string;
+  updatedAt: string;
+  children: GoalCollectionChildResponse[];
+};
+
 export type DashboardConceptInsightResponse = {
   conceptName: string;
   accuracyPercentage: number;
@@ -1341,7 +1373,9 @@ export type NoteCollectionSummary = {
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
   sourcePlanId: string | null;
+  parentCollectionId: string | null;
   itemCount: number;
+  childCount: number;
   notesPracticed: number;
   createdAt: string;
   updatedAt: string;
@@ -1375,6 +1409,8 @@ export type NoteCollectionDetail = {
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
   sourcePlanId: string | null;
+  parentCollectionId: string | null;
+  childCount: number;
   createdAt: string;
   updatedAt: string;
   progress: NoteCollectionProgress;
@@ -3723,6 +3759,31 @@ export async function getPlanReadiness(id: string): Promise<PlanReadinessRespons
     true,
   );
   return parseApiResponse<PlanReadinessResponse>(response, "Could not load plan readiness.");
+}
+
+export async function getCollectionGoal(id: string): Promise<GoalCollectionDetailResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/goal`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<GoalCollectionDetailResponse>(response, "Could not load goal details.");
+}
+
+export async function setCollectionParent(id: string, parentId: string | null): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/parent`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ parentId }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not update collection nesting.");
 }
 
 export async function updateCollection(

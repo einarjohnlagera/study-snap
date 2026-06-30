@@ -61,7 +61,9 @@ describe("CollectionsPage", () => {
         visibility: "PRIVATE",
         courseProgram: null,
         sourcePlanId: null,
+        parentCollectionId: null,
         itemCount: 2,
+        childCount: 0,
         notesPracticed: 0,
         createdAt: "2026-06-01T00:00:00Z",
         updatedAt: "2026-06-02T00:00:00Z",
@@ -104,6 +106,17 @@ describe("CollectionsPage", () => {
     render(<CollectionsPage />);
 
     expect(await screen.findByText("Completed")).toBeInTheDocument();
+  });
+
+  it("shows child plan count for a goal card", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ itemCount: 0, childCount: 3 }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    expect(await screen.findByText("3 plans")).toBeInTheDocument();
+    expect(screen.queryByText("Not started")).not.toBeInTheDocument();
   });
 
   it("shows Not started for an empty plan", async () => {
@@ -149,8 +162,15 @@ describe("CollectionsPage", () => {
       visibility: "PRIVATE",
       courseProgram: null,
       sourcePlanId: null,
+      parentCollectionId: null,
+      childCount: 0,
       createdAt: "2026-06-01T00:00:00Z",
       updatedAt: "2026-06-01T00:00:00Z",
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
       items: [],
     });
 
@@ -173,6 +193,7 @@ function buildCollectionSummary(overrides: Partial<{
   title: string;
   description: string | null;
   itemCount: number;
+  childCount: number;
   notesPracticed: number;
 }> = {}) {
   return {
@@ -182,7 +203,9 @@ function buildCollectionSummary(overrides: Partial<{
     visibility: "PRIVATE" as const,
     courseProgram: null,
     sourcePlanId: null,
+    parentCollectionId: null,
     itemCount: overrides.itemCount ?? 2,
+    childCount: overrides.childCount ?? 0,
     notesPracticed: overrides.notesPracticed ?? 0,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",

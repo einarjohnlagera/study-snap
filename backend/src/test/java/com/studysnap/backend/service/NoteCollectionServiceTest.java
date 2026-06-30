@@ -3,10 +3,13 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
+import com.studysnap.backend.dto.GoalCollectionChildResponse;
+import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
@@ -27,6 +30,7 @@ import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
@@ -250,9 +254,12 @@ class NoteCollectionServiceTest {
         UUID olderNoteId = UUID.randomUUID();
         NoteCollectionEntity newer = buildCollection(UUID.randomUUID(), userId, NEWER_COLLECTION_TITLE, Instant.parse("2026-04-02T00:00:00Z"));
         NoteCollectionEntity older = buildCollection(UUID.randomUUID(), userId, EARLIER_COLLECTION_TITLE, Instant.parse(BASE_TIMESTAMP));
-        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(newer, older));
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(List.of(newer, older));
         when(itemRepository.countItemsByCollectionIds(List.of(newer.getId(), older.getId())))
                 .thenReturn(List.of(countProjection(newer.getId(), 2), countProjection(older.getId(), 1)));
+        when(collectionRepository.countChildrenByCollectionIds(List.of(newer.getId(), older.getId())))
+                .thenReturn(List.of(childCountProjection(newer.getId(), 3)));
         when(itemRepository.findNoteIdsByCollectionIds(List.of(newer.getId(), older.getId())))
                 .thenReturn(List.of(
                         noteProjection(newer.getId(), newerNoteId),
@@ -266,8 +273,9 @@ class NoteCollectionServiceTest {
         assertThat(result).extracting(NoteCollectionSummaryResponse::title)
                 .containsExactly(NEWER_COLLECTION_TITLE, EARLIER_COLLECTION_TITLE);
         assertThat(result).extracting(NoteCollectionSummaryResponse::itemCount).containsExactly(2, 1);
+        assertThat(result).extracting(NoteCollectionSummaryResponse::childCount).containsExactly(3, 0);
         assertThat(result).extracting(NoteCollectionSummaryResponse::notesPracticed).containsExactly(1, 0);
-        verify(collectionRepository).findByOwnerUserIdOrderByUpdatedAtDesc(userId);
+        verify(collectionRepository).findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId);
         ArgumentCaptor<List<UUID>> noteIdsCaptor = ArgumentCaptor.forClass(List.class);
         verify(quizSessionHistoryService, times(1))
                 .findLatestSessionCompletedAtByNoteIds(eq(userId), noteIdsCaptor.capture());
@@ -295,7 +303,8 @@ class NoteCollectionServiceTest {
                 completedFirstNoteId,
                 completedSecondNoteId
         );
-        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(collections);
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(collections);
         when(itemRepository.countItemsByCollectionIds(collectionIds)).thenReturn(List.of(
                 countProjection(notStarted.getId(), 1),
                 countProjection(inProgress.getId(), 2),
@@ -328,7 +337,8 @@ class NoteCollectionServiceTest {
     void list_skipsPracticeLookupWhenEveryCollectionIsEmpty() {
         UUID userId = UUID.randomUUID();
         NoteCollectionEntity empty = buildCollection(UUID.randomUUID(), userId, "Empty", Instant.parse(BASE_TIMESTAMP));
-        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(empty));
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(List.of(empty));
         when(itemRepository.countItemsByCollectionIds(List.of(empty.getId()))).thenReturn(List.of());
         when(itemRepository.findNoteIdsByCollectionIds(List.of(empty.getId()))).thenReturn(List.of());
 
@@ -344,7 +354,8 @@ class NoteCollectionServiceTest {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteCollectionEntity collection = buildCollection(UUID.randomUUID(), userId, COLLECTION_TITLE, Instant.parse(BASE_TIMESTAMP));
-        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(collection));
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(List.of(collection));
         when(itemRepository.countItemsByCollectionIds(List.of(collection.getId())))
                 .thenReturn(List.of(countProjection(collection.getId(), 1)));
         when(itemRepository.findNoteIdsByCollectionIds(List.of(collection.getId())))
@@ -535,6 +546,188 @@ class NoteCollectionServiceTest {
         assertThat(result.overallReadinessPercentage()).isZero();
         assertThat(result.subjects()).isEmpty();
         verify(progressReportService, never()).buildSubjectProgressEntries(anyList(), any(), any());
+    }
+
+    @Test
+    void updateParent_setsParentWhenParentIsTopLevelAndChildHasNoChildren() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(parentId)
+        );
+
+        assertThat(child.getParentCollectionId()).isEqualTo(parentId);
+        assertThat(result.parentCollectionId()).isEqualTo(parentId);
+    }
+
+    @Test
+    void updateParent_clearsParentIdempotently() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(parentId);
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(null)
+        );
+
+        assertThat(child.getParentCollectionId()).isNull();
+        assertThat(result.parentCollectionId()).isNull();
+    }
+
+    @Test
+    void updateParent_rejectsSelfParent() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        assertThatThrownBy(() -> service.updateParent(
+                collectionId,
+                userId,
+                new SetNoteCollectionParentRequest(collectionId)
+        )).isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("A collection cannot be nested under itself.");
+    }
+
+    @Test
+    void updateParent_rejectsParentThatIsNotTopLevel() {
+        UUID userId = UUID.randomUUID();
+        UUID grandParentId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "Child Goal", Instant.now());
+        parent.setParentCollectionId(grandParentId);
+        NoteCollectionEntity child = buildCollection(childId, userId, "Subject", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+
+        assertThatThrownBy(() -> service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(parentId)
+        )).isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("A collection can only be nested under a top-level goal.");
+    }
+
+    @Test
+    void updateParent_rejectsChildThatAlreadyHasChildren() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(childId)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(parentId)
+        )).isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("A collection with child plans cannot be nested under another goal.");
+    }
+
+    @Test
+    void updateParent_rejectsParentOwnedByAnotherUserAsNotFound() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(parentId)
+        )).isInstanceOf(CollectionNotFoundException.class);
+    }
+
+    @Test
+    void getGoal_rollsUpChildReadinessBySummedCountsWithoutMergedConceptDeduplication() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, userId, "Professional Education", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, userId, "General Education", Instant.now());
+        firstChild.setParentCollectionId(goalId);
+        secondChild.setParentCollectionId(goalId);
+        StudyPackEntity firstPack = buildStudyPack(firstNoteId, List.of("Assessment", "Rubrics"));
+        firstPack.setOwnerUserId(userId);
+        StudyPackEntity secondPack = buildStudyPack(secondNoteId, List.of("Assessment", "Foundations"));
+        secondPack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(goalId, userId))
+                .thenReturn(List.of(firstChild, secondChild));
+        when(itemRepository.countItemsByCollectionIds(List.of(firstChildId, secondChildId))).thenReturn(List.of(
+                countProjection(firstChildId, 1),
+                countProjection(secondChildId, 1)
+        ));
+        when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
+        when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId))
+                .thenReturn(List.of(buildItem(firstChildId, firstNoteId, 0, null)));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId))
+                .thenReturn(List.of(buildItem(secondChildId, secondNoteId, 0, null)));
+        when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId))).thenReturn(List.of(firstPack));
+        when(studyPackRepository.findByNoteIdIn(List.of(secondNoteId))).thenReturn(List.of(secondPack));
+        when(progressReportService.buildSubjectProgressEntries(eq(List.of(firstPack)), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(List.of(new SubjectProgressEntry("Professional Education", 2, 1, 1, 0, 50)));
+        when(progressReportService.buildSubjectProgressEntries(eq(List.of(secondPack)), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(List.of(new SubjectProgressEntry("General Education", 2, 1, 0, 1, 50)));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.childCount()).isEqualTo(2);
+        assertThat(result.totalConcepts()).isEqualTo(4);
+        assertThat(result.masteredConcepts()).isEqualTo(2);
+        assertThat(result.overallReadinessPercentage()).isEqualTo(50);
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::totalConcepts)
+                .containsExactly(2, 2);
+    }
+
+    @Test
+    void getGoal_returnsZeroShapeForEmptyGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.childCount()).isZero();
+        assertThat(result.totalConcepts()).isZero();
+        assertThat(result.overallReadinessPercentage()).isZero();
+        assertThat(result.children()).isEmpty();
     }
 
     @Test
@@ -1241,6 +1434,20 @@ class NoteCollectionServiceTest {
             @Override
             public long getItemCount() {
                 return itemCount;
+            }
+        };
+    }
+
+    private NoteCollectionChildCountProjection childCountProjection(UUID collectionId, long childCount) {
+        return new NoteCollectionChildCountProjection() {
+            @Override
+            public UUID getCollectionId() {
+                return collectionId;
+            }
+
+            @Override
+            public long getChildCount() {
+                return childCount;
             }
         };
     }

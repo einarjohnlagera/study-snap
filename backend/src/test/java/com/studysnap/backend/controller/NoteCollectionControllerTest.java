@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
@@ -61,7 +62,13 @@ class NoteCollectionControllerTest {
                 .getMethod("getReadiness", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
+                .getMethod("getGoal", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
                 .getMethod("updateMetadata", String.class, UpdateNoteCollectionRequest.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("updateParent", String.class, SetNoteCollectionParentRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("delete", String.class, AuthenticatedUser.class)
@@ -159,6 +166,20 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
+    void updateParent_delegatesParentRequest() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        SetNoteCollectionParentRequest request = new SetNoteCollectionParentRequest(UUID.randomUUID());
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.updateParent(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.updateParent(COLLECTION_ID, request, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).updateParent(UUID.fromString(COLLECTION_ID), user.userId(), request);
     }
 
     @Test
@@ -326,7 +347,9 @@ class NoteCollectionControllerTest {
                 CollectionVisibility.PRIVATE.name(),
                 null,
                 null,
+                null,
                 1,
+                0,
                 0,
                 now,
                 now
@@ -342,6 +365,8 @@ class NoteCollectionControllerTest {
                 CollectionVisibility.PRIVATE.name(),
                 null,
                 null,
+                null,
+                0,
                 now,
                 now,
                 new com.studysnap.backend.dto.NoteCollectionProgressResponse(0, 0, 0),

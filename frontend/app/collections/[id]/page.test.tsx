@@ -4,9 +4,12 @@ import {
   addCollectionItems,
   ApiRequestError,
   getCollection,
+  getCollectionGoal,
   listCoursePrograms,
+  listCollections,
   listNotes,
   removeCollectionItem,
+  setCollectionParent,
   setCollectionItemOrder,
   updateCollection,
   updateCollectionVisibility,
@@ -50,9 +53,12 @@ jest.mock("@/lib/api", () => {
     ApiRequestError,
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
+    getCollectionGoal: jest.fn(),
     listCoursePrograms: jest.fn(),
+    listCollections: jest.fn(),
     listNotes: jest.fn(),
     removeCollectionItem: jest.fn(),
+    setCollectionParent: jest.fn(),
     setCollectionItemOrder: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
@@ -68,6 +74,8 @@ function collection(overrides: Record<string, unknown> = {}) {
     visibility: "PRIVATE",
     courseProgram: null,
     sourcePlanId: null,
+    parentCollectionId: null,
+    childCount: 0,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
     progress: {
@@ -109,6 +117,52 @@ function collection(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function goalDetail(overrides: Record<string, unknown> = {}) {
+  return {
+    collectionId: "collection-1",
+    title: "LET Mastery",
+    description: "Full LET goal",
+    visibility: "PRIVATE",
+    courseProgram: null,
+    sourcePlanId: null,
+    parentCollectionId: null,
+    itemCount: 0,
+    childCount: 2,
+    overallReadinessPercentage: 45,
+    masteredConcepts: 9,
+    dueConcepts: 4,
+    notPracticedConcepts: 7,
+    totalConcepts: 20,
+    createdAt: "2026-06-01T00:00:00Z",
+    updatedAt: "2026-06-02T00:00:00Z",
+    children: [
+      {
+        collectionId: "child-1",
+        title: "Professional Education Mastery",
+        description: "Teaching foundations",
+        itemCount: 4,
+        overallReadinessPercentage: 50,
+        masteredConcepts: 5,
+        dueConcepts: 2,
+        notPracticedConcepts: 3,
+        totalConcepts: 10,
+      },
+      {
+        collectionId: "child-2",
+        title: "General Education Mastery",
+        description: null,
+        itemCount: 3,
+        overallReadinessPercentage: 40,
+        masteredConcepts: 4,
+        dueConcepts: 2,
+        notPracticedConcepts: 4,
+        totalConcepts: 10,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function note(id: string, title: string) {
   return {
     id,
@@ -142,18 +196,23 @@ describe("CollectionDetailPageClient", () => {
     replaceMock.mockReset();
     (addCollectionItems as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
+    (getCollectionGoal as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
+    (setCollectionParent as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (listCollections as jest.Mock).mockResolvedValue([]);
     (listNotes as jest.Mock).mockResolvedValue([]);
     (updateNoteVisibility as jest.Mock).mockResolvedValue(undefined);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
   });
 
   it("renders collection items in persisted order", async () => {
@@ -171,6 +230,76 @@ describe("CollectionDetailPageClient", () => {
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
     expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/collections/collection-1/readiness");
+  });
+
+  it("renders a goal view when the collection has children", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      description: "Full LET goal",
+      childCount: 2,
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("45% ready · 9/20 mastered · 4 due")).toBeInTheDocument();
+    expect(screen.getByText("Professional Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-1");
+    expect(screen.getByText("General Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-2");
+    expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
+  });
+
+  it("nests a childless plan under a selected goal", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "goal-1",
+        title: "LET Mastery",
+        description: null,
+        visibility: "PRIVATE",
+        courseProgram: null,
+        sourcePlanId: null,
+        parentCollectionId: null,
+        itemCount: 0,
+        childCount: 0,
+        notesPracticed: 0,
+        createdAt: "2026-06-01T00:00:00Z",
+        updatedAt: "2026-06-02T00:00:00Z",
+      },
+    ]);
+    (setCollectionParent as jest.Mock).mockResolvedValue(collection({ parentCollectionId: "goal-1" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Nest under a goal" }));
+    expect(await screen.findByRole("heading", { name: "Nest under a goal" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Nest" }));
+
+    await waitFor(() => {
+      expect(setCollectionParent).toHaveBeenCalledWith("collection-1", "goal-1");
+    });
+  });
+
+  it("unnests a nested plan", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ parentCollectionId: "goal-1" }));
+    (setCollectionParent as jest.Mock).mockResolvedValue(collection({ parentCollectionId: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unnest" }));
+
+    await waitFor(() => {
+      expect(setCollectionParent).toHaveBeenCalledWith("collection-1", null);
+    });
   });
 
   it("renders labeled items under section headers ordered by first item position", async () => {
