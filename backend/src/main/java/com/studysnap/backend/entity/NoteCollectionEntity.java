@@ -45,6 +45,9 @@ public class NoteCollectionEntity {
     @Column(name = "parent_collection_id")
     private UUID parentCollectionId;
 
+    @Column(name = "sibling_position")
+    private Integer siblingPosition;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

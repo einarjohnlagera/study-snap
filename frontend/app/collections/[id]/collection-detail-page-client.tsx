@@ -31,10 +31,8 @@ import {
   getCollection,
   getCollectionGoal,
   listCoursePrograms,
-  listCollections,
   listNotes,
   removeCollectionItem,
-  setCollectionParent,
   setCollectionItemOrder,
   updateCollection,
   updateCollectionVisibility,
@@ -42,7 +40,6 @@ import {
   type GoalCollectionDetailResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
-  type NoteCollectionSummary,
   type NoteListItemResponse,
   type NoteVisibility,
 } from "@/lib/api";
@@ -52,7 +49,7 @@ import { cn } from "@/lib/utils";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
-type MutationKind = "add" | "delete" | "edit" | "parent" | "publish" | "remove" | "reorder" | null;
+type MutationKind = "add" | "delete" | "edit" | "publish" | "remove" | "reorder" | null;
 type NextPlanAction = {
   item: NoteCollectionItem;
   actionLabel: "Generate Study Pack" | "Study this note" | "Review due concepts";
@@ -657,121 +654,6 @@ function AddNotesModal({
   );
 }
 
-function NestCollectionModal({
-  collection,
-  labels,
-  isOpen,
-  onClose,
-  onSaved,
-}: Readonly<{
-  collection: NoteCollectionDetail;
-  labels: ReturnType<typeof getCollectionLabels>;
-  isOpen: boolean;
-  onClose: () => void;
-  onSaved: (collection: NoteCollectionDetail) => void;
-}>) {
-  const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
-  const [selectedParentId, setSelectedParentId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setSelectedParentId("");
-      setError(null);
-      return;
-    }
-    let mounted = true;
-    setLoading(true);
-    setError(null);
-    void listCollections()
-      .then((result) => {
-        if (mounted) {
-          const candidates = result.filter((candidate) => (
-            candidate.id !== collection.id
-            && candidate.parentCollectionId === null
-            && candidate.itemCount === 0
-          ));
-          setCollections(candidates);
-          setSelectedParentId(candidates[0]?.id ?? "");
-        }
-      })
-      .catch((loadError) => {
-        if (mounted) {
-          setCollections([]);
-          setError(loadError instanceof Error ? loadError.message : `Could not load ${labels.goalSingular.toLowerCase()}s.`);
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [collection.id, isOpen, labels.goalSingular]);
-
-  const handleNest = async () => {
-    if (!selectedParentId) {
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const saved = await setCollectionParent(collection.id, selectedParentId);
-      onSaved(saved);
-      onClose();
-    } catch (nestError) {
-      setError(nestError instanceof Error ? nestError.message : "Could not nest this collection.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <AppModal
-      isOpen={isOpen}
-      title={`Nest under a ${labels.goalSingular.toLowerCase()}`}
-      description={`Choose the top-level ${labels.goalSingular.toLowerCase()} that should contain this ${labels.subjectSingular.toLowerCase()}.`}
-      onClose={onClose}
-      actions={(
-        <>
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="button" loading={submitting} loadingText="Saving..." disabled={!selectedParentId || loading} onClick={() => void handleNest()}>
-            Nest
-          </Button>
-        </>
-      )}
-    >
-      <div className="space-y-4">
-        {loading ? <p className="text-sm text-foreground/60">Loading {labels.goalSingular.toLowerCase()}s...</p> : null}
-        {!loading && collections.length === 0 ? (
-          <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">
-            Create an empty top-level {labels.singular.toLowerCase()} first, then use it as the {labels.goalSingular.toLowerCase()}.
-          </p>
-        ) : null}
-        {!loading && collections.length > 0 ? (
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-foreground">{labels.goalSingular}</span>
-            <select
-              value={selectedParentId}
-              onChange={(event) => setSelectedParentId(event.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            >
-              {collections.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>{candidate.title}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
-      </div>
-    </AppModal>
-  );
-}
-
 function PublishStudyPlanModal({
   collection,
   isOpen,
@@ -1138,7 +1020,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [nestOpen, setNestOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1361,21 +1242,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const handleUnnest = async () => {
-    setMutationKind("parent");
-    setMutationError(null);
-    try {
-      const saved = await setCollectionParent(collectionId, null);
-      setCollection(saved);
-      setGoalDetail(saved.childCount > 0 ? await getCollectionGoal(collectionId) : null);
-      setItems(sortCollectionItemsByPosition(saved.items));
-    } catch (error) {
-      setMutationError(error instanceof Error ? error.message : "Could not unnest this collection.");
-    } finally {
-      setMutationKind(null);
-    }
-  };
-
   const presentNoteIds = useMemo(() => new Set(items.map((item) => item.noteId)), [items]);
   const privateNoteIds = useMemo(
     () => (isAdmin ? items.filter((item) => noteVisibility.get(item.noteId) === "PRIVATE").map((item) => item.noteId) : []),
@@ -1515,44 +1381,53 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
             </button>
           ) : undefined}
-          actions={(
-            <div className="relative shrink-0" ref={actionsMenuRef}>
-              <Button
-                type="button"
+        actions={(
+            <div className="flex items-center justify-end gap-2">
+              <ResponsiveActionLink
+                href={`/collections/${collectionId}/builder`}
+                action="edit"
+                label="Build"
                 variant="outline"
                 size="sm"
-                className="h-10 w-10 rounded-full px-0"
-                aria-label="Open study plan actions"
-                aria-haspopup="menu"
-                aria-expanded={actionsMenuOpen}
-                onClick={() => setActionsMenuOpen((open) => !open)}
-              >
-                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-              </Button>
-              {actionsMenuOpen ? (
-                <div
-                  role="menu"
-                  aria-label="Study plan actions"
-                  className="motion-dropdown-panel absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+              />
+              <div className="relative shrink-0" ref={actionsMenuRef}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-10 rounded-full px-0"
+                  aria-label="Open study plan actions"
+                  aria-haspopup="menu"
+                  aria-expanded={actionsMenuOpen}
+                  onClick={() => setActionsMenuOpen((open) => !open)}
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                    onClick={() => { setActionsMenuOpen(false); setEditOpen(true); }}
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                {actionsMenuOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="Study plan actions"
+                    className="motion-dropdown-panel absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
                   >
-                    <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
-                    onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
-                  >
-                    <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
-                  </button>
-                </div>
-              ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => { setActionsMenuOpen(false); setEditOpen(true); }}
+                    >
+                      <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
+                      onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
+                    >
+                      <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           )}
         />
@@ -1648,6 +1523,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               variant="outline"
               size="sm"
             />
+            {collection.parentCollectionId === null && collection.childCount === 0 && items.length === 0 ? (
+              <ResponsiveActionLink
+                href={`/collections/${collectionId}/builder`}
+                action="edit"
+                label={`Build ${labels.goalSingular.toLowerCase()}`}
+                variant="outline"
+                size="sm"
+              />
+            ) : null}
             <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
@@ -1675,26 +1559,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   >
                     <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
                   </button>
-                  {collection.parentCollectionId ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      disabled={mutationKind === "parent"}
-                      onClick={() => { setActionsMenuOpen(false); void handleUnnest(); }}
-                    >
-                      Unnest
-                    </button>
-                  ) : collection.childCount === 0 ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => { setActionsMenuOpen(false); setNestOpen(true); }}
-                    >
-                      Nest under a {labels.goalSingular.toLowerCase()}
-                    </button>
-                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
@@ -1870,16 +1734,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         presentNoteIds={presentNoteIds}
         onClose={() => setAddOpen(false)}
         onAdd={handleAdd}
-      />
-      <NestCollectionModal
-        collection={collection}
-        labels={labels}
-        isOpen={nestOpen}
-        onClose={() => setNestOpen(false)}
-        onSaved={(saved) => {
-          setCollection(saved);
-          setItems(sortCollectionItemsByPosition(saved.items));
-        }}
       />
       {isAdmin ? (
         <PublishStudyPlanModal

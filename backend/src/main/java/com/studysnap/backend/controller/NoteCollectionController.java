@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
+import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.UpdateCollectionVisibilityRequest;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
@@ -124,6 +125,17 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.updateParent(collectionId, user.userId(), request);
+    }
+
+    @PutMapping("/{id}/children/order")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public GoalCollectionDetailResponse setChildrenOrder(
+            @PathVariable String id,
+            @RequestBody SetNoteCollectionChildrenOrderRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.setChildrenOrder(collectionId, user.userId(), request);
     }
 
     @PostMapping("/{id}/visibility")

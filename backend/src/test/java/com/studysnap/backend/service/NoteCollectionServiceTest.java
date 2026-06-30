@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
@@ -559,6 +560,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
         when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
+        when(collectionRepository.findMaxSiblingPosition(parentId, userId)).thenReturn(2);
         when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
 
@@ -569,6 +571,7 @@ class NoteCollectionServiceTest {
         );
 
         assertThat(child.getParentCollectionId()).isEqualTo(parentId);
+        assertThat(child.getSiblingPosition()).isEqualTo(3);
         assertThat(result.parentCollectionId()).isEqualTo(parentId);
     }
 
@@ -590,6 +593,7 @@ class NoteCollectionServiceTest {
         );
 
         assertThat(child.getParentCollectionId()).isNull();
+        assertThat(child.getSiblingPosition()).isNull();
         assertThat(result.parentCollectionId()).isNull();
     }
 
@@ -682,7 +686,7 @@ class NoteCollectionServiceTest {
         StudyPackEntity secondPack = buildStudyPack(secondNoteId, List.of("Assessment", "Foundations"));
         secondPack.setOwnerUserId(userId);
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
-        when(collectionRepository.findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(goalId, userId))
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of(firstChild, secondChild));
         when(itemRepository.countItemsByCollectionIds(List.of(firstChildId, secondChildId))).thenReturn(List.of(
                 countProjection(firstChildId, 1),
@@ -718,7 +722,7 @@ class NoteCollectionServiceTest {
         UUID goalId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
-        when(collectionRepository.findByParentCollectionIdAndOwnerUserIdOrderByUpdatedAtDesc(goalId, userId))
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of());
         when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
 
@@ -728,6 +732,95 @@ class NoteCollectionServiceTest {
         assertThat(result.totalConcepts()).isZero();
         assertThat(result.overallReadinessPercentage()).isZero();
         assertThat(result.children()).isEmpty();
+    }
+
+    @Test
+    void getGoal_returnsChildrenInSiblingPositionOrderFromRepository() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, userId, "First", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, userId, "Second", Instant.now());
+        firstChild.setParentCollectionId(goalId);
+        firstChild.setSiblingPosition(0);
+        secondChild.setParentCollectionId(goalId);
+        secondChild.setSiblingPosition(1);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(firstChild, secondChild));
+        when(itemRepository.countItemsByCollectionIds(List.of(firstChildId, secondChildId))).thenReturn(List.of());
+        when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
+        when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::collectionId)
+                .containsExactly(firstChildId, secondChildId);
+    }
+
+    @Test
+    void setChildrenOrder_reassignsSiblingPositionsAndReturnsGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, userId, "First", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, userId, "Second", Instant.now());
+        firstChild.setParentCollectionId(goalId);
+        firstChild.setSiblingPosition(0);
+        secondChild.setParentCollectionId(goalId);
+        secondChild.setSiblingPosition(1);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(firstChild, secondChild))
+                .thenReturn(List.of(secondChild, firstChild));
+        when(collectionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(goal)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.countItemsByCollectionIds(List.of(secondChildId, firstChildId))).thenReturn(List.of());
+        when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
+        when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId)).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+
+        GoalCollectionDetailResponse result = service.setChildrenOrder(
+                goalId,
+                userId,
+                new SetNoteCollectionChildrenOrderRequest(List.of(secondChildId, firstChildId))
+        );
+
+        assertThat(secondChild.getSiblingPosition()).isZero();
+        assertThat(firstChild.getSiblingPosition()).isEqualTo(1);
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::collectionId)
+                .containsExactly(secondChildId, firstChildId);
+    }
+
+    @Test
+    void setChildrenOrder_rejectsForeignOrMissingChildIds() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID foreignChildId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "First", Instant.now());
+        child.setParentCollectionId(goalId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+
+        assertThatThrownBy(() -> service.setChildrenOrder(
+                goalId,
+                userId,
+                new SetNoteCollectionChildrenOrderRequest(List.of(childId, foreignChildId))
+        )).isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("Child order must include exactly the current child plans.");
+        verify(collectionRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -1314,6 +1407,12 @@ class NoteCollectionServiceTest {
         Method addMethod = NoteCollectionService.class.getMethod("addItems", UUID.class, UUID.class, AddNoteCollectionItemsRequest.class);
         Method removeMethod = NoteCollectionService.class.getMethod("removeItem", UUID.class, UUID.class, UUID.class);
         Method orderMethod = NoteCollectionService.class.getMethod("setOrder", UUID.class, UUID.class, SetNoteCollectionOrderRequest.class);
+        Method childrenOrderMethod = NoteCollectionService.class.getMethod(
+                "setChildrenOrder",
+                UUID.class,
+                UUID.class,
+                SetNoteCollectionChildrenOrderRequest.class
+        );
 
         assertThat(createMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(updateMethod.getAnnotation(Transactional.class)).isNotNull();
@@ -1321,6 +1420,7 @@ class NoteCollectionServiceTest {
         assertThat(addMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(removeMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(orderMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(childrenOrderMethod.getAnnotation(Transactional.class)).isNotNull();
     }
 
     private void stubDetailItemLoad(UUID userId, List<UUID> noteIds, List<NoteEntity> notes) {

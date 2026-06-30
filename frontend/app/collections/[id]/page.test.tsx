@@ -6,10 +6,8 @@ import {
   getCollection,
   getCollectionGoal,
   listCoursePrograms,
-  listCollections,
   listNotes,
   removeCollectionItem,
-  setCollectionParent,
   setCollectionItemOrder,
   updateCollection,
   updateCollectionVisibility,
@@ -55,10 +53,8 @@ jest.mock("@/lib/api", () => {
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
     listCoursePrograms: jest.fn(),
-    listCollections: jest.fn(),
     listNotes: jest.fn(),
     removeCollectionItem: jest.fn(),
-    setCollectionParent: jest.fn(),
     setCollectionItemOrder: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
@@ -198,16 +194,13 @@ describe("CollectionDetailPageClient", () => {
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
-    (listCollections as jest.Mock).mockReset();
     (removeCollectionItem as jest.Mock).mockReset();
-    (setCollectionParent as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
-    (listCollections as jest.Mock).mockResolvedValue([]);
     (listNotes as jest.Mock).mockResolvedValue([]);
     (updateNoteVisibility as jest.Mock).mockResolvedValue(undefined);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
@@ -255,51 +248,22 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
   });
 
-  it("nests a childless plan under a selected goal", async () => {
-    (listCollections as jest.Mock).mockResolvedValue([
-      {
-        id: "goal-1",
-        title: "LET Mastery",
-        description: null,
-        visibility: "PRIVATE",
-        courseProgram: null,
-        sourcePlanId: null,
-        parentCollectionId: null,
-        itemCount: 0,
-        childCount: 0,
+  it("links an empty top-level plan to the goal builder instead of the old nest menu", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
         notesPracticed: 0,
-        createdAt: "2026-06-01T00:00:00Z",
-        updatedAt: "2026-06-02T00:00:00Z",
       },
-    ]);
-    (setCollectionParent as jest.Mock).mockResolvedValue(collection({ parentCollectionId: "goal-1" }));
+      items: [],
+    }));
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    expect(screen.getByRole("link", { name: "Build goal" })).toHaveAttribute("href", "/collections/collection-1/builder");
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Nest under a goal" }));
-    expect(await screen.findByRole("heading", { name: "Nest under a goal" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Nest" }));
-
-    await waitFor(() => {
-      expect(setCollectionParent).toHaveBeenCalledWith("collection-1", "goal-1");
-    });
-  });
-
-  it("unnests a nested plan", async () => {
-    (getCollection as jest.Mock).mockResolvedValue(collection({ parentCollectionId: "goal-1" }));
-    (setCollectionParent as jest.Mock).mockResolvedValue(collection({ parentCollectionId: null }));
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Unnest" }));
-
-    await waitFor(() => {
-      expect(setCollectionParent).toHaveBeenCalledWith("collection-1", null);
-    });
+    expect(screen.queryByRole("menuitem", { name: /Nest under|Unnest/ })).not.toBeInTheDocument();
   });
 
   it("renders labeled items under section headers ordered by first item position", async () => {

@@ -39,6 +39,7 @@ Fields:
 - optional `courseProgram`
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
+- optional `siblingPosition`, used only to order child Subject plans under the same Goal
 - ordered `items`
 - `createdAt`
 - `updatedAt`
@@ -71,10 +72,13 @@ Sections are strictly sections within one plan. They are not child collections, 
 Hierarchy storage:
 
 - `note_collections.parent_collection_id UUID NULL REFERENCES note_collections(id) ON DELETE SET NULL`
+- `note_collections.sibling_position INTEGER NULL`, scoped only to sibling Subject plans under the same `parent_collection_id`
 - indexed by `parent_collection_id`
+- indexed by `(parent_collection_id, sibling_position)` for the builder / Goal child order
 - `NULL` means top-level. A top-level collection with children is treated as a Goal by the frontend.
 - a non-null parent means the collection is a child Subject plan and can still hold note items and label-derived sections.
 - deleting a Goal leaves child Subject plans as standalone top-level plans (`ON DELETE SET NULL`), never cascade-deletes them.
+- when a child is nested under a Goal, it receives the next `siblingPosition` after the current siblings; clearing its parent clears `siblingPosition`.
 
 Hierarchy constraints:
 
@@ -84,6 +88,36 @@ Hierarchy constraints:
 - child must have no children of its own
 - the first implementation keeps Goals note-free: a collection must be empty before it can become a Goal, and a Goal cannot accept direct note items
 - these rules enforce the maximum two levels and make cycles impossible
+
+### Goal Builder Canvas
+
+The v0.33.1 builder turns hierarchy curation into one canvas:
+
+- Goal = canvas.
+- Subject plans = draggable, collapsible section blocks.
+- Notes = cards inside each Subject.
+
+The builder route is `/collections/{id}/builder`. It loads the authoritative Goal shape from `GET /collections/{id}/goal`, then loads each child Subject's notes through the existing collection detail endpoint. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
+
+The builder deliberately orchestrates existing collection endpoints:
+
+- add Subject plan = `POST /collections` to create an empty collection, then `PATCH /collections/{childId}/parent` to nest it under the Goal
+- rename Subject = `PATCH /collections/{childId}`
+- delete Subject = `DELETE /collections/{childId}`; notes are never deleted
+- add notes to a Subject = `POST /collections/{subjectId}/items`
+- reorder notes inside a Subject = `PUT /collections/{subjectId}/items/order`
+- move a note across Subjects = `DELETE /collections/{sourceSubjectId}/items/{noteId}` then `POST /collections/{targetSubjectId}/items`, followed by order save when needed
+
+The only new backend capability for the builder is sibling ordering for child Subject plans:
+
+- `PUT /collections/{id}/children/order`
+- request body: `{ "childIds": ["..."] }`
+- owner-scoped and transactional
+- the submitted ids must include exactly the current children of the Goal and every child must be owned by the caller
+- the service rewrites `siblingPosition` from `0..N-1`
+- `GET /collections/{id}/goal` returns children by `siblingPosition asc`, null positions last, with `updatedAt desc` as fallback
+
+Modules remain the existing per-note `label` / Section field inside a child Subject plan. The builder does not add a third drag level for modules, does not add module readiness, and does not reinterpret labels as hierarchy.
 
 ## Profile-Aware Terminal Actions
 
@@ -294,7 +328,7 @@ This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplica
 
 `GET /collections/{id}/goal`
 
-Returns owner-scoped Goal detail for the authenticated user's own collection. Missing, malformed, or not-owned ids return `CollectionNotFoundException` / `404`.
+Returns owner-scoped Goal detail for the authenticated user's own collection. Missing, malformed, or not-owned ids return `CollectionNotFoundException` / `404`. Children are returned in explicit sibling order (`siblingPosition asc`, nulls last, then `updatedAt desc` fallback).
 
 Response:
 
@@ -353,6 +387,23 @@ Behavior:
 - child that already has children returns `400`.
 - parent with direct note items returns `400`, because Phase 1 Goals are containers of Subject plans, not mixed note folders.
 - setting the current parent again is a safe no-op.
+
+### Reorder Goal Children
+
+`PUT /collections/{id}/children/order`
+
+Request:
+
+- `childIds`: ordered UUID list
+
+Behavior:
+
+- owner-scoped and transactional
+- validates the parent Goal belongs to the caller
+- validates the submitted ids include exactly the current child Subject plans of `{id}`
+- ids that are not children of the Goal or are not owned by the caller are rejected
+- rewrites child `siblingPosition` values from `0..N-1`
+- returns refreshed Goal detail
 
 ### Update Metadata
 
