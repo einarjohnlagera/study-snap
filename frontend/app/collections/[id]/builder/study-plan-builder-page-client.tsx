@@ -25,7 +25,6 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -1096,7 +1095,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       <PageHeader
         eyebrow={`${labels.goalSingular.toUpperCase()} BUILDER`}
         title={goal.title}
-        description={goal.description || `Organize ${labels.subjectSingular.toLowerCase()} plans and notes on one canvas.`}
+        description={goal.description || `Organize ${labels.subjectSingular.toLowerCase()}s and notes on one canvas.`}
         actions={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
@@ -1108,20 +1107,6 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             </Button>
           </div>
         )}
-      />
-
-      <ReadinessSummary
-        variant="compact"
-        title={`${goal.title} readiness`}
-        eyebrow={`${labels.goalSingular} readiness`}
-        overallReadinessPercentage={goal.overallReadinessPercentage}
-        totalConcepts={goal.totalConcepts}
-        masteredConcepts={goal.masteredConcepts}
-        dueConcepts={goal.dueConcepts}
-        notPracticedConcepts={goal.notPracticedConcepts}
-        subjects={[]}
-        emptyTitle="No readiness yet"
-        emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
       />
 
       {mutationError ? (
