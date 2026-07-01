@@ -65,6 +65,7 @@ type ActiveDrag =
   | { type: "subject"; subjectId: string; title: string }
   | { type: "note"; subjectId: string; noteId: string; title: string }
   | { type: "leaf-note"; noteId: string; title: string }
+  | { type: "leaf-section"; sectionName: string; title: string }
   | null;
 
 const TITLE_MAX_LENGTH = 150;
@@ -334,29 +335,6 @@ function SortableNoteCard({
   );
 }
 
-function LeafSectionDropzone({ sectionName, hidden }: Readonly<{ sectionName: string; hidden: boolean }>) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: getLeafSectionDropzoneId(sectionName),
-    data: { type: "leaf-section-dropzone", sectionName },
-    disabled: hidden,
-  });
-
-  if (hidden) {
-    return null;
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-center text-xs font-medium text-foreground/55",
-        isOver && "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-200",
-      )}
-    >
-      Drag notes here
-    </div>
-  );
-}
 
 function LeafSortableNoteCard({
   item,
@@ -496,6 +474,22 @@ function LeafSectionBlock({
   onRemove: (noteId: string) => void;
 }>) {
   const [nameValue, setNameValue] = useState(section.name);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({
+    id: section.id,
+    data: { type: "leaf-section", sectionName: section.name },
+    disabled,
+  });
+
+  const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
   const targetSections = allSections
     .map((candidate) => candidate.name)
     .filter((name) => name !== section.name);
@@ -510,9 +504,29 @@ function LeafSectionBlock({
   };
 
   return (
-    <section className="rounded-xl border border-border bg-surface-alt p-4 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1 space-y-2">
+    <section
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "rounded-xl border border-border bg-surface-alt p-4 shadow-sm",
+        DND_TRANSITION_CLASS,
+        isDragging && "scale-[1.006] border-dashed border-blue-400/80 opacity-45 shadow-lg",
+        isOver && activeDrag?.type === "leaf-note" && "border-blue-300 bg-blue-50/40 dark:bg-blue-950/20",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          aria-label={`Drag section ${section.name}`}
+          className="mt-0.5 inline-flex h-9 w-9 shrink-0 touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/60 hover:bg-highlight disabled:opacity-50"
+          disabled={disabled}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1 space-y-1">
           <input
             aria-label={`Section name ${section.name}`}
             value={nameValue}
@@ -525,7 +539,7 @@ function LeafSectionBlock({
                 event.currentTarget.blur();
               }
             }}
-            className="min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-foreground outline-none hover:border-border focus:border-blue-500 focus:bg-background focus:ring-2 focus:ring-blue-500/20"
+            className="min-w-0 w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-foreground outline-none hover:border-border focus:border-blue-500 focus:bg-background focus:ring-2 focus:ring-blue-500/20"
           />
           <p className="px-2 text-xs text-foreground/60">
             {section.items.length} {section.items.length === 1 ? "note" : "notes"}
@@ -534,7 +548,6 @@ function LeafSectionBlock({
       </div>
 
       <div className="mt-4 space-y-3">
-        <LeafSectionDropzone sectionName={section.name} hidden={section.items.length > 0} />
         {section.items.length > 0 ? (
           <SortableContext items={section.items.map((item) => getLeafNoteSortableId(item.noteId))} strategy={verticalListSortingStrategy}>
             <div className="space-y-3">
@@ -557,7 +570,10 @@ function LeafSectionBlock({
             </div>
           </SortableContext>
         ) : (
-          <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center">
+          <div className={cn(
+            "rounded-lg border border-dashed border-border px-4 py-5 text-center",
+            isOver && activeDrag?.type === "leaf-note" && "border-blue-400 bg-blue-50 dark:bg-blue-950/20",
+          )}>
             <p className="text-sm font-medium text-foreground">No notes in this section yet.</p>
             <p className="mt-1 text-xs text-foreground/60">Drag notes here from another section.</p>
           </div>
@@ -838,7 +854,7 @@ function AddNotesModal({
   onAdd,
 }: Readonly<{
   isOpen: boolean;
-  subject: BuilderSubject | null;
+  subject: { collectionId: string; items: NoteCollectionItem[]; title?: string } | null;
   notes: NoteListItemResponse[];
   submitting: boolean;
   onClose: () => void;
@@ -889,7 +905,7 @@ function AddNotesModal({
   return (
     <AppModal
       isOpen={isOpen}
-      title={subject ? `Add notes to ${subject.title}` : "Add notes"}
+      title={subject?.title ? `Add notes to ${subject.title}` : "Add notes"}
       description="Choose from your existing notes. Notes already in this subject are hidden."
       onClose={handleClose}
       panelClassName="sm:max-w-2xl"
@@ -996,6 +1012,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [addNotesSubjectId, setAddNotesSubjectId] = useState<string | null>(null);
+  const [leafAddNotesOpen, setLeafAddNotesOpen] = useState(false);
   const [deleteSubject, setDeleteSubject] = useState<BuilderSubject | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDrag>(null);
 
@@ -1162,6 +1179,29 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       await refreshBuilder();
     } catch (error) {
       await recoverLeafAfterFailure(error, "Could not remove this note.", previousItems);
+    } finally {
+      setMutationKind(null);
+    }
+  };
+
+  const handleAddLeafNotes = async (targetId: string, noteIds: string[]) => {
+    const previousItems = leafItems;
+    const noteById = new Map(notes.map((n) => [n.id, n]));
+    setMutationKind("add-notes");
+    setMutationError(null);
+    const optimisticItems = noteIds
+      .map((id, offset) => {
+        const n = noteById.get(id);
+        return n ? toOptimisticItem(n, leafItems.length + offset) : null;
+      })
+      .filter((item): item is NoteCollectionItem => item !== null);
+    setLeafItems((prev) => [...prev, ...optimisticItems]);
+    try {
+      await addCollectionItems(targetId, noteIds);
+      await refreshBuilder();
+    } catch (error) {
+      await recoverLeafAfterFailure(error, "Could not add notes.", previousItems);
+      throw error;
     } finally {
       setMutationKind(null);
     }
@@ -1383,6 +1423,11 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     if (data?.type === "leaf-note" && typeof data.noteId === "string") {
       const item = leafItems.find((candidate) => candidate.noteId === data.noteId);
       setActiveDrag(item ? { type: "leaf-note", noteId: item.noteId, title: getNoteTitle(item) } : null);
+      return;
+    }
+    if (data?.type === "leaf-section" && typeof data.sectionName === "string") {
+      const section = leafSections.find((candidate) => candidate.name === data.sectionName);
+      setActiveDrag(section ? { type: "leaf-section", sectionName: section.name, title: section.name } : null);
     }
   };
 
@@ -1390,7 +1435,34 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     const activeData = event.active.data.current;
     const overData = event.over?.data.current;
     setActiveDrag(null);
-    if (activeData?.type !== "leaf-note" || typeof activeData.noteId !== "string" || !overData) {
+    if (!activeData || !overData) {
+      return;
+    }
+
+    // Section reorder
+    if (activeData.type === "leaf-section" && typeof activeData.sectionName === "string") {
+      const overSectionName = overData.type === "leaf-section" && typeof overData.sectionName === "string"
+        ? overData.sectionName
+        : null;
+      if (!overSectionName || overSectionName === activeData.sectionName) {
+        return;
+      }
+      const currentOrder = leafSections.map((s) => s.name);
+      const fromIdx = currentOrder.indexOf(activeData.sectionName);
+      const toIdx = currentOrder.indexOf(overSectionName);
+      if (fromIdx < 0 || toIdx < 0) {
+        return;
+      }
+      const newOrder = arrayMove(currentOrder, fromIdx, toIdx);
+      const nextItems = newOrder
+        .flatMap((sName) => leafSections.find((s) => s.name === sName)?.items ?? [])
+        .map((item, index) => ({ ...item, position: index }));
+      void persistLeafItems(nextItems, leafItems, "Could not save section order.", "reorder-notes");
+      return;
+    }
+
+    // Note reorder / move between sections
+    if (activeData.type !== "leaf-note" || typeof activeData.noteId !== "string") {
       return;
     }
 
@@ -1401,7 +1473,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       targetSectionName = targetItem ? getSectionName(targetItem.label) : null;
       const targetSection = targetSectionName ? leafSections.find((section) => section.name === targetSectionName) : null;
       targetIndex = targetSection?.items.findIndex((item) => item.noteId === overData.noteId) ?? -1;
-    } else if (overData.type === "leaf-section-dropzone" && typeof overData.sectionName === "string") {
+    } else if (overData.type === "leaf-section" && typeof overData.sectionName === "string") {
       targetSectionName = overData.sectionName;
       const targetSection = leafSections.find((section) => section.name === targetSectionName);
       targetIndex = targetSection?.items.length ?? 0;
@@ -1541,21 +1613,28 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         <Card className="space-y-4 p-4 sm:p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>Section canvas</CardTitle>
+              <CardTitle>Your notes</CardTitle>
               <CardDescription>
                 {leafItems.length} {leafItems.length === 1 ? "note" : "notes"} grouped by section.
               </CardDescription>
             </div>
-            <p className="text-xs text-foreground/55">Drag notes to reorder them or move them between sections.</p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-foreground/55">Drag notes or sections to reorganize.</p>
+              <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Add notes
+              </Button>
+            </div>
           </div>
 
           {leafItems.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-8 text-center">
               <CardTitle>No notes yet</CardTitle>
-              <CardDescription className="mt-2">Add notes from the plan detail page.</CardDescription>
-              <Link className="mt-4 inline-flex text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300" href={`/collections/${collectionId}`}>
-                Back to plan
-              </Link>
+              <CardDescription className="mt-2">Add your existing notes to get started.</CardDescription>
+              <Button type="button" className="mt-4" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Add notes
+              </Button>
             </div>
           ) : (
             <DndContext
@@ -1566,22 +1645,24 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               onDragCancel={() => setActiveDrag(null)}
               onDragEnd={handleLeafDragEnd}
             >
-              <div className="space-y-4">
-                {leafSections.map((section) => (
-                  <LeafSectionBlock
-                    key={`${section.id}:${section.name}`}
-                    section={section}
-                    collectionId={collectionId}
-                    disabled={mutationInProgress}
-                    allSections={leafSections}
-                    activeDrag={activeDrag}
-                    onRename={handleRenameLeafSection}
-                    onMoveWithinSection={handleMoveLeafWithinSection}
-                    onMoveToSection={handleMoveLeafToSection}
-                    onRemove={(noteId) => void handleRemoveLeafNote(noteId)}
-                  />
-                ))}
-              </div>
+              <SortableContext items={leafSections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-4">
+                  {leafSections.map((section) => (
+                    <LeafSectionBlock
+                      key={`${section.id}:${section.name}`}
+                      section={section}
+                      collectionId={collectionId}
+                      disabled={mutationInProgress}
+                      allSections={leafSections}
+                      activeDrag={activeDrag}
+                      onRename={handleRenameLeafSection}
+                      onMoveWithinSection={handleMoveLeafWithinSection}
+                      onMoveToSection={handleMoveLeafToSection}
+                      onRemove={(noteId) => void handleRemoveLeafNote(noteId)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
               <DragOverlay dropAnimation={DND_DROP_ANIMATION}>
                 {activeDrag ? (
                   <div className="rounded-lg border border-blue-300 bg-background px-4 py-3 text-sm font-semibold text-foreground shadow-lg">
@@ -1592,6 +1673,15 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             </DndContext>
           )}
         </Card>
+
+        <AddNotesModal
+          isOpen={leafAddNotesOpen}
+          subject={leafAddNotesOpen ? { collectionId, items: leafItems } : null}
+          notes={notes}
+          submitting={mutationKind === "add-notes"}
+          onClose={() => setLeafAddNotesOpen(false)}
+          onAdd={handleAddLeafNotes}
+        />
       </main>
     );
   }

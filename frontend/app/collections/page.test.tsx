@@ -209,7 +209,7 @@ describe("CollectionsPage", () => {
 
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({ title: "Finals", description: null });
-      expect(pushMock).toHaveBeenCalledWith("/collections/created-1");
+      expect(pushMock).toHaveBeenCalledWith("/collections/created-1/builder");
     });
   });
 });
