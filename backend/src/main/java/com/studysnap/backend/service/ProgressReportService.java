@@ -119,13 +119,14 @@ public class ProgressReportService {
     }
 
     private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(List<StudyPackEntity> studyPacks) {
+        Map<UUID, String> noteSubjects = fetchNoteSubjects(studyPacks);
         Map<String, List<StudyPackEntity>> packsBySubject = new LinkedHashMap<>();
         for (StudyPackEntity studyPack : studyPacks) {
             if (!hasKeyConcepts(studyPack)) {
                 continue;
             }
             packsBySubject
-                .computeIfAbsent(resolveSubject(studyPack), ignored -> new ArrayList<>())
+                .computeIfAbsent(resolveSubject(studyPack, noteSubjects), ignored -> new ArrayList<>())
                 .add(studyPack);
         }
         return packsBySubject;
@@ -308,8 +309,9 @@ public class ProgressReportService {
             return null;
         }
 
+        Map<UUID, String> noteSubjects = fetchNoteSubjects(goalPacks);
         return goalPacks.stream()
-                .collect(Collectors.groupingBy(this::resolveSubject, LinkedHashMap::new, Collectors.toList()))
+                .collect(Collectors.groupingBy(sp -> resolveSubject(sp, noteSubjects), LinkedHashMap::new, Collectors.toList()))
                 .entrySet()
                 .stream()
                 .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
@@ -386,7 +388,27 @@ public class ProgressReportService {
         return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
-    private String resolveSubject(StudyPackEntity studyPack) {
+    private Map<UUID, String> fetchNoteSubjects(List<StudyPackEntity> studyPacks) {
+        List<UUID> noteIds = studyPacks.stream()
+                .map(StudyPackEntity::getNoteId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if (noteIds.isEmpty()) {
+            return Map.of();
+        }
+        return noteRepository.findAllById(noteIds).stream()
+                .filter(n -> n.getSubject() != null && !n.getSubject().isBlank())
+                .collect(Collectors.toMap(NoteEntity::getId, NoteEntity::getSubject));
+    }
+
+    private String resolveSubject(StudyPackEntity studyPack, Map<UUID, String> noteSubjects) {
+        UUID noteId = studyPack.getNoteId();
+        if (noteId != null) {
+            String noteSubject = noteSubjects.get(noteId);
+            if (noteSubject != null && !noteSubject.isBlank()) {
+                return noteSubject.trim();
+            }
+        }
         String subject = studyPack.getSubject();
         if (subject == null || subject.isBlank()) {
             return OTHER_SUBJECT;

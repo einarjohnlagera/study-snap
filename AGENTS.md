@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.33.1 - Study Plan polish & Curated Plan Coverage` (in progress); previous: `v0.33.0 - Study Plans as a Retention Engine`
+- `v0.33.2 - Plan Detail Redesign (view/edit split)` (in progress); previous: `v0.33.1 - Study Plan polish & Curated Plan Coverage`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
