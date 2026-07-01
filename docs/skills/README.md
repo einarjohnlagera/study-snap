@@ -93,7 +93,13 @@ Escalate effort or model only when complexity genuinely requires it. Defaulting 
 
 | Skill | File | Purpose |
 |---|---|---|
-| Codex Prompt Generator | `codex-prompt-generator.md` | Convert feature discussions into structured Codex prompts |
+| `/codex-prompt` | `codex-prompt.md` | Fast-path: prompt template + pre-send checklist ready to fill in |
+| Codex Prompt Generator | `codex-prompt-generator.md` | Full reference: section philosophy, common mistakes, anti-drift notes |
+| `/kickoff` | `kickoff.md` | Open a new version — 7-file atomic commit on the release branch |
+| `/signoff` | `signoff.md` | Close a version — 3-file atomic commit + release notes file |
+| `/audit-diff` | `audit-diff.md` | Post-Codex delivery audit: error states, transactions, idempotency |
+| `/feature-doc` | `feature-doc.md` | Update docs/features/<feature>.md after shipping a behavioral change |
+| `/version-check` | `version-check.md` | Verify all 7 version references are in sync before kickoff or signoff |
 | UX / Product Review | `ux-product-review.md` | Consistent product review against NoteLib philosophy |
 | Release / Doc Alignment | `release-doc-alignment.md` | Ensure roadmap and docs stay aligned after feature work |
 | Roadmap / Feature Audit | `roadmap-feature-audit.md` | Prevent scope creep and roadmap drift before starting work |

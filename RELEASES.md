@@ -25,6 +25,7 @@ Anti-drift: section readiness reuses existing `ConceptHealth` / `ProgressReportS
 - **Estimated study time editing (frontend).** Added an optional estimated-hours input to the edit modal and forward both `courseProgram` and `estimatedStudyHours` on every metadata save so title/description edits do not wipe hidden metadata.
 - **Continue where you left off (frontend).** Added a dismissible per-session continue banner that picks the latest practiced note from `lastSessionCompletedAt` and links to that note's next plan action.
 - **Builder for leaf plans (frontend).** Extended `/collections/{id}/builder` to detect childless collections and render a note-section canvas using existing item-order, label, and remove endpoints. The leaf detail page now links to Builder instead of exposing the inline Organize toggle.
+- **Journey polish (frontend).** Several UX improvements shipped as a follow-up: new plan creation now redirects to `/builder` instead of the plan detail; the Notes card "Build" CTA renamed to "Edit" and always shown (Add notes removed from detail, moved to Builder); leaf Builder sections are reorderable via drag handles; canvas label changed from "Section canvas" to "Your notes"; hero card action column right-aligned consistently across breakpoints; Add notes modal redesigned with results above and a pinned "Selected (n)" section below (bounded scroll, independent of search filter) and a live count on the "Add selected (N)" button.
 
 ---
 
