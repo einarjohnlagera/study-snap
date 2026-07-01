@@ -1961,15 +1961,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               variant="outline"
               size="sm"
             />
-            {collection.parentCollectionId === null && collection.childCount === 0 && items.length === 0 ? (
-              <ResponsiveActionLink
-                href={`/collections/${collectionId}/builder`}
-                action="edit"
-                label={`Build ${labels.goalSingular.toLowerCase()}`}
-                variant="outline"
-                size="sm"
-              />
-            ) : null}
             <div className="relative shrink-0" ref={actionsMenuRef}>
               <Button
                 type="button"
@@ -2075,15 +2066,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {items.length > 0 ? (
-              <ResponsiveActionLink
-                href={`/collections/${collectionId}/builder`}
-                action="edit"
-                label="Build"
-                variant="outline"
-              />
-            ) : null}
-            <ResponsiveActionButton action="create" label="Add notes" onClick={() => setAddOpen(true)} />
+            <ResponsiveActionLink
+              href={`/collections/${collectionId}/builder`}
+              action="edit"
+              label="Edit"
+              variant="outline"
+            />
           </div>
         </div>
 

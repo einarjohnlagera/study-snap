@@ -298,7 +298,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    expect(screen.getByRole("link", { name: "Build goal" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.queryByRole("menuitem", { name: /Nest under|Unnest/ })).not.toBeInTheDocument();
   });
@@ -371,7 +371,7 @@ describe("CollectionDetailPageClient", () => {
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
     expect(screen.queryByRole("button", { name: "Organize" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
     expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();
@@ -917,61 +917,10 @@ describe("CollectionDetailPageClient", () => {
     });
   });
 
-  it("adds notes from the picker and excludes notes already present", async () => {
-    (listNotes as jest.Mock).mockResolvedValue([
-      note("note-1", "Hidden Existing Note"),
-      note("note-3", "Chemistry Notes"),
-    ]);
-    (addCollectionItems as jest.Mock).mockResolvedValue(collection({
-      items: [...collection().items, {
-        noteId: "note-3",
-        label: null,
-        position: 2,
-        title: "Chemistry Notes",
-        subject: null,
-        courseProgram: null,
-        studyPackStatus: "DRAFT",
-        generatedQuizId: null,
-        lastSessionCompletedAt: null,
-        dueConceptCount: 0,
-        dueConcepts: [],
-        updatedAt: "2026-06-01T00:00:00Z",
-      }],
-    }));
-
+  it("does not show an Add notes button on the detail page (note addition moved to Builder)", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Add notes" }));
-    expect(await screen.findByText("Chemistry Notes")).toBeInTheDocument();
-    expect(screen.queryByText("Hidden Existing Note")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("Chemistry Notes"));
-    fireEvent.click(screen.getByRole("button", { name: "Add selected" }));
-
-    await waitFor(() => {
-      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3"]);
-    });
-  });
-
-  it("selects all available notes from the picker with select-all", async () => {
-    (listNotes as jest.Mock).mockResolvedValue([
-      note("note-1", "Hidden Existing Note"),
-      note("note-3", "Chemistry Notes"),
-      note("note-4", "Biology Notes"),
-    ]);
-    (addCollectionItems as jest.Mock).mockResolvedValue(collection());
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Add notes" }));
-    await screen.findByText("Chemistry Notes");
-
-    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Add selected" }));
-
-    await waitFor(() => {
-      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3", "note-4"]);
-    });
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    expect(screen.queryByRole("button", { name: "Add notes" })).not.toBeInTheDocument();
   });
 
   it("renders not-found state for 404", async () => {
