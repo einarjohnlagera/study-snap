@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionProgressResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
+import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
@@ -52,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -230,6 +232,60 @@ public class NoteCollectionService {
     }
 
     @Transactional(readOnly = true)
+    public Map<String, NoteConceptCountsResponse> getNoteConceptCounts(UUID collectionId, UUID userId) {
+        getOwnedCollectionOrThrow(collectionId, userId);
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        List<UUID> noteIds = items.stream()
+                .map(NoteCollectionItemEntity::getNoteId)
+                .toList();
+        if (noteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, StudyPackEntity> studyPacksByNoteId = studyPackRepository.findByNoteIdIn(noteIds).stream()
+                .filter(studyPack -> studyPack.getNoteId() != null)
+                .collect(Collectors.toMap(
+                        StudyPackEntity::getNoteId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        if (studyPacksByNoteId.isEmpty()) {
+            return Map.of();
+        }
+
+        List<UUID> studyPackIds = studyPacksByNoteId.values().stream()
+                .map(StudyPackEntity::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, ProgressReportService.ConceptCounts> countsByStudyPackId =
+                progressReportService.getConceptCountsPerStudyPack(
+                        studyPackIds,
+                        studyPacksByNoteId.values(),
+                        userId,
+                        OffsetDateTime.now()
+                );
+        Map<String, NoteConceptCountsResponse> countsByNoteId = new HashMap<>();
+        for (NoteCollectionItemEntity item : items) {
+            StudyPackEntity studyPack = studyPacksByNoteId.get(item.getNoteId());
+            if (studyPack == null || studyPack.getId() == null) {
+                continue;
+            }
+            ProgressReportService.ConceptCounts counts = countsByStudyPackId.get(studyPack.getId());
+            if (counts == null) {
+                continue;
+            }
+            countsByNoteId.put(item.getNoteId().toString(), new NoteConceptCountsResponse(
+                    counts.totalConcepts(),
+                    counts.masteredConcepts(),
+                    counts.dueConcepts(),
+                    counts.notPracticedConcepts()
+            ));
+        }
+        return countsByNoteId;
+    }
+
+    @Transactional(readOnly = true)
     public GoalCollectionDetailResponse getGoal(UUID collectionId, UUID userId) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         List<NoteCollectionEntity> children = collectionRepository
@@ -281,6 +337,7 @@ public class NoteCollectionService {
         if (request != null) {
             collection.setDescription(normalizeOptionalText(request.description()));
             collection.setCourseProgram(CourseProgramNormalizationUtils.normalizeForStorage(request.courseProgram()));
+            collection.setEstimatedStudyHours(request.estimatedStudyHours());
         }
         touch(collection);
         NoteCollectionEntity saved = collectionRepository.save(collection);
@@ -679,6 +736,7 @@ public class NoteCollectionService {
             collection.setDescription(source.getDescription());
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
+            collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
@@ -709,6 +767,7 @@ public class NoteCollectionService {
             collection.setDescription(source.getDescription());
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
+            collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
@@ -1054,6 +1113,7 @@ public class NoteCollectionService {
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                collection.getEstimatedStudyHours(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
@@ -1075,6 +1135,7 @@ public class NoteCollectionService {
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                collection.getEstimatedStudyHours(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),

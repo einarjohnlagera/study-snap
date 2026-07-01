@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
+import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
@@ -30,6 +31,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +65,9 @@ class NoteCollectionControllerTest {
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("getReadiness", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("getNoteConceptCounts", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("getGoal", String.class, AuthenticatedUser.class)
@@ -164,10 +169,26 @@ class NoteCollectionControllerTest {
     }
 
     @Test
+    void getNoteConceptCounts_returnsPerNoteCounts() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        Map<String, NoteConceptCountsResponse> response = Map.of(
+                NOTE_ID,
+                new NoteConceptCountsResponse(3, 1, 1, 1)
+        );
+        when(service.getNoteConceptCounts(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
+
+        Map<String, NoteConceptCountsResponse> result = controller.getNoteConceptCounts(COLLECTION_ID, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).getNoteConceptCounts(UUID.fromString(COLLECTION_ID), user.userId());
+    }
+
+    @Test
     void patch_returnsUpdatedCollection() {
         NoteCollectionController controller = new NoteCollectionController(service);
         AuthenticatedUser user = authenticatedUser();
-        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null, null);
+        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null, null, 3);
         NoteCollectionDetailResponse response = detailResponse();
         when(service.updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
 
@@ -400,6 +421,7 @@ class NoteCollectionControllerTest {
                 COLLECTION_TITLE,
                 null,
                 CollectionVisibility.PRIVATE.name(),
+                null,
                 null,
                 null,
                 null,

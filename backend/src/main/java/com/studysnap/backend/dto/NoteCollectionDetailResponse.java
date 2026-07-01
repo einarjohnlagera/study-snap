@@ -10,6 +10,7 @@ public record NoteCollectionDetailResponse(
         String description,
         String visibility,
         String courseProgram,
+        Integer estimatedStudyHours,
         UUID sourcePlanId,
         UUID parentCollectionId,
         int childCount,

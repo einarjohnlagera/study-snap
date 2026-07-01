@@ -1,17 +1,21 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { CollectionDetailPageClient } from "./collection-detail-page-client";
+import {
+  aggregateSectionReadiness,
+  CollectionDetailPageClient,
+  getLatestPracticedCollectionItem,
+} from "./collection-detail-page-client";
 import {
   addCollectionItems,
   ApiRequestError,
   getCollection,
   getCollectionGoal,
+  getNoteConceptCounts,
   listCoursePrograms,
   listNotes,
-  removeCollectionItem,
-  setCollectionItemOrder,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
+  type NoteCollectionItem,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -52,10 +56,9 @@ jest.mock("@/lib/api", () => {
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
+    getNoteConceptCounts: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
-    removeCollectionItem: jest.fn(),
-    setCollectionItemOrder: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
     updateNoteVisibility: jest.fn(),
@@ -69,6 +72,7 @@ function collection(overrides: Record<string, unknown> = {}) {
     description: "Weeks 1-4",
     visibility: "PRIVATE",
     courseProgram: null,
+    estimatedStudyHours: null,
     sourcePlanId: null,
     parentCollectionId: null,
     childCount: 0,
@@ -186,6 +190,35 @@ function note(id: string, title: string) {
   };
 }
 
+describe("collection detail helpers", () => {
+  it("aggregates concept counts by section label", () => {
+    const items = [
+      { ...collection().items[0], noteId: "note-1", label: "Week 1" },
+      { ...collection().items[1], noteId: "note-2", label: "Week 1" },
+      { ...collection().items[0], noteId: "note-3", label: null },
+    ] as NoteCollectionItem[];
+
+    const result = aggregateSectionReadiness(items, {
+      "note-1": { totalConceptCount: 4, masteredConceptCount: 2, dueConceptCount: 1, notPracticedConceptCount: 1 },
+      "note-2": { totalConceptCount: 3, masteredConceptCount: 1, dueConceptCount: 1, notPracticedConceptCount: 1 },
+      "note-3": { totalConceptCount: 2, masteredConceptCount: 0, dueConceptCount: 0, notPracticedConceptCount: 2 },
+    });
+
+    expect(result.get("Week 1")).toEqual({ mastered: 3, total: 7, due: 2 });
+    expect(result.get("Ungrouped")).toEqual({ mastered: 0, total: 2, due: 0 });
+  });
+
+  it("selects the latest practiced note for continue state", () => {
+    const latest = getLatestPracticedCollectionItem([
+      { ...collection().items[0], noteId: "note-1", lastSessionCompletedAt: "2026-06-01T00:00:00Z" },
+      { ...collection().items[1], noteId: "note-2", lastSessionCompletedAt: "2026-06-03T00:00:00Z" },
+    ] as NoteCollectionItem[]);
+
+    expect(latest?.noteId).toBe("note-2");
+    expect(getLatestPracticedCollectionItem(collection().items.map((item) => ({ ...item, lastSessionCompletedAt: null })) as NoteCollectionItem[])).toBeNull();
+  });
+});
+
 describe("CollectionDetailPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
@@ -193,9 +226,8 @@ describe("CollectionDetailPageClient", () => {
     (addCollectionItems as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
+    (getNoteConceptCounts as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
-    (removeCollectionItem as jest.Mock).mockReset();
-    (setCollectionItemOrder as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
@@ -206,6 +238,7 @@ describe("CollectionDetailPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (getNoteConceptCounts as jest.Mock).mockResolvedValue({});
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
       value: 1024,
@@ -265,7 +298,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    expect(screen.getByRole("link", { name: "Build goal" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.queryByRole("menuitem", { name: /Nest under|Unnest/ })).not.toBeInTheDocument();
   });
@@ -333,30 +366,16 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: /Ungrouped/ })).not.toBeInTheDocument();
   });
 
-  it("hides organize controls by default and reveals them from the Notes header", async () => {
+  it("routes note organization to the Builder from the Notes header", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
-    expect(screen.getByRole("button", { name: "Organize" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Organize" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
     expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Move down" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
-
-    expect(screen.getByRole("button", { name: "Done organizing" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Drag Cell Respiration")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Section")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Move up" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Move down" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(2);
-
-    fireEvent.click(screen.getByRole("button", { name: "Done organizing" }));
-
-    expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
   });
 
@@ -519,7 +538,9 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const nextLink = await screen.findByRole("link", { name: "Study this note" });
+    await screen.findByText("Next in this plan");
+    const nextLink = screen.getAllByRole("link", { name: "Study this note" })
+      .find((link) => link.getAttribute("href") === "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
     expect(nextLink).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
   });
 
@@ -562,7 +583,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Study this note|Review due concepts|Generate Study Pack/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Continue from/)).toBeInTheDocument();
   });
 
   it("never uses due concepts as the next action for Free users", async () => {
@@ -827,9 +848,9 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
   });
 
-  it("preserves course/program when editing the description", async () => {
-    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy" }));
-    (updateCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy", description: "New notes" }));
+  it("preserves course/program and estimated study hours when editing the description", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy", estimatedStudyHours: 3 }));
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "Accountancy", estimatedStudyHours: 3, description: "New notes" }));
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
@@ -846,182 +867,60 @@ describe("CollectionDetailPageClient", () => {
         title: "Midterm Study Plan",
         description: "New notes",
         courseProgram: "Accountancy",
+        estimatedStudyHours: 3,
       });
     });
   });
 
-  it("reorders by move button within a section and persists the grouped order", async () => {
-    (getCollection as jest.Mock).mockResolvedValue(collection({
-      items: [
-        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "Week 1", position: 0 },
-        { ...collection().items[1], noteId: "note-3", title: "Assessment", label: "Week 1", position: 1 },
-        { ...collection().items[0], noteId: "note-2", title: "Extra", label: null, position: 2 },
-      ],
-    }));
-    (setCollectionItemOrder as jest.Mock).mockResolvedValue(collection());
+  it("sends estimated study hours when set from the edit modal", async () => {
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ estimatedStudyHours: 4 }));
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
-    await screen.findByRole("heading", { level: 2, name: "Foundations" });
-    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
-    // first "Move down" belongs to note-1 (first item in the "Week 1" section)
-    fireEvent.click(screen.getAllByRole("button", { name: "Move down" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    fireEvent.change(await screen.findByLabelText("Estimated study time (hours)"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
-        { noteId: "note-3", label: "Week 1" },
-        { noteId: "note-1", label: "Week 1" },
-        { noteId: "note-2", label: null },
-      ]);
-    });
-  });
-
-  it("disables move buttons at section boundaries", async () => {
-    (getCollection as jest.Mock).mockResolvedValue(collection({
-      items: [
-        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "Week 1", position: 0 },
-        { ...collection().items[1], noteId: "note-2", title: "Extra", label: null, position: 1 },
-      ],
-    }));
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    await screen.findByRole("heading", { level: 2, name: "Foundations" });
-    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
-    // each note is alone in its section, so every move button is a boundary and disabled
-    screen.getAllByRole("button", { name: "Move up" }).forEach((button) => expect(button).toBeDisabled());
-    screen.getAllByRole("button", { name: "Move down" }).forEach((button) => expect(button).toBeDisabled());
-  });
-
-  it("assigns a section through the existing order endpoint without changing other labels", async () => {
-    const flatCollection = collection({
-      items: collection().items.map((item) => ({ ...item, label: null })),
-    });
-    const savedCollection = collection({
-      items: [
-        { ...collection().items[0], label: null, position: 0 },
-        { ...collection().items[1], label: "Professional Education", position: 1 },
-      ],
-    });
-    (getCollection as jest.Mock).mockResolvedValue(flatCollection);
-    (setCollectionItemOrder as jest.Mock).mockResolvedValue(savedCollection);
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
-    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
-    const sectionInputs = screen.getAllByLabelText("Section");
-    fireEvent.change(sectionInputs[1], { target: { value: "Professional Education" } });
-    fireEvent.blur(sectionInputs[1]);
-
-    await waitFor(() => {
-      expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
-        { noteId: "note-1", label: null },
-        { noteId: "note-2", label: "Professional Education" },
-      ]);
-    });
-    expect(await screen.findByLabelText("Rename section Professional Education")).toBeInTheDocument();
-    expect(screen.getByText("Ungrouped")).toBeInTheDocument();
-  });
-
-  it("clears a section assignment back to Ungrouped through the order endpoint", async () => {
-    const savedCollection = collection({
-      items: [
-        { ...collection().items[0], label: null, position: 0 },
-        { ...collection().items[1], label: null, position: 1 },
-      ],
-    });
-    (setCollectionItemOrder as jest.Mock).mockResolvedValue(savedCollection);
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
-    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
-    const sectionInputs = screen.getAllByLabelText("Section");
-    fireEvent.change(sectionInputs[0], { target: { value: "" } });
-    fireEvent.blur(sectionInputs[0]);
-
-    await waitFor(() => {
-      expect(setCollectionItemOrder).toHaveBeenCalledWith("collection-1", [
-        { noteId: "note-1", label: null },
-        { noteId: "note-2", label: null },
-      ]);
-    });
-    expect(screen.queryAllByTestId("collection-section-heading")).toHaveLength(0);
-  });
-
-  it("removes a collection item", async () => {
-    (removeCollectionItem as jest.Mock).mockResolvedValue(undefined);
-    (getCollection as jest.Mock)
-      .mockResolvedValueOnce(collection())
-      .mockResolvedValueOnce(collection({ items: [collection().items[1]] }));
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
-    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
-
-    await waitFor(() => {
-      expect(removeCollectionItem).toHaveBeenCalledWith("collection-1", "note-1");
-    });
-  });
-
-  it("adds notes from the picker and excludes notes already present", async () => {
-    (listNotes as jest.Mock).mockResolvedValue([
-      note("note-1", "Hidden Existing Note"),
-      note("note-3", "Chemistry Notes"),
-    ]);
-    (addCollectionItems as jest.Mock).mockResolvedValue(collection({
-      items: [...collection().items, {
-        noteId: "note-3",
-        label: null,
-        position: 2,
-        title: "Chemistry Notes",
-        subject: null,
+      expect(updateCollection).toHaveBeenCalledWith("collection-1", {
+        title: "Midterm Study Plan",
+        description: "Weeks 1-4",
         courseProgram: null,
-        studyPackStatus: "DRAFT",
-        generatedQuizId: null,
-        lastSessionCompletedAt: null,
-        dueConceptCount: 0,
-        dueConcepts: [],
-        updatedAt: "2026-06-01T00:00:00Z",
-      }],
-    }));
-
-    render(<CollectionDetailPageClient collectionId="collection-1" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Add notes" }));
-    expect(await screen.findByText("Chemistry Notes")).toBeInTheDocument();
-    expect(screen.queryByText("Hidden Existing Note")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("Chemistry Notes"));
-    fireEvent.click(screen.getByRole("button", { name: "Add selected" }));
-
-    await waitFor(() => {
-      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3"]);
+        estimatedStudyHours: 4,
+      });
     });
   });
 
-  it("selects all available notes from the picker with select-all", async () => {
-    (listNotes as jest.Mock).mockResolvedValue([
-      note("note-1", "Hidden Existing Note"),
-      note("note-3", "Chemistry Notes"),
-      note("note-4", "Biology Notes"),
-    ]);
-    (addCollectionItems as jest.Mock).mockResolvedValue(collection());
+  it("clears estimated study hours when the edit field is empty", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ estimatedStudyHours: 2 }));
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ estimatedStudyHours: null }));
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add notes" }));
-    await screen.findByText("Chemistry Notes");
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Select all/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Add selected" }));
+    fireEvent.change(await screen.findByLabelText("Estimated study time (hours)"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-3", "note-4"]);
+      expect(updateCollection).toHaveBeenCalledWith("collection-1", {
+        title: "Midterm Study Plan",
+        description: "Weeks 1-4",
+        courseProgram: null,
+        estimatedStudyHours: null,
+      });
     });
+  });
+
+  it("does not show an Add notes button on the detail page (note addition moved to Builder)", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    expect(screen.queryByRole("button", { name: "Add notes" })).not.toBeInTheDocument();
   });
 
   it("renders not-found state for 404", async () => {

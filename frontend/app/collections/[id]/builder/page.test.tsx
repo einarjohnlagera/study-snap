@@ -12,6 +12,7 @@ import {
   setCollectionItemOrder,
   setCollectionParent,
   updateCollection,
+  type NoteCollectionItem,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -69,6 +70,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     description: "Licensure goal",
     visibility: "PRIVATE",
     courseProgram: null,
+    estimatedStudyHours: null,
     sourcePlanId: null,
     parentCollectionId: null,
     itemCount: 0,
@@ -102,7 +104,12 @@ function goalChild(collectionId: string, title: string, readiness: number) {
   };
 }
 
-function collectionDetail(id: string, title: string, items = [collectionItem(`${id}-note-1`, `${title} Foundations`, 0)]) {
+function collectionDetail(
+  id: string,
+  title: string,
+  items: NoteCollectionItem[] = [collectionItem(`${id}-note-1`, `${title} Foundations`, 0) as NoteCollectionItem],
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id,
     title,
@@ -120,10 +127,11 @@ function collectionDetail(id: string, title: string, items = [collectionItem(`${
       notesPracticed: 0,
     },
     items,
+    ...overrides,
   };
 }
 
-function collectionItem(noteId: string, title: string, position: number) {
+function collectionItem(noteId: string, title: string, position: number): NoteCollectionItem {
   return {
     noteId,
     label: null,
@@ -194,6 +202,12 @@ describe("StudyPlanBuilderPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
     (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "goal-1") {
+        return Promise.resolve(collectionDetail("goal-1", "LET Mastery", [], {
+          parentCollectionId: null,
+          childCount: 2,
+        }));
+      }
       if (id === "child-1") {
         return Promise.resolve(collectionDetail("child-1", "Professional Education Mastery", [
           collectionItem("note-1", "Professional Foundations", 0),
@@ -226,6 +240,51 @@ describe("StudyPlanBuilderPageClient", () => {
     expect(screen.getByDisplayValue("General Education Mastery")).toBeInTheDocument();
     expect(screen.getByText("Professional Foundations")).toBeInTheDocument();
     expect(screen.getByText("General Foundations")).toBeInTheDocument();
+  });
+
+  it("renders the leaf builder canvas when the collection has no children", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "leaf-1") {
+        return Promise.resolve(collectionDetail("leaf-1", "Anatomy Plan", [
+          { ...collectionItem("note-1", "Skeletal System", 0), label: "Week 1" },
+          { ...collectionItem("note-2", "Muscle Groups", 1), label: null },
+        ], { parentCollectionId: null, childCount: 0 }));
+      }
+      return Promise.resolve(collectionDetail(id, "Child", []));
+    });
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Anatomy Plan" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Week 1")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Ungrouped")).toBeInTheDocument();
+    expect(screen.getByText("Skeletal System")).toBeInTheDocument();
+    expect(screen.getByText("Muscle Groups")).toBeInTheDocument();
+    expect(getCollectionGoal).not.toHaveBeenCalled();
+  });
+
+  it("persists leaf builder relabeling through the item order endpoint", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "leaf-1") {
+        return Promise.resolve(collectionDetail("leaf-1", "Anatomy Plan", [
+          { ...collectionItem("note-1", "Skeletal System", 0), label: "Week 1" },
+          { ...collectionItem("note-2", "Muscle Groups", 1), label: null },
+        ], { parentCollectionId: null, childCount: 0 }));
+      }
+      return Promise.resolve(collectionDetail(id, "Child", []));
+    });
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByRole("heading", { name: "Anatomy Plan" });
+    fireEvent.change(screen.getByLabelText("Move Muscle Groups to section"), { target: { value: "Week 1" } });
+
+    await waitFor(() => {
+      expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+        { noteId: "note-1", label: "Week 1" },
+        { noteId: "note-2", label: "Week 1" },
+      ]);
+    });
   });
 
   it("shows an empty-goal state with add subject", async () => {
@@ -295,7 +354,7 @@ describe("StudyPlanBuilderPageClient", () => {
     expect(within(dialog).getByText("Assessment Notes")).toBeInTheDocument();
     expect(within(dialog).queryByText("Professional Foundations")).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByText("Assessment Notes"));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add selected" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
 
     await waitFor(() => {
       expect(addCollectionItems).toHaveBeenCalledWith("child-1", ["note-3"]);

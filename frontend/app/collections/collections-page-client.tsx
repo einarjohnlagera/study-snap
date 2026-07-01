@@ -309,7 +309,7 @@ export function CollectionsPageClient() {
         isOpen={createOpen}
         singular={labels.singular}
         onClose={() => setCreateOpen(false)}
-        onCreated={(collection) => router.push(`/collections/${collection.id}`)}
+        onCreated={(collection) => router.push(`/collections/${collection.id}/builder`)}
       />
     </main>
   );

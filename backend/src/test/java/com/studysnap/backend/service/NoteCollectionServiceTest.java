@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
+import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
@@ -60,6 +61,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -963,14 +965,103 @@ class NoteCollectionServiceTest {
         NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
                 UPDATED_COLLECTION_TITLE,
                 UPDATED_COLLECTION_DESCRIPTION,
-                UPDATED_COURSE_PROGRAM
+                UPDATED_COURSE_PROGRAM,
+                3
         ));
 
         assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
         assertThat(result.description()).isEqualTo(UPDATED_COLLECTION_DESCRIPTION);
         assertThat(result.courseProgram()).isEqualTo(UPDATED_COURSE_PROGRAM);
+        assertThat(result.estimatedStudyHours()).isEqualTo(3);
         assertThat(result.updatedAt()).isAfter(previousUpdatedAt);
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
+    }
+
+    @Test
+    void updateMetadata_clearsEstimatedStudyHoursWhenRequestValueIsNull() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setEstimatedStudyHours(4);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                null,
+                COLLECTION_DESCRIPTION,
+                COURSE_PROGRAM,
+                null
+        ));
+
+        assertThat(result.estimatedStudyHours()).isNull();
+        assertThat(collection.getEstimatedStudyHours()).isNull();
+    }
+
+    @Test
+    void getNoteConceptCounts_returnsCountsForNotesWithStudyPacksOnly() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UUID noPackNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        List<NoteCollectionItemEntity> items = List.of(
+                buildItem(collectionId, firstNoteId, 0, WEEK_ONE_LABEL),
+                buildItem(collectionId, noPackNoteId, 1, null),
+                buildItem(collectionId, secondNoteId, 2, WEEK_TWO_LABEL)
+        );
+        StudyPackEntity firstPack = buildStudyPack(firstNoteId, List.of("Cells", "DNA", "Mitosis"));
+        StudyPackEntity secondPack = buildStudyPack(secondNoteId, List.of("Bonds", "Acids"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
+        when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId, noPackNoteId, secondNoteId)))
+                .thenReturn(List.of(firstPack, secondPack));
+        when(progressReportService.getConceptCountsPerStudyPack(
+                eq(List.of(firstPack.getId(), secondPack.getId())),
+                anyCollection(),
+                eq(userId),
+                any(OffsetDateTime.class)
+        )).thenReturn(Map.of(
+                firstPack.getId(), new ProgressReportService.ConceptCounts(3, 1, 1, 1),
+                secondPack.getId(), new ProgressReportService.ConceptCounts(2, 0, 1, 1)
+        ));
+
+        Map<String, NoteConceptCountsResponse> result = service.getNoteConceptCounts(collectionId, userId);
+
+        assertThat(result).containsOnly(
+                Map.entry(firstNoteId.toString(), new NoteConceptCountsResponse(3, 1, 1, 1)),
+                Map.entry(secondNoteId.toString(), new NoteConceptCountsResponse(2, 0, 1, 1))
+        );
+        assertThat(result).doesNotContainKey(noPackNoteId.toString());
+    }
+
+    @Test
+    void getNoteConceptCounts_returnsEmptyMapWhenNoNotesHaveStudyPacks() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+
+        Map<String, NoteConceptCountsResponse> result = service.getNoteConceptCounts(collectionId, userId);
+
+        assertThat(result).isEmpty();
+        verify(progressReportService, never()).getConceptCountsPerStudyPack(anyList(), any(), any(), any());
+    }
+
+    @Test
+    void getNoteConceptCounts_returnsNotFoundForNonOwnedCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getNoteConceptCounts(collectionId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
+        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(collectionId);
     }
 
     @Test
@@ -1193,6 +1284,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
         source.setVisibility(CollectionVisibility.PUBLIC);
         source.setCourseProgram(UPDATED_COURSE_PROGRAM);
+        source.setEstimatedStudyHours(2);
         NoteCollectionItemEntity firstItem = buildItem(sourcePlanId, firstNoteId, 0, WEEK_ONE_LABEL);
         NoteCollectionItemEntity privateItem = buildItem(sourcePlanId, privateNoteId, 1, WEEK_TWO_LABEL);
         NoteEntity publicNote = buildNote(firstNoteId, sourceOwnerId, NOTE_TITLE_ONE);
@@ -1219,6 +1311,28 @@ class NoteCollectionServiceTest {
         verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
         assertThat(collectionCaptor.getValue().getVisibility()).isEqualTo(CollectionVisibility.PRIVATE);
         assertThat(collectionCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
+        assertThat(collectionCaptor.getValue().getEstimatedStudyHours()).isEqualTo(2);
+    }
+
+    @Test
+    void adopt_carriesNullEstimatedStudyHoursToPersonalPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setEstimatedStudyHours(null);
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getEstimatedStudyHours()).isNull();
     }
 
     @Test
@@ -1307,6 +1421,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, sourceOwnerId, "LET Mastery", Instant.now());
         sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
         sourceGoal.setCourseProgram(UPDATED_COURSE_PROGRAM);
+        sourceGoal.setEstimatedStudyHours(3);
         NoteCollectionEntity firstChild = buildCollection(firstChildId, sourceOwnerId, "General Education", Instant.now());
         NoteCollectionEntity secondChild = buildCollection(secondChildId, sourceOwnerId, "Professional Education", Instant.now());
         firstChild.setVisibility(CollectionVisibility.PUBLIC);
@@ -1359,6 +1474,9 @@ class NoteCollectionServiceTest {
         assertThat(personalSecondChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
         assertThat(personalFirstChild.getSiblingPosition()).isZero();
         assertThat(personalSecondChild.getSiblingPosition()).isEqualTo(1);
+        ArgumentCaptor<NoteCollectionEntity> goalCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository, times(3)).saveAndFlush(goalCaptor.capture());
+        assertThat(goalCaptor.getAllValues().getFirst().getEstimatedStudyHours()).isEqualTo(3);
         verify(analyticsService).trackEvent(
                 eq(userId),
                 eq(AnalyticsEventType.STUDY_GOAL_ADOPTED),

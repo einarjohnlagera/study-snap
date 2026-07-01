@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.34.0 - Journey: Goal-First Study Experience` is the next planned release.
+`v0.34.0 - Journey: Goal-First Study Experience` is the latest released version (on `releases/v0.34.0`).
 
-`v0.33.4 - Builder Surface Clarity` is the latest released version (on `releases/v0.33.4`).
+`v0.33.4 - Builder Surface Clarity` is the previous released version (on `releases/v0.33.4`).
 
 `v0.33.3 - Recursive Goal Adopt` is the previous released version (on `releases/v0.33.3`).
 
@@ -169,18 +169,27 @@ The 2-level Goal → Subject model is intentionally constrained. Going to 3+ lev
 
 ---
 
-## Journey (next-priority candidate, gated) - guided goal-completion
+## v0.34.0 - Journey: Goal-First Study Experience (released)
 
-Gated on v0.33.1's Curated Plan Coverage landing **and** non-trivial adoption (re-run `journey-validation-pulls.md` Pull 1 — e.g. ≥20–30 adoptions across covered goals — so it becomes a real retention test). Likely precedes the teacher-gated v0.34.0 below (still no teacher cohort). The goal-first reframe of pieces **already shipped** — adopt (`STUDY_PLAN_ADOPTED`), the Not-started/In-progress/Completed badge, and v0.33.0 readiness — into one cohesive guided experience. Locked direction (decided with Claude, 2026-06):
-- **Curation-match, never AI synthesis.** "NoteLib chooses the notes" = an admin-curated plan *matched* to the learner's goal/course-program (the v0.31.0 adopt path), **not** an algorithm assembling a per-user plan. The latter trips the standing "Curation, never generation" rule and is explicitly out.
-- **Composition, not a rewrite.** Journey is repositioning shipped parts, not a new model/endpoint/pipeline.
-- **Unify readiness onto Progress — one surface, not two (decided 2026-06, post-sign-off concern).** Today there are two readiness surfaces: global `/me/progress` (no plan scope) and the plan readiness sub-route (`/collections/[id]/readiness`, scoped to one plan). They look redundant at low coverage / single-plan accounts, but the **plan scope is the whole value** and Progress can't express it today. Journey's resolution: give Progress a **per-plan/goal lens**, and make plan readiness *that lens* (a deep-link into scoped Progress) rather than a separate page — one readiness surface. Do **not** do the cheap version (redirect "Check readiness" → global Progress): it regresses the scoping. This subsumes the plan readiness sub-route into Progress; it does not delete the global view.
-- **Monetization is mid-journey, not at completion.** Adopt stays free (locked). The conversion moment is goal-commitment + exam-date urgency + premium walls hit *during* the journey (Board Exam mode, practice volume) — not a "finish → subscribe" reward (finishing for free gives no reason to pay; free-quota-hit is 0.0%).
-- **Readiness stays Free — decided 2026-06, not revisited.** The note readiness *signal* is Free by design: it is the return trigger for the non-returning cohort, `/me/progress` is already Free, readiness is derived (zero marginal cost), and at 0.0% free-quota-hit / 0 payers there is no paid cohort to cannibalize. Do **not** re-gate it to PLUS/PRO to chase revenue — clawing back a free feature is a trust hit and gates the wrong thing; build paid value via the mid-journey premium walls instead. PLUS/PRO keep only the per-concept review-*timing* detail.
-- **Retention pull = goal-gradient (a defined finish line), not streaks.** Legitimate, pressure-free, and distinct from the banned streak/guilt mechanics. Still depends on an external return trigger (the re-engagement email / exam deadline) to bring users back to *see* the bar move.
-- **Mastery principle (settled 2026-06):** mastery stays **per-study-pack**; **no reset**; readiness stays honest; do **not** engineer concept-name mastery transfer across adopted duplicates (a stronger note is a new pack with a clean slate; recency decay is the soft reset). The per-pack vs concept-global choice surfaces here — answer is per-pack (honest).
+Base branch: `releases/v0.34.0`. Transform the study plan detail from a note list into a guided study surface. Every piece reuses shipped infrastructure — no new AI, no new mastery signal, no new quiz model. Composition over rewrite.
 
-Anti-drift: no AI curriculum synthesis; no third readiness surface (Journey subsumes plan-readiness into a Progress lens); adopt stays free; no streaks; curated-match only; mastery stays per-pack. Validation gate: re-run `journey-validation-pulls.md` Pull 1 once adoption is non-trivial before committing to the Phase 2 build.
+**Scope (decided with Claude, 2026-07):**
+- **Section readiness on plan detail.** Reverse the v0.33.x locked rule: section cards show readiness % and concepts due. Backend adds per-note concept health counts to the plan detail response; frontend aggregates by section label client-side. Lazy-loaded post-initial-render. No new mastery signal.
+- **Estimated study time.** Optional `estimatedStudyHours` on the collection entity (Flyway migration). Curator-entered, carries over on adopt, never blocks adopt or quiz.
+- **Plan Hero.** Plan title, description, course/program, and estimated time as a visual hero card on the plan detail. Frontend-only.
+- **"Continue where you left off".** Last-studied note = `argmax(lastSessionCompletedAt)` — already in the plan detail response. Adaptive CTA drives to that note's next action. Zero new backend.
+- **Builder for leaf plans.** Extend `/collections/{id}/builder` to handle single-plan (leaf) context: notes as draggable cards with section-label assignment. Eliminates the inline organize mode toggle from leaf plan detail pages. Existing endpoints only — no new API.
+
+Locked direction (carried forward from prior sessions):
+- **Curation-match, never AI synthesis.** "NoteLib chooses the notes" = admin-curated plan matched to learner's goal/course-program — not an algorithm assembling a per-user plan.
+- **Composition, not a rewrite.** Journey repositions shipped parts, not a new model/endpoint/pipeline.
+- **Unify readiness onto Progress — one surface, not two (decided 2026-06).** Plan readiness sub-route becomes a per-plan/goal lens into Progress, not a separate surface. Do **not** redirect "Check readiness" → global Progress (regresses scoping).
+- **Monetization is mid-journey, not at completion.** Adopt stays Free. Conversion moment is goal-commitment + exam-date urgency + premium walls hit *during* the journey.
+- **Readiness stays Free.** It is the return trigger; clawing it back is a trust hit with no revenue upside at 0.0% quota-hit rate.
+- **Retention pull = goal-gradient (a defined finish line), not streaks.** Legitimate and pressure-free.
+- **Mastery stays per-study-pack; no reset.** No concept-name mastery transfer across adopted duplicates.
+
+Anti-drift: section readiness reuses `ConceptHealth` / `ProgressReportService` — no new signal, field, or AI call; `estimatedStudyHours` always optional; Builder leaf canvas uses existing collection endpoints only; no new chart library; readiness Free; adopt Free; no quota / billing / price / checkout changes; 2-level hierarchy max enforced.
 
 ---
 
@@ -475,7 +484,7 @@ Anti-drift: reuse the existing reminder-preference pattern (entity flag + reposi
 
 ---
 
-## v0.34.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
+## v0.35.0 (candidate, gated on teacher users) - Bulk Quiz Generation & Teacher-Flow Polish
 
 Theme: reduce the friction of turning material into quizzes. Builds on the v0.27.0 collections spine and the v0.29.0 bulk-generation foundation. **Deferred (was v0.33.0, before that v0.32.0, earlier v0.31.0, before that v0.30.0, originally v0.29.0)** — we have no teacher users yet, so this only schedules once a teacher cohort exists; it may slip further. (v0.33.0 was repurposed for the Study Plans retention work above.) **Honest remainder after v0.29.0:** v0.29.0 builds the shared batch-orchestration + quota foundation for bulk *content* (note + Study Pack) generation from topics; this release extends that to **collection-level bulk *quiz* generation over existing notes** plus async quiz generation, and bundles three teacher-flow quiz-preview polish fixes. Make quiz generation async (like the Study Pack pipeline), then add a collection-level bulk action that batches the universal per-note pipeline.
 

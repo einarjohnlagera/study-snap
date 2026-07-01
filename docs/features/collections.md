@@ -37,6 +37,7 @@ Fields:
 - optional `description`
 - `visibility` (`PRIVATE` by default, `PUBLIC` only for admin-published plans)
 - optional `courseProgram`
+- optional `estimatedStudyHours`, curator-entered study-time guidance shown by journey surfaces and copied on adopt
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
 - optional `siblingPosition`, used only to order child Subject plans under the same Goal
@@ -90,15 +91,20 @@ Hierarchy constraints:
 - the first implementation keeps Goals note-free: a collection must be empty before it can become a Goal, and a Goal cannot accept direct note items
 - these rules enforce the maximum two levels and make cycles impossible
 
-### Goal Builder Canvas
+### Builder Canvas
 
-The v0.33.1 builder turns hierarchy curation into one canvas:
+The builder route is `/collections/{id}/builder`. It first loads the base collection through `GET /collections/{id}`:
+
+- if `childCount > 0`, it renders the Goal builder canvas.
+- if `childCount == 0`, it renders the leaf-plan builder canvas for that one collection's notes and sections.
+
+The v0.33.1 Goal builder turns hierarchy curation into one canvas:
 
 - Goal = canvas.
 - Subject plans = draggable, collapsible section blocks.
 - Notes = cards inside each Subject.
 
-The builder route is `/collections/{id}/builder`. It loads the authoritative Goal shape from `GET /collections/{id}/goal`, then loads each child Subject's notes through the existing collection detail endpoint. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
+The Goal path loads the authoritative Goal shape from `GET /collections/{id}/goal`, then loads each child Subject's notes through the existing collection detail endpoint. Refreshing the page reconstructs the same structure from backend state; no client-only builder state is required for persistence.
 
 The builder deliberately orchestrates existing collection endpoints:
 
@@ -119,6 +125,16 @@ The only new backend capability for the builder is sibling ordering for child Su
 - `GET /collections/{id}/goal` returns children by `siblingPosition asc`, null positions last, with `updatedAt desc` as fallback
 
 Modules remain the existing per-note `label` / Section field inside a child Subject plan. The builder does not add a third drag level for modules, does not add module readiness, and does not reinterpret labels as hierarchy.
+
+The v0.34.0 leaf-plan builder uses the same route for childless collections:
+
+- sections are the existing item `label` values, with `null` / blank labels grouped as **Ungrouped**.
+- notes are draggable cards inside section zones.
+- moving a note to another section changes only its label.
+- reordering and relabeling persist through `PUT /collections/{id}/items/order` with the full item payload.
+- removing a note uses `DELETE /collections/{id}/items/{noteId}`.
+- there is no Add notes flow in the builder; users add notes from the plan detail page.
+- no new backend API, section entity, module entity, hierarchy level, readiness field, or AI call is introduced.
 
 ## Profile-Aware Terminal Actions
 
@@ -294,6 +310,8 @@ The detail response also exposes neutral hierarchy metadata:
 
 The frontend uses `childCount > 0` to render the Goal view. Childless plans render the existing flat detail unchanged.
 
+The detail response includes optional `estimatedStudyHours` as metadata only. It is nullable, never required, and does not affect adopt, publish, quiz, readiness, quota, or generation behavior.
+
 ### Get Collection Readiness
 
 `GET /collections/{id}/readiness`
@@ -325,6 +343,32 @@ Aggregation rules:
 - No new persisted readiness field, generated content, quota category, AI call, trend, snapshot, or batch/progress infrastructure is added.
 
 This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, scoped to the dedicated readiness detail route only. Collection detail execution rows, collection list cards, published-plan cards, and public source plans must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
+
+### Get Note Concept Counts
+
+`GET /collections/{id}/note-concept-counts`
+
+Returns owner-scoped per-note readiness counts for the authenticated user's own collection only. Missing, malformed, public-source, or not-owned ids return `CollectionNotFoundException` / `404`.
+
+Response shape:
+
+- map key: `noteId` as a string
+- map value:
+  - `totalConceptCount`
+  - `masteredConceptCount`
+  - `dueConceptCount`
+  - `notPracticedConceptCount`
+
+Aggregation rules:
+
+- Starts from the collection's note items and loads Study Packs for those notes.
+- Notes without Study Packs are omitted from the map.
+- Study Packs with zero key concepts return entries with all counts at `0`.
+- Empty collections and collections with no Study Packs return `{}`.
+- Counts reuse `ProgressReportService` concept classification and the existing `ConceptHealth` model.
+- Concept health is loaded in one batch via `findByUserIdAndStudyPackIdIn`; the endpoint must not issue one concept-health query per note.
+- This endpoint is lazy readiness data for frontend section aggregation. The backend does not group by section label, add a section entity, add a mastery field, persist readiness, or call AI.
+- Readiness counts stay Free. Do not gate this endpoint behind `conceptHealthService.canViewConceptHealth(userId)`; Plus/Pro gating remains limited to review-timing detail such as `dueConceptCount` / `dueConcepts` on collection detail items.
 
 ### Get Goal Detail
 
@@ -416,6 +460,7 @@ Request:
 - `title` optional, but if present it must be non-blank and max `150`
 - `description` optional and nullable
 - `courseProgram` optional and nullable; normalized with the same course/program normalization used by notes
+- `estimatedStudyHours` optional and nullable; `null` clears the value
 
 Behavior:
 
@@ -477,7 +522,7 @@ Behavior:
 - if the caller already owns a collection with `sourcePlanId={id}`, the endpoint returns that existing personal plan id instead of creating a duplicate
 - otherwise the endpoint iterates source items in saved order and calls `copyNote(noteId, userId, includeStudyPack=true)` for each still-public source note
 - each source item is isolated; private, deleted, or otherwise unavailable notes are skipped and counted instead of failing the whole adoption
-- the personal collection is `PRIVATE`, keeps `sourcePlanId={source id}`, mirrors the source title/description/courseProgram, and preserves copied item order plus labels
+- the personal collection is `PRIVATE`, keeps `sourcePlanId={source id}`, mirrors the source title/description/courseProgram/estimatedStudyHours, and preserves copied item order plus labels
 - adoption bills no quota and makes no AI calls
 - `sourcePlanId` is lineage/idempotency only; source edits never sync into adopted personal plans
 - server analytics fires `STUDY_PLAN_ADOPTED` with `sourcePlanId`, `copiedCount`, `skippedCount`, and `alreadyAdopted`
@@ -499,7 +544,7 @@ Behavior:
 
 - authenticated users can adopt only `PUBLIC` source Goal collections; a public leaf plan passed to this endpoint returns `CollectionNotFoundException` / `404`
 - if the caller already owns a Goal with `sourcePlanId={id}`, the endpoint returns that existing personal Goal id with `alreadyAdopted=true`
-- otherwise the endpoint creates a private personal Goal with `sourcePlanId={source Goal id}` and copied title/description/courseProgram, but no direct items
+- otherwise the endpoint creates a private personal Goal with `sourcePlanId={source Goal id}` and copied title/description/courseProgram/estimatedStudyHours, but no direct items
 - each source child Subject plan is adopted through the existing leaf `adopt` flow, so note copying, per-note skip isolation, Study Pack inclusion, idempotency, and concurrent-adopt race recovery stay centralized
 - after a child Subject is adopted, a standalone existing personal child (`parentCollectionId == null`) is re-parented under the new personal Goal and receives the source sibling position
 - an existing personal child already nested under another personal Goal is skipped; it is not duplicated and not re-parented
@@ -585,6 +630,7 @@ The core Collections UI ships as the universal organization surface:
 
 - `/collections` lists the user's saved collections in backend order (`updatedAt desc`).
 - `/collections/[id]` shows one collection, its ordered note items, label-derived sections when present, and a per-note execution-status hint.
+- Leaf collection detail renders a Plan Hero card with course/program, title, description, optional `~N hrs` estimated study time, and the existing Study Pack readiness rollup (`notesWithStudyPack/totalNotes`). Goal detail keeps its Goal-specific header and readiness summary.
 - The per-note hint is a learner practice signal, not exam-readiness: `Needs Study Pack` (no `STUDY_PACK_READY` pack yet) → `Not started` (pack ready, `lastSessionCompletedAt == null`) → `Practiced` (`lastSessionCompletedAt != null`), with transient `Generating` / `Generation failed` states preserved for operational feedback. It deliberately does **not** show `Study Pack ready` / `Quiz ready` (the prior hint): plan-level Study Pack readiness already lives in the Progress rollup, and exam-eligibility (quiz-readiness) is surfaced on the Exam Builder, not here.
 - `/collections/[id]` header actions: `Edit` and `Delete` live in a single `⋯` context menu (short labels, mirroring Note Detail); the teacher terminal action (`Build Exam`) sits at the bottom-left of the header card via the `PageHeader` `footer` slot, not crammed into the action row. Admin status is read reactively (SSR-safe).
 - Admins see a published/private **status badge that is itself the publish control** (Notion-style): it sits **below the title** (mirroring Note Detail's visibility control), and clicking it (`aria-label="Publish settings"`, gear affordance) opens the publish modal. There is no separate `Publish settings` menu item or `Share` button. The boilerplate header description is omitted when the plan has no author-written description.
@@ -593,19 +639,20 @@ The core Collections UI ships as the universal organization surface:
 - `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
 - Entitled users see per-note due-concept counts and up to 3 concept names. Free users see no fabricated counts and may see one plan-aware upgrade affordance resolved through `getUpgradeCtas(currentPlan)`.
 - A frontend-only `Next in this plan` card derives one action from the already-returned ordered items. It never calls a recommendation endpoint or persists recommendation state.
-- `/collections/[id]` opens in read mode by default. Note cards show title, subject/course metadata, execution status, entitled due-concept signals, and admin private badges; drag handles, the per-note Section combobox, Move up/down, and Remove controls are hidden until the user clicks `Organize`. The toggle changes to `Done organizing` while active. Flat plans with no labels use the same read/organize split without adding collapse behavior.
+- `/collections/[id]` opens in read mode by default. Note cards show title, subject/course metadata, execution status, entitled due-concept signals, and admin private badges. Leaf plan curation now links to `/collections/{id}/builder`; the old inline `Organize` toggle is no longer exposed from detail. Drag handles, the per-note Section combobox, Move up/down, and Remove controls remain implementation support for existing organize-mode code paths but are not the primary curation entry point.
 - When at least one item has a trimmed non-empty `label`, `/collections/[id]` groups the notes into collapsible section cards (`section name + item count + chevron`). Section order follows the first/minimum `position` in each section, items stay in `position` order within each section, and null/empty labels render under a trailing **Ungrouped** section. Section cards start collapsed below the `lg` breakpoint and expanded at `lg` and wider; collapsed sections render only the header row (including in organize mode). When collapsed, the card also shows a **title peek**: the first 1–3 note titles joined by `·`, with a `+N more` suffix when there are more — pure content preview, no progress semantics.
 - **Inline section rename (organize mode only).** In organize mode, the section name in each non-Ungrouped section card becomes an editable `<input>`. Clicking it enters edit mode; `Enter` or blur commits; `Escape` cancels without saving. Committing an empty name or the unchanged name is a no-op. Committing the reserved name `"Ungrouped"` is a no-op (that string is the synthetic null-label bucket and cannot be used as a real label). Committing a name that already exists as another section triggers a **merge confirmation modal** ("Merge into 'X'? All notes from 'Y' will be moved into it.") with Cancel / Merge sections actions; confirming sends a single batch `setCollectionItemOrder` with all items from the old section relabeled to the target name. All rename paths use one API call, not one per note. The `Ungrouped` section name is static in organize mode (null-label items cannot be given a shared label this way; use the per-note Section combobox instead).
-- Section headers and item rows are execution organization only. They must not show readiness, mastery percentages, subject mastery, milestones, goals, streaks, weakest-subject routing, or progress bars; readiness remains on `/collections/[id]/readiness`.
+- Section headers may show the v0.34.0 Free readiness stat `N% · M due`, computed by lazy-loading `GET /collections/{id}/note-concept-counts` after initial render and aggregating by item label client-side. The stat is hidden while organize mode is active and when a section has zero concepts or the lazy fetch fails. Item rows remain execution organization only: no subject mastery, milestones, goals, streaks, weakest-subject routing, or progress bars.
 - The next-action phases are evaluated globally in this order, choosing the first matching note in saved order within each phase:
   1. First note without `STUDY_PACK_READY` -> `Generate Study Pack`.
   2. When all Study Packs are ready, first note with no completed practice -> `Study this note`.
   3. When all notes are practiced, first note with due concepts -> `Review due concepts` for entitled users only.
   4. Otherwise -> `All caught up in this plan`.
 - The Next card links to `/notes/{noteId}` with `ref=/collections/{collectionId}` so Note Detail returns to the current plan.
+- The "Continue where you left off" banner uses the latest non-null `lastSessionCompletedAt` among returned items and links to that note's same next plan action. It is dismissible for the browser session through `sessionStorage` and never persists server state.
 - Empty collections show a neutral no-progress state and never calculate a percentage from `0/0`.
 - The detail page loads from `GET /collections/{id}` on mount, so a hard refresh renders the persisted order.
-- The detail page can edit metadata, delete the collection, add notes, remove notes, relabel items, and reorder items through the shipped CRUD API.
+- The detail page can edit metadata, including optional estimated study time, delete the collection, and add notes through the shipped CRUD API. Builder owns the primary relabel/reorder/remove curation path for leaf plans.
 - Opening a note from the detail page passes `ref=/collections/{id}`, so the note's back link returns to the collection with the profile-aware label (via `getCollectionLabels`) instead of falling back to Library.
 
 Profile-aware labels are resolved only through `frontend/lib/collection-labels.ts`.
