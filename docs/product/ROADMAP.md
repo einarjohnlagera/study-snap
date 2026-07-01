@@ -120,7 +120,16 @@ Base branch: `releases/v0.33.2`. The v0.33.x series is the study-plan line — e
 **Subject metadata normalization on LET curated plan (data ops, no code):**
 - Normalize inconsistent `subject` field variants on the 29-note LET plan so the readiness page groups cleanly. Cleanup confined to that plan's notes; no impact on other plans or global Progress.
 
-Anti-drift: sections stay label-derived (no mastery on headers); readiness stays Free, derived, matches `/me/progress`; this release is frontend-only (no new backend endpoint or migration); no new chart library; no quota / billing / price / checkout change; recursive Goal adopt is deferred to v0.33.3.
+**Study Pack subject source fix (backend, `StudyPackService`):**
+- Root cause of readiness grouping drift: when a Study Pack is generated, the LLM freely invents a `subject` string, and `normalizeSubject()` only catches exact case/whitespace variants — not semantic synonyms ("Assessment" vs "Assessment of Learning"). Fix: prefer `note.subject` over the LLM-generated subject when one already exists on the note. One-line change in `StudyPackService` at the `setSubject(...)` call. If the note has no subject, fall back to the LLM value (same as today). Prevents future drift on all curated plans without touching the data model.
+
+**Readiness grouping by note subject (backend, `ProgressReportService`):**
+- `ProgressReportService.resolveSubject()` currently reads `studyPack.subject` — the LLM-generated string that may drift. Fix: resolve the grouping key from the note's own `subject` field (fetched in one batch query per grouping call, no N+1), falling back to `studyPack.subject` only when the note has none. Combined with the `StudyPackService` source fix, this heals historical drift on all existing plans without requiring per-plan data patches.
+
+**Feature doc update (`docs/features/`):**
+- Document the note-wins subject resolution rule: `note.subject` is authoritative; LLM subject is fallback when note has none. Update readiness grouping description to reflect the `ProgressReportService` change.
+
+Anti-drift: sections stay label-derived (no mastery on headers); readiness stays Free, derived, matches `/me/progress`; no new chart library; no quota / billing / price / checkout change; recursive Goal adopt is deferred to v0.33.3.
 
 ---
 
