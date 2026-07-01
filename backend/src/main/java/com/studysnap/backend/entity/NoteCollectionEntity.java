@@ -39,6 +39,9 @@ public class NoteCollectionEntity {
     @Column(name = "course_program", length = 120)
     private String courseProgram;
 
+    @Column(name = "estimated_study_hours")
+    private Integer estimatedStudyHours;
+
     @Column(name = "source_plan_id")
     private UUID sourcePlanId;
 
