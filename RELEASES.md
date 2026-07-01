@@ -2,7 +2,7 @@
 
 ## v0.33.2 - Plan Detail Redesign (view/edit split)
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: the v0.33.x study-plan series continues. v0.33.1 shipped hierarchy (Goal → Subject) and curated-plan content; now the **leaf plan detail is the gap** — on mobile, 29-note plans render a wall of edit chrome that makes the page unusable. v0.33.2 is a frontend-only polish release targeting the mobile experience without touching locked rules. v0.33.3 (recursive Goal adopt) follows.
 
@@ -18,6 +18,10 @@ Anti-drift (carried forward and new): sections stay label-derived (no section en
 ### Shipped
 
 - **Leaf plan detail view/organize split** (frontend). `/collections/[id]` now opens in a clean read view: note cards show title, metadata, execution status, due-concept signals, and admin private badges without drag handles, Section comboboxes, Move buttons, or Remove buttons. A Notes-card `Organize` toggle reveals the structural controls only when needed, and label-derived sections now render as collapsible cards whose initial expanded state follows the `lg` breakpoint (collapsed on mobile, expanded on desktop) with no readiness or mastery added to section headers.
+- **Section card polish** (frontend). Section headers no longer use blue (which read as a link); the collapse toggle gains a hover background and a single rotated `ChevronDown` in place of the two-icon swap. Collapsed cards show a **title peek** (first 1–3 note titles + "+N more") so the card is never empty. In organize mode the section name becomes an **inline-editable input**: blur or Enter commits the rename as a single batch `setCollectionItemOrder` call; Escape cancels; renaming to an existing section name triggers a merge-confirmation modal. `"Ungrouped"` is reserved and cannot be typed as a target name.
+- **Study Pack subject source fix** (backend). `StudyPackService` now saves `note.subject` as the Study Pack subject when the note already has one, falling back to the LLM-generated value only when the note has none. Prevents future readiness grouping drift on all curated plans without touching the data model.
+- **Readiness grouping by note subject** (backend). `ProgressReportService.resolveSubject()` now reads from the note's own `subject` field (batch-fetched, no N+1), falling back to `studyPack.subject` when the note has none. Combined with the source fix above, this heals historical subject drift on all existing plans without per-plan data patches.
+- **LET Professional Education subject normalization** (data ops). Normalized inconsistent `subject` field variants on the 29-note LET Professional Education curated plan so the readiness page groups the notes cleanly under consistent subject labels. No code change — metadata-only update confined to that plan's notes.
 
 ---
 

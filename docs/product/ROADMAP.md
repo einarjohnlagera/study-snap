@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.33.2 - Plan Detail Redesign (view/edit split)` is the current in-progress release (on `releases/v0.33.2`).
+`v0.33.3 - Recursive Goal Adopt` is the next planned release.
 
-`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the latest released version (on `releases/v0.33.1`).
+`v0.33.2 - Plan Detail Redesign (view/edit split)` is the latest released version (on `releases/v0.33.2`).
+
+`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the previous released version (on `releases/v0.33.1`).
 
 `v0.33.0 - Study Plans as a Retention Engine` is the previous baseline (on `releases/v0.33.0`).
 
@@ -108,7 +110,7 @@ Anti-drift: readiness stays Free (decided, not revisited — see the Journey can
 
 ---
 
-## v0.33.2 - Plan Detail Redesign (view/edit split) (in progress)
+## v0.33.2 - Plan Detail Redesign (view/edit split) (released)
 
 Base branch: `releases/v0.33.2`. The v0.33.x series is the study-plan line — each minor tightens it. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile. A real 29-note curated plan (LET Professional Education Mastery) exposed the gap: the page is a wall of edit chrome — SECTION combobox, Move up/down, and Remove on every single note card — making it unusable on mobile. Gate (curate one real plan first) is now lifted. v0.33.3 (recursive Goal adopt) follows.
 
