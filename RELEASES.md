@@ -20,6 +20,11 @@ Anti-drift: section readiness reuses existing `ConceptHealth` / `ProgressReportS
 
 - **Collection estimated study time (backend).** Added nullable `estimatedStudyHours` storage and collection detail metadata so curators can attach optional study-time guidance to plans. Metadata updates can set or clear the value, and adopted leaf plans and Goals copy the source estimate alongside title, description, and course/program without affecting adopt, quiz, quota, or publish gates.
 - **Per-note concept counts endpoint (backend).** Added owner-only `GET /collections/{id}/note-concept-counts`, returning a map keyed by note id with total/mastered/due/not-practiced concept counts for notes that have Study Packs. The endpoint reuses `ProgressReportService` concept classification, performs a single batched `findByUserIdAndStudyPackIdIn` lookup, omits notes without Study Packs, returns `{}` for no data, and stays Free readiness data rather than gated review-timing detail.
+- **Plan Hero (frontend).** Replaced the leaf plan detail header with a hero card that surfaces course/program, title, description, optional `~N hrs` study-time guidance, overall Study Pack readiness, and the existing action area without changing Goal detail.
+- **Section readiness on plan detail (frontend).** Added a lazy, owner-scoped `note-concept-counts` fetch after initial render and aggregate the returned per-note counts by section label client-side. Section headers now show a compact `N% · M due` stat in view mode only, and failures degrade silently.
+- **Estimated study time editing (frontend).** Added an optional estimated-hours input to the edit modal and forward both `courseProgram` and `estimatedStudyHours` on every metadata save so title/description edits do not wipe hidden metadata.
+- **Continue where you left off (frontend).** Added a dismissible per-session continue banner that picks the latest practiced note from `lastSessionCompletedAt` and links to that note's next plan action.
+- **Builder for leaf plans (frontend).** Extended `/collections/{id}/builder` to detect childless collections and render a note-section canvas using existing item-order, label, and remove endpoints. The leaf detail page now links to Builder instead of exposing the inline Organize toggle.
 
 ---
 
