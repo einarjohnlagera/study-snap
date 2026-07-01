@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.33.3 - Recursive Goal Adopt` (in progress); previous: `v0.33.2 - Plan Detail Redesign (view/edit split)`
+Current release baseline: `v0.33.4 - Builder Surface Clarity` (in progress); previous: `v0.33.3 - Recursive Goal Adopt`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.33.3** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.33.4** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.33.3 — Recursive Goal Adopt
+## Active release: v0.33.4 — Builder Surface Clarity
 
-Base branch for this release: `releases/v0.33.3`. The v0.33.x series is the study-plan line. v0.33.2 shipped the plan detail redesign (view/organize split, section card polish, subject-source fixes); v0.33.3 closes the adopt gap — a curator's multi-Subject Goal plan cannot yet be adopted as a single unit. Locked rules:
+Base branch for this release: `releases/v0.33.4`. The v0.33.x series is the study-plan line. v0.33.3 shipped recursive Goal adopt; v0.33.4 is a focused frontend-only polish release. Locked rules:
 
-- **Recursive adopt only.** Adopting a Goal copies all child Subject plans and their notes into the learner's library in one action. No other new features in this release.
+- **Builder page only.** Remove the top-level `ReadinessSummary` ring from the Builder page. Per-module readiness stats in Subject plan headers stay. No changes to the plan detail page, leaf-plan organize mode, or any backend code.
 - **Copy-and-edit semantics — decided.** Adopted notes are the learner's own copies, editable and removable immediately. Consistent with the Study Pack copy-and-edit principle. No read-only lock, no "unlock to edit" step.
 - **2-level max enforced.** Goal → Subject only. No 3rd level, no new hierarchy changes.
 - **Adopt stays Free.** No quota, billing, price, or checkout change.

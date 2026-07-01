@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.33.4 - Builder Surface Clarity
+
+**Status: In Progress**
+
+Theme: the Goal Builder is an authoring surface, not a study surface. The `ReadinessSummary` ring currently appears on the Builder page — the same component used on the plan detail — creating role confusion between editing and monitoring. v0.33.4 removes it from the Builder, where per-module stats in each Subject plan header already provide all the authoring-relevant signal a curator needs.
+
+### Planned Scope
+
+- **Remove `ReadinessSummary` from Builder page (frontend).** The top-level readiness ring (`<ReadinessSummary>` at the Builder page root) belongs on the plan detail, not the builder canvas. Per-module readiness stats in each Subject plan header ("4 notes · 0% ready · 0/34 mastered") are retained — they are inline curation signals, not the monitoring ring. Frontend-only; no backend changes.
+
+Anti-drift: readiness still appears on the Goal detail page via `GoalDetailView` (unchanged); per-module stats in Subject plan header rows stay; no new component, endpoint, or migration; no change to leaf-plan organize mode (Builder-for-leaf-plans is scoped to v0.34.0).
+
+### Shipped
+
+---
+
 ## v0.33.3 - Recursive Goal Adopt
 
 **Status: Released**

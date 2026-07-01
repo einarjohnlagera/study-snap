@@ -8,6 +8,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.34.0 - Journey: Goal-First Study Experience` is the next planned release.
 
+`v0.33.4 - Builder Surface Clarity` is the current in-progress release (on `releases/v0.33.4`).
+
 `v0.33.3 - Recursive Goal Adopt` is the latest released version (on `releases/v0.33.3`).
 
 `v0.33.2 - Plan Detail Redesign (view/edit split)` is the previous released version (on `releases/v0.33.2`).
@@ -134,6 +136,16 @@ Base branch: `releases/v0.33.2`. The v0.33.x series is the study-plan line — e
 - Document the note-wins subject resolution rule: `note.subject` is authoritative; LLM subject is fallback when note has none. Update readiness grouping description to reflect the `ProgressReportService` change.
 
 Anti-drift: sections stay label-derived (no mastery on headers); readiness stays Free, derived, matches `/me/progress`; no new chart library; no quota / billing / price / checkout change; recursive Goal adopt is deferred to v0.33.3.
+
+---
+
+## v0.33.4 - Builder Surface Clarity (in progress)
+
+Base branch: `releases/v0.33.4`. Focused frontend-only polish. The Goal Builder (`/collections/{id}/builder`) is an authoring surface, not a study surface — the top-level `ReadinessSummary` ring is the study/monitoring signal that doesn't belong there. Per-module stats inside each Subject plan header ("4 notes · 0% ready · 0/34 mastered") are retained as inline curation feedback.
+
+**Remove `ReadinessSummary` ring from Builder page (frontend-only).** The `<ReadinessSummary>` at the Builder page root is the same component used on the Goal detail page (`GoalDetailView`) — moving it to the detail page is not new work, it just stops rendering on the builder canvas. No backend changes; no change to the plan detail page, leaf-plan organize mode, or any data endpoints.
+
+Anti-drift: readiness continues to appear on Goal detail via `GoalDetailView`; per-module stats in Subject plan header rows stay; no new component, endpoint, or migration. Builder-for-leaf-plans (replacing the leaf-plan organize mode entirely with a Builder canvas) is explicitly scoped to v0.34.0 — do not include it here.
 
 ---
 
