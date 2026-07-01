@@ -944,7 +944,7 @@ function AddNotesModal({
           />
         </label>
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
-        <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+        <div className="space-y-3">
           {hasSelection ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between px-1">
@@ -959,22 +959,24 @@ function AddNotesModal({
                   Clear all
                 </button>
               </div>
-              {selectedNotes.map((note) => (
-                <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-300 bg-blue-50/60 p-3 hover:bg-blue-50 dark:border-blue-800/60 dark:bg-blue-950/20 dark:hover:bg-blue-950/30">
-                  <input
-                    type="checkbox"
-                    checked
-                    onChange={() => toggleSelected(note.id)}
-                    className="mt-1 accent-blue-600"
-                  />
-                  <span className="space-y-1">
-                    <span className="block text-sm font-medium text-foreground">{note.title || "Untitled note"}</span>
-                    <span className="block text-xs text-foreground/60">
-                      {[note.subject, note.courseProgram].filter(Boolean).join(" · ") || "No subject yet"}
+              <div className="max-h-28 space-y-2 overflow-y-auto pr-1">
+                {selectedNotes.map((note) => (
+                  <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-300 bg-blue-50/60 p-3 hover:bg-blue-50 dark:border-blue-800/60 dark:bg-blue-950/20 dark:hover:bg-blue-950/30">
+                    <input
+                      type="checkbox"
+                      checked
+                      onChange={() => toggleSelected(note.id)}
+                      className="mt-1 accent-blue-600"
+                    />
+                    <span className="space-y-1">
+                      <span className="block text-sm font-medium text-foreground">{note.title || "Untitled note"}</span>
+                      <span className="block text-xs text-foreground/60">
+                        {[note.subject, note.courseProgram].filter(Boolean).join(" · ") || "No subject yet"}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              ))}
+                  </label>
+                ))}
+              </div>
             </div>
           ) : null}
           <div className="space-y-1.5">
@@ -984,7 +986,7 @@ function AddNotesModal({
               </span>
             ) : null}
             {hasResults ? (
-              <div className="space-y-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                 {resultNotes.map((note) => (
                   <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-highlight">
                     <input
