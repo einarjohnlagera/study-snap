@@ -413,7 +413,7 @@ function PlanHeroCard({
             ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+        <div className="flex shrink-0 flex-col items-end gap-3">
           {actions}
           {terminalFooter}
         </div>
@@ -2002,7 +2002,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         )}
         terminalFooter={terminalAction ? (
-          <div className="flex flex-col items-start gap-1">
+          <div className="flex flex-col items-end gap-1">
             <ResponsiveActionButton
               action="open"
               label={terminalAction.label}
