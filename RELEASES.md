@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.33.2 - Plan Detail Polish (mobile redesign)
+
+**Status: In Progress**
+
+Theme: the v0.33.x study-plan series continues. v0.33.1 shipped hierarchy (Goal → Subject) and curated-plan content; now the **leaf plan detail is the gap** — on mobile, 29-note plans render a wall of edit chrome that makes the page unusable. v0.33.2 is a frontend-only polish release targeting the mobile experience without touching locked rules. v0.33.3 (recursive Goal adopt) follows.
+
+### Planned Scope
+
+- **Plan detail mobile redesign (collapsible section cards + view/edit split, frontend).** Sections become collapsible cards: collapsed state shows section header + note count, no edit chrome; expanded shows note rows. View mode is the default — SECTION combobox, Move, and Remove controls are hidden by default and revealed only in an organize/edit mode. No readiness on section headers (sections stay label-derived; locked rule unchanged). Codex prompt required.
+- **Subject metadata normalization on LET curated plan** (data ops). Normalize inconsistent `subject` field variants on the 29-note LET Professional Education plan so the readiness page groups correctly. No code change — metadata-only cleanup confined to that plan's notes; no change to other plans.
+
+Anti-drift (carried forward and new): sections stay label-derived (no section entity, no mastery on section headers/cards); readiness stays Free, derived, matches `/me/progress`; no new backend endpoint or model this release (frontend-only); no new chart library; no quota / billing / price / checkout change. Recursive Goal adopt is deferred to v0.33.3.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.33.1 - Study Plan polish & Curated Plan Coverage
 
 **Status: Released**

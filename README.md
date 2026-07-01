@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.33.1 - Study Plan polish & Curated Plan Coverage` (in progress); previous: `v0.33.0 - Study Plans as a Retention Engine`
+Current release baseline: `v0.33.2 - Plan Detail Polish (mobile redesign)` (in progress); previous: `v0.33.1 - Study Plan polish & Curated Plan Coverage`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -398,12 +398,16 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 ## Roadmap
 
-Current release: `v0.33.1 - Study Plan polish & Curated Plan Coverage` (in progress)
+Current release: `v0.33.2 - Plan Detail Polish (mobile redesign)` (in progress)
 
-Planned for v0.33.1:
+Planned for v0.33.2:
 
-- **Curated Plan Coverage (headline)** — assemble (or seed) ≥1 complete, Study-Pack-ready curated plan per goal the actual public learners have; content/curation ops, not new architecture (run the inventory query in `docs/product/journey-validation-pulls.md` to size assemble-vs-seed).
-- **Study Plan polish** — the recommended card no longer offers a re-adopt CTA for a plan the user already owns/adopted; section drag-and-drop scoped per section.
+- **Plan detail mobile redesign** — collapsible section cards + view/edit mode split; view mode is the default; edit chrome revealed only in organize mode.
+- **Subject metadata normalization** — data-only cleanup on the LET curated plan notes so the readiness page groups cleanly.
+
+Planned for v0.33.3:
+
+- **Recursive Goal adopt** — adopting a Goal recursively copies all child Subject plans and their notes, making curated Goal plans adoptable as a single unit.
 
 Readiness stays Free (decided, not revisited); reuses ConceptHealth (no new signal/field/AI). No quota, billing, price, or checkout change. The "Journey" repositioning and teacher bulk-quiz stay deferred (gated candidates).
 

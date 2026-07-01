@@ -6,17 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.33.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.33.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.33.1 — Study Plan polish & Curated Plan Coverage
+## Active release: v0.33.2 — Plan Detail Polish (mobile redesign)
 
-Base branch for this release: `releases/v0.33.1`. v0.33.0 shipped the readiness *lever*; a validation pull (`docs/product/journey-validation-pulls.md`) then showed the plan-adoption retention bet was never testable — only **4 adoptions across ~153 users, 1 goal with a ready plan, 0 post-adopt returns** (n far too small to read as a verdict). The binding constraint is **curated-plan coverage, not architecture.** v0.33.1 is a patch in the study-plan line: small UX-clarity polish plus the coverage push that the bigger "Journey" repositioning is gated on. Locked rules:
+Base branch for this release: `releases/v0.33.2`. The v0.33.x series is the study-plan line; each minor is a tightening pass. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile — a 29-note plan renders a wall of edit chrome that makes the page unusable. v0.33.3 follows with recursive Goal adopt. Locked rules:
 
-- **Curated Plan Coverage is the headline — content/curation ops first.** Run the follow-up inventory query in `journey-validation-pulls.md` to decide **assemble** (build plans from seeded public notes you already have — cheap) vs **seed** (Bulk Generation for goals with little content). Target ≥1 complete, credible, Study-Pack-ready curated plan per goal your *actual* public learners have (let the inventory say where they are — don't assume ALE/PNLE/LET). No new architecture, no AI curriculum synthesis, no new endpoint/model.
-- **Study Plan polish (two items, frontend-only).** (a) Recommended card: do **not** show a re-adopt CTA for a plan the user already owns/adopted — detect owned-source, not just adopted; filtering already-owned plans (falling back to the existing empty state) is cleaner than a badged dead card. (b) Section drag: scope drag-and-drop **per section** (a `SortableContext` per section) so cross-section drag stops being confusing; sections stay label-derived.
-- **Readiness stays Free — decided, not revisited.** The note readiness *signal* is Free (it's the return trigger; `/me/progress` is already Free; readiness is derived / zero-marginal-cost; at 0 payers / 0.0% quota-hit there is no paid cohort to cannibalize). Do not re-gate to chase revenue; PLUS/PRO keep only the per-concept review-*timing* detail.
-- **Carried forward from v0.33.0 (still in force):** readiness is derived, not stored, and must match `/me/progress` (reuse `ProgressReportService` / ConceptHealth — no new mastery signal, persisted field, AI call, or thresholds); sections stay label-derived (no section entity, no nested/umbrella plans, no mastery on rows/headers); no quota / billing / price / checkout change; no new chart library.
-- **Deferred to a gated future candidate (not this release):** "Journey" Phase 2 — the goal-first repositioning + unifying readiness onto Progress as a per-plan lens (one surface, not two) — gated on coverage + non-trivial adoption (re-run validation Pull 1 first). Teacher bulk-quiz / teacher-flow polish stays v0.34.0 (no teacher cohort); dashboard + plan-list readiness badges → v0.34.0.
+- **Frontend-only this release.** Collapsible section cards + view/edit split. No new backend endpoint, no new model, no migration.
+- **Sections stay label-derived.** Section cards show collapse toggle + note count. No readiness on section headers, no mastery on rows/headers. This is a locked rule and the advisor confirmed it — if a grouping needs its own readiness it should be a child Subject plan, not a label.
+- **View mode is the default.** SECTION combobox, Move up/down, and Remove are hidden by default. Revealed in an organize/edit mode (toggle). Not a third parallel editor — the Builder at `/collections/{id}/builder` handles Goal curation; this toggle handles leaf-plan organization.
+- **Readiness stays Free — decided, not revisited.** Derived, matches `/me/progress`; no new mastery signal, persisted field, AI call, or thresholds. PLUS/PRO keep only the per-concept review-timing detail.
+- **Recursive Goal adopt is deferred to v0.33.3.** Adopting a Goal will recursively copy all child Subject plans and their notes (consistent with Study Pack copy-and-edit). Open question on edit semantics (can adopted notes be removed/reorganized?) to be answered with advisor before the v0.33.3 Codex prompt. Do not sneak adopt-recursion into this release.
+- **Carried forward (still in force):** no quota / billing / price / checkout change; no new chart library; "Journey" Phase 2 gated on adoption + coverage; teacher bulk-quiz stays a future gated release.
 
 ## Source-of-truth docs (read before implementing anything)
 

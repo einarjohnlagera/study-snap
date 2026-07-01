@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the latest released version (on `releases/v0.33.1`).
+`v0.33.2 - Plan Detail Polish (mobile redesign)` is the current in-progress release (on `releases/v0.33.2`).
 
-No next release has been kicked off yet.
+`v0.33.1 - Study Plan polish & Curated Plan Coverage` is the latest released version (on `releases/v0.33.1`).
 
 `v0.33.0 - Study Plans as a Retention Engine` is the previous baseline (on `releases/v0.33.0`).
 
@@ -108,19 +108,33 @@ Anti-drift: readiness stays Free (decided, not revisited — see the Journey can
 
 ---
 
-## Plan detail view/edit redesign (candidate, gated on curating one real plan)
+## v0.33.2 - Plan Detail Polish (mobile redesign) (in progress)
 
-Theme: the leaf Study Plan detail still reads like a permanent edit form. v0.33.1 shipped the cheap readability wins (emphasized section headers, Section combobox, header description) but deliberately **deferred the larger view/edit split** — its shape (especially the compact-card spec) is guesswork until a real ~35-note plan exists to design against. The compact card was being spec'd against a 3-note plan; a real plan would likely also demand collapsible sections, sticky/jump-to-section headers, and search-within-plan — none of which are knowable from the armchair.
+Base branch: `releases/v0.33.2`. The v0.33.x series is the study-plan line — each minor tightens it. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile. A real 29-note curated plan (LET Professional Education Mastery) exposed the gap: the page is a wall of edit chrome — SECTION combobox, Move up/down, and Remove on every single note card — making it unusable on mobile. Gate (curate one real plan first) is now lifted. v0.33.3 (recursive Goal adopt) follows.
 
-**Gate:** curate **one real plan** (PNLE-scale) first, then design against it. This is the same curation that validates appetite — so it is the natural gate.
+**Plan detail mobile redesign (frontend, Codex prompt):**
+- **Collapsible section cards** — each label-derived section becomes a card with a collapse toggle. Collapsed state = section header + note count; expanded = note rows. Section cards make boundaries clear and allow users to focus on one section at a time.
+- **View mode by default** — opening a plan shows a clean read view. SECTION combobox, Move up/down, and Remove are hidden by default; revealed via an organize/edit mode toggle. The toggle is *not* a third parallel editor — the Builder at `/collections/{id}/builder` handles Goal-level curation (drag notes across Subject plans); this toggle handles leaf-plan organization (reorder/section-assign within a plan).
+- **No readiness on section headers.** Sections stay label-derived. If a grouping needs its own readiness it should be a child Subject plan (the Goal → Subject model already shipped). This is a confirmed locked rule — do not reverse it.
 
-Scope (design against the real plan, don't pre-spec):
-- **View mode by default** — opening a plan shows a clean, **compact** read view: each note = title · subject · practiced badge · concepts due, tight spacing (plans hold many notes). No Section field, no Move buttons, no edit chrome.
-- **A separate edit mode** (its own toggle, *not* the ⋯→Edit metadata modal which stays title/description) revealing the structural controls.
-- **Edit-mode behaviors not yet delivered:** inline **section rename** at the leaf; **sections reorderable** at the leaf (drag / move up-down — today leaf section order is min-position-derived); **assign a note to a section by dragging** across sections (today only the combobox does it — cross-section drag is a no-op). The dropdown/combobox assignment already shipped.
-- Likely-needed-at-scale (confirm with the real plan, don't assume): collapsible sections, sticky/jump-to-section headers, search-within-plan.
+**Subject metadata normalization on LET curated plan (data ops, no code):**
+- Normalize inconsistent `subject` field variants on the 29-note LET plan so the readiness page groups cleanly. Cleanup confined to that plan's notes; no impact on other plans or global Progress.
 
-Anti-drift: do **not** build a third parallel editor — whether edit is an inline toggle, a modal, or a generalization of the Goal Builder is under-determined until one curation session; decide then. Sections stay label-derived; readiness stays derived + Free; no `ProfileType` branching.
+Anti-drift: sections stay label-derived (no mastery on headers); readiness stays Free, derived, matches `/me/progress`; this release is frontend-only (no new backend endpoint or migration); no new chart library; no quota / billing / price / checkout change; recursive Goal adopt is deferred to v0.33.3.
+
+---
+
+## v0.33.3 - Recursive Goal Adopt (planned)
+
+The curated-plan experience is only complete when a learner can adopt a Goal and get all its child Subject plans and notes in one action. Today, adopting a Goal is not supported — only leaf plans can be adopted — so a curator building a multi-Subject goal plan cannot surface it as a single adoptable unit.
+
+**Recursive Goal adopt:**
+- Adopting a Goal recursively copies all child Subject plans and their notes into the learner's library.
+- Consistent with the Study Pack copy-and-edit principle: adopted notes are the learner's own copies and can be edited, removed, or reorganized.
+- Open question (to resolve with advisor before the Codex prompt): should adopted-Goal copies allow note removal and reorganization immediately on adopt, or should they be locked read-only with an "unlock to edit" step? The Study Pack precedent (copy + edit freely) points toward unrestricted edits, but the curated-plan integrity question is different in character — a curator may want to signal "these notes belong together."
+- Unlocks the Goal → Subject readiness view working end-to-end: once a learner adopts a Goal, each child Subject plan shows its own readiness bar in the Goal detail view (already ships from v0.33.1).
+
+Anti-drift: 2-level max (Goal → Subject) — no 3rd level this release; adopt stays Free; adopted plan readiness reuses `ProgressReportService` (same as owned plans); no new mastery signal or stored field.
 
 ---
 
