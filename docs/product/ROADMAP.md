@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.34.0 - Journey: Goal-First Study Experience` is the current in-progress release (on `releases/v0.34.0`).
+`v0.34.0 - Journey: Goal-First Study Experience` is the latest released version (on `releases/v0.34.0`).
 
-`v0.33.4 - Builder Surface Clarity` is the latest released version (on `releases/v0.33.4`).
+`v0.33.4 - Builder Surface Clarity` is the previous released version (on `releases/v0.33.4`).
 
 `v0.33.3 - Recursive Goal Adopt` is the previous released version (on `releases/v0.33.3`).
 
@@ -169,7 +169,7 @@ The 2-level Goal → Subject model is intentionally constrained. Going to 3+ lev
 
 ---
 
-## v0.34.0 - Journey: Goal-First Study Experience (in progress)
+## v0.34.0 - Journey: Goal-First Study Experience (released)
 
 Base branch: `releases/v0.34.0`. Transform the study plan detail from a note list into a guided study surface. Every piece reuses shipped infrastructure — no new AI, no new mastery signal, no new quiz model. Composition over rewrite.
 

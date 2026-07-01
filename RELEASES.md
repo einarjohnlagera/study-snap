@@ -2,7 +2,7 @@
 
 ## v0.34.0 - Journey: Goal-First Study Experience
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: transform the study plan detail from a note list into a guided study surface. Every piece reuses shipped infrastructure — no new AI, no new mastery signal, no new quiz model. Composition over rewrite.
 
