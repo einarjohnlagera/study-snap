@@ -14,6 +14,8 @@ Anti-drift: readiness still appears on the Goal detail page via `GoalDetailView`
 
 ### Shipped
 
+- **Remove `ReadinessSummary` from Builder page (frontend).** Removed the top-level readiness ring from the Goal Builder canvas. The `<ReadinessSummary>` block and its now-unused import were deleted from `study-plan-builder-page-client.tsx`; readiness continues to appear on the Goal detail page via `GoalDetailView` (unchanged). Per-module stats in each Subject plan header row ("4 notes · 0% ready · 0/34 mastered") are retained as inline curation feedback. Also fixed a typo in the builder page description ("subject plan plans" → "subject plans").
+
 ---
 
 ## v0.33.3 - Recursive Goal Adopt
