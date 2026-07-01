@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
+  adoptGoal,
   adoptStudyPlan,
   listCollections,
   listPublicStudyPlans,
@@ -111,7 +112,14 @@ export function DashboardStudyPlanSection({
 
   const continuePlan = adoptedPlan ?? null;
   const ownsSource = continuePlan?.id === plan.id;
-  const ctaLabel = continuePlan ? (ownsSource ? "Open this plan" : "Continue this plan") : "Start this plan";
+  const isGoal = plan.childCount > 0;
+  const ctaLabel = continuePlan
+    ? (ownsSource ? "Open this plan" : (isGoal ? "Continue this Goal" : "Continue this plan"))
+    : (isGoal ? "Start this Goal" : "Start this plan");
+  const subjectPlanLabel = `${plan.childCount} ${plan.childCount === 1 ? "Subject plan" : "Subject plans"}`;
+  const noteLabel = `${plan.itemCount} ${plan.itemCount === 1 ? "note" : "notes"}`;
+  const descriptionFallback = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} in saved order.`;
+  const detailLine = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} curated for this track.`;
 
   const handleStart = async () => {
     if (continuePlan) {
@@ -121,11 +129,17 @@ export function DashboardStudyPlanSection({
     setAdopting(true);
     setError(null);
     try {
+      if (isGoal) {
+        const result = await adoptGoal(plan.id);
+        setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
+        router.push(`/collections/${result.goalCollectionId}`);
+        return;
+      }
       const result = await adoptStudyPlan(plan.id);
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       router.push(`/collections/${result.collectionId}`);
     } catch (adoptError) {
-      setError(adoptError instanceof Error ? adoptError.message : "Could not start this plan.");
+      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? "Goal" : "plan"}.`);
     } finally {
       setAdopting(false);
     }
@@ -147,12 +161,10 @@ export function DashboardStudyPlanSection({
               </span>
             ) : null}
           </div>
-          <CardDescription>{plan.description || `${plan.itemCount} notes in saved order.`}</CardDescription>
+          <CardDescription>{plan.description || descriptionFallback}</CardDescription>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-foreground/70">
-            {plan.itemCount} {plan.itemCount === 1 ? "note" : "notes"} curated for this track.
-          </p>
+          <p className="text-sm text-foreground/70">{detailLine}</p>
           <Button type="button" loading={adopting} loadingText="Starting..." onClick={handleStart}>
             {ctaLabel}
           </Button>

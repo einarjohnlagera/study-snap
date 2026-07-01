@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
@@ -77,6 +78,9 @@ public class NoteCollectionService {
     private static final String INVALID_VISIBILITY_MESSAGE = "Collection visibility must be PRIVATE or PUBLIC.";
     private static final String EMPTY_PUBLISH_MESSAGE = "Add at least one public note before publishing this study plan.";
     private static final String PRIVATE_NOTE_PUBLISH_MESSAGE = "Every note in a published study plan must be public.";
+    private static final String EMPTY_GOAL_PUBLISH_MESSAGE = "A Goal must have at least one Subject plan before it can be published.";
+    private static final String EMPTY_GOAL_CHILD_PUBLISH_MESSAGE = "All Subject plans must contain at least one public note before publishing a Goal.";
+    private static final String PRIVATE_GOAL_NOTE_PUBLISH_MESSAGE = "All notes in all Subject plans must be public before publishing a Goal.";
     private static final String SELF_PARENT_MESSAGE = "A collection cannot be nested under itself.";
     private static final String PARENT_NOT_TOP_LEVEL_MESSAGE = "A collection can only be nested under a top-level goal.";
     private static final String CHILD_HAS_CHILDREN_MESSAGE = "A collection with child plans cannot be nested under another goal.";
@@ -89,6 +93,10 @@ public class NoteCollectionService {
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
     private static final String SKIPPED_COUNT_METADATA_KEY = "skippedCount";
     private static final String ALREADY_ADOPTED_METADATA_KEY = "alreadyAdopted";
+    private static final String ADOPTED_SUBJECT_COUNT_METADATA_KEY = "adoptedSubjectCount";
+    private static final String SKIPPED_SUBJECT_COUNT_METADATA_KEY = "skippedSubjectCount";
+    private static final String TOTAL_NOTES_COPIED_METADATA_KEY = "totalNotesCopied";
+    private static final String TOTAL_NOTES_SKIPPED_METADATA_KEY = "totalNotesSkipped";
 
     private final NoteCollectionRepository collectionRepository;
     private final NoteCollectionItemRepository itemRepository;
@@ -126,8 +134,8 @@ public class NoteCollectionService {
     public List<NoteCollectionSummaryResponse> listPublic(String courseProgram) {
         String normalizedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
         List<NoteCollectionEntity> collections = normalizedCourseProgram == null
-                ? collectionRepository.findByVisibilityOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC)
-                : collectionRepository.findByVisibilityAndCourseProgramOrderByUpdatedAtDesc(
+                ? collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC)
+                : collectionRepository.findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
                         CollectionVisibility.PUBLIC,
                         normalizedCourseProgram
                 );
@@ -341,11 +349,14 @@ public class NoteCollectionService {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         CollectionVisibility visibility = parseVisibility(visibilityRaw);
         if (visibility == CollectionVisibility.PUBLIC) {
-            validatePublishable(collectionId);
+            validatePublishable(collection);
         }
         collection.setVisibility(visibility);
         touch(collection);
         NoteCollectionEntity saved = collectionRepository.save(collection);
+        if (visibility == CollectionVisibility.PUBLIC) {
+            publishChildCollections(collectionId, userId);
+        }
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         return toDetailResponse(saved, items);
     }
@@ -376,6 +387,83 @@ public class NoteCollectionService {
                     .orElseThrow(() -> raceLost);
             return alreadyAdoptedResponse(userId, sourceCollectionId, winner);
         }
+    }
+
+    public AdoptGoalResponse adoptGoal(UUID sourceGoalId, UUID userId) {
+        NoteCollectionEntity source = collectionRepository
+                .findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)
+                .orElseThrow(CollectionNotFoundException::new);
+        if (collectionRepository.countByParentCollectionId(sourceGoalId) == 0) {
+            throw new CollectionNotFoundException();
+        }
+
+        Optional<NoteCollectionEntity> alreadyAdopted =
+                collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId);
+        if (alreadyAdopted.isPresent()) {
+            return alreadyAdoptedGoalResponse(userId, sourceGoalId, alreadyAdopted.get());
+        }
+
+        List<NoteCollectionEntity> sourceChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, source.getOwnerUserId());
+        AdoptedGoalPersistence persistedGoal;
+        try {
+            persistedGoal = persistAdoptedGoal(source, userId);
+        } catch (DataIntegrityViolationException raceLost) {
+            NoteCollectionEntity winner = collectionRepository
+                    .findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)
+                    .orElseThrow(() -> raceLost);
+            return alreadyAdoptedGoalResponse(userId, sourceGoalId, winner);
+        }
+        if (persistedGoal.alreadyAdopted()) {
+            return alreadyAdoptedGoalResponse(userId, sourceGoalId, persistedGoal.collection());
+        }
+
+        int adoptedSubjectCount = 0;
+        int skippedSubjectCount = 0;
+        int totalNotesCopied = 0;
+        int totalNotesSkipped = 0;
+        for (int index = 0; index < sourceChildren.size(); index++) {
+            NoteCollectionEntity sourceChild = sourceChildren.get(index);
+            AdoptStudyPlanResponse childAdoptResult = adopt(sourceChild.getId(), userId);
+            totalNotesCopied += childAdoptResult.copiedCount();
+            totalNotesSkipped += childAdoptResult.skippedCount();
+            Optional<NoteCollectionEntity> personalChild =
+                    collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceChild.getId());
+            if (personalChild.isEmpty()) {
+                skippedSubjectCount++;
+                continue;
+            }
+
+            NoteCollectionEntity child = personalChild.get();
+            if (child.getParentCollectionId() == null) {
+                child.setParentCollectionId(persistedGoal.collection().getId());
+                child.setSiblingPosition(index);
+                touch(child);
+                collectionRepository.save(child);
+                adoptedSubjectCount++;
+            } else {
+                skippedSubjectCount++;
+            }
+        }
+
+        trackStudyGoalAdopted(
+                userId,
+                sourceGoalId,
+                persistedGoal.collection().getId(),
+                adoptedSubjectCount,
+                skippedSubjectCount,
+                totalNotesCopied,
+                totalNotesSkipped,
+                false
+        );
+        return new AdoptGoalResponse(
+                persistedGoal.collection().getId(),
+                adoptedSubjectCount,
+                skippedSubjectCount,
+                totalNotesCopied,
+                totalNotesSkipped,
+                false
+        );
     }
 
     @Transactional
@@ -481,10 +569,33 @@ public class NoteCollectionService {
         }
     }
 
-    private void validatePublishable(UUID collectionId) {
+    private void validatePublishable(NoteCollectionEntity collection) {
+        if (collectionRepository.countByParentCollectionId(collection.getId()) > 0) {
+            validateGoalPublishable(collection);
+            return;
+        }
+        validateLeafPublishable(collection.getId(), EMPTY_PUBLISH_MESSAGE, PRIVATE_NOTE_PUBLISH_MESSAGE);
+    }
+
+    private void validateGoalPublishable(NoteCollectionEntity collection) {
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collection.getId(), collection.getOwnerUserId());
+        if (children.isEmpty()) {
+            throw new CollectionNotPublishableException(EMPTY_GOAL_PUBLISH_MESSAGE);
+        }
+        for (NoteCollectionEntity child : children) {
+            validateLeafPublishable(child.getId(), EMPTY_GOAL_CHILD_PUBLISH_MESSAGE, PRIVATE_GOAL_NOTE_PUBLISH_MESSAGE);
+        }
+    }
+
+    private void validateLeafPublishable(
+            UUID collectionId,
+            String emptyMessage,
+            String privateNoteMessage
+    ) {
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         if (items.isEmpty()) {
-            throw new CollectionNotPublishableException(EMPTY_PUBLISH_MESSAGE);
+            throw new CollectionNotPublishableException(emptyMessage);
         }
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
         Map<UUID, NoteEntity> notesById = noteRepository.findAllById(noteIds).stream()
@@ -492,9 +603,23 @@ public class NoteCollectionService {
         for (UUID noteId : noteIds) {
             NoteEntity note = notesById.get(noteId);
             if (note == null || note.getVisibility() != NoteVisibility.PUBLIC) {
-                throw new CollectionNotPublishableException(PRIVATE_NOTE_PUBLISH_MESSAGE);
+                throw new CollectionNotPublishableException(privateNoteMessage);
             }
         }
+    }
+
+    private void publishChildCollections(UUID collectionId, UUID userId) {
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
+        if (children.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        children.forEach(child -> {
+            child.setVisibility(CollectionVisibility.PUBLIC);
+            touch(child, now);
+        });
+        collectionRepository.saveAll(children);
     }
 
     private CollectionVisibility parseVisibility(String visibilityRaw) {
@@ -568,6 +693,29 @@ public class NoteCollectionService {
         });
     }
 
+    private AdoptedGoalPersistence persistAdoptedGoal(NoteCollectionEntity source, UUID userId) {
+        return collectionTransactionOperations.execute(status -> {
+            Optional<NoteCollectionEntity> existing =
+                    collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, source.getId());
+            if (existing.isPresent()) {
+                return new AdoptedGoalPersistence(existing.get(), true);
+            }
+
+            Instant now = Instant.now();
+            NoteCollectionEntity collection = new NoteCollectionEntity();
+            collection.setId(UUID.randomUUID());
+            collection.setOwnerUserId(userId);
+            collection.setTitle(source.getTitle());
+            collection.setDescription(source.getDescription());
+            collection.setVisibility(CollectionVisibility.PRIVATE);
+            collection.setCourseProgram(source.getCourseProgram());
+            collection.setSourcePlanId(source.getId());
+            collection.setCreatedAt(now);
+            collection.setUpdatedAt(now);
+            return new AdoptedGoalPersistence(collectionRepository.saveAndFlush(collection), false);
+        });
+    }
+
     private AdoptStudyPlanResponse alreadyAdoptedResponse(
             UUID userId,
             UUID sourcePlanId,
@@ -576,6 +724,29 @@ public class NoteCollectionService {
         int itemCount = itemRepository.findByCollectionIdOrderByPositionAsc(existing.getId()).size();
         trackStudyPlanAdopted(userId, sourcePlanId, existing.getId(), itemCount, 0, true);
         return new AdoptStudyPlanResponse(existing.getId(), itemCount, 0, true);
+    }
+
+    private AdoptGoalResponse alreadyAdoptedGoalResponse(
+            UUID userId,
+            UUID sourceGoalId,
+            NoteCollectionEntity existing
+    ) {
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(existing.getId(), userId);
+        int totalNotesCopied = children.isEmpty()
+                ? 0
+                : loadItemCounts(children).values().stream().mapToInt(Integer::intValue).sum();
+        trackStudyGoalAdopted(
+                userId,
+                sourceGoalId,
+                existing.getId(),
+                children.size(),
+                0,
+                totalNotesCopied,
+                0,
+                true
+        );
+        return new AdoptGoalResponse(existing.getId(), children.size(), 0, totalNotesCopied, 0, true);
     }
 
     private boolean isPublicSourceNote(UUID noteId) {
@@ -601,6 +772,34 @@ public class NoteCollectionService {
                         ALREADY_ADOPTED_METADATA_KEY, alreadyAdopted
                 )
         );
+    }
+
+    private void trackStudyGoalAdopted(
+            UUID userId,
+            UUID sourceGoalId,
+            UUID personalGoalId,
+            int adoptedSubjectCount,
+            int skippedSubjectCount,
+            int totalNotesCopied,
+            int totalNotesSkipped,
+            boolean alreadyAdopted
+    ) {
+        analyticsService.trackEvent(
+                userId,
+                AnalyticsEventType.STUDY_GOAL_ADOPTED,
+                personalGoalId,
+                Map.of(
+                        SOURCE_PLAN_ID_METADATA_KEY, sourceGoalId.toString(),
+                        ADOPTED_SUBJECT_COUNT_METADATA_KEY, adoptedSubjectCount,
+                        SKIPPED_SUBJECT_COUNT_METADATA_KEY, skippedSubjectCount,
+                        TOTAL_NOTES_COPIED_METADATA_KEY, totalNotesCopied,
+                        TOTAL_NOTES_SKIPPED_METADATA_KEY, totalNotesSkipped,
+                        ALREADY_ADOPTED_METADATA_KEY, alreadyAdopted
+                )
+        );
+    }
+
+    private record AdoptedGoalPersistence(NoteCollectionEntity collection, boolean alreadyAdopted) {
     }
 
     private Map<UUID, Integer> loadItemCounts(List<NoteCollectionEntity> collections) {

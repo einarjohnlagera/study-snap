@@ -396,6 +396,7 @@ export type AnalyticsEventType =
   | "NOTES_BULK_IMPORTED"
   | "COLLECTION_CREATED"
   | "STUDY_PLAN_ADOPTED"
+  | "STUDY_GOAL_ADOPTED"
   | "PLAN_READINESS_VIEWED"
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
@@ -1421,6 +1422,15 @@ export type AdoptStudyPlanResponse = {
   collectionId: string;
   copiedCount: number;
   skippedCount: number;
+  alreadyAdopted: boolean;
+};
+
+export type AdoptGoalResponse = {
+  goalCollectionId: string;
+  adoptedSubjectCount: number;
+  skippedSubjectCount: number;
+  totalNotesCopied: number;
+  totalNotesSkipped: number;
   alreadyAdopted: boolean;
 };
 
@@ -3841,6 +3851,18 @@ export async function adoptStudyPlan(id: string): Promise<AdoptStudyPlanResponse
     true,
   );
   return parseApiResponse<AdoptStudyPlanResponse>(response, "Could not start this study plan.");
+}
+
+export async function adoptGoal(id: string): Promise<AdoptGoalResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/adopt-goal`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+    },
+    true,
+  );
+  return parseApiResponse<AdoptGoalResponse>(response, "Could not start this Goal.");
 }
 
 export async function deleteCollection(id: string): Promise<void> {

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DashboardStudyPlanSection } from "./dashboard-study-plan-section";
 import {
+  adoptGoal,
   adoptStudyPlan,
   listCollections,
   listPublicStudyPlans,
@@ -15,6 +16,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  adoptGoal: jest.fn(),
   adoptStudyPlan: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
@@ -28,6 +30,7 @@ const publicPlan = {
   courseProgram: "LET",
   sourcePlanId: null,
   itemCount: 3,
+  childCount: 0,
   notesPracticed: 0,
   createdAt: "2026-06-01T00:00:00Z",
   updatedAt: "2026-06-02T00:00:00Z",
@@ -37,6 +40,7 @@ describe("DashboardStudyPlanSection", () => {
   beforeEach(() => {
     pushMock.mockReset();
     globalThis.sessionStorage.clear();
+    (adoptGoal as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
@@ -80,7 +84,66 @@ describe("DashboardStudyPlanSection", () => {
     fireEvent.click(continueButton);
 
     expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(adoptGoal).not.toHaveBeenCalled();
     expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1");
+  });
+
+  it("starts recursive Goal adoption for a matching public Goal", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      {
+        ...publicPlan,
+        id: "source-goal-1",
+        title: "LET Goal",
+        itemCount: 9,
+        childCount: 3,
+      },
+    ]);
+    (adoptGoal as jest.Mock).mockResolvedValue({
+      goalCollectionId: "personal-goal-1",
+      adoptedSubjectCount: 2,
+      skippedSubjectCount: 1,
+      totalNotesCopied: 9,
+      totalNotesSkipped: 0,
+      alreadyAdopted: false,
+    });
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
+
+    expect(await screen.findByText("3 Subject plans · 9 notes")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start this Goal" }));
+
+    await waitFor(() => {
+      expect(adoptGoal).toHaveBeenCalledWith("source-goal-1");
+      expect(adoptStudyPlan).not.toHaveBeenCalled();
+      expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-goal-1")).toBe("1");
+      expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
+    });
+  });
+
+  it("continues an already adopted Goal without adopting again", async () => {
+    const publicGoal = {
+      ...publicPlan,
+      id: "source-goal-1",
+      title: "LET Goal",
+      childCount: 2,
+    };
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([publicGoal]);
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        ...publicGoal,
+        id: "personal-goal-1",
+        visibility: "PRIVATE",
+        sourcePlanId: "source-goal-1",
+      },
+    ]);
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continue this Goal" }));
+
+    expect(adoptGoal).not.toHaveBeenCalled();
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
   });
 
   it("opens an owned source plan without re-adopting and shows the in-library badge", async () => {

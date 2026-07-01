@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PublishedPlansPage, { metadata } from "./page";
-import { adoptStudyPlan, getMe, listCollections, listPublicStudyPlans } from "@/lib/api";
+import { adoptGoal, adoptStudyPlan, getMe, listCollections, listPublicStudyPlans } from "@/lib/api";
 
 const pushMock = jest.fn();
 
@@ -17,6 +17,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  adoptGoal: jest.fn(),
   adoptStudyPlan: jest.fn(),
   getMe: jest.fn(),
   listCollections: jest.fn(),
@@ -31,6 +32,7 @@ const planOne = {
   courseProgram: "LET",
   sourcePlanId: null,
   itemCount: 3,
+  childCount: 0,
   notesPracticed: 0,
   createdAt: "2026-06-01T00:00:00Z",
   updatedAt: "2026-06-02T00:00:00Z",
@@ -48,6 +50,7 @@ describe("PublishedPlansPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     globalThis.sessionStorage.clear();
+    (adoptGoal as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
@@ -99,6 +102,55 @@ describe("PublishedPlansPage", () => {
       expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-1")).toBe("1");
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-1");
     });
+  });
+
+  it("adopts a Goal through recursive adopt and redirects to the personal Goal", async () => {
+    const goalPlan = {
+      ...planOne,
+      id: "source-goal-1",
+      title: "LET Goal",
+      itemCount: 8,
+      childCount: 2,
+    };
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([goalPlan]);
+    (adoptGoal as jest.Mock).mockResolvedValue({
+      goalCollectionId: "personal-goal-1",
+      adoptedSubjectCount: 2,
+      skippedSubjectCount: 1,
+      totalNotesCopied: 8,
+      totalNotesSkipped: 0,
+      alreadyAdopted: false,
+    });
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findByText("2 Subject plans · 8 notes")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start this Goal" }));
+
+    await waitFor(() => {
+      expect(adoptGoal).toHaveBeenCalledWith("source-goal-1");
+      expect(adoptStudyPlan).not.toHaveBeenCalled();
+      expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-goal-1")).toBe("1");
+      expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
+    });
+  });
+
+  it("shows an inline error when recursive Goal adopt fails", async () => {
+    const goalPlan = {
+      ...planOne,
+      id: "source-goal-1",
+      title: "LET Goal",
+      childCount: 2,
+    };
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([goalPlan]);
+    (adoptGoal as jest.Mock).mockRejectedValue(new Error("Could not adopt Goal."));
+
+    render(<PublishedPlansPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start this Goal" }));
+
+    expect(await screen.findByText("Could not adopt Goal.")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("shows a guidance state when no course/program is set", async () => {

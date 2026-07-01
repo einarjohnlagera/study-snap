@@ -14,6 +14,10 @@ Anti-drift: 2-level max (Goal → Subject) — no 3rd level; adopt stays Free; a
 
 ### Shipped
 
+- **Recursive Goal adopt** (backend + frontend). Public Goal collections can now be adopted through `POST /collections/{id}/adopt-goal`, returning an `AdoptGoalResponse` with the personal Goal id plus adopted/skipped Subject and note-copy counts. The learner receives a private top-level Goal plus copied child Subject plans nested at the source sibling positions; adopted notes remain freely editable personal copies. Existing standalone adopted Subjects are re-parented under the new Goal, while Subjects already nested under another personal Goal are skipped rather than duplicated or moved.
+- **Goal publish and discovery rules** (backend). Publishing a Goal now validates every child Subject has public notes and cascades the publish action to child Subject plans. Unpublishing a Goal does not cascade. Public plan listing now returns root collections only, so child Subject plans no longer appear as standalone public cards.
+- **Goal adopt analytics**. Added the `STUDY_GOAL_ADOPTED` analytics event to the backend enum and frontend union before firing it, with metadata for adopted/skipped Subjects, copied/skipped notes, and idempotent re-entry.
+
 ---
 
 ## v0.33.2 - Plan Detail Redesign (view/edit split)
