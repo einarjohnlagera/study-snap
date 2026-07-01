@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronRight, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
+import { ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,129 @@ function getNoteTitle(item: Pick<NoteCollectionItem, "title" | "noteId">): strin
 
 function getNoteMeta(item: Pick<NoteCollectionItem, "subject" | "courseProgram">): string {
   return [item.subject, item.courseProgram].filter(Boolean).join(" · ") || "No subject yet";
+}
+
+type SectionCardHeaderProps = {
+  section: CollectionItemSection;
+  isExpanded: boolean;
+  organizeMode: boolean;
+  editingSectionId?: string | null;
+  editingSectionName?: string;
+  headingId: string;
+  onToggle: () => void;
+  onRenameStart?: (section: CollectionItemSection) => void;
+  onRenameInput?: (value: string) => void;
+  onRenameCommit?: (section: CollectionItemSection, name: string) => void;
+  onRenameCancel?: () => void;
+};
+
+function SectionCardHeader({
+  section,
+  isExpanded,
+  organizeMode,
+  editingSectionId = null,
+  editingSectionName = "",
+  headingId,
+  onToggle,
+  onRenameStart,
+  onRenameInput,
+  onRenameCommit,
+  onRenameCancel,
+}: Readonly<SectionCardHeaderProps>) {
+  const cancelingRef = useRef(false);
+  const isEditing = editingSectionId === section.id;
+  const isUngrouped = section.name === UNGROUPED_SECTION_NAME;
+
+  const titlePeek = !isExpanded && section.items.length > 0 ? (
+    <span className="mt-0.5 truncate text-xs text-foreground/45">
+      {section.items.slice(0, 3).map((i) => getNoteTitle(i)).join(" · ")}
+      {section.items.length > 3 ? ` +${section.items.length - 3} more` : ""}
+    </span>
+  ) : null;
+
+  const chevron = (
+    <ChevronDown
+      className={cn("h-4 w-4 shrink-0 text-foreground/70 transition-transform", !isExpanded && "-rotate-90")}
+      aria-hidden="true"
+    />
+  );
+
+  if (organizeMode) {
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {isUngrouped ? (
+              <span id={headingId} data-testid="collection-section-heading" className="text-sm font-semibold uppercase tracking-wider text-foreground/55">
+                {section.name}
+              </span>
+            ) : (
+              <input
+                id={headingId}
+                type="text"
+                maxLength={LABEL_MAX_LENGTH}
+                value={isEditing ? editingSectionName : section.name}
+                data-testid="collection-section-heading"
+                className="min-w-0 max-w-[200px] bg-transparent text-sm font-semibold uppercase tracking-wider text-foreground/80 outline-none focus:rounded focus:ring-1 focus:ring-ring"
+                aria-label={`Rename section ${section.name}`}
+                onFocus={() => onRenameStart?.(section)}
+                onChange={(e) => onRenameInput?.(e.target.value)}
+                onBlur={() => {
+                  if (!cancelingRef.current) {
+                    onRenameCommit?.(section, isEditing ? editingSectionName : section.name);
+                  }
+                  cancelingRef.current = false;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    cancelingRef.current = true;
+                    e.currentTarget.blur();
+                    onRenameCancel?.();
+                  }
+                }}
+              />
+            )}
+            <span className="text-xs font-medium text-foreground/55">
+              {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+            </span>
+          </div>
+          {titlePeek}
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-md p-1 text-foreground/70 transition-colors hover:bg-muted/50"
+          aria-expanded={isExpanded}
+          onClick={onToggle}
+        >
+          {chevron}
+          <span className="sr-only">{isExpanded ? "Collapse" : "Expand"} section</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg text-left transition-colors hover:bg-muted/50"
+      aria-expanded={isExpanded}
+      onClick={onToggle}
+    >
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <span id={headingId} data-testid="collection-section-heading" className="text-sm font-semibold uppercase tracking-wider text-foreground/80">
+            {section.name}
+          </span>
+          <span className="text-xs font-medium text-foreground/55">
+            {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+          </span>
+        </div>
+        {titlePeek}
+      </div>
+      {chevron}
+    </button>
+  );
 }
 
 type NoteExecutionStatus = { label: string; className: string };
@@ -1046,6 +1169,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [organizeMode, setOrganizeMode] = useState(false);
   const [defaultSectionExpanded, setDefaultSectionExpanded] = useState<boolean | null>(null);
   const [sectionExpandedById, setSectionExpandedById] = useState<Record<string, boolean>>({});
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editingSectionName, setEditingSectionName] = useState("");
+  const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
   const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
   const [noteListItems, setNoteListItems] = useState<NoteListItemResponse[]>([]);
   const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
@@ -1303,6 +1429,41 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       [sectionId]: !(previous[sectionId] ?? defaultSectionExpanded ?? false),
     }));
   };
+
+  const handleSectionRenameStart = (section: CollectionItemSection) => {
+    setEditingSectionId(section.id);
+    setEditingSectionName(section.name);
+  };
+
+  const handleSectionRenameInput = (value: string) => {
+    setEditingSectionName(value);
+  };
+
+  const handleSectionRenameCancel = () => {
+    setEditingSectionId(null);
+    setEditingSectionName("");
+  };
+
+  const doSectionRename = (oldName: string, newName: string) => {
+    const nextItems = items.map((item) =>
+      normalizeSectionName(item.label) === oldName ? { ...item, label: newName } : item,
+    );
+    void persistOrder(nextItems, "edit");
+  };
+
+  const handleSectionRenameCommit = (section: CollectionItemSection, newName: string) => {
+    const trimmed = newName.trim();
+    setEditingSectionId(null);
+    setEditingSectionName("");
+    if (!trimmed || trimmed === section.name || trimmed === UNGROUPED_SECTION_NAME) return;
+    const targetExists = sectionNames.some((name) => name === trimmed && name !== section.name);
+    if (targetExists) {
+      setPendingSectionRename({ oldName: section.name, newName: trimmed });
+      return;
+    }
+    doSectionRename(section.name, trimmed);
+  };
+
   const quizReadyNoteIds = useMemo(
     () => getCollectionQuizReadyNoteIds(items),
     [items],
@@ -1721,48 +1882,42 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                       const sectionContentId = `collection-section-${sectionIndex}`;
                       return (
                         <section key={section.id} aria-labelledby={`${sectionContentId}-heading`} className="rounded-xl border border-border bg-background p-4 shadow-sm sm:p-5">
-                          <button
-                            type="button"
-                            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left"
-                            aria-expanded={isExpanded}
-                            aria-controls={sectionContentId}
-                            onClick={() => toggleSectionExpanded(section.id)}
-                          >
-                            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                              <span id={`${sectionContentId}-heading`} data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
-                                {section.name}
-                              </span>
-                              <span className="text-xs font-medium text-foreground/55">
-                                {section.items.length} {section.items.length === 1 ? "note" : "notes"}
-                              </span>
-                            </span>
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
-                            )}
-                          </button>
+                          <SectionCardHeader
+                            section={section}
+                            isExpanded={isExpanded}
+                            organizeMode={true}
+                            editingSectionId={editingSectionId}
+                            editingSectionName={editingSectionName}
+                            headingId={`${sectionContentId}-heading`}
+                            onToggle={() => toggleSectionExpanded(section.id)}
+                            onRenameStart={handleSectionRenameStart}
+                            onRenameInput={handleSectionRenameInput}
+                            onRenameCommit={handleSectionRenameCommit}
+                            onRenameCancel={handleSectionRenameCancel}
+                          />
                           {isExpanded ? (
                             <SortableContext items={section.items.map((item) => item.noteId)} strategy={verticalListSortingStrategy}>
-                              <ol id={sectionContentId} className="mt-4 space-y-3">
-                                {section.items.map((item, localIndex) => (
-                                  <SortableCollectionItemRow
-                                    key={`${item.noteId}:${item.label ?? ""}`}
-                                    item={item}
-                                    index={localIndex}
-                                    itemCount={section.items.length}
-                                    disabled={mutationInProgress}
-                                    collectionId={collectionId}
-                                    organizeMode={organizeMode}
-                                    showWeakAreas={showWeakAreas}
-                                    isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
-                                    sectionNames={sectionNames}
-                                    onMove={handleMove}
-                                    onRemove={(noteId) => void handleRemove(noteId)}
-                                    onLabelChange={handleLabelChange}
-                                  />
-                                ))}
-                              </ol>
+                              <div className="mt-3 border-t border-border pt-3">
+                                <ol id={sectionContentId} className="space-y-3">
+                                  {section.items.map((item, localIndex) => (
+                                    <SortableCollectionItemRow
+                                      key={`${item.noteId}:${item.label ?? ""}`}
+                                      item={item}
+                                      index={localIndex}
+                                      itemCount={section.items.length}
+                                      disabled={mutationInProgress}
+                                      collectionId={collectionId}
+                                      organizeMode={organizeMode}
+                                      showWeakAreas={showWeakAreas}
+                                      isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                                      sectionNames={sectionNames}
+                                      onMove={handleMove}
+                                      onRemove={(noteId) => void handleRemove(noteId)}
+                                      onLabelChange={handleLabelChange}
+                                    />
+                                  ))}
+                                </ol>
+                              </div>
                             </SortableContext>
                           ) : null}
                         </section>
@@ -1800,47 +1955,35 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   const sectionContentId = `collection-section-${sectionIndex}`;
                   return (
                     <section key={section.id} aria-labelledby={`${sectionContentId}-heading`} className="rounded-xl border border-border bg-background p-4 shadow-sm sm:p-5">
-                      <button
-                        type="button"
-                        className="flex w-full cursor-pointer items-center justify-between gap-3 text-left"
-                        aria-expanded={isExpanded}
-                        aria-controls={sectionContentId}
-                        onClick={() => toggleSectionExpanded(section.id)}
-                      >
-                        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                          <span id={`${sectionContentId}-heading`} data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
-                            {section.name}
-                          </span>
-                          <span className="text-xs font-medium text-foreground/55">
-                            {section.items.length} {section.items.length === 1 ? "note" : "notes"}
-                          </span>
-                        </span>
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
-                        )}
-                      </button>
+                      <SectionCardHeader
+                        section={section}
+                        isExpanded={isExpanded}
+                        organizeMode={false}
+                        headingId={`${sectionContentId}-heading`}
+                        onToggle={() => toggleSectionExpanded(section.id)}
+                      />
                       {isExpanded ? (
-                        <ol id={sectionContentId} className="mt-4 space-y-3">
-                          {section.items.map((item, localIndex) => (
-                            <SortableCollectionItemRow
-                              key={`${item.noteId}:${item.label ?? ""}`}
-                              item={item}
-                              index={localIndex}
-                              itemCount={section.items.length}
-                              disabled={mutationInProgress}
-                              collectionId={collectionId}
-                              organizeMode={organizeMode}
-                              showWeakAreas={showWeakAreas}
-                              isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
-                              sectionNames={sectionNames}
-                              onMove={handleMove}
-                              onRemove={(noteId) => void handleRemove(noteId)}
-                              onLabelChange={handleLabelChange}
-                            />
-                          ))}
-                        </ol>
+                        <div className="mt-3 border-t border-border pt-3">
+                          <ol id={sectionContentId} className="space-y-3">
+                            {section.items.map((item, localIndex) => (
+                              <SortableCollectionItemRow
+                                key={`${item.noteId}:${item.label ?? ""}`}
+                                item={item}
+                                index={localIndex}
+                                itemCount={section.items.length}
+                                disabled={mutationInProgress}
+                                collectionId={collectionId}
+                                organizeMode={organizeMode}
+                                showWeakAreas={showWeakAreas}
+                                isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                                sectionNames={sectionNames}
+                                onMove={handleMove}
+                                onRemove={(noteId) => void handleRemove(noteId)}
+                                onLabelChange={handleLabelChange}
+                              />
+                            ))}
+                          </ol>
+                        </div>
                       ) : null}
                     </section>
                   );
@@ -1907,6 +2050,30 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           onNotesPublished={loadNoteVisibility}
         />
       ) : null}
+      <AppModal
+        isOpen={pendingSectionRename !== null}
+        title={`Merge into "${pendingSectionRename?.newName ?? ""}"`}
+        description={`Section "${pendingSectionRename?.newName ?? ""}" already exists. All notes from "${pendingSectionRename?.oldName ?? ""}" will be moved into it.`}
+        onClose={() => setPendingSectionRename(null)}
+        actions={(
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setPendingSectionRename(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (pendingSectionRename) {
+                  doSectionRename(pendingSectionRename.oldName, pendingSectionRename.newName);
+                  setPendingSectionRename(null);
+                }
+              }}
+            >
+              Merge sections
+            </Button>
+          </div>
+        )}
+      />
       <AppModal
         isOpen={showReviewFirstModal}
         title="Review before the exam?"
