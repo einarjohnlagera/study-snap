@@ -15,7 +15,7 @@ Anti-drift (carried forward and new): sections stay label-derived (no section en
 
 ### Shipped
 
-_(nothing yet)_
+- **Leaf plan detail view/organize split** (frontend). `/collections/[id]` now opens in a clean read view: note cards show title, metadata, execution status, due-concept signals, and admin private badges without drag handles, Section comboboxes, Move buttons, or Remove buttons. A Notes-card `Organize` toggle reveals the structural controls only when needed, and label-derived sections now render as collapsible cards whose initial expanded state follows the `lg` breakpoint (collapsed on mobile, expanded on desktop) with no readiness or mastery added to section headers.
 
 ---
 
