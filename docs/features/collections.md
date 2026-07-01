@@ -68,7 +68,7 @@ For Study Plan detail sections, there is no separate section entity or nested-pl
 
 Sections are strictly sections within one plan. They are not child collections, independent plans, or module entities.
 
-**Nested collections reversal (v0.33.1, scoped).** The older "do not add parent/child collections, collection-of-collections, umbrella plans, or independently adoptable sub-plans" rule is deliberately reversed only for one level of Study Plan hierarchy: a top-level **Goal** collection can contain child **Subject** plans through `note_collections.parent_collection_id`. This is constrained to two collection levels (Goal -> Subject) and does not change section behavior. Deeper nesting, per-module mastery/readiness, recursive adopt-the-whole-Goal, arbitrary curriculum metadata, and direct note items on a Goal remain out of scope.
+**Nested collections reversal (v0.33.1, scoped).** The older "do not add parent/child collections, collection-of-collections, umbrella plans, or independently adoptable sub-plans" rule is deliberately reversed only for one level of Study Plan hierarchy: a top-level **Goal** collection can contain child **Subject** plans through `note_collections.parent_collection_id`. This is constrained to two collection levels (Goal -> Subject) and does not change section behavior. Recursive Goal adopt shipped in v0.33.3 for this two-level shape only. Deeper nesting, per-module mastery/readiness, arbitrary curriculum metadata, and direct note items on a Goal remain out of scope.
 
 Hierarchy storage:
 
@@ -166,10 +166,11 @@ Collections remain owner-private by default.
 
 Admin-published plans intentionally lift the read boundary only through public endpoints:
 
-- `visibility=PUBLIC` collections are world-readable through `/collections/public`.
+- `visibility=PUBLIC` root collections are world-readable through `/collections/public`; child Subject plans stay reachable through their parent Goal/detail flows, not as standalone public-list cards.
 - `visibility=PRIVATE` collections are never returned by public endpoints and return `404` on public detail.
-- Publishing is admin-only and requires a non-empty collection where every item note is already `PUBLIC`.
-- Unpublishing returns the source collection to `PRIVATE`; adopted personal plans are unaffected.
+- Publishing a leaf Subject plan is admin-only and requires a non-empty collection where every item note is already `PUBLIC`.
+- Publishing a Goal is admin-only, requires at least one child Subject plan, validates every child Subject is non-empty, validates every child item note is already `PUBLIC`, and then cascades `visibility=PUBLIC` to the child Subject plans.
+- Unpublishing returns only the selected source collection to `PRIVATE`; it does not cascade to children, and adopted personal plans are unaffected.
 - User/teacher-authored collection sharing remains deferred.
 
 ## Generation And Quota Rules
@@ -432,13 +433,16 @@ Admin-only request:
 
 Behavior:
 
-- publishing validates the collection is non-empty
-- publishing validates every item note still has `visibility=PUBLIC`
+- publishing a leaf plan validates the collection is non-empty
+- publishing a leaf plan validates every item note still has `visibility=PUBLIC`
+- publishing a Goal validates it has at least one child Subject plan
+- publishing a Goal validates every child Subject plan is non-empty and every child item note still has `visibility=PUBLIC`
+- publishing a Goal cascades `visibility=PUBLIC` to all child Subject plans after the Goal is saved
 - invalid publish attempts return `CollectionNotPublishableException` / `400`
-- unpublishing to `PRIVATE` is allowed
+- unpublishing to `PRIVATE` is allowed and does not cascade to child Subject plans
 - returns full detail
 
-**Metadata save is decoupled from publishing (v0.33.0).** Course/program and description persist through `updateMetadata` (`PATCH /collections/{id}`) independently of the publish action, so a blocked publish never discards what the admin typed. In the publish modal (`PublishStudyPlanModal`): `handlePublish` persists a dirty course/program **before** the private-notes/empty gate, and the unpublished state exposes a standalone **Save** action (in addition to Publish) so course/program can be saved without attempting to publish. Publish validation itself is unchanged — every note public + at least one note, enforced on the backend. Do not re-couple these; the decouple is deliberate (it fixed silent course/program loss on a failed publish).
+**Metadata save is decoupled from publishing (v0.33.0).** Course/program and description persist through `updateMetadata` (`PATCH /collections/{id}`) independently of the publish action, so a blocked publish never discards what the admin typed. In the publish modal (`PublishStudyPlanModal`): `handlePublish` persists a dirty course/program **before** the private-notes/empty gate, and the unpublished state exposes a standalone **Save** action (in addition to Publish) so course/program can be saved without attempting to publish. Publish validation itself is unchanged for leaves — every note public + at least one note, enforced on the backend. Goal publish extends the same rule across every child Subject plan and cascades only when publishing to `PUBLIC`. Do not re-couple these; the decouple is deliberate (it fixed silent course/program loss on a failed publish).
 
 ### Public Plan List
 
@@ -447,9 +451,10 @@ Behavior:
 Behavior:
 
 - no authentication required
-- returns only `visibility=PUBLIC` collections
+- returns only root `visibility=PUBLIC` collections (`parentCollectionId IS NULL`)
 - optional `courseProgram` filter is normalized before lookup
 - private collections are never included
+- public child Subject plans are not listed as standalone cards; they are reached through the public Goal/adopted Goal context
 
 ### Public Plan Detail
 
@@ -476,6 +481,32 @@ Behavior:
 - adoption bills no quota and makes no AI calls
 - `sourcePlanId` is lineage/idempotency only; source edits never sync into adopted personal plans
 - server analytics fires `STUDY_PLAN_ADOPTED` with `sourcePlanId`, `copiedCount`, `skippedCount`, and `alreadyAdopted`
+
+### Goal Adopt
+
+`POST /collections/{id}/adopt-goal`
+
+Response:
+
+- `goalCollectionId`
+- `adoptedSubjectCount`
+- `skippedSubjectCount`
+- `totalNotesCopied`
+- `totalNotesSkipped`
+- `alreadyAdopted`
+
+Behavior:
+
+- authenticated users can adopt only `PUBLIC` source Goal collections; a public leaf plan passed to this endpoint returns `CollectionNotFoundException` / `404`
+- if the caller already owns a Goal with `sourcePlanId={id}`, the endpoint returns that existing personal Goal id with `alreadyAdopted=true`
+- otherwise the endpoint creates a private personal Goal with `sourcePlanId={source Goal id}` and copied title/description/courseProgram, but no direct items
+- each source child Subject plan is adopted through the existing leaf `adopt` flow, so note copying, per-note skip isolation, Study Pack inclusion, idempotency, and concurrent-adopt race recovery stay centralized
+- after a child Subject is adopted, a standalone existing personal child (`parentCollectionId == null`) is re-parented under the new personal Goal and receives the source sibling position
+- an existing personal child already nested under another personal Goal is skipped; it is not duplicated and not re-parented
+- if all children are skipped, the Goal adopt still succeeds and redirects to the new empty personal Goal
+- adoption bills no quota and makes no AI calls
+- adopted notes and plans are immediately editable by the learner, matching leaf-plan adopt semantics
+- server analytics fires `STUDY_GOAL_ADOPTED` with adopted/skipped Subject counts, copied/skipped note totals, and `alreadyAdopted`
 
 ### Delete Collection
 
@@ -581,17 +612,19 @@ Profile-aware labels are resolved only through `frontend/lib/collection-labels.t
 
 ### Browse published plans (`/collections/published`)
 
-The Dashboard card surfaces only the top matching published plan, so publishing several plans per course/program hides all but one. `/collections/published` is the lightweight browse surface that lists **all** published plans matched to the learner's course/program (v0.31.1).
+The Dashboard card surfaces only the top matching published root plan, so publishing several plans per course/program hides all but one. `/collections/published` is the lightweight browse surface that lists **all** published root plans matched to the learner's course/program (v0.31.1, root-only listing tightened in v0.33.3).
 
-- Frontend-only listing. It reuses `GET /collections/public?courseProgram=` (via `listPublicStudyPlans`) plus the user's `GET /collections` to join each plan to an already-adopted personal collection (`sourcePlanId`) — no new endpoint.
+- Frontend listing. It reuses root-only `GET /collections/public?courseProgram=` (via `listPublicStudyPlans`) plus the user's `GET /collections` to join each plan to an already-adopted personal collection (`sourcePlanId`). Child Subject plans are not shown as standalone public cards.
 - This is a surface for *plans*, not the Public Library (which is for *notes*).
-- Each plan renders as a `PublicStudyPlanCard` with `Start this plan` (adopt → `POST /collections/{id}/adopt` → route to the new personal collection) or `Continue this plan` when already adopted. The skipped-note notice uses the shared `lib/study-plan-skipped-notice.ts` key, so the destination collection page shows the same one-time notice as Dashboard/onboarding adoption.
+- Leaf plans render as a `PublicStudyPlanCard` with `Start this plan` (adopt → `POST /collections/{id}/adopt` → route to the new personal collection) or `Continue this plan` when already adopted.
+- Goal plans render with `Start this Goal` (adopt → `POST /collections/{id}/adopt-goal` → route to `goalCollectionId`) or `Continue this Goal` when already adopted. The card describes the Goal as `{childCount} Subject plans · {itemCount} notes`.
+- The skipped-note notice uses the shared `lib/study-plan-skipped-notice.ts` key. For Goal adopt, the skipped count reflects skipped child Subject plans; for leaf adopt, it reflects skipped notes.
 - `courseProgram` and `profileType` come from `getMe()`; labels resolve through `getCollectionLabels`. It is reached via the `See all N {plural}` link on the Dashboard card (shown only when 2+ plans match).
 - States: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. `BackLink` returns to the Dashboard.
 
 **Recommended plans also surface on the user's own Study Plans page (`/collections`) (v0.33.0).** The same Dashboard "Recommended {singular}" section (`DashboardStudyPlanSection`) is reused below the user's own plans — course/program-scoped, with the same `See all N {plural}` link to `/collections/published`. It is **not** tabs, and it stays scoped to the learner's own course/program (an all-programs browse is the Public Library's job for *notes*). `/collections` fetches `courseProgram` via `getMe()` and reads `profileType` from `getAuthUser()`. `/collections` passes `browseWhenEmpty` so that when the learner's course/program has no curated plan yet it renders an honest "No curated {plural} for {program} yet" empty state instead of nothing; the Dashboard omits the prop and still self-hides when no plan matches. No browse link is shown in the empty state — `/collections/published` is course/program-scoped and would be empty too, so coverage (seeding curated plans per program), not UI, is the gating constraint.
 
-If the learner already has the matched plan, the section shows an **"In your library"** badge and opens the existing plan instead of offering a re-adopt CTA. "Already has" means either they **adopted** it (a personal collection whose `sourcePlanId` equals the plan id) or they **own the published source itself** (a personal collection whose `id` equals the plan id — the admin/curator case). The CTA reads "Open this plan" for an owned source, "Continue this plan" for an adopted copy, and only "Start this plan" (which adopts) for a plan the learner does not yet own. This prevents an owner from self-adopting a redundant copy of their own published plan.
+If the learner already has the matched plan, the section shows an **"In your library"** badge and opens the existing plan instead of offering a re-adopt CTA. "Already has" means either they **adopted** it (a personal collection whose `sourcePlanId` equals the plan id) or they **own the published source itself** (a personal collection whose `id` equals the plan id — the admin/curator case). The CTA reads "Open this plan" for an owned source, "Continue this plan" / "Continue this Goal" for an adopted copy, and only "Start this plan" / "Start this Goal" (which adopts) for a plan the learner does not yet own. This prevents an owner from self-adopting a redundant copy of their own published plan.
 
 The Study Plan remains an execution surface for one curated, ordered set. Collection detail itself does not duplicate Progress: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing belong on the execution-detail rows.
 

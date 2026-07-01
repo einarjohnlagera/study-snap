@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
@@ -89,6 +90,9 @@ class NoteCollectionControllerTest {
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("adopt", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("adoptGoal", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("updateVisibility", String.class, UpdateCollectionVisibilityRequest.class, AuthenticatedUser.class)
@@ -237,6 +241,19 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).adopt(UUID.fromString(COLLECTION_ID), user.userId());
+    }
+
+    @Test
+    void adoptGoal_returnsPersonalGoalId() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        AdoptGoalResponse response = new AdoptGoalResponse(UUID.fromString(COLLECTION_ID), 2, 0, 6, 1, false);
+        when(service.adoptGoal(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
+
+        AdoptGoalResponse result = controller.adoptGoal(COLLECTION_ID, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).adoptGoal(UUID.fromString(COLLECTION_ID), user.userId());
     }
 
     @Test

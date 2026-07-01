@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
@@ -157,6 +158,16 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.adopt(collectionId, user.userId());
+    }
+
+    @PostMapping("/{id}/adopt-goal")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public AdoptGoalResponse adoptGoal(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.adoptGoal(collectionId, user.userId());
     }
 
     @DeleteMapping("/{id}")
