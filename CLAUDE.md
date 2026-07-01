@@ -12,7 +12,7 @@ Current version: **v0.33.2** — see `RELEASES.md` for in-progress scope, `docs/
 
 Base branch for this release: `releases/v0.33.2`. The v0.33.x series is the study-plan line; each minor is a tightening pass. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile — a 29-note plan renders a wall of edit chrome that makes the page unusable. v0.33.3 follows with recursive Goal adopt. Locked rules:
 
-- **Frontend-only this release.** Collapsible section cards + view/edit split. No new backend endpoint, no new model, no migration.
+- **Scope expanded beyond frontend.** Collapsible section cards + view/edit split (frontend-only, shipped); subject-source fix in `StudyPackService` (backend, 1 file). No new endpoint, no migration, no new model.
 - **Sections stay label-derived.** Section cards show collapse toggle + note count. No readiness on section headers, no mastery on rows/headers. This is a locked rule and the advisor confirmed it — if a grouping needs its own readiness it should be a child Subject plan, not a label.
 - **View mode is the default.** SECTION combobox, Move up/down, and Remove are hidden by default. Revealed in an organize/edit mode (toggle). Not a third parallel editor — the Builder at `/collections/{id}/builder` handles Goal curation; this toggle handles leaf-plan organization.
 - **Readiness stays Free — decided, not revisited.** Derived, matches `/me/progress`; no new mastery signal, persisted field, AI call, or thresholds. PLUS/PRO keep only the per-concept review-timing detail.

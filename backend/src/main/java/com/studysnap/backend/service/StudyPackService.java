@@ -556,7 +556,12 @@ public class StudyPackService {
         entity.setInputType(inputType);
         entity.setTitle(generated.title());
         entity.setSummary(generated.summary());
-        entity.setSubject(normalizeSubject(generated.subject()));
+        String noteSubject = noteId != null
+                ? noteRepository.findById(noteId).map(NoteEntity::getSubject).orElse(null)
+                : null;
+        entity.setSubject(noteSubject != null && !noteSubject.isBlank()
+                ? noteSubject
+                : normalizeSubject(generated.subject()));
         entity.setSourceText(sourceText);
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());

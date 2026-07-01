@@ -96,6 +96,8 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 - concise and human-readable, not sentence-like, at most 4 words
 - backend enforcement: any combined domain-topic value (`Biology – Cell Division`) is stripped to the domain part (`Biology`) before saving
 - if stripping produces an empty/unusable result, the subject suggestion is ignored; Study Pack generation continues when core summary/key concept/quiz output is valid
+- **note subject wins:** when saving a Study Pack, `StudyPackService` prefers `note.subject` over the LLM-suggested subject if the note already has one. Falls back to the LLM value only when `note.subject` is null or blank. This prevents LLM subject drift from corrupting readiness grouping on curated plans where the curator has already set authoritative subject values.
+- **readiness grouping uses note subject:** `ProgressReportService.resolveSubject()` resolves the grouping key from the note's own `subject` field (batch-fetched, not N+1), falling back to `studyPack.subject` only when the note has none. This heals historical subject drift on all existing plans without requiring per-plan data patches.
 
 ### Tags
 - generate 3 to 6 tags
