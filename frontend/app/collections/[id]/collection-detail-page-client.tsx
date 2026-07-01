@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Clock, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getNoteConceptCounts,
   listCoursePrograms,
   listNotes,
   removeCollectionItem,
@@ -39,6 +40,7 @@ import {
   updateCollectionVisibility,
   updateNoteVisibility,
   type GoalCollectionDetailResponse,
+  type NoteConceptCountsResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
   type NoteListItemResponse,
@@ -61,11 +63,22 @@ type CollectionItemSection = {
   name: string;
   items: NoteCollectionItem[];
 };
+export type SectionReadiness = {
+  mastered: number;
+  total: number;
+  due: number;
+};
+type ContinuePlanAction = {
+  item: NoteCollectionItem;
+  actionLabel: "Generate Study Pack" | "Study this note" | "Review due concepts";
+  href: string;
+};
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
 const UNGROUPED_SECTION_NAME = "Ungrouped";
 const LARGE_VIEWPORT_MIN_WIDTH = 1024;
+const CONTINUE_DISMISS_STORAGE_PREFIX = "dismissed-continue-";
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -123,10 +136,63 @@ function getNoteMeta(item: Pick<NoteCollectionItem, "subject" | "courseProgram">
   return [item.subject, item.courseProgram].filter(Boolean).join(" · ") || "No subject yet";
 }
 
+function getSectionReadinessKey(label: string | null | undefined): string {
+  return normalizeSectionName(label) || UNGROUPED_SECTION_NAME;
+}
+
+export function aggregateSectionReadiness(
+  items: NoteCollectionItem[],
+  countsByNoteId: Record<string, NoteConceptCountsResponse>,
+): Map<string, SectionReadiness> {
+  const sectionCounts = new Map<string, SectionReadiness>();
+  items.forEach((item) => {
+    const counts = countsByNoteId[item.noteId];
+    if (!counts) {
+      return;
+    }
+    const sectionName = getSectionReadinessKey(item.label);
+    const previous = sectionCounts.get(sectionName) ?? { mastered: 0, total: 0, due: 0 };
+    sectionCounts.set(sectionName, {
+      mastered: previous.mastered + counts.masteredConceptCount,
+      total: previous.total + counts.totalConceptCount,
+      due: previous.due + counts.dueConceptCount,
+    });
+  });
+  return sectionCounts;
+}
+
+export function getLatestPracticedCollectionItem(items: NoteCollectionItem[]): NoteCollectionItem | null {
+  return items.reduce<NoteCollectionItem | null>((latest, item) => {
+    if (item.lastSessionCompletedAt === null) {
+      return latest;
+    }
+    if (latest === null || item.lastSessionCompletedAt > (latest.lastSessionCompletedAt ?? "")) {
+      return item;
+    }
+    return latest;
+  }, null);
+}
+
+function getContinuePlanAction(
+  item: NoteCollectionItem,
+  collectionId: string,
+  canReviewDueConcepts: boolean,
+): ContinuePlanAction {
+  const href = `/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`;
+  if (item.studyPackStatus !== "STUDY_PACK_READY") {
+    return { item, actionLabel: "Generate Study Pack", href };
+  }
+  if (canReviewDueConcepts && item.dueConceptCount > 0) {
+    return { item, actionLabel: "Review due concepts", href };
+  }
+  return { item, actionLabel: "Study this note", href };
+}
+
 type SectionCardHeaderProps = {
   section: CollectionItemSection;
   isExpanded: boolean;
   organizeMode: boolean;
+  sectionReadiness?: SectionReadiness | null;
   editingSectionId?: string | null;
   editingSectionName?: string;
   headingId: string;
@@ -141,6 +207,7 @@ function SectionCardHeader({
   section,
   isExpanded,
   organizeMode,
+  sectionReadiness = null,
   editingSectionId = null,
   editingSectionName = "",
   headingId,
@@ -153,6 +220,11 @@ function SectionCardHeader({
   const cancelingRef = useRef(false);
   const isEditing = editingSectionId === section.id;
   const isUngrouped = section.name === UNGROUPED_SECTION_NAME;
+  const readinessStat = !organizeMode && sectionReadiness && sectionReadiness.total > 0 ? (
+    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-200">
+      {Math.round((sectionReadiness.mastered / sectionReadiness.total) * 100)}% · {sectionReadiness.due} due
+    </span>
+  ) : null;
 
   const titlePeek = !isExpanded && section.items.length > 0 ? (
     <span className="mt-0.5 truncate text-xs text-foreground/45">
@@ -238,11 +310,115 @@ function SectionCardHeader({
           <span className="text-xs font-medium text-foreground/55">
             {section.items.length} {section.items.length === 1 ? "note" : "notes"}
           </span>
+          {readinessStat}
         </div>
         {titlePeek}
       </div>
       {chevron}
     </button>
+  );
+}
+
+function ContinuePlanBanner({
+  action,
+  onDismiss,
+}: Readonly<{
+  action: ContinuePlanAction;
+  onDismiss: () => void;
+}>) {
+  return (
+    <Card className="flex flex-col gap-3 border-blue-500/25 bg-blue-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Continue where you left off</p>
+        <p className="mt-1 truncate text-sm text-foreground/75">
+          Continue from <span className="font-semibold text-foreground">{getNoteTitle(action.item)}</span>
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Link
+          href={action.href}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+        >
+          {action.actionLabel}
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+        <Button type="button" variant="ghost" size="sm" className="h-10 px-2" onClick={onDismiss}>
+          Dismiss
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function PlanHeroCard({
+  collection,
+  labels,
+  isAdmin,
+  actions,
+  terminalFooter,
+  onPublishClick,
+}: Readonly<{
+  collection: NoteCollectionDetail;
+  labels: ReturnType<typeof getCollectionLabels>;
+  isAdmin: boolean;
+  actions: ReactNode;
+  terminalFooter?: ReactNode;
+  onPublishClick: () => void;
+}>) {
+  const estimatedStudyHours = collection.estimatedStudyHours && collection.estimatedStudyHours > 0
+    ? collection.estimatedStudyHours
+    : null;
+
+  return (
+    <Card className="space-y-5 p-5 sm:p-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {collection.courseProgram ? (
+              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-foreground/65">
+                {collection.courseProgram}
+              </span>
+            ) : null}
+            {estimatedStudyHours ? (
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-200">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                ~{estimatedStudyHours} hrs
+              </span>
+            ) : null}
+            <span className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground/70">
+              {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready
+            </span>
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={onPublishClick}
+                aria-label="Publish settings"
+                title="Publish settings"
+                className="motion-lift inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
+              >
+                {collection.visibility === "PUBLIC" ? (
+                  <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
+                ) : (
+                  <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
+                )}
+                <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{labels.singular}</p>
+            <CardTitle className="text-2xl sm:text-3xl">{collection.title}</CardTitle>
+            {collection.description ? (
+              <CardDescription className="line-clamp-3 text-sm sm:text-base">{collection.description}</CardDescription>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+          {actions}
+          {terminalFooter}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -508,6 +684,9 @@ function EditCollectionModal({
 }>) {
   const [title, setTitle] = useState(collection.title);
   const [description, setDescription] = useState(collection.description ?? "");
+  const [estimatedStudyHours, setEstimatedStudyHours] = useState<string>(
+    collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -515,10 +694,11 @@ function EditCollectionModal({
     if (isOpen) {
       setTitle(collection.title);
       setDescription(collection.description ?? "");
+      setEstimatedStudyHours(collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours));
       setError(null);
       setSubmitting(false);
     }
-  }, [collection.description, collection.title, isOpen]);
+  }, [collection.description, collection.estimatedStudyHours, collection.title, isOpen]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -536,6 +716,7 @@ function EditCollectionModal({
         // Send the current course/program so this title/description edit does not wipe it
         // (updateMetadata overwrites every provided field; omitting one clears it).
         courseProgram: collection.courseProgram,
+        estimatedStudyHours: estimatedStudyHours ? Number(estimatedStudyHours) : null,
       });
       onSaved(saved);
     } catch (submitError) {
@@ -576,6 +757,19 @@ function EditCollectionModal({
             onChange={(event) => setDescription(event.target.value)}
             className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Estimated study time (hours)</span>
+          <input
+            aria-label="Estimated study time (hours)"
+            type="number"
+            min="1"
+            step="1"
+            value={estimatedStudyHours}
+            onChange={(event) => setEstimatedStudyHours(event.target.value)}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+          <span className="block text-xs text-foreground/60">Optional. Shown to learners on adoption.</span>
         </label>
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
       </form>
@@ -853,6 +1047,7 @@ function PublishStudyPlanModal({
         title: collection.title,
         description: collection.description,
         courseProgram: trimmedCourseProgram || null,
+        estimatedStudyHours: collection.estimatedStudyHours,
       });
       onSaved(saved);
       return saved;
@@ -1157,6 +1352,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goalDetail, setGoalDetail] = useState<GoalCollectionDetailResponse | null>(null);
   const [items, setItems] = useState<NoteCollectionItem[]>([]);
+  const [sectionCounts, setSectionCounts] = useState<Map<string, SectionReadiness> | null>(null);
+  const [continueDismissed, setContinueDismissed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
@@ -1166,7 +1363,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [publishOpen, setPublishOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
-  const [organizeMode, setOrganizeMode] = useState(false);
+  const [organizeMode] = useState(false);
   const [defaultSectionExpanded, setDefaultSectionExpanded] = useState<boolean | null>(null);
   const [sectionExpandedById, setSectionExpandedById] = useState<Record<string, boolean>>({});
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -1227,12 +1424,43 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   }, [loadCollection, router]);
 
   useEffect(() => {
-    setDefaultSectionExpanded((globalThis.window?.innerWidth ?? 0) >= LARGE_VIEWPORT_MIN_WIDTH);
+    setDefaultSectionExpanded((globalThis.innerWidth ?? 0) >= LARGE_VIEWPORT_MIN_WIDTH);
   }, []);
 
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
   }, [collectionId]);
+
+  useEffect(() => {
+    setContinueDismissed(false);
+    try {
+      setContinueDismissed(globalThis.sessionStorage?.getItem(`${CONTINUE_DISMISS_STORAGE_PREFIX}${collectionId}`) === "true");
+    } catch {
+      setContinueDismissed(false);
+    }
+  }, [collectionId]);
+
+  useEffect(() => {
+    if (loadState !== "ready" || goalDetail || items.length === 0) {
+      setSectionCounts(null);
+      return;
+    }
+    let mounted = true;
+    void getNoteConceptCounts(collectionId)
+      .then((counts) => {
+        if (mounted) {
+          setSectionCounts(aggregateSectionReadiness(items, counts));
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setSectionCounts(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [collectionId, goalDetail, items, loadState]);
 
   const loadNoteVisibility = useCallback(async () => {
     try {
@@ -1485,6 +1713,19 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const premiumExamDisabled = noteListLoadFailed
     || !primaryExamItem
     || (terminalAction?.kind === "premium-exam" && terminalAction.mode === "board_exam" && !primaryExamStudyPackId);
+  const continueAction = useMemo(() => {
+    const latestPracticedItem = getLatestPracticedCollectionItem(items);
+    return latestPracticedItem ? getContinuePlanAction(latestPracticedItem, collectionId, showWeakAreas) : null;
+  }, [collectionId, items, showWeakAreas]);
+
+  const dismissContinueBanner = () => {
+    setContinueDismissed(true);
+    try {
+      globalThis.sessionStorage?.setItem(`${CONTINUE_DISMISS_STORAGE_PREFIX}${collectionId}`, "true");
+    } catch {
+      // Session dismissal is progressive enhancement.
+    }
+  };
 
   const openCollectionExamBuilder = useCallback(() => {
     if (quizReadyNoteIds.length === 0) {
@@ -1706,27 +1947,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <BackLink href="/collections" label={labels.plural} />
-      <PageHeader
-        eyebrow={labels.singular.toUpperCase()}
-        title={collection.title}
-        description={collection.description || undefined}
-        descriptionClassName="line-clamp-2"
-        meta={isAdmin ? (
-          <button
-            type="button"
-            onClick={() => setPublishOpen(true)}
-            aria-label="Publish settings"
-            title="Publish settings"
-            className="motion-lift inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
-          >
-            {collection.visibility === "PUBLIC" ? (
-              <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
-            ) : (
-              <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
-            )}
-            <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
-          </button>
-        ) : undefined}
+      <PlanHeroCard
+        collection={collection}
+        labels={labels}
+        isAdmin={isAdmin}
+        onPublishClick={() => setPublishOpen(true)}
         actions={(
           <div className="flex items-center justify-end gap-2">
             <ResponsiveActionLink
@@ -1785,7 +2010,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             </div>
           </div>
         )}
-        footer={terminalAction ? (
+        terminalFooter={terminalAction ? (
           <div className="flex flex-col items-start gap-1">
             <ResponsiveActionButton
               action="open"
@@ -1839,6 +2064,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         </Card>
       ) : null}
 
+      {continueAction && !continueDismissed ? (
+        <ContinuePlanBanner action={continueAction} onDismiss={dismissContinueBanner} />
+      ) : null}
+
       <Card className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1847,9 +2076,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {items.length > 0 ? (
-              <Button type="button" variant="outline" onClick={() => setOrganizeMode((active) => !active)}>
-                {organizeMode ? "Done organizing" : "Organize"}
-              </Button>
+              <ResponsiveActionLink
+                href={`/collections/${collectionId}/builder`}
+                action="edit"
+                label="Build"
+                variant="outline"
+              />
             ) : null}
             <ResponsiveActionButton action="create" label="Add notes" onClick={() => setAddOpen(true)} />
           </div>
@@ -1959,6 +2191,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                         section={section}
                         isExpanded={isExpanded}
                         organizeMode={false}
+                        sectionReadiness={sectionCounts?.get(section.name) ?? null}
                         headingId={`${sectionContentId}-heading`}
                         onToggle={() => toggleSectionExpanded(section.id)}
                       />

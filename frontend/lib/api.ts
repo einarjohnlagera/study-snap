@@ -1409,6 +1409,7 @@ export type NoteCollectionDetail = {
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
+  estimatedStudyHours: number | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   childCount: number;
@@ -1416,6 +1417,13 @@ export type NoteCollectionDetail = {
   updatedAt: string;
   progress: NoteCollectionProgress;
   items: NoteCollectionItem[];
+};
+
+export type NoteConceptCountsResponse = {
+  totalConceptCount: number;
+  masteredConceptCount: number;
+  dueConceptCount: number;
+  notPracticedConceptCount: number;
 };
 
 export type AdoptStudyPlanResponse = {
@@ -3771,6 +3779,18 @@ export async function getPlanReadiness(id: string): Promise<PlanReadinessRespons
   return parseApiResponse<PlanReadinessResponse>(response, "Could not load plan readiness.");
 }
 
+export async function getNoteConceptCounts(id: string): Promise<Record<string, NoteConceptCountsResponse>> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/note-concept-counts`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<Record<string, NoteConceptCountsResponse>>(response, "Could not load concept counts.");
+}
+
 export async function getCollectionGoal(id: string): Promise<GoalCollectionDetailResponse> {
   const response = await fetchWithAuth(
     `/collections/${id}/goal`,
@@ -3811,7 +3831,7 @@ export async function reorderCollectionChildren(id: string, childIds: string[]):
 
 export async function updateCollection(
   id: string,
-  request: { title?: string; description?: string | null; courseProgram?: string | null },
+  request: { title?: string; description?: string | null; courseProgram?: string | null; estimatedStudyHours?: number | null },
 ): Promise<NoteCollectionDetail> {
   const response = await fetchWithAuth(
     `/collections/${id}`,
