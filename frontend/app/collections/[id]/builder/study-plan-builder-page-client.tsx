@@ -875,7 +875,18 @@ function AddNotesModal({
     () => new Set(subject?.items.map((item) => item.noteId) ?? []),
     [subject?.items],
   );
-  const availableNotes = useMemo(() => filterPickerNotes(notes, presentNoteIds, query), [notes, presentNoteIds, query]);
+
+  const noteById = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
+
+  const selectedNotes = useMemo(
+    () => Array.from(selectedIds).map((id) => noteById.get(id)).filter((n): n is NoteListItemResponse => n !== undefined),
+    [selectedIds, noteById],
+  );
+
+  const resultNotes = useMemo(
+    () => filterPickerNotes(notes, new Set([...presentNoteIds, ...selectedIds]), query),
+    [notes, presentNoteIds, selectedIds, query],
+  );
 
   const toggleSelected = (noteId: string) => {
     setSelectedIds((previous) => {
@@ -902,6 +913,9 @@ function AddNotesModal({
     }
   };
 
+  const hasResults = resultNotes.length > 0;
+  const hasSelection = selectedNotes.length > 0;
+
   return (
     <AppModal
       isOpen={isOpen}
@@ -913,7 +927,7 @@ function AddNotesModal({
         <>
           <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
           <Button type="button" loading={submitting} loadingText="Adding..." disabled={selectedIds.size === 0 || !subject} onClick={() => void handleAdd()}>
-            Add selected
+            {selectedIds.size > 0 ? `Add selected (${selectedIds.size})` : "Add selected"}
           </Button>
         </>
       )}
@@ -930,28 +944,68 @@ function AddNotesModal({
           />
         </label>
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
-        {availableNotes.length === 0 ? (
-          <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">No matching notes available.</p>
-        ) : (
-          <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-            {availableNotes.map((note) => (
-              <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-highlight">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(note.id)}
-                  onChange={() => toggleSelected(note.id)}
-                  className="mt-1"
-                />
-                <span className="space-y-1">
-                  <span className="block text-sm font-medium text-foreground">{note.title || "Untitled note"}</span>
-                  <span className="block text-xs text-foreground/60">
-                    {[note.subject, note.courseProgram].filter(Boolean).join(" · ") || "No subject yet"}
-                  </span>
-                </span>
-              </label>
-            ))}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            {hasResults ? (
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                {resultNotes.map((note) => (
+                  <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-highlight">
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      onChange={() => toggleSelected(note.id)}
+                      className="mt-1"
+                    />
+                    <span className="space-y-1">
+                      <span className="block text-sm font-medium text-foreground">{note.title || "Untitled note"}</span>
+                      <span className="block text-xs text-foreground/60">
+                        {[note.subject, note.courseProgram].filter(Boolean).join(" · ") || "No subject yet"}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg bg-muted px-3 py-3 text-sm text-foreground/70">
+                {query ? "No matching notes." : (hasSelection ? "No more notes to add." : "No notes available.")}
+              </p>
+            )}
           </div>
-        )}
+          {hasSelection ? (
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                  Selected ({selectedNotes.length})
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-foreground/50 hover:text-foreground/80"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear all
+                </button>
+              </div>
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                {selectedNotes.map((note) => (
+                  <label key={note.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-300 bg-blue-50/60 p-3 hover:bg-blue-50 dark:border-blue-800/60 dark:bg-blue-950/20 dark:hover:bg-blue-950/30">
+                    <input
+                      type="checkbox"
+                      checked
+                      onChange={() => toggleSelected(note.id)}
+                      className="mt-1 accent-blue-600"
+                    />
+                    <span className="space-y-1">
+                      <span className="block text-sm font-medium text-foreground">{note.title || "Untitled note"}</span>
+                      <span className="block text-xs text-foreground/60">
+                        {[note.subject, note.courseProgram].filter(Boolean).join(" · ") || "No subject yet"}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
     </AppModal>
   );

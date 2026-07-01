@@ -354,7 +354,7 @@ describe("StudyPlanBuilderPageClient", () => {
     expect(within(dialog).getByText("Assessment Notes")).toBeInTheDocument();
     expect(within(dialog).queryByText("Professional Foundations")).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByText("Assessment Notes"));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add selected" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Add selected/ }));
 
     await waitFor(() => {
       expect(addCollectionItems).toHaveBeenCalledWith("child-1", ["note-3"]);
