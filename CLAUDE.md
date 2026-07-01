@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Current version: **v0.33.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.33.2 — Plan Detail Polish (mobile redesign)
+## Active release: v0.33.2 — Plan Detail Redesign (view/edit split)
 
 Base branch for this release: `releases/v0.33.2`. The v0.33.x series is the study-plan line; each minor is a tightening pass. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile — a 29-note plan renders a wall of edit chrome that makes the page unusable. v0.33.3 follows with recursive Goal adopt. Locked rules:
 

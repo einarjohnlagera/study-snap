@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.33.2 - Plan Detail Polish (mobile redesign)` is the current in-progress release (on `releases/v0.33.2`).
+`v0.33.2 - Plan Detail Redesign (view/edit split)` is the current in-progress release (on `releases/v0.33.2`).
 
 `v0.33.1 - Study Plan polish & Curated Plan Coverage` is the latest released version (on `releases/v0.33.1`).
 
@@ -108,12 +108,12 @@ Anti-drift: readiness stays Free (decided, not revisited — see the Journey can
 
 ---
 
-## v0.33.2 - Plan Detail Polish (mobile redesign) (in progress)
+## v0.33.2 - Plan Detail Redesign (view/edit split) (in progress)
 
 Base branch: `releases/v0.33.2`. The v0.33.x series is the study-plan line — each minor tightens it. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile. A real 29-note curated plan (LET Professional Education Mastery) exposed the gap: the page is a wall of edit chrome — SECTION combobox, Move up/down, and Remove on every single note card — making it unusable on mobile. Gate (curate one real plan first) is now lifted. v0.33.3 (recursive Goal adopt) follows.
 
 **Plan detail mobile redesign (frontend, Codex prompt):**
-- **Collapsible section cards** — each label-derived section becomes a card with a collapse toggle. Collapsed state = section header + note count; expanded = note rows. Section cards make boundaries clear and allow users to focus on one section at a time.
+- **Collapsible section cards** — each label-derived section becomes a card with a collapse toggle. Collapsed state = section header + note count; expanded = note rows. Section cards make boundaries clear and allow users to focus on one section at a time. **Default collapse state: expanded on desktop (wide viewport), collapsed on mobile** — so desktop users see content up front while mobile users get a focused one-section-at-a-time view. Use a responsive breakpoint check, not a separate layout; the interaction model is the same on both.
 - **View mode by default** — opening a plan shows a clean read view. SECTION combobox, Move up/down, and Remove are hidden by default; revealed via an organize/edit mode toggle. The toggle is *not* a third parallel editor — the Builder at `/collections/{id}/builder` handles Goal-level curation (drag notes across Subject plans); this toggle handles leaf-plan organization (reorder/section-assign within a plan).
 - **No readiness on section headers.** Sections stay label-derived. If a grouping needs its own readiness it should be a child Subject plan (the Goal → Subject model already shipped). This is a confirmed locked rule — do not reverse it.
 

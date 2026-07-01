@@ -1,6 +1,6 @@
 # RELEASES.md - NoteLib
 
-## v0.33.2 - Plan Detail Polish (mobile redesign)
+## v0.33.2 - Plan Detail Redesign (view/edit split)
 
 **Status: In Progress**
 
