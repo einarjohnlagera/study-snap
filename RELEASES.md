@@ -2,7 +2,7 @@
 
 ## v0.33.3 - Recursive Goal Adopt
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: the curated-plan experience is only complete when a learner can adopt a Goal and receive all its child Subject plans and notes in one action. Today only leaf plans are adoptable — a curator building a multi-Subject Goal plan cannot surface it as a single unit. v0.33.3 closes that gap.
 
