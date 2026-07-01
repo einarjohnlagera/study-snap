@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.34.0 - Journey: Goal-First Study Experience
+
+**Status: In Progress**
+
+Theme: transform the study plan detail from a note list into a guided study surface. Every piece reuses shipped infrastructure — no new AI, no new mastery signal, no new quiz model. Composition over rewrite.
+
+### Planned Scope
+
+- **Section readiness on plan detail (backend + frontend).** Reverse the v0.33.x locked rule: section cards now show readiness % and concepts due. Backend adds per-note concept health counts (mastered/due/total) to the plan detail response; frontend aggregates by section label client-side. Lazy-loaded post-initial-render to avoid blocking first paint. No new mastery signal or stored field.
+- **Estimated study time (backend + frontend).** Add optional `estimatedStudyHours` field to collection entity via Flyway migration. Curator-entered. Carries over on adopt. Never blocks adopt or quiz generation.
+- **Plan Hero (frontend).** Surface plan title, description, course/program, and estimated study time as a visual hero card on the plan detail page. No backend changes.
+- **"Continue where you left off" (frontend).** Identify the last-studied note via `argmax(lastSessionCompletedAt)` — already present in the plan detail response. Adaptive CTA drives directly to that note's next action. Zero new backend work.
+- **Builder for leaf plans (frontend).** Extend `/collections/{id}/builder` to detect leaf vs Goal and render a single-plan canvas: notes as draggable cards with section-label drag-and-drop assignment. Eliminates the inline organize mode toggle from leaf plan detail pages once the Builder handles them. Existing endpoints only — no new API.
+
+Anti-drift: section readiness reuses existing `ConceptHealth` / `ProgressReportService` — no new signal, field, or AI call; `estimatedStudyHours` is always optional; Builder leaf canvas uses existing collection endpoints only; "Continue where you left off" uses `lastSessionCompletedAt` already in the detail response; no new chart library; readiness stays Free; adopt stays Free; no quota / billing / price / checkout changes; no 3rd hierarchy level; 2-level max enforced.
+
+### Shipped
+
+---
+
 ## v0.33.4 - Builder Surface Clarity
 
 **Status: Released**

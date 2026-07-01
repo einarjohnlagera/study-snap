@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.33.4** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.34.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.33.4 — Builder Surface Clarity
+## Active release: v0.34.0 — Journey: Goal-First Study Experience
 
-Base branch for this release: `releases/v0.33.4`. The v0.33.x series is the study-plan line. v0.33.3 shipped recursive Goal adopt; v0.33.4 is a focused frontend-only polish release. Locked rules:
+Base branch for this release: `releases/v0.34.0`. Transform the study plan detail from a note list into a guided study surface. Composition over rewrite — every piece reuses shipped infrastructure. Locked rules:
 
-- **Builder page only.** Remove the top-level `ReadinessSummary` ring from the Builder page. Per-module readiness stats in Subject plan headers stay. No changes to the plan detail page, leaf-plan organize mode, or any backend code.
-- **Copy-and-edit semantics — decided.** Adopted notes are the learner's own copies, editable and removable immediately. Consistent with the Study Pack copy-and-edit principle. No read-only lock, no "unlock to edit" step.
-- **2-level max enforced.** Goal → Subject only. No 3rd level, no new hierarchy changes.
-- **Adopt stays Free.** No quota, billing, price, or checkout change.
-- **Readiness reuses `ProgressReportService`.** No new mastery signal, persisted field, AI call, or thresholds.
-- **Carried forward (still in force):** no new chart library; sections stay label-derived (no mastery on headers); "Journey" Phase 2 gated on adoption + coverage; teacher bulk-quiz stays a future gated release.
+- **Section readiness on plan detail.** Add per-note concept health counts to the plan detail response; aggregate by section label client-side. Lazy-loaded. No new mastery signal, stored field, or AI call.
+- **Estimated study time.** Optional `estimatedStudyHours` on the collection entity (Flyway migration required). Always optional — never blocks adopt, quiz, or publish.
+- **Plan Hero.** Frontend-only hero card. No new backend.
+- **"Continue where you left off".** Uses `lastSessionCompletedAt` already in the plan detail response. Zero new backend.
+- **Builder for leaf plans.** Extend `/collections/{id}/builder` to render a single-plan canvas for leaf plans. Uses existing collection endpoints only — no new API. Eliminates the inline organize mode toggle from leaf plan detail pages.
+- **No new chart library, no new quiz model, no new mastery signal.** Readiness Free. Adopt Free. No quota / billing / price / checkout changes. 2-level hierarchy max enforced.
 
 ## Source-of-truth docs (read before implementing anything)
 
