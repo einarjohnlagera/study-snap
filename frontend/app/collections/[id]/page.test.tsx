@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CollectionDetailPageClient } from "./collection-detail-page-client";
 import {
   addCollectionItems,
@@ -206,6 +206,10 @@ describe("CollectionDetailPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    Object.defineProperty(globalThis.window, "innerWidth", {
+      configurable: true,
+      value: 1024,
+    });
   });
 
   it("renders collection items in persisted order", async () => {
@@ -289,9 +293,8 @@ describe("CollectionDetailPageClient", () => {
     expect(regionText.indexOf("General Education")).toBeLessThan(regionText.indexOf("Professional Education"));
     expect(regionText.indexOf("Teaching Methods")).toBeLessThan(regionText.indexOf("Assessment"));
 
-    expect(screen.getByRole("heading", { level: 3, name: "General Education" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: "Professional Education" })).toBeInTheDocument();
-    expect(within(screen.getByRole("heading", { level: 3, name: "Professional Education" }).parentElement!).getByText("2 notes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "General Education 1 note" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Professional Education 2 notes" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("renders null and empty labels in an Ungrouped section after named sections", async () => {
@@ -310,8 +313,8 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const namedHeader = await screen.findByRole("heading", { level: 3, name: "Major Specialization" });
-    const ungroupedHeader = screen.getByRole("heading", { level: 3, name: "Ungrouped" });
+    const namedHeader = await screen.findByRole("button", { name: "Major Specialization 1 note" });
+    const ungroupedHeader = screen.getByRole("button", { name: "Ungrouped 2 notes" });
     expect(Boolean(namedHeader.compareDocumentPosition(ungroupedHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByRole("heading", { level: 2, name: "Early Ungrouped" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Null Ungrouped" })).toBeInTheDocument();
@@ -327,7 +330,79 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Cell Respiration" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Dosage Calculations" })).toBeInTheDocument();
     expect(screen.queryAllByTestId("collection-section-heading")).toHaveLength(0);
-    expect(screen.queryByRole("heading", { name: "Ungrouped" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ungrouped/ })).not.toBeInTheDocument();
+  });
+
+  it("hides organize controls by default and reveals them from the Notes header", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    expect(screen.getByRole("button", { name: "Organize" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move down" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
+
+    expect(screen.getByRole("button", { name: "Done organizing" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Drag Cell Respiration")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Section")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Move up" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Move down" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Done organizing" }));
+
+    expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("collapses section cards independently and removes collapsed rows from the DOM", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Assessment", label: "Professional Education", position: 1 },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const generalSection = await screen.findByRole("button", { name: "General Education 1 note" });
+    expect(screen.getByRole("heading", { level: 2, name: "Foundations" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Assessment" })).toBeInTheDocument();
+
+    fireEvent.click(generalSection);
+
+    expect(generalSection).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("heading", { level: 2, name: "Foundations" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Assessment" })).toBeInTheDocument();
+  });
+
+  it("starts section cards collapsed on mobile-sized viewports", async () => {
+    Object.defineProperty(globalThis.window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], noteId: "note-1", title: "Foundations", label: "General Education", position: 0 },
+        { ...collection().items[1], noteId: "note-2", title: "Assessment", label: "Professional Education", position: 1 },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const generalSection = await screen.findByRole("button", { name: "General Education 1 note" });
+    expect(generalSection).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("heading", { level: 2, name: "Foundations" })).not.toBeInTheDocument();
+
+    fireEvent.click(generalSection);
+
+    expect(generalSection).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("heading", { level: 2, name: "Foundations" })).toBeInTheDocument();
   });
 
   it("shows three-state per-note execution status and drops the study-pack/quiz readiness hint", async () => {
@@ -788,6 +863,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Foundations" });
+    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
     // first "Move down" belongs to note-1 (first item in the "Week 1" section)
     fireEvent.click(screen.getAllByRole("button", { name: "Move down" })[0]);
 
@@ -811,6 +887,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Foundations" });
+    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
     // each note is alone in its section, so every move button is a boundary and disabled
     screen.getAllByRole("button", { name: "Move up" }).forEach((button) => expect(button).toBeDisabled());
     screen.getAllByRole("button", { name: "Move down" }).forEach((button) => expect(button).toBeDisabled());
@@ -832,6 +909,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
     const sectionInputs = screen.getAllByLabelText("Section");
     fireEvent.change(sectionInputs[1], { target: { value: "Professional Education" } });
     fireEvent.blur(sectionInputs[1]);
@@ -842,8 +920,8 @@ describe("CollectionDetailPageClient", () => {
         { noteId: "note-2", label: "Professional Education" },
       ]);
     });
-    expect(await screen.findByRole("heading", { level: 3, name: "Professional Education" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: "Ungrouped" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Professional Education 1 note" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ungrouped 1 note" })).toBeInTheDocument();
   });
 
   it("clears a section assignment back to Ungrouped through the order endpoint", async () => {
@@ -858,6 +936,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
     const sectionInputs = screen.getAllByLabelText("Section");
     fireEvent.change(sectionInputs[0], { target: { value: "" } });
     fireEvent.blur(sectionInputs[0]);
@@ -880,6 +959,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
+    fireEvent.click(screen.getByRole("button", { name: "Organize" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]);
 
     await waitFor(() => {

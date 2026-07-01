@@ -62,9 +62,9 @@ For Study Plan detail sections, there is no separate section entity or nested-pl
 - section display order follows the minimum `position` among the section's items.
 - items within a section stay in `position` order.
 - null or empty labels belong to a trailing **Ungrouped** bucket.
-- when no item in the plan has a label, detail renders the existing flat ordered list with no section headers.
-- reordering (drag-and-drop and Move up/down) is **scoped to within a section**: each section has its own `SortableContext`, and both reorder paths operate against the grouped display order (sections contiguous) so a within-section move never renumbers another section's positions or reorders the sections. Cross-section drag is a no-op and Move buttons are disabled at section boundaries; to move a note to a different section, change its `label` (the Section control). The flat (no-label) plan reorders globally as before.
-- the per-note **Section** control is the shared `SuggestionCombobox` (existing section names as suggestions + free-type a new one), and it **auto-saves on a short debounce** after the last change rather than on blur. Section headers are rendered as emphasized dividers, distinct from note titles.
+- when no item in the plan has a label, detail renders the existing flat ordered list with no section cards.
+- reordering (drag-and-drop and Move up/down) is visible only in organize mode and is **scoped to within a section**: each section has its own `SortableContext`, and both reorder paths operate against the grouped display order (sections contiguous) so a within-section move never renumbers another section's positions or reorders the sections. Cross-section drag is a no-op and Move buttons are disabled at section boundaries; to move a note to a different section, change its `label` (the Section control). The flat (no-label) plan reorders globally as before.
+- the per-note **Section** control is visible only in organize mode. It uses the shared `SuggestionCombobox` (existing section names as suggestions + free-type a new one), and it **auto-saves on a short debounce** after the last change rather than on blur. Section headers are collapsible card headers, distinct from note titles.
 
 Sections are strictly sections within one plan. They are not child collections, independent plans, or module entities.
 
@@ -562,7 +562,8 @@ The core Collections UI ships as the universal organization surface:
 - `/collections/[id]` shows a compact progress summary near the header: Study Packs ready, notes practiced, and a practiced/total progress bar.
 - Entitled users see per-note due-concept counts and up to 3 concept names. Free users see no fabricated counts and may see one plan-aware upgrade affordance resolved through `getUpgradeCtas(currentPlan)`.
 - A frontend-only `Next in this plan` card derives one action from the already-returned ordered items. It never calls a recommendation endpoint or persists recommendation state.
-- When at least one item has a trimmed non-empty `label`, `/collections/[id]` groups the notes under section headers (`section name + item count`). Section order follows the first/minimum `position` in each section, items stay in `position` order within each section, and null/empty labels render under a trailing **Ungrouped** section. When no item has a label, the page renders the existing flat list unchanged with no section headers.
+- `/collections/[id]` opens in read mode by default. Note cards show title, subject/course metadata, execution status, entitled due-concept signals, and admin private badges; drag handles, the per-note Section combobox, Move up/down, and Remove controls are hidden until the user clicks `Organize`. The toggle changes to `Done organizing` while active. Flat plans with no labels use the same read/organize split without adding collapse behavior.
+- When at least one item has a trimmed non-empty `label`, `/collections/[id]` groups the notes into collapsible section cards (`section name + item count + chevron`). Section order follows the first/minimum `position` in each section, items stay in `position` order within each section, and null/empty labels render under a trailing **Ungrouped** section. Section cards start collapsed below the `lg` breakpoint and expanded at `lg` and wider; collapsed sections render only the header row, including while organize mode is active.
 - Section headers and item rows are execution organization only. They must not show readiness, mastery percentages, subject mastery, milestones, goals, streaks, weakest-subject routing, or progress bars; readiness remains on `/collections/[id]/readiness`.
 - The next-action phases are evaluated globally in this order, choosing the first matching note in saved order within each phase:
   1. First note without `STUDY_PACK_READY` -> `Generate Study Pack`.
@@ -617,7 +618,7 @@ Core UI behavior:
 - `/collections` uses the authenticated page header pattern and opens a create modal with a title (max length `150`) and an optional description field. The Library selection-mode create modal (split-button `{singular}`) also collects an optional description (v0.33.0) — both create paths now carry description through `createCollection`, so a plan built from a Library selection is no longer title-only.
 - `/collections/[id]` uses `BackLink href="/collections"` with the profile-aware plural label.
 - Item labels are edited as per-item **Section** assignment controls with max length `120`: users can choose an existing section name from the current plan, type a new free-text section, or clear the value to return the item to Ungrouped. The control still persists through `PUT /collections/{id}/items/order`; no new mutation, DTO field, endpoint, taxonomy, or backend interpretation is added.
-- Reorder uses drag-and-drop plus `Move up` / `Move down` buttons for accessibility.
+- Reorder uses drag-and-drop plus `Move up` / `Move down` buttons for accessibility, all available only in organize mode.
 - Reorder/relabel persists through `PUT /collections/{id}/items/order` with the full ordered item set.
 - The in-detail note picker uses the user's own notes from the Library note-list API and excludes notes already in the collection.
 - Delete is confirm-gated and must state that deleting a collection does not delete its notes.

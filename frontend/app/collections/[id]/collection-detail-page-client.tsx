@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,7 @@ type CollectionItemSection = {
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
 const UNGROUPED_SECTION_NAME = "Ungrouped";
+const LARGE_VIEWPORT_MIN_WIDTH = 1024;
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -886,6 +887,7 @@ function SortableCollectionItemRow({
   itemCount,
   disabled,
   collectionId,
+  organizeMode,
   showWeakAreas,
   isPrivate,
   sectionNames,
@@ -898,6 +900,7 @@ function SortableCollectionItemRow({
   itemCount: number;
   disabled: boolean;
   collectionId: string;
+  organizeMode: boolean;
   showWeakAreas: boolean;
   isPrivate: boolean;
   sectionNames: string[];
@@ -905,7 +908,10 @@ function SortableCollectionItemRow({
   onRemove: (noteId: string) => void;
   onLabelChange: (noteId: string, label: string) => void;
 }>) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.noteId });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.noteId,
+    disabled: disabled || !organizeMode,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -940,17 +946,19 @@ function SortableCollectionItemRow({
         isDragging && "opacity-70 ring-2 ring-blue-400",
       )}
     >
-      <div className="grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-start">
-        <button
-          type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground/55 hover:bg-highlight"
-          aria-label={`Drag ${getNoteTitle(item)}`}
-          disabled={disabled}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-4 w-4" aria-hidden="true" />
-        </button>
+      <div className={cn("grid gap-4", organizeMode && "lg:grid-cols-[auto_1fr_auto] lg:items-start")}>
+        {organizeMode ? (
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground/55 hover:bg-highlight"
+            aria-label={`Drag ${getNoteTitle(item)}`}
+            disabled={disabled}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : null}
 
         <div className="space-y-3">
           <Link href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`} className="block rounded-lg p-1 -m-1 hover:bg-highlight">
@@ -976,31 +984,35 @@ function SortableCollectionItemRow({
               ) : null}
             </div>
           ) : null}
-          <div className="block space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Section</span>
-            <SuggestionCombobox
-              id={`section-${item.noteId}`}
-              value={labelValue}
-              options={sectionOptions}
-              onChange={(next) => setLabelValue(next.slice(0, LABEL_MAX_LENGTH))}
-              ariaLabel="Section"
-              placeholder="Choose or type a section"
-              disabled={disabled}
-            />
-          </div>
+          {organizeMode ? (
+            <div className="block space-y-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">Section</span>
+              <SuggestionCombobox
+                id={`section-${item.noteId}`}
+                value={labelValue}
+                options={sectionOptions}
+                onChange={(next) => setLabelValue(next.slice(0, LABEL_MAX_LENGTH))}
+                ariaLabel="Section"
+                placeholder="Choose or type a section"
+                disabled={disabled}
+              />
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          <Button type="button" variant="outline" size="sm" disabled={disabled || index === 0} onClick={() => onMove(item.noteId, "up")}>
-            Move up
-          </Button>
-          <Button type="button" variant="outline" size="sm" disabled={disabled || index === itemCount - 1} onClick={() => onMove(item.noteId, "down")}>
-            Move down
-          </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onRemove(item.noteId)}>
-            Remove
-          </Button>
-        </div>
+        {organizeMode ? (
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button type="button" variant="outline" size="sm" disabled={disabled || index === 0} onClick={() => onMove(item.noteId, "up")}>
+              Move up
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={disabled || index === itemCount - 1} onClick={() => onMove(item.noteId, "down")}>
+              Move down
+            </Button>
+            <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onRemove(item.noteId)}>
+              Remove
+            </Button>
+          </div>
+        ) : null}
       </div>
     </li>
   );
@@ -1031,6 +1043,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [publishOpen, setPublishOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [organizeMode, setOrganizeMode] = useState(false);
+  const [defaultSectionExpanded, setDefaultSectionExpanded] = useState<boolean | null>(null);
+  const [sectionExpandedById, setSectionExpandedById] = useState<Record<string, boolean>>({});
   const [noteVisibility, setNoteVisibility] = useState<Map<string, NoteVisibility>>(new Map());
   const [noteListItems, setNoteListItems] = useState<NoteListItemResponse[]>([]);
   const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
@@ -1084,6 +1099,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     void Promise.resolve().then(loadCollection);
   }, [loadCollection, router]);
+
+  useEffect(() => {
+    setDefaultSectionExpanded((globalThis.window?.innerWidth ?? 0) >= LARGE_VIEWPORT_MIN_WIDTH);
+  }, []);
 
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
@@ -1260,6 +1279,30 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     () => getCollectionItemSections(items),
     [items],
   );
+
+  useEffect(() => {
+    if (defaultSectionExpanded === null) {
+      return;
+    }
+    if (!hasSections) {
+      setSectionExpandedById({});
+      return;
+    }
+    setSectionExpandedById((previous) => {
+      const next: Record<string, boolean> = {};
+      itemSections.forEach((section) => {
+        next[section.id] = previous[section.id] ?? defaultSectionExpanded;
+      });
+      return next;
+    });
+  }, [defaultSectionExpanded, hasSections, itemSections]);
+
+  const toggleSectionExpanded = (sectionId: string) => {
+    setSectionExpandedById((previous) => ({
+      ...previous,
+      [sectionId]: !(previous[sectionId] ?? defaultSectionExpanded ?? false),
+    }));
+  };
   const quizReadyNoteIds = useMemo(
     () => getCollectionQuizReadyNoteIds(items),
     [items],
@@ -1641,7 +1684,14 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             <CardTitle>Notes</CardTitle>
             <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
           </div>
-          <ResponsiveActionButton action="create" label="Add notes" onClick={() => setAddOpen(true)} />
+          <div className="flex flex-wrap items-center gap-2">
+            {items.length > 0 ? (
+              <Button type="button" variant="outline" onClick={() => setOrganizeMode((active) => !active)}>
+                {organizeMode ? "Done organizing" : "Organize"}
+              </Button>
+            ) : null}
+            <ResponsiveActionButton action="create" label="Add notes" onClick={() => setAddOpen(true)} />
+          </div>
         </div>
 
         {!showWeakAreas && items.length > 0 && upgradeCtas.primary ? (
@@ -1661,63 +1711,163 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             <p className="text-sm text-foreground/70">Add notes to start organizing this {labels.singular.toLowerCase()}.</p>
           </div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            {hasSections ? (
+          <>
+            {organizeMode ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                {hasSections ? (
+                  <div className="space-y-5">
+                    {itemSections.map((section, sectionIndex) => {
+                      const isExpanded = sectionExpandedById[section.id] ?? defaultSectionExpanded ?? false;
+                      const sectionContentId = `collection-section-${sectionIndex}`;
+                      return (
+                        <section key={section.id} aria-labelledby={`${sectionContentId}-heading`} className="rounded-xl border border-border bg-background p-4 shadow-sm sm:p-5">
+                          <button
+                            type="button"
+                            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left"
+                            aria-expanded={isExpanded}
+                            aria-controls={sectionContentId}
+                            onClick={() => toggleSectionExpanded(section.id)}
+                          >
+                            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                              <span id={`${sectionContentId}-heading`} data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                                {section.name}
+                              </span>
+                              <span className="text-xs font-medium text-foreground/55">
+                                {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+                              </span>
+                            </span>
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
+                            )}
+                          </button>
+                          {isExpanded ? (
+                            <SortableContext items={section.items.map((item) => item.noteId)} strategy={verticalListSortingStrategy}>
+                              <ol id={sectionContentId} className="mt-4 space-y-3">
+                                {section.items.map((item, localIndex) => (
+                                  <SortableCollectionItemRow
+                                    key={`${item.noteId}:${item.label ?? ""}`}
+                                    item={item}
+                                    index={localIndex}
+                                    itemCount={section.items.length}
+                                    disabled={mutationInProgress}
+                                    collectionId={collectionId}
+                                    organizeMode={organizeMode}
+                                    showWeakAreas={showWeakAreas}
+                                    isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                                    sectionNames={sectionNames}
+                                    onMove={handleMove}
+                                    onRemove={(noteId) => void handleRemove(noteId)}
+                                    onLabelChange={handleLabelChange}
+                                  />
+                                ))}
+                              </ol>
+                            </SortableContext>
+                          ) : null}
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+                    <ol className="space-y-3">
+                      {items.map((item, index) => (
+                        <SortableCollectionItemRow
+                          key={`${item.noteId}:${item.label ?? ""}`}
+                          item={item}
+                          index={index}
+                          itemCount={items.length}
+                          disabled={mutationInProgress}
+                          collectionId={collectionId}
+                          organizeMode={organizeMode}
+                          showWeakAreas={showWeakAreas}
+                          isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                          sectionNames={sectionNames}
+                          onMove={handleMove}
+                          onRemove={(noteId) => void handleRemove(noteId)}
+                          onLabelChange={handleLabelChange}
+                        />
+                      ))}
+                    </ol>
+                  </SortableContext>
+                )}
+              </DndContext>
+            ) : hasSections ? (
               <div className="space-y-5">
-                {itemSections.map((section) => (
-                  <section key={section.id} aria-label={`${section.name} section`} className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-                      <h3 data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">{section.name}</h3>
-                      <span className="text-xs font-medium text-foreground/55">
-                        {section.items.length} {section.items.length === 1 ? "note" : "notes"}
-                      </span>
-                    </div>
-                    <SortableContext items={section.items.map((item) => item.noteId)} strategy={verticalListSortingStrategy}>
-                      <ol className="space-y-3">
-                        {section.items.map((item, localIndex) => (
-                          <SortableCollectionItemRow
-                            key={`${item.noteId}:${item.label ?? ""}`}
-                            item={item}
-                            index={localIndex}
-                            itemCount={section.items.length}
-                            disabled={mutationInProgress}
-                            collectionId={collectionId}
-                            showWeakAreas={showWeakAreas}
-                            isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
-                            sectionNames={sectionNames}
-                            onMove={handleMove}
-                            onRemove={(noteId) => void handleRemove(noteId)}
-                            onLabelChange={handleLabelChange}
-                          />
-                        ))}
-                      </ol>
-                    </SortableContext>
-                  </section>
-                ))}
+                {itemSections.map((section, sectionIndex) => {
+                  const isExpanded = sectionExpandedById[section.id] ?? defaultSectionExpanded ?? false;
+                  const sectionContentId = `collection-section-${sectionIndex}`;
+                  return (
+                    <section key={section.id} aria-labelledby={`${sectionContentId}-heading`} className="rounded-xl border border-border bg-background p-4 shadow-sm sm:p-5">
+                      <button
+                        type="button"
+                        className="flex w-full cursor-pointer items-center justify-between gap-3 text-left"
+                        aria-expanded={isExpanded}
+                        aria-controls={sectionContentId}
+                        onClick={() => toggleSectionExpanded(section.id)}
+                      >
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                          <span id={`${sectionContentId}-heading`} data-testid="collection-section-heading" className="text-sm font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                            {section.name}
+                          </span>
+                          <span className="text-xs font-medium text-foreground/55">
+                            {section.items.length} {section.items.length === 1 ? "note" : "notes"}
+                          </span>
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0 text-foreground/55" aria-hidden="true" />
+                        )}
+                      </button>
+                      {isExpanded ? (
+                        <ol id={sectionContentId} className="mt-4 space-y-3">
+                          {section.items.map((item, localIndex) => (
+                            <SortableCollectionItemRow
+                              key={`${item.noteId}:${item.label ?? ""}`}
+                              item={item}
+                              index={localIndex}
+                              itemCount={section.items.length}
+                              disabled={mutationInProgress}
+                              collectionId={collectionId}
+                              organizeMode={organizeMode}
+                              showWeakAreas={showWeakAreas}
+                              isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                              sectionNames={sectionNames}
+                              onMove={handleMove}
+                              onRemove={(noteId) => void handleRemove(noteId)}
+                              onLabelChange={handleLabelChange}
+                            />
+                          ))}
+                        </ol>
+                      ) : null}
+                    </section>
+                  );
+                })}
               </div>
             ) : (
-              <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-                <ol className="space-y-3">
-                  {items.map((item, index) => (
-                    <SortableCollectionItemRow
-                      key={`${item.noteId}:${item.label ?? ""}`}
-                      item={item}
-                      index={index}
-                      itemCount={items.length}
-                      disabled={mutationInProgress}
-                      collectionId={collectionId}
-                      showWeakAreas={showWeakAreas}
-                      isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
-                      sectionNames={sectionNames}
-                      onMove={handleMove}
-                      onRemove={(noteId) => void handleRemove(noteId)}
-                      onLabelChange={handleLabelChange}
-                    />
-                  ))}
-                </ol>
-              </SortableContext>
+              <ol className="space-y-3">
+                {items.map((item, index) => (
+                  <SortableCollectionItemRow
+                    key={`${item.noteId}:${item.label ?? ""}`}
+                    item={item}
+                    index={index}
+                    itemCount={items.length}
+                    disabled={mutationInProgress}
+                    collectionId={collectionId}
+                    organizeMode={organizeMode}
+                    showWeakAreas={showWeakAreas}
+                    isPrivate={isAdmin && noteVisibility.get(item.noteId) === "PRIVATE"}
+                    sectionNames={sectionNames}
+                    onMove={handleMove}
+                    onRemove={(noteId) => void handleRemove(noteId)}
+                    onLabelChange={handleLabelChange}
+                  />
+                ))}
+              </ol>
             )}
-          </DndContext>
+          </>
         )}
       </Card>
 
