@@ -2,7 +2,7 @@
 
 ## v0.33.4 - Builder Surface Clarity
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: the Goal Builder is an authoring surface, not a study surface. The `ReadinessSummary` ring currently appears on the Builder page — the same component used on the plan detail — creating role confusion between editing and monitoring. v0.33.4 removes it from the Builder, where per-module stats in each Subject plan header already provide all the authoring-relevant signal a curator needs.
 

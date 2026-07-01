@@ -8,9 +8,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.34.0 - Journey: Goal-First Study Experience` is the next planned release.
 
-`v0.33.4 - Builder Surface Clarity` is the current in-progress release (on `releases/v0.33.4`).
+`v0.33.4 - Builder Surface Clarity` is the latest released version (on `releases/v0.33.4`).
 
-`v0.33.3 - Recursive Goal Adopt` is the latest released version (on `releases/v0.33.3`).
+`v0.33.3 - Recursive Goal Adopt` is the previous released version (on `releases/v0.33.3`).
 
 `v0.33.2 - Plan Detail Redesign (view/edit split)` is the previous released version (on `releases/v0.33.2`).
 
@@ -139,7 +139,7 @@ Anti-drift: sections stay label-derived (no mastery on headers); readiness stays
 
 ---
 
-## v0.33.4 - Builder Surface Clarity (in progress)
+## v0.33.4 - Builder Surface Clarity (released)
 
 Base branch: `releases/v0.33.4`. Focused frontend-only polish. The Goal Builder (`/collections/{id}/builder`) is an authoring surface, not a study surface — the top-level `ReadinessSummary` ring is the study/monitoring signal that doesn't belong there. Per-module stats inside each Subject plan header ("4 notes · 0% ready · 0/34 mastered") are retained as inline curation feedback.
 
