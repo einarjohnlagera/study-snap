@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.33.2 - Plan Detail Redesign (view/edit split)` (in progress); previous: `v0.33.1 - Study Plan polish & Curated Plan Coverage`
+Current release baseline: `v0.33.3 - Recursive Goal Adopt` (in progress); previous: `v0.33.2 - Plan Detail Redesign (view/edit split)`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -398,12 +398,7 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 ## Roadmap
 
-Current release: `v0.33.2 - Plan Detail Redesign (view/edit split)` (in progress)
-
-Planned for v0.33.2:
-
-- **Plan detail mobile redesign** — collapsible section cards + view/edit mode split; view mode is the default; edit chrome revealed only in organize mode.
-- **Subject metadata normalization** — data-only cleanup on the LET curated plan notes so the readiness page groups cleanly.
+Current release: `v0.33.3 - Recursive Goal Adopt` (in progress)
 
 Planned for v0.33.3:
 

@@ -135,7 +135,7 @@ Anti-drift: sections stay label-derived (no mastery on headers); readiness stays
 
 ---
 
-## v0.33.3 - Recursive Goal Adopt (planned)
+## v0.33.3 - Recursive Goal Adopt (in progress)
 
 The curated-plan experience is only complete when a learner can adopt a Goal and get all its child Subject plans and notes in one action. Today, adopting a Goal is not supported — only leaf plans can be adopted — so a curator building a multi-Subject goal plan cannot surface it as a single adoptable unit.
 

@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.33.3 - Recursive Goal Adopt
+
+**Status: In Progress**
+
+Theme: the curated-plan experience is only complete when a learner can adopt a Goal and receive all its child Subject plans and notes in one action. Today only leaf plans are adoptable — a curator building a multi-Subject Goal plan cannot surface it as a single unit. v0.33.3 closes that gap.
+
+### Planned Scope
+
+- **Recursive Goal adopt** (backend + frontend). Adopting a Goal recursively copies all child Subject plans and their notes into the learner's library, consistent with the Study Pack copy-and-edit principle. Each adopted note is the learner's own copy, editable and removable immediately — the Study Pack precedent (copy freely, edit freely) applies. Adoption stays Free. Unlocks the end-to-end Goal → Subject readiness view: once adopted, each child Subject plan shows its readiness bar in the Goal detail (already ships from v0.33.1).
+
+Anti-drift: 2-level max (Goal → Subject) — no 3rd level; adopt stays Free; adopted plan readiness reuses `ProgressReportService` (same as owned plans); no new mastery signal, persisted field, AI call, or chart library; no quota / billing / price / checkout change; teacher bulk-quiz stays a future gated release.
+
+### Shipped
+
+---
+
 ## v0.33.2 - Plan Detail Redesign (view/edit split)
 
 **Status: Released**
