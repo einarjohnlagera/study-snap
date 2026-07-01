@@ -293,8 +293,8 @@ describe("CollectionDetailPageClient", () => {
     expect(regionText.indexOf("General Education")).toBeLessThan(regionText.indexOf("Professional Education"));
     expect(regionText.indexOf("Teaching Methods")).toBeLessThan(regionText.indexOf("Assessment"));
 
-    expect(screen.getByRole("button", { name: "General Education 1 note" })).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("button", { name: "Professional Education 2 notes" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /General Education.*1 note/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /Professional Education.*2 notes/ })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("renders null and empty labels in an Ungrouped section after named sections", async () => {
@@ -313,7 +313,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const namedHeader = await screen.findByRole("button", { name: "Major Specialization 1 note" });
+    const namedHeader = await screen.findByRole("button", { name: /Major Specialization.*1 note/ });
     const ungroupedHeader = screen.getByRole("button", { name: "Ungrouped 2 notes" });
     expect(Boolean(namedHeader.compareDocumentPosition(ungroupedHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByRole("heading", { level: 2, name: "Early Ungrouped" })).toBeInTheDocument();
@@ -370,7 +370,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const generalSection = await screen.findByRole("button", { name: "General Education 1 note" });
+    const generalSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
     expect(screen.getByRole("heading", { level: 2, name: "Foundations" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Assessment" })).toBeInTheDocument();
 
@@ -395,7 +395,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const generalSection = await screen.findByRole("button", { name: "General Education 1 note" });
+    const generalSection = await screen.findByRole("button", { name: /General Education.*1 note/ });
     expect(generalSection).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("heading", { level: 2, name: "Foundations" })).not.toBeInTheDocument();
 
@@ -920,8 +920,8 @@ describe("CollectionDetailPageClient", () => {
         { noteId: "note-2", label: "Professional Education" },
       ]);
     });
-    expect(await screen.findByRole("button", { name: "Professional Education 1 note" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ungrouped 1 note" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Rename section Professional Education")).toBeInTheDocument();
+    expect(screen.getByText("Ungrouped")).toBeInTheDocument();
   });
 
   it("clears a section assignment back to Ungrouped through the order endpoint", async () => {

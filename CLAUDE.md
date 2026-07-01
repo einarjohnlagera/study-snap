@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.33.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.33.3** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.33.2 — Plan Detail Redesign (view/edit split)
+## Active release: v0.33.3 — Recursive Goal Adopt
 
-Base branch for this release: `releases/v0.33.2`. The v0.33.x series is the study-plan line; each minor is a tightening pass. v0.33.1 shipped hierarchy + curated content; v0.33.2 fixes the plan detail on mobile — a 29-note plan renders a wall of edit chrome that makes the page unusable. v0.33.3 follows with recursive Goal adopt. Locked rules:
+Base branch for this release: `releases/v0.33.3`. The v0.33.x series is the study-plan line. v0.33.2 shipped the plan detail redesign (view/organize split, section card polish, subject-source fixes); v0.33.3 closes the adopt gap — a curator's multi-Subject Goal plan cannot yet be adopted as a single unit. Locked rules:
 
-- **Scope expanded beyond frontend.** Collapsible section cards + view/edit split (frontend-only, shipped); subject-source fix in `StudyPackService` (backend, 1 file). No new endpoint, no migration, no new model.
-- **Sections stay label-derived.** Section cards show collapse toggle + note count. No readiness on section headers, no mastery on rows/headers. This is a locked rule and the advisor confirmed it — if a grouping needs its own readiness it should be a child Subject plan, not a label.
-- **View mode is the default.** SECTION combobox, Move up/down, and Remove are hidden by default. Revealed in an organize/edit mode (toggle). Not a third parallel editor — the Builder at `/collections/{id}/builder` handles Goal curation; this toggle handles leaf-plan organization.
-- **Readiness stays Free — decided, not revisited.** Derived, matches `/me/progress`; no new mastery signal, persisted field, AI call, or thresholds. PLUS/PRO keep only the per-concept review-timing detail.
-- **Recursive Goal adopt is deferred to v0.33.3.** Adopting a Goal will recursively copy all child Subject plans and their notes (consistent with Study Pack copy-and-edit). Open question on edit semantics (can adopted notes be removed/reorganized?) to be answered with advisor before the v0.33.3 Codex prompt. Do not sneak adopt-recursion into this release.
-- **Carried forward (still in force):** no quota / billing / price / checkout change; no new chart library; "Journey" Phase 2 gated on adoption + coverage; teacher bulk-quiz stays a future gated release.
+- **Recursive adopt only.** Adopting a Goal copies all child Subject plans and their notes into the learner's library in one action. No other new features in this release.
+- **Copy-and-edit semantics — decided.** Adopted notes are the learner's own copies, editable and removable immediately. Consistent with the Study Pack copy-and-edit principle. No read-only lock, no "unlock to edit" step.
+- **2-level max enforced.** Goal → Subject only. No 3rd level, no new hierarchy changes.
+- **Adopt stays Free.** No quota, billing, price, or checkout change.
+- **Readiness reuses `ProgressReportService`.** No new mastery signal, persisted field, AI call, or thresholds.
+- **Carried forward (still in force):** no new chart library; sections stay label-derived (no mastery on headers); "Journey" Phase 2 gated on adoption + coverage; teacher bulk-quiz stays a future gated release.
 
 ## Source-of-truth docs (read before implementing anything)
 

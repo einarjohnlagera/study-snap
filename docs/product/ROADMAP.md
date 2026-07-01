@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.33.3 - Recursive Goal Adopt` is the next planned release.
+`v0.34.0 - Journey: Goal-First Study Experience` is the next planned release.
 
-`v0.33.2 - Plan Detail Redesign (view/edit split)` is the latest released version (on `releases/v0.33.2`).
+`v0.33.3 - Recursive Goal Adopt` is the latest released version (on `releases/v0.33.3`).
+
+`v0.33.2 - Plan Detail Redesign (view/edit split)` is the previous released version (on `releases/v0.33.2`).
 
 `v0.33.1 - Study Plan polish & Curated Plan Coverage` is the previous released version (on `releases/v0.33.1`).
 
@@ -135,7 +137,7 @@ Anti-drift: sections stay label-derived (no mastery on headers); readiness stays
 
 ---
 
-## v0.33.3 - Recursive Goal Adopt (planned)
+## v0.33.3 - Recursive Goal Adopt (released)
 
 The curated-plan experience is only complete when a learner can adopt a Goal and get all its child Subject plans and notes in one action. Today, adopting a Goal is not supported — only leaf plans can be adopted — so a curator building a multi-Subject goal plan cannot surface it as a single adoptable unit.
 

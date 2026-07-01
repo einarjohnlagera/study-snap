@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.33.3 - Recursive Goal Adopt
+
+**Status: Released**
+
+Theme: the curated-plan experience is only complete when a learner can adopt a Goal and receive all its child Subject plans and notes in one action. Today only leaf plans are adoptable — a curator building a multi-Subject Goal plan cannot surface it as a single unit. v0.33.3 closes that gap.
+
+### Planned Scope
+
+- **Recursive Goal adopt** (backend + frontend). Adopting a Goal recursively copies all child Subject plans and their notes into the learner's library, consistent with the Study Pack copy-and-edit principle. Each adopted note is the learner's own copy, editable and removable immediately — the Study Pack precedent (copy freely, edit freely) applies. Adoption stays Free. Unlocks the end-to-end Goal → Subject readiness view: once adopted, each child Subject plan shows its readiness bar in the Goal detail (already ships from v0.33.1).
+
+Anti-drift: 2-level max (Goal → Subject) — no 3rd level; adopt stays Free; adopted plan readiness reuses `ProgressReportService` (same as owned plans); no new mastery signal, persisted field, AI call, or chart library; no quota / billing / price / checkout change; teacher bulk-quiz stays a future gated release.
+
+### Shipped
+
+- **Recursive Goal adopt** (backend + frontend). Public Goal collections can now be adopted through `POST /collections/{id}/adopt-goal`, returning an `AdoptGoalResponse` with the personal Goal id plus adopted/skipped Subject and note-copy counts. The learner receives a private top-level Goal plus copied child Subject plans nested at the source sibling positions; adopted notes remain freely editable personal copies. Existing standalone adopted Subjects are re-parented under the new Goal, while Subjects already nested under another personal Goal are skipped rather than duplicated or moved.
+- **Goal publish and discovery rules** (backend). Publishing a Goal now validates every child Subject has public notes and cascades the publish action to child Subject plans. Unpublishing a Goal does not cascade. Public plan listing now returns root collections only, so child Subject plans no longer appear as standalone public cards.
+- **Goal adopt analytics**. Added the `STUDY_GOAL_ADOPTED` analytics event to the backend enum and frontend union before firing it, with metadata for adopted/skipped Subjects, copied/skipped notes, and idempotent re-entry.
+
+---
+
 ## v0.33.2 - Plan Detail Redesign (view/edit split)
 
 **Status: Released**

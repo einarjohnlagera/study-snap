@@ -58,6 +58,15 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
             String courseProgram
     );
 
+    List<NoteCollectionEntity> findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+            CollectionVisibility visibility
+    );
+
+    List<NoteCollectionEntity> findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+            CollectionVisibility visibility,
+            String courseProgram
+    );
+
     Optional<NoteCollectionEntity> findByOwnerUserIdAndSourcePlanId(UUID ownerUserId, UUID sourcePlanId);
 
     long countByParentCollectionId(UUID parentCollectionId);
