@@ -89,17 +89,26 @@ Escalate effort or model only when complexity genuinely requires it. Defaulting 
 
 ---
 
-## Available Skills
+## Invocable Slash Commands
 
-| Skill | File | Purpose |
+Registered as Claude Code slash commands in `.claude/commands/`. Type `/command-name` to invoke.
+
+| Command | Purpose |
+|---|---|
+| `/codex-prompt` | Write a Codex prompt — template + pre-send checklist |
+| `/kickoff` | Open a new version — 7-file atomic commit on the release branch |
+| `/signoff` | Close a version — 3-file atomic commit + release notes file |
+| `/audit-diff` | Post-Codex delivery audit: error states, transactions, idempotency |
+| `/feature-doc` | Update `docs/features/<feature>.md` after shipping a behavioral change |
+| `/version-check` | Verify all 7 version references are in sync |
+
+## Reference Guides
+
+Longer-form guides for AI context in prompts. Reference these in the `source of truth docs` section of Codex prompts.
+
+| Guide | File | Purpose |
 |---|---|---|
-| `/codex-prompt` | `codex-prompt.md` | Fast-path: prompt template + pre-send checklist ready to fill in |
-| Codex Prompt Generator | `codex-prompt-generator.md` | Full reference: section philosophy, common mistakes, anti-drift notes |
-| `/kickoff` | `kickoff.md` | Open a new version — 7-file atomic commit on the release branch |
-| `/signoff` | `signoff.md` | Close a version — 3-file atomic commit + release notes file |
-| `/audit-diff` | `audit-diff.md` | Post-Codex delivery audit: error states, transactions, idempotency |
-| `/feature-doc` | `feature-doc.md` | Update docs/features/<feature>.md after shipping a behavioral change |
-| `/version-check` | `version-check.md` | Verify all 7 version references are in sync before kickoff or signoff |
+| Codex Prompt Generator | `codex-prompt-generator.md` | Full section philosophy, common mistakes, anti-drift notes |
 | UX / Product Review | `ux-product-review.md` | Consistent product review against NoteLib philosophy |
 | Release / Doc Alignment | `release-doc-alignment.md` | Ensure roadmap and docs stay aligned after feature work |
 | Roadmap / Feature Audit | `roadmap-feature-audit.md` | Prevent scope creep and roadmap drift before starting work |
