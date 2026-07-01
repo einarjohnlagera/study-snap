@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -112,6 +113,34 @@ public class ProgressReportService {
                 .filter(Objects::nonNull)
                 .sorted(subjectProgressComparator())
                 .toList();
+    }
+
+    public Map<UUID, ConceptCounts> getConceptCountsPerStudyPack(
+            List<UUID> studyPackIds,
+            Collection<StudyPackEntity> studyPacks,
+            UUID userId,
+            OffsetDateTime now
+    ) {
+        if (studyPackIds == null || studyPackIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, List<ConceptHealthEntity>> healthByStudyPackId = conceptHealthRepository
+                .findByUserIdAndStudyPackIdIn(userId, studyPackIds)
+                .stream()
+                .filter(health -> health.getStudyPackId() != null)
+                .collect(Collectors.groupingBy(ConceptHealthEntity::getStudyPackId));
+        Map<UUID, Map<String, String>> conceptNamesByStudyPackId = collectConceptNamesByStudyPackId(studyPacks);
+        Map<UUID, ConceptCounts> countsByStudyPackId = new LinkedHashMap<>();
+        for (UUID studyPackId : studyPackIds) {
+            Map<String, String> conceptNamesByKey = conceptNamesByStudyPackId.getOrDefault(studyPackId, Map.of());
+            countsByStudyPackId.put(studyPackId, countConceptProgress(
+                    conceptNamesByKey,
+                    healthByStudyPackId.getOrDefault(studyPackId, List.of()),
+                    now
+            ));
+        }
+        return countsByStudyPackId;
     }
 
     private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(UUID userId) {
@@ -282,12 +311,27 @@ public class ProgressReportService {
 
     private ConceptCounts countConceptProgress(List<StudyPackEntity> studyPacks, UUID userId, OffsetDateTime now) {
         Map<String, String> conceptNamesByKey = collectConceptNamesByKey(studyPacks);
+        return countConceptProgress(conceptNamesByKey, collectReviewTimesByConceptKey(studyPacks, userId), now);
+    }
+
+    private ConceptCounts countConceptProgress(
+            Map<String, String> conceptNamesByKey,
+            List<ConceptHealthEntity> healthRecords,
+            OffsetDateTime now
+    ) {
+        return countConceptProgress(conceptNamesByKey, collectReviewTimesByConceptKey(healthRecords), now);
+    }
+
+    private ConceptCounts countConceptProgress(
+            Map<String, String> conceptNamesByKey,
+            Map<String, List<OffsetDateTime>> reviewTimesByConceptKey,
+            OffsetDateTime now
+    ) {
         int totalConcepts = conceptNamesByKey.size();
         if (totalConcepts == 0) {
             return new ConceptCounts(0, 0, 0, 0);
         }
 
-        Map<String, List<OffsetDateTime>> reviewTimesByConceptKey = collectReviewTimesByConceptKey(studyPacks, userId);
         int masteredConcepts = 0;
         int dueConcepts = 0;
         int notPracticedConcepts = 0;
@@ -326,7 +370,7 @@ public class ProgressReportService {
     private Map<String, String> collectConceptNamesByKey(List<StudyPackEntity> studyPacks) {
         Map<String, String> conceptNamesByKey = new LinkedHashMap<>();
         for (StudyPackEntity studyPack : studyPacks) {
-            for (String rawConcept : studyPack.getKeyConcepts()) {
+            for (String rawConcept : studyPack.getKeyConcepts() == null ? List.<String>of() : studyPack.getKeyConcepts()) {
                 String concept = normalizeConcept(rawConcept);
                 if (concept == null) {
                     continue;
@@ -335,6 +379,20 @@ public class ProgressReportService {
             }
         }
         return conceptNamesByKey;
+    }
+
+    private Map<UUID, Map<String, String>> collectConceptNamesByStudyPackId(Collection<StudyPackEntity> studyPacks) {
+        if (studyPacks == null || studyPacks.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> conceptNamesByStudyPackId = new HashMap<>();
+        for (StudyPackEntity studyPack : studyPacks) {
+            if (studyPack.getId() == null) {
+                continue;
+            }
+            conceptNamesByStudyPackId.put(studyPack.getId(), collectConceptNamesByKey(List.of(studyPack)));
+        }
+        return conceptNamesByStudyPackId;
     }
 
     private Map<String, List<OffsetDateTime>> collectReviewTimesByConceptKey(
@@ -352,6 +410,20 @@ public class ProgressReportService {
                     .computeIfAbsent(normalizeConceptKey(concept), ignored -> new ArrayList<>())
                     .add(health.getLastCorrectAt());
             }
+        }
+        return reviewTimesByConceptKey;
+    }
+
+    private Map<String, List<OffsetDateTime>> collectReviewTimesByConceptKey(List<ConceptHealthEntity> healthRecords) {
+        Map<String, List<OffsetDateTime>> reviewTimesByConceptKey = new HashMap<>();
+        for (ConceptHealthEntity health : healthRecords) {
+            String concept = normalizeConcept(health.getConcept());
+            if (concept == null) {
+                continue;
+            }
+            reviewTimesByConceptKey
+                    .computeIfAbsent(normalizeConceptKey(concept), ignored -> new ArrayList<>())
+                    .add(health.getLastCorrectAt());
         }
         return reviewTimesByConceptKey;
     }
@@ -465,7 +537,7 @@ public class ProgressReportService {
         return ExamGoalConfig.isValidSlug(normalizedGoal) ? normalizedGoal.toLowerCase(Locale.ROOT) : normalizedGoal;
     }
 
-    private record ConceptCounts(
+    public record ConceptCounts(
             int totalConcepts,
             int masteredConcepts,
             int dueConcepts,

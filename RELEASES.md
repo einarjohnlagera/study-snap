@@ -8,7 +8,7 @@ Theme: transform the study plan detail from a note list into a guided study surf
 
 ### Planned Scope
 
-- **Section readiness on plan detail (backend + frontend).** Reverse the v0.33.x locked rule: section cards now show readiness % and concepts due. Backend adds per-note concept health counts (mastered/due/total) to the plan detail response; frontend aggregates by section label client-side. Lazy-loaded post-initial-render to avoid blocking first paint. No new mastery signal or stored field.
+- **Section readiness on plan detail (backend + frontend).** Reverse the v0.33.x locked rule: section cards now show readiness % and concepts due. Backend exposes per-note concept health counts (mastered/due/not-practiced/total) through a lazy owner-only endpoint; frontend aggregates by section label client-side. Lazy-loaded post-initial-render to avoid blocking first paint. No new mastery signal or stored field.
 - **Estimated study time (backend + frontend).** Add optional `estimatedStudyHours` field to collection entity via Flyway migration. Curator-entered. Carries over on adopt. Never blocks adopt or quiz generation.
 - **Plan Hero (frontend).** Surface plan title, description, course/program, and estimated study time as a visual hero card on the plan detail page. No backend changes.
 - **"Continue where you left off" (frontend).** Identify the last-studied note via `argmax(lastSessionCompletedAt)` — already present in the plan detail response. Adaptive CTA drives directly to that note's next action. Zero new backend work.
@@ -17,6 +17,9 @@ Theme: transform the study plan detail from a note list into a guided study surf
 Anti-drift: section readiness reuses existing `ConceptHealth` / `ProgressReportService` — no new signal, field, or AI call; `estimatedStudyHours` is always optional; Builder leaf canvas uses existing collection endpoints only; "Continue where you left off" uses `lastSessionCompletedAt` already in the detail response; no new chart library; readiness stays Free; adopt stays Free; no quota / billing / price / checkout changes; no 3rd hierarchy level; 2-level max enforced.
 
 ### Shipped
+
+- **Collection estimated study time (backend).** Added nullable `estimatedStudyHours` storage and collection detail metadata so curators can attach optional study-time guidance to plans. Metadata updates can set or clear the value, and adopted leaf plans and Goals copy the source estimate alongside title, description, and course/program without affecting adopt, quiz, quota, or publish gates.
+- **Per-note concept counts endpoint (backend).** Added owner-only `GET /collections/{id}/note-concept-counts`, returning a map keyed by note id with total/mastered/due/not-practiced concept counts for notes that have Study Packs. The endpoint reuses `ProgressReportService` concept classification, performs a single batched `findByUserIdAndStudyPackIdIn` lookup, omits notes without Study Packs, returns `{}` for no data, and stays Free readiness data rather than gated review-timing detail.
 
 ---
 

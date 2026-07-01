@@ -37,6 +37,7 @@ Fields:
 - optional `description`
 - `visibility` (`PRIVATE` by default, `PUBLIC` only for admin-published plans)
 - optional `courseProgram`
+- optional `estimatedStudyHours`, curator-entered study-time guidance shown by journey surfaces and copied on adopt
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
 - optional `siblingPosition`, used only to order child Subject plans under the same Goal
@@ -294,6 +295,8 @@ The detail response also exposes neutral hierarchy metadata:
 
 The frontend uses `childCount > 0` to render the Goal view. Childless plans render the existing flat detail unchanged.
 
+The detail response includes optional `estimatedStudyHours` as metadata only. It is nullable, never required, and does not affect adopt, publish, quiz, readiness, quota, or generation behavior.
+
 ### Get Collection Readiness
 
 `GET /collections/{id}/readiness`
@@ -325,6 +328,32 @@ Aggregation rules:
 - No new persisted readiness field, generated content, quota category, AI call, trend, snapshot, or batch/progress infrastructure is added.
 
 This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, scoped to the dedicated readiness detail route only. Collection detail execution rows, collection list cards, published-plan cards, and public source plans must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
+
+### Get Note Concept Counts
+
+`GET /collections/{id}/note-concept-counts`
+
+Returns owner-scoped per-note readiness counts for the authenticated user's own collection only. Missing, malformed, public-source, or not-owned ids return `CollectionNotFoundException` / `404`.
+
+Response shape:
+
+- map key: `noteId` as a string
+- map value:
+  - `totalConceptCount`
+  - `masteredConceptCount`
+  - `dueConceptCount`
+  - `notPracticedConceptCount`
+
+Aggregation rules:
+
+- Starts from the collection's note items and loads Study Packs for those notes.
+- Notes without Study Packs are omitted from the map.
+- Study Packs with zero key concepts return entries with all counts at `0`.
+- Empty collections and collections with no Study Packs return `{}`.
+- Counts reuse `ProgressReportService` concept classification and the existing `ConceptHealth` model.
+- Concept health is loaded in one batch via `findByUserIdAndStudyPackIdIn`; the endpoint must not issue one concept-health query per note.
+- This endpoint is lazy readiness data for frontend section aggregation. The backend does not group by section label, add a section entity, add a mastery field, persist readiness, or call AI.
+- Readiness counts stay Free. Do not gate this endpoint behind `conceptHealthService.canViewConceptHealth(userId)`; Plus/Pro gating remains limited to review-timing detail such as `dueConceptCount` / `dueConcepts` on collection detail items.
 
 ### Get Goal Detail
 
@@ -416,6 +445,7 @@ Request:
 - `title` optional, but if present it must be non-blank and max `150`
 - `description` optional and nullable
 - `courseProgram` optional and nullable; normalized with the same course/program normalization used by notes
+- `estimatedStudyHours` optional and nullable; `null` clears the value
 
 Behavior:
 
@@ -477,7 +507,7 @@ Behavior:
 - if the caller already owns a collection with `sourcePlanId={id}`, the endpoint returns that existing personal plan id instead of creating a duplicate
 - otherwise the endpoint iterates source items in saved order and calls `copyNote(noteId, userId, includeStudyPack=true)` for each still-public source note
 - each source item is isolated; private, deleted, or otherwise unavailable notes are skipped and counted instead of failing the whole adoption
-- the personal collection is `PRIVATE`, keeps `sourcePlanId={source id}`, mirrors the source title/description/courseProgram, and preserves copied item order plus labels
+- the personal collection is `PRIVATE`, keeps `sourcePlanId={source id}`, mirrors the source title/description/courseProgram/estimatedStudyHours, and preserves copied item order plus labels
 - adoption bills no quota and makes no AI calls
 - `sourcePlanId` is lineage/idempotency only; source edits never sync into adopted personal plans
 - server analytics fires `STUDY_PLAN_ADOPTED` with `sourcePlanId`, `copiedCount`, `skippedCount`, and `alreadyAdopted`
@@ -499,7 +529,7 @@ Behavior:
 
 - authenticated users can adopt only `PUBLIC` source Goal collections; a public leaf plan passed to this endpoint returns `CollectionNotFoundException` / `404`
 - if the caller already owns a Goal with `sourcePlanId={id}`, the endpoint returns that existing personal Goal id with `alreadyAdopted=true`
-- otherwise the endpoint creates a private personal Goal with `sourcePlanId={source Goal id}` and copied title/description/courseProgram, but no direct items
+- otherwise the endpoint creates a private personal Goal with `sourcePlanId={source Goal id}` and copied title/description/courseProgram/estimatedStudyHours, but no direct items
 - each source child Subject plan is adopted through the existing leaf `adopt` flow, so note copying, per-note skip isolation, Study Pack inclusion, idempotency, and concurrent-adopt race recovery stay centralized
 - after a child Subject is adopted, a standalone existing personal child (`parentCollectionId == null`) is re-parented under the new personal Goal and receives the source sibling position
 - an existing personal child already nested under another personal Goal is skipped; it is not duplicated and not re-parented

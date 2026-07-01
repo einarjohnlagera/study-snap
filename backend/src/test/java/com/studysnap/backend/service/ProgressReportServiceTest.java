@@ -18,9 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -161,6 +164,64 @@ class ProgressReportServiceTest {
                 new SubjectProgressEntry("Biology", 2, 1, 1, 0, 50),
                 new SubjectProgressEntry("Other", 1, 0, 0, 1, 0)
         );
+    }
+
+    @Test
+    void getConceptCountsPerStudyPack_batchesHealthLookupAndClassifiesEachPack() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity firstPack = studyPack("Biology", List.of("Cells", "DNA", "Mitosis"));
+        StudyPackEntity secondPack = studyPack("Chemistry", List.of("Bonds", "Acids"));
+        List<UUID> studyPackIds = List.of(firstPack.getId(), secondPack.getId());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, studyPackIds)).thenReturn(List.of(
+                health(firstPack.getId(), "Cells", NOW.minusDays(1)),
+                health(firstPack.getId(), "DNA", NOW.minusDays(5)),
+                health(secondPack.getId(), "Bonds", NOW.minusDays(1))
+        ));
+
+        Map<UUID, ProgressReportService.ConceptCounts> result = progressReportService.getConceptCountsPerStudyPack(
+                studyPackIds,
+                List.of(firstPack, secondPack),
+                userId,
+                NOW
+        );
+
+        assertThat(result).containsEntry(firstPack.getId(), new ProgressReportService.ConceptCounts(3, 1, 1, 1));
+        assertThat(result).containsEntry(secondPack.getId(), new ProgressReportService.ConceptCounts(2, 1, 0, 1));
+        verify(conceptHealthRepository, times(1)).findByUserIdAndStudyPackIdIn(userId, studyPackIds);
+        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackId(userId, firstPack.getId());
+        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackId(userId, secondPack.getId());
+    }
+
+    @Test
+    void getConceptCountsPerStudyPack_returnsZeroEntryForPackWithNoConcepts() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity emptyPack = studyPack("Biology", List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(emptyPack.getId())))
+                .thenReturn(List.of());
+
+        Map<UUID, ProgressReportService.ConceptCounts> result = progressReportService.getConceptCountsPerStudyPack(
+                List.of(emptyPack.getId()),
+                List.of(emptyPack),
+                userId,
+                NOW
+        );
+
+        assertThat(result).containsEntry(emptyPack.getId(), new ProgressReportService.ConceptCounts(0, 0, 0, 0));
+    }
+
+    @Test
+    void getConceptCountsPerStudyPack_skipsHealthLookupWhenStudyPackIdsAreEmpty() {
+        UUID userId = UUID.randomUUID();
+
+        Map<UUID, ProgressReportService.ConceptCounts> result = progressReportService.getConceptCountsPerStudyPack(
+                List.of(),
+                List.of(),
+                userId,
+                NOW
+        );
+
+        assertThat(result).isEmpty();
+        verifyNoInteractions(conceptHealthRepository);
     }
 
     @Test
