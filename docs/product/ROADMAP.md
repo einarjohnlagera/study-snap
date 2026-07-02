@@ -6,7 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.34.0 - Journey: Goal-First Study Experience` is the latest released version (on `releases/v0.34.0`).
+`v0.36.0 - Readiness/Progress Merge` is the next planned release (on `releases/v0.36.0`, not yet opened).
+
+`v0.35.0 - Mobile-First Builder` is the latest released version (on `releases/v0.35.0`).
+
+`v0.34.0 - Journey: Goal-First Study Experience` is the previous released version (on `releases/v0.34.0`).
 
 `v0.33.4 - Builder Surface Clarity` is the previous released version (on `releases/v0.33.4`).
 
@@ -35,6 +39,37 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.28.0 - Feature Discoverability & Activation` is the release before that.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+---
+
+## v0.35.0 - Mobile-First Builder (released)
+
+Base branch: `releases/v0.35.0`.
+
+Theme: the leaf plan builder is unusable on mobile — text-only Up/Down/Move/Remove controls are cramped on narrow viewports, and sections produce a multi-thousand-pixel scroll. This release makes the builder compact and functional on all screen sizes, and fixes a section drag visual bug where only the section header travels instead of the whole group.
+
+Scope:
+- **Section drag overlay fix (frontend).** `DragOverlay` for `leaf-section` drag renders a proper section clone (header + note list), not a title pill.
+- **Mobile icon buttons (frontend).** Up/Down/Move/Remove become icon-only on mobile (`sm:` and up retains text labels). `aria-label` on all icon buttons.
+- **Mobile collapsible sections (frontend).** Sections collapse by default on mobile to reduce scroll. Tap header to expand. Desktop always-expanded.
+
+Anti-drift: frontend-only; no new endpoint, migration, or AI call; drag handles retained; Up/Down retained alongside drag for touch reorder.
+
+---
+
+## v0.36.0 - Readiness/Progress Merge (planned)
+
+Base branch: `releases/v0.36.0` (not yet opened).
+
+Theme: unify "Progress" and "Readiness" into a single, coherent surface. Today the product has a standalone Progress page (`/me/progress`) and a plan Readiness sub-route (`/collections/{id}/readiness`) that express the same underlying signal with different vocabularies and entry points — confusing to users and inconsistent in value proposition. v0.36.0 merges these into one canonical surface.
+
+Scope (to be refined at kickoff):
+- **Unified vocabulary.** One set of labels (`ready / mastered / due / not started`) used everywhere — note detail, plan header, plan readiness, progress dashboard.
+- **Progress page consolidation.** Merge the standalone `/me/progress` readiness dashboard with the plan-level readiness sub-route. Single canonical entry point with plan-scoped and cross-plan views.
+- **Navigation rename.** "Progress" nav entry updated to reflect the merged surface.
+- **No new mastery signal.** Still derived from existing `ConceptHealth` / `ProgressReportService` — no new field, AI call, or stored signal.
+
+Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new chart library; all derived from existing concept health data.
 
 ---
 

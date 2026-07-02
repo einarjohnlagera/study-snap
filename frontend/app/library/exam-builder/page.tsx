@@ -180,7 +180,7 @@ function SortableExamBuilderItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-2xl border p-3 ${DND_TRANSITION_CLASS} ${
+      className={`flex w-full min-w-0 flex-col gap-2 rounded-2xl border p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3 ${DND_TRANSITION_CLASS} ${
         isDragging
           ? "scale-[1.015] border-dashed border-blue-400/80 bg-blue-50/45 opacity-35 shadow-xl dark:bg-blue-950/20"
           : isOver && activeDragEntryId !== null
