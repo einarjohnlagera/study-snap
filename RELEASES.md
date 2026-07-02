@@ -2,7 +2,7 @@
 
 ## v0.36.1 - Post-Release Fixes
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fast-follow fixes found during a post-signoff audit of v0.36.0 — a reachable dead-end in the Builder's new Goal-creation entry point, vocabulary drift on two dashboard entry points into `/progress`, stale documentation left over from the readiness-route merge, plus a second round of UX fixes surfaced while using v0.36.0 in practice (Builder navigation/responsiveness/layout and Note Detail readiness placement).
 

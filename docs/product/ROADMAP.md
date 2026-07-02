@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.36.1 - Post-Release Fixes` is the current in-progress release (on `releases/v0.36.1`).
+`v0.36.1 - Post-Release Fixes` is the latest released version (on `releases/v0.36.1`).
 
-`v0.36.0 - Readiness/Progress Merge` is the latest released version (on `releases/v0.36.0`).
+`v0.36.0 - Readiness/Progress Merge` is the previous released version (on `releases/v0.36.0`).
 
 `v0.35.0 - Mobile-First Builder` is the previous released version (on `releases/v0.35.0`).
 
@@ -75,7 +75,7 @@ Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no bill
 
 ---
 
-## v0.36.1 - Post-Release Fixes (in progress)
+## v0.36.1 - Post-Release Fixes (released)
 
 Base branch: `releases/v0.36.1`.
 
@@ -90,8 +90,9 @@ Scope:
 - **Refresh relocated.** Moved from the Builder page header into the Add-notes modal, where its actual purpose (pulling in newly created notes) applies; header keeps a single primary action (`Add Subject Plan`).
 - **Plan Hero layout reuse.** Goal detail header now reuses the leaf-plan `PlanHeroCard` (badges-above-title) instead of a separate `PageHeader`-based layout.
 - **Note Detail readiness repositioned.** Moved from above all tab content to just before Performance Overview (still shown on all tabs).
+- **Builder action-row wrapping on tablet widths.** The breakpoint fix alone didn't fix real device screenshots (iPad Air vs. iPad Mini) showing an orphaned single-button wrap. Reorder controls (`Move up`/`Move down`, `Up`/`Down`) moved into a compact icon cluster next to the drag handle; action rows fixed at two items so they never wrap at any width.
 
-Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the eight items above only.
+Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the nine items above only.
 
 ---
 
