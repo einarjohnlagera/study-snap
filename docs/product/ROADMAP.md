@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.36.1 - Post-Release Fixes` is the current in-progress release (on `releases/v0.36.1`).
+
 `v0.36.0 - Readiness/Progress Merge` is the latest released version (on `releases/v0.36.0`).
 
 `v0.35.0 - Mobile-First Builder` is the previous released version (on `releases/v0.35.0`).
@@ -70,6 +72,21 @@ Scope (to be refined at kickoff):
 - **No new mastery signal.** Still derived from existing `ConceptHealth` / `ProgressReportService` — no new field, AI call, or stored signal.
 
 Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new chart library; all derived from existing concept health data.
+
+---
+
+## v0.36.1 - Post-Release Fixes (in progress)
+
+Base branch: `releases/v0.36.1`.
+
+Theme: fast-follow patch fixing three issues found in a post-signoff audit of v0.36.0: a reachable dead-end in the Builder's Goal-creation entry point for already-nested Subject plans, "due for review" vocabulary drift on two dashboard entry points into `/progress`, and stale `AGENTS.md` documentation left over from the readiness-route merge.
+
+Scope:
+- **Nested Subject plan dead-end fix.** Gate the Builder's `Add Subject Plan` control on `collection.parentCollectionId === null` in addition to the existing `leafItems.length === 0` check.
+- **Vocabulary fix.** `dashboard-goal-card.tsx` and `goal-nudge-card.tsx`: `due for review` → `due`. `% mastered` on these cards is unchanged (correct per the locked vocabulary set and consistent with `/progress`'s own goal-level header).
+- **Documentation accuracy.** Fix `AGENTS.md`'s stale "Study Plan Readiness Rule" `PLAN_READINESS_VIEWED` wording and stale documentation baseline line.
+
+Anti-drift: bug-fix/docs patch only; no new endpoint, field, or mastery signal; no scope beyond the three items above.
 
 ---
 

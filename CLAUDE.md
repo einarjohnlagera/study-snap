@@ -6,18 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.36.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.36.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.36.0 — Readiness/Progress Merge
+## Active release: v0.36.1 — Post-Release Fixes
 
-Base branch for this release: `releases/v0.36.0`. Unify the "Progress" and "Readiness" surfaces into one coherent experience — single vocabulary, single entry point, no new signal. Locked rules:
+Base branch for this release: `releases/v0.36.1`. A fast-follow patch fixing three issues found in a post-signoff audit of v0.36.0 (Readiness/Progress Merge): a reachable dead-end in the Builder's Goal-creation entry point for already-nested Subject plans, "due for review" vocabulary drift on two dashboard entry points into `/progress`, and stale `AGENTS.md` documentation left over from the readiness-route merge. Locked rules:
 
-- **Unified vocabulary only.** One label set (`ready / mastered / due / not started`) used everywhere: note detail, plan header, plan readiness, progress dashboard. No new terms introduced.
-- **No new mastery signal.** All data derived from existing `ConceptHealth` / `ProgressReportService`. No new stored field, AI call, or generated content.
-- **Progress page consolidation.** Merge `/me/progress` and `/collections/{id}/readiness` into a single canonical surface with plan-scoped and cross-plan views. No new backend signal — aggregation only.
-- **Navigation rename only.** "Progress" nav entry updated to reflect the merged surface. No new nav items.
-- **No new chart library.** Reuse the existing CSS progress-bar pattern and inline SVG from `progress-report-client.tsx`. No new chart dependency.
-- **Free gate unchanged.** Signal stays Free; per-concept review-timing detail stays PLUS/PRO. No quota / billing / price / checkout changes.
+- **Bug-fix/docs patch only.** No new endpoint, field, mastery signal, or scope beyond the three items in `RELEASES.md`'s v0.36.1 Planned Scope.
+- **Nested Subject plan dead-end fix.** Gate the Builder's `Add Subject Plan` control on `collection.parentCollectionId === null` in addition to the existing `leafItems.length === 0` check.
+- **Vocabulary fix, narrowly scoped.** `due for review` → `due` on `dashboard-goal-card.tsx` and `goal-nudge-card.tsx` only. Do not touch `% mastered` on these cards — it is correct as-is (matches `/progress`'s own goal-level header and milestone labels).
+- **Documentation accuracy.** Fix `AGENTS.md`'s stale "Study Plan Readiness Rule" `PLAN_READINESS_VIEWED` wording and stale documentation baseline line.
 
 ## Source-of-truth docs (read before implementing anything)
 

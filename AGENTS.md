@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.35.0 - Mobile-First Builder` (in progress); previous: `v0.34.0 - Journey: Goal-First Study Experience`
+- `v0.36.1 - Post-Release Fixes` (in progress); previous: `v0.36.0 - Readiness/Progress Merge`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -140,7 +140,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Plan readiness must reuse `ProgressReportService` ConceptHealth classification and `masteryPercentage`; do not invent thresholds, persist readiness fields, add generated content, or call AI/LLM.
 - Collection detail execution rows, collection list cards, published-plan cards, and public source plans must keep the no-mastery rule: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing there.
 - Frontend readiness displays should reuse the shared `ReadinessSummary` component and vocabulary: `ready`, `mastered`, `due`, `not started`.
-- The readiness sub-route fires `PLAN_READINESS_VIEWED` once after a successful load.
+- The `/progress?collectionId={id}` plan-scoped view fires `PLAN_READINESS_VIEWED` once per distinct plan selected in a session (keyed by `collectionId`, not a fire-once boolean — switching plans without a remount must fire again for the newly selected plan).
 
 ### Study Plan Hierarchy Rule
 
@@ -1537,7 +1537,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.36.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.36.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

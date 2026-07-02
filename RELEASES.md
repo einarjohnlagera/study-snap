@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.36.1 - Post-Release Fixes
+
+**Status: In Progress**
+
+Theme: fast-follow fixes found during a post-signoff audit of v0.36.0 — a reachable dead-end in the Builder's new Goal-creation entry point, vocabulary drift on two dashboard entry points into `/progress`, and stale documentation left over from the readiness-route merge.
+
+### Planned Scope
+
+- **Nested Subject plan dead-end fix (frontend).** The tri-state empty Builder added in v0.36.0 only checked `leafItems.length === 0` before offering `Add Subject Plan`, not `parentCollectionId`. An already-nested Subject plan with zero notes could show `Add Subject Plan`, and submitting it always fails server-side (`PARENT_NOT_TOP_LEVEL_MESSAGE`) since a nested collection can't itself become a parent. Gate the control on `collection.parentCollectionId === null` as well.
+- **Vocabulary fix on dashboard entry points (frontend).** `dashboard-goal-card.tsx` and `goal-nudge-card.tsx` still say "N concepts due for review" — the locked v0.36.0 vocabulary rule is `due`, not `due for review`. Fix the wording only; `% mastered` on these cards is correct as-is (matches `/progress`'s own goal-level header and milestone labels) and is not touched.
+- **Documentation accuracy (docs only).** `AGENTS.md`'s "Study Plan Readiness Rule" still describes a deleted "readiness sub-route" firing `PLAN_READINESS_VIEWED` "once after a successful load"; update to match the shipped behavior (fires once per distinct plan selected in a session) and `docs/features/collections.md`'s already-correct wording. Also fix `AGENTS.md`'s stale "Current documentation baseline" line, still reading `v0.35.0`.
+
+Anti-drift: no new mastery signal, no new endpoint, no new field; this is a bug-fix/docs patch only — no scope beyond the three items above.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.36.0 - Readiness/Progress Merge
 
 **Status: Released**
@@ -19,7 +39,7 @@ Anti-drift: no new mastery signal; all data derived from existing `ConceptHealth
 - **Progress/readiness route merge (frontend).** `/progress` is now the canonical surface for all-subject progress and plan-scoped readiness via `?collectionId={id}`. The page includes an in-page leaf-plan picker, reuses the shared readiness vocabulary (`ready / mastered / due / not started`), and the plan detail "Check readiness" CTA now deep-links into `/progress`.
 - **Study Pack status vs. progress cleanup (frontend).** Removed the duplicated "Study Packs ready" text from the plan detail Progress card (that status already lives in the Hero card's `N/N notes ready` badge) and dropped the standing "N of N notes have Study Packs" stat from the merged `/progress` plan-scoped view. Replaced it with a conditional caveat shown only when a plan has notes without a Study Pack yet, linking back to the plan.
 - **Goal builder entry fix (frontend).** Brand-new empty plans can now choose either `Add notes` or `Add subject plan` in the Builder, allowing users to create Goal-shaped plans from scratch. Leaf and Goal detail pages now share one top-level `Build` entry point, with the old Notes-card builder link removed.
-- **Goal builder polish (frontend).** `Add Subject Plan` now lives in the leaf/undecided Builder's top PageHeader (next to `Refresh`) instead of the Notes card, so the CTA doesn't relocate once the plan converts to a Goal. Consistent action hierarchy across the Builder: creation actions (`Add notes`, `Add Subject Plan`) stay the prominent control in their scope, utility actions (`Move up`/`Move down`, `Refresh`) are now `ghost`-styled so they no longer compete visually with creation, one per row/scope. `Subject Plan` casing is now consistent everywhere in the Builder (buttons, modals, error copy) instead of mixing `Subject Plan canvas` with `add subject plan`.
+- **Goal builder polish (frontend).** `Add Subject Plan` now lives in the leaf/undecided Builder's top PageHeader (next to `Refresh`) instead of the Notes card, so the CTA doesn't relocate once the plan converts to a Goal. Consistent action hierarchy: creation actions (`Add notes`, `Add Subject Plan`) stay the prominent control in their scope; `Move up`/`Move down` on Subject blocks and the leaf/undecided header's `Refresh` are now `ghost`-styled so they no longer compete visually with creation. `Subject Plan` casing is now consistent everywhere in the Builder (buttons, modals, error copy) instead of mixing `Subject Plan canvas` with `add subject plan`.
 
 ---
 
