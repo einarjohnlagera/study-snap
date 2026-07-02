@@ -184,6 +184,16 @@ function subjectBlock(title: string): HTMLElement {
   return section;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("StudyPlanBuilderPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
@@ -261,6 +271,83 @@ describe("StudyPlanBuilderPageClient", () => {
     expect(screen.getByText("Skeletal System")).toBeInTheDocument();
     expect(screen.getByText("Muscle Groups")).toBeInTheDocument();
     expect(getCollectionGoal).not.toHaveBeenCalled();
+  });
+
+  it("shows both leaf and goal-building actions for a brand-new empty collection", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "leaf-1") {
+        return Promise.resolve(collectionDetail("leaf-1", "Anatomy Plan", [], {
+          parentCollectionId: null,
+          childCount: 0,
+        }));
+      }
+      return Promise.resolve(collectionDetail(id, "Child", []));
+    });
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    expect(await screen.findByText("No notes yet")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add notes" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Add subject plan" })).toBeInTheDocument();
+  });
+
+  it("adds the first subject plan from an empty leaf collection and transitions to the goal canvas without an error flash", async () => {
+    const goalLoad = deferred<ReturnType<typeof goalDetail>>();
+    let rootFetchCount = 0;
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "leaf-1") {
+        rootFetchCount += 1;
+        return Promise.resolve(collectionDetail("leaf-1", "Anatomy Plan", [], {
+          parentCollectionId: null,
+          childCount: rootFetchCount === 1 ? 0 : 1,
+        }));
+      }
+      return Promise.resolve(collectionDetail("child-new", "Physiology Plan", []));
+    });
+    (createCollection as jest.Mock).mockResolvedValue(collectionDetail("child-new", "Physiology Plan", []));
+    (setCollectionParent as jest.Mock).mockResolvedValue(collectionDetail("child-new", "Physiology Plan", []));
+    (getCollectionGoal as jest.Mock).mockReturnValue(goalLoad.promise);
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add subject plan" }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Physiology Plan" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add subject plan" }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalledWith({ title: "Physiology Plan" });
+      expect(setCollectionParent).toHaveBeenCalledWith("child-new", "leaf-1");
+      expect(getCollectionGoal).toHaveBeenCalledWith("leaf-1");
+    });
+    expect(await screen.findByText("Loading builder...")).toBeInTheDocument();
+    expect(screen.queryByText("Could not load builder")).not.toBeInTheDocument();
+
+    goalLoad.resolve(goalDetail({
+      collectionId: "leaf-1",
+      title: "Anatomy Plan",
+      childCount: 1,
+      children: [goalChild("child-new", "Physiology Plan", 0)],
+    }));
+
+    expect(await screen.findByRole("heading", { name: "Anatomy Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Subject Plan canvas")).toBeInTheDocument();
+    expect(screen.queryByText("Could not load builder")).not.toBeInTheDocument();
+  });
+
+  it("hides the subject-plan action once the collection has notes", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "leaf-1") {
+        return Promise.resolve(collectionDetail("leaf-1", "Anatomy Plan", [
+          collectionItem("note-1", "Skeletal System", 0),
+        ], { parentCollectionId: null, childCount: 0 }));
+      }
+      return Promise.resolve(collectionDetail(id, "Child", []));
+    });
+
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    expect(await screen.findByText("Skeletal System")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add subject plan" })).not.toBeInTheDocument();
   });
 
   it("persists leaf builder relabeling through the item order endpoint", async () => {

@@ -259,6 +259,7 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
     expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/progress?collectionId=collection-1");
   });
 
@@ -298,7 +299,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.queryByRole("menuitem", { name: /Nest under|Unnest/ })).not.toBeInTheDocument();
   });
@@ -320,7 +321,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const notesCard = await screen.findByText("3 notes in saved order.");
-    const notesRegion = notesCard.closest("div")?.parentElement?.parentElement;
+    const notesRegion = notesCard.closest("div")?.parentElement;
     expect(notesRegion).not.toBeNull();
     const regionText = notesRegion?.textContent ?? "";
     expect(regionText.indexOf("General Education")).toBeLessThan(regionText.indexOf("Professional Education"));
@@ -366,12 +367,13 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: /Ungrouped/ })).not.toBeInTheDocument();
   });
 
-  it("routes note organization to the Builder from the Notes header", async () => {
+  it("routes note organization to the Builder from the leaf hero only", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
     expect(screen.queryByRole("button", { name: "Organize" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();

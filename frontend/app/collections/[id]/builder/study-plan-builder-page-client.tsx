@@ -1074,6 +1074,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshingBuilder, setRefreshingBuilder] = useState(false);
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goal, setGoal] = useState<GoalCollectionDetailResponse | null>(null);
   const [subjects, setSubjects] = useState<BuilderSubject[]>([]);
@@ -1098,23 +1099,28 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   }, []);
 
   const refreshBuilder = useCallback(async () => {
-    const [collectionResult, notesResult] = await Promise.all([
-      getCollection(collectionId),
-      listNotes(),
-    ]);
-    setCollection(collectionResult);
-    setNotes(notesResult);
-    if (collectionResult.childCount === 0) {
-      setGoal(null);
-      setSubjects([]);
-      setLeafItems(sortCollectionItemsByPosition(collectionResult.items));
-      return;
+    setRefreshingBuilder(true);
+    try {
+      const [collectionResult, notesResult] = await Promise.all([
+        getCollection(collectionId),
+        listNotes(),
+      ]);
+      setCollection(collectionResult);
+      setNotes(notesResult);
+      if (collectionResult.childCount === 0) {
+        setGoal(null);
+        setSubjects([]);
+        setLeafItems(sortCollectionItemsByPosition(collectionResult.items));
+        return;
+      }
+      const goalResult = await getCollectionGoal(collectionId);
+      const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
+      setGoal(goalResult);
+      setSubjects(buildSubjects(goalResult, childDetails));
+      setLeafItems([]);
+    } finally {
+      setRefreshingBuilder(false);
     }
-    const goalResult = await getCollectionGoal(collectionId);
-    const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
-    setGoal(goalResult);
-    setSubjects(buildSubjects(goalResult, childDetails));
-    setLeafItems([]);
   }, [collectionId]);
 
   const loadBuilder = useCallback(async () => {
@@ -1612,7 +1618,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     void persistNoteMove(sourceSubjectId, activeData.noteId, targetSubjectId, targetIndex);
   };
 
-  if (loadState === "loading") {
+  if (loadState === "loading" || (refreshingBuilder && (collection?.childCount ?? 0) > 0 && !goal)) {
     return (
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
         <BackLink href={`/collections/${collectionId}`} label="Back to plan" />
@@ -1702,11 +1708,19 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           {leafItems.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-8 text-center">
               <CardTitle>No notes yet</CardTitle>
-              <CardDescription className="mt-2">Add your existing notes to get started.</CardDescription>
-              <Button type="button" className="mt-4" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
-                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Add notes
-              </Button>
+              <CardDescription className="mt-2">
+                Add notes for a single-plan canvas, or add a {labels.subjectSingular.toLowerCase()} to build a Goal.
+              </CardDescription>
+              <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Add notes
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Add {labels.subjectSingular.toLowerCase()}
+                </Button>
+              </div>
             </div>
           ) : (
             <DndContext
@@ -1788,6 +1802,13 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           submitting={mutationKind === "add-notes"}
           onClose={() => setLeafAddNotesOpen(false)}
           onAdd={handleAddLeafNotes}
+        />
+        <AddSubjectModal
+          isOpen={addSubjectOpen}
+          labels={labels}
+          submitting={mutationKind === "add-subject"}
+          onClose={() => setAddSubjectOpen(false)}
+          onAdd={handleAddSubject}
         />
       </main>
     );

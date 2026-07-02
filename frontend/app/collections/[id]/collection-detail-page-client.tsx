@@ -1955,6 +1955,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         actions={(
           <div className="flex items-center justify-end gap-2">
             <ResponsiveActionLink
+              href={`/collections/${collectionId}/builder`}
+              action="edit"
+              label="Build"
+              variant="outline"
+              size="sm"
+            />
+            <ResponsiveActionLink
               href={`/progress?collectionId=${collectionId}`}
               action="progress"
               label="Check readiness"
@@ -2060,19 +2067,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       ) : null}
 
       <Card className="space-y-4 p-4 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Notes</CardTitle>
-            <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ResponsiveActionLink
-              href={`/collections/${collectionId}/builder`}
-              action="edit"
-              label="Edit"
-              variant="outline"
-            />
-          </div>
+        <div>
+          <CardTitle>Notes</CardTitle>
+          <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
         </div>
 
         {!showWeakAreas && items.length > 0 && upgradeCtas.primary ? (
