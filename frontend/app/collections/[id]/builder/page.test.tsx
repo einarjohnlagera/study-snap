@@ -287,8 +287,8 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     expect(await screen.findByText("No notes yet")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Add notes" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Add subject plan" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add notes" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Add Subject Plan" })).toHaveLength(2);
   });
 
   it("adds the first subject plan from an empty leaf collection and transitions to the goal canvas without an error flash", async () => {
@@ -310,9 +310,10 @@ describe("StudyPlanBuilderPageClient", () => {
 
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add subject plan" }));
+    const [addSubjectButton] = await screen.findAllByRole("button", { name: "Add Subject Plan" });
+    fireEvent.click(addSubjectButton);
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Physiology Plan" } });
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add subject plan" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add Subject Plan" }));
 
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({ title: "Physiology Plan" });
@@ -347,7 +348,7 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     expect(await screen.findByText("Skeletal System")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add subject plan" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: "Add Subject Plan" })).toHaveLength(0);
   });
 
   it("persists leaf builder relabeling through the item order endpoint", async () => {
@@ -379,16 +380,16 @@ describe("StudyPlanBuilderPageClient", () => {
 
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
-    expect(await screen.findByText("No subject plans yet")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /Add subject/ }).length).toBeGreaterThan(0);
+    expect(await screen.findByText("No Subject Plans yet")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Add Subject/ }).length).toBeGreaterThan(0);
   });
 
   it("adds a subject by creating a collection and nesting it under the goal", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Add subject/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Add Subject/ }));
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Major Specialization Mastery" } });
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Add subject/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Add Subject/ }));
 
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({ title: "Major Specialization Mastery" });
