@@ -445,7 +445,7 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
     const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
-    fireEvent.click(within(block).getByRole("button", { name: "Move down" }));
+    fireEvent.click(within(block).getByRole("button", { name: "Move Professional Education Mastery down" }));
 
     await waitFor(() => {
       expect(reorderCollectionChildren).toHaveBeenCalledWith("goal-1", ["child-2", "child-1"]);
@@ -465,6 +465,23 @@ describe("StudyPlanBuilderPageClient", () => {
 
     await waitFor(() => {
       expect(addCollectionItems).toHaveBeenCalledWith("child-1", ["note-3"]);
+    });
+  });
+
+  it("refreshes the note list from within the Add-notes modal without a standalone header Refresh button", async () => {
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
+    expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(block).getByRole("button", { name: "Add notes" }));
+    const dialog = await screen.findByRole("dialog");
+    (listNotes as jest.Mock).mockClear();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Refresh notes" }));
+
+    await waitFor(() => {
+      expect(listNotes).toHaveBeenCalledTimes(1);
     });
   });
 

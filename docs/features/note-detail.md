@@ -62,6 +62,8 @@ Recent Sessions:
 
 Private Note Detail shows a compact readiness signal for owned notes whose Study Pack is ready and has key concepts.
 
+The rollup renders below the tab content, immediately before the Performance Overview section, and shows on every tab (Summary, Key Concepts, Quiz, Full Notes) — it is not gated to a single tab. It previously rendered above the tab content, ahead of whatever the user was reading; moved down for less distraction (v0.36.1). Its own `unavailable`/neutral-state handling stays independent of Performance Overview's `!isTeacherMode` gate — the two conditions are not coupled.
+
 The signal renders through the shared `ReadinessSummary` component in compact mode and uses the same vocabulary as Plan Readiness and My Progress:
 
 - `ready`

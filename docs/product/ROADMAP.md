@@ -79,14 +79,27 @@ Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no bill
 
 Base branch: `releases/v0.36.1`.
 
-Theme: fast-follow patch fixing three issues found in a post-signoff audit of v0.36.0: a reachable dead-end in the Builder's Goal-creation entry point for already-nested Subject plans, "due for review" vocabulary drift on two dashboard entry points into `/progress`, and stale `AGENTS.md` documentation left over from the readiness-route merge.
+Theme: fast-follow patch fixing three issues found in a post-signoff audit of v0.36.0 — a reachable dead-end in the Builder's Goal-creation entry point for already-nested Subject plans, "due for review" vocabulary drift on two dashboard entry points into `/progress`, stale `AGENTS.md` documentation left over from the readiness-route merge — plus a second round of UX fixes surfaced while using v0.36.0 in practice.
 
 Scope:
 - **Nested Subject plan dead-end fix.** Gate the Builder's `Add Subject Plan` control on `collection.parentCollectionId === null` in addition to the existing `leafItems.length === 0` check.
 - **Vocabulary fix.** `dashboard-goal-card.tsx` and `goal-nudge-card.tsx`: `due for review` → `due`. `% mastered` on these cards is unchanged (correct per the locked vocabulary set and consistent with `/progress`'s own goal-level header).
 - **Documentation accuracy.** Fix `AGENTS.md`'s stale "Study Plan Readiness Rule" `PLAN_READINESS_VIEWED` wording and stale documentation baseline line.
+- **Subject plan BackLink.** Nested Subject plan detail pages now back-link to their parent Goal instead of the flat `/collections` list.
+- **Builder responsiveness.** Subject-block row breakpoint aligned so it no longer squeezes at intermediate viewport widths where the persistent sidebar reduces available content width.
+- **Refresh relocated.** Moved from the Builder page header into the Add-notes modal, where its actual purpose (pulling in newly created notes) applies; header keeps a single primary action (`Add Subject Plan`).
+- **Plan Hero layout reuse.** Goal detail header now reuses the leaf-plan `PlanHeroCard` (badges-above-title) instead of a separate `PageHeader`-based layout.
+- **Note Detail readiness repositioned.** Moved from above all tab content to just before Performance Overview (still shown on all tabs).
 
-Anti-drift: bug-fix/docs patch only; no new endpoint, field, or mastery signal; no scope beyond the three items above.
+Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the eight items above only.
+
+---
+
+## Note Detail readiness as its own tab (candidate)
+
+Idea surfaced while fixing v0.36.1's Note Detail readiness placement: instead of showing the readiness summary inline (currently just before Performance Overview on every tab), give it its own tab alongside Summary / Key Concepts / Quiz / Full Notes.
+
+Blocker: the current 4-tab bar already fills the width of a standard iPhone viewport exactly. Adding a 5th tab would overflow and needs a scroll/overflow affordance (e.g. an arrow or horizontal scroll) so the added tab isn't silently hidden on mobile — that affordance needs its own design pass, not a fast-follow. Not scoped into any release yet.
 
 ---
 

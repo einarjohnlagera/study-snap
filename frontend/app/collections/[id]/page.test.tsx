@@ -284,6 +284,33 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("Professional Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-1");
     expect(screen.getByText("General Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-2");
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
+    expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
+  });
+
+  it("back-links a nested Subject plan to its parent Goal instead of the flat Study Plans list", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "goal-1") {
+        return Promise.resolve(collection({ id: "goal-1", title: "LET Mastery", childCount: 2 }));
+      }
+      return Promise.resolve(collection({ id: "collection-1", parentCollectionId: "goal-1" }));
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("link", { name: "LET Mastery" })).toHaveAttribute("href", "/collections/goal-1");
+  });
+
+  it("falls back to the flat Study Plans link while the parent Goal title has not resolved", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "goal-1") {
+        return new Promise(() => {});
+      }
+      return Promise.resolve(collection({ id: "collection-1", parentCollectionId: "goal-1" }));
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
   });
 
   it("links an empty top-level plan to the goal builder instead of the old nest menu", async () => {
