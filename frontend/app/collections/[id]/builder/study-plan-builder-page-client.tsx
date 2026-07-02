@@ -248,7 +248,7 @@ function SortableNoteCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 items-start justify-between gap-3 rounded-lg border border-border bg-background p-3 shadow-sm",
+        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3",
         DND_TRANSITION_CLASS,
         isDragging && "scale-[1.01] border-dashed border-blue-400/80 opacity-40 shadow-lg",
         isOver && activeDrag?.type === "note" && "border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
@@ -393,7 +393,7 @@ function LeafSortableNoteCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 items-start justify-between gap-3 rounded-lg border border-border bg-background p-3 shadow-sm",
+        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3",
         DND_TRANSITION_CLASS,
         isDragging && "scale-[1.01] border-dashed border-blue-400/80 opacity-40 shadow-lg",
         isOver && activeDrag?.type === "leaf-note" && "border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
