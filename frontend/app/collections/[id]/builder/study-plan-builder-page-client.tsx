@@ -19,7 +19,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -266,6 +266,30 @@ function SortableNoteCard({
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
+        <div className="flex shrink-0 flex-col gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-8 p-0"
+            aria-label={`Move ${title} up`}
+            disabled={disabled || index === 0}
+            onClick={() => onMoveWithinSubject(item.noteId, "up")}
+          >
+            <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-8 p-0"
+            aria-label={`Move ${title} down`}
+            disabled={disabled || index === totalCount - 1}
+            onClick={() => onMoveWithinSubject(item.noteId, "down")}
+          >
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
         <div className="min-w-0 flex-1 space-y-1">
           <Link
             href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${subjectId}`)}`}
@@ -280,31 +304,7 @@ function SortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label={`Move ${title} up`}
-          className="h-9 px-2"
-          disabled={disabled || index === 0}
-          onClick={() => onMoveWithinSubject(item.noteId, "up")}
-        >
-          <ChevronUp className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Up</span>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label={`Move ${title} down`}
-          className="h-9 px-2"
-          disabled={disabled || index === totalCount - 1}
-          onClick={() => onMoveWithinSubject(item.noteId, "down")}
-        >
-          <ChevronDown className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Down</span>
-        </Button>
+      <div className="flex shrink-0 items-center justify-end gap-1">
         {targetSubjects.length > 0 ? (
           <select
             aria-label={`Move ${title} to subject`}
@@ -411,6 +411,14 @@ function LeafSortableNoteCard({
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
+        <div className="flex shrink-0 flex-col gap-1">
+          <Button type="button" variant="ghost" size="sm" className="h-6 w-8 p-0" aria-label={`Move ${title} up`} disabled={disabled || index === 0} onClick={() => onMoveWithinSection(item.noteId, "up")}>
+            <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="h-6 w-8 p-0" aria-label={`Move ${title} down`} disabled={disabled || index === totalCount - 1} onClick={() => onMoveWithinSection(item.noteId, "down")}>
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
         <div className="min-w-0 flex-1 space-y-1">
           <Link
             href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}/builder`)}`}
@@ -425,15 +433,7 @@ function LeafSortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <Button type="button" variant="outline" size="sm" aria-label={`Move ${title} up`} className="h-9 px-2" disabled={disabled || index === 0} onClick={() => onMoveWithinSection(item.noteId, "up")}>
-          <ChevronUp className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Up</span>
-        </Button>
-        <Button type="button" variant="outline" size="sm" aria-label={`Move ${title} down`} className="h-9 px-2" disabled={disabled || index === totalCount - 1} onClick={() => onMoveWithinSection(item.noteId, "down")}>
-          <ChevronDown className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Down</span>
-        </Button>
+      <div className="flex shrink-0 items-center justify-end gap-1">
         {targetSections.length > 0 ? (
           <select
             aria-label={`Move ${title} to section`}
@@ -680,7 +680,7 @@ function SortableSubjectBlock({
         isOver && activeDrag?.type === "subject" && "border-blue-300 bg-blue-50/40 dark:bg-blue-950/20",
       )}
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <button
             ref={setActivatorNodeRef}
@@ -693,6 +693,30 @@ function SortableSubjectBlock({
           >
             <GripVertical className="h-4 w-4" aria-hidden="true" />
           </button>
+          <div className="flex shrink-0 flex-col gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 w-8 p-0"
+              aria-label={`Move ${subject.title} up`}
+              disabled={disabled || index === 0}
+              onClick={() => onMoveSubject(subject.collectionId, "up")}
+            >
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 w-8 p-0"
+              aria-label={`Move ${subject.title} down`}
+              disabled={disabled || index === totalCount - 1}
+              onClick={() => onMoveSubject(subject.collectionId, "down")}
+            >
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </div>
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex min-w-0 items-center gap-2">
               <button
@@ -738,13 +762,7 @@ function SortableSubjectBlock({
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" disabled={disabled || index === 0} onClick={() => onMoveSubject(subject.collectionId, "up")}>
-            Move up
-          </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={disabled || index === totalCount - 1} onClick={() => onMoveSubject(subject.collectionId, "down")}>
-            Move down
-          </Button>
+        <div className="flex shrink-0 items-center gap-2">
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAddNotes(subject.collectionId)}>
             <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
             Add notes
@@ -870,6 +888,8 @@ function AddNotesModal({
   submitting,
   onClose,
   onAdd,
+  onRefresh,
+  refreshing,
 }: Readonly<{
   isOpen: boolean;
   subject: { collectionId: string; items: NoteCollectionItem[]; title?: string } | null;
@@ -877,6 +897,8 @@ function AddNotesModal({
   submitting: boolean;
   onClose: () => void;
   onAdd: (subjectId: string, noteIds: string[]) => Promise<void>;
+  onRefresh: () => Promise<void>;
+  refreshing: boolean;
 }>) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -951,16 +973,29 @@ function AddNotesModal({
       )}
     >
       <div className="space-y-4">
-        <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-          <Search className="h-4 w-4 text-foreground/50" aria-hidden="true" />
-          <span className="sr-only">Search notes</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search notes"
-            className="w-full bg-transparent text-sm outline-none"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+            <Search className="h-4 w-4 text-foreground/50" aria-hidden="true" />
+            <span className="sr-only">Search notes</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search notes"
+              className="w-full bg-transparent text-sm outline-none"
+            />
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            title="Pull in notes created since this list loaded"
+            disabled={refreshing}
+            onClick={() => void onRefresh()}
+          >
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} aria-hidden="true" />
+            <span className="sr-only">Refresh notes</span>
+          </Button>
+        </div>
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -1080,6 +1115,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [subjects, setSubjects] = useState<BuilderSubject[]>([]);
   const [leafItems, setLeafItems] = useState<LeafBuilderNote[]>([]);
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
+  const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -1096,6 +1132,15 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
 
   useEffect(() => {
     setAuthUser(getAuthUser());
+  }, []);
+
+  const refreshNotes = useCallback(async () => {
+    setRefreshingNotes(true);
+    try {
+      setNotes(await listNotes());
+    } finally {
+      setRefreshingNotes(false);
+    }
   }, []);
 
   const refreshBuilder = useCallback(async () => {
@@ -1173,6 +1218,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   );
   const leafSections = useMemo(() => buildLeafSections(leafItems), [leafItems]);
   const mutationInProgress = mutationKind !== null;
+  // A collection nested under a Goal can never itself become a parent (backend
+  // rejects nesting under a non-top-level collection), so only an undecided
+  // top-level collection can still choose to become a Goal.
+  const canBecomeGoal = leafItems.length === 0 && collection?.parentCollectionId == null;
 
   const persistLeafItems = async (nextItems: LeafBuilderNote[], previousItems: LeafBuilderNote[], fallback: string, kind: MutationKind = "reorder-notes") => {
     setMutationKind(kind);
@@ -1667,19 +1716,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           eyebrow={`${labels.singular.toUpperCase()} BUILDER`}
           title={collection.title}
           description={collection.description ?? "Organize notes and sections on one canvas."}
-          actions={(
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
-                Refresh
-              </Button>
-              {leafItems.length === 0 ? (
-                <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
-                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Add {labels.subjectSingular}
-                </Button>
-              ) : null}
-            </div>
-          )}
+          actions={canBecomeGoal ? (
+            <Button type="button" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Add {labels.subjectSingular}
+            </Button>
+          ) : undefined}
         />
 
         {mutationError ? (
@@ -1717,17 +1759,21 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             <div className="rounded-xl border border-dashed border-border p-8 text-center">
               <CardTitle>No notes yet</CardTitle>
               <CardDescription className="mt-2">
-                Add notes for a single-plan canvas, or add a {labels.subjectSingular} to build a Goal.
+                {canBecomeGoal
+                  ? `Add notes for a single-plan canvas, or add a ${labels.subjectSingular} to build a Goal.`
+                  : "Add your existing notes to get started."}
               </CardDescription>
               <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
                 <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
                   <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Add notes
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
-                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Add {labels.subjectSingular}
-                </Button>
+                {canBecomeGoal ? (
+                  <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Add {labels.subjectSingular}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : (
@@ -1810,6 +1856,8 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           submitting={mutationKind === "add-notes"}
           onClose={() => setLeafAddNotesOpen(false)}
           onAdd={handleAddLeafNotes}
+          onRefresh={refreshNotes}
+          refreshing={refreshingNotes}
         />
         <AddSubjectModal
           isOpen={addSubjectOpen}
@@ -1830,15 +1878,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         title={goal!.title}
         description={goal!.description || `Organize ${labels.subjectSingular}s and notes on one canvas.`}
         actions={(
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
-              Refresh
-            </Button>
-            <Button type="button" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Add {labels.subjectSingular}
-            </Button>
-          </div>
+          <Button type="button" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Add {labels.subjectSingular}
+          </Button>
         )}
       />
 
@@ -1938,6 +1981,8 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         submitting={mutationKind === "add-notes"}
         onClose={() => setAddNotesSubjectId(null)}
         onAdd={handleAddNotes}
+        onRefresh={refreshNotes}
+        refreshing={refreshingNotes}
       />
       <DeleteSubjectModal
         subject={deleteSubject}

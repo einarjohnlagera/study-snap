@@ -352,14 +352,16 @@ function ContinuePlanBanner({
 
 function PlanHeroCard({
   collection,
-  labels,
+  eyebrowLabel,
+  statusBadge,
   isAdmin,
   actions,
   terminalFooter,
   onPublishClick,
 }: Readonly<{
   collection: NoteCollectionDetail;
-  labels: ReturnType<typeof getCollectionLabels>;
+  eyebrowLabel: string;
+  statusBadge: ReactNode;
   isAdmin: boolean;
   actions: ReactNode;
   terminalFooter?: ReactNode;
@@ -385,9 +387,7 @@ function PlanHeroCard({
                 ~{estimatedStudyHours} hrs
               </span>
             ) : null}
-            <span className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground/70">
-              {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready
-            </span>
+            {statusBadge}
             {isAdmin ? (
               <button
                 type="button"
@@ -406,7 +406,7 @@ function PlanHeroCard({
             ) : null}
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{labels.singular}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{eyebrowLabel}</p>
             <CardTitle className="text-2xl sm:text-3xl">{collection.title}</CardTitle>
             {collection.description ? (
               <CardDescription className="line-clamp-3 text-sm sm:text-base">{collection.description}</CardDescription>
@@ -1374,6 +1374,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
+  const [parentTitle, setParentTitle] = useState<string | null>(null);
+  const backLinkHref = collection?.parentCollectionId && parentTitle
+    ? `/collections/${collection.parentCollectionId}`
+    : "/collections";
+  const backLinkLabel = collection?.parentCollectionId && parentTitle ? parentTitle : labels.plural;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1406,6 +1411,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       setGoalDetail(goalResult);
       setItems(sortCollectionItemsByPosition(collectionResult.items));
       setLoadState("ready");
+      if (collectionResult.parentCollectionId) {
+        getCollection(collectionResult.parentCollectionId)
+          .then((parent) => setParentTitle(parent.title))
+          .catch(() => setParentTitle(null));
+      } else {
+        setParentTitle(null);
+      }
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 404) {
         setLoadState("not-found");
@@ -1772,7 +1784,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   if (loadState === "loading") {
     return (
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <BackLink href="/collections" label={labels.plural} />
+        <BackLink href={backLinkHref} label={backLinkLabel} />
         <PageHeader eyebrow={labels.singular.toUpperCase()} title="Loading..." description="Loading this saved set of notes." />
         <Card className="space-y-4 p-6">
           <div className="h-5 w-1/2 animate-pulse rounded bg-muted" />
@@ -1785,7 +1797,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   if (loadState === "not-found") {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <BackLink href="/collections" label={labels.plural} />
+        <BackLink href={backLinkHref} label={backLinkLabel} />
         <Card className="space-y-4 p-6">
           <CardTitle>{labels.singular} not found</CardTitle>
           <CardDescription>This saved set may have been deleted or may not belong to your account.</CardDescription>
@@ -1800,7 +1812,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   if (loadState === "error" || !collection) {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <BackLink href="/collections" label={labels.plural} />
+        <BackLink href={backLinkHref} label={backLinkLabel} />
         <Card className="space-y-4 p-6">
           <CardTitle>Could not load {labels.singular.toLowerCase()}</CardTitle>
           <CardDescription>{loadError ?? "Please try again."}</CardDescription>
@@ -1813,28 +1825,18 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   if (goalDetail) {
     return (
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <BackLink href="/collections" label={labels.plural} />
-        <PageHeader
-          eyebrow={labels.goalSingular.toUpperCase()}
-          title={collection.title}
-          description={collection.description || undefined}
-          meta={isAdmin ? (
-            <button
-              type="button"
-              onClick={() => setPublishOpen(true)}
-              aria-label="Publish settings"
-              title="Publish settings"
-              className="motion-lift inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
-            >
-              {collection.visibility === "PUBLIC" ? (
-                <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
-              ) : (
-                <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
-              )}
-              <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
-            </button>
-          ) : undefined}
-        actions={(
+        <BackLink href={backLinkHref} label={backLinkLabel} />
+        <PlanHeroCard
+          collection={collection}
+          eyebrowLabel={labels.goalSingular}
+          statusBadge={(
+            <span className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground/70">
+              {goalDetail.childCount} {labels.subjectSingular}{goalDetail.childCount === 1 ? "" : "s"}
+            </span>
+          )}
+          isAdmin={isAdmin}
+          onPublishClick={() => setPublishOpen(true)}
+          actions={(
             <div className="flex items-center justify-end gap-2">
               <ResponsiveActionLink
                 href={`/collections/${collectionId}/builder`}
@@ -1946,10 +1948,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <BackLink href="/collections" label={labels.plural} />
+      <BackLink href={backLinkHref} label={backLinkLabel} />
       <PlanHeroCard
         collection={collection}
-        labels={labels}
+        eyebrowLabel={labels.singular}
+        statusBadge={(
+          <span className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground/70">
+            {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready
+          </span>
+        )}
         isAdmin={isAdmin}
         onPublishClick={() => setPublishOpen(true)}
         actions={(

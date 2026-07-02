@@ -1,5 +1,39 @@
 # RELEASES.md - NoteLib
 
+## v0.36.1 - Post-Release Fixes
+
+**Status: Released**
+
+Theme: fast-follow fixes found during a post-signoff audit of v0.36.0 — a reachable dead-end in the Builder's new Goal-creation entry point, vocabulary drift on two dashboard entry points into `/progress`, stale documentation left over from the readiness-route merge, plus a second round of UX fixes surfaced while using v0.36.0 in practice (Builder navigation/responsiveness/layout and Note Detail readiness placement).
+
+### Planned Scope
+
+- **Nested Subject plan dead-end fix (frontend).** The tri-state empty Builder added in v0.36.0 only checked `leafItems.length === 0` before offering `Add Subject Plan`, not `parentCollectionId`. An already-nested Subject plan with zero notes could show `Add Subject Plan`, and submitting it always fails server-side (`PARENT_NOT_TOP_LEVEL_MESSAGE`) since a nested collection can't itself become a parent. Gate the control on `collection.parentCollectionId === null` as well.
+- **Vocabulary fix on dashboard entry points (frontend).** `dashboard-goal-card.tsx` and `goal-nudge-card.tsx` still say "N concepts due for review" — the locked v0.36.0 vocabulary rule is `due`, not `due for review`. Fix the wording only; `% mastered` on these cards is correct as-is (matches `/progress`'s own goal-level header and milestone labels) and is not touched.
+- **Documentation accuracy (docs only).** `AGENTS.md`'s "Study Plan Readiness Rule" still describes a deleted "readiness sub-route" firing `PLAN_READINESS_VIEWED` "once after a successful load"; update to match the shipped behavior (fires once per distinct plan selected in a session) and `docs/features/collections.md`'s already-correct wording. Also fix `AGENTS.md`'s stale "Current documentation baseline" line, still reading `v0.35.0`.
+- **Subject plan BackLink (frontend).** A nested Subject plan's detail page back-links to `/collections` (the flat list) instead of its parent Goal plan.
+- **Builder responsiveness (frontend).** Subject-block rows switch to horizontal layout at a viewport-relative `lg` (1024px) breakpoint that doesn't account for the persistent app-shell sidebar (present from `md` up, 256px wide), so the row-split fires before there's actually enough content width for a title column plus four action buttons — cramped at intermediate viewport widths.
+- **Refresh relocated into Add-notes modal (frontend).** The Builder's standalone "Refresh" button had unclear purpose; its actual function (pulling in newly created notes) only matters inside the Add-notes modal, so it moves there. The page header now has a single primary action (`Add Subject Plan`).
+- **Plan Hero layout reuse for Goal detail (frontend).** The Goal branch of the collection detail page used a separate `PageHeader`-based layout with the Published badge below the title, instead of reusing the leaf-plan `PlanHeroCard` (badges-above-title). Both now share one component.
+- **Note Detail readiness repositioned (frontend).** The readiness summary rendered above all tab content regardless of active tab, sitting directly above whatever the user was reading. Moved to sit just before the Performance Overview section instead (still shown on all tabs).
+- **Builder action-row wrapping on tablet widths (frontend).** The `xl` breakpoint fix alone didn't address a second bug the user caught in follow-up screenshots (iPad Air vs. iPad Mini): the Subject-block and note-row action buttons (`Move up`/`Move down`/`Add notes`/`Delete`, and `Up`/`Down`/`Move`/`Remove`) had no responsive treatment of their own and wrapped into an orphaned single-button row at intermediate tablet widths. Consulted Opus for a design opinion; fix is structural rather than another breakpoint patch — reorder controls move into a compact icon cluster next to the drag handle, so the action row only ever holds the two content actions (`Add notes`/`Delete`, or `Move`/`Remove`) and never wraps at any width.
+
+Anti-drift: no new mastery signal, no new endpoint, no new field; this is a bug-fix/UX-polish patch — scope is the nine items above only.
+
+### Shipped
+
+- **Nested Subject plan dead-end fix (frontend).** `Add Subject Plan` in the Builder now also requires `collection.parentCollectionId === null`, so an already-nested Subject plan with zero notes no longer shows a control that always fails server-side (`PARENT_NOT_TOP_LEVEL_MESSAGE`).
+- **Vocabulary fix on dashboard entry points (frontend).** `dashboard-goal-card.tsx` and `goal-nudge-card.tsx` now say "N concepts due" instead of "N concepts due for review", matching the locked `ready / mastered / due / not started` vocabulary. `% mastered` on both cards is unchanged.
+- **Documentation accuracy (docs only).** `AGENTS.md`'s "Study Plan Readiness Rule" and documentation baseline line updated to match shipped v0.36.0 behavior.
+- **Subject plan BackLink (frontend).** `/collections/{id}` now fetches the parent Goal's title when `parentCollectionId` is set and back-links there instead of the flat `/collections` list; falls back to the flat list while the parent title is loading or if the fetch fails.
+- **Builder responsiveness (frontend).** Subject-block row breakpoint moved from `lg` to `xl` to account for the persistent app-shell sidebar's width, so the row-split only fires once there's genuinely enough content width for it. Not visually verified in a browser this session (no browser tool available) — the change is monotonic-safe (no width makes it worse than before) but confirm at ~1024–1280px viewport widths.
+- **Refresh relocated into Add-notes modal (frontend).** Standalone header "Refresh" removed from both Builder branches; an icon-only Refresh control now lives inside the Add-notes modal next to search, scoped to re-fetching just the note list. Builder page headers now have a single primary action, `Add Subject Plan`.
+- **Plan Hero layout reuse for Goal detail (frontend).** `PlanHeroCard` is now parametrized (`eyebrowLabel`, `statusBadge`) and shared by both the leaf and Goal branches of `/collections/{id}`, replacing the Goal branch's separate `PageHeader`-based layout. Goal's status badge shows subject count (`N Subject Plan(s)`) instead of the leaf's notes-ready count, since a Goal holds no notes directly.
+- **Note Detail readiness repositioned (frontend).** `ReadinessSummary` on `/notes/{id}` moved from above all tab content to just before the Performance Overview section; still shown on all tabs (Summary/Key Concepts/Quiz/Full Notes), not gated to one.
+- **Builder action-row wrapping on tablet widths (frontend).** `Move up`/`Move down` (Subject blocks) and `Up`/`Down` (note rows) moved out of the action row into a compact icon cluster (`ArrowUp`/`ArrowDown`) next to the drag handle. Action rows are now fixed at two items (`Add notes`+`Delete`, or `Move`+`Remove`) and no longer wrap at any viewport width, on both the leaf and Goal builder canvases.
+
+---
+
 ## v0.36.0 - Readiness/Progress Merge
 
 **Status: Released**
@@ -19,7 +53,7 @@ Anti-drift: no new mastery signal; all data derived from existing `ConceptHealth
 - **Progress/readiness route merge (frontend).** `/progress` is now the canonical surface for all-subject progress and plan-scoped readiness via `?collectionId={id}`. The page includes an in-page leaf-plan picker, reuses the shared readiness vocabulary (`ready / mastered / due / not started`), and the plan detail "Check readiness" CTA now deep-links into `/progress`.
 - **Study Pack status vs. progress cleanup (frontend).** Removed the duplicated "Study Packs ready" text from the plan detail Progress card (that status already lives in the Hero card's `N/N notes ready` badge) and dropped the standing "N of N notes have Study Packs" stat from the merged `/progress` plan-scoped view. Replaced it with a conditional caveat shown only when a plan has notes without a Study Pack yet, linking back to the plan.
 - **Goal builder entry fix (frontend).** Brand-new empty plans can now choose either `Add notes` or `Add subject plan` in the Builder, allowing users to create Goal-shaped plans from scratch. Leaf and Goal detail pages now share one top-level `Build` entry point, with the old Notes-card builder link removed.
-- **Goal builder polish (frontend).** `Add Subject Plan` now lives in the leaf/undecided Builder's top PageHeader (next to `Refresh`) instead of the Notes card, so the CTA doesn't relocate once the plan converts to a Goal. Consistent action hierarchy across the Builder: creation actions (`Add notes`, `Add Subject Plan`) stay the prominent control in their scope, utility actions (`Move up`/`Move down`, `Refresh`) are now `ghost`-styled so they no longer compete visually with creation, one per row/scope. `Subject Plan` casing is now consistent everywhere in the Builder (buttons, modals, error copy) instead of mixing `Subject Plan canvas` with `add subject plan`.
+- **Goal builder polish (frontend).** `Add Subject Plan` now lives in the leaf/undecided Builder's top PageHeader (next to `Refresh`) instead of the Notes card, so the CTA doesn't relocate once the plan converts to a Goal. Consistent action hierarchy: creation actions (`Add notes`, `Add Subject Plan`) stay the prominent control in their scope; `Move up`/`Move down` on Subject blocks and the leaf/undecided header's `Refresh` are now `ghost`-styled so they no longer compete visually with creation. `Subject Plan` casing is now consistent everywhere in the Builder (buttons, modals, error copy) instead of mixing `Subject Plan canvas` with `add subject plan`.
 
 ---
 

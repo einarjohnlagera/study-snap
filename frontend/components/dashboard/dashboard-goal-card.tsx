@@ -13,7 +13,7 @@ type DashboardGoalCardProps = {
 export function DashboardGoalCard({ goalSummary }: Readonly<DashboardGoalCardProps>) {
   const dueCopy = goalSummary.dueConcepts === 0
     ? "All caught up — keep practicing!"
-    : `${goalSummary.dueConcepts} ${goalSummary.dueConcepts === 1 ? "concept" : "concepts"} due for review`;
+    : `${goalSummary.dueConcepts} ${goalSummary.dueConcepts === 1 ? "concept" : "concepts"} due`;
 
   useEffect(() => {
     void trackAnalyticsEvent({
