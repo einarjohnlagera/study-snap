@@ -1,23 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { HelpLink } from "@/components/ui/help-link";
 import { PageHeader } from "@/components/page-header";
-import { getProgressReport, type GoalSummaryResponse, type ProgressReportResponse, type SubjectProgressEntry } from "@/lib/api";
+import {
+  ApiRequestError,
+  getProgressReport,
+  getPlanReadiness,
+  listCollections,
+  trackAnalyticsEvent,
+  type GoalSummaryResponse,
+  type NoteCollectionSummary,
+  type PlanReadinessResponse,
+  type ProgressReportResponse,
+  type SubjectProgressEntry,
+} from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
-import {
-  getReadinessAccentBorder,
-  getReadinessBarTone,
-  getReadinessTextColor,
-  isReadinessNotStarted,
-} from "@/components/readiness/readiness-summary";
+import { getAuthUser, type AuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
+import { ReadinessBar, ReadinessSummary } from "@/components/readiness/readiness-summary";
 
-type LoadState = "loading" | "ready" | "error";
+type LoadState = "loading" | "ready" | "error" | "not-found";
 
 const MASTERY_QUARTER_THRESHOLD = 25;
 const MASTERY_HALF_THRESHOLD = 50;
@@ -66,43 +75,6 @@ function ProgressHeader() {
         description="Concept mastery across your subjects, based on your recent practice."
       />
     </div>
-  );
-}
-
-function SubjectProgressCard({ entry }: Readonly<{ entry: SubjectProgressEntry }>) {
-  const notStarted = isReadinessNotStarted(entry);
-  const fillWidth = notStarted ? 0 : entry.masteryPercentage;
-
-  return (
-    <Card className={`space-y-4 p-4 sm:p-6 ${getReadinessAccentBorder(entry)}`}>
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{entry.subject}</h2>
-          <p className="text-sm text-foreground/60">{entry.totalConcepts} concepts tracked</p>
-        </div>
-        <p className={`text-2xl font-semibold ${getReadinessTextColor(entry)}`}>{entry.masteryPercentage}%</p>
-      </div>
-
-      <div className="space-y-2">
-        <div
-          role="progressbar"
-          aria-label={`${entry.subject} mastery`}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={entry.masteryPercentage}
-          data-state={notStarted ? "not-started" : "in-progress"}
-          className="h-3 overflow-hidden rounded-full bg-muted"
-        >
-          <div
-            className={`h-full rounded-full transition-all ${getReadinessBarTone(entry)}`}
-            style={{ width: `${fillWidth}%` }}
-          />
-        </div>
-        <p className="text-sm text-foreground/70">
-          {entry.masteredConcepts} mastered &middot; {entry.dueConcepts} due for review &middot; {entry.notPracticedConcepts} not started
-        </p>
-      </div>
-    </Card>
   );
 }
 
@@ -287,6 +259,65 @@ function SetStudyFocusCard({ subjects }: Readonly<{ subjects: SubjectProgressEnt
   );
 }
 
+function PlanPicker({
+  collections,
+  selectedCollectionId,
+  collectionsState,
+  onChange,
+}: Readonly<{
+  collections: NoteCollectionSummary[];
+  selectedCollectionId: string | null;
+  collectionsState: "loading" | "ready" | "error";
+  onChange: (collectionId: string | null) => void;
+}>) {
+  const leafCollections = useMemo(
+    () => collections.filter((collection) => collection.childCount === 0),
+    [collections],
+  );
+  const selectedCollection = selectedCollectionId
+    ? leafCollections.find((collection) => collection.id === selectedCollectionId)
+    : null;
+
+  return (
+    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div className="space-y-1">
+        <label htmlFor="progress-plan-picker" className="text-sm font-semibold text-foreground">
+          Progress view
+        </label>
+        <p className="text-sm text-foreground/65">
+          Switch between all subjects and one saved study plan.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1 sm:min-w-72">
+        <select
+          id="progress-plan-picker"
+          value={selectedCollectionId ?? ""}
+          onChange={(event) => onChange(event.target.value || null)}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">All subjects</option>
+          {selectedCollectionId && !selectedCollection ? (
+            <option value={selectedCollectionId}>Selected plan</option>
+          ) : null}
+          {leafCollections.map((collection) => (
+            <option key={collection.id} value={collection.id}>
+              {collection.title}
+            </option>
+          ))}
+        </select>
+        {collectionsState === "loading" ? (
+          <span className="text-xs text-foreground/50">Loading study plans...</span>
+        ) : null}
+        {collectionsState === "error" ? (
+          <span className="text-xs text-rose-600 dark:text-rose-400">
+            Could not load study plans for the picker.
+          </span>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
 function ProgressContent({
   report,
   state,
@@ -337,7 +368,7 @@ function ProgressContent({
           </div>
           <div className="grid gap-4">
             {subjects.map((entry) => (
-              <SubjectProgressCard key={entry.subject} entry={entry} />
+              <ReadinessBar key={entry.subject} entry={entry} />
             ))}
           </div>
         </section>
@@ -346,41 +377,227 @@ function ProgressContent({
   );
 }
 
-export function ProgressReportClient() {
+function PlanReadinessContent({
+  readiness,
+  state,
+  loadError,
+  onRetry,
+  labels,
+}: Readonly<{
+  readiness: PlanReadinessResponse | null;
+  state: LoadState;
+  loadError: string | null;
+  onRetry: () => void;
+  labels: ReturnType<typeof getCollectionLabels>;
+}>) {
+  if (state === "loading") {
+    return (
+      <Card className="space-y-4 p-6">
+        <div className="h-5 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-24 w-full animate-pulse rounded bg-muted" />
+      </Card>
+    );
+  }
+
+  if (state === "not-found") {
+    return (
+      <Card className="space-y-4 p-6">
+        <CardTitle>{labels.singular} not found</CardTitle>
+        <CardDescription>This saved set may have been deleted or may not belong to your account.</CardDescription>
+        <Link className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" href="/collections">
+          {labels.plural}
+        </Link>
+      </Card>
+    );
+  }
+
+  if (state === "error" || !readiness) {
+    return (
+      <Card className="space-y-4 p-6">
+        <CardTitle>Could not load readiness</CardTitle>
+        <CardDescription>{loadError ?? "Please try again."}</CardDescription>
+        <Button type="button" variant="outline" onClick={onRetry}>Retry</Button>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-4 text-sm text-foreground/75 sm:p-5">
+        {readiness.notesWithStudyPack} of {readiness.totalNotes} notes have Study Packs.
+      </Card>
+
+      <ReadinessSummary
+        overallReadinessPercentage={readiness.overallReadinessPercentage}
+        totalConcepts={readiness.totalConcepts}
+        masteredConcepts={readiness.masteredConcepts}
+        dueConcepts={readiness.dueConcepts}
+        notPracticedConcepts={readiness.notPracticedConcepts}
+        subjects={readiness.subjects}
+        emptyTitle="No readiness yet"
+        emptyDescription="Generate Study Packs and practice to see readiness."
+      />
+    </div>
+  );
+}
+
+export function ProgressReportClient({
+  initialCollectionId = null,
+}: Readonly<{
+  initialCollectionId?: string | null;
+}>) {
   const router = useRouter();
+  const [authUser] = useState<AuthUser | null>(() => getAuthUser());
+  const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
+  const [routeReady, setRouteReady] = useState(false);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(initialCollectionId);
+  const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
+  const [collectionsState, setCollectionsState] = useState<"loading" | "ready" | "error">("loading");
   const [report, setReport] = useState<ProgressReportResponse | null>(null);
+  const [readiness, setReadiness] = useState<PlanReadinessResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const requestIdRef = useRef(0);
+  const trackedPlanIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    setSelectedCollectionId(initialCollectionId);
+  }, [initialCollectionId]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
+    setRouteReady(true);
+  }, [router]);
+
+  useEffect(() => {
+    if (!routeReady) {
+      return;
+    }
+    let cancelled = false;
+    setCollectionsState("loading");
+    listCollections()
+      .then((payload) => {
+        if (!cancelled) {
+          setCollections(payload);
+          setCollectionsState("ready");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCollectionsState("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeReady]);
+
+  useEffect(() => {
+    if (!routeReady) {
+      return;
+    }
 
     let cancelled = false;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    setState("loading");
+    setLoadError(null);
+
+    if (selectedCollectionId) {
+      getPlanReadiness(selectedCollectionId)
+        .then((payload) => {
+          if (cancelled || requestIdRef.current !== requestId) {
+            return;
+          }
+          setReadiness(payload);
+          setReport(null);
+          setState("ready");
+          if (!trackedPlanIdsRef.current.has(payload.collectionId)) {
+            trackedPlanIdsRef.current.add(payload.collectionId);
+            void trackAnalyticsEvent({
+              eventType: "PLAN_READINESS_VIEWED",
+              entityId: payload.collectionId,
+              metadata: {
+                totalNotes: payload.totalNotes,
+                notesWithStudyPack: payload.notesWithStudyPack,
+                totalConcepts: payload.totalConcepts,
+                overallReadinessPercentage: payload.overallReadinessPercentage,
+              },
+            });
+          }
+        })
+        .catch((error) => {
+          if (cancelled || requestIdRef.current !== requestId) {
+            return;
+          }
+          setReadiness(null);
+          if (error instanceof ApiRequestError && error.status === 404) {
+            setState("not-found");
+            return;
+          }
+          setLoadError(error instanceof Error ? error.message : "Could not load readiness.");
+          setState("error");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     getProgressReport()
       .then((payload) => {
-        if (cancelled) {
+        if (cancelled || requestIdRef.current !== requestId) {
           return;
         }
         setReport(payload);
+        setReadiness(null);
         setState("ready");
       })
       .catch(() => {
-        if (cancelled) {
+        if (cancelled || requestIdRef.current !== requestId) {
           return;
         }
+        setReport(null);
         setState("error");
       });
 
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [routeReady, selectedCollectionId, retryKey]);
+
+  function handlePlanChange(collectionId: string | null) {
+    setSelectedCollectionId(collectionId);
+    router.push(collectionId ? `/progress?collectionId=${encodeURIComponent(collectionId)}` : "/progress");
+  }
+
+  function retryLoad() {
+    setRetryKey((current) => current + 1);
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <ProgressHeader />
-      <ProgressContent report={report} state={state} />
+      <PlanPicker
+        collections={collections}
+        selectedCollectionId={selectedCollectionId}
+        collectionsState={collectionsState}
+        onChange={handlePlanChange}
+      />
+      {selectedCollectionId ? (
+        <PlanReadinessContent
+          readiness={readiness}
+          state={state}
+          loadError={loadError}
+          onRetry={retryLoad}
+          labels={labels}
+        />
+      ) : (
+        <ProgressContent report={report} state={state} />
+      )}
     </main>
   );
 }

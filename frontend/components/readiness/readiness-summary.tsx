@@ -81,7 +81,7 @@ function ReadinessRing({ percentage }: Readonly<{ percentage: number }>) {
   );
 }
 
-function ReadinessBar({ entry }: Readonly<{ entry: SubjectProgressEntry }>) {
+export function ReadinessBar({ entry }: Readonly<{ entry: SubjectProgressEntry }>) {
   const fillWidth = isReadinessNotStarted(entry) ? 0 : entry.masteryPercentage;
 
   return (

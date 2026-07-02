@@ -65,8 +65,8 @@ Theme: unify "Progress" and "Readiness" into a single, coherent surface. Today t
 
 Scope (to be refined at kickoff):
 - **Unified vocabulary.** One set of labels (`ready / mastered / due / not started`) used everywhere — note detail, plan header, plan readiness, progress dashboard.
-- **Progress page consolidation.** Merge the standalone `/me/progress` readiness dashboard with the plan-level readiness sub-route. Single canonical entry point with plan-scoped and cross-plan views.
-- **Navigation rename.** "Progress" nav entry updated to reflect the merged surface.
+- **Progress page consolidation.** Merge the standalone `/progress` readiness dashboard with the plan-level readiness sub-route. Single canonical entry point with cross-plan and plan-scoped views via an in-page picker.
+- **Navigation continuity.** Keep the nav label as "Progress" and keep the page header as "My Progress" while the surface gains plan-scoped readiness.
 - **No new mastery signal.** Still derived from existing `ConceptHealth` / `ProgressReportService` — no new field, AI call, or stored signal.
 
 Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new chart library; all derived from existing concept health data.

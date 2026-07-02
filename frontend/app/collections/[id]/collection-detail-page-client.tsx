@@ -1955,7 +1955,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         actions={(
           <div className="flex items-center justify-end gap-2">
             <ResponsiveActionLink
-              href={`/collections/${collectionId}/readiness`}
+              href={`/progress?collectionId=${collectionId}`}
               action="progress"
               label="Check readiness"
               variant="outline"

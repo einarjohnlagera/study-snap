@@ -259,7 +259,7 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
-    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/collections/collection-1/readiness");
+    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/progress?collectionId=collection-1");
   });
 
   it("renders a goal view when the collection has children", async () => {

@@ -135,7 +135,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 ### Study Plan Readiness Rule
 
-- Plan readiness is allowed only on the dedicated owner-scoped route `/collections/[id]/readiness` backed by `GET /collections/{id}/readiness`.
+- Plan readiness is rendered in the canonical `/progress?collectionId={id}` frontend view, still backed by owner-scoped `GET /collections/{id}/readiness`.
 - The endpoint must resolve the collection exactly like `NoteCollectionService.get(collectionId, userId)`: missing, malformed, public-source, or not-owned plans return `CollectionNotFoundException` / `404`.
 - Plan readiness must reuse `ProgressReportService` ConceptHealth classification and `masteryPercentage`; do not invent thresholds, persist readiness fields, add generated content, or call AI/LLM.
 - Collection detail execution rows, collection list cards, published-plan cards, and public source plans must keep the no-mastery rule: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing there.
