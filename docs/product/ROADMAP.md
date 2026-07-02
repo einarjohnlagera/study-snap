@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.36.0 - Readiness/Progress Merge` is the current in-progress release (on `releases/v0.36.0`).
+`v0.36.0 - Readiness/Progress Merge` is the latest released version (on `releases/v0.36.0`).
 
-`v0.35.0 - Mobile-First Builder` is the latest released version (on `releases/v0.35.0`).
+`v0.35.0 - Mobile-First Builder` is the previous released version (on `releases/v0.35.0`).
 
 `v0.34.0 - Journey: Goal-First Study Experience` is the previous released version (on `releases/v0.34.0`).
 
@@ -57,7 +57,7 @@ Anti-drift: frontend-only; no new endpoint, migration, or AI call; drag handles 
 
 ---
 
-## v0.36.0 - Readiness/Progress Merge (in progress)
+## v0.36.0 - Readiness/Progress Merge (released)
 
 Base branch: `releases/v0.36.0`.
 

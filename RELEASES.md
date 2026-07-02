@@ -2,7 +2,7 @@
 
 ## v0.36.0 - Readiness/Progress Merge
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: unify the "Progress" and "Readiness" surfaces into a single coherent entry point with one vocabulary and no new mastery signal.
 
