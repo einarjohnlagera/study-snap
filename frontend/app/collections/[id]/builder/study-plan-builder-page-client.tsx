@@ -19,7 +19,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -266,6 +266,30 @@ function SortableNoteCard({
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
+        <div className="flex shrink-0 flex-col gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-8 p-0"
+            aria-label={`Move ${title} up`}
+            disabled={disabled || index === 0}
+            onClick={() => onMoveWithinSubject(item.noteId, "up")}
+          >
+            <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-8 p-0"
+            aria-label={`Move ${title} down`}
+            disabled={disabled || index === totalCount - 1}
+            onClick={() => onMoveWithinSubject(item.noteId, "down")}
+          >
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
         <div className="min-w-0 flex-1 space-y-1">
           <Link
             href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${subjectId}`)}`}
@@ -280,31 +304,7 @@ function SortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label={`Move ${title} up`}
-          className="h-9 px-2"
-          disabled={disabled || index === 0}
-          onClick={() => onMoveWithinSubject(item.noteId, "up")}
-        >
-          <ChevronUp className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Up</span>
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label={`Move ${title} down`}
-          className="h-9 px-2"
-          disabled={disabled || index === totalCount - 1}
-          onClick={() => onMoveWithinSubject(item.noteId, "down")}
-        >
-          <ChevronDown className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Down</span>
-        </Button>
+      <div className="flex shrink-0 items-center justify-end gap-1">
         {targetSubjects.length > 0 ? (
           <select
             aria-label={`Move ${title} to subject`}
@@ -411,6 +411,14 @@ function LeafSortableNoteCard({
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
+        <div className="flex shrink-0 flex-col gap-1">
+          <Button type="button" variant="ghost" size="sm" className="h-6 w-8 p-0" aria-label={`Move ${title} up`} disabled={disabled || index === 0} onClick={() => onMoveWithinSection(item.noteId, "up")}>
+            <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="h-6 w-8 p-0" aria-label={`Move ${title} down`} disabled={disabled || index === totalCount - 1} onClick={() => onMoveWithinSection(item.noteId, "down")}>
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
         <div className="min-w-0 flex-1 space-y-1">
           <Link
             href={`/notes/${item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}/builder`)}`}
@@ -425,15 +433,7 @@ function LeafSortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <Button type="button" variant="outline" size="sm" aria-label={`Move ${title} up`} className="h-9 px-2" disabled={disabled || index === 0} onClick={() => onMoveWithinSection(item.noteId, "up")}>
-          <ChevronUp className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Up</span>
-        </Button>
-        <Button type="button" variant="outline" size="sm" aria-label={`Move ${title} down`} className="h-9 px-2" disabled={disabled || index === totalCount - 1} onClick={() => onMoveWithinSection(item.noteId, "down")}>
-          <ChevronDown className="h-4 w-4 sm:mr-1" aria-hidden="true" />
-          <span className="hidden sm:inline">Down</span>
-        </Button>
+      <div className="flex shrink-0 items-center justify-end gap-1">
         {targetSections.length > 0 ? (
           <select
             aria-label={`Move ${title} to section`}
@@ -693,6 +693,30 @@ function SortableSubjectBlock({
           >
             <GripVertical className="h-4 w-4" aria-hidden="true" />
           </button>
+          <div className="flex shrink-0 flex-col gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 w-8 p-0"
+              aria-label={`Move ${subject.title} up`}
+              disabled={disabled || index === 0}
+              onClick={() => onMoveSubject(subject.collectionId, "up")}
+            >
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 w-8 p-0"
+              aria-label={`Move ${subject.title} down`}
+              disabled={disabled || index === totalCount - 1}
+              onClick={() => onMoveSubject(subject.collectionId, "down")}
+            >
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </div>
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex min-w-0 items-center gap-2">
               <button
@@ -738,13 +762,7 @@ function SortableSubjectBlock({
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" disabled={disabled || index === 0} onClick={() => onMoveSubject(subject.collectionId, "up")}>
-            Move up
-          </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={disabled || index === totalCount - 1} onClick={() => onMoveSubject(subject.collectionId, "down")}>
-            Move down
-          </Button>
+        <div className="flex shrink-0 items-center gap-2">
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAddNotes(subject.collectionId)}>
             <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
             Add notes

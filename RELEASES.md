@@ -16,8 +16,9 @@ Theme: fast-follow fixes found during a post-signoff audit of v0.36.0 — a reac
 - **Refresh relocated into Add-notes modal (frontend).** The Builder's standalone "Refresh" button had unclear purpose; its actual function (pulling in newly created notes) only matters inside the Add-notes modal, so it moves there. The page header now has a single primary action (`Add Subject Plan`).
 - **Plan Hero layout reuse for Goal detail (frontend).** The Goal branch of the collection detail page used a separate `PageHeader`-based layout with the Published badge below the title, instead of reusing the leaf-plan `PlanHeroCard` (badges-above-title). Both now share one component.
 - **Note Detail readiness repositioned (frontend).** The readiness summary rendered above all tab content regardless of active tab, sitting directly above whatever the user was reading. Moved to sit just before the Performance Overview section instead (still shown on all tabs).
+- **Builder action-row wrapping on tablet widths (frontend).** The `xl` breakpoint fix alone didn't address a second bug the user caught in follow-up screenshots (iPad Air vs. iPad Mini): the Subject-block and note-row action buttons (`Move up`/`Move down`/`Add notes`/`Delete`, and `Up`/`Down`/`Move`/`Remove`) had no responsive treatment of their own and wrapped into an orphaned single-button row at intermediate tablet widths. Consulted Opus for a design opinion; fix is structural rather than another breakpoint patch — reorder controls move into a compact icon cluster next to the drag handle, so the action row only ever holds the two content actions (`Add notes`/`Delete`, or `Move`/`Remove`) and never wraps at any width.
 
-Anti-drift: no new mastery signal, no new endpoint, no new field; this is a bug-fix/UX-polish patch — scope is the eight items above only.
+Anti-drift: no new mastery signal, no new endpoint, no new field; this is a bug-fix/UX-polish patch — scope is the nine items above only.
 
 ### Shipped
 
@@ -29,6 +30,7 @@ Anti-drift: no new mastery signal, no new endpoint, no new field; this is a bug-
 - **Refresh relocated into Add-notes modal (frontend).** Standalone header "Refresh" removed from both Builder branches; an icon-only Refresh control now lives inside the Add-notes modal next to search, scoped to re-fetching just the note list. Builder page headers now have a single primary action, `Add Subject Plan`.
 - **Plan Hero layout reuse for Goal detail (frontend).** `PlanHeroCard` is now parametrized (`eyebrowLabel`, `statusBadge`) and shared by both the leaf and Goal branches of `/collections/{id}`, replacing the Goal branch's separate `PageHeader`-based layout. Goal's status badge shows subject count (`N Subject Plan(s)`) instead of the leaf's notes-ready count, since a Goal holds no notes directly.
 - **Note Detail readiness repositioned (frontend).** `ReadinessSummary` on `/notes/{id}` moved from above all tab content to just before the Performance Overview section; still shown on all tabs (Summary/Key Concepts/Quiz/Full Notes), not gated to one.
+- **Builder action-row wrapping on tablet widths (frontend).** `Move up`/`Move down` (Subject blocks) and `Up`/`Down` (note rows) moved out of the action row into a compact icon cluster (`ArrowUp`/`ArrowDown`) next to the drag handle. Action rows are now fixed at two items (`Add notes`+`Delete`, or `Move`+`Remove`) and no longer wrap at any viewport width, on both the leaf and Goal builder canvases.
 
 ---
 

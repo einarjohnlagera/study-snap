@@ -445,7 +445,7 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
     const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
-    fireEvent.click(within(block).getByRole("button", { name: "Move down" }));
+    fireEvent.click(within(block).getByRole("button", { name: "Move Professional Education Mastery down" }));
 
     await waitFor(() => {
       expect(reorderCollectionChildren).toHaveBeenCalledWith("goal-1", ["child-2", "child-1"]);
