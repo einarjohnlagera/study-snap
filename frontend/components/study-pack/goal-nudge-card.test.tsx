@@ -28,7 +28,7 @@ describe("GoalNudgeCard", () => {
     expect(screen.getByText("PNLE Goal")).toBeInTheDocument();
     expect(screen.getByText("Philippine Nurse Licensure Examination")).toBeInTheDocument();
     expect(screen.getByText(/42%/)).toBeInTheDocument();
-    expect(screen.getByText("8 concepts due for review")).toBeInTheDocument();
+    expect(screen.getByText("8 concepts due")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View PNLE progress →" })).toHaveAttribute("href", "/progress");
   });
 
