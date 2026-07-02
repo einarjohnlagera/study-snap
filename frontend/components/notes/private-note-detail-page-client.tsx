@@ -2083,22 +2083,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </p>
             </Card>
 
-            {shouldShowNoteReadiness && noteReadinessEntry ? (
-              <ReadinessSummary
-                variant="compact"
-                title="Note readiness"
-                description="Practice to move due concepts toward mastered."
-                overallReadinessPercentage={noteReadinessEntry.masteryPercentage}
-                totalConcepts={noteReadinessEntry.totalConcepts}
-                masteredConcepts={noteReadinessEntry.masteredConcepts}
-                dueConcepts={noteReadinessEntry.dueConcepts}
-                notPracticedConcepts={noteReadinessEntry.notPracticedConcepts}
-                subjects={[noteReadinessEntry]}
-                unavailable={conceptHealthUnavailable}
-                unavailableDescription="Readiness is unavailable right now. Your note content is still available."
-              />
-            ) : null}
-
             {activeStudyPackTab === "summary" ? (
               <NoteDetailSummaryCard
                 summary={
@@ -2215,6 +2199,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </p>
                 </div>
               </Card>
+            ) : null}
+
+            {shouldShowNoteReadiness && noteReadinessEntry ? (
+              <ReadinessSummary
+                variant="compact"
+                title="Note readiness"
+                description="Practice to move due concepts toward mastered."
+                overallReadinessPercentage={noteReadinessEntry.masteryPercentage}
+                totalConcepts={noteReadinessEntry.totalConcepts}
+                masteredConcepts={noteReadinessEntry.masteredConcepts}
+                dueConcepts={noteReadinessEntry.dueConcepts}
+                notPracticedConcepts={noteReadinessEntry.notPracticedConcepts}
+                subjects={[noteReadinessEntry]}
+                unavailable={conceptHealthUnavailable}
+                unavailableDescription="Readiness is unavailable right now. Your note content is still available."
+              />
             ) : null}
 
             {!isTeacherMode ? (

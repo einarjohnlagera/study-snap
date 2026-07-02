@@ -915,12 +915,16 @@ describe("PrivateNoteDetailPageClient", () => {
       },
     ]);
 
-    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+    const { container, rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Note readiness")).toBeInTheDocument();
     expect(screen.getByText((content) => (
       content.includes("33% ready") && content.includes("1/3 mastered") && content.includes("1 due")
     ))).toBeInTheDocument();
+    const readinessIndex = container.textContent!.indexOf("Note readiness");
+    const performanceIndex = container.textContent!.indexOf("Performance Overview");
+    expect(readinessIndex).toBeGreaterThan(-1);
+    expect(performanceIndex).toBeGreaterThan(readinessIndex);
 
     fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
     searchParamValues = { tab: "key-concepts" };
@@ -933,6 +937,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText(/Due — \d+d ago/)).not.toBeInTheDocument();
     expect(screen.getByText("Review timing for 1 due concept is available on Plus and Pro.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toBeInTheDocument();
+    expect(screen.getByText("Note readiness")).toBeInTheDocument();
   });
 
   it("derives readiness from isDue when readinessStatus is absent", async () => {

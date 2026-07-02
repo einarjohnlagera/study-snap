@@ -468,6 +468,23 @@ describe("StudyPlanBuilderPageClient", () => {
     });
   });
 
+  it("refreshes the note list from within the Add-notes modal without a standalone header Refresh button", async () => {
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
+    expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(block).getByRole("button", { name: "Add notes" }));
+    const dialog = await screen.findByRole("dialog");
+    (listNotes as jest.Mock).mockClear();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Refresh notes" }));
+
+    await waitFor(() => {
+      expect(listNotes).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("moves a note across subjects with remove plus add and then saves target order", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
