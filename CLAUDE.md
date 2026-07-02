@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.35.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.36.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.34.0 — Journey: Goal-First Study Experience
+## Active release: v0.36.0 — Readiness/Progress Merge
 
-Base branch for this release: `releases/v0.34.0`. Transform the study plan detail from a note list into a guided study surface. Composition over rewrite — every piece reuses shipped infrastructure. Locked rules:
+Base branch for this release: `releases/v0.36.0`. Unify the "Progress" and "Readiness" surfaces into one coherent experience — single vocabulary, single entry point, no new signal. Locked rules:
 
-- **Section readiness on plan detail.** Add per-note concept health counts to the plan detail response; aggregate by section label client-side. Lazy-loaded. No new mastery signal, stored field, or AI call.
-- **Estimated study time.** Optional `estimatedStudyHours` on the collection entity (Flyway migration required). Always optional — never blocks adopt, quiz, or publish.
-- **Plan Hero.** Frontend-only hero card. No new backend.
-- **"Continue where you left off".** Uses `lastSessionCompletedAt` already in the plan detail response. Zero new backend.
-- **Builder for leaf plans.** Extend `/collections/{id}/builder` to render a single-plan canvas for leaf plans. Uses existing collection endpoints only — no new API. Eliminates the inline organize mode toggle from leaf plan detail pages.
-- **No new chart library, no new quiz model, no new mastery signal.** Readiness Free. Adopt Free. No quota / billing / price / checkout changes. 2-level hierarchy max enforced.
+- **Unified vocabulary only.** One label set (`ready / mastered / due / not started`) used everywhere: note detail, plan header, plan readiness, progress dashboard. No new terms introduced.
+- **No new mastery signal.** All data derived from existing `ConceptHealth` / `ProgressReportService`. No new stored field, AI call, or generated content.
+- **Progress page consolidation.** Merge `/me/progress` and `/collections/{id}/readiness` into a single canonical surface with plan-scoped and cross-plan views. No new backend signal — aggregation only.
+- **Navigation rename only.** "Progress" nav entry updated to reflect the merged surface. No new nav items.
+- **No new chart library.** Reuse the existing CSS progress-bar pattern and inline SVG from `progress-report-client.tsx`. No new chart dependency.
+- **Free gate unchanged.** Signal stays Free; per-concept review-timing detail stays PLUS/PRO. No quota / billing / price / checkout changes.
 
 ## Source-of-truth docs (read before implementing anything)
 

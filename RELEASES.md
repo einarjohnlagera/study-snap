@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.36.0 - Readiness/Progress Merge
+
+**Status: In Progress**
+
+Theme: unify the "Progress" and "Readiness" surfaces into a single coherent entry point with one vocabulary and no new mastery signal.
+
+### Planned Scope
+
+- **Unified vocabulary (frontend + backend).** Reconcile all readiness labels to one set: `ready / mastered / due / not started`. Applied consistently across note detail, plan header, plan readiness sub-route, and the progress dashboard.
+- **Progress page consolidation (frontend).** Merge `/me/progress` and `/collections/{id}/readiness` into a single canonical surface. Plan-scoped and cross-plan views from one entry point.
+- **Navigation rename (frontend).** "Progress" nav entry updated to reflect the merged surface.
+
+Anti-drift: no new mastery signal; all data derived from existing `ConceptHealth` / `ProgressReportService`; no new chart library; Free gate unchanged (signal Free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new AI call or stored field.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.35.0 - Mobile-First Builder
 
 **Status: Released**

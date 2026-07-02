@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.36.0 - Readiness/Progress Merge` is the next planned release (on `releases/v0.36.0`, not yet opened).
+`v0.36.0 - Readiness/Progress Merge` is the current in-progress release (on `releases/v0.36.0`).
 
 `v0.35.0 - Mobile-First Builder` is the latest released version (on `releases/v0.35.0`).
 
@@ -57,9 +57,9 @@ Anti-drift: frontend-only; no new endpoint, migration, or AI call; drag handles 
 
 ---
 
-## v0.36.0 - Readiness/Progress Merge (planned)
+## v0.36.0 - Readiness/Progress Merge (in progress)
 
-Base branch: `releases/v0.36.0` (not yet opened).
+Base branch: `releases/v0.36.0`.
 
 Theme: unify "Progress" and "Readiness" into a single, coherent surface. Today the product has a standalone Progress page (`/me/progress`) and a plan Readiness sub-route (`/collections/{id}/readiness`) that express the same underlying signal with different vocabularies and entry points — confusing to users and inconsistent in value proposition. v0.36.0 merges these into one canonical surface.
 
