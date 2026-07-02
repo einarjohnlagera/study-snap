@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.36.2 - OCR Disable Hotfix` is the current in-progress release (on `releases/v0.36.2`).
+
 `v0.36.1 - Post-Release Fixes` is the latest released version (on `releases/v0.36.1`).
 
 `v0.36.0 - Readiness/Progress Merge` is the previous released version (on `releases/v0.36.0`).
@@ -72,6 +74,21 @@ Scope (to be refined at kickoff):
 - **No new mastery signal.** Still derived from existing `ConceptHealth` / `ProgressReportService` — no new field, AI call, or stored signal.
 
 Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new chart library; all derived from existing concept health data.
+
+---
+
+## v0.36.2 - OCR Disable Hotfix (in progress)
+
+Base branch: `releases/v0.36.2`.
+
+Theme: production incident response. The backend was repeatedly OOM-killed on Render's 512MB Starter instance. Root-caused to Google Vision OCR: a fresh gRPC `ImageAnnotatorClient` is constructed per call, and the scanned-PDF fallback calls it once per page (up to 30x per import) — native/off-heap memory churns faster than it's reclaimed, and the Dockerfile's JVM flags leave no native-memory headroom, so the container's cgroup SIGKILLs the process before the JVM can log an OutOfMemoryError. Pre-revenue, so disabling OCR (a paid Google API) also cuts real cost.
+
+Scope:
+- **Kill-switch (backend).** Disable all three Google Vision OCR call sites (`NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, `StudyPackService.createFromImage`) behind one env-configurable flag. Native-text PDF extraction and `.txt` upload are unaffected.
+- **Typed failure state (backend).** Callers hitting a disabled OCR path get a distinct, typed error instead of a raw failure.
+- **Fast-follow (not in this hotfix):** a Codex-built polished experience — clear "OCR temporarily unavailable" messaging in the upload flow plus a feedback-capture mechanism (ask users if they want OCR back).
+
+Anti-drift: kill-switch only, no redesign; no new endpoint, entity, or billing/quota change beyond gating the OCR call.
 
 ---
 

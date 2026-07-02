@@ -6,16 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.36.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.36.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.36.1 — Post-Release Fixes
+## Active release: v0.36.2 — OCR Disable Hotfix
 
-Base branch for this release: `releases/v0.36.1`. A fast-follow patch fixing three issues found in a post-signoff audit of v0.36.0 (Readiness/Progress Merge): a reachable dead-end in the Builder's Goal-creation entry point for already-nested Subject plans, "due for review" vocabulary drift on two dashboard entry points into `/progress`, and stale `AGENTS.md` documentation left over from the readiness-route merge. Locked rules:
+Base branch for this release: `releases/v0.36.2`. Production incident response: the backend was repeatedly OOM-killed on Render's 512MB Starter instance, root-caused to Google Vision OCR (a fresh gRPC `ImageAnnotatorClient` per call, up to 30x per scanned-PDF import, native memory churn the JVM's flags leave no headroom for). Locked rules:
 
-- **Bug-fix/docs patch only.** No new endpoint, field, mastery signal, or scope beyond the three items in `RELEASES.md`'s v0.36.1 Planned Scope.
-- **Nested Subject plan dead-end fix.** Gate the Builder's `Add Subject Plan` control on `collection.parentCollectionId === null` in addition to the existing `leafItems.length === 0` check.
-- **Vocabulary fix, narrowly scoped.** `due for review` → `due` on `dashboard-goal-card.tsx` and `goal-nudge-card.tsx` only. Do not touch `% mastered` on these cards — it is correct as-is (matches `/progress`'s own goal-level header and milestone labels).
-- **Documentation accuracy.** Fix `AGENTS.md`'s stale "Study Plan Readiness Rule" `PLAN_READINESS_VIEWED` wording and stale documentation baseline line.
+- **Kill-switch only, no redesign.** Disable all three Google Vision OCR call sites (`NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, `StudyPackService.createFromImage`) behind one env-configurable flag. No new endpoint, entity, or billing/quota change beyond gating the OCR call itself.
+- **Native-text paths unaffected.** `PDFTextStripper` extraction and `.txt` upload never call OCR and keep working exactly as before.
+- **Typed failure state.** A disabled OCR path returns a distinct, typed error, not a raw 500 — the frontend renders an honest "temporarily unavailable" message.
+- **Polish is a fast-follow, not this release.** Clear in-flow user messaging plus a feedback-capture mechanism (ask users if they want OCR back) is a separate, Codex-built change after this hotfix ships.
 
 ## Source-of-truth docs (read before implementing anything)
 
