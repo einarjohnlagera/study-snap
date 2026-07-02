@@ -445,7 +445,7 @@ describe("CollectionDetailPageClient", () => {
   it("renders the collection progress rollup", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("1 of 2 Study Packs ready · 1 of 2 practiced")).toBeInTheDocument();
+    expect(await screen.findByText("1 of 2 practiced")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "1");
     expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuemax", "2");
   });
@@ -463,7 +463,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("No progress yet")).toBeInTheDocument();
-    expect(screen.getByText("Add notes to track Study Pack readiness and practice.")).toBeInTheDocument();
+    expect(screen.getByText("Add notes to start tracking practice.")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "0");
     expect(screen.queryByText("Next in this plan")).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain("NaN");

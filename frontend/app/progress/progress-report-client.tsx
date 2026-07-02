@@ -421,11 +421,21 @@ function PlanReadinessContent({
     );
   }
 
+  const notesMissingStudyPack = readiness.totalNotes - readiness.notesWithStudyPack;
+
   return (
     <div className="space-y-6">
-      <Card className="p-4 text-sm text-foreground/75 sm:p-5">
-        {readiness.notesWithStudyPack} of {readiness.totalNotes} notes have Study Packs.
-      </Card>
+      {notesMissingStudyPack > 0 ? (
+        <Card className="p-4 text-sm text-foreground/70 sm:p-5">
+          {notesMissingStudyPack} of {readiness.totalNotes} notes in this {labels.singular.toLowerCase()} don&apos;t have a Study Pack yet, so they aren&apos;t reflected below.{" "}
+          <Link
+            href={`/collections/${readiness.collectionId}`}
+            className="font-medium text-blue-700 hover:underline dark:text-blue-300"
+          >
+            Generate Study Packs &rarr;
+          </Link>
+        </Card>
+      ) : null}
 
       <ReadinessSummary
         overallReadinessPercentage={readiness.overallReadinessPercentage}

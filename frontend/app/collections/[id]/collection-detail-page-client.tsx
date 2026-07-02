@@ -484,7 +484,7 @@ function getNextPlanAction(items: NoteCollectionItem[], canReviewDueConcepts: bo
 }
 
 function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCollectionDetail }>) {
-  const { totalNotes, notesWithStudyPack, notesPracticed } = collection.progress;
+  const { totalNotes, notesPracticed } = collection.progress;
   const practicedPercentage = totalNotes > 0
     ? Math.min(100, Math.max(0, Math.round((notesPracticed / totalNotes) * 100)))
     : 0;
@@ -495,12 +495,12 @@ function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCo
         <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Progress</p>
         {totalNotes > 0 ? (
           <p className="text-sm font-medium text-foreground">
-            {notesWithStudyPack} of {totalNotes} Study Packs ready · {notesPracticed} of {totalNotes} practiced
+            {notesPracticed} of {totalNotes} practiced
           </p>
         ) : (
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">No progress yet</p>
-            <p className="text-xs text-foreground/60">Add notes to track Study Pack readiness and practice.</p>
+            <p className="text-xs text-foreground/60">Add notes to start tracking practice.</p>
           </div>
         )}
       </div>
