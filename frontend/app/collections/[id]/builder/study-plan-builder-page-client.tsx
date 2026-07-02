@@ -739,10 +739,10 @@ function SortableSubjectBlock({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={disabled || index === 0} onClick={() => onMoveSubject(subject.collectionId, "up")}>
+          <Button type="button" variant="ghost" size="sm" disabled={disabled || index === 0} onClick={() => onMoveSubject(subject.collectionId, "up")}>
             Move up
           </Button>
-          <Button type="button" variant="outline" size="sm" disabled={disabled || index === totalCount - 1} onClick={() => onMoveSubject(subject.collectionId, "down")}>
+          <Button type="button" variant="ghost" size="sm" disabled={disabled || index === totalCount - 1} onClick={() => onMoveSubject(subject.collectionId, "down")}>
             Move down
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onAddNotes(subject.collectionId)}>
@@ -785,8 +785,8 @@ function SortableSubjectBlock({
             </SortableContext>
           ) : (
             <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center">
-              <p className="text-sm font-medium text-foreground">No notes in this {labels.subjectSingular.toLowerCase()} yet.</p>
-              <p className="mt-1 text-xs text-foreground/60">Add notes or drag them from another {labels.subjectSingular.toLowerCase()}.</p>
+              <p className="text-sm font-medium text-foreground">No notes in this {labels.subjectSingular} yet.</p>
+              <p className="mt-1 text-xs text-foreground/60">Add notes or drag them from another {labels.subjectSingular}.</p>
             </div>
           )}
         </div>
@@ -829,20 +829,20 @@ function AddSubjectModal({
       await onAdd(trimmedTitle);
       handleClose();
     } catch (addError) {
-      setError(makeErrorMessage(addError, `Could not add this ${labels.subjectSingular.toLowerCase()}.`));
+      setError(makeErrorMessage(addError, `Could not add this ${labels.subjectSingular}.`));
     }
   };
 
   return (
     <AppModal
       isOpen={isOpen}
-      title={`Add ${labels.subjectSingular.toLowerCase()}`}
+      title={`Add ${labels.subjectSingular}`}
       description={`Create a child ${labels.singular.toLowerCase()} and nest it under this ${labels.goalSingular.toLowerCase()}.`}
       onClose={handleClose}
       actions={(
         <>
           <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
-          <Button type="submit" form="add-subject-form" loading={submitting} loadingText="Adding...">Add {labels.subjectSingular.toLowerCase()}</Button>
+          <Button type="submit" form="add-subject-form" loading={submitting} loadingText="Adding...">Add {labels.subjectSingular}</Button>
         </>
       )}
     >
@@ -1045,7 +1045,7 @@ function DeleteSubjectModal({
   return (
     <AppModal
       isOpen={subject !== null}
-      title={`Delete ${labels.subjectSingular.toLowerCase()}?`}
+      title={`Delete ${labels.subjectSingular}?`}
       description={subject ? `Delete "${subject.title}" from this builder. This removes only the child plan; your notes will not be deleted.` : undefined}
       onClose={onClose}
       actions={(
@@ -1074,6 +1074,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshingBuilder, setRefreshingBuilder] = useState(false);
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goal, setGoal] = useState<GoalCollectionDetailResponse | null>(null);
   const [subjects, setSubjects] = useState<BuilderSubject[]>([]);
@@ -1098,23 +1099,28 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   }, []);
 
   const refreshBuilder = useCallback(async () => {
-    const [collectionResult, notesResult] = await Promise.all([
-      getCollection(collectionId),
-      listNotes(),
-    ]);
-    setCollection(collectionResult);
-    setNotes(notesResult);
-    if (collectionResult.childCount === 0) {
-      setGoal(null);
-      setSubjects([]);
-      setLeafItems(sortCollectionItemsByPosition(collectionResult.items));
-      return;
+    setRefreshingBuilder(true);
+    try {
+      const [collectionResult, notesResult] = await Promise.all([
+        getCollection(collectionId),
+        listNotes(),
+      ]);
+      setCollection(collectionResult);
+      setNotes(notesResult);
+      if (collectionResult.childCount === 0) {
+        setGoal(null);
+        setSubjects([]);
+        setLeafItems(sortCollectionItemsByPosition(collectionResult.items));
+        return;
+      }
+      const goalResult = await getCollectionGoal(collectionId);
+      const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
+      setGoal(goalResult);
+      setSubjects(buildSubjects(goalResult, childDetails));
+      setLeafItems([]);
+    } finally {
+      setRefreshingBuilder(false);
     }
-    const goalResult = await getCollectionGoal(collectionId);
-    const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
-    setGoal(goalResult);
-    setSubjects(buildSubjects(goalResult, childDetails));
-    setLeafItems([]);
   }, [collectionId]);
 
   const loadBuilder = useCallback(async () => {
@@ -1301,7 +1307,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       await setCollectionParent(created.id, collectionId);
       await refreshBuilder();
     } catch (error) {
-      await recoverAfterFailure(error, `Could not add this ${labels.subjectSingular.toLowerCase()}.`, previousSubjects);
+      await recoverAfterFailure(error, `Could not add this ${labels.subjectSingular}.`, previousSubjects);
       throw error;
     } finally {
       setMutationKind(null);
@@ -1319,7 +1325,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       await updateCollection(subjectId, { title });
       await refreshBuilder();
     } catch (error) {
-      await recoverAfterFailure(error, `Could not rename this ${labels.subjectSingular.toLowerCase()}.`, previousSubjects);
+      await recoverAfterFailure(error, `Could not rename this ${labels.subjectSingular}.`, previousSubjects);
     } finally {
       setMutationKind(null);
     }
@@ -1361,7 +1367,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       setDeleteSubject(null);
       await refreshBuilder();
     } catch (error) {
-      await recoverAfterFailure(error, `Could not delete this ${labels.subjectSingular.toLowerCase()}.`, previousSubjects);
+      await recoverAfterFailure(error, `Could not delete this ${labels.subjectSingular}.`, previousSubjects);
     } finally {
       setMutationKind(null);
     }
@@ -1612,7 +1618,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     void persistNoteMove(sourceSubjectId, activeData.noteId, targetSubjectId, targetIndex);
   };
 
-  if (loadState === "loading") {
+  if (loadState === "loading" || (refreshingBuilder && (collection?.childCount ?? 0) > 0 && !goal)) {
     return (
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
         <BackLink href={`/collections/${collectionId}`} label="Back to plan" />
@@ -1662,9 +1668,17 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           title={collection.title}
           description={collection.description ?? "Organize notes and sections on one canvas."}
           actions={(
-            <Button type="button" variant="outline" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
-              Refresh
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
+                Refresh
+              </Button>
+              {leafItems.length === 0 ? (
+                <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Add {labels.subjectSingular}
+                </Button>
+              ) : null}
+            </div>
           )}
         />
 
@@ -1702,11 +1716,19 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           {leafItems.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-8 text-center">
               <CardTitle>No notes yet</CardTitle>
-              <CardDescription className="mt-2">Add your existing notes to get started.</CardDescription>
-              <Button type="button" className="mt-4" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
-                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Add notes
-              </Button>
+              <CardDescription className="mt-2">
+                Add notes for a single-plan canvas, or add a {labels.subjectSingular} to build a Goal.
+              </CardDescription>
+              <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Add notes
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Add {labels.subjectSingular}
+                </Button>
+              </div>
             </div>
           ) : (
             <DndContext
@@ -1789,6 +1811,13 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           onClose={() => setLeafAddNotesOpen(false)}
           onAdd={handleAddLeafNotes}
         />
+        <AddSubjectModal
+          isOpen={addSubjectOpen}
+          labels={labels}
+          submitting={mutationKind === "add-subject"}
+          onClose={() => setAddSubjectOpen(false)}
+          onAdd={handleAddSubject}
+        />
       </main>
     );
   }
@@ -1799,7 +1828,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       <PageHeader
         eyebrow={`${labels.goalSingular.toUpperCase()} BUILDER`}
         title={goal!.title}
-        description={goal!.description || `Organize ${labels.subjectSingular.toLowerCase()}s and notes on one canvas.`}
+        description={goal!.description || `Organize ${labels.subjectSingular}s and notes on one canvas.`}
         actions={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
@@ -1807,7 +1836,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             </Button>
             <Button type="button" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
               <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Add {labels.subjectSingular.toLowerCase()}
+              Add {labels.subjectSingular}
             </Button>
           </div>
         )}
@@ -1827,19 +1856,19 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           <div>
             <CardTitle>{labels.subjectSingular} canvas</CardTitle>
             <CardDescription>
-              {subjects.length} {subjects.length === 1 ? labels.subjectSingular.toLowerCase() : pluralizeLabel(labels.subjectSingular).toLowerCase()} in this {labels.goalSingular.toLowerCase()}.
+              {subjects.length} {subjects.length === 1 ? labels.subjectSingular : pluralizeLabel(labels.subjectSingular)} in this {labels.goalSingular.toLowerCase()}.
             </CardDescription>
           </div>
-          <p className="text-xs text-foreground/55">Drag {pluralizeLabel(labels.subjectSingular).toLowerCase()} to reorder; drag notes within or across them.</p>
+          <p className="text-xs text-foreground/55">Drag {pluralizeLabel(labels.subjectSingular)} to reorder; drag notes within or across them.</p>
         </div>
 
         {subjects.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-8 text-center">
-            <CardTitle>No {pluralizeLabel(labels.subjectSingular).toLowerCase()} yet</CardTitle>
+            <CardTitle>No {pluralizeLabel(labels.subjectSingular)} yet</CardTitle>
             <CardDescription className="mt-2">Start this {labels.goalSingular.toLowerCase()} by adding the first child plan.</CardDescription>
             <Button type="button" className="mt-4" onClick={() => setAddSubjectOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              Add {labels.subjectSingular.toLowerCase()}
+              Add {labels.subjectSingular}
             </Button>
           </div>
         ) : (

@@ -1,8 +1,18 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ProgressPage, { metadata } from "./page";
 import { MILESTONES, ProgressReportClient } from "./progress-report-client";
 import { DashboardFocusAreasCard } from "../dashboard/dashboard-focus-areas-card";
-import { getProgressReport, type GoalSummaryResponse } from "@/lib/api";
+import {
+  ApiRequestError,
+  getPlanReadiness,
+  getProgressReport,
+  listCollections,
+  trackAnalyticsEvent,
+  type GoalSummaryResponse,
+  type NoteCollectionSummary,
+  type PlanReadinessResponse,
+} from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 const routerMock = {
@@ -37,17 +47,83 @@ jest.mock("@/lib/route-guards", () => ({
   requireAuthenticatedOnboardedUser: jest.fn(),
 }));
 
-jest.mock("@/lib/api", () => ({
-  getProgressReport: jest.fn(),
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
 }));
+
+jest.mock("@/lib/api", () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    status: number;
+    code: string | null;
+
+    constructor(message: string, options: { status: number; code?: string | null }) {
+      super(message);
+      this.status = options.status;
+      this.code = options.code ?? null;
+    }
+  },
+  getProgressReport: jest.fn(),
+  getPlanReadiness: jest.fn(),
+  listCollections: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
+}));
+
+function collection(overrides: Partial<NoteCollectionSummary> = {}): NoteCollectionSummary {
+  return {
+    id: "collection-1",
+    title: "Midterm Study Plan",
+    description: null,
+    visibility: "PRIVATE",
+    courseProgram: null,
+    sourcePlanId: null,
+    parentCollectionId: null,
+    itemCount: 2,
+    childCount: 0,
+    notesPracticed: 0,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function planReadiness(overrides: Partial<PlanReadinessResponse> = {}): PlanReadinessResponse {
+  return {
+    collectionId: "collection-1",
+    totalNotes: 3,
+    notesWithStudyPack: 2,
+    overallReadinessPercentage: 50,
+    totalConcepts: 4,
+    masteredConcepts: 2,
+    dueConcepts: 1,
+    notPracticedConcepts: 1,
+    subjects: [
+      {
+        subject: "Biology",
+        totalConcepts: 4,
+        masteredConcepts: 2,
+        dueConcepts: 1,
+        notPracticedConcepts: 1,
+        masteryPercentage: 50,
+      },
+    ],
+    ...overrides,
+  };
+}
 
 describe("ProgressPage", () => {
   beforeEach(() => {
     routerMock.replace.mockReset();
     routerMock.push.mockReset();
     (getProgressReport as jest.Mock).mockReset();
+    (getPlanReadiness as jest.Mock).mockReset();
+    (listCollections as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
+    (listCollections as jest.Mock).mockResolvedValue([]);
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
   });
 
   it("exports page metadata", () => {
@@ -56,7 +132,7 @@ describe("ProgressPage", () => {
     });
   });
 
-  it("renders subject progress entries with mastery stats", async () => {
+  it("renders subject progress entries with readiness stats", async () => {
     (getProgressReport as jest.Mock).mockResolvedValue({
       subjects: [
         {
@@ -71,12 +147,13 @@ describe("ProgressPage", () => {
       goalSummary: null,
     });
 
-    render(<ProgressPage />);
+    render(await ProgressPage({ searchParams: Promise.resolve({}) }));
 
     expect(await screen.findByRole("heading", { name: "Pharmacology" })).toBeInTheDocument();
-    expect(screen.getByText("70%")).toBeInTheDocument();
-    expect(screen.getByText(/7 mastered.*2 due for review.*1 not started/)).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Pharmacology mastery" })).toHaveAttribute("aria-valuenow", "70");
+    expect(screen.getByText("70% ready")).toBeInTheDocument();
+    expect(screen.getByText(/7 mastered.*2 due.*1 not started/)).toBeInTheDocument();
+    expect(screen.queryByText(/due for review/)).not.toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Pharmacology readiness" })).toHaveAttribute("aria-valuenow", "70");
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
   });
 
@@ -105,10 +182,12 @@ describe("ProgressPage", () => {
 
     render(<ProgressReportClient />);
 
-    const progressbar = await screen.findByRole("progressbar", { name: "Biochemistry mastery" });
+    const progressbar = await screen.findByRole("progressbar", { name: "Biochemistry readiness" });
     expect(progressbar).toHaveAttribute("aria-valuenow", "0");
     expect(progressbar).toHaveAttribute("data-state", "not-started");
-    expect(screen.getByText(/0 mastered.*0 due for review.*5 not started/)).toBeInTheDocument();
+    expect(screen.getByText("Not started")).toBeInTheDocument();
+    expect(screen.getByText(/0 mastered.*0 due.*5 not started/)).toBeInTheDocument();
+    expect(screen.queryByText(/due for review/)).not.toBeInTheDocument();
   });
 
   it("renders an inline error when loading fails", async () => {
@@ -287,6 +366,144 @@ describe("ProgressPage", () => {
     await waitFor(() => {
       expect(getProgressReport).not.toHaveBeenCalled();
     });
+  });
+
+  it("lists only leaf plans in the picker and switches to plan readiness", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      collection({ id: "goal-1", title: "LET Goal", childCount: 2 }),
+      collection({ id: "collection-1", title: "Biology Plan", childCount: 0 }),
+    ]);
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [],
+      goalSummary: null,
+    });
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
+
+    render(<ProgressReportClient />);
+
+    await screen.findByText("No study packs with concepts yet. Generate a Study Pack to start tracking your progress.");
+    expect(await screen.findByRole("option", { name: "Biology Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "LET Goal" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Progress view"), { target: { value: "collection-1" } });
+
+    expect(routerMock.push).toHaveBeenCalledWith("/progress?collectionId=collection-1");
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Generate Study Packs →" })).toHaveAttribute("href", "/collections/collection-1");
+    expect(screen.getByRole("progressbar", { name: "Biology readiness" })).toHaveAttribute("aria-valuenow", "50");
+    expect(screen.queryByRole("heading", { name: "Goal Milestones" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "What to study next" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Set your study focus" })).not.toBeInTheDocument();
+  });
+
+  it("loads plan readiness directly from the collectionId search param", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([collection({ id: "collection-1", title: "Biology Plan" })]);
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
+
+    render(await ProgressPage({ searchParams: Promise.resolve({ collectionId: "collection-1" }) }));
+
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
+    expect(getPlanReadiness).toHaveBeenCalledWith("collection-1");
+    expect(getProgressReport).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "My Progress" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Biology Plan")).toBeInTheDocument();
+  });
+
+  it("switches back to all subjects and clears the collectionId query param", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([collection({ id: "collection-1", title: "Biology Plan" })]);
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [
+        {
+          subject: "Chemistry",
+          totalConcepts: 2,
+          masteredConcepts: 1,
+          dueConcepts: 1,
+          notPracticedConcepts: 0,
+          masteryPercentage: 50,
+        },
+      ],
+      goalSummary: null,
+    });
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/);
+    fireEvent.change(screen.getByLabelText("Progress view"), { target: { value: "" } });
+
+    expect(routerMock.push).toHaveBeenCalledWith("/progress");
+    expect(await screen.findByRole("heading", { name: "Chemistry" })).toBeInTheDocument();
+  });
+
+  it("hides the missing Study Pack caveat when every note has a Study Pack", async () => {
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({ totalNotes: 2, notesWithStudyPack: 2 }));
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    await screen.findByRole("progressbar", { name: "Biology readiness" });
+    expect(screen.queryByText(/don't have a Study Pack yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Generate Study Packs →" })).not.toBeInTheDocument();
+  });
+
+  it("renders not found for missing or non-owned selected plans", async () => {
+    (getPlanReadiness as jest.Mock).mockRejectedValue(new ApiRequestError("Missing", { status: 404 }));
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    expect(await screen.findByText("Study Plan not found")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+    expect(trackAnalyticsEvent).not.toHaveBeenCalled();
+  });
+
+  it("renders plan readiness errors with retry", async () => {
+    (getPlanReadiness as jest.Mock)
+      .mockRejectedValueOnce(new Error("Network failed"))
+      .mockResolvedValueOnce(planReadiness());
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    expect(await screen.findByText("Could not load readiness")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
+    expect(getPlanReadiness).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks plan readiness once per distinct selected plan", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      collection({ id: "collection-a", title: "Plan A" }),
+      collection({ id: "collection-b", title: "Plan B" }),
+    ]);
+    (getPlanReadiness as jest.Mock).mockImplementation((id: string) => Promise.resolve(planReadiness({
+      collectionId: id,
+    })));
+
+    render(<ProgressReportClient initialCollectionId="collection-a" />);
+
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledTimes(1);
+    });
+    expect(trackAnalyticsEvent).toHaveBeenLastCalledWith(expect.objectContaining({
+      eventType: "PLAN_READINESS_VIEWED",
+      entityId: "collection-a",
+    }));
+
+    fireEvent.change(await screen.findByLabelText("Progress view"), { target: { value: "collection-b" } });
+
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledTimes(2);
+    });
+    expect(trackAnalyticsEvent).toHaveBeenLastCalledWith(expect.objectContaining({
+      eventType: "PLAN_READINESS_VIEWED",
+      entityId: "collection-b",
+    }));
+
+    fireEvent.change(screen.getByLabelText("Progress view"), { target: { value: "collection-a" } });
+
+    await waitFor(() => {
+      expect(getPlanReadiness).toHaveBeenCalledWith("collection-a");
+    });
+    expect(trackAnalyticsEvent).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -259,7 +259,8 @@ describe("CollectionDetailPageClient", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
-    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/collections/collection-1/readiness");
+    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/progress?collectionId=collection-1");
   });
 
   it("renders a goal view when the collection has children", async () => {
@@ -298,7 +299,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.queryByRole("menuitem", { name: /Nest under|Unnest/ })).not.toBeInTheDocument();
   });
@@ -320,7 +321,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const notesCard = await screen.findByText("3 notes in saved order.");
-    const notesRegion = notesCard.closest("div")?.parentElement?.parentElement;
+    const notesRegion = notesCard.closest("div")?.parentElement;
     expect(notesRegion).not.toBeNull();
     const regionText = notesRegion?.textContent ?? "";
     expect(regionText.indexOf("General Education")).toBeLessThan(regionText.indexOf("Professional Education"));
@@ -366,12 +367,13 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: /Ungrouped/ })).not.toBeInTheDocument();
   });
 
-  it("routes note organization to the Builder from the Notes header", async () => {
+  it("routes note organization to the Builder from the leaf hero only", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { level: 2, name: "Cell Respiration" });
     expect(screen.queryByRole("button", { name: "Organize" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
+    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Drag Cell Respiration")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Section")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();
@@ -445,7 +447,7 @@ describe("CollectionDetailPageClient", () => {
   it("renders the collection progress rollup", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("1 of 2 Study Packs ready · 1 of 2 practiced")).toBeInTheDocument();
+    expect(await screen.findByText("1 of 2 practiced")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "1");
     expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuemax", "2");
   });
@@ -463,7 +465,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("No progress yet")).toBeInTheDocument();
-    expect(screen.getByText("Add notes to track Study Pack readiness and practice.")).toBeInTheDocument();
+    expect(screen.getByText("Add notes to start tracking practice.")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Notes practiced" })).toHaveAttribute("aria-valuenow", "0");
     expect(screen.queryByText("Next in this plan")).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain("NaN");

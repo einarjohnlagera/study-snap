@@ -484,7 +484,7 @@ function getNextPlanAction(items: NoteCollectionItem[], canReviewDueConcepts: bo
 }
 
 function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCollectionDetail }>) {
-  const { totalNotes, notesWithStudyPack, notesPracticed } = collection.progress;
+  const { totalNotes, notesPracticed } = collection.progress;
   const practicedPercentage = totalNotes > 0
     ? Math.min(100, Math.max(0, Math.round((notesPracticed / totalNotes) * 100)))
     : 0;
@@ -495,12 +495,12 @@ function CollectionProgressSummary({ collection }: Readonly<{ collection: NoteCo
         <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Progress</p>
         {totalNotes > 0 ? (
           <p className="text-sm font-medium text-foreground">
-            {notesWithStudyPack} of {totalNotes} Study Packs ready · {notesPracticed} of {totalNotes} practiced
+            {notesPracticed} of {totalNotes} practiced
           </p>
         ) : (
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">No progress yet</p>
-            <p className="text-xs text-foreground/60">Add notes to track Study Pack readiness and practice.</p>
+            <p className="text-xs text-foreground/60">Add notes to start tracking practice.</p>
           </div>
         )}
       </div>
@@ -1955,7 +1955,14 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         actions={(
           <div className="flex items-center justify-end gap-2">
             <ResponsiveActionLink
-              href={`/collections/${collectionId}/readiness`}
+              href={`/collections/${collectionId}/builder`}
+              action="edit"
+              label="Build"
+              variant="outline"
+              size="sm"
+            />
+            <ResponsiveActionLink
+              href={`/progress?collectionId=${collectionId}`}
               action="progress"
               label="Check readiness"
               variant="outline"
@@ -2060,19 +2067,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       ) : null}
 
       <Card className="space-y-4 p-4 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Notes</CardTitle>
-            <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ResponsiveActionLink
-              href={`/collections/${collectionId}/builder`}
-              action="edit"
-              label="Edit"
-              variant="outline"
-            />
-          </div>
+        <div>
+          <CardTitle>Notes</CardTitle>
+          <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
         </div>
 
         {!showWeakAreas && items.length > 0 && upgradeCtas.primary ? (

@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.36.0 - Readiness/Progress Merge` is the next planned release (on `releases/v0.36.0`, not yet opened).
+`v0.36.0 - Readiness/Progress Merge` is the latest released version (on `releases/v0.36.0`).
 
-`v0.35.0 - Mobile-First Builder` is the latest released version (on `releases/v0.35.0`).
+`v0.35.0 - Mobile-First Builder` is the previous released version (on `releases/v0.35.0`).
 
 `v0.34.0 - Journey: Goal-First Study Experience` is the previous released version (on `releases/v0.34.0`).
 
@@ -57,16 +57,16 @@ Anti-drift: frontend-only; no new endpoint, migration, or AI call; drag handles 
 
 ---
 
-## v0.36.0 - Readiness/Progress Merge (planned)
+## v0.36.0 - Readiness/Progress Merge (released)
 
-Base branch: `releases/v0.36.0` (not yet opened).
+Base branch: `releases/v0.36.0`.
 
 Theme: unify "Progress" and "Readiness" into a single, coherent surface. Today the product has a standalone Progress page (`/me/progress`) and a plan Readiness sub-route (`/collections/{id}/readiness`) that express the same underlying signal with different vocabularies and entry points — confusing to users and inconsistent in value proposition. v0.36.0 merges these into one canonical surface.
 
 Scope (to be refined at kickoff):
 - **Unified vocabulary.** One set of labels (`ready / mastered / due / not started`) used everywhere — note detail, plan header, plan readiness, progress dashboard.
-- **Progress page consolidation.** Merge the standalone `/me/progress` readiness dashboard with the plan-level readiness sub-route. Single canonical entry point with plan-scoped and cross-plan views.
-- **Navigation rename.** "Progress" nav entry updated to reflect the merged surface.
+- **Progress page consolidation.** Merge the standalone `/progress` readiness dashboard with the plan-level readiness sub-route. Single canonical entry point with cross-plan and plan-scoped views via an in-page picker.
+- **Navigation continuity.** Keep the nav label as "Progress" and keep the page header as "My Progress" while the surface gains plan-scoped readiness.
 - **No new mastery signal.** Still derived from existing `ConceptHealth` / `ProgressReportService` — no new field, AI call, or stored signal.
 
 Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new chart library; all derived from existing concept health data.
