@@ -388,7 +388,8 @@ describe("ProgressPage", () => {
     fireEvent.change(screen.getByLabelText("Progress view"), { target: { value: "collection-1" } });
 
     expect(routerMock.push).toHaveBeenCalledWith("/progress?collectionId=collection-1");
-    expect(await screen.findByText("2 of 3 notes have Study Packs.")).toBeInTheDocument();
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Generate Study Packs →" })).toHaveAttribute("href", "/collections/collection-1");
     expect(screen.getByRole("progressbar", { name: "Biology readiness" })).toHaveAttribute("aria-valuenow", "50");
     expect(screen.queryByRole("heading", { name: "Goal Milestones" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "What to study next" })).not.toBeInTheDocument();
@@ -401,7 +402,7 @@ describe("ProgressPage", () => {
 
     render(await ProgressPage({ searchParams: Promise.resolve({ collectionId: "collection-1" }) }));
 
-    expect(await screen.findByText("2 of 3 notes have Study Packs.")).toBeInTheDocument();
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
     expect(getPlanReadiness).toHaveBeenCalledWith("collection-1");
     expect(getProgressReport).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "My Progress" })).toBeInTheDocument();
@@ -427,11 +428,21 @@ describe("ProgressPage", () => {
 
     render(<ProgressReportClient initialCollectionId="collection-1" />);
 
-    await screen.findByText("2 of 3 notes have Study Packs.");
+    await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/);
     fireEvent.change(screen.getByLabelText("Progress view"), { target: { value: "" } });
 
     expect(routerMock.push).toHaveBeenCalledWith("/progress");
     expect(await screen.findByRole("heading", { name: "Chemistry" })).toBeInTheDocument();
+  });
+
+  it("hides the missing Study Pack caveat when every note has a Study Pack", async () => {
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({ totalNotes: 2, notesWithStudyPack: 2 }));
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    await screen.findByRole("progressbar", { name: "Biology readiness" });
+    expect(screen.queryByText(/don't have a Study Pack yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Generate Study Packs →" })).not.toBeInTheDocument();
   });
 
   it("renders not found for missing or non-owned selected plans", async () => {
@@ -454,7 +465,7 @@ describe("ProgressPage", () => {
     expect(await screen.findByText("Could not load readiness")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(await screen.findByText("2 of 3 notes have Study Packs.")).toBeInTheDocument();
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
     expect(getPlanReadiness).toHaveBeenCalledTimes(2);
   });
 
