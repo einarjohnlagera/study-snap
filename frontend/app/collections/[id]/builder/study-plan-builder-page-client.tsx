@@ -19,7 +19,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronRight, GripVertical, Plus, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus, Search, Trash2, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -285,21 +285,25 @@ function SortableNoteCard({
           type="button"
           variant="outline"
           size="sm"
+          aria-label={`Move ${title} up`}
           className="h-9 px-2"
           disabled={disabled || index === 0}
           onClick={() => onMoveWithinSubject(item.noteId, "up")}
         >
-          Up
+          <ChevronUp className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+          <span className="hidden sm:inline">Up</span>
         </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
+          aria-label={`Move ${title} down`}
           className="h-9 px-2"
           disabled={disabled || index === totalCount - 1}
           onClick={() => onMoveWithinSubject(item.noteId, "down")}
         >
-          Down
+          <ChevronDown className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+          <span className="hidden sm:inline">Down</span>
         </Button>
         {targetSubjects.length > 0 ? (
           <select
@@ -324,11 +328,13 @@ function SortableNoteCard({
           type="button"
           variant="ghost"
           size="sm"
+          aria-label={`Remove ${title}`}
           className="h-9 px-2 text-red-700 dark:text-red-300"
           disabled={disabled}
           onClick={() => onRemove(subjectId, item.noteId)}
         >
-          Remove
+          <Trash2 className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+          <span className="hidden sm:inline">Remove</span>
         </Button>
       </div>
     </div>
@@ -420,11 +426,13 @@ function LeafSortableNoteCard({
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        <Button type="button" variant="outline" size="sm" className="h-9 px-2" disabled={disabled || index === 0} onClick={() => onMoveWithinSection(item.noteId, "up")}>
-          Up
+        <Button type="button" variant="outline" size="sm" aria-label={`Move ${title} up`} className="h-9 px-2" disabled={disabled || index === 0} onClick={() => onMoveWithinSection(item.noteId, "up")}>
+          <ChevronUp className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+          <span className="hidden sm:inline">Up</span>
         </Button>
-        <Button type="button" variant="outline" size="sm" className="h-9 px-2" disabled={disabled || index === totalCount - 1} onClick={() => onMoveWithinSection(item.noteId, "down")}>
-          Down
+        <Button type="button" variant="outline" size="sm" aria-label={`Move ${title} down`} className="h-9 px-2" disabled={disabled || index === totalCount - 1} onClick={() => onMoveWithinSection(item.noteId, "down")}>
+          <ChevronDown className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+          <span className="hidden sm:inline">Down</span>
         </Button>
         {targetSections.length > 0 ? (
           <select
@@ -444,8 +452,9 @@ function LeafSortableNoteCard({
             ))}
           </select>
         ) : null}
-        <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-red-700 dark:text-red-300" disabled={disabled} onClick={() => onRemove(item.noteId)}>
-          Remove
+        <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${title}`} className="h-9 px-2 text-red-700 dark:text-red-300" disabled={disabled} onClick={() => onRemove(item.noteId)}>
+          <Trash2 className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+          <span className="hidden sm:inline">Remove</span>
         </Button>
       </div>
     </div>
@@ -474,6 +483,7 @@ function LeafSectionBlock({
   onRemove: (noteId: string) => void;
 }>) {
   const [nameValue, setNameValue] = useState(section.name);
+  const [mobileCollapsed, setMobileCollapsed] = useState(true);
   const {
     attributes,
     listeners,
@@ -545,9 +555,17 @@ function LeafSectionBlock({
             {section.items.length} {section.items.length === 1 ? "note" : "notes"}
           </p>
         </div>
+        <button
+          type="button"
+          aria-label={`${mobileCollapsed ? "Expand" : "Collapse"} section ${section.name}`}
+          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/60 hover:bg-highlight sm:hidden"
+          onClick={() => setMobileCollapsed((prev) => !prev)}
+        >
+          {mobileCollapsed ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+        </button>
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div className={cn("mt-4 space-y-3", mobileCollapsed && "hidden sm:block")}>
         {section.items.length > 0 ? (
           <SortableContext items={section.items.map((item) => getLeafNoteSortableId(item.noteId))} strategy={verticalListSortingStrategy}>
             <div className="space-y-3">
@@ -1719,9 +1737,44 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               </SortableContext>
               <DragOverlay dropAnimation={DND_DROP_ANIMATION}>
                 {activeDrag ? (
-                  <div className="rounded-lg border border-blue-300 bg-background px-4 py-3 text-sm font-semibold text-foreground shadow-lg">
-                    {activeDrag.title}
-                  </div>
+                  activeDrag.type === "leaf-section" ? (() => {
+                    const draggedSection = leafSections.find((s) => s.name === activeDrag.sectionName);
+                    if (!draggedSection) {
+                      return (
+                        <div className="rounded-lg border border-blue-300 bg-background px-4 py-3 text-sm font-semibold text-foreground shadow-lg">
+                          {activeDrag.title}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="rounded-xl border border-blue-300 bg-surface-alt p-4 shadow-xl opacity-95">
+                        <div className="flex items-center gap-3">
+                          <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/60">
+                            <GripVertical className="h-4 w-4" aria-hidden="true" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-base font-semibold text-foreground">{draggedSection.name}</p>
+                            <p className="text-xs text-foreground/60">
+                              {draggedSection.items.length} {draggedSection.items.length === 1 ? "note" : "notes"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {draggedSection.items.map((item) => (
+                            <div key={item.noteId} className="rounded-lg border border-border bg-background px-3 py-2">
+                              <p className="line-clamp-1 text-sm font-medium text-foreground">{getNoteTitle(item)}</p>
+                              <p className="text-xs text-foreground/60">{getNoteMeta(item)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                  : (
+                    <div className="rounded-lg border border-blue-300 bg-background px-4 py-3 text-sm font-semibold text-foreground shadow-lg">
+                      {activeDrag.title}
+                    </div>
+                  )
                 ) : null}
               </DragOverlay>
             </DndContext>

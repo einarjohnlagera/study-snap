@@ -383,7 +383,7 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
     const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
-    fireEvent.click(within(block).getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(block).getByRole("button", { name: /^Remove/ }));
 
     await waitFor(() => {
       expect(removeCollectionItem).toHaveBeenCalledWith("child-1", "note-1");
