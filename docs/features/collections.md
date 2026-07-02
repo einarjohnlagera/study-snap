@@ -98,12 +98,12 @@ The builder route is `/collections/{id}/builder`. It first loads the base collec
 - if `childCount > 0`, it renders the Goal builder canvas.
 - if `childCount == 0`, it renders the leaf-plan builder canvas for that one collection's notes and sections.
 
-An empty top-level collection with no children and no note items is still undecided. The leaf builder empty state offers both:
+An empty **top-level** collection (`parentCollectionId === null`) with no children and no note items is still undecided. The leaf builder empty state offers both:
 
 - `Add notes` to commit the collection as a flat leaf plan.
 - `Add {subjectSingular}` to create a child collection and nest it under the current collection, turning it into a Goal through the existing parent API.
 
-Once the collection has at least one note item, the Goal-building option is hidden because backend hierarchy rules reject nesting under a parent that already has notes.
+Once the collection has at least one note item, the Goal-building option is hidden because backend hierarchy rules reject nesting under a parent that already has notes. It is also hidden for a collection that is itself already nested under a Goal (`parentCollectionId != null`), even with zero notes — a nested Subject plan can never become a parent itself (backend rejects nesting under a non-top-level collection), so `Add {subjectSingular}` never renders there regardless of note count (v0.36.1 fix).
 
 The v0.33.1 Goal builder turns hierarchy curation into one canvas:
 

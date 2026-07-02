@@ -1173,6 +1173,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   );
   const leafSections = useMemo(() => buildLeafSections(leafItems), [leafItems]);
   const mutationInProgress = mutationKind !== null;
+  // A collection nested under a Goal can never itself become a parent (backend
+  // rejects nesting under a non-top-level collection), so only an undecided
+  // top-level collection can still choose to become a Goal.
+  const canBecomeGoal = leafItems.length === 0 && collection?.parentCollectionId == null;
 
   const persistLeafItems = async (nextItems: LeafBuilderNote[], previousItems: LeafBuilderNote[], fallback: string, kind: MutationKind = "reorder-notes") => {
     setMutationKind(kind);
@@ -1672,7 +1676,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               <Button type="button" variant="ghost" onClick={() => void refreshBuilder()} disabled={mutationInProgress}>
                 Refresh
               </Button>
-              {leafItems.length === 0 ? (
+              {canBecomeGoal ? (
                 <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
                   <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Add {labels.subjectSingular}
@@ -1717,17 +1721,21 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             <div className="rounded-xl border border-dashed border-border p-8 text-center">
               <CardTitle>No notes yet</CardTitle>
               <CardDescription className="mt-2">
-                Add notes for a single-plan canvas, or add a {labels.subjectSingular} to build a Goal.
+                {canBecomeGoal
+                  ? `Add notes for a single-plan canvas, or add a ${labels.subjectSingular} to build a Goal.`
+                  : "Add your existing notes to get started."}
               </CardDescription>
               <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
                 <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
                   <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Add notes
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
-                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Add {labels.subjectSingular}
-                </Button>
+                {canBecomeGoal ? (
+                  <Button type="button" variant="outline" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Add {labels.subjectSingular}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : (

@@ -22,7 +22,7 @@ export function GoalNudgeCard({ goalNudge, noteId }: Readonly<GoalNudgeCardProps
 
   const dueCopy = goalNudge.dueConcepts === 0
     ? "You've reviewed all current goal concepts."
-    : `${goalNudge.dueConcepts} ${goalNudge.dueConcepts === 1 ? "concept" : "concepts"} due for review`;
+    : `${goalNudge.dueConcepts} ${goalNudge.dueConcepts === 1 ? "concept" : "concepts"} due`;
 
   return (
     <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4">

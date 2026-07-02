@@ -16,7 +16,9 @@ Anti-drift: no new mastery signal, no new endpoint, no new field; this is a bug-
 
 ### Shipped
 
-_(nothing yet)_
+- **Nested Subject plan dead-end fix (frontend).** `Add Subject Plan` in the Builder now also requires `collection.parentCollectionId === null`, so an already-nested Subject plan with zero notes no longer shows a control that always fails server-side (`PARENT_NOT_TOP_LEVEL_MESSAGE`).
+- **Vocabulary fix on dashboard entry points (frontend).** `dashboard-goal-card.tsx` and `goal-nudge-card.tsx` now say "N concepts due" instead of "N concepts due for review", matching the locked `ready / mastered / due / not started` vocabulary. `% mastered` on both cards is unchanged.
+- **Documentation accuracy (docs only).** `AGENTS.md`'s "Study Plan Readiness Rule" and documentation baseline line updated to match shipped v0.36.0 behavior.
 
 ---
 
