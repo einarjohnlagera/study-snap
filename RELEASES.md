@@ -2,21 +2,15 @@
 
 ## v0.35.0 - Mobile-First Builder
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: make the leaf plan builder functional and compact on all screen sizes — icon buttons replace cramped text controls on mobile, sections collapse by default on narrow viewports, and the section drag overlay renders the full group rather than just a title pill.
 
-### Planned Scope
-
-- **Section drag overlay fix (frontend).** When dragging a leaf section, the `DragOverlay` currently shows only a small title pill. Fix: render the full section card (header + note list) in the overlay so users see the whole group traveling together.
-- **Mobile icon buttons (frontend).** Replace "Up / Down / Move / Remove" text-only buttons with responsive icon+label variants: text shown on `sm:` and up, icon-only on mobile. All icon buttons carry `aria-label`. Affects `SortableNoteCard` (Goal builder) and `LeafSortableNoteCard` (leaf builder).
-- **Mobile collapsible sections (frontend).** Leaf plan sections collapse by default on mobile (narrow viewport) to eliminate the multi-thousand-pixel scroll. Tap header to expand. Desktop stays always-expanded. State is page-local; no persistence.
-
-Anti-drift: frontend-only release — no new endpoint, migration, or AI call; no new mastery signal; no new quiz model; no billing/quota/price/checkout change; drag-and-drop still supported (icons supplement, do not replace, the drag handle); Up/Down buttons retained alongside drag for reliable touch reorder.
-
 ### Shipped
 
-_(nothing yet)_
+- **Section drag overlay fix (frontend).** When dragging a leaf section, the `DragOverlay` now renders a full section clone (header + note list), replacing the previous title-pill-only overlay that made it unclear what was being moved.
+- **Mobile collapsible sections (frontend).** Leaf plan sections now collapse by default on mobile to eliminate the multi-thousand-pixel scroll. A chevron toggle on each section header expands/collapses individually. Desktop stays always-expanded. State is page-local with no persistence.
+- **Mobile two-row card layout (frontend).** Note cards in the plan builder and exam builder now stack to two rows on mobile: the note title fills the full card width on the top row, and action buttons (Up / Down / Move / Remove) drop to a right-aligned bottom row. Eliminates the title squeeze to 2–3 characters caused by buttons in the same row. Applied to `SortableNoteCard` (Goal builder), `LeafSortableNoteCard` (leaf builder), and `SortableExamBuilderItem` (exam builder). Desktop side-by-side layout unchanged.
 
 ---
 
