@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.35.0 - Mobile-First Builder
+
+**Status: In Progress**
+
+Theme: make the leaf plan builder functional and compact on all screen sizes — icon buttons replace cramped text controls on mobile, sections collapse by default on narrow viewports, and the section drag overlay renders the full group rather than just a title pill.
+
+### Planned Scope
+
+- **Section drag overlay fix (frontend).** When dragging a leaf section, the `DragOverlay` currently shows only a small title pill. Fix: render the full section card (header + note list) in the overlay so users see the whole group traveling together.
+- **Mobile icon buttons (frontend).** Replace "Up / Down / Move / Remove" text-only buttons with responsive icon+label variants: text shown on `sm:` and up, icon-only on mobile. All icon buttons carry `aria-label`. Affects `SortableNoteCard` (Goal builder) and `LeafSortableNoteCard` (leaf builder).
+- **Mobile collapsible sections (frontend).** Leaf plan sections collapse by default on mobile (narrow viewport) to eliminate the multi-thousand-pixel scroll. Tap header to expand. Desktop stays always-expanded. State is page-local; no persistence.
+
+Anti-drift: frontend-only release — no new endpoint, migration, or AI call; no new mastery signal; no new quiz model; no billing/quota/price/checkout change; drag-and-drop still supported (icons supplement, do not replace, the drag handle); Up/Down buttons retained alongside drag for reliable touch reorder.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.34.0 - Journey: Goal-First Study Experience
 
 **Status: Released**

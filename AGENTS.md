@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.34.0 - Journey: Goal-First Study Experience` (in progress); previous: `v0.33.4 - Builder Surface Clarity`
+- `v0.35.0 - Mobile-First Builder` (in progress); previous: `v0.34.0 - Journey: Goal-First Study Experience`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
