@@ -16,7 +16,7 @@ Anti-drift: no schema change, no new endpoint — read/write correctness only. T
 
 ### Shipped
 
-_(nothing yet)_
+- **Fixed silent metadata data-loss on collection PATCH.** `NoteCollectionService.updateMetadata` now applies true PATCH semantics — only fields present (non-null) in the request are written, so a partial update no longer wipes the others. Previously only `title` was guarded, so the Goal Builder's title-only rename (`PATCH /collections/{childId}` with `{ title }`) silently cleared `description`, `courseProgram`, and `estimatedStudyHours` on every subject-plan rename (and `persistCourseProgram` had the same exposure for `description`). To clear a text field, callers now send an explicit empty string. Audited the sibling PATCH surfaces (`NoteService.update` PUT with required content, `AuthService.updateUserProfile` with required fields) — both are structurally full-replace and not affected. Frontend edit-modal and course/program-editor sends updated to the new contract; the one accepted trade is that clearing a previously-set `estimatedStudyHours` back to null via the modal is deferred (no non-null empty sentinel for the integer field). Added regression coverage for title-only-preserves-other-fields and empty-string-clears.
 
 ## v0.37.1 - Native Memory Hotfix
 

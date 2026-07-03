@@ -978,7 +978,33 @@ class NoteCollectionServiceTest {
     }
 
     @Test
-    void updateMetadata_clearsEstimatedStudyHoursWhenRequestValueIsNull() {
+    void updateMetadata_titleOnlyRequestPreservesDescriptionCourseProgramAndEstimatedHours() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setCourseProgram(COURSE_PROGRAM);
+        collection.setEstimatedStudyHours(4);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        // Regression: the Goal Builder rename PATCHes only a title. The other fields arrive null,
+        // and null must mean "not provided" — not "clear it" — so they must survive untouched.
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                UPDATED_COLLECTION_TITLE,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
+        assertThat(result.description()).isEqualTo(COLLECTION_DESCRIPTION);
+        assertThat(result.courseProgram()).isEqualTo(COURSE_PROGRAM);
+        assertThat(result.estimatedStudyHours()).isEqualTo(4);
+    }
+
+    @Test
+    void updateMetadata_preservesEstimatedStudyHoursWhenRequestValueIsNull() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
         NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
@@ -994,8 +1020,29 @@ class NoteCollectionServiceTest {
                 null
         ));
 
-        assertThat(result.estimatedStudyHours()).isNull();
-        assertThat(collection.getEstimatedStudyHours()).isNull();
+        assertThat(result.estimatedStudyHours()).isEqualTo(4);
+        assertThat(collection.getEstimatedStudyHours()).isEqualTo(4);
+    }
+
+    @Test
+    void updateMetadata_clearsDescriptionOnExplicitEmptyString() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        // An explicit empty string is the caller's signal to clear a text field.
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                null,
+                "",
+                null,
+                null
+        ));
+
+        assertThat(result.description()).isNull();
+        assertThat(collection.getDescription()).isNull();
     }
 
     @Test

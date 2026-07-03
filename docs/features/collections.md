@@ -469,13 +469,14 @@ Behavior:
 Request:
 
 - `title` optional, but if present it must be non-blank and max `150`
-- `description` optional and nullable
-- `courseProgram` optional and nullable; normalized with the same course/program normalization used by notes
-- `estimatedStudyHours` optional and nullable; `null` clears the value
+- `description` optional; omit / `null` to leave unchanged, send `""` to clear (blank normalizes to null)
+- `courseProgram` optional; same PATCH semantics (omit / `null` preserves, `""` clears); normalized with the same course/program normalization used by notes
+- `estimatedStudyHours` optional; omit / `null` preserves the existing value
 
 Behavior:
 
-- updates collection metadata
+- **PATCH semantics (v0.37.2): only fields present (non-null) in the request are written; a `null` field means "not included" and is left untouched.** This is what stops a partial caller — e.g. the Goal Builder's title-only rename (`PATCH /collections/{childId}` with `{ title }`) — from silently wiping `description`, `courseProgram`, and `estimatedStudyHours`. To clear a text field, callers send an explicit empty string (`""`), which normalizes to null. Do not revert this to unconditional overwrite; the earlier form (title guarded, other fields overwritten from `null`) was a live data-loss bug.
+- clearing a previously-set `estimatedStudyHours` back to null via this endpoint is not currently supported — an omitted/`null` value preserves it, and the integer field has no non-null "empty" sentinel. Setting a new value works; clear-to-empty is deferred to a later release.
 - bumps `updatedAt`
 - returns full detail
 
