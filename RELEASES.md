@@ -2,7 +2,7 @@
 
 ## v0.36.3 - OCR Fast-Follow: Messaging & Feedback
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: complete the OCR-disable story from v0.36.2. That hotfix gated the backend so no OCR call site can crash the server, but one touchpoint (New Note/Edit Note upload) currently swallows the real "OCR unavailable" message into a generic failure, and none of the three touchpoints tell users what's going on or ask if they want the feature back. This release fixes the swallowed message and adds a consistent, honest "OCR temporarily unavailable" state with a lightweight feedback ask across all three OCR-gated flows.
 
