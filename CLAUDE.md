@@ -6,17 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.37.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.37.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.37.0 — Readiness-First Plans & Mastery Integrity
+## Active release: v0.37.1 — Native Memory Hotfix
 
-Base branch for this release: `releases/v0.37.0`. Makes plan-level readiness the headline of the leaf Study Plan page instead of a click-through, and protects the mastery signal the readiness surface depends on. Locked rules:
+Base branch for this release: `releases/v0.37.1`. Production incident response: repeated silent restarts on the 512MB Render Starter instance with no JVM-level `OutOfMemoryError` ever logged — the growth is native/off-heap memory outside JVM heap accounting, most likely glibc malloc-arena fragmentation (the base image is glibc/Debian, not musl/Alpine), not a repeat of the v0.36.2 OCR leak (already ruled out). Locked rules:
 
-- **Inline `ReadinessSummary` on leaf plan detail.** Reuses the existing `GET /collections/{id}/readiness` endpoint and `ProgressReportService` — no new field, endpoint, or mastery signal. Matches the order Goal detail already uses (Hero → Readiness → Continue where you left off → sections).
-- **"Review due concepts" entry point** on plan detail, routing through the existing `PostSessionNextStep` logic — no new routing model.
-- **Pro-gated CTA on the readiness surface**, extending the v0.32.1 premium-exam-paywall pattern. Must be profile-aware via `exam-mode-visibility.ts` (Long Exam for Student/Professional, Board Exam for Board Taker) — never a blanket CTA regardless of profile.
-- **Quick Review stops writing to `ConceptHealth`.** Quick Review must never move mastery, due-state, or `Overall Readiness` going forward — it keeps its own ephemeral in-session feedback only. Mode-based exclusion in the shared session-completion write path for the `QUICK_REVIEW` discriminator; no new aggregate, table, or signal. No backfill/migration on existing `ConceptHealth` data — mastery held up only by past Quick Review activity decays naturally.
-- **Deferred, not in scope**: flexible review methods (Flashcards/Identification/Enumeration/Memorization), Quick Review session disposability, and the broader review-vs-assessment taxonomy — see `ROADMAP.md`.
+- **Cap glibc malloc arenas.** `MALLOC_ARENA_MAX=2` in `backend/Dockerfile` — zero code change, fully reversible via env var.
+- **Expose actuator metrics.** `management.endpoints.web.exposure.include: health,metrics` in `application.yaml` for future heap-vs-non-heap diagnosis — stays authenticated-only, not `permitAll`.
+- **No code/logic change.** Dockerfile env var + actuator exposure config only.
 
 ## Source-of-truth docs (read before implementing anything)
 

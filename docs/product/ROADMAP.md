@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.0 - Readiness-First Plans & Mastery Integrity` is the latest released version (on `releases/v0.37.0`).
+`v0.37.1 - Native Memory Hotfix` is the in-progress release (on `releases/v0.37.1`).
+
+`v0.37.0 - Readiness-First Plans & Mastery Integrity` is the previous released version (on `releases/v0.37.0`).
 
 `v0.38.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
 
@@ -131,6 +133,21 @@ Scope:
 - **Builder action-row wrapping on tablet widths.** The breakpoint fix alone didn't fix real device screenshots (iPad Air vs. iPad Mini) showing an orphaned single-button wrap. Reorder controls (`Move up`/`Move down`, `Up`/`Down`) moved into a compact icon cluster next to the drag handle; action rows fixed at two items so they never wrap at any width.
 
 Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the nine items above only.
+
+---
+
+## v0.37.1 - Native Memory Hotfix
+
+Base branch: `releases/v0.37.1`.
+
+Theme: production incident response, same shape as v0.36.2 but a different root cause. Repeated silent restarts on the 512MB Render Starter instance with no JVM-level `OutOfMemoryError` ever logged — meaning the growth is native/off-heap memory outside JVM heap accounting entirely, not the OCR gRPC-client leak from before (already ruled out: that client is now properly closed via try-with-resources, and the triggering request was topic-based bulk note+Study Pack generation, which never touches OCR). Leading hypothesis: `eclipse-temurin:21-jre` is glibc-based (Debian), and glibc's per-thread malloc arenas fragment and are never returned to the OS — a well-documented cause of exactly this symptom (slow all-day RSS climb, silent SIGKILL, zero JVM OOM log) on containerized JVMs running multiple thread pools (Tomcat, `studyPackGenerationTaskExecutor`, `llmParallelTaskExecutor`).
+
+### Planned Scope
+
+- **Cap glibc malloc arenas (Dockerfile).** `MALLOC_ARENA_MAX=2` — zero code change, fully reversible via env var, standard mitigation for this exact JVM-in-small-container profile.
+- **Expose actuator metrics (backend config).** `management.endpoints.web.exposure.include: health,metrics` — `jvm.memory.used`/`max` tagged heap vs. nonheap, GC pause, thread counts, reachable at `GET /actuator/metrics/{name}`. Stays authenticated-only (not `permitAll`), so this doesn't newly expose anything publicly. Purpose: next time, diagnose heap-vs-native from live metrics instead of inferring it from whether an OOM log line exists.
+
+Anti-drift: no Java code change, no new dependency — Dockerfile env var + actuator exposure config only.
 
 ---
 

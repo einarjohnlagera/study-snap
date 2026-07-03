@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.37.1 - Native Memory Hotfix
+
+**Status: In Progress**
+
+Theme: production incident response — the backend on Render (512MB Starter instance) was repeatedly silently killed (no JVM-level `OutOfMemoryError` ever logged, despite `-XX:+ExitOnOutOfMemoryError` already being set from the v0.36.2 incident) after a slow, all-day memory climb to ~90%+ container usage. Because no heap OOM was ever logged, the JVM itself never detected the pressure — the growth is native/off-heap memory outside what `-XX:MaxRAMPercentage`/direct-buffer accounting tracks at all. The base image (`eclipse-temurin:21-jre`, glibc/Debian, not musl/Alpine) is a well-documented match for this symptom shape: glibc allocates a malloc arena per thread for concurrency, and those arenas fragment and are never returned to the OS, so container RSS can silently climb to the cgroup limit and get SIGKILLed with multiple chatty thread pools (Tomcat, `studyPackGenerationTaskExecutor`, `llmParallelTaskExecutor`) running all day. This release caps glibc's arena count and adds live heap-vs-non-heap visibility so a future incident can be diagnosed from metrics instead of inferred from the presence/absence of a log line.
+
+### Planned Scope
+
+- **Cap glibc malloc arenas (Dockerfile).** `MALLOC_ARENA_MAX=2` bounds native memory fragmentation instead of letting arena count scale with thread count. Zero code change, fully reversible via env var.
+- **Expose actuator metrics endpoint (backend config).** Adds `metrics` to `management.endpoints.web.exposure.include` (`jvm.memory.used`/`max` tagged heap vs. nonheap, GC pause, thread counts) — stays authenticated-only, not `permitAll`, per existing `SecurityConfig`.
+
+Anti-drift: no code/logic change — Dockerfile env var and actuator exposure config only. OCR was investigated and ruled out (its client is already properly closed via try-with-resources, and the incident's triggering request — bulk note+Study Pack generation from topics — doesn't touch OCR/image upload at all).
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.37.0 - Readiness-First Plans & Mastery Integrity
 
 **Status: Released**
