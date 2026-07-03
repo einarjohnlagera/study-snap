@@ -45,6 +45,7 @@ class ExamQuestionPoolServiceTest {
     private StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
 
     private ExamQuestionPoolService service;
+    private StudySnapProperties properties;
 
     @BeforeEach
     void setUp() {
@@ -54,12 +55,17 @@ class ExamQuestionPoolServiceTest {
                 return action.doInTransaction(new SimpleTransactionStatus());
             }
         };
+        properties = new StudySnapProperties();
+        // Prod default is disabled (see v0.37.1); most of this suite predates the
+        // kill-switch and asserts pre-warming behavior, so enable it here and test
+        // the disabled path explicitly below.
+        properties.getPricing().setExamPoolPrewarmEnabled(true);
         service = new ExamQuestionPoolService(
                 examQuestionPoolRepository,
                 studyPackRepository,
                 quizGenerationService,
                 generationContextResolver,
-                new StudySnapProperties(),
+                properties,
                 studyPackGenerationTaskDispatcher,
                 transactionOperations,
                 new SimpleAsyncTaskExecutor(),
@@ -255,6 +261,48 @@ class ExamQuestionPoolServiceTest {
 
         verify(examQuestionPoolRepository, org.mockito.Mockito.times(2)).save(any(ExamQuestionPoolEntity.class));
         verify(studyPackGenerationTaskDispatcher, org.mockito.Mockito.times(2)).execute(any(Runnable.class));
+    }
+
+    @Test
+    void initiatePool_isNoopWhenPrewarmDisabled() {
+        properties.getPricing().setExamPoolPrewarmEnabled(false);
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+
+        service.initiatePool(studyPack, userId);
+
+        verify(examQuestionPoolRepository, never()).findByStudyPackIdAndModeForUpdate(any(), any());
+        verify(examQuestionPoolRepository, never()).save(any(ExamQuestionPoolEntity.class));
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void sampleQuestions_doesNotCreateAPoolWhenPrewarmDisabled() {
+        properties.getPricing().setExamPoolPrewarmEnabled(false);
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.empty());
+        lenient().when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                20,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(result).isEmpty();
+        verify(examQuestionPoolRepository, never()).save(any(ExamQuestionPoolEntity.class));
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
     }
 
     private ExamQuestionPoolEntity pool(
