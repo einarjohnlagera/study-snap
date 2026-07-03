@@ -67,9 +67,10 @@ The subject label comes from the Study Pack. Packs with a null or blank subject 
 
 ConceptHealth write sources:
 
-- Quick Review, Challenge Quiz, and Adaptive Practice record fully-correct concepts to `lastCorrectAt` and missed concepts to `lastIncorrectAt`.
+- Challenge Quiz and Adaptive Practice record fully-correct concepts to `lastCorrectAt` and missed concepts to `lastIncorrectAt`.
 - Long Exam and Board Exam record fully-correct and missed concepts on normal completion only when the effective recording concept exactly matches a source Study Pack's `keyConcepts`.
 - Interview Practice records the same exact-match correct and missed ConceptHealth signals across its primary and additional source Study Packs.
+- Quick Review does not record to `ConceptHealth`; it is a refresh-only review mechanic and cannot move mastery, due-state, or `Overall Readiness`.
 - New Long Exam and Interview Practice questions carry a separate `keyConcept` field that is schema-constrained to the source pack's key concepts. Recording uses that field first.
 - Legacy sessions and pre-warmed pool questions with no `keyConcept` fall back to the existing free-form `concept` field.
 - Free-form exam labels that do not match a source pack key concept are dropped before writing, so Progress never depends on invisible orphan ConceptHealth rows.

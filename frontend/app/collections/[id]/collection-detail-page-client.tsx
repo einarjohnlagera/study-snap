@@ -32,6 +32,7 @@ import {
   getCollection,
   getCollectionGoal,
   getNoteConceptCounts,
+  getPlanReadiness,
   listCoursePrograms,
   listNotes,
   removeCollectionItem,
@@ -45,6 +46,7 @@ import {
   type NoteCollectionItem,
   type NoteListItemResponse,
   type NoteVisibility,
+  type PlanReadinessResponse,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -52,6 +54,7 @@ import { cn } from "@/lib/utils";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
+type ReadinessLoadState = "idle" | "loading" | "ready" | "error";
 type MutationKind = "add" | "delete" | "edit" | "publish" | "remove" | "reorder" | null;
 type NextPlanAction = {
   item: NoteCollectionItem;
@@ -1353,6 +1356,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [goalDetail, setGoalDetail] = useState<GoalCollectionDetailResponse | null>(null);
   const [items, setItems] = useState<NoteCollectionItem[]>([]);
   const [sectionCounts, setSectionCounts] = useState<Map<string, SectionReadiness> | null>(null);
+  const [planReadiness, setPlanReadiness] = useState<PlanReadinessResponse | null>(null);
+  const [planReadinessLoadState, setPlanReadinessLoadState] = useState<ReadinessLoadState>("idle");
   const [continueDismissed, setContinueDismissed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -1473,6 +1478,32 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       mounted = false;
     };
   }, [collectionId, goalDetail, items, loadState]);
+
+  useEffect(() => {
+    if (loadState !== "ready" || goalDetail) {
+      setPlanReadiness(null);
+      setPlanReadinessLoadState("idle");
+      return;
+    }
+    let mounted = true;
+    setPlanReadinessLoadState("loading");
+    void getPlanReadiness(collectionId)
+      .then((readiness) => {
+        if (mounted) {
+          setPlanReadiness(readiness);
+          setPlanReadinessLoadState("ready");
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPlanReadiness(null);
+          setPlanReadinessLoadState("error");
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [collectionId, goalDetail, loadState]);
 
   const loadNoteVisibility = useCallback(async () => {
     try {
@@ -1729,6 +1760,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     const latestPracticedItem = getLatestPracticedCollectionItem(items);
     return latestPracticedItem ? getContinuePlanAction(latestPracticedItem, collectionId, showWeakAreas) : null;
   }, [collectionId, items, showWeakAreas]);
+  const dueConceptReviewItem = useMemo(() => {
+    if (!showWeakAreas || !planReadiness || planReadiness.dueConcepts <= 0) {
+      return null;
+    }
+    return items.find((item) => item.dueConceptCount > 0) ?? null;
+  }, [items, planReadiness, showWeakAreas]);
+  const dueConceptReviewHref = dueConceptReviewItem
+    ? `/notes/${dueConceptReviewItem.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`
+    : null;
+  const hasReadinessActions = dueConceptReviewHref !== null || terminalAction?.kind === "premium-exam";
 
   const dismissContinueBanner = () => {
     setContinueDismissed(true);
@@ -2045,6 +2086,51 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         ) : undefined}
       />
+
+      <section className={cn("grid gap-4", hasReadinessActions ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "")}>
+        <ReadinessSummary
+          variant="compact"
+          title={`${collection.title} readiness`}
+          eyebrow={`${labels.singular} readiness`}
+          overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
+          totalConcepts={planReadiness?.totalConcepts ?? 0}
+          masteredConcepts={planReadiness?.masteredConcepts ?? 0}
+          dueConcepts={planReadiness?.dueConcepts ?? 0}
+          notPracticedConcepts={planReadiness?.notPracticedConcepts ?? 0}
+          subjects={planReadiness?.subjects ?? []}
+          unavailable={planReadinessLoadState === "error"}
+          unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
+          emptyTitle="No readiness yet"
+          emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
+        />
+
+        {hasReadinessActions ? (
+          <Card className="flex flex-col justify-center gap-3 p-4 sm:p-5">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Next mastery steps</CardTitle>
+              <CardDescription>Act on what the readiness check found.</CardDescription>
+            </div>
+            <div className="flex flex-col gap-2">
+              {dueConceptReviewHref ? (
+                <ResponsiveActionLink
+                  href={dueConceptReviewHref}
+                  action="quickReview"
+                  label="Review due concepts"
+                  variant="outline"
+                />
+              ) : null}
+              {terminalAction?.kind === "premium-exam" ? (
+                <ResponsiveActionButton
+                  action="open"
+                  label={`Prove it - ${terminalAction.label}`}
+                  disabled={premiumExamDisabled}
+                  onClick={handlePremiumExamCta}
+                />
+              ) : null}
+            </div>
+          </Card>
+        ) : null}
+      </section>
 
       <CollectionProgressSummary collection={collection} />
 

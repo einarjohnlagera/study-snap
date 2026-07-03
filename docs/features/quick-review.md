@@ -94,16 +94,16 @@ Meaning:
 
 ## ConceptHealth
 
-- on completion, Quick Review records concepts answered fully correctly in the session to `ConceptHealth`
-- on completion, Quick Review also records concepts missed in the session to `ConceptHealth.lastIncorrectAt`
-- a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
-- weak or partially correct concepts are recorded as missed, not mastered
-- the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved
-- a later fully-correct Quick Review updates `lastCorrectAt` and clears the struggling state derived from a newer `lastIncorrectAt`
-- ConceptHealth entries drive weak-area routing only when they have prior review history and are currently due; due entries with no `lastCorrectAt` remain not-started concepts
+- Quick Review does not record to `ConceptHealth`.
+- Completing Quick Review must not update `lastCorrectAt`, `lastIncorrectAt`, mastery, due-state, struggling state, note readiness, plan readiness, or `Overall Readiness`.
+- Quick Review remains a refresh-only mechanic: it keeps immediate right/wrong feedback, one retry round for incorrect questions, result-screen missed-concept copy, and session history from its own session data.
+- `Retry Incorrect Questions` / `Take a Challenge` next-step behavior uses the completed session's stored `weakConcepts` metadata, not a `ConceptHealth` write from that same Quick Review session.
+- Genuine weak-area secondary recommendations may still read shared `ConceptHealth`, but that spine is fed by assessment modes only: Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice.
+- Existing `ConceptHealth` rows influenced by older Quick Review completions are not backfilled or deleted; they naturally decay once no assessment mode refreshes them.
 
 ## Review history
 
-- completed Quick Review sessions appear in Note Detail session history
-- detailed answer review lives on the dedicated session-review page
+- completed Quick Review sessions are excluded from the visible Note Detail "Recent Sessions" history list (`QuizSessionHistoryService.listRecentSessions` filters out the `QUICK_REVIEW` mode) — Quick Review is a refresh mechanic, not a session worth revisiting in a permanent history list.
+- the underlying session row still persists exactly as before: `lastSessionCompletedAt` aggregation (`findLatestSessionCompletedAtByNoteIds`), "Continue where you left off," and practiced-status tracking are unaffected — only the visible history *list* excludes Quick Review, not the data.
+- the dedicated session-review page (direct-URL access to a specific completed session's answers) is unaffected and still reachable for a Quick Review session — this is a separate concern from list visibility.
 - session review exports use stored session data only

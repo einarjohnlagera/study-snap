@@ -70,6 +70,7 @@ public class QuizSessionHistoryService {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
         int normalizedLimit = Math.clamp(limit, FIRST_PAGE_LIMIT, MAX_RECENT_SESSION_LIMIT);
         return findCompletedSessions(userId).stream()
+                .filter(session -> session.getSessionMode() != QuickReviewSessionMode.QUICK_REVIEW)
                 .filter(session -> findParticipatingNoteIds(session).contains(noteId))
                 .limit(normalizedLimit)
                 .map(this::toResponse)

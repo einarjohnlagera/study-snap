@@ -10,6 +10,7 @@ import {
   getCollection,
   getCollectionGoal,
   getNoteConceptCounts,
+  getPlanReadiness,
   listCoursePrograms,
   listNotes,
   updateCollection,
@@ -57,6 +58,7 @@ jest.mock("@/lib/api", () => {
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
     getNoteConceptCounts: jest.fn(),
+    getPlanReadiness: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
     updateCollection: jest.fn(),
@@ -163,6 +165,30 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function planReadiness(overrides: Record<string, unknown> = {}) {
+  return {
+    collectionId: "collection-1",
+    totalNotes: 2,
+    notesWithStudyPack: 1,
+    overallReadinessPercentage: 40,
+    totalConcepts: 10,
+    masteredConcepts: 4,
+    dueConcepts: 2,
+    notPracticedConcepts: 4,
+    subjects: [
+      {
+        subject: "Biology",
+        totalConcepts: 10,
+        masteredConcepts: 4,
+        dueConcepts: 2,
+        notPracticedConcepts: 4,
+        masteryPercentage: 40,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function note(id: string, title: string) {
   return {
     id,
@@ -227,6 +253,7 @@ describe("CollectionDetailPageClient", () => {
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (getNoteConceptCounts as jest.Mock).mockReset();
+    (getPlanReadiness as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
@@ -239,6 +266,7 @@ describe("CollectionDetailPageClient", () => {
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
     (getNoteConceptCounts as jest.Mock).mockResolvedValue({});
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
       value: 1024,
@@ -256,11 +284,31 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
-    const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
-    expect(headings).toEqual(["Dosage Calculations", "Cell Respiration"]);
+    const dosageHeading = await screen.findByRole("heading", { level: 2, name: "Dosage Calculations" });
+    const cellHeading = screen.getByRole("heading", { level: 2, name: "Cell Respiration" });
+    expect(Boolean(dosageHeading.compareDocumentPosition(cellHeading) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
     expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
     expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/progress?collectionId=collection-1");
+  });
+
+  it("renders plan readiness inline for leaf plans after the hero", async () => {
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({
+      overallReadinessPercentage: 60,
+      masteredConcepts: 6,
+      dueConcepts: 1,
+      notPracticedConcepts: 3,
+      totalConcepts: 10,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent("60% ready · 6/10 mastered · 1 due");
+    });
+    const bodyText = document.body.textContent ?? "";
+    expect(bodyText.indexOf("Midterm Study Plan readiness")).toBeLessThan(bodyText.indexOf("1 of 2 practiced"));
   });
 
   it("renders a goal view when the collection has children", async () => {
@@ -285,6 +333,19 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("General Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-2");
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
     expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("shows the readiness unavailable state without hiding the leaf plan", async () => {
+    (getPlanReadiness as jest.Mock).mockRejectedValue(new Error("Readiness failed"));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Readiness is unavailable right now. Try refreshing this plan.")).toBeInTheDocument();
+    });
+    expect(screen.getByText("1 of 2 practiced")).toBeInTheDocument();
   });
 
   it("back-links a nested Subject plan to its parent Goal instead of the flat Study Plans list", async () => {
@@ -593,8 +654,62 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const nextLink = await screen.findByRole("link", { name: "Review due concepts" });
+    const nextLinks = await screen.findAllByRole("link", { name: "Review due concepts" });
+    const nextLink = nextLinks.find((link) => link.getAttribute("href") === "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
+    if (!nextLink) {
+      throw new Error("Expected Review due concepts link for note-2");
+    }
     expect(nextLink).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
+  });
+
+  it("shows the dedicated due-concepts CTA even when the next-plan card prioritizes generation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({ dueConcepts: 3 }));
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        {
+          ...collection().items[0],
+          studyPackStatus: "DRAFT",
+          dueConceptCount: 3,
+          dueConcepts: ["ATP", "Glycolysis", "Krebs cycle"],
+        },
+        {
+          ...collection().items[1],
+          studyPackStatus: "STUDY_PACK_READY",
+          dueConceptCount: 0,
+          dueConcepts: [],
+        },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("link", { name: "Review due concepts" })).toHaveAttribute(
+      "href",
+      "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
+    );
+    expect(screen.getByRole("link", { name: "Generate Study Pack" })).toHaveAttribute(
+      "href",
+      "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
+    );
+  });
+
+  it("does not show the dedicated due-concepts CTA without an entitled due item", async () => {
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({ dueConcepts: 3 }));
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({
+        ...item,
+        studyPackStatus: "STUDY_PACK_READY",
+        lastSessionCompletedAt: "2026-06-03T00:00:00Z",
+        dueConceptCount: 2,
+        dueConcepts: ["Hidden concept"],
+      })),
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review due concepts" })).not.toBeInTheDocument();
   });
 
   it("shows caught up when no action remains", async () => {
@@ -646,6 +761,7 @@ describe("CollectionDetailPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith(
       "/library/exam-builder?collectionId=collection-1&notes=note-2",
     );
+    expect(screen.queryByRole("button", { name: /Prove it/ })).not.toBeInTheDocument();
   });
 
   it("disables the teacher terminal action when no collection notes are quiz-ready", async () => {
@@ -677,6 +793,17 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("Only Study Pack-ready notes will be included.")).toBeInTheDocument();
 
     fireEvent.click(examButton);
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
+  });
+
+  it("renders the readiness premium CTA and reuses the existing premium exam handler", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const readinessExamButton = await screen.findByRole("button", { name: "Prove it - Take the Long Exam" });
+    expect(readinessExamButton).toBeEnabled();
+
+    fireEvent.click(readinessExamButton);
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
   });

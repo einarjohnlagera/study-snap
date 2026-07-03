@@ -6,7 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.36.3 - OCR Fast-Follow: Messaging & Feedback` is the latest released version (on `releases/v0.36.3`).
+`v0.37.0 - Readiness-First Plans & Mastery Integrity` is the latest released version (on `releases/v0.37.0`).
+
+`v0.38.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
+
+`v0.36.3 - OCR Fast-Follow: Messaging & Feedback` is the previous released version (on `releases/v0.36.3`).
 
 `v0.36.2 - OCR Disable Hotfix` is the previous released version (on `releases/v0.36.2`).
 
@@ -127,6 +131,69 @@ Scope:
 - **Builder action-row wrapping on tablet widths.** The breakpoint fix alone didn't fix real device screenshots (iPad Air vs. iPad Mini) showing an orphaned single-button wrap. Reorder controls (`Move up`/`Move down`, `Up`/`Down`) moved into a compact icon cluster next to the drag handle; action rows fixed at two items so they never wrap at any width.
 
 Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the nine items above only.
+
+---
+
+## v0.37.0 - Readiness-First Plans & Mastery Integrity (released)
+
+Base branch: `releases/v0.37.0`.
+
+Theme: make plan-level readiness the headline of the (leaf) Study Plan page instead of a click-through, and protect the mastery signal the readiness surface depends on so it can't be satisfied for free by unlimited Quick Review grinding. Origin: user email-campaign feedback plus a reflection on the shipped Study Plan work. A broader pitch (flexible review methods reusing a Study Pack, disposable Quick Review sessions) surfaced alongside this — the parts that survived a pressure test are in scope below; the rest is explicitly deferred (see bottom of this section) rather than folded in.
+
+**Monetization context:** at the time of this planning, there are **zero paying Pro users** and a **0% free-quota-hit rate**; v0.32.1/v0.32.2 already diagnosed the conversion problem as *surfacing* — premium exams (Board Exam, Long Exam, Difficulty selection) aren't reaching users, not that Free is too generous. That said, one concrete free-generosity mechanism was real before v0.37.0: **Quick Review is unlimited on Free** (`subscriptions-and-usage-limits.md` — only Challenge Quiz is quota-capped) and wrote to `ConceptHealth` exactly like every paid mode, so a free user could grind unlimited Quick Review to 100% "Overall Readiness" without touching a quota-gated or Pro-gated mode. Putting readiness front and center on the plan page (this release) made that path more visible, so this release closes it (Quick Review scope below) and adds a direct upsell moment on the readiness surface itself.
+
+### Scope
+
+- **Inline `ReadinessSummary` on leaf plan detail**, reusing the existing `GET /collections/{id}/readiness` endpoint and `ProgressReportService` — no new field, endpoint, or mastery signal. Placed between `PlanHeroCard` and the existing execution-progress summary, matching the order Goal detail already uses (shipped v0.34.0–v0.36.1). The "notes practiced" execution bar stays as a distinct row alongside readiness; it is not replaced or merged into mastery.
+- **"Review due concepts" entry point** on plan detail, next to `ReadinessSummary`, routing to the same next-step logic `PostSessionNextStep` already uses (no new routing model). Today acting on due/weak concepts means separately finding a note and starting Quick Review/Adaptive Practice from there.
+- **Pro-gated CTA on the readiness surface**, extending the v0.32.1 "surface premium exams as paywall moments" pattern: pair the free readiness % with a paid, formal way to prove it (e.g. "Prove it under Board Exam conditions" / "Test full mastery with Long Exam"). **Must be profile-aware and driven by the existing `terminalAction` / `resolvePlanPremiumExamMode` mapping** — Student -> Long Exam, Board Taker -> Board Exam, Professional -> Interview Practice; never a blanket "Board Exam" CTA regardless of profile. No new plan tier, no new quota category — reuses existing premium-exam entitlement checks.
+- **Quick Review stops writing to `ConceptHealth`.** Locked decision: Quick Review must never move mastery, due-state, or `Overall Readiness`. It keeps its own in-session feedback (immediate right/wrong, "you missed N concepts this round," retry-incorrect) since that's ephemeral/session-local, not `ConceptHealth`-based — **verify this assumption at implementation time**; if the retry-incorrect flow turns out to read from `ConceptHealth` rather than in-memory session results, it needs a non-`ConceptHealth` data path so in-session feedback keeps working. Backend change is a mode-based exclusion in the shared session-completion write path for the `QUICK_REVIEW` discriminator — not a new aggregate, table, or signal.
+  - **No backfill/migration on existing data.** `ConceptHealthEntity` has no field recording which mode wrote a value (`(user_id, study_pack_id, concept) → last_correct_at, last_incorrect_at`, overwritten in place by whichever mode last touched it) — there is no way to isolate and delete just the rows a past Quick Review session influenced without also erasing legitimate mastery earned via Challenge Quiz/Adaptive Practice/Long Exam/Board Exam. Explicitly decided: let it decay naturally — any concept whose mastered status is currently held up only by a past Quick Review session will fall to "due" on its own once the due-threshold passes with nothing to refresh it, and from then on only real assessment activity can re-master it.
+  - Docs to update as part of this change: `my-progress.md` ("ConceptHealth write sources" — remove Quick Review), `quick-review.md` ("ConceptHealth" section — rewrite), `dashboard-recommendation.md` (confirm no Focus Areas / next-step logic depends on Quick Review's ConceptHealth writes), `EXAM_MODES.md` (Quick Review identity boundary line).
+
+Anti-drift: reuses existing `ConceptHealth` / `ProgressReportService` / `GET /collections/{id}/readiness` and existing premium-exam entitlement checks only. No new mastery signal, no new persisted field, no data migration/backfill, no billing/quota/price change.
+
+### Deferred to a later release (not v0.37.0)
+
+- **Flexible review methods over one Study Pack** (Flashcards, Identification, Enumeration, real spaced-repetition Memorization) — scoped as its own candidate release below (v0.38.0), not folded into v0.37.0.
+
+Quick Review session disposability is resolved above (hide from session-history UI, keep the row — see "Shipped"/pending item). The broader review-vs-assessment taxonomy for future methods is resolved as part of the v0.38.0 scoping below, not left as a separate open question.
+
+---
+
+## v0.38.0 (candidate) - Flexible Review Methods
+
+Not kicked off — **do not kick off until v0.37.0 is signed off** (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
+
+Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while keeping the review-vs-assessment mastery boundary this whole effort is built around.
+
+**This is two independent dependency chains, not four parallel items:**
+
+| Chain | Order | Why |
+|---|---|---|
+| A — Review methods | Flashcards → Memorization | Memorization is Flashcards plus spaced-repetition scheduling and self-grading on top; it cannot be built first. |
+| B — Assessment formats | Identification → Enumeration | Enumeration reuses Identification's free-text-answer field, LLM prompt work, and validation infrastructure, plus its own harder partial-credit/order-independence logic on top. |
+
+Chains A and B don't depend on each other — sequencing between them (e.g. Flashcards → Identification → Memorization → Enumeration, roughly increasing complexity) is a prioritization call to make at kickoff, not a hard technical constraint.
+
+### Review-vs-assessment classification (locked, resolves the deferred taxonomy question)
+
+| Method | Family | ConceptHealth on completion? | Fits the quiz-session engine? |
+|---|---|---|---|
+| Flashcards | Review | No — same rule as Quick Review, never moves mastery | No — no timer, no submit, no scoring; a new non-scored surface, not a mode |
+| Memorization | Review | No — same rule as Quick Review | No — new non-scored surface; adds its own SRS scheduling state (see below), not ConceptHealth |
+| Identification | Assessment | Yes — writes mastery like Challenge Quiz/Adaptive Practice | Yes — new question *format* on the existing engine, not a new mode |
+| Enumeration | Assessment | Yes — same as Identification | Yes — new question *format* on the existing engine, not a new mode |
+
+### Scope
+
+- **Flashcards.** New non-scored frontend surface over Study Pack content. `keyConcepts` is a flat `List<String>` with no paired definition today — reuse `QuizItem.explanation` for the matching `concept` as the card's "back" where a quiz question exists for that concept; fall back to a "no definition yet" state where it doesn't, rather than triggering new AI generation. No `ConceptHealth` write on flip/self-assessment.
+- **Memorization.** Flashcards' surface plus a real spaced-repetition schedule: graduating review intervals per concept (correct → interval grows; incorrect → interval resets), driven by a **new, separate entity** — not new `ConceptHealth` columns. This is a third concept-level signal alongside `ConceptHealth` (mastery, assessment-only) and Quick Review's ephemeral per-session data; **firewall it explicitly in docs and code** so a future change doesn't wire SRS scheduling into readiness/mastery and silently break the v0.37.0 mastery-integrity lock. Self-graded (e.g. "again/hard/good/easy"), not scored.
+- **Identification.** New question format: fill-in-the-blank / name-the-term. Needs a new free-text answer field on `QuizItem` (today only `choices`/`correctIndex`/`correctIndices` exist), new LLM prompt work to generate checkable short answers, new answer-validation logic (exact vs. fuzzy match — decide at kickoff), and a new frontend text-input question component. Writes `ConceptHealth` on completion like Challenge Quiz.
+- **Enumeration.** New question format: list N items in a category. Builds on Identification's free-text field/validation/prompt work; adds partial-credit and order-independent set-matching semantics (decide exact scoring rule at kickoff) and a multi-item entry UI. Writes `ConceptHealth` on completion like Challenge Quiz.
+- **`EXAM_MODES.md` update required before any of this reaches a Codex prompt** — add Identification/Enumeration as new question formats on the existing engine and Flashcards/Memorization as new non-scored surfaces, explicitly *not* a 6th/7th mode, per the doc's own "update this document before adding a sixth mode" rule.
+
+Anti-drift: Identification/Enumeration reuse the existing quiz-session engine and `ConceptHealth` write path (parameterized like every other assessment mode) — no new session discriminator. Flashcards/Memorization are new surfaces outside the quiz-session engine entirely — no attempt to force them through `QuickReviewSessionEntity`. Memorization's SRS state is a new, separate entity — never a `ConceptHealth` field, never counted toward mastery or `Overall Readiness`.
 
 ---
 
