@@ -138,6 +138,7 @@ public class StudySnapProperties {
         private int longExamHighTierCount = 30;
         private int longExamPoolSize = 48;
         private int boardExamPoolSize = 24;
+        private boolean examPoolPrewarmEnabled = false;
 
         public int resolveMonthlyStudyPackLimit(PlanType planType) {
             return switch (normalizePlanType(planType)) {

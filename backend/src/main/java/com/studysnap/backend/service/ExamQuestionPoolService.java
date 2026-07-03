@@ -178,6 +178,9 @@ public class ExamQuestionPoolService {
     }
 
     private void initiatePoolForMode(StudyPackEntity studyPack, UUID ownerUserId, String mode) {
+        if (!properties.getPricing().isExamPoolPrewarmEnabled()) {
+            return;
+        }
         studyPackGenerationTransactionOperations.execute(status -> {
             Optional<ExamQuestionPoolEntity> existingPool = examQuestionPoolRepository
                     .findByStudyPackIdAndModeForUpdate(studyPack.getId(), mode);
