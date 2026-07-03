@@ -15,7 +15,8 @@ Anti-drift: no code/logic change — Dockerfile env var and actuator exposure co
 
 ### Shipped
 
-_(nothing yet)_
+- **Capped glibc malloc arenas (Dockerfile).** `MALLOC_ARENA_MAX=2` added alongside the existing `JAVA_OPTS`. No JVM flag, no code change — a container-level env var bounding native memory fragmentation instead of letting arena count scale with thread count.
+- **Exposed actuator metrics endpoint (backend config).** `management.endpoints.web.exposure.include` now includes `metrics` alongside `health`. Confirmed it stays authenticated-only (no new `permitAll` rule was added to `SecurityConfig`), so this doesn't newly expose anything publicly — it's reachable the same way any other authenticated endpoint is.
 
 ---
 

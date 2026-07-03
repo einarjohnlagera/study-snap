@@ -48,7 +48,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        # metrics exposes jvm.memory.used/max (tagged heap vs nonheap), jvm.gc.pause,
+        # and thread counts via GET /actuator/metrics/{name} — not permitAll (see
+        # SecurityConfig), so this stays authenticated-only. Added so a future memory
+        # incident can be diagnosed from live metrics instead of inferring
+        # heap-vs-native from the presence/absence of an OutOfMemoryError log line.
+        include: health,metrics
       cors:
         allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
