@@ -76,3 +76,5 @@ Cross-reference the original prompt's CONTEXT anti-drift rules:
 ## After the Audit
 
 Fix any gaps, re-run tests, then commit. Do not commit a diff that fails any checked item above.
+
+**Exclude `docs/codex-prompts/*.md` from the commit.** If the prompt that generated this diff was saved there, stage and commit only the Codex-delivered code/doc changes — the prompt file itself is local planning material, not a shipped artifact, and must stay untracked.

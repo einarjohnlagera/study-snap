@@ -60,6 +60,7 @@ type NoteEditorFormProps = {
     importFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
     importStatusMessage: string | null;
     importReviewMessage?: string | null;
+    importNotice?: ReactNode;
     onImportFileChange: (file: File | null) => void;
     entryOption?: NoteEditorEntryOption;
     onEntryOptionChange?: (value: NoteEditorEntryOption) => void;
@@ -132,6 +133,7 @@ export function NoteEditorForm({
                                    importFlowState,
                                    importStatusMessage,
                                    importReviewMessage,
+                                   importNotice = null,
                                    onImportFileChange,
                                    entryOption = "write",
                                    onEntryOptionChange,
@@ -522,6 +524,7 @@ export function NoteEditorForm({
                     </div>
                 </div>
             ) : null}
+            {importNotice}
             <p className="text-xs text-foreground/60">
                 Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.
             </p>

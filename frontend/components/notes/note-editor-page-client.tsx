@@ -16,6 +16,7 @@ import {
   getMe,
   getNote,
   isEmailNotVerifiedError,
+  isOcrDisabledError,
   isNoteGenerationLimitReachedError,
   isOcrLimitReachedError,
   listCoursePrograms,
@@ -78,6 +79,7 @@ import {
   mapProfileTypeToNoteTargetProfile,
   toSelectableNoteTargetProfile,
 } from "@/lib/note-target-profile";
+import { OcrDisabledNotice } from "@/components/notes/ocr-disabled-notice";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -170,6 +172,7 @@ export function NoteEditorPageClient({
   const [importFlowState, setImportFlowState] = useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
   const [importReviewMessage, setImportReviewMessage] = useState<string | null>(null);
+  const [importOcrDisabledMessage, setImportOcrDisabledMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
   const [showGenerateNoteTip, setShowGenerateNoteTip] = useState(false);
@@ -367,11 +370,13 @@ export function NoteEditorPageClient({
       setImportFlowState("idle");
       setImportStatusMessage(null);
       setImportReviewMessage(null);
+      setImportOcrDisabledMessage(null);
       return;
     }
 
     setImportFile(file);
     setImportReviewMessage(null);
+    setImportOcrDisabledMessage(null);
     setImportFlowState("uploading");
     setImportStatusMessage(IMPORT_LOADING_MESSAGE);
 
@@ -414,6 +419,7 @@ export function NoteEditorPageClient({
         setImportFlowState("failure");
         setImportStatusMessage(verificationMessage);
         setImportReviewMessage(null);
+        setImportOcrDisabledMessage(null);
         resetImportInput();
         showToast(verificationMessage, "info");
         return;
@@ -422,12 +428,21 @@ export function NoteEditorPageClient({
         setImportFlowState("failure");
         setImportStatusMessage(null);
         setImportReviewMessage(null);
+        setImportOcrDisabledMessage(null);
         resetImportInput();
         if (currentPlan === "FREE") {
           openLockedFeaturePaywall("ocr-limit", "note_editor_ocr_limit");
         } else {
           setShowOcrLimitModal(true);
         }
+        return;
+      }
+      if (isOcrDisabledError(error)) {
+        setImportFlowState("failure");
+        setImportStatusMessage(null);
+        setImportReviewMessage(null);
+        setImportOcrDisabledMessage(error.message);
+        resetImportInput();
         return;
       }
       const rawMessage = error instanceof Error ? error.message : IMPORT_GENERIC_ERROR_MESSAGE;
@@ -437,6 +452,7 @@ export function NoteEditorPageClient({
       setImportFlowState("failure");
       setImportStatusMessage(resolvedMessage);
       setImportReviewMessage(null);
+      setImportOcrDisabledMessage(null);
       resetImportInput();
       showToast(resolvedMessage, "error");
     }
@@ -1100,6 +1116,9 @@ export function NoteEditorPageClient({
         importFlowState={importFlowState}
         importStatusMessage={importStatusMessage}
         importReviewMessage={importReviewMessage}
+        importNotice={importOcrDisabledMessage !== null ? (
+          <OcrDisabledNotice message={importOcrDisabledMessage} source="note_editor_import" />
+        ) : null}
         onImportFileChange={(file) => {
           void handleImportFileChange(file);
         }}

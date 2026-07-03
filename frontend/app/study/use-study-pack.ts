@@ -7,6 +7,7 @@ import {
   createStudyPackFromText,
   isEmailNotVerifiedError,
   isNeedsTextConfirmationResponse,
+  isOcrDisabledError,
   type NeedsTextConfirmationResponse,
   type StudyPackResponse,
 } from "@/lib/api";
@@ -34,6 +35,7 @@ type UseStudyPackResult = {
   detectedTopic: string | null;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
   ocrStatusMessage: string | null;
+  ocrDisabledMessage: string | null;
   toastMessage: string | null;
   toastTone: "success" | "error" | "info";
   showToast: (message: string, tone?: "success" | "error" | "info") => void;
@@ -86,6 +88,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
   const [ocrFlowState, setOcrFlowState] =
     useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
+  const [ocrDisabledMessage, setOcrDisabledMessage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
 
@@ -138,11 +141,11 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     if (!toastMessage) {
       return;
     }
-    const timeout = window.setTimeout(() => {
+    const timeout = globalThis.setTimeout(() => {
       setToastMessage(null);
     }, 3200);
     return () => {
-      window.clearTimeout(timeout);
+      globalThis.clearTimeout(timeout);
     };
   }, [toastMessage]);
 
@@ -153,6 +156,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
 
   const setImageFileWithValidation = (file: File | null) => {
     setErrorMessage(null);
+    setOcrDisabledMessage(null);
 
     if (!file) {
       setImageFile(null);
@@ -209,6 +213,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     }
     setLoading(true);
     setErrorMessage(null);
+    setOcrDisabledMessage(null);
     setStudyPackResult(null);
     setNeedsConfirmation(null);
 
@@ -246,7 +251,16 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       clearOcrStageTimer();
       if (isEmailNotVerifiedError(error)) {
         setErrorMessage(null);
+        setOcrDisabledMessage(null);
         showToast("Email verification is required before generating Study Packs.");
+        return null;
+      }
+      if (isOcrDisabledError(error)) {
+        const message = error.message;
+        setOcrFlowState("failure");
+        setOcrStatusMessage(null);
+        setErrorMessage(null);
+        setOcrDisabledMessage(message);
         return null;
       }
       const message =
@@ -258,8 +272,10 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
         setOcrFlowState("failure");
         setOcrStatusMessage(friendlyMessage);
         setErrorMessage(friendlyMessage);
+        setOcrDisabledMessage(null);
       } else {
         setErrorMessage(message);
+        setOcrDisabledMessage(null);
       }
       return null;
     } finally {
@@ -287,6 +303,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     }
     setLoading(true);
     setErrorMessage(null);
+    setOcrDisabledMessage(null);
     setStudyPackResult(null);
     setOcrFlowState("extracting");
     setOcrStatusMessage("Generating your Study Pack from edited text...");
@@ -302,6 +319,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
         setErrorMessage(null);
+        setOcrDisabledMessage(null);
         showToast("Email verification is required before generating Study Packs.");
         return null;
       }
@@ -331,6 +349,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     setNeedsConfirmation(null);
     setConfirmedText("");
     setErrorMessage(null);
+    setOcrDisabledMessage(null);
     setGeneratedAt(null);
     setLoading(false);
     setOcrFlowState("idle");
@@ -380,6 +399,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     detectedTopic,
     ocrFlowState,
     ocrStatusMessage,
+    ocrDisabledMessage,
     toastMessage,
     toastTone,
     showToast,
@@ -388,4 +408,3 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     handleClearNotes,
   };
 }
-

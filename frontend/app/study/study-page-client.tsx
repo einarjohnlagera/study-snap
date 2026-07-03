@@ -10,6 +10,7 @@ import { StudyPackResults } from "./study-pack-results";
 import { StudyInputCard } from "./study-input-card";
 import { useStudyPack } from "./use-study-pack";
 import { ToastMessage } from "@/components/ui/toast-message";
+import { OcrDisabledNotice } from "@/components/notes/ocr-disabled-notice";
 
 type StudyPageClientProps = {
   forcedDemoMode?: boolean;
@@ -43,6 +44,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     detectedTopic,
     ocrFlowState,
     ocrStatusMessage,
+    ocrDisabledMessage,
     toastMessage,
     toastTone,
     showToast,
@@ -147,7 +149,9 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
         }}
       />
 
-      {errorMessage ? (
+      {ocrDisabledMessage !== null ? (
+        <OcrDisabledNotice message={ocrDisabledMessage} source="study_pack_image_capture" />
+      ) : errorMessage ? (
         <Card className="border-red-500/40 bg-red-50/70 p-4 dark:bg-red-950/20 sm:p-6">
           <CardTitle className="mb-2">
             {ocrFlowState === "failure" ? "Couldn't Process Notes Image" : "Couldn't Generate Study Pack"}
