@@ -46,6 +46,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -75,8 +76,7 @@ class QuickReviewSessionServiceTest {
                 activityTrackingService,
                 analyticsService,
                 subscriptionService,
-                featureGateService,
-                conceptHealthService
+                featureGateService
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -284,51 +284,46 @@ class QuickReviewSessionServiceTest {
         QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
 
         assertThat(response.weakConcepts()).containsExactly("Light Reactions", "Calvin Cycle", "Light Reactions");
+        assertThat(session.getSessionMetadata())
+                .containsEntry("weakConcepts", List.of("Light Reactions", "Calvin Cycle", "Light Reactions"));
     }
 
     @Test
-    void completeSession_recordsOnlyFullyCorrectConceptsToConceptHealth() {
+    void completeSession_neverRecordsToConceptHealth() {
         UUID userId = UUID.randomUUID();
-        UUID sessionId = UUID.randomUUID();
+        UUID fullyCorrectSessionId = UUID.randomUUID();
+        UUID partiallyCorrectSessionId = UUID.randomUUID();
+        UUID allMissedSessionId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
-        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
-        session.setTotalQuestions(3);
-        session.setSessionState(Map.of(
-                "selectedChoices",
-                Map.of(
-                        "0", "A",
-                        "1", "A",
-                        "2", "D"
-                )
-        ));
-        StudyPackEntity studyPack = StudyPackEntityBuilder.aStudyPack()
-                .withId(studyPackId)
-                .withOwnerUserId(userId)
-                .withQuiz(List.of(
-                        new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Cells", "Explanation 1"),
-                        new QuizItem("Q2", List.of("A", "B", "C", "D"), "B", "Cells", "Explanation 2"),
-                        new QuizItem("Q3", List.of("A", "B", "C", "D"), "D", "Genetics", "Explanation 3")
-                ))
-                .build();
-        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(2, 3, 0, 120, null);
+        QuickReviewSessionEntity fullyCorrectSession = buildInProgressSession(fullyCorrectSessionId, userId, studyPackId);
+        QuickReviewSessionEntity partiallyCorrectSession = buildInProgressSession(partiallyCorrectSessionId, userId, studyPackId);
+        QuickReviewSessionEntity allMissedSession = buildInProgressSession(allMissedSessionId, userId, studyPackId);
 
-        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findByIdAndUserId(fullyCorrectSessionId, userId))
+                .thenReturn(Optional.of(fullyCorrectSession));
+        when(quickReviewSessionRepository.findByIdAndUserId(partiallyCorrectSessionId, userId))
+                .thenReturn(Optional.of(partiallyCorrectSession));
+        when(quickReviewSessionRepository.findByIdAndUserId(allMissedSessionId, userId))
+                .thenReturn(Optional.of(allMissedSession));
 
-        quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
-
-        verify(conceptHealthService).recordCorrectAnswers(
+        quickReviewSessionService.completeSession(
+                fullyCorrectSessionId.toString(),
                 userId,
-                studyPackId,
-                List.of("Genetics"),
-                session.getCompletedAt()
+                new QuickReviewSessionCompleteRequest(5, 5, 0, 120, Map.of("weakConcepts", List.of()))
         );
-        verify(conceptHealthService).recordIncorrectAnswers(
+        quickReviewSessionService.completeSession(
+                partiallyCorrectSessionId.toString(),
                 userId,
-                studyPackId,
-                List.of("Cells"),
-                session.getCompletedAt()
+                new QuickReviewSessionCompleteRequest(2, 5, 0, 120, Map.of("weakConcepts", List.of("Cells")))
         );
+        quickReviewSessionService.completeSession(
+                allMissedSessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(0, 5, 0, 120, Map.of("weakConcepts", List.of("Cells", "Genetics")))
+        );
+
+        verifyNoInteractions(conceptHealthService);
+        verify(studyPackRepository, never()).findByIdAndOwnerUserId(studyPackId, userId);
     }
 
     @Test

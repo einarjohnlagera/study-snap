@@ -53,8 +53,6 @@ public class QuickReviewSessionService {
     private static final String QUICK_REVIEW_SESSION_FORFEITED_MESSAGE = "Quick Review session forfeited.";
     private static final String SESSION_REVIEW_NOT_AVAILABLE_CODE = "SESSION_REVIEW_NOT_AVAILABLE";
     private static final String QUICK_REVIEW_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Quick Review session review is only available after completion.";
-    private static final String SESSION_STATE_SELECTED_CHOICES = "selectedChoices";
-    private static final String SESSION_STATE_SELECTED_MULTI_CHOICES = "selectedMultiChoices";
 
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
@@ -62,7 +60,6 @@ public class QuickReviewSessionService {
     private final AnalyticsService analyticsService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
-    private final ConceptHealthService conceptHealthService;
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
@@ -196,15 +193,6 @@ public class QuickReviewSessionService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<ChallengeQuizConceptStatResponse> conceptBreakdown = computeConceptBreakdownForCompletion(saved, userId);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown);
-        List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
-        if (!correctConcepts.isEmpty()) {
-            conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
-        }
-        if (!missedConcepts.isEmpty()) {
-            conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
-        }
 
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
@@ -395,34 +383,6 @@ public class QuickReviewSessionService {
                 session.getRetryCount() == null ? 0 : session.getRetryCount(),
                 session.getSessionState()
         );
-    }
-
-    private List<ChallengeQuizConceptStatResponse> computeConceptBreakdownForCompletion(
-            QuickReviewSessionEntity session,
-            UUID userId
-    ) {
-        if (!hasStoredSelections(session.getSessionState())) {
-            return List.of();
-        }
-
-        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        if (quiz.isEmpty()) {
-            StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId)
-                    .orElseThrow(StudyPackNotFoundException::new);
-            quiz = studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz();
-        }
-        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
-        Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
-        if (selectedChoices.isEmpty() && selectedMultiChoices.isEmpty()) {
-            return List.of();
-        }
-        return QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices);
-    }
-
-    private boolean hasStoredSelections(Map<String, Object> sessionState) {
-        return sessionState != null
-                && (sessionState.containsKey(SESSION_STATE_SELECTED_CHOICES)
-                || sessionState.containsKey(SESSION_STATE_SELECTED_MULTI_CHOICES));
     }
 
     private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
