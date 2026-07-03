@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.0 - Readiness-First Plans & Mastery Integrity` is the in-progress release (on `releases/v0.37.0`).
+`v0.37.0 - Readiness-First Plans & Mastery Integrity` is the latest released version (on `releases/v0.37.0`).
+
+`v0.38.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
 
 `v0.36.3 - OCR Fast-Follow: Messaging & Feedback` is the previous released version (on `releases/v0.36.3`).
 
@@ -132,7 +134,7 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
-## v0.37.0 - Readiness-First Plans & Mastery Integrity
+## v0.37.0 - Readiness-First Plans & Mastery Integrity (released)
 
 Base branch: `releases/v0.37.0`.
 

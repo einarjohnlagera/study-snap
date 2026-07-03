@@ -2,7 +2,7 @@
 
 ## v0.37.0 - Readiness-First Plans & Mastery Integrity
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: make plan-level readiness the headline of the leaf Study Plan page instead of a click-through, and protect the mastery signal the readiness surface depends on so it can't be satisfied for free by unlimited Quick Review grinding.
 
