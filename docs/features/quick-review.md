@@ -103,6 +103,7 @@ Meaning:
 
 ## Review history
 
-- completed Quick Review sessions appear in Note Detail session history
-- detailed answer review lives on the dedicated session-review page
+- completed Quick Review sessions are excluded from the visible Note Detail "Recent Sessions" history list (`QuizSessionHistoryService.listRecentSessions` filters out the `QUICK_REVIEW` mode) — Quick Review is a refresh mechanic, not a session worth revisiting in a permanent history list.
+- the underlying session row still persists exactly as before: `lastSessionCompletedAt` aggregation (`findLatestSessionCompletedAtByNoteIds`), "Continue where you left off," and practiced-status tracking are unaffected — only the visible history *list* excludes Quick Review, not the data.
+- the dedicated session-review page (direct-URL access to a specific completed session's answers) is unaffected and still reachable for a Quick Review session — this is a separate concern from list visibility.
 - session review exports use stored session data only

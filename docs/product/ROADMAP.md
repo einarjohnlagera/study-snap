@@ -153,9 +153,45 @@ Anti-drift: reuses existing `ConceptHealth` / `ProgressReportService` / `GET /co
 
 ### Deferred to a later release (not v0.37.0)
 
-- **Flexible review methods over one Study Pack** (reusing a Study Pack across Multiple Choice, Flashcards, Identification, Enumeration, Memorization, etc.) — needs a scoping pass classifying each method as an existing mode, a new question format on the existing quiz-session engine, or a new non-scored surface, and an `EXAM_MODES.md` update before any of it reaches a Codex prompt.
-- **Quick Review session disposability** (dropping session history entirely) — needs its own explicit product decision between keeping persistence as-is, keeping persistence but hiding it from session-history UI, or actually not persisting completed rows (which would make "Continue where you left off" / Recent Sessions go stale whenever the latest activity was a Quick Review). Independent of this release's Quick Review/mastery decision — one is about mastery, the other is about session history.
-- **Broader review-vs-assessment taxonomy** for any future review methods beyond Quick Review — blocked on the flexible-review-methods scoping pass above.
+- **Flexible review methods over one Study Pack** (Flashcards, Identification, Enumeration, real spaced-repetition Memorization) — scoped as its own candidate release below (v0.38.0), not folded into v0.37.0.
+
+Quick Review session disposability is resolved above (hide from session-history UI, keep the row — see "Shipped"/pending item). The broader review-vs-assessment taxonomy for future methods is resolved as part of the v0.38.0 scoping below, not left as a separate open question.
+
+---
+
+## v0.38.0 (candidate) - Flexible Review Methods
+
+Not kicked off — **do not kick off until v0.37.0 is signed off** (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
+
+Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while keeping the review-vs-assessment mastery boundary this whole effort is built around.
+
+**This is two independent dependency chains, not four parallel items:**
+
+| Chain | Order | Why |
+|---|---|---|
+| A — Review methods | Flashcards → Memorization | Memorization is Flashcards plus spaced-repetition scheduling and self-grading on top; it cannot be built first. |
+| B — Assessment formats | Identification → Enumeration | Enumeration reuses Identification's free-text-answer field, LLM prompt work, and validation infrastructure, plus its own harder partial-credit/order-independence logic on top. |
+
+Chains A and B don't depend on each other — sequencing between them (e.g. Flashcards → Identification → Memorization → Enumeration, roughly increasing complexity) is a prioritization call to make at kickoff, not a hard technical constraint.
+
+### Review-vs-assessment classification (locked, resolves the deferred taxonomy question)
+
+| Method | Family | ConceptHealth on completion? | Fits the quiz-session engine? |
+|---|---|---|---|
+| Flashcards | Review | No — same rule as Quick Review, never moves mastery | No — no timer, no submit, no scoring; a new non-scored surface, not a mode |
+| Memorization | Review | No — same rule as Quick Review | No — new non-scored surface; adds its own SRS scheduling state (see below), not ConceptHealth |
+| Identification | Assessment | Yes — writes mastery like Challenge Quiz/Adaptive Practice | Yes — new question *format* on the existing engine, not a new mode |
+| Enumeration | Assessment | Yes — same as Identification | Yes — new question *format* on the existing engine, not a new mode |
+
+### Scope
+
+- **Flashcards.** New non-scored frontend surface over Study Pack content. `keyConcepts` is a flat `List<String>` with no paired definition today — reuse `QuizItem.explanation` for the matching `concept` as the card's "back" where a quiz question exists for that concept; fall back to a "no definition yet" state where it doesn't, rather than triggering new AI generation. No `ConceptHealth` write on flip/self-assessment.
+- **Memorization.** Flashcards' surface plus a real spaced-repetition schedule: graduating review intervals per concept (correct → interval grows; incorrect → interval resets), driven by a **new, separate entity** — not new `ConceptHealth` columns. This is a third concept-level signal alongside `ConceptHealth` (mastery, assessment-only) and Quick Review's ephemeral per-session data; **firewall it explicitly in docs and code** so a future change doesn't wire SRS scheduling into readiness/mastery and silently break the v0.37.0 mastery-integrity lock. Self-graded (e.g. "again/hard/good/easy"), not scored.
+- **Identification.** New question format: fill-in-the-blank / name-the-term. Needs a new free-text answer field on `QuizItem` (today only `choices`/`correctIndex`/`correctIndices` exist), new LLM prompt work to generate checkable short answers, new answer-validation logic (exact vs. fuzzy match — decide at kickoff), and a new frontend text-input question component. Writes `ConceptHealth` on completion like Challenge Quiz.
+- **Enumeration.** New question format: list N items in a category. Builds on Identification's free-text field/validation/prompt work; adds partial-credit and order-independent set-matching semantics (decide exact scoring rule at kickoff) and a multi-item entry UI. Writes `ConceptHealth` on completion like Challenge Quiz.
+- **`EXAM_MODES.md` update required before any of this reaches a Codex prompt** — add Identification/Enumeration as new question formats on the existing engine and Flashcards/Memorization as new non-scored surfaces, explicitly *not* a 6th/7th mode, per the doc's own "update this document before adding a sixth mode" rule.
+
+Anti-drift: Identification/Enumeration reuse the existing quiz-session engine and `ConceptHealth` write path (parameterized like every other assessment mode) — no new session discriminator. Flashcards/Memorization are new surfaces outside the quiz-session engine entirely — no attempt to force them through `QuickReviewSessionEntity`. Memorization's SRS state is a new, separate entity — never a `ConceptHealth` field, never counted toward mastery or `Overall Readiness`.
 
 ---
 

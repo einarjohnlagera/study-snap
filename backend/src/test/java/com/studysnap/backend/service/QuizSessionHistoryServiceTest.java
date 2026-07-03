@@ -146,7 +146,7 @@ class QuizSessionHistoryServiceTest {
     }
 
     @Test
-    void listRecentSessions_mapsEveryStoredModeAndLongExamParticipationCount() {
+    void listRecentSessions_excludesQuickReviewButMapsEveryOtherStoredModeAndLongExamParticipationCount() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         UUID otherNoteId = UUID.randomUUID();
@@ -191,7 +191,6 @@ class QuizSessionHistoryServiceTest {
 
         assertThat(sessions).extracting(RecentQuizSessionHistoryResponse::sessionMode)
                 .containsExactly(
-                        "QUICK_REVIEW",
                         "CHALLENGE",
                         "BOARD_EXAM",
                         "ADAPTIVE",
@@ -199,6 +198,26 @@ class QuizSessionHistoryServiceTest {
                         "LONG_EXAM"
                 );
         assertThat(sessions.getLast().participatingNoteCount()).isEqualTo(2);
+    }
+
+    @Test
+    void listRecentSessions_excludesQuickReviewSessionsFromTheVisibleHistory() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-05-21T10:00:00Z");
+        QuickReviewSessionEntity quickReview = buildSession(userId, noteId, QuickReviewSessionMode.QUICK_REVIEW, completedAt, null);
+        when(quickReviewSessionRepository.findByUserIdAndStatusAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).thenReturn(List.of(quickReview));
+
+        List<RecentQuizSessionHistoryResponse> sessions = quizSessionHistoryService.listRecentSessions(
+                noteId.toString(),
+                userId,
+                10
+        );
+
+        assertThat(sessions).isEmpty();
     }
 
     private QuickReviewSessionEntity buildSession(
