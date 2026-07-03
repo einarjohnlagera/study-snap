@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.37.3 - Study Plan Read-Path Memory Optimization
+
+**Status: In Progress**
+
+Theme: cut heap allocation on Study Plan read endpoints (`getReadiness`, `getNoteConceptCounts`, `getGoal`) by stopping full `StudyPackEntity` materialization (drops the `quiz` and `source_text` jsonb columns from reads that only need `keyConcepts`), batching the concept-health N+1 into the existing batched repository method, and replacing a count-by-load with a count query. Full brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`.
+
+### Planned Scope
+
+- **Projection query for the read path (backend).** Add a lightweight projection for `StudyPackRepository.findByNoteIdIn(...)` exposing only `id, noteId, ownerUserId, subject, keyConcepts, status`; route `NoteCollectionService.getReadiness`/`getNoteConceptCounts`/`getGoal` and the relevant `ProgressReportService` methods through it instead of the full entity.
+- **Batch the concept-health N+1 (backend).** `ProgressReportService.collectReviewTimesByConceptKey` currently calls `findByUserIdAndStudyPackId` once per pack in a loop; replace with the existing batched `findByUserIdAndStudyPackIdIn`.
+- **Count query instead of count-by-load (backend).** `NoteCollectionService.getGoal`'s item count loads and sizes a list; replace with a `count(...)` query.
+
+Anti-drift: no schema, endpoint, or DTO change — API responses must stay byte-identical to today. `getGoal`'s per-child readiness fan-out restructure (deferred as P3 in the brief) is out of scope for this release.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.37.2 - Plan Data Integrity Hotfix
 
 **Status: Released**

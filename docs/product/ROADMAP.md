@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.2 - Plan Data Integrity Hotfix` is the latest released version (on `releases/v0.37.2`).
+`v0.37.3 - Study Plan Read-Path Memory Optimization` is in progress (on `releases/v0.37.3`); handoff brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`.
+
+`v0.37.2 - Plan Data Integrity Hotfix` is the previous released version (on `releases/v0.37.2`).
 
 `v0.37.1 - Native Memory Hotfix` is the previous released version (on `releases/v0.37.1`).
 
@@ -138,6 +140,22 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
+## v0.37.3 - Study Plan Read-Path Memory Optimization (in progress)
+
+Base branch: `releases/v0.37.3`.
+
+Theme: cut heap allocation on Study Plan read endpoints — the recurring production memory-restart investigation traced part of the climb to `getReadiness`/`getNoteConceptCounts`/`getGoal` fully materializing `StudyPackEntity` (including its two largest columns, `quiz` and `source_text` jsonb) just to read `keyConcepts`, plus a per-study-pack N+1 on concept health. Full brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`.
+
+### Planned Scope
+
+- **Projection query for the read path (backend).** Lightweight projection for `StudyPackRepository.findByNoteIdIn(...)` exposing only `id, noteId, ownerUserId, subject, keyConcepts, status`; route the readiness/concept-count/goal read paths through it instead of the full entity.
+- **Batch the concept-health N+1 (backend).** Replace the per-pack loop in `ProgressReportService.collectReviewTimesByConceptKey` with the existing batched `findByUserIdAndStudyPackIdIn`.
+- **Count query instead of count-by-load (backend).** `NoteCollectionService.getGoal`'s item count currently loads and sizes a list; replace with a `count(...)` query.
+
+Anti-drift: no schema, endpoint, or DTO change — API responses stay byte-identical. `getGoal`'s per-child readiness fan-out restructure is deferred (P1 already makes each fan-out call cheap, so restructuring it is a latency concern, not a memory one).
+
+---
+
 ## v0.37.2 - Plan Data Integrity Hotfix (released)
 
 Base branch: `releases/v0.37.2`.
@@ -147,9 +165,9 @@ Theme: two Study Plan correctness bugs found in production, shipped as a hotfix 
 ### Planned Scope
 
 - **Fix partial-update clobber on collection metadata (backend).** `NoteCollectionService.updateMetadata` overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally while guarding only `title`; the Goal Builder's rename (a `{ title }`-only PATCH) therefore wiped those fields silently. Guard each optional field with a null check (PATCH semantics); an explicit empty string still clears a field. Audit sibling PATCH endpoints for the same shape.
-- **Plan visibility / course-program filtering (under investigation).** A FREE account reported seeing plans outside its own course/program. Only PUBLIC collections are ever returned (not a cross-user private leak); confirm the surface and enforce course/program relevance.
+- **Plan visibility / course-program filtering — investigated, no defect found.** A FREE account reported seeing plans outside its own course/program. Traced the full read path: `list` is strictly owner-scoped, `listPublic` only ever returns PUBLIC collections, and adoption always stamps `ownerUserId = copier`. Confirmed not a cross-user leak or scoping bug; no change shipped.
 
-Anti-drift: no schema change, no new endpoint — read/write correctness only. Study Plan read-path memory optimization is deferred to v0.38.0.
+Anti-drift: no schema change, no new endpoint — read/write correctness only. Study Plan read-path memory optimization is deferred to v0.37.3.
 
 ---
 
