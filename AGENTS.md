@@ -138,6 +138,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Plan readiness is rendered in the canonical `/progress?collectionId={id}` frontend view, still backed by owner-scoped `GET /collections/{id}/readiness`.
 - The endpoint must resolve the collection exactly like `NoteCollectionService.get(collectionId, userId)`: missing, malformed, public-source, or not-owned plans return `CollectionNotFoundException` / `404`.
 - Plan readiness must reuse `ProgressReportService` ConceptHealth classification and `masteryPercentage`; do not invent thresholds, persist readiness fields, add generated content, or call AI/LLM.
+- Quick Review must not write to `ConceptHealth` and must not move mastery, due-state, Note readiness, Plan readiness, or Overall Readiness. It is a refresh-only mechanic; its own retry/missed-concept feedback must come from session metadata, not ConceptHealth writes.
 - Collection detail execution rows, collection list cards, published-plan cards, and public source plans must keep the no-mastery rule: no subject mastery percentages, milestones, goals, streaks, or weakest-subject routing there.
 - Frontend readiness displays should reuse the shared `ReadinessSummary` component and vocabulary: `ready`, `mastered`, `due`, `not started`.
 - The `/progress?collectionId={id}` plan-scoped view fires `PLAN_READINESS_VIEWED` once per distinct plan selected in a session (keyed by `collectionId`, not a fire-once boolean — switching plans without a remount must fire again for the newly selected plan).

@@ -17,7 +17,7 @@ Anti-drift: reuses existing `ConceptHealth` / `ProgressReportService` / `GET /co
 
 ### Shipped
 
-_(nothing yet)_
+- **Quick Review no longer writes ConceptHealth (backend).** `QuickReviewSessionService.completeSession` now saves Quick Review completion/session metadata without recording correct or missed concepts to `ConceptHealth`, so Quick Review cannot move mastery, due-state, Note/Plan readiness, or Overall Readiness. Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice ConceptHealth writes are unchanged; no backfill or migration was added for older rows.
 
 ---
 

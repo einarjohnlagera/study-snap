@@ -111,6 +111,7 @@ Display:
 
 Behavior:
 
+- Focus Areas and weak-area recommendations read persisted weak-concept/session signals plus the shared ConceptHealth spine. They do not depend on a same-session Quick Review `ConceptHealth` write; Quick Review's own retry/challenge next step reads session metadata, while ConceptHealth-backed weakness is fed by assessment modes.
 - Users with Adaptive Practice access and remaining quota can get `Practice Weak Concepts` → Adaptive Practice on the source note
 - When Adaptive Practice is unavailable or quota is exhausted, recommendations should fall back to a safe note-review path or the shared upgrade flow rather than implying the user has no next step
 - The `Unlock Adaptive Practice` paywall button appears only when weak concepts exist but no source note can be resolved (`practiceNoteId` is null)

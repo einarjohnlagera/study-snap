@@ -59,7 +59,7 @@ If a future requirement does not fit cleanly inside Challenge / Long / Board, pr
 
 - **Identity**: Lightweight concept check. Entry point to active recall.
 - **Audience**: All profile types, all plans.
-- **Boundary**: Re-uses the base Study Pack quiz; not LLM-generated per session. Result screen guides into Challenge Quiz / Adaptive Practice.
+- **Boundary**: Re-uses the base Study Pack quiz; not LLM-generated per session. Result screen guides into Challenge Quiz / Adaptive Practice. Quick Review does not write `ConceptHealth` and cannot move mastery, due-state, or Overall Readiness.
 
 No identity changes from `quick-review.md`; included here for completeness.
 
