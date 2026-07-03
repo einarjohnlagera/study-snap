@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.2 - Plan Data Integrity Hotfix` is in progress (on `releases/v0.37.2`).
+`v0.37.2 - Plan Data Integrity Hotfix` is the latest released version (on `releases/v0.37.2`).
 
 `v0.37.1 - Native Memory Hotfix` is the previous released version (on `releases/v0.37.1`).
 
@@ -138,7 +138,7 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
-## v0.37.2 - Plan Data Integrity Hotfix (in progress)
+## v0.37.2 - Plan Data Integrity Hotfix (released)
 
 Base branch: `releases/v0.37.2`.
 

@@ -2,15 +2,15 @@
 
 ## v0.37.2 - Plan Data Integrity Hotfix
 
-**Status: In Progress**
+**Status: Released**
 
-Theme: stop a silent data-loss bug in Study Plan metadata and tighten plan visibility so learners only see plans relevant to their course/program.
+Theme: stop a silent data-loss bug that wiped Study Plan metadata on every subject-plan rename.
 
 ### Planned Scope
 
 - **Fix partial-update clobber on collection metadata (backend).** `NoteCollectionService.updateMetadata` guarded only `title` against null and overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally. The Goal Builder's rename action PATCHes `{ title }` only, so every subject-plan rename silently wiped those three fields. Guard each optional field with a null check (PATCH semantics), matching the existing `title` pattern; an explicit empty string still clears a field.
 - **Audit sibling PATCH endpoints (backend).** Scan note/profile update services for the same unguarded-setter shape and fix any that repeat it.
-- **Plan visibility / course-program filtering (under investigation).** A FREE account reported seeing plans outside its own course/program. Only PUBLIC collections are ever returned (confirmed not a cross-user private leak); scope is to confirm the exact surface and enforce course/program relevance.
+- **Plan visibility report — investigated, no defect found (no change shipped).** A report of an account seeing unexpected plans was traced through the full read path: `list` is strictly `ownerUserId`-scoped, `listPublic` only ever returns PUBLIC collections, and the copy/adopt flow stamps every copy with `ownerUserId = copier` / `visibility = PRIVATE` and fires only on an explicit user action (no auto-adopt). Confirmed not a cross-user leak and not a scoping bug — plans on an account are only ones it created or explicitly adopted. Left as-is pending a concrete repro.
 
 Anti-drift: no schema change, no new endpoint — read/write correctness only. The Study Plan read-path memory optimization is deferred to v0.38.0.
 
