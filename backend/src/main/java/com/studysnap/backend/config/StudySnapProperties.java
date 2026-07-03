@@ -44,6 +44,7 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Ocr {
+        private boolean enabled = true;
         private String provider = "stub";
         private double confidenceThreshold = 0.8;
         private int minDetectedChars = 30;

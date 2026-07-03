@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.OcrResult;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +58,9 @@ public class NoteTextExtractionService {
     }
 
     private ExtractedNoteTextResponse extractFromImage(MultipartFile file, UUID ownerUserId) {
+        if (!properties.getOcr().isEnabled()) {
+            throw new OcrDisabledException();
+        }
         authService.requireEmailVerified(ownerUserId);
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
         validateImage(file, planType);
@@ -137,6 +141,9 @@ public class NoteTextExtractionService {
     }
 
     private ExtractedNoteTextResponse extractFromPdfViaOcr(PDDocument document, MultipartFile file, UUID ownerUserId) {
+        if (!properties.getOcr().isEnabled()) {
+            throw new OcrDisabledException();
+        }
         authService.requireEmailVerified(ownerUserId);
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
         ocrUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);

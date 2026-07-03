@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.OcrResult;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -218,6 +219,74 @@ class NoteTextExtractionServiceTest {
             assertEquals("PDF_NO_TEXT", error.getCode());
             assertEquals("This PDF appears to be scanned or image-based. Please upload images for OCR instead.", error.getMessage());
             verify(ocrUsageProtectionService).recordUsage(eq(userId), org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void rejectsImageImportWithTypedErrorWhenOcrIsDisabled() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getOcr().setEnabled(false);
+        properties.getOcr().setFreeMaxImageBytes(5_000_000);
+        properties.getOcr().setPremiumMaxImageBytes(10_000_000);
+        properties.getLimits().setTxtUploadMaxSize(1);
+        properties.getLimits().setPdfUploadMaxSize(10);
+        properties.getLimits().setDocxUploadMaxSize(10);
+        properties.getLimits().setFileUploadMaxSize(10);
+        properties.getLimits().setPdfMaxPages(30);
+        properties.getLimits().setExtractedTextMaxLength(200_000);
+        noteTextExtractionService = new NoteTextExtractionService(
+                authService,
+                ocrService,
+                ocrRateLimitService,
+                subscriptionService,
+                properties,
+                ocrUsageProtectionService
+        );
+        MockMultipartFile file = new MockMultipartFile("file", "note.png", "image/png", "fake-image".getBytes());
+
+        assertThrows(OcrDisabledException.class, () -> noteTextExtractionService.extractText(file, userId));
+
+        verify(authService, never()).requireEmailVerified(userId);
+        verify(ocrUsageProtectionService, never()).assertQuotaAvailable(eq(userId), org.mockito.ArgumentMatchers.any());
+        verify(ocrService, never()).extractText(org.mockito.ArgumentMatchers.any(MultipartFile.class));
+    }
+
+    @Test
+    void rejectsScannedPdfImportWithTypedErrorWhenOcrIsDisabled() throws IOException {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getOcr().setEnabled(false);
+        properties.getOcr().setFreeMaxImageBytes(5_000_000);
+        properties.getOcr().setPremiumMaxImageBytes(10_000_000);
+        properties.getLimits().setTxtUploadMaxSize(1);
+        properties.getLimits().setPdfUploadMaxSize(10);
+        properties.getLimits().setDocxUploadMaxSize(10);
+        properties.getLimits().setFileUploadMaxSize(10);
+        properties.getLimits().setPdfMaxPages(30);
+        properties.getLimits().setExtractedTextMaxLength(200_000);
+        noteTextExtractionService = new NoteTextExtractionService(
+                authService,
+                ocrService,
+                ocrRateLimitService,
+                subscriptionService,
+                properties,
+                ocrUsageProtectionService
+        );
+
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            document.addPage(new PDPage());
+            document.save(outputStream);
+
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "scan.pdf",
+                    "application/pdf",
+                    outputStream.toByteArray()
+            );
+
+            assertThrows(OcrDisabledException.class, () -> noteTextExtractionService.extractText(file, userId));
+
+            verify(authService, never()).requireEmailVerified(userId);
+            verify(ocrService, never()).extractText(org.mockito.ArgumentMatchers.any(MultipartFile.class));
         }
     }
 

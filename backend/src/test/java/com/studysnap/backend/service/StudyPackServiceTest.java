@@ -24,6 +24,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
@@ -45,10 +46,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class StudyPackServiceTest {
@@ -325,6 +328,42 @@ class StudyPackServiceTest {
 
         verify(noteRepository, never()).findByIdAndOwnerUserId(any(UUID.class), any(UUID.class));
         verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void createFromImage_throwsTypedErrorWhenOcrIsDisabled() {
+        UUID userId = UUID.randomUUID();
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getOcr().setEnabled(false);
+        studyPackService = new StudyPackService(
+                studyPackRepository,
+                studyPackDraftRepository,
+                noteRepository,
+                ocrService,
+                llmStudyPackService,
+                properties,
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                userUsageService,
+                studyPackUsageService,
+                ocrRateLimitService,
+                ocrUsageProtectionService,
+                aiRateLimitService,
+                generationContextResolver,
+                TEST_TRANSACTION_OPERATIONS,
+                new StudyPackGenerationTaskDispatcher(Runnable::run),
+                contentModerationService,
+                examQuestionPoolService,
+                onboardingGuardService
+        );
+        MockMultipartFile image = new MockMultipartFile("image", "note.png", "image/png", "fake-image".getBytes());
+
+        assertThatThrownBy(() -> studyPackService.createFromImage(image, null, userId))
+                .isInstanceOf(OcrDisabledException.class);
+
+        verify(ocrService, never()).extractText(any(MultipartFile.class));
+        verify(subscriptionService, never()).resolvePlan(any(UUID.class));
     }
 
     @Test

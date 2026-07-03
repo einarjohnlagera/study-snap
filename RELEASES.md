@@ -9,13 +9,13 @@ Theme: production incident response — the backend on Render (512MB Starter ins
 ### Planned Scope
 
 - **Disable all Google Vision OCR call sites (backend).** Gate `NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, and `StudyPackService.createFromImage` behind a single kill-switch (env-configurable), so none of them construct an `ImageAnnotatorClient`. Native-text PDF extraction (`PDFTextStripper`) and `.txt` upload are unaffected — no OCR call, no cost, no crash risk.
-- **Clear failure state, not a raw 500.** When OCR is disabled and a caller hits one of the three gated paths, return a distinct, typed error so the frontend can show an honest "temporarily unavailable" message instead of a generic failure.
+- **Clear failure state, not a raw 500.** When OCR is disabled and a caller hits one of the three gated paths, return a distinct, typed error (`OcrDisabledException`, `OCR_DISABLED`, HTTP 503) with a user-readable message. The frontend's existing generic API-error surface already renders the backend's error message, so this alone shows an honest "temporarily unavailable" message without a frontend code change — a dedicated/polished state (distinct from a generic failure) is part of the fast-follow, not this hotfix.
 
 Anti-drift: this is a kill-switch, not a redesign — no new endpoint, no new entity, no billing/quota change beyond gating the OCR call itself. The polished feedback-capture UX (asking users if they want OCR back) is intentionally deferred to a fast-follow Codex-built change, not bundled into this hotfix.
 
 ### Shipped
 
-_(nothing yet)_
+- **Disabled all Google Vision OCR call sites (backend).** Added `studysnap.ocr.enabled` (env `OCR_ENABLED`, default `true`) gating `NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, and `StudyPackService.createFromImage`. Each throws the new `OcrDisabledException` (`OCR_DISABLED`, HTTP 503) before any OCR call, quota check, or rate-limit check when disabled. Native-text PDF extraction and `.txt`/`.docx` upload are unaffected. Set `OCR_ENABLED=false` on Render to activate the kill-switch.
 
 ---
 
