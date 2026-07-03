@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.36.3 - OCR Fast-Follow: Messaging & Feedback
+
+**Status: In Progress**
+
+Theme: complete the OCR-disable story from v0.36.2. That hotfix gated the backend so no OCR call site can crash the server, but one touchpoint (New Note/Edit Note upload) currently swallows the real "OCR unavailable" message into a generic failure, and none of the three touchpoints tell users what's going on or ask if they want the feature back. This release fixes the swallowed message and adds a consistent, honest "OCR temporarily unavailable" state with a lightweight feedback ask across all three OCR-gated flows.
+
+### Planned Scope
+
+- **Fix swallowed error message (frontend).** `note-editor-page-client.tsx`'s upload handler only recognizes two hardcoded error messages (`IMPORT_UNSUPPORTED_FILE_MESSAGE`, `IMPORT_SCANNED_PDF_MESSAGE`); anything else — including the new `OCR_DISABLED` error — collapses into a generic "We couldn't extract text from this file" message. Add `isOcrDisabledError` (mirrors the existing `isOcrLimitReachedError` pattern, checks `error.code === "OCR_DISABLED"`) and a dedicated branch so the real message surfaces.
+- **Consistent "OCR temporarily unavailable" state (frontend, 3 touchpoints).** New Note/Edit Note upload, bulk import, and the photo-to-Study-Pack quick capture (`use-study-pack.ts`) each detect `OCR_DISABLED` and show the same distinguishable state (not a plain generic-red-text failure) instead of relying on incidental message pass-through.
+- **Feedback capture (frontend + backend).** A "Yes, I'd like this back" affordance on that state, firing a new `AnalyticsEventType` enum value. No new endpoint, table, or billing/quota change — reuses the existing analytics pipeline.
+
+Anti-drift: no change to the v0.36.2 kill-switch itself (`studysnap.ocr.enabled` stays as the single source of truth); no new endpoint or entity; the only backend change is additive enum value(s) for analytics, consistent with `AGENTS.md`'s "add to the enum before firing new events" rule.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.36.2 - OCR Disable Hotfix
 
 **Status: Released**

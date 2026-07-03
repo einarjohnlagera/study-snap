@@ -6,16 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.36.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.36.3** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.36.2 — OCR Disable Hotfix
+## Active release: v0.36.3 — OCR Fast-Follow: Messaging & Feedback
 
-Base branch for this release: `releases/v0.36.2`. Production incident response: the backend was repeatedly OOM-killed on Render's 512MB Starter instance, root-caused to Google Vision OCR (a fresh gRPC `ImageAnnotatorClient` per call, up to 30x per scanned-PDF import, native memory churn the JVM's flags leave no headroom for). Locked rules:
+Base branch for this release: `releases/v0.36.3`. Completes the OCR-disable story from v0.36.2 (the kill-switch itself is not touched). Locked rules:
 
-- **Kill-switch only, no redesign.** Disable all three Google Vision OCR call sites (`NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, `StudyPackService.createFromImage`) behind one env-configurable flag. No new endpoint, entity, or billing/quota change beyond gating the OCR call itself.
-- **Native-text paths unaffected.** `PDFTextStripper` extraction and `.txt` upload never call OCR and keep working exactly as before.
-- **Typed failure state.** A disabled OCR path returns a distinct, typed error, not a raw 500 — the frontend renders an honest "temporarily unavailable" message.
-- **Polish is a fast-follow, not this release.** Clear in-flow user messaging plus a feedback-capture mechanism (ask users if they want OCR back) is a separate, Codex-built change after this hotfix ships.
+- **Fix the swallowed error message.** `note-editor-page-client.tsx`'s upload handler only recognizes two hardcoded error messages; add `isOcrDisabledError` (mirrors `isOcrLimitReachedError`, checks `error.code === "OCR_DISABLED"`) so the real message surfaces instead of a generic fallback.
+- **Consistent disabled-state UI across all three OCR-gated touchpoints.** New Note/Edit Note upload, bulk import, and the photo-to-Study-Pack quick capture (`use-study-pack.ts`) each show the same distinguishable "OCR temporarily unavailable" state.
+- **Feedback capture.** A "Yes, I'd like this back" affordance at all three touchpoints, firing a new `AnalyticsEventType` enum value. No new endpoint, table, or billing/quota change.
+- **The v0.36.2 kill-switch itself is out of scope.** `studysnap.ocr.enabled` stays the single source of truth; this release only changes how the frontend responds to it.
 
 ## Source-of-truth docs (read before implementing anything)
 

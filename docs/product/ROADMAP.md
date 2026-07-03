@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.36.3 - OCR Fast-Follow: Messaging & Feedback` is the current in-progress release (on `releases/v0.36.3`).
+
 `v0.36.2 - OCR Disable Hotfix` is the latest released version (on `releases/v0.36.2`).
 
 `v0.36.1 - Post-Release Fixes` is the previous released version (on `releases/v0.36.1`).
@@ -74,6 +76,21 @@ Scope (to be refined at kickoff):
 - **No new mastery signal.** Still derived from existing `ConceptHealth` / `ProgressReportService` — no new field, AI call, or stored signal.
 
 Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no billing/quota/price/checkout change; no new chart library; all derived from existing concept health data.
+
+---
+
+## v0.36.3 - OCR Fast-Follow: Messaging & Feedback (in progress)
+
+Base branch: `releases/v0.36.3`.
+
+Theme: complete the OCR-disable story from v0.36.2 — fix a swallowed error message, give all three OCR-gated flows a consistent "temporarily unavailable" state, and add a lightweight feedback ask (do users want OCR back?).
+
+Scope:
+- **Fix swallowed error message.** `note-editor-page-client.tsx`'s upload handler only recognizes two hardcoded messages; anything else (including `OCR_DISABLED`) collapses into a generic failure. Add `isOcrDisabledError` and a dedicated branch.
+- **Consistent disabled-state UI across 3 touchpoints.** New Note/Edit Note upload, bulk import, and photo-to-Study-Pack quick capture each show the same distinguishable "OCR temporarily unavailable" state.
+- **Feedback capture.** A "Yes, I'd like this back" affordance firing a new `AnalyticsEventType` value — no new endpoint or table.
+
+Anti-drift: no change to the v0.36.2 kill-switch itself; only additive analytics enum value(s) on the backend.
 
 ---
 
