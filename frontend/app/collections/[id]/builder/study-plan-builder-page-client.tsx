@@ -248,13 +248,13 @@ function SortableNoteCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3",
+        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm",
         DND_TRANSITION_CLASS,
         isDragging && "scale-[1.01] border-dashed border-blue-400/80 opacity-40 shadow-lg",
         isOver && activeDrag?.type === "note" && "border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
       )}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 w-full items-start gap-3">
         <button
           ref={setActivatorNodeRef}
           type="button"
@@ -304,7 +304,7 @@ function SortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-1">
+      <div className="flex w-full items-center justify-end gap-1">
         {targetSubjects.length > 0 ? (
           <select
             aria-label={`Move ${title} to subject`}
@@ -393,13 +393,13 @@ function LeafSortableNoteCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3",
+        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm",
         DND_TRANSITION_CLASS,
         isDragging && "scale-[1.01] border-dashed border-blue-400/80 opacity-40 shadow-lg",
         isOver && activeDrag?.type === "leaf-note" && "border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
       )}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 w-full items-start gap-3">
         <button
           ref={setActivatorNodeRef}
           type="button"
@@ -433,7 +433,7 @@ function LeafSortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-1">
+      <div className="flex w-full items-center justify-end gap-1">
         {targetSections.length > 0 ? (
           <select
             aria-label={`Move ${title} to section`}
