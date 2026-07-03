@@ -10,11 +10,11 @@ import {
   Copy,
   Download,
   Globe,
-  Hammer,
   HelpCircle,
   House,
   Link2,
   Layers,
+  ListTree,
   LogOut,
   Mail,
   Pencil,
@@ -70,7 +70,7 @@ export type ActionIconName =
 
 const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   back: ArrowLeft,
-  build: Hammer,
+  build: ListTree,
   copy: Copy,
   create: Plus,
   dashboard: House,

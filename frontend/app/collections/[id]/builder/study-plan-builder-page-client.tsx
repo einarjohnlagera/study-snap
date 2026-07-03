@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -1125,6 +1125,13 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
+  // Tracks which collectionId the initial collapse-seed has already run for. A plain
+  // "has seeded" boolean isn't enough: loadBuilder depends on labels.goalSingular,
+  // which changes once for TEACHER profiles when auth resolves ("Goal" -> "Course"),
+  // re-firing loadBuilder a second time for the *same* plan. Keying the guard by
+  // collectionId makes that second fire a no-op while still correctly reseeding if
+  // the user navigates to a different Goal plan without a full remount.
+  const seededCollapseForCollectionIdRef = useRef<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
@@ -1176,8 +1183,11 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       // with many Subject Plans opens as a scannable header list. Later refreshes
       // (after add/remove/rename) never reseed, so manual expand/collapse state
       // survives mutations; a newly created Subject Plan is simply absent from the
-      // set, so it renders expanded by default.
-      if (options?.seedCollapsed) {
+      // set, so it renders expanded by default. Guarded per collectionId (not a
+      // plain boolean) so it still reseeds correctly if the user navigates to a
+      // different Goal plan without a full remount.
+      if (options?.seedCollapsed && seededCollapseForCollectionIdRef.current !== collectionId) {
+        seededCollapseForCollectionIdRef.current = collectionId;
         setCollapsedSubjectIds(new Set(nextSubjects.map((subject) => subject.collectionId)));
       }
     } finally {
