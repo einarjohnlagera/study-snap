@@ -362,7 +362,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - **Cross-profile mode unlock** (Students opting into Board Exam without changing profile).
 - **Curated exam decks / cohort content** (Pro+).
 - **Cross-profile journey** (Student → Board Taker upgrade flow with continuity).
-- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.37.0 candidate, Track B) — proposes reusing a Study Pack across methods like Identification, Enumeration, Flashcards, Memorization. Needs each method classified as an existing mode, a new question format on the existing engine, or a new non-scored surface, and this document updated first if any bucket needs a new discriminator. Not scoped into any release yet.
+- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.38.0 candidate — not kicked off) — Identification and Enumeration are scoped as new *question formats* on the existing quiz-session engine (write `ConceptHealth` like Challenge Quiz/Adaptive Practice, no new discriminator). Flashcards and Memorization are scoped as new *non-scored surfaces* outside the engine entirely (no `ConceptHealth` write, same rule as Quick Review). None of the four are a 6th/7th mode under this classification — this document still needs a short update to reflect the two new question formats before either reaches a Codex prompt.
 
 ---
 
