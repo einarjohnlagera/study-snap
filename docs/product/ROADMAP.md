@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.1 - Native Memory Hotfix` is the latest released version (on `releases/v0.37.1`).
+`v0.37.2 - Plan Data Integrity Hotfix` is the latest released version (on `releases/v0.37.2`).
+
+`v0.37.1 - Native Memory Hotfix` is the previous released version (on `releases/v0.37.1`).
 
 `v0.38.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
 
@@ -133,6 +135,21 @@ Scope:
 - **Builder action-row wrapping on tablet widths.** The breakpoint fix alone didn't fix real device screenshots (iPad Air vs. iPad Mini) showing an orphaned single-button wrap. Reorder controls (`Move up`/`Move down`, `Up`/`Down`) moved into a compact icon cluster next to the drag handle; action rows fixed at two items so they never wrap at any width.
 
 Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the nine items above only.
+
+---
+
+## v0.37.2 - Plan Data Integrity Hotfix (released)
+
+Base branch: `releases/v0.37.2`.
+
+Theme: two Study Plan correctness bugs found in production, shipped as a hotfix ahead of the v0.38.0 read-path memory optimization.
+
+### Planned Scope
+
+- **Fix partial-update clobber on collection metadata (backend).** `NoteCollectionService.updateMetadata` overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally while guarding only `title`; the Goal Builder's rename (a `{ title }`-only PATCH) therefore wiped those fields silently. Guard each optional field with a null check (PATCH semantics); an explicit empty string still clears a field. Audit sibling PATCH endpoints for the same shape.
+- **Plan visibility / course-program filtering (under investigation).** A FREE account reported seeing plans outside its own course/program. Only PUBLIC collections are ever returned (not a cross-user private leak); confirm the surface and enforce course/program relevance.
+
+Anti-drift: no schema change, no new endpoint — read/write correctness only. Study Plan read-path memory optimization is deferred to v0.38.0.
 
 ---
 

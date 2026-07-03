@@ -331,13 +331,24 @@ public class NoteCollectionService {
     @Transactional
     public NoteCollectionDetailResponse updateMetadata(UUID collectionId, UUID userId, UpdateNoteCollectionRequest request) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
-        if (request != null && request.title() != null) {
-            collection.setTitle(validateRequiredTitle(request.title()));
-        }
         if (request != null) {
-            collection.setDescription(normalizeOptionalText(request.description()));
-            collection.setCourseProgram(CourseProgramNormalizationUtils.normalizeForStorage(request.courseProgram()));
-            collection.setEstimatedStudyHours(request.estimatedStudyHours());
+            // PATCH semantics: only overwrite fields the caller actually provided. A null field means
+            // "not included in this request" and must be left untouched — otherwise a partial update
+            // (e.g. the Goal Builder's title-only rename) silently wipes description, courseProgram, and
+            // estimatedStudyHours. To clear a text field, callers send an explicit empty string, which
+            // normalizes to null below.
+            if (request.title() != null) {
+                collection.setTitle(validateRequiredTitle(request.title()));
+            }
+            if (request.description() != null) {
+                collection.setDescription(normalizeOptionalText(request.description()));
+            }
+            if (request.courseProgram() != null) {
+                collection.setCourseProgram(CourseProgramNormalizationUtils.normalizeForStorage(request.courseProgram()));
+            }
+            if (request.estimatedStudyHours() != null) {
+                collection.setEstimatedStudyHours(request.estimatedStudyHours());
+            }
         }
         touch(collection);
         NoteCollectionEntity saved = collectionRepository.save(collection);

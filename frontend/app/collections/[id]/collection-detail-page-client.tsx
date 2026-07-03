@@ -715,10 +715,9 @@ function EditCollectionModal({
     try {
       const saved = await updateCollection(collection.id, {
         title: trimmedTitle,
-        description: description.trim() || null,
-        // Send the current course/program so this title/description edit does not wipe it
-        // (updateMetadata overwrites every provided field; omitting one clears it).
-        courseProgram: collection.courseProgram,
+        // Send an empty string (not null) to clear the description: updateMetadata now preserves
+        // fields omitted (null) from the request and only clears a text field on an explicit "".
+        description: description.trim(),
         estimatedStudyHours: estimatedStudyHours ? Number(estimatedStudyHours) : null,
       });
       onSaved(saved);
@@ -1045,12 +1044,9 @@ function PublishStudyPlanModal({
     setError(null);
     try {
       const saved = await updateCollection(collection.id, {
-        // Send the current title/description so saving course/program does not wipe them
-        // (updateMetadata overwrites every provided field; omitting one clears it).
-        title: collection.title,
-        description: collection.description,
-        courseProgram: trimmedCourseProgram || null,
-        estimatedStudyHours: collection.estimatedStudyHours,
+        // updateMetadata preserves fields omitted (null) from the request, so we only send the field
+        // this editor changes. An empty string clears the course/program; null would leave it unchanged.
+        courseProgram: trimmedCourseProgram,
       });
       onSaved(saved);
       return saved;

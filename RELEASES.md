@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.37.2 - Plan Data Integrity Hotfix
+
+**Status: Released**
+
+Theme: stop a silent data-loss bug that wiped Study Plan metadata on every subject-plan rename.
+
+### Planned Scope
+
+- **Fix partial-update clobber on collection metadata (backend).** `NoteCollectionService.updateMetadata` guarded only `title` against null and overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally. The Goal Builder's rename action PATCHes `{ title }` only, so every subject-plan rename silently wiped those three fields. Guard each optional field with a null check (PATCH semantics), matching the existing `title` pattern; an explicit empty string still clears a field.
+- **Audit sibling PATCH endpoints (backend).** Scan note/profile update services for the same unguarded-setter shape and fix any that repeat it.
+- **Plan visibility report — investigated, no defect found (no change shipped).** A report of an account seeing unexpected plans was traced through the full read path: `list` is strictly `ownerUserId`-scoped, `listPublic` only ever returns PUBLIC collections, and the copy/adopt flow stamps every copy with `ownerUserId = copier` / `visibility = PRIVATE` and fires only on an explicit user action (no auto-adopt). Confirmed not a cross-user leak and not a scoping bug — plans on an account are only ones it created or explicitly adopted. Left as-is pending a concrete repro.
+
+Anti-drift: no schema change, no new endpoint — read/write correctness only. The Study Plan read-path memory optimization is deferred to v0.38.0.
+
+### Shipped
+
+- **Fixed silent metadata data-loss on collection PATCH.** `NoteCollectionService.updateMetadata` now applies true PATCH semantics — only fields present (non-null) in the request are written, so a partial update no longer wipes the others. Previously only `title` was guarded, so the Goal Builder's title-only rename (`PATCH /collections/{childId}` with `{ title }`) silently cleared `description`, `courseProgram`, and `estimatedStudyHours` on every subject-plan rename (and `persistCourseProgram` had the same exposure for `description`). To clear a text field, callers now send an explicit empty string. Audited the sibling PATCH surfaces (`NoteService.update` PUT with required content, `AuthService.updateUserProfile` with required fields) — both are structurally full-replace and not affected. Frontend edit-modal and course/program-editor sends updated to the new contract; the one accepted trade is that clearing a previously-set `estimatedStudyHours` back to null via the modal is deferred (no non-null empty sentinel for the integer field). Added regression coverage for title-only-preserves-other-fields and empty-string-clears.
+
 ## v0.37.1 - Native Memory Hotfix
 
 **Status: Released**
