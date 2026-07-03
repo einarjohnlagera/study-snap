@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.37.2 - Plan Data Integrity Hotfix
+
+**Status: In Progress**
+
+Theme: stop a silent data-loss bug in Study Plan metadata and tighten plan visibility so learners only see plans relevant to their course/program.
+
+### Planned Scope
+
+- **Fix partial-update clobber on collection metadata (backend).** `NoteCollectionService.updateMetadata` guarded only `title` against null and overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally. The Goal Builder's rename action PATCHes `{ title }` only, so every subject-plan rename silently wiped those three fields. Guard each optional field with a null check (PATCH semantics), matching the existing `title` pattern; an explicit empty string still clears a field.
+- **Audit sibling PATCH endpoints (backend).** Scan note/profile update services for the same unguarded-setter shape and fix any that repeat it.
+- **Plan visibility / course-program filtering (under investigation).** A FREE account reported seeing plans outside its own course/program. Only PUBLIC collections are ever returned (confirmed not a cross-user private leak); scope is to confirm the exact surface and enforce course/program relevance.
+
+Anti-drift: no schema change, no new endpoint — read/write correctness only. The Study Plan read-path memory optimization is deferred to v0.38.0.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.37.1 - Native Memory Hotfix
 
 **Status: Released**

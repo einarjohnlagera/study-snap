@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.37.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.37.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.37.1 — Native Memory Hotfix
+## Active release: v0.37.2 — Plan Data Integrity Hotfix
 
-Base branch for this release: `releases/v0.37.1`. Production incident response: repeated silent restarts on the 512MB Render Starter instance with no JVM-level `OutOfMemoryError` ever logged — the growth is native/off-heap memory outside JVM heap accounting, most likely glibc malloc-arena fragmentation (the base image is glibc/Debian, not musl/Alpine), not a repeat of the v0.36.2 OCR leak (already ruled out). Locked rules:
+Base branch for this release: `releases/v0.37.2`. Two correctness bugs in Study Plans found in production, shipped as a hotfix ahead of the v0.38.0 memory work. Locked rules:
 
-- **Cap glibc malloc arenas.** `MALLOC_ARENA_MAX=2` in `backend/Dockerfile` — zero code change, fully reversible via env var.
-- **Expose actuator metrics.** `management.endpoints.web.exposure.include: health,metrics` in `application.yaml` for future heap-vs-non-heap diagnosis — stays authenticated-only, not `permitAll`.
-- **No code/logic change.** Dockerfile env var + actuator exposure config only.
+- **Fix partial-update clobber in `NoteCollectionService.updateMetadata`.** The method guarded only `title` against null and overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally — so the Goal Builder's rename (which PATCHes `{ title }` only) silently wiped those three fields. Guard each optional field with a null check (PATCH semantics), matching the existing `title` pattern; an explicit empty string still clears a field. Audit sibling PATCH endpoints for the same shape.
+- **Plan visibility / course-program relevance.** A FREE account reported seeing plans outside its own course/program; only PUBLIC collections are ever returned (not a cross-user private leak). Confirm the exact surface and enforce course/program relevance.
+- **No schema change, no new endpoint.** Read/write correctness only. Study Plan read-path memory optimization is deferred to v0.38.0.
 
 ## Source-of-truth docs (read before implementing anything)
 
