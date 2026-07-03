@@ -22,6 +22,7 @@ import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.DraftNotFoundException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
@@ -217,6 +218,9 @@ public class StudyPackService {
     }
 
     public Object createFromImage(MultipartFile image, String subject, UUID ownerUserId) {
+        if (!properties.getOcr().isEnabled()) {
+            throw new OcrDisabledException();
+        }
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
