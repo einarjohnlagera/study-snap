@@ -1881,7 +1881,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             <div className="flex items-center justify-end gap-2">
               <ResponsiveActionLink
                 href={`/collections/${collectionId}/builder`}
-                action="edit"
+                action="build"
                 label="Build"
                 variant="outline"
                 size="sm"
@@ -2004,7 +2004,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           <div className="flex items-center justify-end gap-2">
             <ResponsiveActionLink
               href={`/collections/${collectionId}/builder`}
-              action="edit"
+              action="build"
               label="Build"
               variant="outline"
               size="sm"

@@ -242,12 +242,40 @@ describe("StudyPlanBuilderPageClient", () => {
     (updateCollection as jest.Mock).mockResolvedValue(collectionDetail("child-1", "Professional Education Mastery"));
   });
 
-  it("renders the goal builder canvas with subject blocks and notes", async () => {
+  it("shows a distinct empty state for a subject plan with no notes, even while collapsed", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "goal-1") {
+        return Promise.resolve(collectionDetail("goal-1", "LET Mastery", [], {
+          parentCollectionId: null,
+          childCount: 2,
+        }));
+      }
+      if (id === "child-1") {
+        return Promise.resolve(collectionDetail("child-1", "Professional Education Mastery", [
+          collectionItem("note-1", "Professional Foundations", 0),
+        ]));
+      }
+      return Promise.resolve(collectionDetail("child-2", "General Education Mastery", []));
+    });
+
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("No notes yet")).toBeInTheDocument();
+    expect(screen.queryByText("0% ready")).not.toBeInTheDocument();
+  });
+
+  it("renders the goal builder canvas with subject blocks and notes, collapsed by default", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("Professional Education Mastery")).toBeInTheDocument();
     expect(screen.getByDisplayValue("General Education Mastery")).toBeInTheDocument();
+    expect(screen.queryByText("Professional Foundations")).not.toBeInTheDocument();
+    expect(screen.queryByText("General Foundations")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+
     expect(screen.getByText("Professional Foundations")).toBeInTheDocument();
     expect(screen.getByText("General Foundations")).toBeInTheDocument();
   });
@@ -488,6 +516,8 @@ describe("StudyPlanBuilderPageClient", () => {
   it("moves a note across subjects with remove plus add and then saves target order", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
+    await screen.findByRole("heading", { name: "LET Mastery" });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     await screen.findByText("Professional Foundations");
     fireEvent.change(screen.getByLabelText("Move Professional Foundations to subject"), {
       target: { value: "child-2" },
@@ -506,6 +536,8 @@ describe("StudyPlanBuilderPageClient", () => {
   it("removes a note from a subject through the existing remove endpoint", async () => {
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
+    await screen.findByRole("heading", { name: "LET Mastery" });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     const block = await waitFor(() => subjectBlock("Professional Education Mastery"));
     fireEvent.click(within(block).getByRole("button", { name: /^Remove/ }));
 
@@ -519,6 +551,8 @@ describe("StudyPlanBuilderPageClient", () => {
 
     render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
 
+    await screen.findByRole("heading", { name: "LET Mastery" });
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     await screen.findByText("Professional Foundations");
     fireEvent.change(screen.getByLabelText("Move Professional Foundations to subject"), {
       target: { value: "child-2" },

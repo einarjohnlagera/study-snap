@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   Globe,
+  Hammer,
   HelpCircle,
   House,
   Link2,
@@ -37,6 +38,7 @@ import { cn } from "@/lib/utils";
 
 export type ActionIconName =
   | "back"
+  | "build"
   | "copy"
   | "create"
   | "dashboard"
@@ -68,6 +70,7 @@ export type ActionIconName =
 
 const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   back: ArrowLeft,
+  build: Hammer,
   copy: Copy,
   create: Plus,
   dashboard: House,
