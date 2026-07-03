@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.36.3 - OCR Fast-Follow: Messaging & Feedback` (in progress); previous: `v0.36.2 - OCR Disable Hotfix`
+Current release baseline: `v0.37.0 - Readiness-First Plans & Mastery Integrity` (in progress); previous: `v0.36.3 - OCR Fast-Follow: Messaging & Feedback`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

@@ -1,5 +1,26 @@
 # RELEASES.md - NoteLib
 
+## v0.37.0 - Readiness-First Plans & Mastery Integrity
+
+**Status: In Progress**
+
+Theme: make plan-level readiness the headline of the leaf Study Plan page instead of a click-through, and protect the mastery signal the readiness surface depends on so it can't be satisfied for free by unlimited Quick Review grinding.
+
+### Planned Scope
+
+- **Inline `ReadinessSummary` on leaf plan detail (frontend).** Reuses the existing `GET /collections/{id}/readiness` endpoint and `ProgressReportService` — no new field, endpoint, or mastery signal. Placed between `PlanHeroCard` and the existing "Continue where you left off" banner, matching the order Goal detail already uses.
+- **"Review due concepts" entry point (frontend).** A direct CTA from plan detail routing to the same next-step logic `PostSessionNextStep` already uses — no new routing model.
+- **Pro-gated CTA on the readiness surface (frontend).** Extends the v0.32.1 "surface premium exams as paywall moments" pattern; profile-aware via `exam-mode-visibility.ts` (Long Exam for Student/Professional, Board Exam for Board Taker) — no new plan tier or quota category.
+- **Quick Review stops writing to `ConceptHealth` (backend).** Quick Review no longer moves mastery, due-state, or `Overall Readiness` — it keeps its own ephemeral in-session feedback only. Mode-based exclusion in the shared session-completion write path for the `QUICK_REVIEW` discriminator; no new aggregate, table, or signal. No backfill/migration on existing `ConceptHealth` rows — mastery held up only by past Quick Review activity decays naturally once nothing refreshes it.
+
+Anti-drift: reuses existing `ConceptHealth` / `ProgressReportService` / `GET /collections/{id}/readiness` and existing Board Exam / Long Exam entitlement checks only. No new mastery signal, no new persisted field, no data migration/backfill, no billing/quota/price change. Flexible review methods (Flashcards/Identification/Enumeration/Memorization), Quick Review session disposability, and the broader review-vs-assessment taxonomy are explicitly deferred — see `ROADMAP.md`.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.36.3 - OCR Fast-Follow: Messaging & Feedback
 
 **Status: Released**

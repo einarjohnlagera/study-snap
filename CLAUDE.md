@@ -6,16 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.36.3** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.37.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.36.3 — OCR Fast-Follow: Messaging & Feedback
+## Active release: v0.37.0 — Readiness-First Plans & Mastery Integrity
 
-Base branch for this release: `releases/v0.36.3`. Completes the OCR-disable story from v0.36.2 (the kill-switch itself is not touched). Locked rules:
+Base branch for this release: `releases/v0.37.0`. Makes plan-level readiness the headline of the leaf Study Plan page instead of a click-through, and protects the mastery signal the readiness surface depends on. Locked rules:
 
-- **Fix the swallowed error message.** `note-editor-page-client.tsx`'s upload handler only recognizes two hardcoded error messages; add `isOcrDisabledError` (mirrors `isOcrLimitReachedError`, checks `error.code === "OCR_DISABLED"`) so the real message surfaces instead of a generic fallback.
-- **Consistent disabled-state UI across all three OCR-gated touchpoints.** New Note/Edit Note upload, bulk import, and the photo-to-Study-Pack quick capture (`use-study-pack.ts`) each show the same distinguishable "OCR temporarily unavailable" state.
-- **Feedback capture.** A "Yes, I'd like this back" affordance at all three touchpoints, firing a new `AnalyticsEventType` enum value. No new endpoint, table, or billing/quota change.
-- **The v0.36.2 kill-switch itself is out of scope.** `studysnap.ocr.enabled` stays the single source of truth; this release only changes how the frontend responds to it.
+- **Inline `ReadinessSummary` on leaf plan detail.** Reuses the existing `GET /collections/{id}/readiness` endpoint and `ProgressReportService` — no new field, endpoint, or mastery signal. Matches the order Goal detail already uses (Hero → Readiness → Continue where you left off → sections).
+- **"Review due concepts" entry point** on plan detail, routing through the existing `PostSessionNextStep` logic — no new routing model.
+- **Pro-gated CTA on the readiness surface**, extending the v0.32.1 premium-exam-paywall pattern. Must be profile-aware via `exam-mode-visibility.ts` (Long Exam for Student/Professional, Board Exam for Board Taker) — never a blanket CTA regardless of profile.
+- **Quick Review stops writing to `ConceptHealth`.** Quick Review must never move mastery, due-state, or `Overall Readiness` going forward — it keeps its own ephemeral in-session feedback only. Mode-based exclusion in the shared session-completion write path for the `QUICK_REVIEW` discriminator; no new aggregate, table, or signal. No backfill/migration on existing `ConceptHealth` data — mastery held up only by past Quick Review activity decays naturally.
+- **Deferred, not in scope**: flexible review methods (Flashcards/Identification/Enumeration/Memorization), Quick Review session disposability, and the broader review-vs-assessment taxonomy — see `ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 

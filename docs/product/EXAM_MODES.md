@@ -362,6 +362,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - **Cross-profile mode unlock** (Students opting into Board Exam without changing profile).
 - **Curated exam decks / cohort content** (Pro+).
 - **Cross-profile journey** (Student → Board Taker upgrade flow with continuity).
+- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.37.0 candidate, Track B) — proposes reusing a Study Pack across methods like Identification, Enumeration, Flashcards, Memorization. Needs each method classified as an existing mode, a new question format on the existing engine, or a new non-scored surface, and this document updated first if any bucket needs a new discriminator. Not scoped into any release yet.
 
 ---
 
