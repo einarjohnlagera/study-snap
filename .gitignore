@@ -4,3 +4,7 @@ node_modules
 .env.local
 target
 .idea
+
+# Codex prompts are local planning material for handing work to Codex,
+# not a shipped artifact — never tracked, see docs/skills/codex-prompt-generator.md
+docs/codex-prompts/

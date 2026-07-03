@@ -16,6 +16,8 @@ Determine the prompt mode:
 
 Then fill in the appropriate template below. Save the completed prompt to `docs/codex-prompts/<version>-<feature>.md` before sending.
 
+**Do not `git add` or commit files under `docs/codex-prompts/`.** They're local planning material for handing work to Codex, not a shipped artifact — write them to disk, but leave them untracked. This applies even during the later `/audit-diff` commit step: stage and commit the Codex-delivered code/doc changes, but exclude the prompt file itself.
+
 ---
 
 ## Long Prompt Template

@@ -6,6 +6,7 @@ import {
   getMyPlan,
   importNotesBatch,
   listCollections,
+  trackAnalyticsEvent,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -32,6 +33,8 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   importNotesBatch: jest.fn(),
   listCollections: jest.fn(),
+  OCR_DISABLED_ERROR_CODE: "OCR_DISABLED",
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 const partialResult = {
@@ -96,6 +99,7 @@ describe("BulkImportPageClient", () => {
     (createCollection as jest.Mock).mockReset();
     (importNotesBatch as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       limits: { ocrPerMonth: 20 },
@@ -164,6 +168,36 @@ describe("BulkImportPageClient", () => {
     expect(screen.getByRole("heading", { name: "Failed (1)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import more files" })).toBeInTheDocument();
     expect(screen.queryByText(/Add these .* drafts to a/i)).not.toBeInTheDocument();
+  });
+
+  it("renders OCR disabled failures with dedicated treatment while sibling failures stay generic", async () => {
+    render(<BulkImportPageClient />);
+    const mixedFailures = {
+      created: [],
+      failed: [
+        {
+          fileName: "scan.pdf",
+          errorCode: "OCR_DISABLED",
+          message: "Image and scanned-document reading is temporarily unavailable. Try a PDF or document with selectable text instead.",
+        },
+        {
+          fileName: "blank.txt",
+          errorCode: "EMPTY_TEXT",
+          message: "No readable text was found.",
+        },
+      ],
+    };
+
+    await importFiles([
+      new File(["scan"], "scan.pdf", { type: "application/pdf" }),
+      new File([""], "blank.txt", { type: "text/plain" }),
+    ], mixedFailures);
+
+    expect(screen.getByText("scan.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Image reading is temporarily unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Yes, I'd like this back" })).toBeInTheDocument();
+    expect(screen.getByText("blank.txt")).toBeInTheDocument();
+    expect(screen.getByText("No readable text was found.")).toBeInTheDocument();
   });
 
   it("preserves selected files and offers retry after a request failure", async () => {

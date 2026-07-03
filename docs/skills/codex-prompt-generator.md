@@ -50,6 +50,12 @@ This prevents Codex from guessing product rules it should be reading instead.
 
 ---
 
+## Do Not Commit Prompt Files
+
+Save every completed prompt to `docs/codex-prompts/<version>-<feature>.md` — but never `git add` or commit that file. It's local planning material for handing work to Codex, not a shipped artifact. This holds even at the later `/audit-diff` commit step: stage and commit the Codex-delivered code and doc changes, but leave the prompt file itself untracked.
+
+---
+
 ## Prompt Template (Long Mode)
 
 ```

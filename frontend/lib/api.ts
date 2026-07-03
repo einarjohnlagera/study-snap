@@ -431,6 +431,8 @@ export type AnalyticsEventType =
   | "STUDY_GOAL_DISMISSED"
   | "GOAL_NUDGE_SHOWN"
   | "GOAL_NUDGE_CTA_CLICKED"
+  | "OCR_DISABLED_NOTICE_SHOWN"
+  | "OCR_DISABLED_FEEDBACK_INTERESTED"
   | "DASHBOARD_GOAL_CARD_VIEWED"
   | "DASHBOARD_GOAL_CARD_CTA_CLICKED"
   | "DASHBOARD_RECOMMENDATION_SHOWN"
@@ -1554,6 +1556,7 @@ export class ApiRequestError extends Error {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
+export const OCR_DISABLED_ERROR_CODE = "OCR_DISABLED";
 
 function buildUrl(path: string) {
   return `${API_BASE_URL}${path}`;
@@ -4107,6 +4110,10 @@ export function isEmailNotVerifiedError(error: unknown): error is ApiRequestErro
 
 export function isOcrLimitReachedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "OCR_LIMIT_REACHED";
+}
+
+export function isOcrDisabledError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === OCR_DISABLED_ERROR_CODE;
 }
 
 export function isNoteGenerationLimitReachedError(error: unknown): error is ApiRequestError {
