@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.36.2 - OCR Disable Hotfix` is the current in-progress release (on `releases/v0.36.2`).
+`v0.36.2 - OCR Disable Hotfix` is the latest released version (on `releases/v0.36.2`).
 
-`v0.36.1 - Post-Release Fixes` is the latest released version (on `releases/v0.36.1`).
+`v0.36.1 - Post-Release Fixes` is the previous released version (on `releases/v0.36.1`).
 
 `v0.36.0 - Readiness/Progress Merge` is the previous released version (on `releases/v0.36.0`).
 
@@ -77,7 +77,7 @@ Anti-drift: Free gate stays as-is (signal free, timing detail PLUS/PRO); no bill
 
 ---
 
-## v0.36.2 - OCR Disable Hotfix (in progress)
+## v0.36.2 - OCR Disable Hotfix (released)
 
 Base branch: `releases/v0.36.2`.
 

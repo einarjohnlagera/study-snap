@@ -2,7 +2,7 @@
 
 ## v0.36.2 - OCR Disable Hotfix
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: production incident response — the backend on Render (512MB Starter instance) was repeatedly OOM-killed (crashing every 20-90 minutes). Root cause traced to Google Vision OCR: `GoogleVisionOcrService` constructs a fresh gRPC `ImageAnnotatorClient` per call, and the scanned-PDF fallback calls it once per page (up to 30x per import); each client's native/off-heap Netty buffers churn faster than they're reclaimed, and the Dockerfile's JVM flags leave zero native-memory headroom (`MaxRAMPercentage=50.0` with no `MaxDirectMemorySize` cap means heap+direct already claims the full 512MB container), so the cgroup kills the process with SIGKILL before the JVM can log an OutOfMemoryError. Since the product is pre-revenue, disabling OCR (which is also a paid Google API) cuts cost as well as risk. This release is a fast kill-switch now; a polished user-facing version (clear messaging + feedback capture) is planned as a fast-follow.
 
