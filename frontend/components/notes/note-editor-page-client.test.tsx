@@ -14,6 +14,7 @@ import {
   getNote,
   listCoursePrograms,
   listSubjects,
+  trackAnalyticsEvent,
   updateNote,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -63,6 +64,9 @@ jest.mock("@/lib/api", () => ({
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
+  isOcrDisabledError: (error: unknown) => (
+    error instanceof Error && (error as Error & { code?: string }).code === "OCR_DISABLED"
+  ),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
 }));
@@ -120,6 +124,7 @@ describe("NoteEditorPageClient", () => {
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (redirectToCheckoutUrl as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Senior High – STEM"]);
@@ -1259,6 +1264,29 @@ describe("NoteEditorPageClient", () => {
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Get Plus" })).not.toBeInTheDocument();
+  });
+
+  it("renders the OCR disabled notice with the backend message during import", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockRejectedValue(
+      Object.assign(
+        new Error("Image and scanned-document reading is temporarily unavailable. Try a PDF or document with selectable text instead."),
+        { code: "OCR_DISABLED" },
+      ),
+    );
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    await selectImportNotesMode();
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["img"], "note.png", { type: "image/png" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(await screen.findByText("Image reading is temporarily unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Image and scanned-document reading is temporarily unavailable. Try a PDF or document with selectable text instead.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Yes, I'd like this back" })).toBeInTheDocument();
+    expect(screen.queryByText("We couldn’t extract text from this file. Try another image or file.")).not.toBeInTheDocument();
   });
 
   it("saves a new note after importing content", async () => {

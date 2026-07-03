@@ -16,7 +16,9 @@ Anti-drift: no change to the v0.36.2 kill-switch itself (`studysnap.ocr.enabled`
 
 ### Shipped
 
-_(nothing yet)_
+- **Fix swallowed OCR-disabled upload message (frontend).** `note-editor-page-client.tsx` now detects `OCR_DISABLED` with a dedicated `isOcrDisabledError` helper before the generic import fallback, so image uploads and scanned-PDF OCR fallback failures surface the backend's real "temporarily unavailable" message instead of collapsing into "We couldn't extract text from this file."
+- **Consistent "OCR temporarily unavailable" state (frontend, 3 touchpoints).** Added a shared `OcrDisabledNotice` used by New Note/Edit Note upload, bulk import per-file failures, and the photo-to-Study-Pack quick capture. Bulk import treats each failed file independently, so `OCR_DISABLED` rows get the paused-feature treatment while sibling failures keep the generic red failure row.
+- **Feedback capture analytics (frontend + backend enum).** Added `OCR_DISABLED_NOTICE_SHOWN` and `OCR_DISABLED_FEEDBACK_INTERESTED` to the backend `AnalyticsEventType` enum and frontend union type, then wired the notice to fire the shown event once per mount and the feedback event once when the user clicks "Yes, I'd like this back." No endpoint, table, billing, quota, or kill-switch behavior changed.
 
 ---
 

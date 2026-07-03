@@ -16,6 +16,7 @@ import {
   getMyPlan,
   importNotesBatch,
   listCollections,
+  OCR_DISABLED_ERROR_CODE,
   type BulkImportResult,
   type NoteCollectionSummary,
 } from "@/lib/api";
@@ -24,6 +25,7 @@ import { getCollectionLabels } from "@/lib/collection-labels";
 import { formatStudyPackResetDate } from "@/lib/plans";
 import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { OcrDisabledNotice } from "@/components/notes/ocr-disabled-notice";
 
 export const MAX_BATCH_IMPORT_FILES = 20;
 export const BATCH_IMPORT_CAP_MESSAGE = `You can import up to ${MAX_BATCH_IMPORT_FILES} files at once.`;
@@ -461,17 +463,32 @@ export function BulkImportPageClient() {
                   Failed ({result.failed.length})
                 </h3>
                 <ul className="space-y-2">
-                  {result.failed.map((failure, index) => (
-                    <li key={`${failure.fileName}-${failure.errorCode}-${index}`} className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/20">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">{failure.fileName}</p>
-                          <p className="text-sm text-red-700 dark:text-red-200">{failure.message}</p>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
+                  {result.failed.map((failure, index) => {
+                    const isOcrDisabledFailure = failure.errorCode === OCR_DISABLED_ERROR_CODE;
+                    return (
+                      <li
+                        key={`${failure.fileName}-${failure.errorCode}-${index}`}
+                        className={isOcrDisabledFailure
+                          ? "space-y-2"
+                          : "rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/20"}
+                      >
+                        {isOcrDisabledFailure ? (
+                          <>
+                            <p className="text-sm font-medium text-foreground">{failure.fileName}</p>
+                            <OcrDisabledNotice message={failure.message} source="bulk_import_result" />
+                          </>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">{failure.fileName}</p>
+                              <p className="text-sm text-red-700 dark:text-red-200">{failure.message}</p>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ) : null}
