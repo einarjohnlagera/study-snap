@@ -19,6 +19,12 @@ Current product placement:
 
 NoteLib uses Google Cloud Vision OCR for image-based notes.
 
+## Kill-switch (v0.36.2)
+
+`studysnap.ocr.enabled` (env `OCR_ENABLED`, default `true`) gates all three call sites that invoke Google Vision OCR: image note upload (`NoteTextExtractionService.extractFromImage`), the scanned-PDF fallback (`NoteTextExtractionService.extractFromPdfViaOcr`), and the photo-to-Study-Pack quick capture (`StudyPackService.createFromImage`). When disabled, each throws `OcrDisabledException` (`OCR_DISABLED`, HTTP 503) before doing any OCR work, quota check, or rate-limit check. Native-text PDF extraction (`PDFTextStripper`) and `.txt`/`.docx` upload never call OCR and are unaffected.
+
+This was added as a production incident hotfix: constructing a fresh gRPC `ImageAnnotatorClient` per OCR call (up to once per page for a scanned PDF, up to 30 pages) drove native/off-heap memory usage past the Render container's memory limit, and being pre-revenue, disabling this also cuts Google Vision API cost. The frontend does not yet have a dedicated "OCR unavailable" message for this state — that polish (plus a feedback-capture mechanism asking users if they want OCR back) is a planned fast-follow, not yet shipped.
+
 ## Extraction flow
 
 Create/Edit Note should use a backend extraction endpoint that:

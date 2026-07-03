@@ -63,6 +63,7 @@ studysnap:
     model-critique: ${LLM_MODEL_CRITIQUE:gpt-4.1-mini}
     prompt-dir: ${LLM_PROMPT_DIR:prompts/study-pack-v1}
   ocr:
+    enabled: ${OCR_ENABLED:true}
     provider: ${OCR_PROVIDER:stub}
     confidence-threshold: ${OCR_CONFIDENCE_THRESHOLD:0.8}
     min-detected-chars: ${OCR_MIN_DETECTED_CHARS:30}

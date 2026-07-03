@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.36.2 - OCR Disable Hotfix
+
+**Status: Released**
+
+Theme: production incident response — the backend on Render (512MB Starter instance) was repeatedly OOM-killed (crashing every 20-90 minutes). Root cause traced to Google Vision OCR: `GoogleVisionOcrService` constructs a fresh gRPC `ImageAnnotatorClient` per call, and the scanned-PDF fallback calls it once per page (up to 30x per import); each client's native/off-heap Netty buffers churn faster than they're reclaimed, and the Dockerfile's JVM flags leave zero native-memory headroom (`MaxRAMPercentage=50.0` with no `MaxDirectMemorySize` cap means heap+direct already claims the full 512MB container), so the cgroup kills the process with SIGKILL before the JVM can log an OutOfMemoryError. Since the product is pre-revenue, disabling OCR (which is also a paid Google API) cuts cost as well as risk. This release is a fast kill-switch now; a polished user-facing version (clear messaging + feedback capture) is planned as a fast-follow.
+
+### Planned Scope
+
+- **Disable all Google Vision OCR call sites (backend).** Gate `NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, and `StudyPackService.createFromImage` behind a single kill-switch (env-configurable), so none of them construct an `ImageAnnotatorClient`. Native-text PDF extraction (`PDFTextStripper`) and `.txt` upload are unaffected — no OCR call, no cost, no crash risk.
+- **Clear failure state, not a raw 500.** When OCR is disabled and a caller hits one of the three gated paths, return a distinct, typed error (`OcrDisabledException`, `OCR_DISABLED`, HTTP 503) with a user-readable message. The frontend's existing generic API-error surface already renders the backend's error message, so this alone shows an honest "temporarily unavailable" message without a frontend code change — a dedicated/polished state (distinct from a generic failure) is part of the fast-follow, not this hotfix.
+
+Anti-drift: this is a kill-switch, not a redesign — no new endpoint, no new entity, no billing/quota change beyond gating the OCR call itself. The polished feedback-capture UX (asking users if they want OCR back) is intentionally deferred to a fast-follow Codex-built change, not bundled into this hotfix.
+
+### Shipped
+
+- **Disabled all Google Vision OCR call sites (backend).** Added `studysnap.ocr.enabled` (env `OCR_ENABLED`, default `true`) gating `NoteTextExtractionService.extractFromImage`, `NoteTextExtractionService.extractFromPdfViaOcr`, and `StudyPackService.createFromImage`. Each throws the new `OcrDisabledException` (`OCR_DISABLED`, HTTP 503) before any OCR call, quota check, or rate-limit check when disabled. Native-text PDF extraction and `.txt`/`.docx` upload are unaffected. Set `OCR_ENABLED=false` on Render to activate the kill-switch.
+
+---
+
 ## v0.36.1 - Post-Release Fixes
 
 **Status: Released**
