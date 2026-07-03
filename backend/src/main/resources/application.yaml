@@ -48,7 +48,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        # metrics exposes jvm.memory.used/max (tagged heap vs nonheap), jvm.gc.pause,
+        # and thread counts via GET /actuator/metrics/{name} — not permitAll (see
+        # SecurityConfig), so this stays authenticated-only. Added so a future memory
+        # incident can be diagnosed from live metrics instead of inferring
+        # heap-vs-native from the presence/absence of an OutOfMemoryError log line.
+        include: health,metrics
       cors:
         allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
@@ -125,6 +130,12 @@ studysnap:
     difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
     long-exam-pool-size: ${LONG_EXAM_POOL_SIZE:48}
     board-exam-pool-size: ${BOARD_EXAM_POOL_SIZE:24}
+    # Kill-switch for eager exam-pool pre-warming (fires automatically on every Study
+    # Pack generation, not on actual Long/Board Exam usage). Default off: with zero
+    # Pro users today, this is pure LLM-fan-out cost/memory pressure for zero value.
+    # A real Long/Board Exam start still works when this is off — it live-generates
+    # on demand instead of serving from a pre-warmed pool (see LongExamService).
+    exam-pool-prewarm-enabled: ${EXAM_POOL_PREWARM_ENABLED:false}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}

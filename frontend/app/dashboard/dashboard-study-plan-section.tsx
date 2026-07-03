@@ -118,8 +118,11 @@ export function DashboardStudyPlanSection({
     : (isGoal ? "Start this Goal" : "Start this plan");
   const subjectPlanLabel = `${plan.childCount} ${plan.childCount === 1 ? "Subject plan" : "Subject plans"}`;
   const noteLabel = `${plan.itemCount} ${plan.itemCount === 1 ? "note" : "notes"}`;
-  const descriptionFallback = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} in saved order.`;
-  const detailLine = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} curated for this track.`;
+  // A Goal never holds notes directly (only its child Subject plans do), so plan.itemCount
+  // is always 0 here — showing "0 notes" alongside "N Subject plans" reads as broken/empty.
+  // Omit the note count for Goals rather than show a truthful-but-misleading zero.
+  const descriptionFallback = isGoal ? subjectPlanLabel : `${noteLabel} in saved order.`;
+  const detailLine = isGoal ? subjectPlanLabel : `${noteLabel} curated for this track.`;
 
   const handleStart = async () => {
     if (continuePlan) {

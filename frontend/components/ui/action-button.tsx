@@ -14,6 +14,7 @@ import {
   House,
   Link2,
   Layers,
+  ListTree,
   LogOut,
   Mail,
   Pencil,
@@ -37,6 +38,7 @@ import { cn } from "@/lib/utils";
 
 export type ActionIconName =
   | "back"
+  | "build"
   | "copy"
   | "create"
   | "dashboard"
@@ -68,6 +70,7 @@ export type ActionIconName =
 
 const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   back: ArrowLeft,
+  build: ListTree,
   copy: Copy,
   create: Plus,
   dashboard: House,

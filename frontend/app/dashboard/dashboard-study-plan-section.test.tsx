@@ -109,7 +109,7 @@ describe("DashboardStudyPlanSection", () => {
 
     render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
 
-    expect(await screen.findByText("3 Subject plans · 9 notes")).toBeInTheDocument();
+    expect(await screen.findByText("3 Subject plans")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start this Goal" }));
 
     await waitFor(() => {

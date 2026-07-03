@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -248,13 +248,13 @@ function SortableNoteCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3",
+        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm",
         DND_TRANSITION_CLASS,
         isDragging && "scale-[1.01] border-dashed border-blue-400/80 opacity-40 shadow-lg",
         isOver && activeDrag?.type === "note" && "border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
       )}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 w-full items-start gap-3">
         <button
           ref={setActivatorNodeRef}
           type="button"
@@ -304,7 +304,7 @@ function SortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-1">
+      <div className="flex w-full items-center justify-end gap-1">
         {targetSubjects.length > 0 ? (
           <select
             aria-label={`Move ${title} to subject`}
@@ -393,13 +393,13 @@ function LeafSortableNoteCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3",
+        "flex w-full min-w-0 flex-col gap-2 rounded-lg border border-border bg-background p-3 shadow-sm",
         DND_TRANSITION_CLASS,
         isDragging && "scale-[1.01] border-dashed border-blue-400/80 opacity-40 shadow-lg",
         isOver && activeDrag?.type === "leaf-note" && "border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
       )}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 w-full items-start gap-3">
         <button
           ref={setActivatorNodeRef}
           type="button"
@@ -433,7 +433,7 @@ function LeafSortableNoteCard({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-1">
+      <div className="flex w-full items-center justify-end gap-1">
         {targetSections.length > 0 ? (
           <select
             aria-label={`Move ${title} to section`}
@@ -743,9 +743,17 @@ function SortableSubjectBlock({
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
-              <span>{subject.items.length} {subject.items.length === 1 ? "note" : "notes"}</span>
-              <span>{subject.overallReadinessPercentage}% ready</span>
-              <span>{subject.masteredConcepts}/{subject.totalConcepts} mastered</span>
+              {subject.items.length === 0 ? (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                  No notes yet
+                </span>
+              ) : (
+                <>
+                  <span>{subject.items.length} {subject.items.length === 1 ? "note" : "notes"}</span>
+                  <span>{subject.overallReadinessPercentage}% ready</span>
+                  <span>{subject.masteredConcepts}/{subject.totalConcepts} mastered</span>
+                </>
+              )}
             </div>
             <div
               role="progressbar"
@@ -1117,6 +1125,13 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
+  // Tracks which collectionId the initial collapse-seed has already run for. A plain
+  // "has seeded" boolean isn't enough: loadBuilder depends on labels.goalSingular,
+  // which changes once for TEACHER profiles when auth resolves ("Goal" -> "Course"),
+  // re-firing loadBuilder a second time for the *same* plan. Keying the guard by
+  // collectionId makes that second fire a no-op while still correctly reseeding if
+  // the user navigates to a different Goal plan without a full remount.
+  const seededCollapseForCollectionIdRef = useRef<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
@@ -1143,7 +1158,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   }, []);
 
-  const refreshBuilder = useCallback(async () => {
+  const refreshBuilder = useCallback(async (options?: { seedCollapsed?: boolean }) => {
     setRefreshingBuilder(true);
     try {
       const [collectionResult, notesResult] = await Promise.all([
@@ -1160,9 +1175,21 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       }
       const goalResult = await getCollectionGoal(collectionId);
       const childDetails = await Promise.all(goalResult.children.map((child) => getCollection(child.collectionId)));
+      const nextSubjects = buildSubjects(goalResult, childDetails);
       setGoal(goalResult);
-      setSubjects(buildSubjects(goalResult, childDetails));
+      setSubjects(nextSubjects);
       setLeafItems([]);
+      // Collapse every section on the initial load only (see loadBuilder) so a plan
+      // with many Subject Plans opens as a scannable header list. Later refreshes
+      // (after add/remove/rename) never reseed, so manual expand/collapse state
+      // survives mutations; a newly created Subject Plan is simply absent from the
+      // set, so it renders expanded by default. Guarded per collectionId (not a
+      // plain boolean) so it still reseeds correctly if the user navigates to a
+      // different Goal plan without a full remount.
+      if (options?.seedCollapsed && seededCollapseForCollectionIdRef.current !== collectionId) {
+        seededCollapseForCollectionIdRef.current = collectionId;
+        setCollapsedSubjectIds(new Set(nextSubjects.map((subject) => subject.collectionId)));
+      }
     } finally {
       setRefreshingBuilder(false);
     }
@@ -1173,7 +1200,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     setLoadError(null);
     setMutationError(null);
     try {
-      await refreshBuilder();
+      await refreshBuilder({ seedCollapsed: true });
       setLoadState("ready");
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 404) {
@@ -1904,6 +1931,27 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           </div>
           <p className="text-xs text-foreground/55">Drag {pluralizeLabel(labels.subjectSingular)} to reorder; drag notes within or across them.</p>
         </div>
+
+        {subjects.length > 0 ? (
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCollapsedSubjectIds(new Set())}
+            >
+              Expand all
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCollapsedSubjectIds(new Set(subjects.map((subject) => subject.collectionId)))}
+            >
+              Collapse all
+            </Button>
+          </div>
+        ) : null}
 
         {subjects.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-8 text-center">

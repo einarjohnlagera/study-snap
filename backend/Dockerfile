@@ -22,4 +22,14 @@ EXPOSE 8080
 # so Render restarts a clean process instead of limping with an exhausted pool.
 # Tunable via JAVA_OPTS without a rebuild; `exec` keeps the JVM as PID 1.
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:+ExitOnOutOfMemoryError"
+
+# This image is glibc-based (Debian), not musl/Alpine. glibc allocates a separate
+# malloc arena per thread for concurrency, and those arenas fragment and are never
+# returned to the OS — with multiple thread pools (Tomcat, study-pack-generation,
+# llm-parallel) churning small allocations all day, container RSS can silently climb
+# to the cgroup memory limit and get SIGKILLed with no JVM-level OutOfMemoryError
+# ever logged, since this is OS/libc memory the JVM has zero visibility into. Capping
+# arenas trades a little allocation throughput for bounded, predictable native memory.
+ENV MALLOC_ARENA_MAX=2
+
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
