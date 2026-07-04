@@ -2,7 +2,7 @@
 
 ## v0.38.0 - Read-Path Optimization Pass
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: extend the v0.37.3 projection discipline across the remaining hot read/list endpoints, cutting per-request latency, DB payload, and peak heap under concurrent load. Not a memory-idle fix (that was the 2GB instance upgrade) — this is a latency/efficiency pass on the endpoints the app hits most.
 

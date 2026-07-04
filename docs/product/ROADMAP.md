@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.38.0 - Read-Path Optimization Pass` is in progress (on `releases/v0.38.0`).
+`v0.38.0 - Read-Path Optimization Pass` is the latest released version (on `releases/v0.38.0`).
 
-`v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the latest released version (on `releases/v0.37.4`).
+`v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the previous released version (on `releases/v0.37.4`).
 
 `v0.37.3 - Study Plan Read-Path Memory Optimization` is the previous released version (on `releases/v0.37.3`).
 
@@ -144,7 +144,7 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
-## v0.38.0 - Read-Path Optimization Pass (in progress)
+## v0.38.0 - Read-Path Optimization Pass (released)
 
 Base branch: `releases/v0.38.0`.
 
@@ -158,6 +158,10 @@ Theme: extend the v0.37.3 projection discipline across the remaining hot read/li
 - **Goal per-child readiness batch (backend, P4).** Batch `getGoal`'s per-child `getReadiness` N+1 (deferred from v0.37.3). Sequenced last; may slip to a follow-up.
 
 Anti-drift: no schema, endpoint, or DTO change — byte-identical responses. Every new interface projection requires a real-Hibernate test (the v0.37.3 projection-detection footgun). Note detail (`getById`), generated-quiz `getByNoteId`, and the already-optimized progress report are out of scope — they legitimately need full payloads. Sequencing driven by `http.server.requests` p95 data, not inferred frequency.
+
+### Unplanned follow-ups (backlog, not scheduled)
+
+- **Persist `study_packs.question_count` (denormalize the quiz length).** P3 ships the library-list quiz count via a Postgres-native `jsonb_array_length(quiz)` query, which (a) still forces Postgres to read/parse the TOAST'd `quiz` JSONB per row and (b) can't be exercised by the H2 test harness (documented gap). A persisted `int question_count` column would eliminate the residual server-side TOAST read, make the whole read path pure-JPQL (fully H2-testable), and become indexable/reusable (sort/filter/analytics by length). Cost is a migration + backfill + write-path sync on every quiz mutation (generation, regeneration, Challenge Quiz progressive add) — a new drift/bug surface — so it only earns its keep if the library list shows up in slow-query logs, or question count is needed in more than one place. Revisit then; not worth the write-path maintenance at current scale.
 
 ---
 
