@@ -18,6 +18,7 @@ Anti-drift: Identification/Enumeration reuse the existing quiz-session engine an
 ### Shipped
 
 - **Flashcards (frontend).** Added a private Note Detail Flashcards entry point for every non-teacher profile. `/notes/{id}/flashcards` renders a flip-card deck from existing `keyConcepts`, matches `quiz[].concept` to reuse `quiz[].explanation` as the card back, and shows a per-card "no definition yet" fallback when no explanation matches. The surface is free, frontend-only, outside the quiz-session engine, makes no new AI/backend call, and never reads or writes `ConceptHealth`.
+- **Flashcards fix: fuzzy concept matching + entry point relocation (frontend).** Exact-string concept matching measured ~18% average definition coverage across generated Study Packs in an audit; switched to a normalized, bidirectional-substring fuzzy match, raising average coverage to ~56% (the practical ceiling, since `keyConcepts` always outnumbers `quiz` questions — a documented, permanent limitation, not a bug to keep chasing). Also moved the Flashcards entry point from the quiz-mode action row (which it doesn't belong in, per `EXAM_MODES.md`'s Non-Engine Review Surfaces classification, and which was overflowing on narrower widths) to the Key Concepts tab.
 
 ## v0.38.0 - Read-Path Optimization Pass
 

@@ -2036,7 +2036,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   ) : (
                     <>
                       <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quickReview" label="Start Quick Review" showTextOnMobile />
-                      <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/flashcards`)} action="flashcards" label="Flashcards" />
                       <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Challenge Quiz" />
                       {hasAdaptiveTargets ? (
                         <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />
@@ -2098,7 +2097,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
             {activeStudyPackTab === "key-concepts" ? (
               <Card className="space-y-3 p-4 sm:p-6">
-                <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+                  {!isTeacherMode && !isGeneratingStudyPack && !hasGenerationFailed && !isDraft && note.keyConcepts.length > 0 ? (
+                    <ResponsiveActionButton
+                      type="button"
+                      variant="outline"
+                      onClick={() => router.push(`/notes/${routeId}/flashcards`)}
+                      action="flashcards"
+                      label="Flashcards"
+                      showTextOnMobile
+                    />
+                  ) : null}
+                </div>
                 {isGeneratingStudyPack ? (
                   <p className="text-sm text-foreground/75">Key concepts are being generated from your note.</p>
                 ) : hasGenerationFailed ? (
