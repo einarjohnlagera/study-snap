@@ -3,6 +3,7 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.dto.AdminSubjectMetricItemResponse;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.InputType;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -107,6 +108,38 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Double findMedianDaysFromVerifiedSignupToFirstPack();
 
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
+
+    // Return type is StudyPackProgressProjection (a marker sub-interface of StudyPackProgressView that no
+    // concrete class implements), not StudyPackProgressView itself. StudyPackEntity implements
+    // StudyPackProgressView for polymorphism elsewhere (services/tests accept List<? extends
+    // StudyPackProgressView>); if a JPQL @Query's declared return type is an interface the managed domain
+    // entity ALSO implements, Spring Data's projection detection breaks and falls through to a generic
+    // ConversionService that cannot map a query tuple to an interface, throwing ConverterNotFoundException
+    // at call time. Confirmed by reproduction: swapping this back to StudyPackProgressView reintroduces the
+    // failure. Keep the sub-interface indirection; do not "simplify" this back to StudyPackProgressView.
+    @Query("""
+            select s.id as id,
+                   s.noteId as noteId,
+                   s.ownerUserId as ownerUserId,
+                   s.subject as subject,
+                   s.keyConcepts as keyConcepts,
+                   s.status as status
+            from StudyPackEntity s
+            where s.noteId in :noteIds
+            """)
+    List<StudyPackProgressProjection> findProgressViewsByNoteIdIn(@Param("noteIds") Collection<UUID> noteIds);
+
+    @Query("""
+            select s.id as id,
+                   s.noteId as noteId,
+                   s.ownerUserId as ownerUserId,
+                   s.subject as subject,
+                   s.keyConcepts as keyConcepts,
+                   s.status as status
+            from StudyPackEntity s
+            where s.ownerUserId = :ownerUserId
+            """)
+    List<StudyPackProgressProjection> findProgressViewsByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     @Modifying
     @Query("""

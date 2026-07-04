@@ -28,6 +28,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
@@ -495,9 +496,9 @@ class NoteCollectionServiceTest {
         );
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
-        when(studyPackRepository.findByNoteIdIn(List.of(draftNoteId, biologyNoteId, otherNoteId)))
-                .thenReturn(List.of(biologyPack, otherPack, foreignPack));
-        when(progressReportService.buildSubjectProgressEntries(eq(List.of(biologyPack, otherPack)), eq(userId), any(OffsetDateTime.class)))
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(draftNoteId, biologyNoteId, otherNoteId)))
+                .thenReturn(asProjections(biologyPack, otherPack, foreignPack));
+        when(progressReportService.buildSubjectProgressEntries(eq(asProjections(biologyPack, otherPack)), eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(subjects);
 
         PlanReadinessResponse result = service.getReadiness(collectionId, userId);
@@ -528,7 +529,7 @@ class NoteCollectionServiceTest {
         assertThat(result.overallReadinessPercentage()).isZero();
         assertThat(result.totalConcepts()).isZero();
         assertThat(result.subjects()).isEmpty();
-        verify(studyPackRepository, never()).findByNoteIdIn(anyList());
+        verify(studyPackRepository, never()).findProgressViewsByNoteIdIn(anyList());
         verify(progressReportService, never()).buildSubjectProgressEntries(anyList(), any(), any());
     }
 
@@ -541,7 +542,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
                 .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(List.of());
 
         PlanReadinessResponse result = service.getReadiness(collectionId, userId);
 
@@ -701,13 +702,13 @@ class NoteCollectionServiceTest {
                 .thenReturn(List.of(buildItem(firstChildId, firstNoteId, 0, null)));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId))
                 .thenReturn(List.of(buildItem(secondChildId, secondNoteId, 0, null)));
-        when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId))).thenReturn(List.of(firstPack));
-        when(studyPackRepository.findByNoteIdIn(List.of(secondNoteId))).thenReturn(List.of(secondPack));
-        when(progressReportService.buildSubjectProgressEntries(eq(List.of(firstPack)), eq(userId), any(OffsetDateTime.class)))
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(firstNoteId))).thenReturn(asProjections(firstPack));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(secondNoteId))).thenReturn(asProjections(secondPack));
+        when(progressReportService.buildSubjectProgressEntries(eq(asProjections(firstPack)), eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(List.of(new SubjectProgressEntry("Professional Education", 2, 1, 1, 0, 50)));
-        when(progressReportService.buildSubjectProgressEntries(eq(List.of(secondPack)), eq(userId), any(OffsetDateTime.class)))
+        when(progressReportService.buildSubjectProgressEntries(eq(asProjections(secondPack)), eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(List.of(new SubjectProgressEntry("General Education", 2, 1, 0, 1, 50)));
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
@@ -727,7 +728,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of());
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
@@ -758,7 +759,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId)).thenReturn(List.of());
         when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId)).thenReturn(List.of());
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
@@ -790,7 +791,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId)).thenReturn(List.of());
         when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId)).thenReturn(List.of());
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.setChildrenOrder(
                 goalId,
@@ -1062,8 +1063,8 @@ class NoteCollectionServiceTest {
         StudyPackEntity secondPack = buildStudyPack(secondNoteId, List.of("Bonds", "Acids"));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
-        when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId, noPackNoteId, secondNoteId)))
-                .thenReturn(List.of(firstPack, secondPack));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(firstNoteId, noPackNoteId, secondNoteId)))
+                .thenReturn(asProjections(firstPack, secondPack));
         when(progressReportService.getConceptCountsPerStudyPack(
                 eq(List.of(firstPack.getId(), secondPack.getId())),
                 anyCollection(),
@@ -1092,7 +1093,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
                 .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(List.of());
 
         Map<String, NoteConceptCountsResponse> result = service.getNoteConceptCounts(collectionId, userId);
 
@@ -1963,6 +1964,63 @@ class NoteCollectionServiceTest {
         studyPack.setKeyConcepts(keyConcepts);
         studyPack.setStatus(StudyPackStatus.DONE);
         return studyPack;
+    }
+
+    // Test double for the JPA-proxy Spring Data generates for StudyPackRepository's projection
+    // queries. Deliberately does NOT reuse StudyPackEntity: only Spring Data's own proxy is
+    // allowed to implement StudyPackProgressProjection (see its Javadoc). Records compare by
+    // value, so a second call with the same underlying entity's fields still matches an
+    // eq(asProjections(...)) expectation elsewhere in a test.
+    private static List<StudyPackProgressProjection> asProjections(StudyPackEntity... packs) {
+        return java.util.Arrays.stream(packs)
+                .map(pack -> (StudyPackProgressProjection) new TestStudyPackProgressView(
+                        pack.getId(),
+                        pack.getNoteId(),
+                        pack.getOwnerUserId(),
+                        pack.getSubject(),
+                        pack.getKeyConcepts(),
+                        pack.getStatus()
+                ))
+                .toList();
+    }
+
+    private record TestStudyPackProgressView(
+            UUID id,
+            UUID noteId,
+            UUID ownerUserId,
+            String subject,
+            List<String> keyConcepts,
+            StudyPackStatus status
+    ) implements StudyPackProgressProjection {
+        @Override
+        public UUID getId() {
+            return id;
+        }
+
+        @Override
+        public UUID getNoteId() {
+            return noteId;
+        }
+
+        @Override
+        public UUID getOwnerUserId() {
+            return ownerUserId;
+        }
+
+        @Override
+        public String getSubject() {
+            return subject;
+        }
+
+        @Override
+        public List<String> getKeyConcepts() {
+            return keyConcepts;
+        }
+
+        @Override
+        public StudyPackStatus getStatus() {
+            return status;
+        }
     }
 
     private GeneratedQuizEntity buildGeneratedQuiz(UUID noteId, UUID userId) {

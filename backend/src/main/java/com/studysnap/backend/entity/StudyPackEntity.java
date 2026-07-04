@@ -1,6 +1,7 @@
 package com.studysnap.backend.entity;
 
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.model.StudyPackProgressView;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,7 +24,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
-public class StudyPackEntity {
+public class StudyPackEntity implements StudyPackProgressView {
 
     @Id
     private UUID id;
@@ -103,4 +104,3 @@ public class StudyPackEntity {
     @Column(columnDefinition = "text[]", nullable = false)
     private String[] tags;
 }
-
