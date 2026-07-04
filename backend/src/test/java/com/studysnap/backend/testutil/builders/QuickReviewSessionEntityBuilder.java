@@ -22,6 +22,7 @@ public final class QuickReviewSessionEntityBuilder {
     private final UUID id;
     private final UUID userId;
     private final UUID studyPackId;
+    private final UUID noteId;
     private final QuickReviewSessionMode sessionMode;
     private final QuickReviewSessionStatus status;
     private final Integer currentQuestionIndex;
@@ -39,6 +40,7 @@ public final class QuickReviewSessionEntityBuilder {
 
     public static QuickReviewSessionEntityBuilder anInProgressSession() {
         return new QuickReviewSessionEntityBuilder(
+                UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -89,6 +91,7 @@ public final class QuickReviewSessionEntityBuilder {
         session.setId(id);
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
         session.setSessionMode(sessionMode);
         session.setStatus(status);
         session.setCurrentQuestionIndex(currentQuestionIndex);
