@@ -2,10 +2,14 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.GoalSummaryResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
+import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.ConceptHealthEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
+import com.studysnap.backend.model.StudyPackProgressProjection;
+import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -62,20 +66,21 @@ class ProgressReportServiceTest {
         StudyPackEntity biologyPackTwo = studyPack("Biology", List.of(" mitosis ", "Cells"));
         StudyPackEntity chemistryPack = studyPack("Chemistry", List.of("Bonds", "Acids"));
         StudyPackEntity emptyPack = studyPack("History", List.of());
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(
             biologyPackOne,
             biologyPackTwo,
             chemistryPack,
             emptyPack
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, biologyPackOne.getId())).thenReturn(List.of(
-            health(biologyPackOne.getId(), "Mitosis", NOW.minusDays(1)),
-            health(biologyPackOne.getId(), "DNA", NOW.minusDays(5))
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(
+                userId,
+                List.of(biologyPackOne.getId(), biologyPackTwo.getId())
+        )).thenReturn(List.of(
+                health(biologyPackOne.getId(), "Mitosis", NOW.minusDays(1)),
+                health(biologyPackOne.getId(), "DNA", NOW.minusDays(5))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, biologyPackTwo.getId())).thenReturn(List.of());
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, chemistryPack.getId())).thenReturn(List.of(
-            health(chemistryPack.getId(), "Bonds", NOW.minusDays(5))
-        ));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(chemistryPack.getId())))
+                .thenReturn(List.of(health(chemistryPack.getId(), "Bonds", NOW.minusDays(5))));
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, null, NOW);
 
@@ -85,9 +90,11 @@ class ProgressReportServiceTest {
         );
         assertThat(response.goalSummary()).isNull();
         assertThat(response.userCoursePrograms()).isEmpty();
-        verify(conceptHealthRepository).findByUserIdAndStudyPackId(userId, biologyPackOne.getId());
-        verify(conceptHealthRepository).findByUserIdAndStudyPackId(userId, biologyPackTwo.getId());
-        verify(conceptHealthRepository).findByUserIdAndStudyPackId(userId, chemistryPack.getId());
+        verify(conceptHealthRepository).findByUserIdAndStudyPackIdIn(
+                userId,
+                List.of(biologyPackOne.getId(), biologyPackTwo.getId())
+        );
+        verify(conceptHealthRepository).findByUserIdAndStudyPackIdIn(userId, List.of(chemistryPack.getId()));
     }
 
     @Test
@@ -95,11 +102,10 @@ class ProgressReportServiceTest {
         UUID userId = UUID.randomUUID();
         StudyPackEntity otherPack = studyPack(null, List.of("Orientation"));
         StudyPackEntity anatomyPack = studyPack("Anatomy", List.of("Bones"));
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(otherPack, anatomyPack));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, otherPack.getId())).thenReturn(List.of());
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, anatomyPack.getId())).thenReturn(List.of(
-            health(anatomyPack.getId(), "Bones", NOW.minusDays(1))
-        ));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(otherPack, anatomyPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(otherPack.getId()))).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(anatomyPack.getId())))
+                .thenReturn(List.of(health(anatomyPack.getId(), "Bones", NOW.minusDays(1))));
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, null, NOW);
 
@@ -117,10 +123,9 @@ class ProgressReportServiceTest {
             concepts.add("Concept " + index);
         }
         StudyPackEntity studyPack = studyPack("Math", concepts);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
-            health(studyPack.getId(), "Concept 1", NOW.minusDays(1))
-        ));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId())))
+                .thenReturn(List.of(health(studyPack.getId(), "Concept 1", NOW.minusDays(1))));
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, null, NOW);
 
@@ -132,7 +137,7 @@ class ProgressReportServiceTest {
     @Test
     void getProgressReport_returnsEmptyResultWhenNoPacksHaveConcepts() {
         UUID userId = UUID.randomUUID();
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(
             studyPack("Biology", null),
             studyPack("Chemistry", List.of())
         ));
@@ -148,11 +153,12 @@ class ProgressReportServiceTest {
         UUID userId = UUID.randomUUID();
         StudyPackEntity biologyPack = studyPack("Biology", List.of("Cells", "DNA"));
         StudyPackEntity otherPack = studyPack(WHITESPACE, List.of("Orientation"));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, biologyPack.getId())).thenReturn(List.of(
-                health(biologyPack.getId(), "Cells", NOW.minusDays(1)),
-                health(biologyPack.getId(), "DNA", NOW.minusDays(5))
-        ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, otherPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(biologyPack.getId())))
+                .thenReturn(List.of(
+                        health(biologyPack.getId(), "Cells", NOW.minusDays(1)),
+                        health(biologyPack.getId(), "DNA", NOW.minusDays(5))
+                ));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(otherPack.getId()))).thenReturn(List.of());
 
         List<SubjectProgressEntry> subjects = progressReportService.buildSubjectProgressEntries(
                 List.of(biologyPack, otherPack),
@@ -188,8 +194,8 @@ class ProgressReportServiceTest {
         assertThat(result).containsEntry(firstPack.getId(), new ProgressReportService.ConceptCounts(3, 1, 1, 1));
         assertThat(result).containsEntry(secondPack.getId(), new ProgressReportService.ConceptCounts(2, 1, 0, 1));
         verify(conceptHealthRepository, times(1)).findByUserIdAndStudyPackIdIn(userId, studyPackIds);
-        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackId(userId, firstPack.getId());
-        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackId(userId, secondPack.getId());
+        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackIdIn(userId, List.of(firstPack.getId()));
+        verify(conceptHealthRepository, never()).findByUserIdAndStudyPackIdIn(userId, List.of(secondPack.getId()));
     }
 
     @Test
@@ -225,14 +231,62 @@ class ProgressReportServiceTest {
     }
 
     @Test
+    void getConceptCountsPerStudyPack_matchesFullEntityWhenLargeColumnsAreOmittedFromProjection() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity fullPack = studyPack("Biology", List.of("Cells", "DNA", "Mitosis"));
+        fullPack.setOwnerUserId(userId);
+        fullPack.setNoteId(noteId);
+        fullPack.setStatus(StudyPackStatus.DONE);
+        fullPack.setSourceText("large source text");
+        fullPack.setQuiz(List.of(new QuizItem(
+                "Which structure stores genetic information?",
+                List.of("DNA", "Ribosome"),
+                0,
+                "DNA",
+                "DNA carries genetic instructions."
+        )));
+        StudyPackProgressView projection = new TestStudyPackProgressView(
+                fullPack.getId(),
+                fullPack.getNoteId(),
+                fullPack.getOwnerUserId(),
+                fullPack.getSubject(),
+                fullPack.getKeyConcepts(),
+                fullPack.getStatus()
+        );
+        List<UUID> studyPackIds = List.of(fullPack.getId());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, studyPackIds)).thenReturn(List.of(
+                health(fullPack.getId(), "Cells", NOW.minusDays(1)),
+                health(fullPack.getId(), "DNA", NOW.minusDays(5))
+        ));
+
+        Map<UUID, ProgressReportService.ConceptCounts> fullEntityCounts = progressReportService.getConceptCountsPerStudyPack(
+                studyPackIds,
+                List.of(fullPack),
+                userId,
+                NOW
+        );
+        Map<UUID, ProgressReportService.ConceptCounts> projectionCounts = progressReportService.getConceptCountsPerStudyPack(
+                studyPackIds,
+                List.of(projection),
+                userId,
+                NOW
+        );
+
+        assertThat(projectionCounts).isEqualTo(fullEntityCounts);
+        assertThat(projectionCounts).containsEntry(fullPack.getId(), new ProgressReportService.ConceptCounts(3, 1, 1, 1));
+        verify(conceptHealthRepository, times(2)).findByUserIdAndStudyPackIdIn(userId, studyPackIds);
+    }
+
+    @Test
     void getProgressReport_computesAleGoalSummaryFromArchitectureNotes() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Design", List.of("Site Planning", "Structures"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Architecture")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of(
                 health(studyPack.getId(), "Site Planning", NOW.minusDays(1))
         ));
 
@@ -260,15 +314,19 @@ class ProgressReportServiceTest {
         nursingPack.setNoteId(nursingNoteId);
         StudyPackEntity medSurgPack = studyPack("Medical Surgical Nursing", List.of("Wound Care"));
         medSurgPack.setNoteId(medSurgNoteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(nursingPack, medSurgPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(nursingPack, medSurgPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(nursingNoteId, medSurgNoteId))).thenReturn(List.of(
                 note(nursingNoteId, "Nursing"),
                 note(medSurgNoteId, "Medical – Surgical Nursing")
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, nursingPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(nursingPack.getId()))).thenReturn(List.of(
                 health(nursingPack.getId(), "Vital Signs", NOW.minusDays(1))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, medSurgPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(medSurgPack.getId()))).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(
+                userId,
+                List.of(nursingPack.getId(), medSurgPack.getId())
+        )).thenReturn(List.of(health(nursingPack.getId(), "Vital Signs", NOW.minusDays(1))));
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, "pnle", NOW);
 
@@ -291,9 +349,9 @@ class ProgressReportServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Biology", List.of("Cells"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Biology")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of());
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, "ale", NOW);
 
@@ -319,16 +377,16 @@ class ProgressReportServiceTest {
         designPack.setNoteId(designNoteId);
         StudyPackEntity structuresPack = studyPack("Structures", List.of("Loads", "Beams", "Columns"));
         structuresPack.setNoteId(structuresNoteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(designPack, structuresPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(designPack, structuresPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(designNoteId, structuresNoteId))).thenReturn(List.of(
                 note(designNoteId, "Architecture"),
                 note(structuresNoteId, "Architecture")
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, designPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(designPack.getId()))).thenReturn(List.of(
                 health(designPack.getId(), "Site", NOW.minusDays(1)),
                 health(designPack.getId(), "Codes", NOW.minusDays(1))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, structuresPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(structuresPack.getId()))).thenReturn(List.of(
                 health(structuresPack.getId(), "Loads", NOW.minusDays(5))
         ));
 
@@ -343,9 +401,9 @@ class ProgressReportServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals", "Whole Numbers"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of(
                 health(studyPack.getId(), "Fractions", NOW.minusDays(1)),
                 health(studyPack.getId(), "Decimals", NOW.minusDays(5))
         ));
@@ -364,9 +422,9 @@ class ProgressReportServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of(
                 health(studyPack.getId(), "Fractions", NOW.minusDays(1))
         ));
 
@@ -390,11 +448,11 @@ class ProgressReportServiceTest {
         UUID userId = UUID.randomUUID();
         StudyPackEntity pharmacologyPack = studyPack("Pharmacology", List.of("Beta Blockers", "ACE Inhibitors"));
         StudyPackEntity anatomyPack = studyPack("Anatomy", List.of("Bones"));
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(pharmacologyPack, anatomyPack));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, pharmacologyPack.getId())).thenReturn(List.of(
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(pharmacologyPack, anatomyPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(pharmacologyPack.getId()))).thenReturn(List.of(
                 health(pharmacologyPack.getId(), "Beta Blockers", NOW.minusDays(1))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, anatomyPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(anatomyPack.getId()))).thenReturn(List.of());
 
         ProgressReportResponse response = progressReportService.getProgressReport(
                 userId,
@@ -422,14 +480,21 @@ class ProgressReportServiceTest {
         StudyPackEntity pharmacologyPack = studyPack("Pharmacology", List.of("Beta Blockers", "ACE Inhibitors"));
         StudyPackEntity anatomyPack = studyPack("Anatomy", List.of("Bones"));
         StudyPackEntity chemistryPack = studyPack("Chemistry", List.of("Bonds"));
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(pharmacologyPack, anatomyPack, chemistryPack));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, pharmacologyPack.getId())).thenReturn(List.of(
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(pharmacologyPack, anatomyPack, chemistryPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(pharmacologyPack.getId()))).thenReturn(List.of(
                 health(pharmacologyPack.getId(), "Beta Blockers", NOW.minusDays(1))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, anatomyPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(anatomyPack.getId()))).thenReturn(List.of(
                 health(anatomyPack.getId(), "Bones", NOW.minusDays(5))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, chemistryPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(chemistryPack.getId()))).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(
+                userId,
+                List.of(pharmacologyPack.getId(), anatomyPack.getId())
+        )).thenReturn(List.of(
+                health(pharmacologyPack.getId(), "Beta Blockers", NOW.minusDays(1)),
+                health(anatomyPack.getId(), "Bones", NOW.minusDays(5))
+        ));
 
         ProgressReportResponse response = progressReportService.getProgressReport(
                 userId,
@@ -455,8 +520,8 @@ class ProgressReportServiceTest {
     void getProgressReport_returnsNullGoalSummaryWhenSubjectFocusIsEmpty() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity pharmacologyPack = studyPack("Pharmacology", List.of("Beta Blockers"));
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(pharmacologyPack));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, pharmacologyPack.getId())).thenReturn(List.of());
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(pharmacologyPack));
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(pharmacologyPack.getId()))).thenReturn(List.of());
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, null, List.of(), NOW);
 
@@ -469,9 +534,9 @@ class ProgressReportServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Design", List.of("Site Planning"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Architecture")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of());
 
         ProgressReportResponse response = progressReportService.getProgressReport(
                 userId,
@@ -491,9 +556,9 @@ class ProgressReportServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Biology", List.of("Cells"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Biology")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of());
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of());
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, "Mathematics", NOW);
 
@@ -536,9 +601,9 @@ class ProgressReportServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = studyPack("Algebra", List.of("Fractions", "Decimals"));
         studyPack.setNoteId(noteId);
-        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId)).thenReturn(asProjections(studyPack));
         when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note(noteId, "Mathematics")));
-        when(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())).thenReturn(List.of(
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()))).thenReturn(List.of(
                 health(studyPack.getId(), "Fractions", NOW.minusDays(1)),
                 health(studyPack.getId(), "Decimals", NOW.minusDays(5))
         ));
@@ -574,5 +639,61 @@ class ProgressReportServiceTest {
         health.setConcept(concept);
         health.setLastCorrectAt(lastCorrectAt);
         return health;
+    }
+
+    // Test double for the JPA-proxy Spring Data generates for StudyPackRepository's projection
+    // queries. Deliberately does NOT reuse StudyPackEntity for this: only Spring Data's own proxy
+    // is allowed to implement StudyPackProgressProjection (see StudyPackProgressProjection's
+    // Javadoc) — mocks stand in for what the query actually returns.
+    private static List<StudyPackProgressProjection> asProjections(StudyPackEntity... packs) {
+        return java.util.Arrays.stream(packs)
+                .map(pack -> (StudyPackProgressProjection) new TestStudyPackProgressView(
+                        pack.getId(),
+                        pack.getNoteId(),
+                        pack.getOwnerUserId(),
+                        pack.getSubject(),
+                        pack.getKeyConcepts(),
+                        pack.getStatus()
+                ))
+                .toList();
+    }
+
+    private record TestStudyPackProgressView(
+            UUID id,
+            UUID noteId,
+            UUID ownerUserId,
+            String subject,
+            List<String> keyConcepts,
+            StudyPackStatus status
+    ) implements StudyPackProgressProjection {
+        @Override
+        public UUID getId() {
+            return id;
+        }
+
+        @Override
+        public UUID getNoteId() {
+            return noteId;
+        }
+
+        @Override
+        public UUID getOwnerUserId() {
+            return ownerUserId;
+        }
+
+        @Override
+        public String getSubject() {
+            return subject;
+        }
+
+        @Override
+        public List<String> getKeyConcepts() {
+            return keyConcepts;
+        }
+
+        @Override
+        public StudyPackStatus getStatus() {
+            return status;
+        }
     }
 }

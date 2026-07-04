@@ -31,6 +31,7 @@ import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
@@ -197,14 +198,14 @@ public class NoteCollectionService {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
-        List<StudyPackEntity> studyPacks = noteIds.isEmpty()
+        List<? extends StudyPackProgressView> studyPacks = noteIds.isEmpty()
                 ? List.of()
-                : studyPackRepository.findByNoteIdIn(noteIds).stream()
+                : studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
                         .filter(studyPack -> Objects.equals(userId, studyPack.getOwnerUserId()))
                         .filter(studyPack -> studyPack.getNoteId() != null)
                         .toList();
         int notesWithStudyPack = (int) studyPacks.stream()
-                .map(StudyPackEntity::getNoteId)
+                .map(StudyPackProgressView::getNoteId)
                 .distinct()
                 .count();
         List<SubjectProgressEntry> subjects = studyPacks.isEmpty()
@@ -242,10 +243,10 @@ public class NoteCollectionService {
             return Map.of();
         }
 
-        Map<UUID, StudyPackEntity> studyPacksByNoteId = studyPackRepository.findByNoteIdIn(noteIds).stream()
+        Map<UUID, StudyPackProgressView> studyPacksByNoteId = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
                 .filter(studyPack -> studyPack.getNoteId() != null)
                 .collect(Collectors.toMap(
-                        StudyPackEntity::getNoteId,
+                        StudyPackProgressView::getNoteId,
                         Function.identity(),
                         (left, right) -> left,
                         LinkedHashMap::new
@@ -255,7 +256,7 @@ public class NoteCollectionService {
         }
 
         List<UUID> studyPackIds = studyPacksByNoteId.values().stream()
-                .map(StudyPackEntity::getId)
+                .map(StudyPackProgressView::getId)
                 .filter(Objects::nonNull)
                 .toList();
         Map<UUID, ProgressReportService.ConceptCounts> countsByStudyPackId =
@@ -267,7 +268,7 @@ public class NoteCollectionService {
                 );
         Map<String, NoteConceptCountsResponse> countsByNoteId = new HashMap<>();
         for (NoteCollectionItemEntity item : items) {
-            StudyPackEntity studyPack = studyPacksByNoteId.get(item.getNoteId());
+            StudyPackProgressView studyPack = studyPacksByNoteId.get(item.getNoteId());
             if (studyPack == null || studyPack.getId() == null) {
                 continue;
             }
@@ -298,7 +299,7 @@ public class NoteCollectionService {
         int masteredConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::masteredConcepts).sum();
         int dueConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum();
         int notPracticedConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
-        int itemCount = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId).size();
+        int itemCount = Math.toIntExact(itemRepository.countByCollectionId(collectionId));
         return new GoalCollectionDetailResponse(
                 collection.getId(),
                 collection.getTitle(),
