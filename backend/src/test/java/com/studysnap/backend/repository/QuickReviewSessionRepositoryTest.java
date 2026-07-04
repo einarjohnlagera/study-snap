@@ -38,7 +38,7 @@ class QuickReviewSessionRepositoryTest {
                     id uuid primary key,
                     user_id uuid not null,
                     study_pack_id uuid not null,
-                    note_id uuid,
+                    note_id uuid not null,
                     session_mode varchar(32) not null,
                     status varchar(32) not null,
                     current_question_index integer not null,
@@ -56,6 +56,7 @@ class QuickReviewSessionRepositoryTest {
                 )
                 """);
         jdbcTemplate.execute("delete from quick_review_sessions");
+        jdbcTemplate.execute("alter table quick_review_sessions alter column note_id set not null");
     }
 
     @Test
@@ -329,6 +330,70 @@ class QuickReviewSessionRepositoryTest {
                 .anySatisfy(sql -> assertThat(sql.toLowerCase()).contains("session_metadata"));
     }
 
+    @Test
+    void latestCompletionProjection_groupsByNoteAndDoesNotSelectJsonColumns() {
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID otherNoteId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        QuickReviewSessionEntity latest = saveSession(
+                userId,
+                UUID.randomUUID(),
+                noteId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusMinutes(15),
+                now.minusMinutes(5),
+                90
+        );
+        saveSession(
+                userId,
+                UUID.randomUUID(),
+                noteId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusMinutes(30),
+                now.minusMinutes(20),
+                80
+        );
+        saveSession(
+                userId,
+                UUID.randomUUID(),
+                otherNoteId,
+                QuickReviewSessionStatus.IN_PROGRESS,
+                now.minusMinutes(10),
+                null,
+                null
+        );
+        saveSession(
+                otherUserId,
+                UUID.randomUUID(),
+                noteId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusMinutes(12),
+                now.minusMinutes(1),
+                100
+        );
+
+        SqlCaptureStatementInspector.clear();
+
+        List<NoteLatestCompletionProjection> latestCompletions = quickReviewSessionRepository
+                .findLatestCompletedAtByUserIdAndNoteIdIn(
+                        userId,
+                        QuickReviewSessionStatus.COMPLETED,
+                        List.of(noteId, otherNoteId)
+                );
+
+        assertThat(latestCompletions).containsExactly(new NoteLatestCompletionProjection(noteId, latest.getCompletedAt()));
+        List<String> quickReviewSelects = SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().contains("from quick_review_sessions"))
+                .filter(sql -> sql.toLowerCase().startsWith("select"))
+                .toList();
+        assertThat(quickReviewSelects).hasSize(1);
+        assertThat(quickReviewSelects.getFirst().toLowerCase())
+                .doesNotContain("session_state")
+                .doesNotContain("session_metadata");
+    }
+
     private QuickReviewSessionEntity saveSession(
             UUID userId,
             UUID studyPackId,
@@ -337,14 +402,27 @@ class QuickReviewSessionRepositoryTest {
             OffsetDateTime completedAt,
             Integer scorePercentage
     ) {
+        return saveSession(userId, studyPackId, studyPackId, status, createdAt, completedAt, scorePercentage);
+    }
+
+    private QuickReviewSessionEntity saveSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            QuickReviewSessionStatus status,
+            OffsetDateTime createdAt,
+            OffsetDateTime completedAt,
+            Integer scorePercentage
+    ) {
         QuickReviewRound round = status == QuickReviewSessionStatus.COMPLETED ? QuickReviewRound.RETRY : QuickReviewRound.INITIAL;
-        Integer correctAnswers = scorePercentage == null ? null : Math.max(0, Math.min(5, scorePercentage / 20));
+        Integer correctAnswers = scorePercentage == null ? null : Math.clamp(scorePercentage / 20, 0, 5);
         BigDecimal score = scorePercentage == null ? null : BigDecimal.valueOf(scorePercentage).setScale(2);
 
         QuickReviewSessionEntity session = QuickReviewSessionEntityBuilder.anInProgressSession()
                 .withId(UUID.randomUUID())
                 .withUserId(userId)
                 .withStudyPackId(studyPackId)
+                .withNoteId(noteId)
                 .withStatus(status)
                 .withCurrentQuestionIndex(status == QuickReviewSessionStatus.COMPLETED ? 5 : 0)
                 .withCurrentRound(round)

@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.38.0 - Read-Path Optimization Pass
+
+**Status: Released**
+
+Theme: extend the v0.37.3 projection discipline across the remaining hot read/list endpoints, cutting per-request latency, DB payload, and peak heap under concurrent load. Not a memory-idle fix (that was the 2GB instance upgrade) — this is a latency/efficiency pass on the endpoints the app hits most.
+
+### Planned Scope
+
+- None remaining.
+
+Anti-drift: no schema, endpoint, or DTO change — API responses stay byte-identical to today. Every new interface projection requires a real-Hibernate (`@SpringBootTest` + H2) test, not a mocked one (the v0.37.3 projection-detection footgun). Note detail (`getById`), generated-quiz `getByNoteId`, and the already-optimized progress report are explicitly out of scope — they legitimately need the full payloads.
+
+### Shipped
+
+- **Session-history read path (backend).** Removed `QuizSessionHistoryService.findCompletedSessions`, which loaded every completed `QuickReviewSessionEntity` for a user with full `sessionState`/`sessionMetadata` JSONB and no LIMIT. `findLatestSessionCompletedAtByNoteIds` now resolves direct note participation with a grouped JPQL constructor projection (`noteId`, `max(completedAt)`) that selects no JSONB, then scans only completed `LONG_EXAM`/`CHALLENGE` rows for multi-note `sourceNoteRefs`. `listRecentSessions` now asks the database for only non-Quick-Review rows that directly target the requested note or are multi-note-capable candidates before applying the existing participation filter and limit in memory. Collections list/detail and quiz recent-session responses remain unchanged.
+- **Note collection detail projection (backend).** `NoteCollectionService.toItemResponses` and `toPublicItemResponses` now build plan detail rows from lean projections instead of full `NoteEntity`, `StudyPackEntity`, and `GeneratedQuizEntity` rows. Notes use a JPQL record constructor projection for `id/title/subject/courseProgram/status/visibility/updatedAt` (no `content`), generated quizzes use a record projection for `noteId/id` (no `questions`), and Study Packs reuse the existing `findProgressViewsByNoteIdIn` projection (no `quiz` or `source_text`). Private and public collection detail responses remain byte-identical, including public-note filtering, Study Pack status labels, generated quiz ids, last-practiced timestamps, and due-concept fallback behavior.
+- **Private library list projection (backend).** `StudyPackService.listMine` now pages through a JPQL record constructor projection for `id/title/summary/subject/tags/createdAt`, so the private Study Pack list no longer loads `quiz` or `source_text` during the page fetch. Quiz counts are resolved for only the returned page ids through an isolated PostgreSQL-native `jsonb_array_length(quiz)` count query. Cursor ordering, `hasMore`/`nextCursor`, 140-character summary previews, tags, and question-count responses remain unchanged. Real-Hibernate H2 coverage verifies the lean projection and cursor behavior; the native JSONB count expression is isolated because H2 PostgreSQL mode cannot execute `jsonb_array_length`.
+- **Goal per-child readiness batch (backend).** `NoteCollectionService.getGoal` no longer calls `getReadiness` once per child. Goal detail now loads child item note ids once, resolves owned Study Pack progress projections once across the note union, and computes subject readiness through a grouped `ProgressReportService` helper that batches note-subject fallback and `ConceptHealth` lookup across all children. Child ordering, per-child zero fallback, Goal rollups, and the single-plan `getReadiness` response remain unchanged.
+
 ## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix
 
 **Status: Released**

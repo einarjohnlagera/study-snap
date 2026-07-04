@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.repository.NoteLatestCompletionProjection;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -19,8 +20,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -43,6 +46,10 @@ public class QuizSessionHistoryService {
     private static final int EXCELLENT_SCORE_THRESHOLD = 90;
     private static final int GOOD_SCORE_THRESHOLD = 75;
     private static final int FAIR_SCORE_THRESHOLD = 50;
+    private static final List<QuickReviewSessionMode> MULTI_NOTE_SESSION_MODES = List.of(
+            QuickReviewSessionMode.LONG_EXAM,
+            QuickReviewSessionMode.CHALLENGE
+    );
 
     private final QuickReviewSessionRepository quickReviewSessionRepository;
 
@@ -51,12 +58,22 @@ public class QuizSessionHistoryService {
             return Map.of();
         }
 
-        Set<UUID> requestedNoteIds = new HashSet<>(noteIds);
+        Set<UUID> requestedNoteIds = noteIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (requestedNoteIds.isEmpty()) {
+            return Map.of();
+        }
+
         Map<UUID, OffsetDateTime> latestByNoteId = new HashMap<>();
-        for (QuickReviewSessionEntity session : findCompletedSessions(userId)) {
-            if (session.getCompletedAt() == null) {
-                continue;
-            }
+        for (NoteLatestCompletionProjection projection : quickReviewSessionRepository.findLatestCompletedAtByUserIdAndNoteIdIn(
+                userId,
+                QuickReviewSessionStatus.COMPLETED,
+                requestedNoteIds
+        )) {
+            latestByNoteId.put(projection.noteId(), projection.completedAt());
+        }
+        for (QuickReviewSessionEntity session : findCompletedMultiNoteSessionCandidates(userId)) {
             for (UUID noteId : findParticipatingNoteIds(session)) {
                 if (requestedNoteIds.contains(noteId)) {
                     latestByNoteId.merge(noteId, session.getCompletedAt(), this::latest);
@@ -69,18 +86,24 @@ public class QuizSessionHistoryService {
     public List<RecentQuizSessionHistoryResponse> listRecentSessions(String noteIdRaw, UUID userId, int limit) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
         int normalizedLimit = Math.clamp(limit, FIRST_PAGE_LIMIT, MAX_RECENT_SESSION_LIMIT);
-        return findCompletedSessions(userId).stream()
-                .filter(session -> session.getSessionMode() != QuickReviewSessionMode.QUICK_REVIEW)
+        return quickReviewSessionRepository.findRecentHistoryCandidatesByUserIdAndNoteIdOrderByCompletedAtDesc(
+                        userId,
+                        noteId,
+                        QuickReviewSessionStatus.COMPLETED,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        MULTI_NOTE_SESSION_MODES
+                ).stream()
                 .filter(session -> findParticipatingNoteIds(session).contains(noteId))
                 .limit(normalizedLimit)
                 .map(this::toResponse)
                 .toList();
     }
 
-    private List<QuickReviewSessionEntity> findCompletedSessions(UUID userId) {
-        return quickReviewSessionRepository.findByUserIdAndStatusAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+    private List<QuickReviewSessionEntity> findCompletedMultiNoteSessionCandidates(UUID userId) {
+        return quickReviewSessionRepository.findByUserIdAndStatusAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 userId,
-                QuickReviewSessionStatus.COMPLETED
+                QuickReviewSessionStatus.COMPLETED,
+                MULTI_NOTE_SESSION_MODES
         );
     }
 

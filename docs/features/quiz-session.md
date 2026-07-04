@@ -58,6 +58,8 @@ Rules:
 
 Do not load unbounded lists of `QuickReviewSessionEntity` for aggregate screens or scheduled retention jobs. Single-session play/resume paths that genuinely read `sessionState` may still load the entity by id or latest active session, and `QuizSessionStateUtils` remains the owner for `sessionState` reads.
 
+As of v0.38.0, collection practiced counts, collection detail `lastSessionCompletedAt`, and per-note Recent Sessions keep the same response semantics while resolving direct single-note participation from the `note_id` column first. JSONB `sessionState` is read only for bounded Long Exam / Board Exam candidate sets where `sourceNoteRefs` can add extra participating notes.
+
 ## Long Exam Multi-source State
 
 Long Exam sessions stay anchored to the primary `studyPackId`. When the user adds same-subject notes, additional source attribution is stored in `sessionState.sourceNoteRefs`.

@@ -153,12 +153,11 @@ class ProgressReportServiceTest {
         UUID userId = UUID.randomUUID();
         StudyPackEntity biologyPack = studyPack("Biology", List.of("Cells", "DNA"));
         StudyPackEntity otherPack = studyPack(WHITESPACE, List.of("Orientation"));
-        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(biologyPack.getId())))
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(biologyPack.getId(), otherPack.getId())))
                 .thenReturn(List.of(
                         health(biologyPack.getId(), "Cells", NOW.minusDays(1)),
                         health(biologyPack.getId(), "DNA", NOW.minusDays(5))
                 ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(otherPack.getId()))).thenReturn(List.of());
 
         List<SubjectProgressEntry> subjects = progressReportService.buildSubjectProgressEntries(
                 List.of(biologyPack, otherPack),

@@ -26,7 +26,9 @@ class UnsubscribeTokenServiceTest {
     void verify_rejectsTamperedToken() {
         UnsubscribeTokenService service = serviceWithSecret("0123456789abcdef0123456789abcdef");
         String token = service.sign(UUID.randomUUID(), UnsubscribeCategory.WEEKLY_SUMMARY);
-        String tampered = token.substring(0, token.length() - 1) + "x";
+        int signatureStart = token.indexOf('.') + 1;
+        char replacement = token.charAt(signatureStart) == 'x' ? 'y' : 'x';
+        String tampered = token.substring(0, signatureStart) + replacement + token.substring(signatureStart + 1);
 
         assertThatThrownBy(() -> service.verify(tampered))
                 .isInstanceOf(InvalidUnsubscribeTokenException.class);

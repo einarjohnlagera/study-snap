@@ -20,12 +20,10 @@ import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
-import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
-import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
@@ -33,11 +31,13 @@ import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
@@ -198,37 +198,12 @@ public class NoteCollectionService {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
-        List<? extends StudyPackProgressView> studyPacks = noteIds.isEmpty()
-                ? List.of()
-                : studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
-                        .filter(studyPack -> Objects.equals(userId, studyPack.getOwnerUserId()))
-                        .filter(studyPack -> studyPack.getNoteId() != null)
-                        .toList();
-        int notesWithStudyPack = (int) studyPacks.stream()
-                .map(StudyPackProgressView::getNoteId)
-                .distinct()
-                .count();
-        List<SubjectProgressEntry> subjects = studyPacks.isEmpty()
-                ? List.of()
-                : progressReportService.buildSubjectProgressEntries(
-                        studyPacks,
-                        userId,
-                        OffsetDateTime.now()
-                );
-        int totalConcepts = subjects.stream().mapToInt(SubjectProgressEntry::totalConcepts).sum();
-        int masteredConcepts = subjects.stream().mapToInt(SubjectProgressEntry::masteredConcepts).sum();
-        int dueConcepts = subjects.stream().mapToInt(SubjectProgressEntry::dueConcepts).sum();
-        int notPracticedConcepts = subjects.stream().mapToInt(SubjectProgressEntry::notPracticedConcepts).sum();
-        return new PlanReadinessResponse(
+        return toPlanReadinessResponse(
                 collection.getId(),
                 items.size(),
-                notesWithStudyPack,
-                masteryPercentage(masteredConcepts, totalConcepts),
-                totalConcepts,
-                masteredConcepts,
-                dueConcepts,
-                notPracticedConcepts,
-                subjects
+                loadOwnedStudyPackProgressViews(noteIds, userId),
+                userId,
+                OffsetDateTime.now()
         );
     }
 
@@ -292,8 +267,23 @@ public class NoteCollectionService {
         List<NoteCollectionEntity> children = collectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
         Map<UUID, Integer> itemCountsByCollectionId = children.isEmpty() ? Map.of() : loadItemCounts(children);
+        Map<UUID, List<StudyPackProgressView>> studyPacksByChildId = children.isEmpty()
+                ? Map.of()
+                : loadGoalStudyPacksByChildId(children, userId);
+        Map<UUID, ProgressReportService.SubjectProgressBatchResult> progressByChildId = children.isEmpty()
+                ? Map.of()
+                : progressReportService.buildSubjectProgressEntriesByGroup(
+                        studyPacksByChildId,
+                        userId,
+                        OffsetDateTime.now()
+                );
         List<GoalCollectionChildResponse> childResponses = children.stream()
-                .map(child -> toGoalChildResponse(child, userId, itemCountsByCollectionId.getOrDefault(child.getId(), 0)))
+                .map(child -> toGoalChildResponse(
+                        child,
+                        userId,
+                        itemCountsByCollectionId.getOrDefault(child.getId(), 0),
+                        progressByChildId.get(child.getId())
+                ))
                 .toList();
         int totalConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::totalConcepts).sum();
         int masteredConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::masteredConcepts).sum();
@@ -922,6 +912,53 @@ public class NoteCollectionService {
         return noteIdsByCollectionId;
     }
 
+    private List<StudyPackProgressView> loadOwnedStudyPackProgressViews(List<UUID> noteIds, UUID userId) {
+        if (noteIds.isEmpty()) {
+            return List.of();
+        }
+        return studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
+                .filter(studyPack -> Objects.equals(userId, studyPack.getOwnerUserId()))
+                .filter(studyPack -> studyPack.getNoteId() != null)
+                .map(StudyPackProgressView.class::cast)
+                .toList();
+    }
+
+    private Map<UUID, List<StudyPackProgressView>> loadGoalStudyPacksByChildId(
+            List<NoteCollectionEntity> children,
+            UUID userId
+    ) {
+        Map<UUID, List<UUID>> noteIdsByChildId = loadNoteIdsByCollectionId(children);
+        Map<UUID, List<StudyPackProgressView>> studyPacksByChildId = new LinkedHashMap<>();
+        for (NoteCollectionEntity child : children) {
+            studyPacksByChildId.put(child.getId(), new ArrayList<>());
+        }
+
+        Map<UUID, List<UUID>> childIdsByNoteId = new HashMap<>();
+        LinkedHashSet<UUID> allNoteIds = new LinkedHashSet<>();
+        for (NoteCollectionEntity child : children) {
+            UUID childId = child.getId();
+            for (UUID noteId : noteIdsByChildId.getOrDefault(childId, List.of())) {
+                allNoteIds.add(noteId);
+                childIdsByNoteId
+                        .computeIfAbsent(noteId, ignored -> new ArrayList<>())
+                        .add(childId);
+            }
+        }
+        if (allNoteIds.isEmpty()) {
+            return studyPacksByChildId;
+        }
+
+        for (StudyPackProgressView studyPack : loadOwnedStudyPackProgressViews(List.copyOf(allNoteIds), userId)) {
+            for (UUID childId : childIdsByNoteId.getOrDefault(studyPack.getNoteId(), List.of())) {
+                List<StudyPackProgressView> childStudyPacks = studyPacksByChildId.get(childId);
+                if (childStudyPacks != null) {
+                    childStudyPacks.add(studyPack);
+                }
+            }
+        }
+        return studyPacksByChildId;
+    }
+
     private Map<UUID, NoteEntity> loadOwnedNotesByIdOrThrow(UUID userId, List<UUID> noteIds) {
         if (noteIds.isEmpty()) {
             return Map.of();
@@ -1175,38 +1212,86 @@ public class NoteCollectionService {
         return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
+    private PlanReadinessResponse toPlanReadinessResponse(
+            UUID collectionId,
+            int totalNotes,
+            List<? extends StudyPackProgressView> studyPacks,
+            UUID userId,
+            OffsetDateTime now
+    ) {
+        int notesWithStudyPack = (int) studyPacks.stream()
+                .map(StudyPackProgressView::getNoteId)
+                .distinct()
+                .count();
+        List<SubjectProgressEntry> subjects = studyPacks.isEmpty()
+                ? List.of()
+                : progressReportService.buildSubjectProgressEntries(
+                        studyPacks,
+                        userId,
+                        now
+                );
+        ReadinessConceptTotals totals = summarizeReadinessConcepts(subjects);
+        return new PlanReadinessResponse(
+                collectionId,
+                totalNotes,
+                notesWithStudyPack,
+                masteryPercentage(totals.masteredConcepts(), totals.totalConcepts()),
+                totals.totalConcepts(),
+                totals.masteredConcepts(),
+                totals.dueConcepts(),
+                totals.notPracticedConcepts(),
+                subjects
+        );
+    }
+
+    private ReadinessConceptTotals summarizeReadinessConcepts(List<SubjectProgressEntry> subjects) {
+        int totalConcepts = subjects.stream().mapToInt(SubjectProgressEntry::totalConcepts).sum();
+        int masteredConcepts = subjects.stream().mapToInt(SubjectProgressEntry::masteredConcepts).sum();
+        int dueConcepts = subjects.stream().mapToInt(SubjectProgressEntry::dueConcepts).sum();
+        int notPracticedConcepts = subjects.stream().mapToInt(SubjectProgressEntry::notPracticedConcepts).sum();
+        return new ReadinessConceptTotals(totalConcepts, masteredConcepts, dueConcepts, notPracticedConcepts);
+    }
+
     private GoalCollectionChildResponse toGoalChildResponse(
             NoteCollectionEntity child,
             UUID userId,
-            int itemCount
+            int itemCount,
+            ProgressReportService.SubjectProgressBatchResult progress
     ) {
-        try {
-            PlanReadinessResponse readiness = getReadiness(child.getId(), userId);
+        if (progress != null && progress.failure() == null) {
+            ReadinessConceptTotals totals = summarizeReadinessConcepts(progress.subjects());
             return new GoalCollectionChildResponse(
                     child.getId(),
                     child.getTitle(),
                     child.getDescription(),
                     itemCount,
-                    readiness.overallReadinessPercentage(),
-                    readiness.masteredConcepts(),
-                    readiness.dueConcepts(),
-                    readiness.notPracticedConcepts(),
-                    readiness.totalConcepts()
-            );
-        } catch (RuntimeException exception) {
-            log.warn("Could not load child collection readiness collectionId={} userId={}", child.getId(), userId, exception);
-            return new GoalCollectionChildResponse(
-                    child.getId(),
-                    child.getTitle(),
-                    child.getDescription(),
-                    itemCount,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
+                    masteryPercentage(totals.masteredConcepts(), totals.totalConcepts()),
+                    totals.masteredConcepts(),
+                    totals.dueConcepts(),
+                    totals.notPracticedConcepts(),
+                    totals.totalConcepts()
             );
         }
+
+        if (progress != null && progress.failure() != null) {
+            log.warn(
+                    "Could not load child collection readiness collectionId={} userId={}",
+                    child.getId(),
+                    userId,
+                    progress.failure()
+            );
+        }
+        return new GoalCollectionChildResponse(
+                child.getId(),
+                child.getTitle(),
+                child.getDescription(),
+                itemCount,
+                0,
+                0,
+                0,
+                0,
+                0
+        );
     }
 
     private List<NoteCollectionItemResponse> toItemResponses(UUID userId, List<NoteCollectionItemEntity> items) {
@@ -1214,15 +1299,19 @@ public class NoteCollectionService {
             return List.of();
         }
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
-        Map<UUID, NoteEntity> notesById = noteRepository.findAllById(noteIds).stream()
-                .collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
-        Map<UUID, StudyPackEntity> studyPacksByNoteId = studyPackRepository.findByNoteIdIn(noteIds).stream()
+        Map<UUID, NoteCollectionNoteProjection> notesById = noteRepository.findCollectionNoteProjectionsByIdIn(noteIds).stream()
+                .collect(Collectors.toMap(NoteCollectionNoteProjection::noteId, Function.identity()));
+        Map<UUID, StudyPackProgressView> studyPacksByNoteId = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
                 .filter(studyPack -> studyPack.getNoteId() != null)
-                .collect(Collectors.toMap(StudyPackEntity::getNoteId, Function.identity(), (left, right) -> left));
-        Map<UUID, GeneratedQuizEntity> generatedQuizzesByNoteId = generatedQuizRepository
-                .findByOwnerUserIdAndNoteIdIn(userId, noteIds).stream()
-                .filter(generatedQuiz -> generatedQuiz.getNoteId() != null)
-                .collect(Collectors.toMap(GeneratedQuizEntity::getNoteId, Function.identity(), (left, right) -> left));
+                .collect(Collectors.toMap(StudyPackProgressView::getNoteId, Function.identity(), (left, right) -> left));
+        Map<UUID, UUID> generatedQuizIdByNoteId = generatedQuizRepository
+                .findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds).stream()
+                .filter(generatedQuiz -> generatedQuiz.noteId() != null)
+                .collect(Collectors.toMap(
+                        GeneratedQuizNoteProjection::noteId,
+                        GeneratedQuizNoteProjection::generatedQuizId,
+                        (left, right) -> left
+                ));
         Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = loadLastSessionCompletedAt(userId, noteIds);
         Map<UUID, List<String>> dueConceptsByStudyPackId = loadDueConceptsByStudyPackId(
                 userId,
@@ -1234,7 +1323,7 @@ public class NoteCollectionService {
                         item,
                         notesById.get(item.getNoteId()),
                         studyPacksByNoteId.get(item.getNoteId()),
-                        generatedQuizzesByNoteId.get(item.getNoteId()),
+                        generatedQuizIdByNoteId.get(item.getNoteId()),
                         lastSessionCompletedAtByNoteId.get(item.getNoteId()),
                         dueConceptsByStudyPackId
                 ))
@@ -1246,12 +1335,12 @@ public class NoteCollectionService {
             return List.of();
         }
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
-        Map<UUID, NoteEntity> notesById = noteRepository.findAllById(noteIds).stream()
-                .filter(note -> note.getVisibility() == NoteVisibility.PUBLIC)
-                .collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
-        Map<UUID, StudyPackEntity> studyPacksByNoteId = studyPackRepository.findByNoteIdIn(noteIds).stream()
+        Map<UUID, NoteCollectionNoteProjection> notesById = noteRepository.findCollectionNoteProjectionsByIdIn(noteIds).stream()
+                .filter(note -> note.visibility() == NoteVisibility.PUBLIC)
+                .collect(Collectors.toMap(NoteCollectionNoteProjection::noteId, Function.identity()));
+        Map<UUID, StudyPackProgressView> studyPacksByNoteId = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
                 .filter(studyPack -> studyPack.getNoteId() != null)
-                .collect(Collectors.toMap(StudyPackEntity::getNoteId, Function.identity(), (left, right) -> left));
+                .collect(Collectors.toMap(StudyPackProgressView::getNoteId, Function.identity(), (left, right) -> left));
 
         return items.stream()
                 .filter(item -> notesById.containsKey(item.getNoteId()))
@@ -1268,7 +1357,7 @@ public class NoteCollectionService {
 
     private Map<UUID, List<String>> loadDueConceptsByStudyPackId(
             UUID userId,
-            Collection<StudyPackEntity> studyPacks
+            Collection<? extends StudyPackProgressView> studyPacks
     ) {
         if (studyPacks.isEmpty()) {
             return Map.of();
@@ -1279,7 +1368,7 @@ public class NoteCollectionService {
             }
             Map<UUID, List<String>> conceptsByStudyPackId = studyPacks.stream()
                     .collect(Collectors.toMap(
-                            StudyPackEntity::getId,
+                            StudyPackProgressView::getId,
                             studyPack -> studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                             (left, right) -> left
                     ));
@@ -1310,9 +1399,9 @@ public class NoteCollectionService {
 
     private NoteCollectionItemResponse toItemResponse(
             NoteCollectionItemEntity item,
-            NoteEntity note,
-            StudyPackEntity studyPack,
-            GeneratedQuizEntity generatedQuiz,
+            NoteCollectionNoteProjection note,
+            StudyPackProgressView studyPack,
+            UUID generatedQuizId,
             OffsetDateTime lastSessionCompletedAt,
             Map<UUID, List<String>> dueConceptsByStudyPackId
     ) {
@@ -1326,18 +1415,26 @@ public class NoteCollectionService {
                 item.getNoteId(),
                 item.getLabel(),
                 item.getPosition(),
-                note.getTitle(),
-                note.getSubject(),
-                note.getCourseProgram(),
-                NoteStudyPackStatusResolver.resolve(note, studyPack),
-                generatedQuiz == null ? null : generatedQuiz.getId().toString(),
+                note.title(),
+                note.subject(),
+                note.courseProgram(),
+                NoteStudyPackStatusResolver.resolve(note.status(), studyPack != null),
+                generatedQuizId == null ? null : generatedQuizId.toString(),
                 lastSessionCompletedAt,
                 dueConcepts.size(),
                 dueConcepts.stream().limit(DUE_CONCEPT_DISPLAY_LIMIT).toList(),
-                note.getUpdatedAt()
+                note.updatedAt()
         );
     }
 
     private record CopiedPlanItem(UUID noteId, String label) {
+    }
+
+    private record ReadinessConceptTotals(
+            int totalConcepts,
+            int masteredConcepts,
+            int dueConcepts,
+            int notPracticedConcepts
+    ) {
     }
 }
