@@ -19,6 +19,16 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID> {
+    String LIST_ITEM_PROJECTION = """
+            new com.studysnap.backend.repository.StudyPackListItemProjection(
+                s.id,
+                s.title,
+                s.summary,
+                s.subject,
+                s.tags,
+                s.createdAt
+            )
+            """;
     String MALFORMED_TRUE_FALSE_QUIZ_EXISTS_QUERY = """
             exists (
                 select 1
@@ -52,19 +62,41 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
 
     List<StudyPackEntity> findByOwnerUserIdOrderByCreatedAtDescIdDesc(UUID ownerUserId, Pageable pageable);
     List<StudyPackEntity> findByOwnerUserId(UUID ownerUserId);
+
     @Query("""
-            select s
+            select """ + " " + LIST_ITEM_PROJECTION + """
+            from StudyPackEntity s
+            where s.ownerUserId = :ownerUserId
+            order by s.createdAt desc, s.id desc
+            """)
+    List<StudyPackListItemProjection> findListItemProjectionsByOwnerUserIdOrderByCreatedAtDescIdDesc(
+            @Param("ownerUserId") UUID ownerUserId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select """ + " " + LIST_ITEM_PROJECTION + """
             from StudyPackEntity s
             where s.ownerUserId = :ownerUserId
               and (s.createdAt < :cursorCreatedAt or (s.createdAt = :cursorCreatedAt and s.id < :cursorId))
             order by s.createdAt desc, s.id desc
             """)
-    List<StudyPackEntity> findByOwnerUserIdAndCursor(
-            UUID ownerUserId,
-            OffsetDateTime cursorCreatedAt,
-            UUID cursorId,
+    List<StudyPackListItemProjection> findListItemProjectionsByOwnerUserIdAndCursor(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
+            @Param("cursorId") UUID cursorId,
             Pageable pageable
     );
+
+    // PostgreSQL-native by design: H2 PostgreSQL mode cannot execute jsonb_array_length, so tests cover
+    // the lean JPQL page fetch and service count mapping while this expression remains isolated here.
+    @Query(value = """
+            select sp.id, coalesce(jsonb_array_length(sp.quiz), 0) as question_count
+            from study_packs sp
+            where sp.id in (:ids)
+            """, nativeQuery = true)
+    List<Object[]> findQuizCountsByIdIn(@Param("ids") Collection<UUID> ids);
+
     Optional<StudyPackEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<StudyPackEntity> findByOwnerUserIdAndNoteId(UUID ownerUserId, UUID noteId);
     Optional<StudyPackEntity> findByNoteId(UUID noteId);

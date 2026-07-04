@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -28,12 +29,14 @@ import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
+import com.studysnap.backend.repository.StudyPackListItemProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -47,6 +50,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -133,6 +137,116 @@ class StudyPackServiceTest {
         lenient().when(generationContextResolver.resolve(any(UUID.class), any())).thenReturn(
                 new com.studysnap.backend.service.model.StudyPackGenerationContext(null, null, null, List.of())
         );
+    }
+
+    @Test
+    void listMine_mapsLeanProjectionAndNativeQuizCountsWithUnchangedPagination() {
+        UUID userId = UUID.randomUUID();
+        StudyPackListItemProjection first = listProjection(
+                UUID.fromString("00000000-0000-0000-0000-000000000003"),
+                "First",
+                "A long summary that should be preserved through the existing summary preview utility.",
+                "Biology",
+                new String[]{"cells", "exam"},
+                OffsetDateTime.parse("2026-05-03T10:00:00Z")
+        );
+        StudyPackListItemProjection second = listProjection(
+                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                "Second",
+                "Short summary",
+                null,
+                null,
+                OffsetDateTime.parse("2026-05-02T10:00:00Z")
+        );
+        StudyPackListItemProjection extra = listProjection(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                "Extra",
+                "Extra summary",
+                "Chemistry",
+                new String[]{"hidden"},
+                OffsetDateTime.parse("2026-05-01T10:00:00Z")
+        );
+        when(studyPackRepository.findListItemProjectionsByOwnerUserIdOrderByCreatedAtDescIdDesc(
+                userId,
+                PageRequest.of(0, 3)
+        )).thenReturn(List.of(first, second, extra));
+        when(studyPackRepository.findQuizCountsByIdIn(List.of(first.id(), second.id())))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{first.id(), 3},
+                        new Object[]{second.id(), null}
+                ));
+
+        StudyPackListPageResponse response = studyPackService.listMine(userId, 2, null);
+
+        assertThat(response.hasMore()).isTrue();
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items().get(0).id()).isEqualTo(first.id().toString());
+        assertThat(response.items().get(0).title()).isEqualTo("First");
+        assertThat(response.items().get(0).summaryPreview()).isEqualTo("A long summary that should be preserved through the existing summary preview utility.");
+        assertThat(response.items().get(0).quizCount()).isEqualTo(3);
+        assertThat(response.items().get(0).subject()).isEqualTo("Biology");
+        assertThat(response.items().get(0).tags()).containsExactly("cells", "exam");
+        assertThat(response.items().get(0).createdAt()).isEqualTo(first.createdAt());
+        assertThat(response.items().get(1).quizCount()).isZero();
+        assertThat(response.items().get(1).tags()).isEmpty();
+        CreatedAtIdCursorUtils.CursorToken nextCursor = CreatedAtIdCursorUtils.decode(response.nextCursor());
+        assertThat(nextCursor.createdAt()).isEqualTo(second.createdAt());
+        assertThat(nextCursor.id()).isEqualTo(second.id());
+        verify(studyPackRepository).findQuizCountsByIdIn(List.of(first.id(), second.id()));
+    }
+
+    @Test
+    void listMine_usesProjectionCursorFinderForSubsequentPages() {
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime cursorCreatedAt = OffsetDateTime.parse("2026-05-02T10:00:00Z");
+        UUID cursorId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        String cursor = CreatedAtIdCursorUtils.encode(cursorCreatedAt, cursorId);
+        StudyPackListItemProjection next = listProjection(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                "Next",
+                "Next summary",
+                "Chemistry",
+                new String[0],
+                OffsetDateTime.parse("2026-05-01T10:00:00Z")
+        );
+        when(studyPackRepository.findListItemProjectionsByOwnerUserIdAndCursor(
+                userId,
+                cursorCreatedAt,
+                cursorId,
+                PageRequest.of(0, 3)
+        )).thenReturn(List.of(next));
+        when(studyPackRepository.findQuizCountsByIdIn(List.of(next.id())))
+                .thenReturn(List.<Object[]>of(new Object[]{next.id(), 1}));
+
+        StudyPackListPageResponse response = studyPackService.listMine(userId, 2, cursor);
+
+        assertThat(response.hasMore()).isFalse();
+        assertThat(response.nextCursor()).isNull();
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).id()).isEqualTo(next.id().toString());
+        assertThat(response.items().get(0).quizCount()).isEqualTo(1);
+        verify(studyPackRepository).findListItemProjectionsByOwnerUserIdAndCursor(
+                userId,
+                cursorCreatedAt,
+                cursorId,
+                PageRequest.of(0, 3)
+        );
+    }
+
+    @Test
+    void listMine_emptyPageDoesNotRunQuizCountQuery() {
+        UUID userId = UUID.randomUUID();
+        when(studyPackRepository.findListItemProjectionsByOwnerUserIdOrderByCreatedAtDescIdDesc(
+                userId,
+                PageRequest.of(0, 21)
+        )).thenReturn(List.of());
+
+        StudyPackListPageResponse response = studyPackService.listMine(userId, null, null);
+
+        assertThat(response.items()).isEmpty();
+        assertThat(response.nextCursor()).isNull();
+        assertThat(response.hasMore()).isFalse();
+        verify(studyPackRepository, never()).findQuizCountsByIdIn(any());
     }
 
     @Test
@@ -849,5 +963,16 @@ class StudyPackServiceTest {
         note.setUpdatedAt(OffsetDateTime.now().minusHours(1));
         note.setCopiedFromPublic(Boolean.FALSE);
         return note;
+    }
+
+    private StudyPackListItemProjection listProjection(
+            UUID id,
+            String title,
+            String summary,
+            String subject,
+            String[] tags,
+            OffsetDateTime createdAt
+    ) {
+        return new StudyPackListItemProjection(id, title, summary, subject, tags, createdAt);
     }
 }

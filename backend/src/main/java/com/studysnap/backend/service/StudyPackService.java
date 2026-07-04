@@ -26,6 +26,7 @@ import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
+import com.studysnap.backend.repository.StudyPackListItemProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
@@ -57,6 +58,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -348,9 +350,12 @@ public class StudyPackService {
         int fetchSize = pageSize + 1;
         CreatedAtIdCursorUtils.CursorToken cursorToken = parseCursorToken(cursor);
 
-        List<StudyPackEntity> fetched = cursorToken == null
-                ? studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(ownerUserId, PageRequest.of(0, fetchSize))
-                : studyPackRepository.findByOwnerUserIdAndCursor(
+        List<StudyPackListItemProjection> fetched = cursorToken == null
+                ? studyPackRepository.findListItemProjectionsByOwnerUserIdOrderByCreatedAtDescIdDesc(
+                        ownerUserId,
+                        PageRequest.of(0, fetchSize)
+                )
+                : studyPackRepository.findListItemProjectionsByOwnerUserIdAndCursor(
                         ownerUserId,
                         cursorToken.createdAt(),
                         cursorToken.id(),
@@ -358,13 +363,17 @@ public class StudyPackService {
                 );
 
         boolean hasMore = fetched.size() > pageSize;
-        List<StudyPackEntity> pageEntities = hasMore ? fetched.subList(0, pageSize) : fetched;
-        List<StudyPackListItemResponse> items = pageEntities.stream()
-                .map(this::mapToListItemResponse)
+        List<StudyPackListItemProjection> pageProjections = hasMore ? fetched.subList(0, pageSize) : fetched;
+        Map<UUID, Integer> quizCountsById = loadQuizCountsByStudyPackId(pageProjections);
+        List<StudyPackListItemResponse> items = pageProjections.stream()
+                .map(projection -> mapToListItemResponse(
+                        projection,
+                        quizCountsById.getOrDefault(projection.id(), 0)
+                ))
                 .toList();
 
-        String nextCursor = hasMore && !pageEntities.isEmpty()
-                ? encodeCursorToken(pageEntities.getLast().getCreatedAt(), pageEntities.getLast().getId())
+        String nextCursor = hasMore && !pageProjections.isEmpty()
+                ? encodeCursorToken(pageProjections.getLast().createdAt(), pageProjections.getLast().id())
                 : null;
 
         return new StudyPackListPageResponse(items, nextCursor, hasMore);
@@ -750,15 +759,42 @@ public class StudyPackService {
         );
     }
 
-    private StudyPackListItemResponse mapToListItemResponse(StudyPackEntity entity) {
+    private Map<UUID, Integer> loadQuizCountsByStudyPackId(List<StudyPackListItemProjection> projections) {
+        if (projections.isEmpty()) {
+            return Map.of();
+        }
+
+        List<UUID> ids = projections.stream()
+                .map(StudyPackListItemProjection::id)
+                .toList();
+        Map<UUID, Integer> countsById = new LinkedHashMap<>();
+        studyPackRepository.findQuizCountsByIdIn(ids).forEach(row -> {
+            UUID studyPackId = toUuid(row[0]);
+            int questionCount = row[1] instanceof Number number ? number.intValue() : 0;
+            countsById.put(studyPackId, questionCount);
+        });
+        return countsById;
+    }
+
+    private UUID toUuid(Object value) {
+        if (value instanceof UUID uuid) {
+            return uuid;
+        }
+        return UUID.fromString(value.toString());
+    }
+
+    private StudyPackListItemResponse mapToListItemResponse(
+            StudyPackListItemProjection projection,
+            int questionCount
+    ) {
         return new StudyPackListItemResponse(
-                entity.getId().toString(),
-                entity.getTitle(),
-                SummaryPreviewUtils.buildSummaryPreview(entity.getSummary(), 140),
-                entity.getQuiz() == null ? 0 : entity.getQuiz().size(),
-                entity.getSubject(),
-                entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
-                entity.getCreatedAt()
+                projection.id().toString(),
+                projection.title(),
+                SummaryPreviewUtils.buildSummaryPreview(projection.summary(), 140),
+                questionCount,
+                projection.subject(),
+                projection.tags() == null ? List.of() : Arrays.asList(projection.tags()),
+                projection.createdAt()
         );
     }
 
@@ -766,7 +802,7 @@ public class StudyPackService {
         if (limit == null || limit <= 0) {
             return DEFAULT_LIST_LIMIT;
         }
-        return Math.min(limit, MAX_LIST_LIMIT);
+        return Math.clamp(limit, 1, MAX_LIST_LIMIT);
     }
 
     private CreatedAtIdCursorUtils.CursorToken parseCursorToken(String cursor) {
