@@ -177,7 +177,7 @@ describe("FlashcardsPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Flashcards unavailable" })).toBeInTheDocument();
     expect(screen.getByText("Could not load note.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to Note" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Note" })).toHaveAttribute(
       "href",
       "/notes/note-1?tab=key-concepts",
     );

@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookMarked, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getAuthUser } from "@/lib/auth";
 import { getNote, type NoteResponse, type QuizItem } from "@/lib/api";
@@ -59,16 +58,13 @@ export function buildFlashcardDeck(keyConcepts: string[], quiz: QuizItem[]): Fla
     }));
 }
 
-function FlashcardsGuard({ title, message, noteHref }: Readonly<{ title: string; message: string; noteHref: string }>) {
+function FlashcardsGuard({ title, message }: Readonly<{ title: string; message: string }>) {
   return (
     <Card className="space-y-4 p-5 sm:p-6">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
         <p className="text-sm leading-relaxed text-foreground/75">{message}</p>
       </div>
-      <Link href={noteHref} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-        Back to Note
-      </Link>
     </Card>
   );
 }
@@ -140,7 +136,6 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
         <FlashcardsGuard
           title="Flashcards"
           message="Loading flashcards from this note's Study Pack."
-          noteHref={noteHref}
         />
       ) : null}
 
@@ -148,7 +143,6 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
         <FlashcardsGuard
           title="Flashcards unavailable"
           message={error ?? "Could not load flashcards."}
-          noteHref={noteHref}
         />
       ) : null}
 
@@ -173,7 +167,6 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
             <FlashcardsGuard
               title="Key concepts are being generated"
               message="Key concepts are being generated from your note."
-              noteHref={noteHref}
             />
           ) : null}
 
@@ -181,7 +174,6 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
             <FlashcardsGuard
               title="Flashcards are not available yet"
               message="Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready."
-              noteHref={noteHref}
             />
           ) : null}
 
@@ -189,7 +181,6 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
             <FlashcardsGuard
               title="No key concepts yet"
               message="No key concepts yet. Generate a Study Pack to extract the most important ideas from this note."
-              noteHref={noteHref}
             />
           ) : null}
 
@@ -197,7 +188,6 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
             <FlashcardsGuard
               title="Nothing to review yet"
               message="This Study Pack does not have key concepts to review yet."
-              noteHref={noteHref}
             />
           ) : null}
 
@@ -256,15 +246,10 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
                     <ChevronRight className="ml-2 h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button type="button" variant="secondary" onClick={() => setFlipped((value) => !value)}>
-                    <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-                    {flipped ? "Show concept" : "Show definition"}
-                  </Button>
-                  <Link href={noteHref} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-                    Back to Note
-                  </Link>
-                </div>
+                <Button type="button" variant="secondary" onClick={() => setFlipped((value) => !value)}>
+                  <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {flipped ? "Show concept" : "Show definition"}
+                </Button>
               </div>
             </section>
           ) : null}
