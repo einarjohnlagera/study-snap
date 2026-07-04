@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { getAuthUser } from "@/lib/auth";
 import { getNote, type NoteResponse, type QuizItem } from "@/lib/api";
 import { normalizeConceptKey } from "@/lib/concepts";
+import { buildNoteDetailPathWithTab } from "@/lib/note-entry";
 import { cn } from "@/lib/utils";
 
 type Flashcard = {
@@ -74,7 +75,7 @@ function FlashcardsGuard({ title, message, noteHref }: Readonly<{ title: string;
 
 export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
   const { replace } = useRouter();
-  const noteHref = `/notes/${noteId}`;
+  const noteHref = buildNoteDetailPathWithTab(noteId, "key-concepts");
   const isTeacherMode = getAuthUser()?.profileType === "TEACHER";
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [note, setNote] = useState<NoteResponse | null>(null);

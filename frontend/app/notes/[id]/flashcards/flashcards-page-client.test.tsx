@@ -177,7 +177,10 @@ describe("FlashcardsPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Flashcards unavailable" })).toBeInTheDocument();
     expect(screen.getByText("Could not load note.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to Note" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to Note" })).toHaveAttribute(
+      "href",
+      "/notes/note-1?tab=key-concepts",
+    );
   });
 
   it("redirects teachers back to note detail without loading flashcards", async () => {
@@ -186,7 +189,7 @@ describe("FlashcardsPageClient", () => {
     render(<FlashcardsPageClient noteId="note-1" />);
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/notes/note-1");
+      expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?tab=key-concepts");
     });
     expect(getNote).not.toHaveBeenCalled();
   });
