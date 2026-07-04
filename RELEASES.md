@@ -2,7 +2,7 @@
 
 ## v0.37.3 - Study Plan Read-Path Memory Optimization
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: cut heap allocation on Study Plan read endpoints (`getReadiness`, `getNoteConceptCounts`, `getGoal`) by stopping full `StudyPackEntity` materialization (drops the `quiz` and `source_text` jsonb columns from reads that only need `keyConcepts`), batching the concept-health N+1 into the existing batched repository method, and replacing a count-by-load with a count query. Full brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`.
 

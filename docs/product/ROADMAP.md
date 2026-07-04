@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.3 - Study Plan Read-Path Memory Optimization` is in progress (on `releases/v0.37.3`); handoff brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`.
+`v0.37.3 - Study Plan Read-Path Memory Optimization` is the latest released version (on `releases/v0.37.3`).
 
 `v0.37.2 - Plan Data Integrity Hotfix` is the previous released version (on `releases/v0.37.2`).
 
@@ -140,7 +140,7 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
-## v0.37.3 - Study Plan Read-Path Memory Optimization (in progress)
+## v0.37.3 - Study Plan Read-Path Memory Optimization (released)
 
 Base branch: `releases/v0.37.3`.
 
@@ -153,6 +153,8 @@ Theme: cut heap allocation on Study Plan read endpoints — the recurring produc
 - **Count query instead of count-by-load (backend).** `NoteCollectionService.getGoal`'s item count currently loads and sizes a list; replace with a `count(...)` query.
 
 Anti-drift: no schema, endpoint, or DTO change — API responses stay byte-identical. `getGoal`'s per-child readiness fan-out restructure is deferred (P1 already makes each fan-out call cheap, so restructuring it is a latency concern, not a memory one).
+
+Audit finding: the delivered projection initially returned `StudyPackProgressView` directly, which `StudyPackEntity` (the managed domain type) also implements — a combination that silently breaks Spring Data's projection detection and 500s at call time, invisible to Mockito-mocked unit tests. Fixed with a marker sub-interface (`StudyPackProgressProjection`) used only as the query return type, plus a new real-Hibernate repository test to catch this class of bug going forward. See `RELEASES.md` for full detail.
 
 ---
 
