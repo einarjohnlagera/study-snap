@@ -292,6 +292,27 @@ Anti-drift: Identification/Enumeration reuse the existing quiz-session engine an
 
 ---
 
+## v0.39.1 (candidate) - Study Plan Builder Polish
+
+Not kicked off — do not kick off until v0.39.0 (Flexible Review Methods) is signed off. Surfaced while using the Study Plan Builder in practice; two sub-themes, both Study Plan/note-collection polish rather than new architecture.
+
+### Theme A — Subject metadata completeness
+
+Today, metadata set at the Goal level doesn't reliably reach its child Subject plans.
+
+- **Description field on Add Subject Plan.** The Builder's `AddSubjectModal` only collects a title; `createCollection` already accepts `description` (the top-level "New Review Set" modal already uses it). Add the same textarea here and thread it through `handleAddSubject(title, description)`. Frontend-only, no backend change — separate component from `CreateCollectionModal` (the two diverge in behavior: optimistic re-parenting vs. navigate-after-create), so add the field directly rather than force a shared component.
+- **Course/program does not cascade from parent to children.** Confirmed bug: `NoteCollectionService.publishChildCollections` cascades `visibility = PUBLIC` to children on publish but never touches `courseProgram`, and `updateMetadata` only ever updates the single collection it's called on. A dev-DB audit found zero existing parent/child pairs with intentionally-different `courseProgram` values, so a cascade is safe in practice — but given this codebase already shipped a real hotfix for `updateMetadata` silently clobbering fields (v0.37.2), implement this as "cascade to children only when their `courseProgram` is currently blank," not a blind overwrite. Belongs in `updateMetadata` (covers editing course/program after publish too, not just at the initial publish moment). **This is a correctness bug on already-published content** (blank child `courseProgram` breaks the course/program-scoped public discovery from v0.33.0) — candidate for a standalone hotfix ahead of this batch rather than waiting for v0.39.1, decide at kickoff.
+
+### Theme B — Adoption model
+
+- **Cold-start adoption discoverability (reframed from "should we auto-generate review sets").** Raised alongside a comparison to competitor apps that auto-generate review decks. Auto-generation was rejected: NoteLib's differentiator is that review material comes from the user's *own* notes, not pre-made content — adopting a curated plan is correctly positioned as the **cold-start on-ramp** for zero-notes users, not the core loop, and shouldn't be second-guessed on that basis. The sharper question worth scoping here is whether adoption is **discoverable and frictionless enough** for that cold-start moment — a UX/discovery audit, not a new generation feature.
+
+### Parked (not scoped for this candidate)
+
+- **Adopting a single child Subject plan standalone.** Backend technically permits it today (`adopt()` has no parent-child guard), so this is a pure UX-surfacing question, not a backend change. Not building it yet: the value it would add (grabbing one Subject without its parent Goal) is already served by copying individual public notes, and there's an unresolved interaction — `adopt()` never sets `parentCollectionId`, so a standalone-adopted child lands as a top-level orphan copy; if the user later adopts the parent Goal, `adoptGoal`'s idempotency check finds that existing copy by `sourcePlanId` and **silently re-parents it** into the newly-adopted Goal (no duplicate created, but a surprising structural change with no user confirmation). Revisit only if a real discovery need shows up — resolve the re-parenting UX before shipping.
+
+---
+
 ## Note Detail readiness as its own tab (candidate)
 
 Idea surfaced while fixing v0.36.1's Note Detail readiness placement: instead of showing the readiness summary inline (currently just before Performance Overview on every tab), give it its own tab alongside Summary / Key Concepts / Quiz / Full Notes.
