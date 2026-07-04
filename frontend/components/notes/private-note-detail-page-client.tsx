@@ -25,6 +25,7 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { normalizeConceptKey } from "@/lib/concepts";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   formatStudyPackResetDate,
@@ -183,10 +184,6 @@ function buildShareUrl(subject: string | null, title: string | null) {
     return path;
   }
   return new URL(path, globalThis.location.origin).toString();
-}
-
-function normalizeConceptKey(concept: string): string {
-  return concept.trim().toLowerCase();
 }
 
 function resolveConceptReadinessStatus(health: ConceptHealthEntry | undefined): ConceptReadinessStatus {
@@ -2039,6 +2036,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   ) : (
                     <>
                       <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quickReview" label="Start Quick Review" showTextOnMobile />
+                      <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/flashcards`)} action="flashcards" label="Flashcards" />
                       <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Challenge Quiz" />
                       {hasAdaptiveTargets ? (
                         <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />

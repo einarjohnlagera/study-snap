@@ -8,7 +8,6 @@ Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashc
 
 ### Planned Scope
 
-- **Flashcards (frontend).** New non-scored surface over Study Pack content, reusing `QuizItem.explanation` as the card back where a matching concept has a quiz question; no `ConceptHealth` write.
 - **Memorization (backend + frontend).** Flashcards' surface plus a real spaced-repetition schedule — graduating review intervals per concept driven by a new, separate entity, never a `ConceptHealth` field.
 - **Identification (backend + frontend).** New free-text question format (fill-in-the-blank / name-the-term) on the existing quiz-session engine; writes `ConceptHealth` on completion like Challenge Quiz.
 - **Enumeration (backend + frontend).** New free-text question format (list N items in a category) reusing Identification's field/validation/prompt work, plus partial-credit and order-independent scoring; writes `ConceptHealth` on completion like Challenge Quiz.
@@ -18,7 +17,7 @@ Anti-drift: Identification/Enumeration reuse the existing quiz-session engine an
 
 ### Shipped
 
-_(nothing yet)_
+- **Flashcards (frontend).** Added a private Note Detail Flashcards entry point for every non-teacher profile. `/notes/{id}/flashcards` renders a flip-card deck from existing `keyConcepts`, matches `quiz[].concept` to reuse `quiz[].explanation` as the card back, and shows a per-card "no definition yet" fallback when no explanation matches. The surface is free, frontend-only, outside the quiz-session engine, makes no new AI/backend call, and never reads or writes `ConceptHealth`.
 
 ## v0.38.0 - Read-Path Optimization Pass
 
