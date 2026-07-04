@@ -19,18 +19,34 @@ type Flashcard = {
 
 type LoadState = "loading" | "ready" | "error";
 
+const MIN_FUZZY_MATCH_LENGTH = 4;
+
+function isFuzzyConceptMatch(a: string, b: string): boolean {
+  if (a === b) {
+    return true;
+  }
+  const shorter = a.length <= b.length ? a : b;
+  if (shorter.length < MIN_FUZZY_MATCH_LENGTH) {
+    return false;
+  }
+  return a.includes(b) || b.includes(a);
+}
+
 export function buildFlashcardDeck(keyConcepts: string[], quiz: QuizItem[]): Flashcard[] {
-  const explanationsByConcept = new Map<string, string>();
+  const explanations: Array<{ key: string; explanation: string }> = [];
   for (const item of quiz) {
     const concept = item.concept?.trim();
     const explanation = item.explanation?.trim();
     if (!concept || !explanation) {
       continue;
     }
+    explanations.push({ key: normalizeConceptKey(concept), explanation });
+  }
+
+  function findExplanation(concept: string): string | null {
     const key = normalizeConceptKey(concept);
-    if (!explanationsByConcept.has(key)) {
-      explanationsByConcept.set(key, explanation);
-    }
+    const match = explanations.find((entry) => isFuzzyConceptMatch(entry.key, key));
+    return match?.explanation ?? null;
   }
 
   return keyConcepts
@@ -38,7 +54,7 @@ export function buildFlashcardDeck(keyConcepts: string[], quiz: QuizItem[]): Fla
     .filter(Boolean)
     .map((concept) => ({
       concept,
-      explanation: explanationsByConcept.get(normalizeConceptKey(concept)) ?? null,
+      explanation: findExplanation(concept),
     }));
 }
 

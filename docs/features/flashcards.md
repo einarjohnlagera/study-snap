@@ -20,6 +20,8 @@ It should feel:
 
 Teacher stays scoped to Quiz Preview and Export. Flashcards is not shown on teacher note detail, public note pages, public library pages, or shared quiz links.
 
+**Entry point:** the Key Concepts tab, not the quiz-mode action row (Start Quick Review / Challenge Quiz / Adaptive Practice). This is deliberate, not just a layout choice — per `EXAM_MODES.md`'s "Non-Engine Review Surfaces" classification, Flashcards is not a quiz mode, so it does not belong in the quiz-mode CTA row. It also keeps that row from growing an unbounded number of buttons as review surfaces are added.
+
 ## Core flow
 
 Study Pack-ready private note
@@ -36,14 +38,16 @@ There is no start, submit, score, result screen, timer, or session history.
 Flashcards reuses data already returned by the existing note-detail read path:
 
 - `keyConcepts: string[]` supplies the card fronts.
-- `quiz[].concept` is matched to each key concept by the shared normalized concept key.
+- `quiz[].concept` is matched to each key concept using a normalized, bidirectional-substring fuzzy match (exact match first, then either string containing the other, gated by a minimum length to avoid short-token false positives). Exact-only matching measured ~18% average coverage across generated Study Packs; fuzzy matching brings that to ~56% — the practical ceiling given the next constraint.
 - `quiz[].explanation` supplies the card back when a matching quiz item exists.
+
+**Known, permanent limitation:** `keyConcepts` (5–10 items) and `quiz` (a fixed, smaller question count) are independently generated lists — a Study Pack will always have more key concepts than quiz questions, so a meaningful share of concepts can never have a matching explanation, regardless of match quality. This is not a bug to keep chasing; it is a structural consequence of reusing quiz data instead of generating real per-concept definitions (which would require a Study Pack schema/prompt change — deliberately out of scope, see below).
 
 If a key concept has no matching quiz explanation, the card still renders and shows:
 
 - `No definition yet for this concept.`
 
-Flashcards must never request new generated content to fill that gap.
+Flashcards must never request new generated content to fill that gap. Closing the remaining gap would require adding a real per-concept definition field to Study Pack generation — a schema/prompt change with real token cost, and existing packs would only benefit after regeneration. That is a deliberate non-goal for this surface as currently scoped.
 
 ## Generation states
 

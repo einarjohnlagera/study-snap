@@ -114,6 +114,29 @@ describe("FlashcardsPageClient", () => {
     expect(screen.getByText("This Study Pack did not include a quiz explanation matched to this concept.")).toBeInTheDocument();
   });
 
+  it("fuzzy-matches a key concept to a differently-worded quiz concept", async () => {
+    (getNote as jest.Mock).mockResolvedValue({
+      ...readyNote,
+      keyConcepts: ["Chloroplast"],
+      quiz: [
+        {
+          question: "Where does photosynthesis occur?",
+          choices: ["Chloroplast structure", "Mitochondria", "Nucleus", "Ribosome"],
+          correctIndex: 0,
+          concept: "Chloroplast structure",
+          explanation: "The chloroplast is the organelle where photosynthesis takes place.",
+        },
+      ],
+    });
+
+    render(<FlashcardsPageClient noteId="note-1" />);
+
+    await screen.findByText("Chloroplast");
+    fireEvent.click(screen.getByRole("button", { name: "Flip to definition" }));
+
+    expect(screen.getByText("The chloroplast is the organelle where photosynthesis takes place.")).toBeInTheDocument();
+  });
+
   it("shows an explicit empty state when a ready Study Pack has no key concepts", async () => {
     (getNote as jest.Mock).mockResolvedValue({
       ...readyNote,

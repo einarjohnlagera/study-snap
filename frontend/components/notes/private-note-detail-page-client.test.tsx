@@ -755,7 +755,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it.each(["STUDENT", "BOARD_EXAM", "PARENT", "PROFESSIONAL"] as const)(
-    "shows the Flashcards action for %s note detail",
+    "shows the Flashcards entry on the Key Concepts tab for %s note detail",
     async (profileType) => {
       (getAuthUser as jest.Mock).mockReturnValue({
         planType: profileType === "PROFESSIONAL" ? "PRO" : "FREE",
@@ -782,7 +782,14 @@ describe("PrivateNoteDetailPageClient", () => {
         adaptivePracticeAvailable: false,
       });
 
-      render(<PrivateNoteDetailPageClient routeId="note-1" />);
+      const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+
+      fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+      searchParamValues = { tab: "key-concepts" };
+      searchParamsMock = createSearchParamsMock();
+      rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
 
       const flashcardsButton = await screen.findByRole("button", { name: "Flashcards" });
       expect(flashcardsButton).toBeInTheDocument();
@@ -792,6 +799,32 @@ describe("PrivateNoteDetailPageClient", () => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-1/flashcards");
     },
   );
+
+  it("hides the Flashcards entry on the Key Concepts tab in teacher mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Cells")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+  });
 
   it("renders teacher note detail with Study Pack tabs visible and student-only sections hidden", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
