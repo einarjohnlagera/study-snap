@@ -2,7 +2,7 @@
 
 ## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: continuation of the production memory-restart investigation (v0.37.1). Actuator sampling on the live Render instance showed container RSS plateauing near 95-97% within minutes of boot — before the bulk of request traffic even arrived — while JVM-tracked heap (committed ~207MB vs used ~99MB) and nonheap (~171MB, fully reconciled across Metaspace/Compressed Class Space/CodeHeaps) together only accounted for ~394MB of the 512MB limit. Two findings: G1 wasn't returning ~109MB of idle-committed-but-unused heap to the OS, and `MaxMetaspaceSize` was unset (`jvm.memory.max` reported `-1`), leaving Metaspace with no ceiling and any future runaway invisible to JVM-level OOM logging.
 
@@ -16,7 +16,10 @@ Anti-drift: no code change, no schema/endpoint/DTO change — Dockerfile `JAVA_O
 
 ### Shipped
 
-_(nothing yet)_
+- **Force G1 to release idle-committed heap (Dockerfile).** Added `G1PeriodicGCInterval=30000` and `G1PeriodicGCInvokesConcurrent` to `JAVA_OPTS`, giving G1 a recurring, concurrent (non-pausing) opportunity to hand unused committed heap back to the OS instead of holding it indefinitely.
+- **Cap Metaspace (Dockerfile).** Added `MaxMetaspaceSize=200m` — Metaspace had no ceiling at all (`jvm.memory.max` reported `-1`); a future runaway will now surface as a logged `OutOfMemoryError: Metaspace` instead of a silent container SIGKILL.
+- **Enable Native Memory Tracking (Dockerfile).** Added `NativeMemoryTracking=summary` so `jcmd <pid> VM.native_memory summary` is available without a redeploy if this round doesn't move the RSS plateau.
+- Deployed to production as an instrumented experiment: post-deploy, the RSS plateau either drops (confirming the gap was reclaimable heap slack) or stays pinned (pointing at native memory — thread stacks, GC bookkeeping, or `GoogleVisionOcrService`'s per-call `ImageAnnotatorClient` creation — as the next investigation thread).
 
 ## v0.37.3 - Study Plan Read-Path Memory Optimization
 

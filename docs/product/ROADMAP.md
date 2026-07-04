@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is in progress (on `releases/v0.37.4`).
+`v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the latest released version (on `releases/v0.37.4`).
 
-`v0.37.3 - Study Plan Read-Path Memory Optimization` is the latest released version (on `releases/v0.37.3`).
+`v0.37.3 - Study Plan Read-Path Memory Optimization` is the previous released version (on `releases/v0.37.3`).
 
 `v0.37.2 - Plan Data Integrity Hotfix` is the previous released version (on `releases/v0.37.2`).
 
@@ -142,7 +142,7 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
-## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix (in progress)
+## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix (released)
 
 Base branch: `releases/v0.37.4`.
 
