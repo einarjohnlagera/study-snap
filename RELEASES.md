@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix
+
+**Status: In Progress**
+
+Theme: continuation of the production memory-restart investigation (v0.37.1). Actuator sampling on the live Render instance showed container RSS plateauing near 95-97% within minutes of boot — before the bulk of request traffic even arrived — while JVM-tracked heap (committed ~207MB vs used ~99MB) and nonheap (~171MB, fully reconciled across Metaspace/Compressed Class Space/CodeHeaps) together only accounted for ~394MB of the 512MB limit. Two findings: G1 wasn't returning ~109MB of idle-committed-but-unused heap to the OS, and `MaxMetaspaceSize` was unset (`jvm.memory.max` reported `-1`), leaving Metaspace with no ceiling and any future runaway invisible to JVM-level OOM logging.
+
+### Planned Scope
+
+- **Force G1 to release idle-committed heap (Dockerfile).** `G1PeriodicGCInterval=30000` + `G1PeriodicGCInvokesConcurrent` give G1 a regular, concurrent (non-pausing) opportunity to uncommit heap it's holding but not using. Zero code change, fully reversible via env var.
+- **Cap Metaspace (Dockerfile).** `MaxMetaspaceSize=200m` — a safety tripwire, not a remediation: Metaspace was observed at ~126MB with no ceiling at all. If it ever runs away, this turns a silent container SIGKILL into a logged `OutOfMemoryError: Metaspace`.
+- **Enable Native Memory Tracking (Dockerfile).** `NativeMemoryTracking=summary` — cheap to add now, otherwise requires a redeploy later. Lets `jcmd <pid> VM.native_memory summary` break down the ~93MB gap between container RSS and JVM-tracked memory if this round doesn't move the plateau.
+
+Anti-drift: no code change, no schema/endpoint/DTO change — Dockerfile `JAVA_OPTS` env var only. This is an experiment as much as a fix: if the RSS plateau drops after deploy, the gap was reclaimable heap slack; if it stays pinned, the gap is native (thread stacks, GC bookkeeping, possible Netty/gRPC off-heap from `GoogleVisionOcrService`'s per-call client creation), and that becomes the next investigation thread.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.37.3 - Study Plan Read-Path Memory Optimization
 
 **Status: Released**
