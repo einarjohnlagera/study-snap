@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.38.0 - Read-Path Optimization Pass
+
+**Status: In Progress**
+
+Theme: extend the v0.37.3 projection discipline across the remaining hot read/list endpoints, cutting per-request latency, DB payload, and peak heap under concurrent load. Not a memory-idle fix (that was the 2GB instance upgrade) — this is a latency/efficiency pass on the endpoints the app hits most.
+
+### Planned Scope
+
+- **Session-history read path (backend).** `QuizSessionHistoryService.findCompletedSessions` loads every completed `QuickReviewSessionEntity` for a user — full `sessionState` JSONB, no LIMIT — then filters in memory. It backs three hot paths (collections list `loadPracticedCounts`, collection detail `loadLastSessionCompletedAt`, and quiz `listRecentSessions`). Push mode/note filtering to the DB and stop loading `sessionState` for single-note modes.
+- **Note collection detail projection (backend).** `NoteCollectionService.toItemResponses` (the `get()` path) still materializes full `StudyPackEntity` (quiz + source_text JSONB), full `GeneratedQuizEntity` (questions JSONB, only the id is used), and full `NoteEntity` (content unused). Route through the existing `findProgressViewsByNoteIdIn` projection plus lean note/generated-quiz projections. Same fix applied to the public detail path (`toPublicItemResponses`).
+- **Private library list projection (backend).** `StudyPackService.listMine` loads full `StudyPackEntity` per page item but only needs id/title/summary/quiz-count/subject/tags/createdAt — it loads the entire `quiz` JSONB just to call `.size()` and never reads `source_text`. Add a projection using `jsonb_array_length(quiz)` for the count.
+- **Goal per-child readiness batch (backend).** `NoteCollectionService.getGoal` fans out `getReadiness` once per child (N+1). Batch the note-ID/pack loads across all children (deferred from v0.37.3). Sequenced last; may slip to a follow-up.
+
+Anti-drift: no schema, endpoint, or DTO change — API responses stay byte-identical to today. Every new interface projection requires a real-Hibernate (`@SpringBootTest` + H2) test, not a mocked one (the v0.37.3 projection-detection footgun). Note detail (`getById`), generated-quiz `getByNoteId`, and the already-optimized progress report are explicitly out of scope — they legitimately need the full payloads.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix
 
 **Status: Released**

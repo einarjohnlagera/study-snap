@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.38.0 - Read-Path Optimization Pass` is in progress (on `releases/v0.38.0`).
+
 `v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the latest released version (on `releases/v0.37.4`).
 
 `v0.37.3 - Study Plan Read-Path Memory Optimization` is the previous released version (on `releases/v0.37.3`).
@@ -14,7 +16,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.37.1 - Native Memory Hotfix` is the previous released version (on `releases/v0.37.1`).
 
-`v0.38.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
+`v0.39.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
 
 `v0.37.0 - Readiness-First Plans & Mastery Integrity` is the previous released version (on `releases/v0.37.0`).
 
@@ -142,6 +144,23 @@ Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery sig
 
 ---
 
+## v0.38.0 - Read-Path Optimization Pass (in progress)
+
+Base branch: `releases/v0.38.0`.
+
+Theme: extend the v0.37.3 projection discipline across the remaining hot read/list endpoints. Explicitly a latency/efficiency pass, not a memory-idle fix — the idle-footprint problem was resolved by upgrading the Render instance to 2GB. An audit of the six highest-traffic areas (note collections, private/public library, progress, note detail, quizzes) found several paths still materializing full entities (with the large `quiz`/`source_text`/`questions`/`content`/`sessionState` columns) where only a handful of fields are needed.
+
+### Planned Scope
+
+- **Session-history read path (backend, P1).** `QuizSessionHistoryService.findCompletedSessions` loads every completed session (full `sessionState` JSONB, no LIMIT) then filters in memory — and backs three hot paths (collections list, collection detail, quiz recent-sessions). Push mode/note filtering to the DB; stop loading `sessionState` for single-note modes.
+- **Collection detail + public detail projections (backend, P2).** `toItemResponses`/`toPublicItemResponses` still load full `StudyPackEntity` + full `GeneratedQuizEntity` (only the id is used) + full `NoteEntity` (content unused). Route through `findProgressViewsByNoteIdIn` + lean note/generated-quiz projections.
+- **Private library list projection (backend, P3).** `StudyPackService.listMine` loads the full `quiz` JSONB just to call `.size()` and never reads `source_text`. Projection with `jsonb_array_length(quiz)`.
+- **Goal per-child readiness batch (backend, P4).** Batch `getGoal`'s per-child `getReadiness` N+1 (deferred from v0.37.3). Sequenced last; may slip to a follow-up.
+
+Anti-drift: no schema, endpoint, or DTO change — byte-identical responses. Every new interface projection requires a real-Hibernate test (the v0.37.3 projection-detection footgun). Note detail (`getById`), generated-quiz `getByNoteId`, and the already-optimized progress report are out of scope — they legitimately need full payloads. Sequencing driven by `http.server.requests` p95 data, not inferred frequency.
+
+---
+
 ## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix (released)
 
 Base branch: `releases/v0.37.4`.
@@ -233,7 +252,7 @@ Quick Review session disposability is resolved above (hide from session-history 
 
 ---
 
-## v0.38.0 (candidate) - Flexible Review Methods
+## v0.39.0 (candidate) - Flexible Review Methods
 
 Not kicked off — **do not kick off until v0.37.0 is signed off** (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
 

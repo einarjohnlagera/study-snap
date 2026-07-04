@@ -6,16 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.37.4** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.38.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.37.4 — Idle GC & Metaspace Ceiling Hotfix
+## Active release: v0.38.0 — Read-Path Optimization Pass
 
-Base branch for this release: `releases/v0.37.4`. Continuation of the production memory-restart investigation (v0.37.1). Actuator sampling showed container RSS plateauing near 95-97% within minutes of boot while JVM-tracked heap+nonheap only accounted for ~394MB of the 512MB limit — a ~93MB gap the JVM can't see, plus an unset `MaxMetaspaceSize` (no ceiling at all). Locked rules:
+Base branch for this release: `releases/v0.38.0`. A latency/efficiency pass extending the v0.37.3 projection discipline across the remaining hot read/list endpoints — **not** a memory-idle fix (that was the 2GB Render upgrade). An audit of the six highest-traffic areas found several paths still materializing full entities (with the large `quiz`/`source_text`/`questions`/`content`/`sessionState` columns) where only a handful of fields are needed. Locked rules:
 
-- **Force G1 to release idle-committed heap.** `G1PeriodicGCInterval=30000` + `G1PeriodicGCInvokesConcurrent` in the Dockerfile's `JAVA_OPTS` — the actual fix candidate, targeting ~109MB of committed-but-unused heap.
-- **Cap Metaspace.** `MaxMetaspaceSize=200m` — a tripwire, not a remediation; converts a future runaway into a logged `OutOfMemoryError: Metaspace` instead of a silent SIGKILL.
-- **Enable Native Memory Tracking.** `NativeMemoryTracking=summary` — cheap to add now so `jcmd <pid> VM.native_memory summary` is available without a second redeploy if the plateau doesn't move.
-- **No Java code change, no schema/endpoint/DTO change.** Dockerfile `JAVA_OPTS` env var only. Post-deploy, watch whether the RSS plateau drops (reclaimable heap slack) or stays pinned (native gap — next lever is `GoogleVisionOcrService`'s per-call `ImageAnnotatorClient` creation).
+- **Session-history read path (P1).** `QuizSessionHistoryService.findCompletedSessions` loads every completed session (full `sessionState` JSONB, no LIMIT) then filters in memory — backs collections list, collection detail, and quiz recent-sessions. Push mode/note filtering to the DB; stop loading `sessionState` for single-note modes.
+- **Collection detail + public detail projections (P2).** `toItemResponses`/`toPublicItemResponses` load full `StudyPackEntity` + full `GeneratedQuizEntity` (id only used) + full `NoteEntity` (content unused). Route through `findProgressViewsByNoteIdIn` + lean projections.
+- **Private library list projection (P3).** `StudyPackService.listMine` loads the `quiz` JSONB just for `.size()`; use `jsonb_array_length`.
+- **Goal per-child readiness batch (P4).** Batch `getGoal`'s per-child `getReadiness` N+1. Sequenced last; may slip.
+- **No schema, endpoint, or DTO change.** Byte-identical responses. Every new interface projection requires a real-Hibernate (`@SpringBootTest` + H2) test — the v0.37.3 projection-detection footgun. Note detail, generated-quiz `getByNoteId`, and the progress report are out of scope (they legitimately need full payloads).
 
 ## Source-of-truth docs (read before implementing anything)
 
