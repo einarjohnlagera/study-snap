@@ -126,6 +126,22 @@ These differences are not cosmetic. Implementation should treat them as Board Ex
 
 ---
 
+## Non-Engine Review Surfaces (locked classification)
+
+Not every study activity is a quiz mode. Flashcards and Memorization are **review-only surfaces that sit outside the Quiz Session Engine entirely** — they do not add a 6th/7th mode, do not use a `quizSession` discriminator, and never write `ConceptHealth`. This mirrors Quick Review's existing "practice, don't assess" boundary, applied to a non-timed, non-scored surface.
+
+| Surface | Engine? | `ConceptHealth` on completion? | Audience / Plan |
+|---|---|---|---|
+| Flashcards | No — new frontend-only surface over Study Pack content | No | All profiles, all plans (Free) |
+| Memorization | No — Flashcards + a new, separate spaced-repetition entity | No | TBD at its own kickoff |
+
+- **Flashcards**: renders each `keyConcepts` entry as a card front; the back is the matching `QuizItem.explanation` (matched by normalized concept) where a quiz question exists for that concept, else a "no definition yet" fallback. No new AI/LLM call — reuses data already returned by the existing note-detail/Study Pack read path. No new endpoint. Flip/self-review interaction only; no scoring, no session, no `ConceptHealth` write.
+- **Memorization** (later in this chain, not yet scoped for implementation): adds real spaced-repetition scheduling on top of Flashcards — graduating review intervals per concept, self-graded. Its schedule state is a **new, separate entity**, never a `ConceptHealth` column, and never counted toward mastery or `Overall Readiness`. Do not build ahead of its own kickoff.
+
+Constraint: neither surface may be routed through `QuickReviewSessionEntity` or any other engine discriminator. If a future requirement needs scoring, a timer, or persistence beyond spaced-repetition scheduling, it no longer fits this classification and must go through the 5-mode contract review instead.
+
+---
+
 ## Audience & Profile-Type Mapping
 
 Profile type controls **which exam modes are visible** in mode-selection. The engine and feature docs remain unified.
@@ -362,7 +378,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - **Cross-profile mode unlock** (Students opting into Board Exam without changing profile).
 - **Curated exam decks / cohort content** (Pro+).
 - **Cross-profile journey** (Student → Board Taker upgrade flow with continuity).
-- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.38.0 candidate — not kicked off) — Identification and Enumeration are scoped as new *question formats* on the existing quiz-session engine (write `ConceptHealth` like Challenge Quiz/Adaptive Practice, no new discriminator). Flashcards and Memorization are scoped as new *non-scored surfaces* outside the engine entirely (no `ConceptHealth` write, same rule as Quick Review). None of the four are a 6th/7th mode under this classification — this document still needs a short update to reflect the two new question formats before either reaches a Codex prompt.
+- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.39.0, in progress) — see the new "Non-Engine Review Surfaces" section above for Flashcards/Memorization; Identification and Enumeration (new *question formats* on the existing quiz-session engine, writing `ConceptHealth` like Challenge Quiz/Adaptive Practice, no new discriminator) follow later in the chain and will get their own short update to this document before reaching a Codex prompt.
 
 ---
 
