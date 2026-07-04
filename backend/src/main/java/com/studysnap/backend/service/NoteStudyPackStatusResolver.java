@@ -14,16 +14,21 @@ public class NoteStudyPackStatusResolver {
 
     public String resolve(NoteEntity note, StudyPackEntity studyPack) {
         NoteStatus noteStatus = resolveStatus(note);
-        if (noteStatus == NoteStatus.GENERATED) {
+        return resolve(noteStatus, studyPack != null);
+    }
+
+    public String resolve(NoteStatus noteStatus, boolean hasStudyPack) {
+        NoteStatus resolvedStatus = resolveStatus(noteStatus);
+        if (resolvedStatus == NoteStatus.GENERATED) {
             return STUDY_PACK_READY;
         }
-        if (noteStatus == NoteStatus.GENERATING) {
+        if (resolvedStatus == NoteStatus.GENERATING) {
             return GENERATING;
         }
-        if (noteStatus == NoteStatus.FAILED) {
+        if (resolvedStatus == NoteStatus.FAILED) {
             return FAILED;
         }
-        if (studyPack == null) {
+        if (!hasStudyPack) {
             return DRAFT;
         }
         return STUDY_PACK_READY;
@@ -31,5 +36,9 @@ public class NoteStudyPackStatusResolver {
 
     private NoteStatus resolveStatus(NoteEntity note) {
         return note.getStatus() == null ? NoteStatus.DRAFT : note.getStatus();
+    }
+
+    private NoteStatus resolveStatus(NoteStatus noteStatus) {
+        return noteStatus == null ? NoteStatus.DRAFT : noteStatus;
     }
 }

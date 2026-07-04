@@ -34,11 +34,13 @@ import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -389,10 +391,11 @@ class NoteCollectionServiceTest {
         GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(secondNoteId, userId);
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(firstItem, secondItem));
-        when(noteRepository.findAllById(List.of(firstNoteId, secondNoteId))).thenReturn(List.of(firstNote, secondNote));
-        when(studyPackRepository.findByNoteIdIn(List.of(firstNoteId, secondNoteId))).thenReturn(List.of(studyPack));
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(firstNoteId, secondNoteId)))
-                .thenReturn(List.of(generatedQuiz));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(firstNoteId, secondNoteId)))
+                .thenReturn(asNoteProjections(firstNote, secondNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(firstNoteId, secondNoteId))).thenReturn(asProjections(studyPack));
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, List.of(firstNoteId, secondNoteId)))
+                .thenReturn(asGeneratedQuizProjections(generatedQuiz));
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
                 userId,
                 List.of(firstNoteId, secondNoteId)
@@ -434,10 +437,10 @@ class NoteCollectionServiceTest {
         List<UUID> noteIds = List.of(firstNoteId, secondNoteId, thirdNoteId);
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
-        when(noteRepository.findAllById(noteIds)).thenReturn(notes);
-        when(studyPackRepository.findByNoteIdIn(noteIds))
-                .thenReturn(List.of(buildStudyPack(firstNoteId), buildStudyPack(thirdNoteId)));
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(notes));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds))
+                .thenReturn(asProjections(buildStudyPack(firstNoteId), buildStudyPack(thirdNoteId)));
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds))
                 .thenReturn(Map.of(
                         firstNoteId, FIRST_PRACTICED_AT,
@@ -837,9 +840,9 @@ class NoteCollectionServiceTest {
         NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
-        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of());
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(noteId))).thenReturn(asNoteProjections(note));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId)))
                 .thenThrow(new IllegalStateException("session history unavailable"));
 
@@ -875,9 +878,9 @@ class NoteCollectionServiceTest {
         StudyPackEntity currentStudyPack = buildStudyPack(currentNoteId, List.of(CURRENT_CONCEPT));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(items);
-        when(noteRepository.findAllById(noteIds)).thenReturn(notes);
-        when(studyPackRepository.findByNoteIdIn(noteIds)).thenReturn(List.of(dueStudyPack, currentStudyPack));
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(notes));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(dueStudyPack, currentStudyPack));
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
         when(conceptHealthService.canViewConceptHealth(userId)).thenReturn(true);
         when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), anyMap(), any(OffsetDateTime.class)))
@@ -915,9 +918,9 @@ class NoteCollectionServiceTest {
         StudyPackEntity studyPack = buildStudyPack(noteId, List.of("Underlying Due Concept"));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
-        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(studyPack));
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(noteId))).thenReturn(asNoteProjections(note));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(studyPack));
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId))).thenReturn(Map.of());
         when(conceptHealthService.canViewConceptHealth(userId)).thenReturn(false);
 
@@ -939,9 +942,9 @@ class NoteCollectionServiceTest {
         StudyPackEntity studyPack = buildStudyPack(noteId, List.of("Due Concept"));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(item));
-        when(noteRepository.findAllById(List.of(noteId))).thenReturn(List.of(note));
-        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(studyPack));
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(noteId))).thenReturn(asNoteProjections(note));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(studyPack));
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, List.of(noteId))).thenReturn(Map.of());
         when(conceptHealthService.canViewConceptHealth(userId)).thenReturn(true);
         when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), anyMap(), any(OffsetDateTime.class)))
@@ -1908,9 +1911,9 @@ class NoteCollectionServiceTest {
     }
 
     private void stubDetailItemLoad(UUID userId, List<UUID> noteIds, List<NoteEntity> notes) {
-        when(noteRepository.findAllById(noteIds)).thenReturn(notes);
-        when(studyPackRepository.findByNoteIdIn(noteIds)).thenReturn(List.of());
-        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(notes));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(List.of());
+        when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
     }
 
@@ -1964,6 +1967,30 @@ class NoteCollectionServiceTest {
         studyPack.setKeyConcepts(keyConcepts);
         studyPack.setStatus(StudyPackStatus.DONE);
         return studyPack;
+    }
+
+    private static List<NoteCollectionNoteProjection> asNoteProjections(NoteEntity... notes) {
+        return java.util.Arrays.stream(notes)
+                .map(NoteCollectionServiceTest::asNoteProjection)
+                .toList();
+    }
+
+    private static List<NoteCollectionNoteProjection> asNoteProjections(List<NoteEntity> notes) {
+        return notes.stream()
+                .map(NoteCollectionServiceTest::asNoteProjection)
+                .toList();
+    }
+
+    private static NoteCollectionNoteProjection asNoteProjection(NoteEntity note) {
+        return new NoteCollectionNoteProjection(
+                note.getId(),
+                note.getTitle(),
+                note.getSubject(),
+                note.getCourseProgram(),
+                note.getStatus(),
+                note.getVisibility(),
+                note.getUpdatedAt()
+        );
     }
 
     // Test double for the JPA-proxy Spring Data generates for StudyPackRepository's projection
@@ -2032,6 +2059,12 @@ class NoteCollectionServiceTest {
         generatedQuiz.setUpdatedAt(OffsetDateTime.parse(QUIZ_TIMESTAMP));
         generatedQuiz.setQuestions(List.of());
         return generatedQuiz;
+    }
+
+    private static List<GeneratedQuizNoteProjection> asGeneratedQuizProjections(GeneratedQuizEntity... generatedQuizzes) {
+        return java.util.Arrays.stream(generatedQuizzes)
+                .map(generatedQuiz -> new GeneratedQuizNoteProjection(generatedQuiz.getNoteId(), generatedQuiz.getId()))
+                .toList();
     }
 
     private NoteResponse noteResponse(UUID noteId) {
