@@ -52,6 +52,12 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
                 q.completedAt
             )
             """;
+    String NOTE_LATEST_COMPLETION_PROJECTION = """
+             new com.studysnap.backend.repository.NoteLatestCompletionProjection(
+                q.noteId,
+                max(q.completedAt)
+            )
+            """;
 
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
@@ -99,9 +105,10 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             Collection<QuickReviewSessionMode> sessionModes
     );
 
-    List<QuickReviewSessionEntity> findByUserIdAndStatusAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+    List<QuickReviewSessionEntity> findByUserIdAndStatusAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
             UUID userId,
-            QuickReviewSessionStatus status
+            QuickReviewSessionStatus status,
+            Collection<QuickReviewSessionMode> sessionModes
     );
 
     @Deprecated
@@ -111,6 +118,42 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     );
 
     List<QuickReviewSessionEntity> findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(UUID userId);
+
+    @Query("""
+            select """ + NOTE_LATEST_COMPLETION_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.status = :status
+              and q.completedAt is not null
+              and q.noteId in :noteIds
+            group by q.noteId
+            """)
+    List<NoteLatestCompletionProjection> findLatestCompletedAtByUserIdAndNoteIdIn(
+            @Param("userId") UUID userId,
+            @Param("status") QuickReviewSessionStatus status,
+            @Param("noteIds") Collection<UUID> noteIds
+    );
+
+    @Query("""
+            select q
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.status = :status
+              and q.completedAt is not null
+              and q.sessionMode <> :excludedSessionMode
+              and (
+                  q.noteId = :noteId
+                  or q.sessionMode in :multiNoteSessionModes
+              )
+            order by q.completedAt desc
+            """)
+    List<QuickReviewSessionEntity> findRecentHistoryCandidatesByUserIdAndNoteIdOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("noteId") UUID noteId,
+            @Param("status") QuickReviewSessionStatus status,
+            @Param("excludedSessionMode") QuickReviewSessionMode excludedSessionMode,
+            @Param("multiNoteSessionModes") Collection<QuickReviewSessionMode> multiNoteSessionModes
+    );
 
     @Query("""
             select """ + SESSION_SUMMARY_PROJECTION + """
