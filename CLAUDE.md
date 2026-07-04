@@ -6,15 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.37.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.37.3** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.37.2 — Plan Data Integrity Hotfix
+## Active release: v0.37.3 — Study Plan Read-Path Memory Optimization
 
-Base branch for this release: `releases/v0.37.2`. Two correctness bugs in Study Plans found in production, shipped as a hotfix ahead of the v0.38.0 memory work. Locked rules:
+Base branch for this release: `releases/v0.37.3`. Full brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`. Cuts heap allocation on Study Plan read endpoints, part of the ongoing production memory-restart investigation. Locked rules:
 
-- **Fix partial-update clobber in `NoteCollectionService.updateMetadata`.** The method guarded only `title` against null and overwrote `description`, `courseProgram`, and `estimatedStudyHours` unconditionally — so the Goal Builder's rename (which PATCHes `{ title }` only) silently wiped those three fields. Guard each optional field with a null check (PATCH semantics), matching the existing `title` pattern; an explicit empty string still clears a field. Audit sibling PATCH endpoints for the same shape.
-- **Plan visibility / course-program relevance.** A FREE account reported seeing plans outside its own course/program; only PUBLIC collections are ever returned (not a cross-user private leak). Confirm the exact surface and enforce course/program relevance.
-- **No schema change, no new endpoint.** Read/write correctness only. Study Plan read-path memory optimization is deferred to v0.38.0.
+- **Projection query for the read path.** `getReadiness`/`getNoteConceptCounts`/`getGoal` currently materialize full `StudyPackEntity` rows (including the two largest columns, `quiz` and `source_text` jsonb) just to read `keyConcepts`. Add a projection exposing only `id, noteId, ownerUserId, subject, keyConcepts, status` and route the read path through it.
+- **Batch the concept-health N+1.** `ProgressReportService.collectReviewTimesByConceptKey` calls the repository once per study pack in a loop; replace with the existing batched `findByUserIdAndStudyPackIdIn`.
+- **Count query instead of count-by-load.** `NoteCollectionService.getGoal`'s item count loads and sizes a list; replace with a `count(...)` query.
+- **No schema, endpoint, or DTO change.** API responses must stay byte-identical to today. `getGoal`'s per-child readiness fan-out restructure is deferred (latency concern, not memory).
 
 ## Source-of-truth docs (read before implementing anything)
 

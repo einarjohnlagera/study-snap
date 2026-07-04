@@ -1,5 +1,27 @@
 # RELEASES.md - NoteLib
 
+## v0.37.3 - Study Plan Read-Path Memory Optimization
+
+**Status: Released**
+
+Theme: cut heap allocation on Study Plan read endpoints (`getReadiness`, `getNoteConceptCounts`, `getGoal`) by stopping full `StudyPackEntity` materialization (drops the `quiz` and `source_text` jsonb columns from reads that only need `keyConcepts`), batching the concept-health N+1 into the existing batched repository method, and replacing a count-by-load with a count query. Full brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`.
+
+### Planned Scope
+
+- **Projection query for the read path (backend).** Add a lightweight projection for `StudyPackRepository.findByNoteIdIn(...)` exposing only `id, noteId, ownerUserId, subject, keyConcepts, status`; route `NoteCollectionService.getReadiness`/`getNoteConceptCounts`/`getGoal` and the relevant `ProgressReportService` methods through it instead of the full entity.
+- **Batch the concept-health N+1 (backend).** `ProgressReportService.collectReviewTimesByConceptKey` currently calls `findByUserIdAndStudyPackId` once per pack in a loop; replace with the existing batched `findByUserIdAndStudyPackIdIn`.
+- **Count query instead of count-by-load (backend).** `NoteCollectionService.getGoal`'s item count loads and sizes a list; replace with a `count(...)` query.
+
+Anti-drift: no schema, endpoint, or DTO change — API responses must stay byte-identical to today. `getGoal`'s per-child readiness fan-out restructure (deferred as P3 in the brief) is out of scope for this release.
+
+### Shipped
+
+- **Projection query for the read path (backend).** Added `StudyPackRepository.findProgressViewsByNoteIdIn`/`findProgressViewsByOwnerUserId`, returning a new `StudyPackProgressProjection` interface (`id, noteId, ownerUserId, subject, keyConcepts, status`) instead of full `StudyPackEntity` rows — stops loading the `quiz` and `source_text` jsonb columns on every plan read. Routed `NoteCollectionService.getReadiness`/`getNoteConceptCounts`/`getGoal` and `ProgressReportService` (including `getProgressReport` and `buildGoalNudge`, which share the same subject-grouping helper) through it.
+- **Root-caused and fixed a Spring Data JPA projection pitfall discovered during audit.** The initial implementation returned the existing `StudyPackProgressView` interface directly from the new `@Query` methods; since `StudyPackEntity` (the repository's managed domain type) also implements that same interface, Spring Data's projection detection silently breaks and falls through to a generic `ConversionService` that cannot map a JPQL tuple to an interface — throwing `ConverterNotFoundException` at call time on every `getReadiness`/`getNoteConceptCounts`/`getGoal`/`getProgressReport`/`buildGoalNudge` request. This was invisible to the unit tests (all Mockito-mocked) and only reproduced against a real Hibernate session. Fixed by introducing `StudyPackProgressProjection extends StudyPackProgressView` as a marker sub-interface that no concrete class implements, used only as the two query methods' return type — `StudyPackEntity` keeps implementing the base `StudyPackProgressView` for polymorphism elsewhere. Added `StudyPackRepositoryTest` (a real `@SpringBootTest` + H2 integration test) specifically to catch this class of bug going forward — the codebase's existing interface-projection repository methods (`countItemsByCollectionIds`, `findNoteIdsByCollectionIds`, etc.) had the same never-integration-tested gap and were confirmed still correct by isolated reproduction, but were not modified.
+- **Batch the concept-health N+1 (backend).** `ProgressReportService.collectReviewTimesByConceptKey` now calls the existing batched `findByUserIdAndStudyPackIdIn` once instead of `findByUserIdAndStudyPackId` per pack in a loop.
+- **Count query instead of count-by-load (backend).** `NoteCollectionService.getGoal`'s item count now uses `NoteCollectionItemRepository.countByCollectionId` instead of loading and sizing the full item list.
+- No API response or DTO changed; full existing test suite (1018 tests) plus new/updated coverage all pass.
+
 ## v0.37.2 - Plan Data Integrity Hotfix
 
 **Status: Released**

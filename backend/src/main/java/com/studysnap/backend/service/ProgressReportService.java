@@ -7,7 +7,7 @@ import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.ConceptHealthEntity;
 import com.studysnap.backend.entity.NoteEntity;
-import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -55,7 +55,7 @@ public class ProgressReportService {
             List<String> focusSubjects,
             OffsetDateTime now
     ) {
-        Map<String, List<StudyPackEntity>> packsBySubject = groupQualifyingPacksBySubject(userId);
+        Map<String, List<StudyPackProgressView>> packsBySubject = groupQualifyingPacksBySubject(userId);
         List<SubjectProgressEntry> subjects = packsBySubject.entrySet().stream()
             .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
             .filter(Objects::nonNull)
@@ -80,15 +80,15 @@ public class ProgressReportService {
             return null;
         }
 
-        Map<String, List<StudyPackEntity>> packsBySubject = groupQualifyingPacksBySubject(userId);
+        Map<String, List<StudyPackProgressView>> packsBySubject = groupQualifyingPacksBySubject(userId);
         boolean studyGoalIsSlug = ExamGoalConfig.isValidSlug(normalizedGoal);
         String goalType = studyGoalIsSlug ? GOAL_TYPE_EXAM : GOAL_TYPE_SUBJECT;
         String goalName = studyGoalIsSlug ? ExamGoalConfig.getShortName(normalizedGoal) : normalizedGoal;
         String goalLabel = studyGoalIsSlug ? ExamGoalConfig.getFullName(normalizedGoal) : goalName;
-        List<StudyPackEntity> qualifyingPacks = packsBySubject.values().stream()
+        List<StudyPackProgressView> qualifyingPacks = packsBySubject.values().stream()
                 .flatMap(List::stream)
                 .toList();
-        List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, normalizedGoal, studyGoalIsSlug, qualifyingPacks);
+        List<StudyPackProgressView> goalPacks = filterGoalStudyPacks(userId, normalizedGoal, studyGoalIsSlug, qualifyingPacks);
         ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
         String weakestGoalSubject = resolveWeakestGoalSubject(goalPacks, userId, now);
 
@@ -104,7 +104,7 @@ public class ProgressReportService {
     }
 
     public List<SubjectProgressEntry> buildSubjectProgressEntries(
-            List<StudyPackEntity> studyPacks,
+            List<? extends StudyPackProgressView> studyPacks,
             UUID userId,
             OffsetDateTime now
     ) {
@@ -117,7 +117,7 @@ public class ProgressReportService {
 
     public Map<UUID, ConceptCounts> getConceptCountsPerStudyPack(
             List<UUID> studyPackIds,
-            Collection<StudyPackEntity> studyPacks,
+            Collection<? extends StudyPackProgressView> studyPacks,
             UUID userId,
             OffsetDateTime now
     ) {
@@ -143,14 +143,16 @@ public class ProgressReportService {
         return countsByStudyPackId;
     }
 
-    private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(UUID userId) {
-        return groupQualifyingPacksBySubject(studyPackRepository.findByOwnerUserId(userId));
+    private Map<String, List<StudyPackProgressView>> groupQualifyingPacksBySubject(UUID userId) {
+        return groupQualifyingPacksBySubject(studyPackRepository.findProgressViewsByOwnerUserId(userId));
     }
 
-    private Map<String, List<StudyPackEntity>> groupQualifyingPacksBySubject(List<StudyPackEntity> studyPacks) {
+    private Map<String, List<StudyPackProgressView>> groupQualifyingPacksBySubject(
+            List<? extends StudyPackProgressView> studyPacks
+    ) {
         Map<UUID, String> noteSubjects = fetchNoteSubjects(studyPacks);
-        Map<String, List<StudyPackEntity>> packsBySubject = new LinkedHashMap<>();
-        for (StudyPackEntity studyPack : studyPacks) {
+        Map<String, List<StudyPackProgressView>> packsBySubject = new LinkedHashMap<>();
+        for (StudyPackProgressView studyPack : studyPacks) {
             if (!hasKeyConcepts(studyPack)) {
                 continue;
             }
@@ -163,7 +165,7 @@ public class ProgressReportService {
 
     private SubjectProgressEntry toSubjectProgress(
         String subject,
-        List<StudyPackEntity> studyPacks,
+        List<StudyPackProgressView> studyPacks,
         UUID userId,
         OffsetDateTime now
     ) {
@@ -203,7 +205,7 @@ public class ProgressReportService {
             UUID userId,
             String studyGoal,
             List<String> focusSubjects,
-            Map<String, List<StudyPackEntity>> packsBySubject,
+            Map<String, List<StudyPackProgressView>> packsBySubject,
             OffsetDateTime now
     ) {
         if (studyGoal == null && focusSubjects.isEmpty()) {
@@ -218,10 +220,10 @@ public class ProgressReportService {
         String goalType = studyGoalIsSlug ? GOAL_TYPE_EXAM : GOAL_TYPE_SUBJECT;
         String goalName = studyGoalIsSlug ? ExamGoalConfig.getShortName(studyGoal) : studyGoal;
         String goalLabel = studyGoalIsSlug ? ExamGoalConfig.getFullName(studyGoal) : goalName;
-        List<StudyPackEntity> qualifyingPacks = packsBySubject.values().stream()
+        List<StudyPackProgressView> qualifyingPacks = packsBySubject.values().stream()
                 .flatMap(List::stream)
                 .toList();
-        List<StudyPackEntity> goalPacks = filterGoalStudyPacks(userId, studyGoal, studyGoalIsSlug, qualifyingPacks);
+        List<StudyPackProgressView> goalPacks = filterGoalStudyPacks(userId, studyGoal, studyGoalIsSlug, qualifyingPacks);
         ConceptCounts counts = countConceptProgress(goalPacks, userId, now);
         String weakestGoalSubject = resolveWeakestGoalSubject(goalPacks, userId, now);
 
@@ -241,14 +243,14 @@ public class ProgressReportService {
     private GoalSummaryResponse buildSubjectFocusGoalSummary(
             UUID userId,
             List<String> focusSubjects,
-            Map<String, List<StudyPackEntity>> packsBySubject,
+            Map<String, List<StudyPackProgressView>> packsBySubject,
             OffsetDateTime now
     ) {
         Set<String> focusSubjectKeys = focusSubjects.stream()
                 .map(SubjectNormalizationUtils::normalizeForLookup)
                 .filter(key -> !key.isBlank())
                 .collect(Collectors.toSet());
-        List<StudyPackEntity> goalPacks = packsBySubject.entrySet().stream()
+        List<StudyPackProgressView> goalPacks = packsBySubject.entrySet().stream()
                 .filter(entry -> focusSubjectKeys.contains(SubjectNormalizationUtils.normalizeForLookup(entry.getKey())))
                 .flatMap(entry -> entry.getValue().stream())
                 .toList();
@@ -275,18 +277,18 @@ public class ProgressReportService {
         );
     }
 
-    private List<StudyPackEntity> filterGoalStudyPacks(
+    private List<StudyPackProgressView> filterGoalStudyPacks(
             UUID userId,
             String studyGoal,
             boolean studyGoalIsSlug,
-            List<StudyPackEntity> studyPacks
+            List<StudyPackProgressView> studyPacks
     ) {
         if (studyPacks.isEmpty()) {
             return List.of();
         }
 
         List<UUID> noteIds = studyPacks.stream()
-                .map(StudyPackEntity::getNoteId)
+                .map(StudyPackProgressView::getNoteId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
@@ -309,7 +311,11 @@ public class ProgressReportService {
                 .toList();
     }
 
-    private ConceptCounts countConceptProgress(List<StudyPackEntity> studyPacks, UUID userId, OffsetDateTime now) {
+    private ConceptCounts countConceptProgress(
+            List<? extends StudyPackProgressView> studyPacks,
+            UUID userId,
+            OffsetDateTime now
+    ) {
         Map<String, String> conceptNamesByKey = collectConceptNamesByKey(studyPacks);
         return countConceptProgress(conceptNamesByKey, collectReviewTimesByConceptKey(studyPacks, userId), now);
     }
@@ -348,7 +354,7 @@ public class ProgressReportService {
         return new ConceptCounts(totalConcepts, masteredConcepts, dueConcepts, notPracticedConcepts);
     }
 
-    private String resolveWeakestGoalSubject(List<StudyPackEntity> goalPacks, UUID userId, OffsetDateTime now) {
+    private String resolveWeakestGoalSubject(List<StudyPackProgressView> goalPacks, UUID userId, OffsetDateTime now) {
         if (goalPacks.isEmpty()) {
             return null;
         }
@@ -367,9 +373,9 @@ public class ProgressReportService {
                 .orElse(null);
     }
 
-    private Map<String, String> collectConceptNamesByKey(List<StudyPackEntity> studyPacks) {
+    private Map<String, String> collectConceptNamesByKey(List<? extends StudyPackProgressView> studyPacks) {
         Map<String, String> conceptNamesByKey = new LinkedHashMap<>();
-        for (StudyPackEntity studyPack : studyPacks) {
+        for (StudyPackProgressView studyPack : studyPacks) {
             for (String rawConcept : studyPack.getKeyConcepts() == null ? List.<String>of() : studyPack.getKeyConcepts()) {
                 String concept = normalizeConcept(rawConcept);
                 if (concept == null) {
@@ -381,12 +387,14 @@ public class ProgressReportService {
         return conceptNamesByKey;
     }
 
-    private Map<UUID, Map<String, String>> collectConceptNamesByStudyPackId(Collection<StudyPackEntity> studyPacks) {
+    private Map<UUID, Map<String, String>> collectConceptNamesByStudyPackId(
+            Collection<? extends StudyPackProgressView> studyPacks
+    ) {
         if (studyPacks == null || studyPacks.isEmpty()) {
             return Map.of();
         }
         Map<UUID, Map<String, String>> conceptNamesByStudyPackId = new HashMap<>();
-        for (StudyPackEntity studyPack : studyPacks) {
+        for (StudyPackProgressView studyPack : studyPacks) {
             if (studyPack.getId() == null) {
                 continue;
             }
@@ -396,22 +404,20 @@ public class ProgressReportService {
     }
 
     private Map<String, List<OffsetDateTime>> collectReviewTimesByConceptKey(
-        List<StudyPackEntity> studyPacks,
+        List<? extends StudyPackProgressView> studyPacks,
         UUID userId
     ) {
-        Map<String, List<OffsetDateTime>> reviewTimesByConceptKey = new HashMap<>();
-        for (StudyPackEntity studyPack : studyPacks) {
-            for (ConceptHealthEntity health : conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPack.getId())) {
-                String concept = normalizeConcept(health.getConcept());
-                if (concept == null) {
-                    continue;
-                }
-                reviewTimesByConceptKey
-                    .computeIfAbsent(normalizeConceptKey(concept), ignored -> new ArrayList<>())
-                    .add(health.getLastCorrectAt());
-            }
+        List<UUID> studyPackIds = studyPacks.stream()
+                .map(StudyPackProgressView::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (studyPackIds.isEmpty()) {
+            return Map.of();
         }
-        return reviewTimesByConceptKey;
+        return collectReviewTimesByConceptKey(
+                conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, studyPackIds)
+        );
     }
 
     private Map<String, List<OffsetDateTime>> collectReviewTimesByConceptKey(List<ConceptHealthEntity> healthRecords) {
@@ -460,9 +466,9 @@ public class ProgressReportService {
         return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
-    private Map<UUID, String> fetchNoteSubjects(List<StudyPackEntity> studyPacks) {
+    private Map<UUID, String> fetchNoteSubjects(List<? extends StudyPackProgressView> studyPacks) {
         List<UUID> noteIds = studyPacks.stream()
-                .map(StudyPackEntity::getNoteId)
+                .map(StudyPackProgressView::getNoteId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
         if (noteIds.isEmpty()) {
@@ -473,7 +479,7 @@ public class ProgressReportService {
                 .collect(Collectors.toMap(NoteEntity::getId, NoteEntity::getSubject));
     }
 
-    private String resolveSubject(StudyPackEntity studyPack, Map<UUID, String> noteSubjects) {
+    private String resolveSubject(StudyPackProgressView studyPack, Map<UUID, String> noteSubjects) {
         UUID noteId = studyPack.getNoteId();
         if (noteId != null) {
             String noteSubject = noteSubjects.get(noteId);
@@ -488,7 +494,7 @@ public class ProgressReportService {
         return subject.trim();
     }
 
-    private boolean hasKeyConcepts(StudyPackEntity studyPack) {
+    private boolean hasKeyConcepts(StudyPackProgressView studyPack) {
         return studyPack.getKeyConcepts() != null && !studyPack.getKeyConcepts().isEmpty();
     }
 
