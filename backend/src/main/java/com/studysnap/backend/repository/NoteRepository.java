@@ -9,11 +9,24 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
+    String COLLECTION_NOTE_PROJECTION = """
+             new com.studysnap.backend.repository.NoteCollectionNoteProjection(
+                n.id,
+                n.title,
+                n.subject,
+                n.courseProgram,
+                n.status,
+                n.visibility,
+                n.updatedAt
+            )
+            """;
+
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
@@ -24,6 +37,13 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     long countByVisibility(NoteVisibility visibility);
     List<NoteEntity> findByOwnerUserIdAndVisibility(UUID ownerUserId, NoteVisibility visibility);
     void deleteByOwnerUserIdAndVisibility(UUID ownerUserId, NoteVisibility visibility);
+
+    @Query("""
+            select """ + COLLECTION_NOTE_PROJECTION + """
+            from NoteEntity n
+            where n.id in :noteIds
+            """)
+    List<NoteCollectionNoteProjection> findCollectionNoteProjectionsByIdIn(@Param("noteIds") Collection<UUID> noteIds);
 
     @Modifying
     @Query("""

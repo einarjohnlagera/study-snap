@@ -20,12 +20,10 @@ import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
-import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
-import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
@@ -33,11 +31,13 @@ import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionChildCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemCountProjection;
 import com.studysnap.backend.repository.NoteCollectionItemNoteProjection;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
@@ -1214,15 +1214,19 @@ public class NoteCollectionService {
             return List.of();
         }
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
-        Map<UUID, NoteEntity> notesById = noteRepository.findAllById(noteIds).stream()
-                .collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
-        Map<UUID, StudyPackEntity> studyPacksByNoteId = studyPackRepository.findByNoteIdIn(noteIds).stream()
+        Map<UUID, NoteCollectionNoteProjection> notesById = noteRepository.findCollectionNoteProjectionsByIdIn(noteIds).stream()
+                .collect(Collectors.toMap(NoteCollectionNoteProjection::noteId, Function.identity()));
+        Map<UUID, StudyPackProgressView> studyPacksByNoteId = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
                 .filter(studyPack -> studyPack.getNoteId() != null)
-                .collect(Collectors.toMap(StudyPackEntity::getNoteId, Function.identity(), (left, right) -> left));
-        Map<UUID, GeneratedQuizEntity> generatedQuizzesByNoteId = generatedQuizRepository
-                .findByOwnerUserIdAndNoteIdIn(userId, noteIds).stream()
-                .filter(generatedQuiz -> generatedQuiz.getNoteId() != null)
-                .collect(Collectors.toMap(GeneratedQuizEntity::getNoteId, Function.identity(), (left, right) -> left));
+                .collect(Collectors.toMap(StudyPackProgressView::getNoteId, Function.identity(), (left, right) -> left));
+        Map<UUID, UUID> generatedQuizIdByNoteId = generatedQuizRepository
+                .findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds).stream()
+                .filter(generatedQuiz -> generatedQuiz.noteId() != null)
+                .collect(Collectors.toMap(
+                        GeneratedQuizNoteProjection::noteId,
+                        GeneratedQuizNoteProjection::generatedQuizId,
+                        (left, right) -> left
+                ));
         Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = loadLastSessionCompletedAt(userId, noteIds);
         Map<UUID, List<String>> dueConceptsByStudyPackId = loadDueConceptsByStudyPackId(
                 userId,
@@ -1234,7 +1238,7 @@ public class NoteCollectionService {
                         item,
                         notesById.get(item.getNoteId()),
                         studyPacksByNoteId.get(item.getNoteId()),
-                        generatedQuizzesByNoteId.get(item.getNoteId()),
+                        generatedQuizIdByNoteId.get(item.getNoteId()),
                         lastSessionCompletedAtByNoteId.get(item.getNoteId()),
                         dueConceptsByStudyPackId
                 ))
@@ -1246,12 +1250,12 @@ public class NoteCollectionService {
             return List.of();
         }
         List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
-        Map<UUID, NoteEntity> notesById = noteRepository.findAllById(noteIds).stream()
-                .filter(note -> note.getVisibility() == NoteVisibility.PUBLIC)
-                .collect(Collectors.toMap(NoteEntity::getId, Function.identity()));
-        Map<UUID, StudyPackEntity> studyPacksByNoteId = studyPackRepository.findByNoteIdIn(noteIds).stream()
+        Map<UUID, NoteCollectionNoteProjection> notesById = noteRepository.findCollectionNoteProjectionsByIdIn(noteIds).stream()
+                .filter(note -> note.visibility() == NoteVisibility.PUBLIC)
+                .collect(Collectors.toMap(NoteCollectionNoteProjection::noteId, Function.identity()));
+        Map<UUID, StudyPackProgressView> studyPacksByNoteId = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
                 .filter(studyPack -> studyPack.getNoteId() != null)
-                .collect(Collectors.toMap(StudyPackEntity::getNoteId, Function.identity(), (left, right) -> left));
+                .collect(Collectors.toMap(StudyPackProgressView::getNoteId, Function.identity(), (left, right) -> left));
 
         return items.stream()
                 .filter(item -> notesById.containsKey(item.getNoteId()))
@@ -1268,7 +1272,7 @@ public class NoteCollectionService {
 
     private Map<UUID, List<String>> loadDueConceptsByStudyPackId(
             UUID userId,
-            Collection<StudyPackEntity> studyPacks
+            Collection<? extends StudyPackProgressView> studyPacks
     ) {
         if (studyPacks.isEmpty()) {
             return Map.of();
@@ -1279,7 +1283,7 @@ public class NoteCollectionService {
             }
             Map<UUID, List<String>> conceptsByStudyPackId = studyPacks.stream()
                     .collect(Collectors.toMap(
-                            StudyPackEntity::getId,
+                            StudyPackProgressView::getId,
                             studyPack -> studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                             (left, right) -> left
                     ));
@@ -1310,9 +1314,9 @@ public class NoteCollectionService {
 
     private NoteCollectionItemResponse toItemResponse(
             NoteCollectionItemEntity item,
-            NoteEntity note,
-            StudyPackEntity studyPack,
-            GeneratedQuizEntity generatedQuiz,
+            NoteCollectionNoteProjection note,
+            StudyPackProgressView studyPack,
+            UUID generatedQuizId,
             OffsetDateTime lastSessionCompletedAt,
             Map<UUID, List<String>> dueConceptsByStudyPackId
     ) {
@@ -1326,15 +1330,15 @@ public class NoteCollectionService {
                 item.getNoteId(),
                 item.getLabel(),
                 item.getPosition(),
-                note.getTitle(),
-                note.getSubject(),
-                note.getCourseProgram(),
-                NoteStudyPackStatusResolver.resolve(note, studyPack),
-                generatedQuiz == null ? null : generatedQuiz.getId().toString(),
+                note.title(),
+                note.subject(),
+                note.courseProgram(),
+                NoteStudyPackStatusResolver.resolve(note.status(), studyPack != null),
+                generatedQuizId == null ? null : generatedQuizId.toString(),
                 lastSessionCompletedAt,
                 dueConcepts.size(),
                 dueConcepts.stream().limit(DUE_CONCEPT_DISPLAY_LIMIT).toList(),
-                note.getUpdatedAt()
+                note.updatedAt()
         );
     }
 
