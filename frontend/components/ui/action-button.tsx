@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   BarChart2,
+  Brain,
   BookOpen,
   BookMarked,
   Briefcase,
@@ -62,6 +63,7 @@ export type ActionIconName =
   | "challengeQuiz"
   | "adaptivePractice"
   | "flashcards"
+  | "memorization"
   | "interviewPractice"
   | "retry"
   | "save"
@@ -95,6 +97,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   challengeQuiz: Trophy,
   adaptivePractice: Target,
   flashcards: BookMarked,
+  memorization: Brain,
   interviewPractice: Briefcase,
   retry: RotateCcw,
   save: Save,

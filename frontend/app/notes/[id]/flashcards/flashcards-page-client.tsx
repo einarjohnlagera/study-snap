@@ -7,56 +7,12 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getAuthUser } from "@/lib/auth";
-import { getNote, type NoteResponse, type QuizItem } from "@/lib/api";
-import { normalizeConceptKey } from "@/lib/concepts";
+import { getNote, type NoteResponse } from "@/lib/api";
+import { buildFlashcardDeck } from "@/lib/flashcards";
 import { buildNoteDetailPathWithTab } from "@/lib/note-entry";
 import { cn } from "@/lib/utils";
 
-type Flashcard = {
-  concept: string;
-  explanation: string | null;
-};
-
 type LoadState = "loading" | "ready" | "error";
-
-const MIN_FUZZY_MATCH_LENGTH = 4;
-
-function isFuzzyConceptMatch(a: string, b: string): boolean {
-  if (a === b) {
-    return true;
-  }
-  const shorter = a.length <= b.length ? a : b;
-  if (shorter.length < MIN_FUZZY_MATCH_LENGTH) {
-    return false;
-  }
-  return a.includes(b) || b.includes(a);
-}
-
-export function buildFlashcardDeck(keyConcepts: string[], quiz: QuizItem[]): Flashcard[] {
-  const explanations: Array<{ key: string; explanation: string }> = [];
-  for (const item of quiz) {
-    const concept = item.concept?.trim();
-    const explanation = item.explanation?.trim();
-    if (!concept || !explanation) {
-      continue;
-    }
-    explanations.push({ key: normalizeConceptKey(concept), explanation });
-  }
-
-  function findExplanation(concept: string): string | null {
-    const key = normalizeConceptKey(concept);
-    const match = explanations.find((entry) => isFuzzyConceptMatch(entry.key, key));
-    return match?.explanation ?? null;
-  }
-
-  return keyConcepts
-    .map((concept) => concept.trim())
-    .filter(Boolean)
-    .map((concept) => ({
-      concept,
-      explanation: findExplanation(concept),
-    }));
-}
 
 function FlashcardsGuard({ title, message }: Readonly<{ title: string; message: string }>) {
   return (

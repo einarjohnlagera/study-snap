@@ -8,7 +8,6 @@ Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashc
 
 ### Planned Scope
 
-- **Memorization (backend + frontend).** Flashcards' surface plus a real spaced-repetition schedule — graduating review intervals per concept driven by a new, separate entity, never a `ConceptHealth` field.
 - **Identification (backend + frontend).** New free-text question format (fill-in-the-blank / name-the-term) on the existing quiz-session engine; writes `ConceptHealth` on completion like Challenge Quiz.
 - **Enumeration (backend + frontend).** New free-text question format (list N items in a category) reusing Identification's field/validation/prompt work, plus partial-credit and order-independent scoring; writes `ConceptHealth` on completion like Challenge Quiz.
 - **`EXAM_MODES.md` update required before any of this reaches a Codex prompt** — document Identification/Enumeration as new question formats on the existing engine and Flashcards/Memorization as new non-scored surfaces, not a 6th/7th mode.
@@ -19,6 +18,7 @@ Anti-drift: Identification/Enumeration reuse the existing quiz-session engine an
 
 - **Flashcards (frontend).** Added a private Note Detail Flashcards entry point for every non-teacher profile. `/notes/{id}/flashcards` renders a flip-card deck from existing `keyConcepts`, matches `quiz[].concept` to reuse `quiz[].explanation` as the card back, and shows a per-card "no definition yet" fallback when no explanation matches. The surface is free, frontend-only, outside the quiz-session engine, makes no new AI/backend call, and never reads or writes `ConceptHealth`.
 - **Flashcards fix: fuzzy concept matching + entry point relocation (frontend).** Exact-string concept matching measured ~18% average definition coverage across generated Study Packs in an audit; switched to a normalized, bidirectional-substring fuzzy match, raising average coverage to ~56% (the practical ceiling, since `keyConcepts` always outnumbers `quiz` questions — a documented, permanent limitation, not a bug to keep chasing). Also moved the Flashcards entry point from the quiz-mode action row (which it doesn't belong in, per `EXAM_MODES.md`'s Non-Engine Review Surfaces classification, and which was overflowing on narrower widths) to the Key Concepts tab.
+- **Memorization (backend + frontend).** Added a private Note Detail Memorization entry point beside Flashcards for every non-teacher profile. Eligible cards reuse Flashcards' fuzzy concept matching but exclude fallback-only concepts, then schedule review with a separate `memorization_cards` SRS table and `/study-packs/{id}/memorization` endpoints. Grading uses Again/Hard/Good/Easy intervals, upserts per `(user, studyPack, concept)`, stays free for all plans, never uses `QuickReviewSessionEntity`, and is firewalled from `ConceptHealth`, `ProgressReportService`, readiness, and `Overall Readiness`.
 
 ## v0.38.0 - Read-Path Optimization Pass
 
