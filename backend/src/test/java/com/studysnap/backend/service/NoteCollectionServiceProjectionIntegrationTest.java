@@ -2,6 +2,9 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionItemResponse;
+import com.studysnap.backend.dto.GoalCollectionChildResponse;
+import com.studysnap.backend.dto.GoalCollectionDetailResponse;
+import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.InputType;
@@ -181,7 +184,20 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     completed_at timestamp with time zone
                 )
                 """);
+        jdbcTemplate.execute("""
+                create table if not exists concept_health (
+                    id uuid primary key,
+                    user_id uuid not null,
+                    study_pack_id uuid not null,
+                    concept varchar(500) not null,
+                    last_correct_at timestamp with time zone,
+                    last_incorrect_at timestamp with time zone,
+                    created_at timestamp with time zone not null,
+                    updated_at timestamp with time zone not null
+                )
+                """);
         jdbcTemplate.execute("delete from generated_quizzes");
+        jdbcTemplate.execute("delete from concept_health");
         jdbcTemplate.execute("delete from study_packs");
         jdbcTemplate.execute("delete from note_collection_items");
         jdbcTemplate.execute("delete from note_collections");
@@ -301,10 +317,86 @@ class NoteCollectionServiceProjectionIntegrationTest {
         assertThat(generatedQuizzes.getFirst().getClass().isRecord()).isTrue();
     }
 
+    @Test
+    void getGoalBatchesChildReadinessAndMatchesPerChildReadiness() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity goal = saveCollection(userId, CollectionVisibility.PRIVATE);
+        NoteCollectionEntity biology = saveChildCollection(userId, goal.getId(), "Biology Plan", 0);
+        NoteCollectionEntity chemistry = saveChildCollection(userId, goal.getId(), "Chemistry Plan", 1);
+        NoteCollectionEntity empty = saveChildCollection(userId, goal.getId(), "Empty Plan", 2);
+        NoteEntity cells = saveNote(userId, "Cells", BIOLOGY_SUBJECT, NoteStatus.GENERATED, NoteVisibility.PRIVATE, 0);
+        NoteEntity atoms = saveNote(userId, "Atoms", "Chemistry", NoteStatus.GENERATED, NoteVisibility.PRIVATE, 1);
+        NoteEntity noPack = saveNote(userId, "No Pack", "History", NoteStatus.DRAFT, NoteVisibility.PRIVATE, 2);
+        saveItem(biology.getId(), cells.getId(), 0);
+        saveItem(chemistry.getId(), atoms.getId(), 0);
+        saveItem(empty.getId(), noPack.getId(), 0);
+        StudyPackEntity biologyPack = saveStudyPack(userId, cells.getId(), BIOLOGY_SUBJECT, List.of("Cells", "DNA"));
+        StudyPackEntity chemistryPack = saveStudyPack(userId, atoms.getId(), "Chemistry", List.of("Atom", "Molecule"));
+        OffsetDateTime recentReview = OffsetDateTime.now().minusDays(1).withNano(0);
+        OffsetDateTime dueReview = OffsetDateTime.now().minusDays(30).withNano(0);
+        saveConceptHealth(userId, biologyPack.getId(), "Cells", recentReview);
+        saveConceptHealth(userId, biologyPack.getId(), "DNA", dueReview);
+        saveConceptHealth(userId, chemistryPack.getId(), "Atom", recentReview);
+
+        PlanReadinessResponse biologyReadiness = noteCollectionService.getReadiness(biology.getId(), userId);
+        PlanReadinessResponse chemistryReadiness = noteCollectionService.getReadiness(chemistry.getId(), userId);
+        PlanReadinessResponse emptyReadiness = noteCollectionService.getReadiness(empty.getId(), userId);
+        List<GoalCollectionChildResponse> expectedChildren = List.of(
+                expectedGoalChild(biology, biologyReadiness),
+                expectedGoalChild(chemistry, chemistryReadiness),
+                expectedGoalChild(empty, emptyReadiness)
+        );
+        GoalCollectionDetailResponse expectedGoal = expectedGoal(goal, expectedChildren);
+
+        SqlCaptureStatementInspector.clear();
+
+        GoalCollectionDetailResponse actualGoal = noteCollectionService.getGoal(goal.getId(), userId);
+
+        assertThat(actualGoal).isEqualTo(expectedGoal);
+        assertThat(actualGoal.children()).extracting(GoalCollectionChildResponse::title)
+                .containsExactly("Biology Plan", "Chemistry Plan", "Empty Plan");
+        List<String> selects = selectStatements();
+        assertThat(countSelectsContaining(selects, " from study_packs ")).isLessThanOrEqualTo(1);
+        assertThat(countSelectsContaining(selects, " from concept_health ")).isLessThanOrEqualTo(1);
+    }
+
+    @Test
+    void getGoalZerosOnlyFailingChildReadiness() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity goal = saveCollection(userId, CollectionVisibility.PRIVATE);
+        NoteCollectionEntity stable = saveChildCollection(userId, goal.getId(), "Stable Plan", 0);
+        NoteCollectionEntity failing = saveChildCollection(userId, goal.getId(), "Failing Plan", 1);
+        NoteEntity stableNote = saveNote(userId, "Stable", BIOLOGY_SUBJECT, NoteStatus.GENERATED, NoteVisibility.PRIVATE, 0);
+        NoteEntity failingNote = saveNote(userId, "Failing", BIOLOGY_SUBJECT, NoteStatus.GENERATED, NoteVisibility.PRIVATE, 1);
+        saveItem(stable.getId(), stableNote.getId(), 0);
+        saveItem(failing.getId(), failingNote.getId(), 0);
+        StudyPackEntity stablePack = saveStudyPack(userId, stableNote.getId(), BIOLOGY_SUBJECT, List.of("Cells"));
+        StudyPackEntity failingPack = saveStudyPack(userId, failingNote.getId(), BIOLOGY_SUBJECT, List.of("DNA"));
+        OffsetDateTime stableReview = OffsetDateTime.now().minusDays(2).withNano(0);
+        OffsetDateTime failingReview = OffsetDateTime.now().minusDays(1).withNano(0);
+        saveConceptHealth(userId, stablePack.getId(), "Cells", stableReview);
+        saveConceptHealth(userId, failingPack.getId(), "DNA", failingReview);
+        conceptHealthService.failDueCheckAt(failingReview);
+
+        GoalCollectionDetailResponse actualGoal = noteCollectionService.getGoal(goal.getId(), userId);
+
+        assertThat(actualGoal.children()).hasSize(2);
+        GoalCollectionChildResponse stableChild = actualGoal.children().getFirst();
+        GoalCollectionChildResponse failingChild = actualGoal.children().get(1);
+        assertThat(stableChild.masteredConcepts()).isEqualTo(1);
+        assertThat(stableChild.totalConcepts()).isEqualTo(1);
+        assertThat(failingChild.itemCount()).isEqualTo(1);
+        assertThat(failingChild.overallReadinessPercentage()).isZero();
+        assertThat(failingChild.masteredConcepts()).isZero();
+        assertThat(failingChild.dueConcepts()).isZero();
+        assertThat(failingChild.notPracticedConcepts()).isZero();
+        assertThat(failingChild.totalConcepts()).isZero();
+        assertThat(actualGoal.masteredConcepts()).isEqualTo(1);
+        assertThat(actualGoal.totalConcepts()).isEqualTo(1);
+    }
+
     private void assertProjectionQueriesAvoidLargeColumns() {
-        List<String> selects = SqlCaptureStatementInspector.statements().stream()
-                .filter(sql -> sql.toLowerCase().startsWith("select"))
-                .toList();
+        List<String> selects = selectStatements();
         assertThat(selects).isNotEmpty();
         assertThat(selects).allSatisfy(sql -> assertThat(sql.toLowerCase())
                 .doesNotContain(".content")
@@ -313,6 +405,73 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 .doesNotContain(".quiz")
                 .doesNotContain(" questions")
                 .doesNotContain(".questions"));
+    }
+
+    private List<String> selectStatements() {
+        return SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().startsWith("select"))
+                .toList();
+    }
+
+    private long countSelectsContaining(List<String> selects, String fragment) {
+        String normalizedFragment = fragment.toLowerCase();
+        return selects.stream()
+                .map(String::toLowerCase)
+                .filter(sql -> sql.contains(normalizedFragment))
+                .count();
+    }
+
+    private GoalCollectionChildResponse expectedGoalChild(
+            NoteCollectionEntity child,
+            PlanReadinessResponse readiness
+    ) {
+        return new GoalCollectionChildResponse(
+                child.getId(),
+                child.getTitle(),
+                child.getDescription(),
+                readiness.totalNotes(),
+                readiness.overallReadinessPercentage(),
+                readiness.masteredConcepts(),
+                readiness.dueConcepts(),
+                readiness.notPracticedConcepts(),
+                readiness.totalConcepts()
+        );
+    }
+
+    private GoalCollectionDetailResponse expectedGoal(
+            NoteCollectionEntity goal,
+            List<GoalCollectionChildResponse> children
+    ) {
+        int totalConcepts = children.stream().mapToInt(GoalCollectionChildResponse::totalConcepts).sum();
+        int masteredConcepts = children.stream().mapToInt(GoalCollectionChildResponse::masteredConcepts).sum();
+        int dueConcepts = children.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum();
+        int notPracticedConcepts = children.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
+        return new GoalCollectionDetailResponse(
+                goal.getId(),
+                goal.getTitle(),
+                goal.getDescription(),
+                goal.getVisibility().name(),
+                goal.getCourseProgram(),
+                goal.getSourcePlanId(),
+                goal.getParentCollectionId(),
+                0,
+                children.size(),
+                masteryPercentage(masteredConcepts, totalConcepts),
+                masteredConcepts,
+                dueConcepts,
+                notPracticedConcepts,
+                totalConcepts,
+                goal.getCreatedAt(),
+                goal.getUpdatedAt(),
+                children
+        );
+    }
+
+    private int masteryPercentage(int masteredConcepts, int totalConcepts) {
+        if (totalConcepts == 0) {
+            return 0;
+        }
+        return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
     private NoteCollectionItemResponse legacyItem(
@@ -352,12 +511,31 @@ class NoteCollectionServiceProjectionIntegrationTest {
         return collectionRepository.save(collection);
     }
 
+    private NoteCollectionEntity saveChildCollection(UUID userId, UUID parentCollectionId, String title, int siblingPosition) {
+        NoteCollectionEntity collection = saveCollection(userId, CollectionVisibility.PRIVATE);
+        collection.setTitle(title);
+        collection.setParentCollectionId(parentCollectionId);
+        collection.setSiblingPosition(siblingPosition);
+        return collectionRepository.save(collection);
+    }
+
     private NoteEntity saveNote(UUID userId, String title, NoteStatus status, NoteVisibility visibility, int offsetHours) {
+        return saveNote(userId, title, BIOLOGY_SUBJECT, status, visibility, offsetHours);
+    }
+
+    private NoteEntity saveNote(
+            UUID userId,
+            String title,
+            String subject,
+            NoteStatus status,
+            NoteVisibility visibility,
+            int offsetHours
+    ) {
         NoteEntity note = new NoteEntity();
         note.setId(UUID.randomUUID());
         note.setOwnerUserId(userId);
         note.setTitle(title);
-        note.setSubject(BIOLOGY_SUBJECT);
+        note.setSubject(subject);
         note.setCourseProgram(COURSE_PROGRAM);
         note.setTags(new String[0]);
         note.setContent("Large note content that must not be selected by collection detail projections.");
@@ -381,6 +559,10 @@ class NoteCollectionServiceProjectionIntegrationTest {
     }
 
     private StudyPackEntity saveStudyPack(UUID userId, UUID noteId, List<String> keyConcepts) {
+        return saveStudyPack(userId, noteId, BIOLOGY_SUBJECT, keyConcepts);
+    }
+
+    private StudyPackEntity saveStudyPack(UUID userId, UUID noteId, String subject, List<String> keyConcepts) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(UUID.randomUUID());
         studyPack.setOwnerUserId(userId);
@@ -388,7 +570,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
         studyPack.setInputType(InputType.TEXT);
         studyPack.setTitle("Pack");
         studyPack.setSummary("Summary");
-        studyPack.setSubject(BIOLOGY_SUBJECT);
+        studyPack.setSubject(subject);
         studyPack.setSourceText("Large source text that must not be selected by collection detail projections.");
         studyPack.setKeyConcepts(keyConcepts);
         studyPack.setQuiz(List.of(new QuizItem(
@@ -406,6 +588,31 @@ class NoteCollectionServiceProjectionIntegrationTest {
         studyPack.setUpdatedAt(BASE_TIME);
         studyPack.setTags(new String[0]);
         return studyPackRepository.save(studyPack);
+    }
+
+    private void saveConceptHealth(UUID userId, UUID studyPackId, String concept, OffsetDateTime lastCorrectAt) {
+        jdbcTemplate.update(
+                """
+                        insert into concept_health (
+                            id,
+                            user_id,
+                            study_pack_id,
+                            concept,
+                            last_correct_at,
+                            last_incorrect_at,
+                            created_at,
+                            updated_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                UUID.randomUUID(),
+                userId,
+                studyPackId,
+                concept,
+                lastCorrectAt,
+                null,
+                BASE_TIME,
+                BASE_TIME
+        );
     }
 
     private UUID saveGeneratedQuiz(UUID userId, UUID noteId) {
@@ -443,6 +650,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
     static class StubConceptHealthService extends ConceptHealthService {
         private boolean canView;
         private Map<UUID, List<String>> dueConceptsByStudyPackId = Map.of();
+        private OffsetDateTime failingDueCheckAt;
 
         StubConceptHealthService() {
             super(null, null, null, null);
@@ -451,6 +659,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
         void reset() {
             canView = false;
             dueConceptsByStudyPackId = Map.of();
+            failingDueCheckAt = null;
         }
 
         void setCanView(boolean canView) {
@@ -459,6 +668,10 @@ class NoteCollectionServiceProjectionIntegrationTest {
 
         void setDueConcepts(Map<UUID, List<String>> dueConceptsByStudyPackId) {
             this.dueConceptsByStudyPackId = new HashMap<>(dueConceptsByStudyPackId);
+        }
+
+        void failDueCheckAt(OffsetDateTime failingDueCheckAt) {
+            this.failingDueCheckAt = failingDueCheckAt;
         }
 
         @Override
@@ -473,6 +686,14 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 OffsetDateTime now
         ) {
             return dueConceptsByStudyPackId;
+        }
+
+        @Override
+        boolean isDue(OffsetDateTime lastCorrectAt, OffsetDateTime now) {
+            if (failingDueCheckAt != null && lastCorrectAt != null && lastCorrectAt.isEqual(failingDueCheckAt)) {
+                throw new IllegalStateException("Simulated concept-health failure");
+            }
+            return super.isDue(lastCorrectAt, now);
         }
     }
 }
