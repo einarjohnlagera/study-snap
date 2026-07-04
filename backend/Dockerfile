@@ -21,7 +21,18 @@ EXPOSE 8080
 # capped (see application.yaml) and adapts if the instance is upsized. Exit on OOM
 # so Render restarts a clean process instead of limping with an exhausted pool.
 # Tunable via JAVA_OPTS without a rebuild; `exec` keeps the JVM as PID 1.
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:+ExitOnOutOfMemoryError"
+#
+# Production memory investigation (ongoing): actuator sampling showed heap
+# committed (~207 MB) sitting well above heap used (~99 MB) during a container
+# RSS plateau near the 512 MB limit — G1 wasn't handing idle-committed heap back
+# to the OS. G1PeriodicGCInterval forces a periodic opportunity to uncommit that
+# slack; G1PeriodicGCInvokesConcurrent keeps that cycle concurrent so it doesn't
+# introduce pause-time regressions on this 0.5 CPU instance. MaxMetaspaceSize
+# caps a pool that was otherwise unbounded (jvm.memory.max reported -1) so a
+# future runaway shows up as a logged OutOfMemoryError instead of a silent
+# SIGKILL. NativeMemoryTracking=summary costs little and gives `jcmd <pid>
+# VM.native_memory summary` a breakdown to run if the plateau doesn't move.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:+ExitOnOutOfMemoryError -XX:G1PeriodicGCInterval=30000 -XX:+G1PeriodicGCInvokesConcurrent -XX:MaxMetaspaceSize=200m -XX:NativeMemoryTracking=summary"
 
 # This image is glibc-based (Debian), not musl/Alpine. glibc allocates a separate
 # malloc arena per thread for concurrency, and those arenas fragment and are never

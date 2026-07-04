@@ -6,16 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.37.3** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.37.4** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.37.3 — Study Plan Read-Path Memory Optimization
+## Active release: v0.37.4 — Idle GC & Metaspace Ceiling Hotfix
 
-Base branch for this release: `releases/v0.37.3`. Full brief: `docs/codex-prompts/v0.37.3-studyplan-readpath-memory.md`. Cuts heap allocation on Study Plan read endpoints, part of the ongoing production memory-restart investigation. Locked rules:
+Base branch for this release: `releases/v0.37.4`. Continuation of the production memory-restart investigation (v0.37.1). Actuator sampling showed container RSS plateauing near 95-97% within minutes of boot while JVM-tracked heap+nonheap only accounted for ~394MB of the 512MB limit — a ~93MB gap the JVM can't see, plus an unset `MaxMetaspaceSize` (no ceiling at all). Locked rules:
 
-- **Projection query for the read path.** `getReadiness`/`getNoteConceptCounts`/`getGoal` currently materialize full `StudyPackEntity` rows (including the two largest columns, `quiz` and `source_text` jsonb) just to read `keyConcepts`. Add a projection exposing only `id, noteId, ownerUserId, subject, keyConcepts, status` and route the read path through it.
-- **Batch the concept-health N+1.** `ProgressReportService.collectReviewTimesByConceptKey` calls the repository once per study pack in a loop; replace with the existing batched `findByUserIdAndStudyPackIdIn`.
-- **Count query instead of count-by-load.** `NoteCollectionService.getGoal`'s item count loads and sizes a list; replace with a `count(...)` query.
-- **No schema, endpoint, or DTO change.** API responses must stay byte-identical to today. `getGoal`'s per-child readiness fan-out restructure is deferred (latency concern, not memory).
+- **Force G1 to release idle-committed heap.** `G1PeriodicGCInterval=30000` + `G1PeriodicGCInvokesConcurrent` in the Dockerfile's `JAVA_OPTS` — the actual fix candidate, targeting ~109MB of committed-but-unused heap.
+- **Cap Metaspace.** `MaxMetaspaceSize=200m` — a tripwire, not a remediation; converts a future runaway into a logged `OutOfMemoryError: Metaspace` instead of a silent SIGKILL.
+- **Enable Native Memory Tracking.** `NativeMemoryTracking=summary` — cheap to add now so `jcmd <pid> VM.native_memory summary` is available without a second redeploy if the plateau doesn't move.
+- **No Java code change, no schema/endpoint/DTO change.** Dockerfile `JAVA_OPTS` env var only. Post-deploy, watch whether the RSS plateau drops (reclaimable heap slack) or stays pinned (native gap — next lever is `GoogleVisionOcrService`'s per-call `ImageAnnotatorClient` creation).
 
 ## Source-of-truth docs (read before implementing anything)
 

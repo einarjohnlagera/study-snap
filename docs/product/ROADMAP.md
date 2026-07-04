@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.37.3 - Study Plan Read-Path Memory Optimization` is the latest released version (on `releases/v0.37.3`).
+`v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the latest released version (on `releases/v0.37.4`).
+
+`v0.37.3 - Study Plan Read-Path Memory Optimization` is the previous released version (on `releases/v0.37.3`).
 
 `v0.37.2 - Plan Data Integrity Hotfix` is the previous released version (on `releases/v0.37.2`).
 
@@ -137,6 +139,22 @@ Scope:
 - **Builder action-row wrapping on tablet widths.** The breakpoint fix alone didn't fix real device screenshots (iPad Air vs. iPad Mini) showing an orphaned single-button wrap. Reorder controls (`Move up`/`Move down`, `Up`/`Down`) moved into a compact icon cluster next to the drag handle; action rows fixed at two items so they never wrap at any width.
 
 Anti-drift: bug-fix/UX-polish patch only; no new endpoint, field, or mastery signal; scope is the nine items above only.
+
+---
+
+## v0.37.4 - Idle GC & Metaspace Ceiling Hotfix (released)
+
+Base branch: `releases/v0.37.4`.
+
+Theme: continuation of the production memory-restart investigation (v0.37.1). Live actuator sampling showed container RSS plateauing near 95-97% within minutes of boot, before the bulk of request traffic even arrived, while JVM-tracked heap (committed ~207MB vs used ~99MB) and nonheap (~171MB, fully reconciled across Metaspace/Compressed Class Space/CodeHeaps) together only accounted for ~394MB of the 512MB limit — leaving a ~93MB gap the JVM can't see. Two concrete findings drove this round: G1 wasn't returning idle-committed-but-unused heap to the OS, and `MaxMetaspaceSize` was unset entirely (`jvm.memory.max` reported `-1`).
+
+### Planned Scope
+
+- **Force G1 to release idle-committed heap (Dockerfile).** `G1PeriodicGCInterval=30000` + `G1PeriodicGCInvokesConcurrent` — a regular, concurrent (non-pausing) opportunity to uncommit unused heap. This is the actual fix candidate; the other two flags are safety/instrumentation.
+- **Cap Metaspace (Dockerfile).** `MaxMetaspaceSize=200m` — a tripwire, not a remediation. Converts any future runaway into a logged `OutOfMemoryError: Metaspace` instead of a silent SIGKILL.
+- **Enable Native Memory Tracking (Dockerfile).** `NativeMemoryTracking=summary` — cheap now, avoids a second redeploy later if `jcmd <pid> VM.native_memory summary` is needed to break down the native gap.
+
+Anti-drift: no Java code change, no schema/endpoint/DTO change — Dockerfile `JAVA_OPTS` env var only. Framed explicitly as an experiment: if the post-deploy RSS plateau drops, the gap was reclaimable heap slack; if it stays pinned near 95%, the gap is native (thread stacks, GC bookkeeping, or Netty/gRPC off-heap from `GoogleVisionOcrService`'s per-call `ImageAnnotatorClient` creation), and that becomes the next thread to pull.
 
 ---
 
