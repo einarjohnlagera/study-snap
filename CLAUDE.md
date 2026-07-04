@@ -6,17 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.38.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.39.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.38.0 — Read-Path Optimization Pass
+## Active release: v0.39.0 — Flexible Review Methods
 
-Base branch for this release: `releases/v0.38.0`. A latency/efficiency pass extending the v0.37.3 projection discipline across the remaining hot read/list endpoints — **not** a memory-idle fix (that was the 2GB Render upgrade). An audit of the six highest-traffic areas found several paths still materializing full entities (with the large `quiz`/`source_text`/`questions`/`content`/`sessionState` columns) where only a handful of fields are needed. Locked rules:
+Base branch for this release: `releases/v0.39.0`. Lets a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while preserving the v0.37.0 review-vs-assessment mastery boundary. Two independent dependency chains: Flashcards → Memorization (review), Identification → Enumeration (assessment). Locked rules:
 
-- **Session-history read path (P1).** `QuizSessionHistoryService.findCompletedSessions` loads every completed session (full `sessionState` JSONB, no LIMIT) then filters in memory — backs collections list, collection detail, and quiz recent-sessions. Push mode/note filtering to the DB; stop loading `sessionState` for single-note modes.
-- **Collection detail + public detail projections (P2).** `toItemResponses`/`toPublicItemResponses` load full `StudyPackEntity` + full `GeneratedQuizEntity` (id only used) + full `NoteEntity` (content unused). Route through `findProgressViewsByNoteIdIn` + lean projections.
-- **Private library list projection (P3).** `StudyPackService.listMine` loads the `quiz` JSONB just for `.size()`; use `jsonb_array_length`.
-- **Goal per-child readiness batch (P4).** Batch `getGoal`'s per-child `getReadiness` N+1. Sequenced last; may slip.
-- **No schema, endpoint, or DTO change.** Byte-identical responses. Every new interface projection requires a real-Hibernate (`@SpringBootTest` + H2) test — the v0.37.3 projection-detection footgun. Note detail, generated-quiz `getByNoteId`, and the progress report are out of scope (they legitimately need full payloads).
+- **Flashcards/Memorization never write `ConceptHealth`.** Same rule as Quick Review — review-only surfaces never move mastery, due-state, or `Overall Readiness`. Memorization's spaced-repetition schedule is a new, separate entity, never a `ConceptHealth` field.
+- **Identification/Enumeration write `ConceptHealth` on completion**, same as Challenge Quiz, and reuse the existing quiz-session engine — no new session discriminator.
+- **`EXAM_MODES.md` must be updated before any of this reaches a Codex prompt** — document these as new question formats/surfaces, not a 6th/7th mode.
+- **No cross-wiring.** Flashcards/Memorization stay outside `QuickReviewSessionEntity` entirely; do not force them through the quiz-session engine.
 
 ## Source-of-truth docs (read before implementing anything)
 

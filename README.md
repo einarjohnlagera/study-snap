@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.38.0 - Read-Path Optimization Pass` (in progress); previous: `v0.37.4 - Idle GC & Metaspace Ceiling Hotfix`
+Current release baseline: `v0.39.0 - Flexible Review Methods` (in progress); previous: `v0.38.0 - Read-Path Optimization Pass`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

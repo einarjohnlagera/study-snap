@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.38.0 - Read-Path Optimization Pass` is the latest released version (on `releases/v0.38.0`).
+`v0.39.0 - Flexible Review Methods` is the current in-progress release (on `releases/v0.39.0`).
+
+`v0.38.0 - Read-Path Optimization Pass` is the previous released version (on `releases/v0.38.0`).
 
 `v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the previous released version (on `releases/v0.37.4`).
 
@@ -15,8 +17,6 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.37.2 - Plan Data Integrity Hotfix` is the previous released version (on `releases/v0.37.2`).
 
 `v0.37.1 - Native Memory Hotfix` is the previous released version (on `releases/v0.37.1`).
-
-`v0.39.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
 
 `v0.37.0 - Readiness-First Plans & Mastery Integrity` is the previous released version (on `releases/v0.37.0`).
 
@@ -256,9 +256,9 @@ Quick Review session disposability is resolved above (hide from session-history 
 
 ---
 
-## v0.39.0 (candidate) - Flexible Review Methods
+## v0.39.0 - Flexible Review Methods
 
-Not kicked off — **do not kick off until v0.37.0 is signed off** (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
+Base branch: `releases/v0.39.0`. Kicked off after v0.38.0 signoff (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
 
 Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while keeping the review-vs-assessment mastery boundary this whole effort is built around.
 

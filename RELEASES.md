@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.39.0 - Flexible Review Methods
+
+**Status: In Progress**
+
+Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while keeping the review-vs-assessment mastery boundary v0.37.0 built.
+
+### Planned Scope
+
+- **Flashcards (frontend).** New non-scored surface over Study Pack content, reusing `QuizItem.explanation` as the card back where a matching concept has a quiz question; no `ConceptHealth` write.
+- **Memorization (backend + frontend).** Flashcards' surface plus a real spaced-repetition schedule — graduating review intervals per concept driven by a new, separate entity, never a `ConceptHealth` field.
+- **Identification (backend + frontend).** New free-text question format (fill-in-the-blank / name-the-term) on the existing quiz-session engine; writes `ConceptHealth` on completion like Challenge Quiz.
+- **Enumeration (backend + frontend).** New free-text question format (list N items in a category) reusing Identification's field/validation/prompt work, plus partial-credit and order-independent scoring; writes `ConceptHealth` on completion like Challenge Quiz.
+- **`EXAM_MODES.md` update required before any of this reaches a Codex prompt** — document Identification/Enumeration as new question formats on the existing engine and Flashcards/Memorization as new non-scored surfaces, not a 6th/7th mode.
+
+Anti-drift: Identification/Enumeration reuse the existing quiz-session engine and `ConceptHealth` write path — no new session discriminator. Flashcards/Memorization are new surfaces outside the quiz-session engine entirely — no attempt to force them through `QuickReviewSessionEntity`. Memorization's SRS state is a new, separate entity — never counted toward mastery or `Overall Readiness`. Chain sequencing (Flashcards → Memorization; Identification → Enumeration) per `docs/product/ROADMAP.md`.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.38.0 - Read-Path Optimization Pass
 
 **Status: Released**
