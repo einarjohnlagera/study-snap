@@ -90,6 +90,18 @@ export type StudyPackResponse = {
   };
 };
 
+export type MemorizationGrade = "AGAIN" | "HARD" | "GOOD" | "EASY";
+
+export type MemorizationCardResponse = {
+  concept: string;
+  intervalDays: number;
+  easeFactor: number;
+  repetitions: number;
+  dueAt: string;
+  lastReviewedAt: string | null;
+  lastGrade: MemorizationGrade | null;
+};
+
 export type NoteTextExtractionResponse = {
   inputType: "image" | "txt" | "pdf" | "docx";
   extractedText: string;
@@ -2594,6 +2606,35 @@ export async function getConceptHealth(studyPackId: string): Promise<ConceptHeal
     true,
   );
   return parseApiResponse<ConceptHealthEntry[]>(response, "Could not load concept review signals.");
+}
+
+export async function getMemorizationCards(studyPackId: string): Promise<MemorizationCardResponse[]> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/memorization`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<MemorizationCardResponse[]>(response, "Could not load memorization schedule.");
+}
+
+export async function gradeMemorizationCard(
+  studyPackId: string,
+  concept: string,
+  grade: MemorizationGrade,
+): Promise<MemorizationCardResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/memorization/grade`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ concept, grade }),
+    },
+    true,
+  );
+  return parseApiResponse<MemorizationCardResponse>(response, "Could not save memorization grade.");
 }
 
 export async function getPostSessionNextStep(studyPackId: string): Promise<PostSessionNextStepResponse> {

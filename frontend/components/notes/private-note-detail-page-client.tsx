@@ -2100,14 +2100,24 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
                   {!isTeacherMode && !isGeneratingStudyPack && !hasGenerationFailed && !isDraft && note.keyConcepts.length > 0 ? (
-                    <ResponsiveActionButton
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.push(`/notes/${routeId}/flashcards`)}
-                      action="flashcards"
-                      label="Flashcards"
-                      showTextOnMobile
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ResponsiveActionButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/notes/${routeId}/flashcards`)}
+                        action="flashcards"
+                        label="Flashcards"
+                        showTextOnMobile
+                      />
+                      <ResponsiveActionButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/notes/${routeId}/memorization`)}
+                        action="memorization"
+                        label="Memorization"
+                        showTextOnMobile
+                      />
+                    </div>
                   ) : null}
                 </div>
                 {isGeneratingStudyPack ? (

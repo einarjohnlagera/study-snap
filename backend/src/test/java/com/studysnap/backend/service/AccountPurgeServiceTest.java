@@ -17,6 +17,7 @@ import com.studysnap.backend.entity.VoucherRedemptionEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
 import com.studysnap.backend.repository.ConceptHealthRepository;
+import com.studysnap.backend.repository.MemorizationCardRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.EmailVerificationTokenRepository;
 import com.studysnap.backend.repository.FeedbackRepository;
@@ -81,6 +82,8 @@ class AccountPurgeServiceTest {
     @Mock
     private ConceptHealthRepository conceptHealthRepository;
     @Mock
+    private MemorizationCardRepository memorizationCardRepository;
+    @Mock
     private ActivityEventRepository activityEventRepository;
     @Mock
     private BulkGenerationResultRepository bulkGenerationResultRepository;
@@ -133,6 +136,7 @@ class AccountPurgeServiceTest {
                 generatedQuizRepository,
                 quickReviewSessionRepository,
                 conceptHealthRepository,
+                memorizationCardRepository,
                 activityEventRepository,
                 bulkGenerationResultRepository,
                 quizShareLinkRepository,
@@ -195,6 +199,7 @@ class AccountPurgeServiceTest {
         verify(generatedQuizRepository).deleteByOwnerUserId(userId);
         verify(quickReviewSessionRepository).deleteByUserId(userId);
         verify(conceptHealthRepository).deleteByUserId(userId);
+        verify(memorizationCardRepository).deleteByUserId(userId);
         verify(activityEventRepository).deleteByUserId(userId);
         verify(bulkGenerationResultRepository).deleteByOwnerUserId(userId);
         verify(publicNoteLikeRepository).deleteByUserId(userId);

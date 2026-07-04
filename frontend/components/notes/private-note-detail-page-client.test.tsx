@@ -755,7 +755,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it.each(["STUDENT", "BOARD_EXAM", "PARENT", "PROFESSIONAL"] as const)(
-    "shows the Flashcards entry on the Key Concepts tab for %s note detail",
+    "shows the review-surface entries on the Key Concepts tab for %s note detail",
     async (profileType) => {
       (getAuthUser as jest.Mock).mockReturnValue({
         planType: profileType === "PROFESSIONAL" ? "PRO" : "FREE",
@@ -792,15 +792,19 @@ describe("PrivateNoteDetailPageClient", () => {
       rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
 
       const flashcardsButton = await screen.findByRole("button", { name: "Flashcards" });
+      const memorizationButton = await screen.findByRole("button", { name: "Memorization" });
       expect(flashcardsButton).toBeInTheDocument();
+      expect(memorizationButton).toBeInTheDocument();
 
       fireEvent.click(flashcardsButton);
 
       expect(pushMock).toHaveBeenCalledWith("/notes/note-1/flashcards");
+      fireEvent.click(memorizationButton);
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-1/memorization");
     },
   );
 
-  it("hides the Flashcards entry on the Key Concepts tab in teacher mode", async () => {
+  it("hides review-surface entries on the Key Concepts tab in teacher mode", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -824,6 +828,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(await screen.findByText("Cells")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Memorization" })).not.toBeInTheDocument();
   });
 
   it("renders teacher note detail with Study Pack tabs visible and student-only sections hidden", async () => {
@@ -853,6 +858,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Recent Sessions")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Memorization" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Challenge Quiz" })).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Quiz question count" })).not.toBeInTheDocument();
 
