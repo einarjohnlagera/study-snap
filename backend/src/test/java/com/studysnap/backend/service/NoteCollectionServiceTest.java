@@ -699,18 +699,26 @@ class NoteCollectionServiceTest {
                 countProjection(firstChildId, 1),
                 countProjection(secondChildId, 1)
         ));
-        when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
-        when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId))
-                .thenReturn(List.of(buildItem(firstChildId, firstNoteId, 0, null)));
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId))
-                .thenReturn(List.of(buildItem(secondChildId, secondNoteId, 0, null)));
-        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(firstNoteId))).thenReturn(asProjections(firstPack));
-        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(secondNoteId))).thenReturn(asProjections(secondPack));
-        when(progressReportService.buildSubjectProgressEntries(eq(asProjections(firstPack)), eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(List.of(new SubjectProgressEntry("Professional Education", 2, 1, 1, 0, 50)));
-        when(progressReportService.buildSubjectProgressEntries(eq(asProjections(secondPack)), eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(List.of(new SubjectProgressEntry("General Education", 2, 1, 0, 1, 50)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(firstChildId, secondChildId))).thenReturn(List.of(
+                noteProjection(firstChildId, firstNoteId),
+                noteProjection(secondChildId, secondNoteId)
+        ));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(firstNoteId, secondNoteId)))
+                .thenReturn(asProjections(firstPack, secondPack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(
+                anyMap(),
+                eq(userId),
+                any(OffsetDateTime.class)
+        )).thenReturn(Map.of(
+                firstChildId, new ProgressReportService.SubjectProgressBatchResult(
+                        List.of(new SubjectProgressEntry("Professional Education", 2, 1, 1, 0, 50)),
+                        null
+                ),
+                secondChildId, new ProgressReportService.SubjectProgressBatchResult(
+                        List.of(new SubjectProgressEntry("General Education", 2, 1, 0, 1, 50)),
+                        null
+                )
+        ));
         when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
@@ -758,10 +766,12 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of(firstChild, secondChild));
         when(itemRepository.countItemsByCollectionIds(List.of(firstChildId, secondChildId))).thenReturn(List.of());
-        when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
-        when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId)).thenReturn(List.of());
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId)).thenReturn(List.of());
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(firstChildId, secondChildId))).thenReturn(List.of());
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        firstChildId, new ProgressReportService.SubjectProgressBatchResult(List.of(), null),
+                        secondChildId, new ProgressReportService.SubjectProgressBatchResult(List.of(), null)
+                ));
         when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
@@ -790,10 +800,12 @@ class NoteCollectionServiceTest {
         when(collectionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(collectionRepository.save(goal)).thenAnswer(invocation -> invocation.getArgument(0));
         when(itemRepository.countItemsByCollectionIds(List.of(secondChildId, firstChildId))).thenReturn(List.of());
-        when(collectionRepository.findByIdAndOwnerUserId(secondChildId, userId)).thenReturn(Optional.of(secondChild));
-        when(collectionRepository.findByIdAndOwnerUserId(firstChildId, userId)).thenReturn(Optional.of(firstChild));
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(secondChildId)).thenReturn(List.of());
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(firstChildId)).thenReturn(List.of());
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(secondChildId, firstChildId))).thenReturn(List.of());
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        secondChildId, new ProgressReportService.SubjectProgressBatchResult(List.of(), null),
+                        firstChildId, new ProgressReportService.SubjectProgressBatchResult(List.of(), null)
+                ));
         when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.setChildrenOrder(

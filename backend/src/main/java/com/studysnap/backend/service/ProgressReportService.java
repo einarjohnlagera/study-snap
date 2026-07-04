@@ -37,6 +37,7 @@ public class ProgressReportService {
     private static final String GOAL_TYPE_EXAM = "EXAM";
     private static final String GOAL_TYPE_SUBJECT = "SUBJECT";
     private static final String GOAL_TYPE_SUBJECT_FOCUS = "SUBJECT_FOCUS";
+    private static final UUID SINGLE_SUBJECT_PROGRESS_GROUP_ID = new UUID(0L, 0L);
 
     private final StudyPackRepository studyPackRepository;
     private final ConceptHealthRepository conceptHealthRepository;
@@ -108,11 +109,74 @@ public class ProgressReportService {
             UUID userId,
             OffsetDateTime now
     ) {
-        return groupQualifyingPacksBySubject(studyPacks).entrySet().stream()
-                .map(entry -> toSubjectProgress(entry.getKey(), entry.getValue(), userId, now))
+        SubjectProgressBatchResult result = buildSubjectProgressEntriesByGroup(
+                Map.of(SINGLE_SUBJECT_PROGRESS_GROUP_ID, studyPacks),
+                userId,
+                now
+        ).get(SINGLE_SUBJECT_PROGRESS_GROUP_ID);
+        if (result == null) {
+            return List.of();
+        }
+        if (result.failure() != null) {
+            throw result.failure();
+        }
+        return result.subjects();
+    }
+
+    public Map<UUID, SubjectProgressBatchResult> buildSubjectProgressEntriesByGroup(
+            Map<UUID, ? extends Collection<? extends StudyPackProgressView>> studyPacksByGroupId,
+            UUID userId,
+            OffsetDateTime now
+    ) {
+        if (studyPacksByGroupId == null || studyPacksByGroupId.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, SubjectProgressBatchResult> resultsByGroupId = new LinkedHashMap<>();
+        List<StudyPackProgressView> allStudyPacks = studyPacksByGroupId.values().stream()
                 .filter(Objects::nonNull)
-                .sorted(subjectProgressComparator())
+                .flatMap(Collection::stream)
+                .filter(Objects::nonNull)
+                .map(StudyPackProgressView.class::cast)
                 .toList();
+        Map<UUID, String> noteSubjects;
+        Map<UUID, List<ConceptHealthEntity>> healthByStudyPackId;
+        try {
+            noteSubjects = fetchNoteSubjects(allStudyPacks);
+            healthByStudyPackId = fetchHealthByStudyPackId(allStudyPacks, userId);
+        } catch (RuntimeException exception) {
+            studyPacksByGroupId.keySet().forEach(groupId ->
+                    resultsByGroupId.put(groupId, new SubjectProgressBatchResult(List.of(), exception))
+            );
+            return resultsByGroupId;
+        }
+
+        for (Map.Entry<UUID, ? extends Collection<? extends StudyPackProgressView>> entry : studyPacksByGroupId.entrySet()) {
+            try {
+                List<StudyPackProgressView> studyPacks = entry.getValue() == null
+                        ? List.of()
+                        : entry.getValue().stream()
+                                .filter(Objects::nonNull)
+                                .map(StudyPackProgressView.class::cast)
+                                .toList();
+                List<SubjectProgressEntry> subjects = groupQualifyingPacksBySubject(studyPacks, noteSubjects)
+                        .entrySet()
+                        .stream()
+                        .map(subjectEntry -> toSubjectProgress(
+                                subjectEntry.getKey(),
+                                subjectEntry.getValue(),
+                                collectHealthForStudyPacks(subjectEntry.getValue(), healthByStudyPackId),
+                                now
+                        ))
+                        .filter(Objects::nonNull)
+                        .sorted(subjectProgressComparator())
+                        .toList();
+                resultsByGroupId.put(entry.getKey(), new SubjectProgressBatchResult(subjects, null));
+            } catch (RuntimeException exception) {
+                resultsByGroupId.put(entry.getKey(), new SubjectProgressBatchResult(List.of(), exception));
+            }
+        }
+        return resultsByGroupId;
     }
 
     public Map<UUID, ConceptCounts> getConceptCountsPerStudyPack(
@@ -143,6 +207,39 @@ public class ProgressReportService {
         return countsByStudyPackId;
     }
 
+    private Map<UUID, List<ConceptHealthEntity>> fetchHealthByStudyPackId(
+            List<? extends StudyPackProgressView> studyPacks,
+            UUID userId
+    ) {
+        List<UUID> studyPackIds = studyPacks.stream()
+                .map(StudyPackProgressView::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (studyPackIds.isEmpty()) {
+            return Map.of();
+        }
+        return conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, studyPackIds)
+                .stream()
+                .filter(health -> health.getStudyPackId() != null)
+                .collect(Collectors.groupingBy(ConceptHealthEntity::getStudyPackId));
+    }
+
+    private List<ConceptHealthEntity> collectHealthForStudyPacks(
+            List<? extends StudyPackProgressView> studyPacks,
+            Map<UUID, List<ConceptHealthEntity>> healthByStudyPackId
+    ) {
+        if (studyPacks.isEmpty() || healthByStudyPackId.isEmpty()) {
+            return List.of();
+        }
+        return studyPacks.stream()
+                .map(StudyPackProgressView::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .flatMap(studyPackId -> healthByStudyPackId.getOrDefault(studyPackId, List.of()).stream())
+                .toList();
+    }
+
     private Map<String, List<StudyPackProgressView>> groupQualifyingPacksBySubject(UUID userId) {
         return groupQualifyingPacksBySubject(studyPackRepository.findProgressViewsByOwnerUserId(userId));
     }
@@ -151,6 +248,13 @@ public class ProgressReportService {
             List<? extends StudyPackProgressView> studyPacks
     ) {
         Map<UUID, String> noteSubjects = fetchNoteSubjects(studyPacks);
+        return groupQualifyingPacksBySubject(studyPacks, noteSubjects);
+    }
+
+    private Map<String, List<StudyPackProgressView>> groupQualifyingPacksBySubject(
+            List<? extends StudyPackProgressView> studyPacks,
+            Map<UUID, String> noteSubjects
+    ) {
         Map<String, List<StudyPackProgressView>> packsBySubject = new LinkedHashMap<>();
         for (StudyPackProgressView studyPack : studyPacks) {
             if (!hasKeyConcepts(studyPack)) {
@@ -198,6 +302,44 @@ public class ProgressReportService {
             dueConcepts,
             notPracticedConcepts,
             masteryPercentage(masteredConcepts, totalConcepts)
+        );
+    }
+
+    private SubjectProgressEntry toSubjectProgress(
+            String subject,
+            List<StudyPackProgressView> studyPacks,
+            List<ConceptHealthEntity> healthRecords,
+            OffsetDateTime now
+    ) {
+        Map<String, String> conceptNamesByKey = collectConceptNamesByKey(studyPacks);
+        int totalConcepts = conceptNamesByKey.size();
+        if (totalConcepts == 0) {
+            return null;
+        }
+
+        Map<String, List<OffsetDateTime>> reviewTimesByConceptKey = collectReviewTimesByConceptKey(healthRecords);
+        int masteredConcepts = 0;
+        int dueConcepts = 0;
+        int notPracticedConcepts = 0;
+
+        for (String conceptKey : conceptNamesByKey.keySet()) {
+            ConceptProgressState state = resolveConceptState(reviewTimesByConceptKey.get(conceptKey), now);
+            if (state == ConceptProgressState.MASTERED) {
+                masteredConcepts++;
+            } else if (state == ConceptProgressState.DUE) {
+                dueConcepts++;
+            } else {
+                notPracticedConcepts++;
+            }
+        }
+
+        return new SubjectProgressEntry(
+                subject,
+                totalConcepts,
+                masteredConcepts,
+                dueConcepts,
+                notPracticedConcepts,
+                masteryPercentage(masteredConcepts, totalConcepts)
         );
     }
 
@@ -548,6 +690,12 @@ public class ProgressReportService {
             int masteredConcepts,
             int dueConcepts,
             int notPracticedConcepts
+    ) {
+    }
+
+    public record SubjectProgressBatchResult(
+            List<SubjectProgressEntry> subjects,
+            RuntimeException failure
     ) {
     }
 
