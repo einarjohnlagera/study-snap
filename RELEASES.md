@@ -2,7 +2,7 @@
 
 ## v0.39.1 - Study Plan Builder Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix subject-metadata gaps and improve cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage rather than a planned feature push.
 
