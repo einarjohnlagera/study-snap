@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { QuizIdentificationInput } from "@/components/study-pack/quiz-identification-input";
+import { QuizEnumerationInput } from "@/components/study-pack/quiz-enumeration-input";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -19,6 +21,8 @@ import {
 import {
   getDisplayedQuizChoices,
   isQuizSelectionCorrect,
+  resolveEnumerationAcceptedAnswerGroups,
+  resolveIdentificationAcceptedAnswers,
   resolveMultiSelectCorrectIndices,
   resolveQuizCorrectIndex,
   resolveQuizItemGroupAt,
@@ -31,6 +35,8 @@ type QuizAnswerReviewProps = {
   quiz: QuizItem[];
   selectedChoices: Record<number, number>;
   selectedMultiChoices?: Record<number, number[]>;
+  selectedIdentificationAnswers?: Record<number, string>;
+  selectedEnumerationAnswers?: Record<number, string[]>;
   initialMode?: ReviewMode;
   title?: string;
   className?: string;
@@ -43,6 +49,8 @@ export function QuizAnswerReview({
   quiz,
   selectedChoices,
   selectedMultiChoices = {},
+  selectedIdentificationAnswers = {},
+  selectedEnumerationAnswers = {},
   initialMode = "all",
   title = "Review Answers",
   className,
@@ -61,13 +69,23 @@ export function QuizAnswerReview({
       const displayedChoices = getDisplayedQuizChoices({ ...item, question: `${item.question}-${originalIndex}` });
       const selectedChoiceIndex = selectedChoices[originalIndex] ?? null;
       const selectedMultiChoiceIndices = selectedMultiChoices[originalIndex] ?? [];
+      const selectedIdentificationAnswer = selectedIdentificationAnswers[originalIndex] ?? "";
+      const selectedEnumerationAnswer = selectedEnumerationAnswers[originalIndex] ?? [];
       const correctIndex = resolveQuizCorrectIndex(item);
       const correctIndices = resolveMultiSelectCorrectIndices(item);
+      const acceptableAnswers = resolveIdentificationAcceptedAnswers(item);
+      const acceptableAnswerGroups = resolveEnumerationAcceptedAnswerGroups(item);
       const selectedChoice = displayedChoices.find((choice) => choice.canonicalIndex === selectedChoiceIndex) ?? null;
       const correctChoice = displayedChoices.find((choice) => choice.canonicalIndex === correctIndex) ?? null;
       const selectedMultiChoicesForSummary = displayedChoices.filter((choice) => selectedMultiChoiceIndices.includes(choice.canonicalIndex));
       const correctMultiChoicesForSummary = displayedChoices.filter((choice) => correctIndices.includes(choice.canonicalIndex));
-      const selectedForScoring = item.questionFormat === "MULTI_SELECT" ? selectedMultiChoiceIndices : selectedChoiceIndex;
+      const selectedForScoring = item.questionFormat === "IDENTIFICATION"
+        ? selectedIdentificationAnswer
+        : item.questionFormat === "ENUMERATION"
+          ? selectedEnumerationAnswer
+          : item.questionFormat === "MULTI_SELECT"
+            ? selectedMultiChoiceIndices
+            : selectedChoiceIndex;
       return {
         item,
         originalIndex,
@@ -75,8 +93,12 @@ export function QuizAnswerReview({
         displayedChoices,
         selectedChoiceIndex,
         selectedMultiChoiceIndices,
+        selectedIdentificationAnswer,
+        selectedEnumerationAnswer,
         correctIndex,
         correctIndices,
+        acceptableAnswers,
+        acceptableAnswerGroups,
         selectedChoice,
         correctChoice,
         selectedMultiChoicesForSummary,
@@ -84,16 +106,19 @@ export function QuizAnswerReview({
         isCorrect: isQuizSelectionCorrect(item, selectedForScoring),
       };
     });
-  }, [quiz, selectedChoices, selectedMultiChoices]);
+  }, [quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers]);
 
-  const score = useMemo(() => computeScore(quiz, selectedChoices, selectedMultiChoices), [quiz, selectedChoices, selectedMultiChoices]);
+  const score = useMemo(
+    () => computeScore(quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers),
+    [quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers],
+  );
   const performanceLevel = useMemo(
     () => mapPerformanceLevel(score.scorePercentage),
     [score.scorePercentage],
   );
   const conceptBreakdown = useMemo(
-    () => computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices),
-    [quiz, selectedChoices, selectedMultiChoices],
+    () => computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers),
+    [quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers],
   );
   const weakConcepts = useMemo(
     () => computeWeakConcepts(conceptBreakdown),
@@ -133,14 +158,30 @@ export function QuizAnswerReview({
 
   const currentExplanationExpanded = currentItem ? isExplanationExpanded(currentItem.originalIndex) : false;
   const isCurrentMultiSelect = currentItem?.item.questionFormat === "MULTI_SELECT";
-  const selectedAnswerSummary = isCurrentMultiSelect
+  const isCurrentIdentification = currentItem?.item.questionFormat === "IDENTIFICATION";
+  const isCurrentEnumeration = currentItem?.item.questionFormat === "ENUMERATION";
+  const selectedAnswerSummary = isCurrentIdentification
+    ? currentItem?.selectedIdentificationAnswer.trim() || "No answer entered"
+    : isCurrentEnumeration
+    ? currentItem?.selectedEnumerationAnswer.some((value) => value.trim().length > 0)
+      ? currentItem.selectedEnumerationAnswer.filter((value) => value.trim().length > 0).join("; ")
+      : "No answer entered"
+    : isCurrentMultiSelect
     ? currentItem?.selectedMultiChoicesForSummary.length
       ? currentItem.selectedMultiChoicesForSummary.map((choice) => `${choice.label}. ${choice.text}`).join("; ")
       : "No answer selected"
     : currentItem?.selectedChoice
       ? `${currentItem.selectedChoice.label}. ${currentItem.selectedChoice.text}`
       : "No answer selected";
-  const correctAnswerSummary = isCurrentMultiSelect
+  const correctAnswerSummary = isCurrentIdentification
+    ? currentItem?.acceptableAnswers.length
+      ? currentItem.acceptableAnswers.join("; ")
+      : "Correct answer unavailable"
+    : isCurrentEnumeration
+    ? currentItem?.acceptableAnswerGroups.length
+      ? currentItem.acceptableAnswerGroups.map((group) => group.join(" / ")).join("; ")
+      : "Correct answer unavailable"
+    : isCurrentMultiSelect
     ? currentItem?.correctMultiChoicesForSummary.length
       ? currentItem.correctMultiChoicesForSummary.map((choice) => `${choice.label}. ${choice.text}`).join("; ")
       : "Answer unavailable"
@@ -148,7 +189,11 @@ export function QuizAnswerReview({
       ? `${currentItem.correctChoice.label}. ${currentItem.correctChoice.text}`
       : "Correct answer unavailable";
   const currentHasSelectedAnswer = currentItem
-    ? isCurrentMultiSelect
+    ? isCurrentIdentification
+      ? currentItem.selectedIdentificationAnswer.trim().length > 0
+      : isCurrentEnumeration
+      ? currentItem.selectedEnumerationAnswer.some((value) => value.trim().length > 0)
+      : isCurrentMultiSelect
       ? currentItem.selectedMultiChoiceIndices.length > 0
       : currentItem.selectedChoiceIndex !== null
     : false;
@@ -304,7 +349,21 @@ export function QuizAnswerReview({
             </div>
           </div>
 
-          {currentMatchingGroup ? (
+          {isCurrentIdentification && currentItem ? (
+            <QuizIdentificationInput
+              item={currentItem.item}
+              value={currentItem.selectedIdentificationAnswer}
+              revealAnswer
+              disabled
+            />
+          ) : isCurrentEnumeration && currentItem ? (
+            <QuizEnumerationInput
+              item={currentItem.item}
+              values={currentItem.selectedEnumerationAnswer}
+              revealAnswer
+              disabled
+            />
+          ) : currentMatchingGroup ? (
             <QuizMatchingGroup
               items={currentMatchingGroup.items}
               groupStartIndex={currentMatchingGroup.startIndex}

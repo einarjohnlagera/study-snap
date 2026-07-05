@@ -754,6 +754,83 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
+  it.each(["STUDENT", "BOARD_EXAM", "PARENT", "PROFESSIONAL"] as const)(
+    "shows the review-surface entries on the Key Concepts tab for %s note detail",
+    async (profileType) => {
+      (getAuthUser as jest.Mock).mockReturnValue({
+        planType: profileType === "PROFESSIONAL" ? "PRO" : "FREE",
+        emailVerifiedAt: "2026-03-21T09:00:00Z",
+        profileType,
+      });
+      (getNote as jest.Mock).mockResolvedValue({
+        ...baseNote,
+        studyPackStatus: "STUDY_PACK_READY",
+        studyPackId: "sp-1",
+        summary: "Generated summary",
+        keyConcepts: ["Cells"],
+        quiz: [
+          {
+            question: "What is the nucleus?",
+            choices: ["Control center", "Energy source", "Cell wall", "Waste product"],
+            correctIndex: 0,
+            concept: "Cells",
+            explanation: "The nucleus controls cell activity.",
+          },
+        ],
+        quickReviewAvailable: true,
+        challengeQuizAvailable: true,
+        adaptivePracticeAvailable: false,
+      });
+
+      const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+
+      fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+      searchParamValues = { tab: "key-concepts" };
+      searchParamsMock = createSearchParamsMock();
+      rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      const flashcardsButton = await screen.findByRole("button", { name: "Flashcards" });
+      const memorizationButton = await screen.findByRole("button", { name: "Memorization" });
+      expect(flashcardsButton).toBeInTheDocument();
+      expect(memorizationButton).toBeInTheDocument();
+
+      fireEvent.click(flashcardsButton);
+
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-1/flashcards");
+      fireEvent.click(memorizationButton);
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-1/memorization");
+    },
+  );
+
+  it("hides review-surface entries on the Key Concepts tab in teacher mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Cells")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Memorization" })).not.toBeInTheDocument();
+  });
+
   it("renders teacher note detail with Study Pack tabs visible and student-only sections hidden", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
@@ -780,6 +857,8 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Performance Overview")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent Sessions")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Flashcards" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Memorization" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Challenge Quiz" })).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Quiz question count" })).not.toBeInTheDocument();
 
@@ -841,7 +920,7 @@ describe("PrivateNoteDetailPageClient", () => {
     });
     (getConceptHealth as jest.Mock).mockResolvedValue([
       {
-        concept: "Cells",
+        concept: "  cells  ",
         readinessStatus: "DUE",
         lastCorrectAt: "2026-03-20T10:00:00Z",
         lastIncorrectAt: "2026-03-21T10:00:00Z",

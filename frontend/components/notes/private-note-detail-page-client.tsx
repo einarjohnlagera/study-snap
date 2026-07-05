@@ -25,6 +25,7 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { normalizeConceptKey } from "@/lib/concepts";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   formatStudyPackResetDate,
@@ -183,10 +184,6 @@ function buildShareUrl(subject: string | null, title: string | null) {
     return path;
   }
   return new URL(path, globalThis.location.origin).toString();
-}
-
-function normalizeConceptKey(concept: string): string {
-  return concept.trim().toLowerCase();
 }
 
 function resolveConceptReadinessStatus(health: ConceptHealthEntry | undefined): ConceptReadinessStatus {
@@ -2100,7 +2097,29 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
             {activeStudyPackTab === "key-concepts" ? (
               <Card className="space-y-3 p-4 sm:p-6">
-                <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+                  {!isTeacherMode && !isGeneratingStudyPack && !hasGenerationFailed && !isDraft && note.keyConcepts.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ResponsiveActionButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/notes/${routeId}/flashcards`)}
+                        action="flashcards"
+                        label="Flashcards"
+                        showTextOnMobile
+                      />
+                      <ResponsiveActionButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(`/notes/${routeId}/memorization`)}
+                        action="memorization"
+                        label="Memorization"
+                        showTextOnMobile
+                      />
+                    </div>
+                  ) : null}
+                </div>
                 {isGeneratingStudyPack ? (
                   <p className="text-sm text-foreground/75">Key concepts are being generated from your note.</p>
                 ) : hasGenerationFailed ? (

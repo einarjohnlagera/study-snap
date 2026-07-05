@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.38.0 - Read-Path Optimization Pass` is the latest released version (on `releases/v0.38.0`).
+`v0.39.0 - Flexible Review Methods` is the latest released version (on `releases/v0.39.0`).
+
+`v0.38.0 - Read-Path Optimization Pass` is the previous released version (on `releases/v0.38.0`).
 
 `v0.37.4 - Idle GC & Metaspace Ceiling Hotfix` is the previous released version (on `releases/v0.37.4`).
 
@@ -15,8 +17,6 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.37.2 - Plan Data Integrity Hotfix` is the previous released version (on `releases/v0.37.2`).
 
 `v0.37.1 - Native Memory Hotfix` is the previous released version (on `releases/v0.37.1`).
-
-`v0.39.0 - Flexible Review Methods` is scoped as a candidate (see below) but not yet kicked off.
 
 `v0.37.0 - Readiness-First Plans & Mastery Integrity` is the previous released version (on `releases/v0.37.0`).
 
@@ -256,9 +256,9 @@ Quick Review session disposability is resolved above (hide from session-history 
 
 ---
 
-## v0.39.0 (candidate) - Flexible Review Methods
+## v0.39.0 - Flexible Review Methods (released)
 
-Not kicked off — **do not kick off until v0.37.0 is signed off** (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
+Base branch: `releases/v0.39.0`. Kicked off after v0.38.0 signoff (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
 
 Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while keeping the review-vs-assessment mastery boundary this whole effort is built around.
 
@@ -289,6 +289,27 @@ Chains A and B don't depend on each other — sequencing between them (e.g. Flas
 - **`EXAM_MODES.md` update required before any of this reaches a Codex prompt** — add Identification/Enumeration as new question formats on the existing engine and Flashcards/Memorization as new non-scored surfaces, explicitly *not* a 6th/7th mode, per the doc's own "update this document before adding a sixth mode" rule.
 
 Anti-drift: Identification/Enumeration reuse the existing quiz-session engine and `ConceptHealth` write path (parameterized like every other assessment mode) — no new session discriminator. Flashcards/Memorization are new surfaces outside the quiz-session engine entirely — no attempt to force them through `QuickReviewSessionEntity`. Memorization's SRS state is a new, separate entity — never a `ConceptHealth` field, never counted toward mastery or `Overall Readiness`.
+
+---
+
+## v0.39.1 (candidate) - Study Plan Builder Polish
+
+Not kicked off — do not kick off until v0.39.0 (Flexible Review Methods) is signed off. Surfaced while using the Study Plan Builder in practice; two sub-themes, both Study Plan/note-collection polish rather than new architecture.
+
+### Theme A — Subject metadata completeness
+
+Today, metadata set at the Goal level doesn't reliably reach its child Subject plans.
+
+- **Description field on Add Subject Plan.** The Builder's `AddSubjectModal` only collects a title; `createCollection` already accepts `description` (the top-level "New Review Set" modal already uses it). Add the same textarea here and thread it through `handleAddSubject(title, description)`. Frontend-only, no backend change — separate component from `CreateCollectionModal` (the two diverge in behavior: optimistic re-parenting vs. navigate-after-create), so add the field directly rather than force a shared component.
+- **Course/program does not cascade from parent to children.** Confirmed bug: `NoteCollectionService.publishChildCollections` cascades `visibility = PUBLIC` to children on publish but never touches `courseProgram`, and `updateMetadata` only ever updates the single collection it's called on. A dev-DB audit found zero existing parent/child pairs with intentionally-different `courseProgram` values, so a cascade is safe in practice — but given this codebase already shipped a real hotfix for `updateMetadata` silently clobbering fields (v0.37.2), implement this as "cascade to children only when their `courseProgram` is currently blank," not a blind overwrite. Belongs in `updateMetadata` (covers editing course/program after publish too, not just at the initial publish moment). **This is a correctness bug on already-published content** (blank child `courseProgram` breaks the course/program-scoped public discovery from v0.33.0) — candidate for a standalone hotfix ahead of this batch rather than waiting for v0.39.1, decide at kickoff.
+
+### Theme B — Adoption model
+
+- **Cold-start adoption discoverability (reframed from "should we auto-generate review sets").** Raised alongside a comparison to competitor apps that auto-generate review decks. Auto-generation was rejected: NoteLib's differentiator is that review material comes from the user's *own* notes, not pre-made content — adopting a curated plan is correctly positioned as the **cold-start on-ramp** for zero-notes users, not the core loop, and shouldn't be second-guessed on that basis. The sharper question worth scoping here is whether adoption is **discoverable and frictionless enough** for that cold-start moment — a UX/discovery audit, not a new generation feature.
+
+### Parked (not scoped for this candidate)
+
+- **Adopting a single child Subject plan standalone.** Backend technically permits it today (`adopt()` has no parent-child guard), so this is a pure UX-surfacing question, not a backend change. Not building it yet: the value it would add (grabbing one Subject without its parent Goal) is already served by copying individual public notes, and there's an unresolved interaction — `adopt()` never sets `parentCollectionId`, so a standalone-adopted child lands as a top-level orphan copy; if the user later adopts the parent Goal, `adoptGoal`'s idempotency check finds that existing copy by `sourcePlanId` and **silently re-parents it** into the newly-adopted Goal (no duplicate created, but a surprising structural change with no user confirmation). Revisit only if a real discovery need shows up — resolve the re-parenting UX before shipping.
 
 ---
 

@@ -150,7 +150,8 @@ class OpenAiLlmStudyPackServiceTest {
         JsonNode schema = invokeBuildGeneratedQuizSchema(
                 2,
                 true,
-                List.of("ATP synthesis", "Electron transport chain")
+                List.of("ATP synthesis", "Electron transport chain"),
+                false
         );
 
         JsonNode item = schema.path("properties").path("questions").path("items");
@@ -162,12 +163,50 @@ class OpenAiLlmStudyPackServiceTest {
 
     @Test
     void buildGeneratedQuizSchema_omitsKeyConceptWhenEnumMissing() throws Exception {
-        JsonNode schema = invokeBuildGeneratedQuizSchema(2, true, List.of());
+        JsonNode schema = invokeBuildGeneratedQuizSchema(2, true, List.of(), false);
 
         JsonNode item = schema.path("properties").path("questions").path("items");
         assertThat(jsonArrayValues(item.path("required")))
                 .doesNotContain("keyConcept");
         assertThat(item.path("properties").has("keyConcept")).isFalse();
+    }
+
+    @Test
+    void buildGeneratedQuizSchema_allowsIdentificationOnlyWhenRequested() throws Exception {
+        JsonNode schema = invokeBuildGeneratedQuizSchema(2, true, List.of(), true);
+
+        JsonNode item = schema.path("properties").path("questions").path("items");
+        JsonNode itemProps = item.path("properties");
+        assertThat(jsonArrayValues(item.path("required")))
+                .contains("acceptableAnswers");
+        assertThat(jsonArrayValues(itemProps.path("questionFormat").path("enum")))
+                .contains("IDENTIFICATION");
+        assertThat(jsonArrayValues(itemProps.path("answer").path("type")))
+                .containsExactly("string", "null");
+        assertThat(itemProps.path("choices").path("minItems").asInt()).isZero();
+        assertThat(jsonArrayValues(itemProps.path("acceptableAnswers").path("type")))
+                .containsExactly("array", "null");
+    }
+
+    @Test
+    void buildGeneratedQuizSchema_allowsEnumerationOnlyWhenRequested() throws Exception {
+        JsonNode schema = invokeBuildGeneratedQuizSchema(2, true, List.of(), false, true);
+
+        JsonNode item = schema.path("properties").path("questions").path("items");
+        JsonNode itemProps = item.path("properties");
+        assertThat(jsonArrayValues(item.path("required")))
+                .contains("acceptableAnswerGroups");
+        assertThat(jsonArrayValues(itemProps.path("questionFormat").path("enum")))
+                .contains("ENUMERATION");
+        assertThat(jsonArrayValues(itemProps.path("answer").path("type")))
+                .containsExactly("string", "null");
+        assertThat(itemProps.path("choices").path("minItems").asInt()).isZero();
+        assertThat(jsonArrayValues(itemProps.path("acceptableAnswerGroups").path("type")))
+                .containsExactly("array", "null");
+        assertThat(itemProps.path("acceptableAnswerGroups").path("items").path("type").asText())
+                .isEqualTo("array");
+        assertThat(itemProps.path("acceptableAnswerGroups").path("items").path("items").path("type").asText())
+                .isEqualTo("string");
     }
 
     @Test
@@ -228,16 +267,29 @@ class OpenAiLlmStudyPackServiceTest {
     private JsonNode invokeBuildGeneratedQuizSchema(
             int questionCount,
             boolean allowTrueFalse,
-            List<String> keyConceptEnum
+            List<String> keyConceptEnum,
+            boolean allowIdentification
+    ) throws Exception {
+        return invokeBuildGeneratedQuizSchema(questionCount, allowTrueFalse, keyConceptEnum, allowIdentification, false);
+    }
+
+    private JsonNode invokeBuildGeneratedQuizSchema(
+            int questionCount,
+            boolean allowTrueFalse,
+            List<String> keyConceptEnum,
+            boolean allowIdentification,
+            boolean allowEnumeration
     ) throws Exception {
         Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
                 "buildGeneratedQuizSchema",
                 int.class,
                 boolean.class,
-                List.class
+                List.class,
+                boolean.class,
+                boolean.class
         );
         method.setAccessible(true);
-        return (JsonNode) method.invoke(service, questionCount, allowTrueFalse, keyConceptEnum);
+        return (JsonNode) method.invoke(service, questionCount, allowTrueFalse, keyConceptEnum, allowIdentification, allowEnumeration);
     }
 
     private List<String> jsonArrayValues(JsonNode node) {

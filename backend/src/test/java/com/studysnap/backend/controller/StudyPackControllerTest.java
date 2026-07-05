@@ -2,16 +2,20 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.MemorizationCardResponse;
+import com.studysnap.backend.dto.MemorizationGradeRequest;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.dto.TodayFocusType;
+import com.studysnap.backend.entity.MemorizationGrade;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ConceptHealthService;
+import com.studysnap.backend.service.MemorizationCardService;
 import com.studysnap.backend.service.PostSessionNextStepService;
 import com.studysnap.backend.service.StudyPackService;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,6 +50,8 @@ class StudyPackControllerTest {
     @Mock
     private ConceptHealthService conceptHealthService;
     @Mock
+    private MemorizationCardService memorizationCardService;
+    @Mock
     private PostSessionNextStepService postSessionNextStepService;
 
     private StudyPackController studyPackController;
@@ -54,6 +62,7 @@ class StudyPackControllerTest {
                 authService,
                 studyPackService,
                 conceptHealthService,
+                memorizationCardService,
                 postSessionNextStepService
         );
     }
@@ -205,5 +214,62 @@ class StudyPackControllerTest {
                 .isInstanceOf(StudyPackNotFoundException.class);
 
         verify(postSessionNextStepService, never()).getNextStep(any(UUID.class), any(UUID.class));
+    }
+
+    @Test
+    void getMemorizationCards_delegatesToServiceForAuthenticatedOwner() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        String studyPackId = UUID.randomUUID().toString();
+        List<MemorizationCardResponse> expected = List.of(new MemorizationCardResponse(
+                "cell cycle",
+                1,
+                BigDecimal.valueOf(2.50),
+                1,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                MemorizationGrade.GOOD
+        ));
+        when(memorizationCardService.listForOwnedStudyPack(userId, studyPackId)).thenReturn(expected);
+
+        List<MemorizationCardResponse> response = studyPackController.getMemorizationCards(studyPackId, user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(memorizationCardService).listForOwnedStudyPack(userId, studyPackId);
+    }
+
+    @Test
+    void gradeMemorizationCard_delegatesToServiceWithRequestFields() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        String studyPackId = UUID.randomUUID().toString();
+        MemorizationGradeRequest request = new MemorizationGradeRequest("Cell Cycle", MemorizationGrade.HARD);
+        MemorizationCardResponse expected = new MemorizationCardResponse(
+                "cell cycle",
+                2,
+                BigDecimal.valueOf(2.35),
+                2,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                MemorizationGrade.HARD
+        );
+        when(memorizationCardService.recordGradeForOwnedStudyPack(
+                eq(userId),
+                eq(studyPackId),
+                eq(request.concept()),
+                eq(request.grade()),
+                any(OffsetDateTime.class)
+        )).thenReturn(expected);
+
+        MemorizationCardResponse response = studyPackController.gradeMemorizationCard(studyPackId, request, user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(memorizationCardService).recordGradeForOwnedStudyPack(
+                eq(userId),
+                eq(studyPackId),
+                eq(request.concept()),
+                eq(request.grade()),
+                any(OffsetDateTime.class)
+        );
     }
 }

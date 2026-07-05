@@ -26,6 +26,8 @@ public final class QuizItem {
     private final String workingSolution;
     private final String questionGroup;
     private final String keyConcept;
+    private final List<String> acceptableAnswers;
+    private final List<List<String>> acceptableAnswerGroups;
 
     public QuizItem(
             String question,
@@ -125,6 +127,8 @@ public final class QuizItem {
                 workingSolution,
                 correctIndices,
                 questionGroup,
+                null,
+                null,
                 null
         );
     }
@@ -141,7 +145,9 @@ public final class QuizItem {
             String workingSolution,
             List<Integer> correctIndices,
             String questionGroup,
-            String keyConcept
+            String keyConcept,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups
     ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
@@ -154,6 +160,8 @@ public final class QuizItem {
         this.workingSolution = workingSolution;
         this.questionGroup = normalizeQuestionGroup(questionGroup);
         this.keyConcept = keyConcept;
+        this.acceptableAnswers = sanitizeAcceptableAnswers(acceptableAnswers);
+        this.acceptableAnswerGroups = sanitizeAcceptableAnswerGroups(acceptableAnswerGroups);
     }
 
     @JsonCreator
@@ -171,7 +179,9 @@ public final class QuizItem {
             @JsonProperty("workingSolution") String workingSolution,
             @JsonProperty("correctIndices") List<Integer> correctIndices,
             @JsonProperty("questionGroup") String questionGroup,
-            @JsonProperty("keyConcept") String keyConcept
+            @JsonProperty("keyConcept") String keyConcept,
+            @JsonProperty("acceptableAnswers") List<String> acceptableAnswers,
+            @JsonProperty("acceptableAnswerGroups") List<List<String>> acceptableAnswerGroups
     ) {
         this(
                 question,
@@ -185,7 +195,9 @@ public final class QuizItem {
                 workingSolution,
                 correctIndices,
                 questionGroup,
-                keyConcept
+                keyConcept,
+                acceptableAnswers,
+                acceptableAnswerGroups
         );
     }
 
@@ -239,6 +251,14 @@ public final class QuizItem {
 
     public String keyConcept() {
         return keyConcept;
+    }
+
+    public List<String> acceptableAnswers() {
+        return acceptableAnswers;
+    }
+
+    public List<List<String>> acceptableAnswerGroups() {
+        return acceptableAnswerGroups;
     }
 
     private static Integer resolveCorrectIndex(
@@ -300,6 +320,28 @@ public final class QuizItem {
         return questionGroup.trim();
     }
 
+    private static List<String> sanitizeAcceptableAnswers(List<String> acceptableAnswers) {
+        if (acceptableAnswers == null || acceptableAnswers.isEmpty()) {
+            return List.of();
+        }
+        return acceptableAnswers.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private static List<List<String>> sanitizeAcceptableAnswerGroups(List<List<String>> acceptableAnswerGroups) {
+        if (acceptableAnswerGroups == null || acceptableAnswerGroups.isEmpty()) {
+            return List.of();
+        }
+        return acceptableAnswerGroups.stream()
+                .filter(Objects::nonNull)
+                .map(QuizItem::sanitizeAcceptableAnswers)
+                .toList();
+    }
+
     private static Integer answerLetterIndex(String answer, int choiceCount) {
         if (answer == null || choiceCount <= 0) {
             return null;
@@ -343,12 +385,14 @@ public final class QuizItem {
                 && Objects.equals(questionType, quizItem.questionType)
                 && Objects.equals(workingSolution, quizItem.workingSolution)
                 && Objects.equals(questionGroup, quizItem.questionGroup)
-                && Objects.equals(keyConcept, quizItem.keyConcept);
+                && Objects.equals(keyConcept, quizItem.keyConcept)
+                && Objects.equals(acceptableAnswers, quizItem.acceptableAnswers)
+                && Objects.equals(acceptableAnswerGroups, quizItem.acceptableAnswerGroups);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept);
+        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups);
     }
 
     @Override
@@ -365,6 +409,8 @@ public final class QuizItem {
                 + ", workingSolution='" + workingSolution + '\''
                 + ", questionGroup='" + questionGroup + '\''
                 + ", keyConcept='" + keyConcept + '\''
+                + ", acceptableAnswers=" + acceptableAnswers
+                + ", acceptableAnswerGroups=" + acceptableAnswerGroups
                 + '}';
     }
 }

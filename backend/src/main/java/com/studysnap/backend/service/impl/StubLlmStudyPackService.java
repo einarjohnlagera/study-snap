@@ -179,6 +179,12 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         return IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = concepts.get(index % concepts.size());
+                    if (index == 0) {
+                        return buildStubIdentificationItem(concept);
+                    }
+                    if (index == 1 && normalizedCount > 1) {
+                        return buildStubEnumerationItem(concept);
+                    }
                     String correctAnswer = concept + " applied understanding";
                     return new QuizItem(
                             "In a " + difficulty + " scenario, what best represents " + concept + "?",
@@ -194,6 +200,47 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                     );
                 })
                 .toList();
+    }
+
+    private QuizItem buildStubIdentificationItem(String concept) {
+        return new QuizItem(
+                "Identify the term most closely associated with " + concept + ".",
+                List.of(),
+                null,
+                concept,
+                "This term names the " + concept + " concept from your notes.",
+                null,
+                "IDENTIFICATION",
+                null,
+                null,
+                null,
+                null,
+                concept,
+                List.of(concept),
+                null
+        );
+    }
+
+    private QuizItem buildStubEnumerationItem(String concept) {
+        return new QuizItem(
+                "Name the two key aspects of " + concept + ".",
+                List.of(),
+                null,
+                concept,
+                "These are the two key aspects of " + concept + " covered in your notes.",
+                null,
+                "ENUMERATION",
+                null,
+                null,
+                null,
+                null,
+                concept,
+                null,
+                List.of(
+                        List.of(concept + " aspect one"),
+                        List.of(concept + " aspect two")
+                )
+        );
     }
 
     @Override

@@ -75,6 +75,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String MCQ_FORMAT = "MCQ";
     private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
     private static final String MATCHING_FORMAT = "MATCHING";
+    private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
+    private static final String ENUMERATION_FORMAT = "ENUMERATION";
+    private static final String CHALLENGE_QUIZ_SCHEMA_NAME = "note_lib_challenge_quiz";
     private static final String TRUE_FALSE_GUIDANCE = """
             Mix in True/False questions where appropriate. Use TRUE_FALSE ONLY for a single declarative statement that the learner judges true or false (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, best-answer judgment, or choosing among statement combinations.
 
@@ -400,7 +403,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.questionType(),
                     item.workingSolution(),
                     item.correctIndices(),
-                    item.questionGroup()
+                    item.questionGroup(),
+                    null,
+                    item.acceptableAnswers(),
+                    item.acceptableAnswerGroups()
             ));
         }
         return normalizeMatchingGroups(quizItems, "study_pack_quiz");
@@ -509,7 +515,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 item.workingSolution(),
                 item.correctIndices(),
                 questionGroup,
-                item.keyConcept()
+                item.keyConcept(),
+                item.acceptableAnswers(),
+                item.acceptableAnswerGroups()
         );
     }
 
@@ -778,7 +786,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private JsonNode buildGeneratedQuizSchema(
             int questionCount,
             boolean allowTrueFalse,
-            List<String> keyConceptEnum
+            List<String> keyConceptEnum,
+            boolean allowIdentification,
+            boolean allowEnumeration
     ) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "object");
@@ -806,6 +816,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (!normalizedKeyConceptEnum.isEmpty()) {
             required.add("keyConcept");
         }
+        if (allowIdentification) {
+            required.add("acceptableAnswers");
+        }
+        if (allowEnumeration) {
+            required.add("acceptableAnswerGroups");
+        }
         if (allowTrueFalse) {
             required.add("questionFormat");
             required.add("questionGroup");
@@ -815,12 +831,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ObjectNode itemProps = item.putObject("properties");
         itemProps.putObject("question").put("type", "string");
         ObjectNode answer = itemProps.putObject("answer");
-        answer.put("type", "string");
-        ArrayNode answerEnum = answer.putArray("enum");
-        answerEnum.add("A");
-        answerEnum.add("B");
-        answerEnum.add("C");
-        answerEnum.add("D");
+        if (allowIdentification || allowEnumeration) {
+            ArrayNode answerTypes = answer.putArray("type");
+            answerTypes.add("string");
+            answerTypes.add("null");
+        } else {
+            answer.put("type", "string");
+            ArrayNode answerEnum = answer.putArray("enum");
+            answerEnum.add("A");
+            answerEnum.add("B");
+            answerEnum.add("C");
+            answerEnum.add("D");
+        }
         itemProps.putObject("explanation").put("type", "string").put("minLength", 1);
         itemProps.putObject("concept").put("type", "string").put("minLength", 1);
         if (!normalizedKeyConceptEnum.isEmpty()) {
@@ -839,6 +861,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             questionFormatEnum.add("TRUE_FALSE");
             questionFormatEnum.add(MULTI_SELECT_FORMAT);
             questionFormatEnum.add(MATCHING_FORMAT);
+            if (allowIdentification) {
+                questionFormatEnum.add(IDENTIFICATION_FORMAT);
+            }
+            if (allowEnumeration) {
+                questionFormatEnum.add(ENUMERATION_FORMAT);
+            }
             questionFormatEnum.addNull();
         }
         if (allowTrueFalse) {
@@ -868,10 +896,26 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode workingSolutionTypes = workingSolution.putArray("type");
         workingSolutionTypes.add("string");
         workingSolutionTypes.add("null");
+        if (allowIdentification) {
+            ObjectNode acceptableAnswers = itemProps.putObject("acceptableAnswers");
+            ArrayNode acceptableAnswersTypes = acceptableAnswers.putArray("type");
+            acceptableAnswersTypes.add("array");
+            acceptableAnswersTypes.add("null");
+            acceptableAnswers.putObject("items").put("type", "string");
+        }
+        if (allowEnumeration) {
+            ObjectNode acceptableAnswerGroups = itemProps.putObject("acceptableAnswerGroups");
+            ArrayNode acceptableAnswerGroupsTypes = acceptableAnswerGroups.putArray("type");
+            acceptableAnswerGroupsTypes.add("array");
+            acceptableAnswerGroupsTypes.add("null");
+            ObjectNode acceptableAnswerGroupItems = acceptableAnswerGroups.putObject("items");
+            acceptableAnswerGroupItems.put("type", "array");
+            acceptableAnswerGroupItems.putObject("items").put("type", "string");
+        }
 
         ObjectNode choices = itemProps.putObject("choices");
         choices.put("type", "array");
-        choices.put("minItems", allowTrueFalse ? 2 : 4);
+        choices.put("minItems", (allowIdentification || allowEnumeration) ? 0 : allowTrueFalse ? 2 : 4);
         choices.put("maxItems", 4);
         choices.putObject("items").put("type", "string");
 
@@ -1874,7 +1918,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 model,
                 inputMessages,
                 quizOperation(schemaName, operationLabel),
-                buildGeneratedQuizSchema(questionCount, allowTrueFalse, normalizedKeyConceptEnum),
+                buildGeneratedQuizSchema(
+                        questionCount,
+                        allowTrueFalse,
+                        normalizedKeyConceptEnum,
+                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName),
+                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName)
+                ),
                 PromptGeneratedQuiz.class
         );
         PromptGeneratedQuiz promptGeneratedQuiz = response.payload();
@@ -1887,14 +1937,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         int conceptIndex = 0;
         for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
             validateGeneratedQuizItem(item, operationLabel);
-            int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
+            boolean isFreeTextFormat = IDENTIFICATION_FORMAT.equals(item.questionFormat())
+                    || ENUMERATION_FORMAT.equals(item.questionFormat());
+            Integer answerIndex = isFreeTextFormat
+                    ? null
+                    : resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
             String conceptFallback = conceptFallbackPool.isEmpty()
                     ? null
                     : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
             conceptIndex += 1;
             quizItems.add(new QuizItem(
                     item.question().trim(),
-                    item.choices().stream().map(String::trim).toList(),
+                    item.choices() == null ? List.of() : item.choices().stream().map(String::trim).toList(),
                     MULTI_SELECT_FORMAT.equals(item.questionFormat()) ? null : answerIndex,
                     normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
                     normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again."),
@@ -1904,14 +1958,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.workingSolution(),
                     item.correctIndices(),
                     item.questionGroup(),
-                    normalizeKeyConceptOrNull(item.keyConcept(), normalizedKeyConceptEnum)
+                    normalizeKeyConceptOrNull(item.keyConcept(), normalizedKeyConceptEnum),
+                    item.acceptableAnswers(),
+                    item.acceptableAnswerGroups()
             ));
         }
         return normalizeMatchingGroups(quizItems, operationLabel);
     }
 
     private void validateGeneratedQuizItem(PromptGeneratedQuizItem item, String operationLabel) {
-        if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.answer())) {
+        if (StringNormalizationUtils.isBlank(item.question())) {
             throw invalidOutput(operationLabel + " returned an invalid question. Please try again.");
         }
         if (StringNormalizationUtils.isBlank(item.explanation())) {
@@ -1929,7 +1985,23 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (QuizValidationUtils.hasInvalidCorrectIndices(item.correctIndices(), item.choices(), item.questionFormat())) {
             throw invalidOutput(operationLabel + " returned invalid multi-select answers. Please try again.");
         }
-        resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
+        if (IDENTIFICATION_FORMAT.equals(item.questionFormat())) {
+            if (item.choices() == null || !item.choices().isEmpty()
+                    || item.acceptableAnswers() == null || item.acceptableAnswers().isEmpty()) {
+                throw invalidOutput(operationLabel + " returned an invalid identification question. Please try again.");
+            }
+        } else if (ENUMERATION_FORMAT.equals(item.questionFormat())) {
+            List<List<String>> groups = item.acceptableAnswerGroups();
+            if (item.choices() == null || !item.choices().isEmpty()
+                    || groups == null || groups.isEmpty()
+                    || groups.stream().anyMatch(group -> group == null || group.isEmpty())) {
+                throw invalidOutput(operationLabel + " returned an invalid enumeration question. Please try again.");
+            }
+        } else if (StringNormalizationUtils.isBlank(item.answer())) {
+            throw invalidOutput(operationLabel + " returned an invalid question. Please try again.");
+        } else {
+            resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
+        }
     }
 
     private <T> T retryOnceOnInvalidOutput(Supplier<T> operation) {
@@ -2202,7 +2274,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String questionType,
             String workingSolution,
             List<Integer> correctIndices,
-            String questionGroup
+            String questionGroup,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups
     ) {
     }
 
@@ -2222,7 +2296,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String workingSolution,
             List<Integer> correctIndices,
             String questionGroup,
-            String keyConcept
+            String keyConcept,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups
     ) {
     }
 

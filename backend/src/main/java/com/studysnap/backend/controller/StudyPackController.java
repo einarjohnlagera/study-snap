@@ -3,6 +3,8 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.MemorizationCardResponse;
+import com.studysnap.backend.dto.MemorizationGradeRequest;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
@@ -13,6 +15,7 @@ import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ConceptHealthService;
+import com.studysnap.backend.service.MemorizationCardService;
 import com.studysnap.backend.service.PostSessionNextStepService;
 import com.studysnap.backend.service.StudyPackService;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -46,6 +49,7 @@ public class StudyPackController {
 	private final AuthService authService;
 	private final StudyPackService studyPackService;
 	private final ConceptHealthService conceptHealthService;
+	private final MemorizationCardService memorizationCardService;
 	private final PostSessionNextStepService postSessionNextStepService;
 
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -97,6 +101,31 @@ public class StudyPackController {
 		return conceptHealthService.getConceptHealthForOwnedStudyPack(
 				userId,
 				id,
+				OffsetDateTime.now(ZoneOffset.UTC)
+		);
+	}
+
+	@GetMapping("/{id}/memorization")
+	public List<MemorizationCardResponse> getMemorizationCards(
+			@PathVariable String id,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		return memorizationCardService.listForOwnedStudyPack(userId, id);
+	}
+
+	@PostMapping("/{id}/memorization/grade")
+	public MemorizationCardResponse gradeMemorizationCard(
+			@PathVariable String id,
+			@Valid @RequestBody MemorizationGradeRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		return memorizationCardService.recordGradeForOwnedStudyPack(
+				userId,
+				id,
+				request.concept(),
+				request.grade(),
 				OffsetDateTime.now(ZoneOffset.UTC)
 		);
 	}

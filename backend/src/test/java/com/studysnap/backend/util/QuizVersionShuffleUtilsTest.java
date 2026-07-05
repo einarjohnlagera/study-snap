@@ -35,7 +35,9 @@ class QuizVersionShuffleUtilsTest {
                 null,
                 null,
                 null,
-                "Versioned key concept"
+                "Versioned key concept",
+                null,
+                null
         );
 
         QuizItem shuffled = QuizVersionShuffleUtils.shuffleQuestionsAndChoices(List.of(question), "C", "quiz-2").getFirst();

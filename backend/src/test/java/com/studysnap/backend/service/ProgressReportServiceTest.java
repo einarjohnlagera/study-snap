@@ -5,12 +5,15 @@ import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.ConceptHealthEntity;
+import com.studysnap.backend.entity.MemorizationCardEntity;
+import com.studysnap.backend.entity.MemorizationGrade;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.ConceptHealthRepository;
+import com.studysnap.backend.repository.MemorizationCardRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -275,6 +279,35 @@ class ProgressReportServiceTest {
         assertThat(projectionCounts).isEqualTo(fullEntityCounts);
         assertThat(projectionCounts).containsEntry(fullPack.getId(), new ProgressReportService.ConceptCounts(3, 1, 1, 1));
         verify(conceptHealthRepository, times(2)).findByUserIdAndStudyPackIdIn(userId, studyPackIds);
+    }
+
+    @Test
+    void buildSubjectProgressEntries_ignoresMemorizationCardsForReadinessFirewall() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPack("Biology", List.of("Cells", "DNA"));
+        MemorizationCardEntity memorizationCard = new MemorizationCardEntity();
+        memorizationCard.setId(UUID.randomUUID());
+        memorizationCard.setUserId(userId);
+        memorizationCard.setStudyPackId(studyPack.getId());
+        memorizationCard.setConcept("cells");
+        memorizationCard.setIntervalDays(30);
+        memorizationCard.setRepetitions(10);
+        memorizationCard.setDueAt(NOW.plusDays(30));
+        memorizationCard.setLastGrade(MemorizationGrade.EASY);
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId())))
+                .thenReturn(List.of(health(studyPack.getId(), "Cells", NOW.minusDays(1))));
+
+        List<SubjectProgressEntry> subjects = progressReportService.buildSubjectProgressEntries(
+                List.of(studyPack),
+                userId,
+                NOW
+        );
+
+        assertThat(memorizationCard.getIntervalDays()).isEqualTo(30);
+        assertThat(subjects).containsExactly(new SubjectProgressEntry("Biology", 2, 1, 0, 1, 50));
+        assertThat(Arrays.stream(ProgressReportService.class.getDeclaredFields()).map(java.lang.reflect.Field::getType))
+                .doesNotContain(MemorizationCardRepository.class);
+        verify(conceptHealthRepository).findByUserIdAndStudyPackIdIn(userId, List.of(studyPack.getId()));
     }
 
     @Test

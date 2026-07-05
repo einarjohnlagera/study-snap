@@ -17,17 +17,19 @@ export type { MePlanResponse } from "./me-plan";
 export type QuizItem = {
   question: string;
   choices: string[];
-  correctIndex: number;
+  correctIndex: number | null;
   correctIndices?: number[] | null;
   answerIndex?: number;
   correctAnswerIndex?: number;
-  answer?: string;
+  answer?: string | null;
   concept?: string;
   explanation: string;
-  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | "MATCHING" | null;
+  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | "MATCHING" | "IDENTIFICATION" | "ENUMERATION" | null;
   questionGroup?: string | null;
   questionType?: "CONCEPTUAL" | "COMPUTATIONAL" | null;
   workingSolution?: string | null;
+  acceptableAnswers?: string[] | null;
+  acceptableAnswerGroups?: string[][] | null;
 };
 
 export type GeneratedQuizResponse = {
@@ -88,6 +90,18 @@ export type StudyPackResponse = {
     ocrConfidence: number | null;
     latencyMs: number | null;
   };
+};
+
+export type MemorizationGrade = "AGAIN" | "HARD" | "GOOD" | "EASY";
+
+export type MemorizationCardResponse = {
+  concept: string;
+  intervalDays: number;
+  easeFactor: number;
+  repetitions: number;
+  dueAt: string;
+  lastReviewedAt: string | null;
+  lastGrade: MemorizationGrade | null;
 };
 
 export type NoteTextExtractionResponse = {
@@ -1082,6 +1096,8 @@ export type QuizSessionReviewResponse = {
   quiz: QuizItem[];
   selectedChoices: Record<string, number>;
   selectedMultiChoices?: Record<string, number[]>;
+  selectedIdentificationAnswers?: Record<string, string>;
+  selectedEnumerationAnswers?: Record<string, string[]>;
   createdAt: string;
   completedAt: string | null;
 };
@@ -2594,6 +2610,35 @@ export async function getConceptHealth(studyPackId: string): Promise<ConceptHeal
     true,
   );
   return parseApiResponse<ConceptHealthEntry[]>(response, "Could not load concept review signals.");
+}
+
+export async function getMemorizationCards(studyPackId: string): Promise<MemorizationCardResponse[]> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/memorization`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<MemorizationCardResponse[]>(response, "Could not load memorization schedule.");
+}
+
+export async function gradeMemorizationCard(
+  studyPackId: string,
+  concept: string,
+  grade: MemorizationGrade,
+): Promise<MemorizationCardResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/memorization/grade`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ concept, grade }),
+    },
+    true,
+  );
+  return parseApiResponse<MemorizationCardResponse>(response, "Could not save memorization grade.");
 }
 
 export async function getPostSessionNextStep(studyPackId: string): Promise<PostSessionNextStepResponse> {

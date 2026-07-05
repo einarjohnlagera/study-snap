@@ -1,11 +1,20 @@
 import {
   getDisplayedQuizChoices,
   groupQuizItems,
+  isEnumerationAnswerCorrect,
+  isIdentificationAnswerCorrect,
   isMultiSelectSelectionCorrect,
+  resolveEnumerationAcceptedAnswerGroups,
+  resolveIdentificationAcceptedAnswers,
+  resolveQuizCorrectAnswer,
   resolveQuizCorrectIndex,
   resolveMultiSelectCorrectIndices,
   sanitizeQuizChoiceText,
   serializeSelectedChoiceIndexRecord,
+  serializeSelectedEnumerationAnswersRecord,
+  serializeSelectedIdentificationAnswerRecord,
+  toSelectedEnumerationAnswersRecord,
+  toSelectedIdentificationAnswerRecord,
   toSelectedMultiChoiceIndicesRecord,
   toSelectedChoiceIndexRecord,
 } from "./quiz";
@@ -162,6 +171,87 @@ describe("quiz helpers", () => {
     ];
 
     expect(toSelectedMultiChoiceIndicesRecord({ 0: ["C. Turn blue litmus red", "A"] }, quiz)).toEqual({ 0: [0, 2] });
+  });
+
+  it("scores identification answers using normalized accepted answers", () => {
+    const item = {
+      question: "Identify the law that relates voltage, current, and resistance.",
+      choices: [],
+      correctIndex: null,
+      questionFormat: "IDENTIFICATION" as const,
+      acceptableAnswers: ["Ohm's Law", "Ohms law"],
+      explanation: "Ohm's Law relates voltage, current, and resistance.",
+    };
+
+    expect(resolveIdentificationAcceptedAnswers(item)).toEqual(["Ohm's Law", "Ohms law"]);
+    expect(resolveQuizCorrectAnswer(item)).toBe("Ohm's Law");
+    expect(isIdentificationAnswerCorrect(item, "  OHM'S   LAW ")).toBe(true);
+    expect(isIdentificationAnswerCorrect(item, "Kirchhoff's Law")).toBe(false);
+    expect(isIdentificationAnswerCorrect(item, "   ")).toBe(false);
+  });
+
+  it("normalizes identification session answers into string records", () => {
+    const quiz = [
+      {
+        question: "Identify the law that relates voltage, current, and resistance.",
+        choices: [],
+        correctIndex: null,
+        questionFormat: "IDENTIFICATION" as const,
+        acceptableAnswers: ["Ohm's Law", "Ohms law"],
+        explanation: "Ohm's Law relates voltage, current, and resistance.",
+      },
+    ];
+
+    expect(toSelectedIdentificationAnswerRecord({ 0: "  Ohm's Law " }, quiz)).toEqual({ 0: "Ohm's Law" });
+    expect(serializeSelectedIdentificationAnswerRecord({ 0: "  Ohm's Law ", 1: " " })).toEqual({ 0: "Ohm's Law" });
+  });
+
+  it("scores enumeration answers via exhaustive bipartite matching, not first-match greedy", () => {
+    const item = {
+      question: "Name the two example items.",
+      choices: [],
+      correctIndex: null,
+      questionFormat: "ENUMERATION" as const,
+      acceptableAnswerGroups: [["x", "y"], ["x"]],
+      explanation: "Explanation",
+    };
+
+    expect(resolveEnumerationAcceptedAnswerGroups(item)).toEqual([["x", "y"], ["x"]]);
+    expect(isEnumerationAnswerCorrect(item, ["x", "y"])).toBe(true);
+  });
+
+  it("scores fully correct enumeration answers case and whitespace insensitively", () => {
+    const item = {
+      question: "Name the three branches of government.",
+      choices: [],
+      correctIndex: null,
+      questionFormat: "ENUMERATION" as const,
+      acceptableAnswerGroups: [["Legislative", "Legislature"], ["Executive"], ["Judicial", "Judiciary"]],
+      explanation: "Explanation",
+    };
+
+    expect(resolveQuizCorrectAnswer(item)).toBe("Legislative, Executive, Judicial");
+    expect(isEnumerationAnswerCorrect(item, ["  EXECUTIVE ", "judiciary", "legislature"])).toBe(true);
+    expect(isEnumerationAnswerCorrect(item, ["Legislative", "Executive", "Wrong Answer"])).toBe(false);
+    expect(isEnumerationAnswerCorrect(item, ["Legislative", "", "Judicial"])).toBe(false);
+  });
+
+  it("normalizes enumeration session answers into array records preserving blank slots", () => {
+    const quiz = [
+      {
+        question: "Name the three branches of government.",
+        choices: [],
+        correctIndex: null,
+        questionFormat: "ENUMERATION" as const,
+        acceptableAnswerGroups: [["Legislative"], ["Executive"], ["Judicial"]],
+        explanation: "Explanation",
+      },
+    ];
+
+    expect(toSelectedEnumerationAnswersRecord({ 0: ["Legislative", "", "Judicial"] }, quiz))
+      .toEqual({ 0: ["Legislative", "", "Judicial"] });
+    expect(serializeSelectedEnumerationAnswersRecord({ 0: ["Legislative", "", "Judicial"] }))
+      .toEqual({ 0: ["Legislative", "", "Judicial"] });
   });
 
   it("groups only consecutive matching items with the same question group", () => {

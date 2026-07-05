@@ -17,6 +17,7 @@ import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.EmailVerificationTokenRepository;
 import com.studysnap.backend.repository.FeedbackRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.MemorizationCardRepository;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -64,6 +65,7 @@ public class AccountPurgeService {
     private final GeneratedQuizRepository generatedQuizRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ConceptHealthRepository conceptHealthRepository;
+    private final MemorizationCardRepository memorizationCardRepository;
     private final ActivityEventRepository activityEventRepository;
     private final BulkGenerationResultRepository bulkGenerationResultRepository;
     private final QuizShareLinkRepository quizShareLinkRepository;
@@ -165,6 +167,7 @@ public class AccountPurgeService {
         generatedQuizRepository.deleteByOwnerUserId(userId);
         quickReviewSessionRepository.deleteByUserId(userId);
         conceptHealthRepository.deleteByUserId(userId);
+        memorizationCardRepository.deleteByUserId(userId);
         activityEventRepository.deleteByUserId(userId);
         bulkGenerationResultRepository.deleteByOwnerUserId(userId);
         publicNoteLikeRepository.deleteByUserId(userId);
