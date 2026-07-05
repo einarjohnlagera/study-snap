@@ -344,7 +344,7 @@ describe("StudyPlanBuilderPageClient", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add Subject Plan" }));
 
     await waitFor(() => {
-      expect(createCollection).toHaveBeenCalledWith({ title: "Physiology Plan" });
+      expect(createCollection).toHaveBeenCalledWith({ title: "Physiology Plan", description: null });
       expect(setCollectionParent).toHaveBeenCalledWith("child-new", "leaf-1");
       expect(getCollectionGoal).toHaveBeenCalledWith("leaf-1");
     });
@@ -439,8 +439,24 @@ describe("StudyPlanBuilderPageClient", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Add Subject/ }));
 
     await waitFor(() => {
-      expect(createCollection).toHaveBeenCalledWith({ title: "Major Specialization Mastery" });
+      expect(createCollection).toHaveBeenCalledWith({ title: "Major Specialization Mastery", description: null });
       expect(setCollectionParent).toHaveBeenCalledWith("child-3", "goal-1");
+    });
+  });
+
+  it("adds a subject with an optional description threaded through to createCollection", async () => {
+    render(<StudyPlanBuilderPageClient collectionId="goal-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Add Subject/ }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Major Specialization Mastery" } });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "  Covers advanced electives.  " } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Add Subject/ }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalledWith({
+        title: "Major Specialization Mastery",
+        description: "Covers advanced electives.",
+      });
     });
   });
 

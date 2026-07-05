@@ -335,7 +335,11 @@ public class NoteCollectionService {
                 collection.setDescription(normalizeOptionalText(request.description()));
             }
             if (request.courseProgram() != null) {
-                collection.setCourseProgram(CourseProgramNormalizationUtils.normalizeForStorage(request.courseProgram()));
+                String normalizedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(request.courseProgram());
+                collection.setCourseProgram(normalizedCourseProgram);
+                if (normalizedCourseProgram != null) {
+                    cascadeCourseProgramToBlankChildren(collectionId, userId, normalizedCourseProgram);
+                }
             }
             if (request.estimatedStudyHours() != null) {
                 collection.setEstimatedStudyHours(request.estimatedStudyHours());
@@ -679,6 +683,23 @@ public class NoteCollectionService {
             touch(child, now);
         });
         collectionRepository.saveAll(children);
+    }
+
+    private void cascadeCourseProgramToBlankChildren(UUID collectionId, UUID userId, String courseProgram) {
+        List<NoteCollectionEntity> blankChildren = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId)
+                .stream()
+                .filter(child -> child.getCourseProgram() == null || child.getCourseProgram().isBlank())
+                .toList();
+        if (blankChildren.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        blankChildren.forEach(child -> {
+            child.setCourseProgram(courseProgram);
+            touch(child, now);
+        });
+        collectionRepository.saveAll(blankChildren);
     }
 
     private CollectionVisibility parseVisibility(String visibilityRaw) {

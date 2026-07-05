@@ -16,7 +16,8 @@ Anti-drift: no new architecture; this is Study Plan Builder / note-collection po
 
 ### Shipped
 
-_(nothing yet)_
+- **Description field on Add Subject Plan (frontend).** `AddSubjectModal` now collects an optional description alongside title, mirroring the top-level "New Review Set" modal's field, threaded through `handleAddSubject(title, description)` into the existing `createCollection({ title, description })` call. Frontend-only, no backend or API change.
+- **Course/program cascade fix (backend).** `updateMetadata` now cascades a newly-set, non-blank `courseProgram` to every direct child collection whose own `courseProgram` is currently blank — never overwriting a child's intentionally-different value, per the v0.37.2 clobber-bug precedent. Clearing `courseProgram` to blank never cascades. Fixes a real bug where `publishChildCollections` cascaded `visibility=PUBLIC` on publish but left child `courseProgram` blank, breaking course/program-scoped public discovery for newly-published child Subject plans.
 
 ## v0.39.0 - Flexible Review Methods
 

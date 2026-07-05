@@ -832,13 +832,15 @@ function AddSubjectModal({
   labels: ReturnType<typeof getCollectionLabels>;
   submitting: boolean;
   onClose: () => void;
-  onAdd: (title: string) => Promise<void>;
+  onAdd: (title: string, description: string | null) => Promise<void>;
 }>) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleClose = () => {
     setTitle("");
+    setDescription("");
     setError(null);
     onClose();
   };
@@ -852,7 +854,7 @@ function AddSubjectModal({
     }
     setError(null);
     try {
-      await onAdd(trimmedTitle);
+      await onAdd(trimmedTitle, description.trim() || null);
       handleClose();
     } catch (addError) {
       setError(makeErrorMessage(addError, `Could not add this ${labels.subjectSingular}.`));
@@ -881,6 +883,15 @@ function AddSubjectModal({
             maxLength={TITLE_MAX_LENGTH}
             onChange={(event) => setTitle(event.target.value)}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Description</span>
+          <textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            placeholder={`Optional context for this ${labels.subjectSingular.toLowerCase()}`}
           />
         </label>
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
@@ -1361,12 +1372,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const handleAddSubject = async (title: string) => {
+  const handleAddSubject = async (title: string, description: string | null) => {
     const previousSubjects = subjects;
     const temporarySubject: BuilderSubject = {
       collectionId: `temporary:${Date.now()}`,
       title,
-      description: null,
+      description,
       itemCount: 0,
       overallReadinessPercentage: 0,
       masteredConcepts: 0,
@@ -1379,7 +1390,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     setMutationError(null);
     setSubjects([...subjects, temporarySubject]);
     try {
-      const created = await createCollection({ title });
+      const created = await createCollection({ title, description });
       await setCollectionParent(created.id, collectionId);
       await refreshBuilder();
     } catch (error) {
