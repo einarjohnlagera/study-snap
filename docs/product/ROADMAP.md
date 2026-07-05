@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.39.0 - Flexible Review Methods` is the latest released version (on `releases/v0.39.0`).
+`v0.39.1 - Study Plan Builder Polish` is the latest released version (on `releases/v0.39.1`).
+
+`v0.39.0 - Flexible Review Methods` is the previous released version (on `releases/v0.39.0`).
 
 `v0.38.0 - Read-Path Optimization Pass` is the previous released version (on `releases/v0.38.0`).
 
@@ -292,9 +294,9 @@ Anti-drift: Identification/Enumeration reuse the existing quiz-session engine an
 
 ---
 
-## v0.39.1 (candidate) - Study Plan Builder Polish
+## v0.39.1 - Study Plan Builder Polish (released)
 
-Not kicked off — do not kick off until v0.39.0 (Flexible Review Methods) is signed off. Surfaced while using the Study Plan Builder in practice; two sub-themes, both Study Plan/note-collection polish rather than new architecture.
+Base branch: `releases/v0.39.1`. Kicked off after v0.39.0 (Flexible Review Methods) signoff. Surfaced while using the Study Plan Builder in practice; two sub-themes, both Study Plan/note-collection polish rather than new architecture. The course/program cascade fix (Theme A) is a live correctness bug but was assessed as not urgent enough to warrant a standalone hotfix — it ships bundled in this batch.
 
 ### Theme A — Subject metadata completeness
 

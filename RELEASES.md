@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.39.1 - Study Plan Builder Polish
+
+**Status: Released**
+
+Theme: fix subject-metadata gaps and improve cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage rather than a planned feature push.
+
+### Planned Scope
+
+- **Description field on Add Subject Plan (frontend).** `AddSubjectModal` only collects a title today; add the same description textarea the top-level "New Review Set" modal already has, threaded through `handleAddSubject(title, description)`. Frontend-only, no backend change.
+- **Course/program cascade fix (backend).** `NoteCollectionService.publishChildCollections` cascades `visibility = PUBLIC` to children on publish but never touches `courseProgram`, and `updateMetadata` only ever updates the single collection it's called on. Cascade to children only when their `courseProgram` is currently blank — never a blind overwrite, per the v0.37.2 clobber-bug precedent. Belongs in `updateMetadata` so it also covers editing course/program after publish.
+- **Cold-start adoption discoverability (frontend/UX).** A UX/discovery audit of whether adopting a curated plan — NoteLib's cold-start on-ramp for zero-notes users — is discoverable and frictionless enough, not a new content-generation feature.
+
+Anti-drift: no new architecture; this is Study Plan Builder / note-collection polish only. Standalone adoption of a single child Subject plan remains parked (unresolved re-parenting interaction with `adoptGoal`'s idempotency check) — not in scope for this release.
+
+### Shipped
+
+- **Description field on Add Subject Plan (frontend).** `AddSubjectModal` now collects an optional description alongside title, mirroring the top-level "New Review Set" modal's field, threaded through `handleAddSubject(title, description)` into the existing `createCollection({ title, description })` call. Frontend-only, no backend or API change.
+- **Course/program cascade fix (backend).** `updateMetadata` now cascades a newly-set, non-blank `courseProgram` to every direct child collection whose own `courseProgram` is currently blank — never overwriting a child's intentionally-different value, per the v0.37.2 clobber-bug precedent. Clearing `courseProgram` to blank never cascades. Fixes a real bug where `publishChildCollections` cascaded `visibility=PUBLIC` on publish but left child `courseProgram` blank, breaking course/program-scoped public discovery for newly-published child Subject plans.
+- **Cold-start adoption discoverability fixes (frontend).** Audit found the Dashboard's "Recommended {plan}" card silently rendered nothing whenever a learner's course/program had no curated plan yet, and the zero-notes empty state (`DashboardEmpty`) never mentioned adoption as an option at all — so a genuinely cold-start learner had no visible signal the on-ramp existed. Fixed both: (1) the Dashboard's plan card now shows the same "No curated plans yet, check back soon" guidance nudge `/collections` already had, but only for learners with zero notes (`items.length === 0`), preserving the original v0.33.0 anti-clutter intent for everyone else; (2) `DashboardEmpty` now links to `/collections/published` ("Or start from a ready-made plan instead") for STUDENT/BOARD_EXAM/PROFESSIONAL profiles. `/onboarding`'s locked Profile Type -> Study Goal -> Input Method -> Study Pack Generation -> Completion flow was not touched — the fix lives entirely on Dashboard surfaces every cold-start learner reaches regardless of how they got there.
+
 ## v0.39.0 - Flexible Review Methods
 
 **Status: Released**

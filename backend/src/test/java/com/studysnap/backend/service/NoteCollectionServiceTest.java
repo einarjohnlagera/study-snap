@@ -1062,6 +1062,60 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void updateMetadata_cascadesCourseProgramToBlankChildrenOnlyNotDifferentValues() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID blankChildId = UUID.randomUUID();
+        UUID differentChildId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionEntity blankChild = buildCollection(blankChildId, userId, "Blank Child", Instant.now());
+        blankChild.setParentCollectionId(goalId);
+        NoteCollectionEntity differentChild = buildCollection(differentChildId, userId, "Different Child", Instant.now());
+        differentChild.setParentCollectionId(goalId);
+        differentChild.setCourseProgram("Existing Program");
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.save(goal)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(blankChild, differentChild));
+        when(collectionRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.updateMetadata(goalId, userId, new UpdateNoteCollectionRequest(
+                null,
+                null,
+                UPDATED_COURSE_PROGRAM,
+                null
+        ));
+
+        assertThat(blankChild.getCourseProgram()).isEqualTo(UPDATED_COURSE_PROGRAM);
+        assertThat(differentChild.getCourseProgram()).isEqualTo("Existing Program");
+        verify(collectionRepository).saveAll(List.of(blankChild));
+    }
+
+    @Test
+    void updateMetadata_doesNotCascadeCourseProgramWhenClearedToBlank() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, COLLECTION_TITLE, Instant.now());
+        goal.setCourseProgram(COURSE_PROGRAM);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.save(goal)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
+
+        // Explicit empty string clears courseProgram; a clear must not cascade anything to children.
+        service.updateMetadata(goalId, userId, new UpdateNoteCollectionRequest(
+                null,
+                null,
+                "",
+                null
+        ));
+
+        assertThat(goal.getCourseProgram()).isNull();
+        verify(collectionRepository, never()).findOrderedChildrenByParentCollectionIdAndOwnerUserId(any(), any());
+        verify(collectionRepository, never()).saveAll(anyList());
+    }
+
+    @Test
     void getNoteConceptCounts_returnsCountsForNotesWithStudyPacksOnly() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
