@@ -692,6 +692,7 @@ export default function DashboardPage() {
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
                 viewAllHref="/collections/published"
+                browseWhenEmpty={items.length === 0}
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}
@@ -774,6 +775,7 @@ export default function DashboardPage() {
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
                 viewAllHref="/collections/published"
+                browseWhenEmpty={items.length === 0}
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { getCollectionLabels } from "@/lib/collection-labels";
@@ -52,8 +53,12 @@ const FIRST_RUN_CONTENT: Record<FirstRunProfileType, FirstRunContent> = {
   },
 };
 
+const PLAN_ADOPTION_PROFILE_TYPES: ReadonlySet<FirstRunProfileType> = new Set(["STUDENT", "BOARD_EXAM", "PROFESSIONAL"]);
+
 export function DashboardEmpty({ profileType }: Readonly<{ profileType: FirstRunProfileType }>) {
   const content = FIRST_RUN_CONTENT[profileType];
+  const labels = getCollectionLabels(profileType);
+  const showPlanAdoptionLink = PLAN_ADOPTION_PROFILE_TYPES.has(profileType);
 
   return (
     <Card className="space-y-5 p-4 sm:p-6">
@@ -77,6 +82,15 @@ export function DashboardEmpty({ profileType }: Readonly<{ profileType: FirstRun
         <ResponsiveActionLink href="/notes/import" action="import" label="Import files" className="w-full sm:w-auto" />
         <ResponsiveActionLink href="/notes/new" action="create" label="Create a note" variant="outline" className="w-full sm:w-auto" />
       </div>
+
+      {showPlanAdoptionLink ? (
+        <Link
+          href="/collections/published"
+          className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+        >
+          Or start from a ready-made {labels.singular.toLowerCase()} instead
+        </Link>
+      ) : null}
     </Card>
   );
 }
