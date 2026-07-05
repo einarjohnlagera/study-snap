@@ -6,16 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.39.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.39.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.39.0 — Flexible Review Methods
+## Active release: v0.39.1 — Study Plan Builder Polish
 
-Base branch for this release: `releases/v0.39.0`. Lets a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while preserving the v0.37.0 review-vs-assessment mastery boundary. Two independent dependency chains: Flashcards → Memorization (review), Identification → Enumeration (assessment). Locked rules:
+Base branch for this release: `releases/v0.39.1`. Fixes subject-metadata gaps and improves cold-start adoption discoverability in the Study Plan Builder — surfaced from real usage, not a planned feature push. Two sub-themes:
 
-- **Flashcards/Memorization never write `ConceptHealth`.** Same rule as Quick Review — review-only surfaces never move mastery, due-state, or `Overall Readiness`. Memorization's spaced-repetition schedule is a new, separate entity, never a `ConceptHealth` field.
-- **Identification/Enumeration write `ConceptHealth` on completion**, same as Challenge Quiz, and reuse the existing quiz-session engine — no new session discriminator.
-- **`EXAM_MODES.md` must be updated before any of this reaches a Codex prompt** — document these as new question formats/surfaces, not a 6th/7th mode.
-- **No cross-wiring.** Flashcards/Memorization stay outside `QuickReviewSessionEntity` entirely; do not force them through the quiz-session engine.
+- **Theme A — Subject metadata completeness.** Add a description field to `AddSubjectModal` (frontend-only). Fix course/program not cascading from a parent Goal to child Subject plans — cascade only when the child's `courseProgram` is currently blank, never a blind overwrite, per the v0.37.2 clobber-bug precedent.
+- **Theme B — Adoption model.** UX/discovery audit of cold-start adoption discoverability — not a new content-generation feature. NoteLib's differentiator stays "review material comes from your own notes"; adoption is the cold-start on-ramp, not the core loop.
+- **Parked, not in scope:** standalone adoption of a single child Subject plan — unresolved re-parenting interaction with `adoptGoal`'s idempotency check.
 
 ## Source-of-truth docs (read before implementing anything)
 

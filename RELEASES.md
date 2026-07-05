@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.39.1 - Study Plan Builder Polish
+
+**Status: In Progress**
+
+Theme: fix subject-metadata gaps and improve cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage rather than a planned feature push.
+
+### Planned Scope
+
+- **Description field on Add Subject Plan (frontend).** `AddSubjectModal` only collects a title today; add the same description textarea the top-level "New Review Set" modal already has, threaded through `handleAddSubject(title, description)`. Frontend-only, no backend change.
+- **Course/program cascade fix (backend).** `NoteCollectionService.publishChildCollections` cascades `visibility = PUBLIC` to children on publish but never touches `courseProgram`, and `updateMetadata` only ever updates the single collection it's called on. Cascade to children only when their `courseProgram` is currently blank — never a blind overwrite, per the v0.37.2 clobber-bug precedent. Belongs in `updateMetadata` so it also covers editing course/program after publish.
+- **Cold-start adoption discoverability (frontend/UX).** A UX/discovery audit of whether adopting a curated plan — NoteLib's cold-start on-ramp for zero-notes users — is discoverable and frictionless enough, not a new content-generation feature.
+
+Anti-drift: no new architecture; this is Study Plan Builder / note-collection polish only. Standalone adoption of a single child Subject plan remains parked (unresolved re-parenting interaction with `adoptGoal`'s idempotency check) — not in scope for this release.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.39.0 - Flexible Review Methods
 
 **Status: Released**
