@@ -748,9 +748,9 @@ class LongExamServiceTest {
         QuickReviewSessionEntity session = buildSession(userId, primaryStudyPackId, QuickReviewSessionStatus.IN_PROGRESS,
             List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Database durability", "Explanation",
-                    null, "MCQ", null, null, null, null, "Transactions", null),
+                    null, "MCQ", null, null, null, null, "Transactions", null, null),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), 1, "Thread safety", "Explanation",
-                    null, "MCQ", null, null, null, null, "Concurrency", null),
+                    null, "MCQ", null, null, null, null, "Concurrency", null, null),
                 new QuizItem("Q3", List.of("A", "B", "C", "D"), 2, "Free-form", "Explanation")
             ));
         session.setId(sessionId);

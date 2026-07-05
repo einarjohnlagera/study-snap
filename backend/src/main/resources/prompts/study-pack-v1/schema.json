@@ -51,6 +51,7 @@
           "questionGroup",
           "correctIndices",
           "acceptableAnswers",
+          "acceptableAnswerGroups",
           "questionType",
           "workingSolution"
         ],
@@ -75,7 +76,7 @@
           },
           "questionFormat": {
             "type": ["string", "null"],
-            "enum": ["MCQ", "TRUE_FALSE", "MULTI_SELECT", "MATCHING", "IDENTIFICATION", null]
+            "enum": ["MCQ", "TRUE_FALSE", "MULTI_SELECT", "MATCHING", "IDENTIFICATION", "ENUMERATION", null]
           },
           "questionGroup": {
             "type": ["string", "null"],
@@ -94,6 +95,15 @@
             "type": ["array", "null"],
             "items": {
               "type": "string"
+            }
+          },
+          "acceptableAnswerGroups": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "questionType": {

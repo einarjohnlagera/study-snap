@@ -155,6 +155,28 @@ describe("computeScore", () => {
       scorePercentage: 100,
     });
   });
+
+  it("scores enumeration questions all-or-nothing using accepted answer groups", () => {
+    const quiz: QuizItem[] = [
+      makeItem("Single answer", 0, "MCQ"),
+      {
+        question: "Name the three branches of government.",
+        choices: [],
+        correctIndex: null,
+        questionFormat: "ENUMERATION",
+        acceptableAnswerGroups: [["Legislative"], ["Executive"], ["Judicial"]],
+        concept: "Enumeration",
+        explanation: "The three branches are legislative, executive, and judicial.",
+      },
+    ];
+
+    expect(computeScore(quiz, { 0: 0 }, {}, {}, { 1: ["Legislative", "Executive", "Judicial"] })).toEqual({
+      correctAnswers: 2,
+      totalQuestions: 2,
+      scorePercentage: 100,
+    });
+    expect(computeScore(quiz, { 0: 0 }, {}, {}, { 1: ["Legislative", "Executive", "Wrong"] }).correctAnswers).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

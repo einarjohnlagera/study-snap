@@ -295,6 +295,7 @@ public class QuickReviewSessionService {
                 selectedChoices,
                 selectedMultiChoices,
                 Map.of(),
+                Map.of(),
                 session.getCreatedAt(),
                 session.getCompletedAt()
         );

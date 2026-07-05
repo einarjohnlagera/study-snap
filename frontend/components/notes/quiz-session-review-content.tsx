@@ -7,6 +7,7 @@ import { getAuthUser } from "@/lib/auth";
 import { getQuizSessionModeLabel, type RecentQuizSessionHistoryItem } from "@/lib/quiz-session-history";
 import {
   toSelectedChoiceIndexRecord,
+  toSelectedEnumerationAnswersRecord,
   toSelectedIdentificationAnswerRecord,
   toSelectedMultiChoiceIndicesRecord,
 } from "@/lib/quiz";
@@ -67,6 +68,7 @@ export function QuizSessionReviewContent({
           selectedChoices={toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz)}
           selectedMultiChoices={toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz)}
           selectedIdentificationAnswers={toSelectedIdentificationAnswerRecord(review.selectedIdentificationAnswers, review.quiz)}
+          selectedEnumerationAnswers={toSelectedEnumerationAnswersRecord(review.selectedEnumerationAnswers, review.quiz)}
           planType={getAuthUser()?.planType ?? null}
           stickyNav
         />

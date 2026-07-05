@@ -172,6 +172,116 @@ class QuizSessionReviewUtilsTest {
     }
 
     @Test
+    void isAnswerCorrect_matchesEnumerationAnswersViaExhaustiveBipartiteMatchingNotGreedy() {
+        QuizItem item = enumerationItem(List.of(
+                List.of("x", "y"),
+                List.of("x")
+        ));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(0, List.of("x", "y"))
+        );
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void isAnswerCorrect_matchesFullyCorrectEnumerationAnswersCaseAndWhitespaceInsensitively() {
+        QuizItem item = enumerationItem(List.of(
+                List.of("Legislative", "Legislature"),
+                List.of("Executive"),
+                List.of("Judicial", "Judiciary")
+        ));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(0, List.of("  EXECUTIVE ", "judiciary", "legislature"))
+        );
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void isAnswerCorrect_rejectsPartiallyCorrectEnumerationAnswersAllOrNothing() {
+        QuizItem item = enumerationItem(List.of(
+                List.of("Legislative"),
+                List.of("Executive"),
+                List.of("Judicial")
+        ));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(0, List.of("Legislative", "Executive", "Wrong Answer"))
+        );
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isAnswerCorrect_rejectsEnumerationAnswerWithBlankSlot() {
+        QuizItem item = enumerationItem(List.of(
+                List.of("Legislative"),
+                List.of("Executive"),
+                List.of("Judicial")
+        ));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(0, List.of("Legislative", "", "Judicial"))
+        );
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isAnswerCorrect_rejectsEnumerationItemWithoutAcceptableAnswerGroups() {
+        QuizItem item = enumerationItem(List.of());
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(0, List.of("Legislative"))
+        );
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void existingIsAnswerCorrectFiveArgOverloadKeepsIdentificationBehaviorUnchanged() {
+        QuizItem item = identificationItem(List.of("Ohm's Law"));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(0, "Ohm's Law")
+        );
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
     void existingIsAnswerCorrectOverloadKeepsMcqBehavior() {
         QuizItem item = quizItem("Q1", 2, "Domain", "Key Concept");
 
@@ -193,6 +303,7 @@ class QuizSessionReviewUtilsTest {
                 null,
                 null,
                 keyConcept,
+                null,
                 null
         );
     }
@@ -211,7 +322,27 @@ class QuizSessionReviewUtilsTest {
                 null,
                 null,
                 "Ohm's Law",
-                acceptableAnswers
+                acceptableAnswers,
+                null
+        );
+    }
+
+    private QuizItem enumerationItem(List<List<String>> acceptableAnswerGroups) {
+        return new QuizItem(
+                "Name the three branches of government.",
+                List.of(),
+                null,
+                "Branches of government",
+                "The three branches are legislative, executive, and judicial.",
+                null,
+                "ENUMERATION",
+                null,
+                null,
+                null,
+                null,
+                "Branches of government",
+                null,
+                acceptableAnswerGroups
         );
     }
 }

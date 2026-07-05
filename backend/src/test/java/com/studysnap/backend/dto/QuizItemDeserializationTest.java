@@ -330,6 +330,7 @@ class QuizItemDeserializationTest {
                 null,
                 null,
                 "Electron transport chain",
+                null,
                 null
         );
         QuizItem differentKeyConcept = new QuizItem(
@@ -345,6 +346,7 @@ class QuizItemDeserializationTest {
                 null,
                 null,
                 "ATP synthesis",
+                null,
                 null
         );
 
@@ -375,7 +377,8 @@ class QuizItemDeserializationTest {
                 null,
                 null,
                 "Ohm's Law",
-                acceptableAnswers
+                acceptableAnswers,
+                null
         );
     }
 }

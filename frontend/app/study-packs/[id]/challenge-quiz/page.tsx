@@ -24,6 +24,7 @@ import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizIdentificationInput } from "@/components/study-pack/quiz-identification-input";
+import { QuizEnumerationInput } from "@/components/study-pack/quiz-enumeration-input";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
@@ -74,8 +75,10 @@ import {
   resolveQuizCorrectIndex,
   resolveQuizItemGroupAt,
   serializeSelectedChoiceIndexRecord,
+  serializeSelectedEnumerationAnswersRecord,
   serializeSelectedIdentificationAnswerRecord,
   serializeSelectedMultiChoiceIndicesRecord,
+  toSelectedEnumerationAnswersRecord,
   toSelectedIdentificationAnswerRecord,
   toSelectedChoiceIndexRecord,
   toSelectedMultiChoiceIndicesRecord,
@@ -96,6 +99,7 @@ type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
   selectedMultiChoices?: Record<string, number[]>;
   selectedIdentificationAnswers?: Record<string, string>;
+  selectedEnumerationAnswers?: Record<string, string[]>;
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
@@ -293,11 +297,13 @@ export default function ChallengeQuizPage() {
     selectedChoices: Record<number, number>;
     selectedMultiChoices: Record<number, number[]>;
     selectedIdentificationAnswers: Record<number, string>;
+    selectedEnumerationAnswers: Record<number, string[]>;
   }>({
     currentIndex: 0,
     selectedChoices: {},
     selectedMultiChoices: {},
     selectedIdentificationAnswers: {},
+    selectedEnumerationAnswers: {},
   });
   const remainingSecondsRef = useRef(0);
   const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
@@ -323,6 +329,7 @@ export default function ChallengeQuizPage() {
   const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
   const [selectedMultiChoices, setSelectedMultiChoices] = useState<Record<number, number[]>>({});
   const [selectedIdentificationAnswers, setSelectedIdentificationAnswers] = useState<Record<number, string>>({});
+  const [selectedEnumerationAnswers, setSelectedEnumerationAnswers] = useState<Record<number, string[]>>({});
   const [timedOut, setTimedOut] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showFirstQuizCompletionBanner, setShowFirstQuizCompletionBanner] = useState(false);
@@ -378,12 +385,14 @@ export default function ChallengeQuizPage() {
     nextSelectedChoices: Record<number, number>,
     nextSelectedMultiChoices: Record<number, number[]> = progressRef.current.selectedMultiChoices,
     nextSelectedIdentificationAnswers: Record<number, string> = progressRef.current.selectedIdentificationAnswers,
+    nextSelectedEnumerationAnswers: Record<number, string[]> = progressRef.current.selectedEnumerationAnswers,
   ) => {
     progressRef.current = {
       currentIndex: nextIndex,
       selectedChoices: nextSelectedChoices,
       selectedMultiChoices: nextSelectedMultiChoices,
       selectedIdentificationAnswers: nextSelectedIdentificationAnswers,
+      selectedEnumerationAnswers: nextSelectedEnumerationAnswers,
     };
   }, []);
   const openLockedFeaturePaywall = useCallback(
@@ -572,13 +581,14 @@ export default function ChallengeQuizPage() {
     setBoardExamMonthlyLimit(started.boardExamMonthlyLimit ?? 0);
 
     if (started.status === "GENERATING") {
-      syncProgressRef(0, {}, {}, {});
+      syncProgressRef(0, {}, {}, {}, {});
       setChallengeSession(started);
       setResult(null);
       setError(null);
       setSelectedChoices({});
       setSelectedMultiChoices({});
       setSelectedIdentificationAnswers({});
+      setSelectedEnumerationAnswers({});
       setCurrentIndex(0);
       setDeadlineEpochSeconds(null);
       setRemainingSeconds(0);
@@ -590,12 +600,13 @@ export default function ChallengeQuizPage() {
     }
 
     if (started.status === "FAILED") {
-      syncProgressRef(0, {}, {}, {});
+      syncProgressRef(0, {}, {}, {}, {});
       setChallengeSession(started);
       setResult(null);
       setSelectedChoices({});
       setSelectedMultiChoices({});
       setSelectedIdentificationAnswers({});
+      setSelectedEnumerationAnswers({});
       setCurrentIndex(0);
       setDeadlineEpochSeconds(null);
       setRemainingSeconds(0);
@@ -610,13 +621,14 @@ export default function ChallengeQuizPage() {
     }
 
     if (!started.sessionId || started.quiz.length === 0) {
-      syncProgressRef(0, {}, {}, {});
+      syncProgressRef(0, {}, {}, {}, {});
       setChallengeSession(started);
       setResult(null);
       setError(null);
       setSelectedChoices({});
       setSelectedMultiChoices({});
       setSelectedIdentificationAnswers({});
+      setSelectedEnumerationAnswers({});
       setCurrentIndex(0);
       setDeadlineEpochSeconds(null);
       setRemainingSeconds(0);
@@ -631,13 +643,14 @@ export default function ChallengeQuizPage() {
     const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
     const restoredMultiChoices = toSelectedMultiChoiceIndicesRecord(state.selectedMultiChoices, started.quiz);
     const restoredIdentificationAnswers = toSelectedIdentificationAnswerRecord(state.selectedIdentificationAnswers, started.quiz);
+    const restoredEnumerationAnswers = toSelectedEnumerationAnswersRecord(state.selectedEnumerationAnswers, started.quiz);
     const normalizedIndex = Math.max(0, Math.min(started.currentQuestionIndex ?? 0, Math.max(0, started.quiz.length - 1)));
     const nextDeadlineEpochSeconds = resolveDeadlineEpochSeconds(
       started.timeLimitSeconds,
       state,
       getNowEpochSeconds(),
     );
-    syncProgressRef(normalizedIndex, restoredChoices, restoredMultiChoices, restoredIdentificationAnswers);
+    syncProgressRef(normalizedIndex, restoredChoices, restoredMultiChoices, restoredIdentificationAnswers, restoredEnumerationAnswers);
 
     setChallengeSession(started);
     setResult(null);
@@ -645,6 +658,7 @@ export default function ChallengeQuizPage() {
     setSelectedChoices(restoredChoices);
     setSelectedMultiChoices(restoredMultiChoices);
     setSelectedIdentificationAnswers(restoredIdentificationAnswers);
+    setSelectedEnumerationAnswers(restoredEnumerationAnswers);
     setCurrentIndex(normalizedIndex);
     setDeadlineEpochSeconds(nextDeadlineEpochSeconds);
     setRemainingSeconds(resolveRemainingSecondsFromDeadline(nextDeadlineEpochSeconds, getNowEpochSeconds()));
@@ -659,6 +673,7 @@ export default function ChallengeQuizPage() {
       nextSelectedChoices: Record<number, number>,
       nextSelectedMultiChoices: Record<number, number[]> = progressRef.current.selectedMultiChoices,
       nextSelectedIdentificationAnswers: Record<number, string> = progressRef.current.selectedIdentificationAnswers,
+      nextSelectedEnumerationAnswers: Record<number, string[]> = progressRef.current.selectedEnumerationAnswers,
       keepalive = false,
     ) => {
       if (!challengeSession?.sessionId) {
@@ -669,6 +684,7 @@ export default function ChallengeQuizPage() {
         selectedChoices: serializeSelectedChoiceIndexRecord(nextSelectedChoices),
         selectedMultiChoices: serializeSelectedMultiChoiceIndicesRecord(nextSelectedMultiChoices),
         selectedIdentificationAnswers: serializeSelectedIdentificationAnswerRecord(nextSelectedIdentificationAnswers),
+        selectedEnumerationAnswers: serializeSelectedEnumerationAnswersRecord(nextSelectedEnumerationAnswers),
       };
 
       void updateChallengeQuizSessionProgress(
@@ -719,12 +735,13 @@ export default function ChallengeQuizPage() {
       setViewerPlanType(resolvedViewerPlanType);
       setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
       if (!authUser?.emailVerifiedAt) {
-        syncProgressRef(0, {}, {}, {});
+        syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
         setSelectedIdentificationAnswers({});
+        setSelectedEnumerationAnswers({});
         setCurrentIndex(0);
         setDeadlineEpochSeconds(null);
         setRemainingSeconds(0);
@@ -742,12 +759,13 @@ export default function ChallengeQuizPage() {
       setBoardExamMonthlyLimit(inProgress.boardExamMonthlyLimit ?? 0);
       if (sharedModeSelectionEntryRequested) {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
-        syncProgressRef(0, {}, {}, {});
+        syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
         setSelectedIdentificationAnswers({});
+        setSelectedEnumerationAnswers({});
         setCurrentIndex(0);
         setDeadlineEpochSeconds(null);
         setRemainingSeconds(0);
@@ -768,12 +786,13 @@ export default function ChallengeQuizPage() {
         applyStartedSession(inProgress, true);
       } else {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
-        syncProgressRef(0, {}, {}, {});
+        syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
         setSelectedIdentificationAnswers({});
+        setSelectedEnumerationAnswers({});
         setCurrentIndex(0);
         setDeadlineEpochSeconds(null);
         setRemainingSeconds(0);
@@ -824,7 +843,10 @@ export default function ChallengeQuizPage() {
     ...Object.entries(selectedIdentificationAnswers)
       .filter(([, value]) => value.trim().length > 0)
       .map(([key]) => key),
-  ]).size, [selectedChoices, selectedMultiChoices, selectedIdentificationAnswers]);
+    ...Object.entries(selectedEnumerationAnswers)
+      .filter(([, values]) => values.some((value) => value.trim().length > 0))
+      .map(([key]) => key),
+  ]).size, [selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers]);
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const activeSourceNoteRefs = challengeSession?.sourceNoteRefs ?? [];
@@ -837,7 +859,9 @@ export default function ChallengeQuizPage() {
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
   const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
   const selectedIdentificationAnswer = selectedIdentificationAnswers[currentIndex] ?? "";
+  const selectedEnumerationAnswer = selectedEnumerationAnswers[currentIndex] ?? [];
   const isIdentificationQuestion = !isBoardExamMode && currentQuestion?.questionFormat === "IDENTIFICATION";
+  const isEnumerationQuestion = !isBoardExamMode && currentQuestion?.questionFormat === "ENUMERATION";
   const currentMatchingGroupAnswered = currentMatchingGroup
     ? currentMatchingGroup.items.every((_, offset) => selectedChoices[currentMatchingGroup.startIndex + offset] != null)
     : false;
@@ -861,8 +885,9 @@ export default function ChallengeQuizPage() {
       selectedChoices,
       selectedMultiChoices,
       selectedIdentificationAnswers,
+      selectedEnumerationAnswers,
     };
-  }, [currentIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers]);
+  }, [currentIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers]);
 
   useEffect(() => {
     remainingSecondsRef.current = remainingSeconds;
@@ -875,6 +900,7 @@ export default function ChallengeQuizPage() {
       latest.selectedChoices,
       latest.selectedMultiChoices,
       latest.selectedIdentificationAnswers,
+      latest.selectedEnumerationAnswers,
       keepalive,
     );
   }, [persistProgress]);
@@ -898,11 +924,13 @@ export default function ChallengeQuizPage() {
     const latestSelectedChoices = progressRef.current.selectedChoices;
     const latestSelectedMultiChoices = progressRef.current.selectedMultiChoices;
     const latestSelectedIdentificationAnswers = progressRef.current.selectedIdentificationAnswers;
+    const latestSelectedEnumerationAnswers = progressRef.current.selectedEnumerationAnswers;
     const { correctAnswers, totalQuestions: total } = computeScore(
       activeSession.quiz,
       latestSelectedChoices,
       latestSelectedMultiChoices,
       latestSelectedIdentificationAnswers,
+      latestSelectedEnumerationAnswers,
     );
     const durationSeconds = Math.max(0, activeSession.timeLimitSeconds - remainingSecondsRef.current);
 
@@ -1116,12 +1144,13 @@ export default function ChallengeQuizPage() {
 
   const handleRetry = () => {
     timeoutAutoSubmitRequestedRef.current = false;
-    syncProgressRef(0, {}, {}, {});
+    syncProgressRef(0, {}, {}, {}, {});
     setChallengeSession(null);
     setResult(null);
     setSelectedChoices({});
     setSelectedMultiChoices({});
     setSelectedIdentificationAnswers({});
+    setSelectedEnumerationAnswers({});
     setCurrentIndex(0);
     setDeadlineEpochSeconds(null);
     setRemainingSeconds(0);
@@ -1170,6 +1199,7 @@ export default function ChallengeQuizPage() {
         progressRef.current.selectedChoices,
         progressRef.current.selectedMultiChoices,
         progressRef.current.selectedIdentificationAnswers,
+        progressRef.current.selectedEnumerationAnswers,
       );
       setCurrentIndex(nextIndex);
       setGenerateMoreToast(
@@ -1932,8 +1962,8 @@ export default function ChallengeQuizPage() {
                     onSelectChoice={(questionIndex, choiceIndex) => {
                       setSelectedChoices((previous) => {
                         const next = { ...previous, [questionIndex]: choiceIndex };
-                        syncProgressRef(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers);
-                        persistProgress(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers);
+                        syncProgressRef(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
+                        persistProgress(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                         return next;
                       });
                     }}
@@ -1956,8 +1986,29 @@ export default function ChallengeQuizPage() {
                             } else {
                               delete next[currentIndex];
                             }
-                            syncProgressRef(currentIndex, selectedChoices, selectedMultiChoices, next);
-                            persistProgress(currentIndex, selectedChoices, selectedMultiChoices, next);
+                            syncProgressRef(currentIndex, selectedChoices, selectedMultiChoices, next, selectedEnumerationAnswers);
+                            persistProgress(currentIndex, selectedChoices, selectedMultiChoices, next, selectedEnumerationAnswers);
+                            return next;
+                          });
+                        }}
+                      />
+                    ) : isEnumerationQuestion ? (
+                      <QuizEnumerationInput
+                        item={currentQuestion}
+                        values={selectedEnumerationAnswer}
+                        revealAnswer={false}
+                        disabled={quizInteractionDisabled}
+                        selectionStyle="exam"
+                        onChangeAnswers={(answers) => {
+                          setSelectedEnumerationAnswers((previous) => {
+                            const next = { ...previous };
+                            if (answers.some((answer) => answer.trim().length > 0)) {
+                              next[currentIndex] = answers;
+                            } else {
+                              delete next[currentIndex];
+                            }
+                            syncProgressRef(currentIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, next);
+                            persistProgress(currentIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, next);
                             return next;
                           });
                         }}
@@ -1977,8 +2028,8 @@ export default function ChallengeQuizPage() {
                         onSelectChoice={(choiceIndex) => {
                           setSelectedChoices((previous) => {
                             const next = { ...previous, [currentIndex]: choiceIndex };
-                            syncProgressRef(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers);
-                            persistProgress(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers);
+                            syncProgressRef(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
+                            persistProgress(currentIndex, next, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                             return next;
                           });
                         }}
@@ -1988,8 +2039,8 @@ export default function ChallengeQuizPage() {
                           }
                           setSelectedMultiChoices((previous) => {
                             const next = { ...previous, [currentIndex]: choiceIndices };
-                            syncProgressRef(currentIndex, progressRef.current.selectedChoices, next, selectedIdentificationAnswers);
-                            persistProgress(currentIndex, progressRef.current.selectedChoices, next, selectedIdentificationAnswers);
+                            syncProgressRef(currentIndex, progressRef.current.selectedChoices, next, selectedIdentificationAnswers, selectedEnumerationAnswers);
+                            persistProgress(currentIndex, progressRef.current.selectedChoices, next, selectedIdentificationAnswers, selectedEnumerationAnswers);
                             return next;
                           });
                         }}
@@ -2006,11 +2057,12 @@ export default function ChallengeQuizPage() {
                   currentIndex={currentIndex}
                   isAnswered={(index) => selectedChoices[index] != null
                     || (selectedMultiChoices[index]?.length ?? 0) > 0
-                    || (selectedIdentificationAnswers[index]?.trim().length ?? 0) > 0}
+                    || (selectedIdentificationAnswers[index]?.trim().length ?? 0) > 0
+                    || (selectedEnumerationAnswers[index]?.some((value) => value.trim().length > 0) ?? false)}
                   onSelect={(index) => {
-                    syncProgressRef(index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                    syncProgressRef(index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                     setCurrentIndex(index);
-                    persistProgress(index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                    persistProgress(index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                   }}
                   summary={questionNavigatorSummary}
                   disabled={quizInteractionDisabled}
@@ -2050,9 +2102,9 @@ export default function ChallengeQuizPage() {
                 className="w-28 shrink-0 sm:w-auto"
                 onClick={() => {
                   const nextIndex = Math.max(0, (currentMatchingGroup?.startIndex ?? currentIndex) - 1);
-                  syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                  syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                   setCurrentIndex(nextIndex);
-                  persistProgress(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                  persistProgress(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                 }}
                 disabled={currentIndex <= 0 || quizInteractionDisabled}
               >
@@ -2065,9 +2117,9 @@ export default function ChallengeQuizPage() {
                     className="flex-1 sm:w-auto sm:flex-none"
                     onClick={() => {
                       const nextIndex = Math.min(totalQuestions - 1, currentMatchingGroup ? currentMatchingGroup.endIndex + 1 : currentIndex + 1);
-                      syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                      syncProgressRef(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                       setCurrentIndex(nextIndex);
-                      persistProgress(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                      persistProgress(nextIndex, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                     }}
                     disabled={quizInteractionDisabled || Boolean(currentMatchingGroup && !currentMatchingGroupAnswered)}
                   >
@@ -2224,6 +2276,7 @@ export default function ChallengeQuizPage() {
               selectedChoices={selectedChoices}
               selectedMultiChoices={selectedMultiChoices}
               selectedIdentificationAnswers={selectedIdentificationAnswers}
+              selectedEnumerationAnswers={selectedEnumerationAnswers}
               className="mt-2"
               planType={viewerPlanType}
               footer={(
@@ -2439,6 +2492,7 @@ export default function ChallengeQuizPage() {
               selectedChoices={selectedChoices}
               selectedMultiChoices={selectedMultiChoices}
               selectedIdentificationAnswers={selectedIdentificationAnswers}
+              selectedEnumerationAnswers={selectedEnumerationAnswers}
               className="mt-2"
               planType={viewerPlanType}
               footer={(

@@ -75,6 +75,7 @@ public class ChallengeQuizService {
     private static final String SESSION_STATE_SELECTED_CHOICES = "selectedChoices";
     private static final String SESSION_STATE_SELECTED_MULTI_CHOICES = "selectedMultiChoices";
     private static final String SESSION_STATE_SELECTED_IDENTIFICATION_ANSWERS = "selectedIdentificationAnswers";
+    private static final String SESSION_STATE_SELECTED_ENUMERATION_ANSWERS = "selectedEnumerationAnswers";
     private static final String SESSION_STATE_COMPLETED = "completed";
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
     private static final String SESSION_STATE_MODE = "mode";
@@ -437,11 +438,13 @@ public class ChallengeQuizService {
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
         Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
         Map<Integer, String> selectedIdentificationAnswers = QuizSessionStateUtils.extractSelectedIdentificationAnswers(session.getSessionState(), quiz);
+        Map<Integer, List<String>> selectedEnumerationAnswers = QuizSessionStateUtils.extractSelectedEnumerationAnswers(session.getSessionState(), quiz);
         ChallengeStatistics statistics = computeStatistics(
                 quiz,
                 selectedChoices,
                 selectedMultiChoices,
                 selectedIdentificationAnswers,
+                selectedEnumerationAnswers,
                 request.correctAnswers(),
                 totalQuestions
         );
@@ -592,13 +595,15 @@ public class ChallengeQuizService {
         Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
         Map<Integer, List<Integer>> selectedMultiChoices = QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
         Map<Integer, String> selectedIdentificationAnswers = QuizSessionStateUtils.extractSelectedIdentificationAnswers(session.getSessionState(), quiz);
+        Map<Integer, List<String>> selectedEnumerationAnswers = QuizSessionStateUtils.extractSelectedEnumerationAnswers(session.getSessionState(), quiz);
         List<ChallengeQuizConceptStatResponse> conceptBreakdown = extractConceptBreakdown(session);
         if (conceptBreakdown.isEmpty()) {
             conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdown(
                     quiz,
                     selectedChoices,
                     selectedMultiChoices,
-                    selectedIdentificationAnswers
+                    selectedIdentificationAnswers,
+                    selectedEnumerationAnswers
             );
         }
         List<String> weakConcepts = extractWeakConcepts(session);
@@ -622,6 +627,7 @@ public class ChallengeQuizService {
                 selectedChoices,
                 selectedMultiChoices,
                 selectedIdentificationAnswers,
+                selectedEnumerationAnswers,
                 session.getCreatedAt(),
                 session.getCompletedAt()
         );
@@ -1064,6 +1070,10 @@ public class ChallengeQuizService {
             if (selectedIdentificationAnswers instanceof Map<?, ?>) {
                 merged.put(SESSION_STATE_SELECTED_IDENTIFICATION_ANSWERS, selectedIdentificationAnswers);
             }
+            Object selectedEnumerationAnswers = incomingState.get(SESSION_STATE_SELECTED_ENUMERATION_ANSWERS);
+            if (selectedEnumerationAnswers instanceof Map<?, ?>) {
+                merged.put(SESSION_STATE_SELECTED_ENUMERATION_ANSWERS, selectedEnumerationAnswers);
+            }
         }
         if (!merged.containsKey(SESSION_STATE_SELECTED_CHOICES)) {
             merged.put(SESSION_STATE_SELECTED_CHOICES, Map.of());
@@ -1073,6 +1083,9 @@ public class ChallengeQuizService {
         }
         if (!merged.containsKey(SESSION_STATE_SELECTED_IDENTIFICATION_ANSWERS)) {
             merged.put(SESSION_STATE_SELECTED_IDENTIFICATION_ANSWERS, Map.of());
+        }
+        if (!merged.containsKey(SESSION_STATE_SELECTED_ENUMERATION_ANSWERS)) {
+            merged.put(SESSION_STATE_SELECTED_ENUMERATION_ANSWERS, Map.of());
         }
         if (!merged.containsKey(SESSION_STATE_TIME_LIMIT_SECONDS)) {
             merged.put(SESSION_STATE_TIME_LIMIT_SECONDS, INITIAL_CHALLENGE_QUIZ_COUNT * SECONDS_PER_QUESTION_CHALLENGE);
@@ -1220,6 +1233,7 @@ public class ChallengeQuizService {
             Map<Integer, Integer> selectedChoices,
             Map<Integer, List<Integer>> selectedMultiChoices,
             Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers,
             int fallbackCorrectAnswers,
             int fallbackTotalQuestions
     ) {
@@ -1254,7 +1268,8 @@ public class ChallengeQuizService {
                     index,
                     selectedChoices,
                     selectedMultiChoices,
-                    selectedIdentificationAnswers
+                    selectedIdentificationAnswers,
+                    selectedEnumerationAnswers
             )) {
                 counter.correctAnswers += 1;
                 correctAnswers += 1;
@@ -1264,8 +1279,9 @@ public class ChallengeQuizService {
         int totalQuestions = selectedChoices.isEmpty()
                 && (selectedMultiChoices == null || selectedMultiChoices.isEmpty())
                 && (selectedIdentificationAnswers == null || selectedIdentificationAnswers.isEmpty())
+                && (selectedEnumerationAnswers == null || selectedEnumerationAnswers.isEmpty())
                 ? quiz.size()
-                : countAnsweredQuestions(selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+                : countAnsweredQuestions(selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
         BigDecimal percentage = BigDecimal.valueOf(correctAnswers)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(Math.max(1, totalQuestions)), 2, RoundingMode.HALF_UP);
@@ -1300,7 +1316,8 @@ public class ChallengeQuizService {
     private int countAnsweredQuestions(
             Map<Integer, Integer> selectedChoices,
             Map<Integer, List<Integer>> selectedMultiChoices,
-            Map<Integer, String> selectedIdentificationAnswers
+            Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers
     ) {
         Set<Integer> answeredQuestionIndexes = new LinkedHashSet<>();
         if (selectedChoices != null) {
@@ -1315,6 +1332,13 @@ public class ChallengeQuizService {
         if (selectedIdentificationAnswers != null) {
             selectedIdentificationAnswers.entrySet().stream()
                     .filter(entry -> entry.getValue() != null && !entry.getValue().isBlank())
+                    .map(Map.Entry::getKey)
+                    .forEach(answeredQuestionIndexes::add);
+        }
+        if (selectedEnumerationAnswers != null) {
+            selectedEnumerationAnswers.entrySet().stream()
+                    .filter(entry -> entry.getValue() != null
+                            && entry.getValue().stream().anyMatch(answer -> answer != null && !answer.isBlank()))
                     .map(Map.Entry::getKey)
                     .forEach(answeredQuestionIndexes::add);
         }
