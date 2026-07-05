@@ -2,7 +2,7 @@
 
 ## v0.39.0 - Flexible Review Methods
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: let a Study Pack be reviewed through more than Multiple Choice — Flashcards and real spaced-repetition Memorization as review-only methods, Identification and Enumeration as new scored assessment formats — while keeping the review-vs-assessment mastery boundary v0.37.0 built.
 

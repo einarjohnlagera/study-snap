@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.39.0 - Flexible Review Methods` is the current in-progress release (on `releases/v0.39.0`).
+`v0.39.0 - Flexible Review Methods` is the latest released version (on `releases/v0.39.0`).
 
 `v0.38.0 - Read-Path Optimization Pass` is the previous released version (on `releases/v0.38.0`).
 
@@ -256,7 +256,7 @@ Quick Review session disposability is resolved above (hide from session-history 
 
 ---
 
-## v0.39.0 - Flexible Review Methods
+## v0.39.0 - Flexible Review Methods (released)
 
 Base branch: `releases/v0.39.0`. Kicked off after v0.38.0 signoff (repo convention: signoff of the current version precedes kickoff of the next). Scoped here so the four sub-features don't drift before implementation.
 
