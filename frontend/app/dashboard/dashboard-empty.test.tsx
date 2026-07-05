@@ -31,4 +31,20 @@ describe("DashboardEmpty", () => {
     expect(importLink).toHaveAttribute("href", "/notes/import");
     expect(createLink).toHaveAttribute("href", "/notes/new");
   });
+
+  it.each(["STUDENT", "BOARD_EXAM", "PROFESSIONAL"] as const)(
+    "offers a curated-plan adoption link for %s profiles",
+    (profileType) => {
+      render(<DashboardEmpty profileType={profileType} />);
+
+      expect(screen.getByRole("link", { name: /Or start from a ready-made .* instead/ }))
+        .toHaveAttribute("href", "/collections/published");
+    },
+  );
+
+  it("does not offer a curated-plan adoption link for Teacher profiles", () => {
+    render(<DashboardEmpty profileType="TEACHER" />);
+
+    expect(screen.queryByRole("link", { name: /Or start from a ready-made .* instead/ })).not.toBeInTheDocument();
+  });
 });
