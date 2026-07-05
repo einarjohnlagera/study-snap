@@ -22,6 +22,7 @@ public record QuizSessionReviewResponse(
         List<QuizItem> quiz,
         Map<Integer, Integer> selectedChoices,
         Map<Integer, List<Integer>> selectedMultiChoices,
+        Map<Integer, String> selectedIdentificationAnswers,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt
 ) {

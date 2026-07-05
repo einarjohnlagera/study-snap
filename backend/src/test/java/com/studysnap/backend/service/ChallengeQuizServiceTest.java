@@ -1198,6 +1198,91 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void completeSession_scoresMixedMcqAndIdentificationAnswersWithAnsweredDenominator() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        List<QuizItem> quiz = List.of(
+                new QuizItem("MCQ 1", List.of("A", "B", "C", "D"), "A", "MCQ Correct", "Explanation"),
+                new QuizItem("MCQ 2", List.of("A", "B", "C", "D"), "B", "MCQ Wrong", "Explanation"),
+                new QuizItem("MCQ 3", List.of("A", "B", "C", "D"), "C", "MCQ Correct", "Explanation"),
+                new QuizItem("MCQ 4", List.of("A", "B", "C", "D"), "D", "MCQ Wrong", "Explanation"),
+                new QuizItem("MCQ 5", List.of("A", "B", "C", "D"), "A", "MCQ Correct", "Explanation"),
+                identificationQuizItem("Identification 1", "Ohm's Law", "ID Correct"),
+                identificationQuizItem("Identification 2", "Kirchhoff's Law", "ID Wrong"),
+                identificationQuizItem("Identification 3", "Faraday's Law", "ID Correct"),
+                identificationQuizItem("Identification 4", "Lenz's Law", "ID Wrong"),
+                identificationQuizItem("Identification 5", "Coulomb's Law", "ID Correct")
+        );
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(quiz.size());
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                quiz,
+                Map.of(
+                        "mode", "challenge",
+                        "difficulty", "medium",
+                        "selectedChoices", Map.of("0", "A", "1", "C", "2", "C", "3", "B", "4", "A"),
+                        "selectedIdentificationAnswers", Map.of(
+                                "5", " ohm's   law ",
+                                "6", "Ampere's Law",
+                                "7", "FARADAY'S LAW",
+                                "8", "Hooke's Law",
+                                "9", "Coulomb's Law"
+                        ),
+                        "completed", false
+                )
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(0, 10, 180)
+        );
+
+        assertThat(response.correctAnswers()).isEqualTo(6);
+        assertThat(response.totalQuestions()).isEqualTo(10);
+        assertThat(response.scorePercentage()).isEqualByComparingTo("60.00");
+        assertThat(response.conceptBreakdown())
+                .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+                .contains(
+                        "ID Correct:3/3",
+                        "ID Wrong:0/2",
+                        "MCQ Correct:3/3",
+                        "MCQ Wrong:0/2"
+                );
+        assertThat(response.weakConcepts()).contains("ID Wrong", "MCQ Wrong");
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("MCQ Correct", "ID Correct"),
+                session.getCompletedAt()
+        );
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId,
+                studyPackId,
+                List.of("MCQ Wrong", "ID Wrong"),
+                session.getCompletedAt()
+        );
+    }
+
+    @Test
     void completeSession_recordsFullyCorrectBoardExamConceptsToConceptHealth() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -1531,6 +1616,24 @@ class ChallengeQuizServiceTest {
             ));
         }
         return quiz;
+    }
+
+    private QuizItem identificationQuizItem(String question, String answer, String concept) {
+        return new QuizItem(
+                question,
+                List.of(),
+                null,
+                concept,
+                "Explanation",
+                null,
+                "IDENTIFICATION",
+                null,
+                null,
+                null,
+                null,
+                concept,
+                List.of(answer, answer.replace("'", ""))
+        );
     }
 
     private QuickReviewSessionEntity buildInProgressChallengeSession(

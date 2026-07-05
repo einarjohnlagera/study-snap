@@ -111,6 +111,74 @@ class QuizSessionReviewUtilsTest {
         assertThat(concepts).containsExactly("Key Concept A", "Legacy Concept");
     }
 
+    @Test
+    void isAnswerCorrect_matchesIdentificationAnswersCaseAndWhitespaceInsensitively() {
+        QuizItem item = identificationItem(List.of("Ohm's Law", "Ohms law"));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(0, "  OHM'S   LAW ")
+        );
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void isAnswerCorrect_rejectsIncorrectIdentificationAnswer() {
+        QuizItem item = identificationItem(List.of("Ohm's Law", "Ohms law"));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(0, "Kirchhoff's Law")
+        );
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isAnswerCorrect_rejectsBlankIdentificationAnswer() {
+        QuizItem item = identificationItem(List.of("Ohm's Law", "Ohms law"));
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(0, "   ")
+        );
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isAnswerCorrect_rejectsIdentificationItemWithoutAcceptableAnswers() {
+        QuizItem item = identificationItem(List.of());
+
+        boolean result = QuizSessionReviewUtils.isAnswerCorrect(
+                item,
+                0,
+                Map.of(),
+                Map.of(),
+                Map.of(0, "Ohm's Law")
+        );
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void existingIsAnswerCorrectOverloadKeepsMcqBehavior() {
+        QuizItem item = quizItem("Q1", 2, "Domain", "Key Concept");
+
+        assertThat(QuizSessionReviewUtils.isAnswerCorrect(item, 0, Map.of(0, 2), Map.of())).isTrue();
+        assertThat(QuizSessionReviewUtils.isAnswerCorrect(item, 0, Map.of(0, 1), Map.of())).isFalse();
+    }
+
     private QuizItem quizItem(String question, int correctIndex, String concept, String keyConcept) {
         return new QuizItem(
                 question,
@@ -124,7 +192,26 @@ class QuizSessionReviewUtilsTest {
                 null,
                 null,
                 null,
-                keyConcept
+                keyConcept,
+                null
+        );
+    }
+
+    private QuizItem identificationItem(List<String> acceptableAnswers) {
+        return new QuizItem(
+                "Identify the law that relates voltage, current, and resistance.",
+                List.of(),
+                null,
+                "Ohm's Law",
+                "Ohm's Law relates voltage, current, and resistance.",
+                null,
+                "IDENTIFICATION",
+                null,
+                null,
+                null,
+                null,
+                "Ohm's Law",
+                acceptableAnswers
         );
     }
 }

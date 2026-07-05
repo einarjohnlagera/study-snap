@@ -77,6 +77,32 @@ class QuizItemDeserializationTest {
     }
 
     @Test
+    void deserializesAndSerializesAcceptableAnswers() throws Exception {
+        QuizItem item = objectMapper.readValue(
+                """
+                {
+                  "question": "Identify the law that relates voltage, current, and resistance.",
+                  "choices": [],
+                  "correctIndex": null,
+                  "concept": "Ohm's Law",
+                  "keyConcept": "Ohm's Law",
+                  "explanation": "Ohm's Law relates voltage, current, and resistance.",
+                  "questionFormat": "IDENTIFICATION",
+                  "acceptableAnswers": ["Ohm's Law", "Ohms law"]
+                }
+                """,
+                QuizItem.class
+        );
+
+        String serialized = objectMapper.writeValueAsString(item);
+
+        assertThat(item.choices()).isEmpty();
+        assertThat(item.correctIndex()).isNull();
+        assertThat(item.acceptableAnswers()).containsExactly("Ohm's Law", "Ohms law");
+        assertThat(serialized).contains("\"acceptableAnswers\":[\"Ohm's Law\",\"Ohms law\"]");
+    }
+
+    @Test
     void deserializesMissingKeyConceptAsNull() throws Exception {
         QuizItem item = objectMapper.readValue(
                 """
@@ -303,7 +329,8 @@ class QuizItemDeserializationTest {
                 null,
                 null,
                 null,
-                "Electron transport chain"
+                "Electron transport chain",
+                null
         );
         QuizItem differentKeyConcept = new QuizItem(
                 "Which stage generates most ATP?",
@@ -317,10 +344,38 @@ class QuizItemDeserializationTest {
                 null,
                 null,
                 null,
-                "ATP synthesis"
+                "ATP synthesis",
+                null
         );
 
         assertThat(first).isNotEqualTo(differentKeyConcept);
         assertThat(first.hashCode()).isNotEqualTo(differentKeyConcept.hashCode());
+    }
+
+    @Test
+    void equalityIncludesAcceptableAnswers() {
+        QuizItem first = identificationItem(List.of("Ohm's Law", "Ohms law"));
+        QuizItem differentAcceptableAnswers = identificationItem(List.of("Kirchhoff's Law"));
+
+        assertThat(first).isNotEqualTo(differentAcceptableAnswers);
+        assertThat(first.hashCode()).isNotEqualTo(differentAcceptableAnswers.hashCode());
+    }
+
+    private QuizItem identificationItem(List<String> acceptableAnswers) {
+        return new QuizItem(
+                "Identify the law that relates voltage, current, and resistance.",
+                List.of(),
+                null,
+                "Ohm's Law",
+                "Ohm's Law relates voltage, current, and resistance.",
+                null,
+                "IDENTIFICATION",
+                null,
+                null,
+                null,
+                null,
+                "Ohm's Law",
+                acceptableAnswers
+        );
     }
 }

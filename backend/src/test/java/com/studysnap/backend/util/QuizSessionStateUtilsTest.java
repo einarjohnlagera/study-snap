@@ -26,7 +26,8 @@ class QuizSessionStateUtilsTest {
                         "P = IV = 5 × 2 = 10 W",
                         List.of(0, 2),
                         "group-1",
-                        "Chlorophyll"
+                        "Chlorophyll",
+                        null
                 )
         );
 
@@ -48,6 +49,28 @@ class QuizSessionStateUtilsTest {
         assertThat(restored.getFirst().correctIndices()).containsExactly(0, 2);
         assertThat(restored.getFirst().questionGroup()).isEqualTo("group-1");
         assertThat(restored.getFirst().keyConcept()).isEqualTo("Chlorophyll");
+    }
+
+    @Test
+    void withQuiz_andExtractQuiz_roundTripPreservesIdentificationAnswers() {
+        List<QuizItem> quiz = List.of(identificationItem());
+
+        Map<String, Object> state = QuizSessionStateUtils.withQuiz(quiz, Map.of());
+        List<QuizItem> restored = QuizSessionStateUtils.extractQuiz(state);
+
+        assertThat(restored).hasSize(1);
+        assertThat(restored.getFirst().choices()).isEmpty();
+        assertThat(restored.getFirst().correctIndex()).isNull();
+        assertThat(restored.getFirst().questionFormat()).isEqualTo("IDENTIFICATION");
+        assertThat(restored.getFirst().acceptableAnswers()).containsExactly("Ohm's Law", "Ohms law");
+    }
+
+    @Test
+    void withSelectedIdentificationAnswer_andExtractSelectedIdentificationAnswers_roundTrip() {
+        Map<String, Object> state = QuizSessionStateUtils.withSelectedIdentificationAnswer(Map.of(), 0, "  Ohm's Law ");
+
+        assertThat(QuizSessionStateUtils.extractSelectedIdentificationAnswers(state, List.of(identificationItem())))
+                .containsEntry(0, "Ohm's Law");
     }
 
     @Test
@@ -151,5 +174,23 @@ class QuizSessionStateUtilsTest {
                 .containsExactly("Encapsulation", "Abstraction", "Inheritance", "Polymorphism");
         assertThat(restored.getFirst().correctIndex()).isZero();
         assertThat(restored.getFirst().answer()).isEqualTo("Encapsulation");
+    }
+
+    private QuizItem identificationItem() {
+        return new QuizItem(
+                "Identify the law that relates voltage, current, and resistance.",
+                List.of(),
+                null,
+                "Ohm's Law",
+                "Ohm's Law relates voltage, current, and resistance.",
+                null,
+                "IDENTIFICATION",
+                null,
+                null,
+                null,
+                null,
+                "Ohm's Law",
+                List.of("Ohm's Law", "Ohms law")
+        );
     }
 }

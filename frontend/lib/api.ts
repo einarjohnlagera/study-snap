@@ -17,17 +17,18 @@ export type { MePlanResponse } from "./me-plan";
 export type QuizItem = {
   question: string;
   choices: string[];
-  correctIndex: number;
+  correctIndex: number | null;
   correctIndices?: number[] | null;
   answerIndex?: number;
   correctAnswerIndex?: number;
-  answer?: string;
+  answer?: string | null;
   concept?: string;
   explanation: string;
-  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | "MATCHING" | null;
+  questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | "MATCHING" | "IDENTIFICATION" | null;
   questionGroup?: string | null;
   questionType?: "CONCEPTUAL" | "COMPUTATIONAL" | null;
   workingSolution?: string | null;
+  acceptableAnswers?: string[] | null;
 };
 
 export type GeneratedQuizResponse = {
@@ -1094,6 +1095,7 @@ export type QuizSessionReviewResponse = {
   quiz: QuizItem[];
   selectedChoices: Record<string, number>;
   selectedMultiChoices?: Record<string, number[]>;
+  selectedIdentificationAnswers?: Record<string, string>;
   createdAt: string;
   completedAt: string | null;
 };
