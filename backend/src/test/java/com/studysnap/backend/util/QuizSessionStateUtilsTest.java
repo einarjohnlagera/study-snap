@@ -27,6 +27,7 @@ class QuizSessionStateUtilsTest {
                         List.of(0, 2),
                         "group-1",
                         "Chlorophyll",
+                        null,
                         null
                 )
         );
@@ -71,6 +72,47 @@ class QuizSessionStateUtilsTest {
 
         assertThat(QuizSessionStateUtils.extractSelectedIdentificationAnswers(state, List.of(identificationItem())))
                 .containsEntry(0, "Ohm's Law");
+    }
+
+    @Test
+    void withQuiz_andExtractQuiz_roundTripPreservesNestedAcceptableAnswerGroups() {
+        List<QuizItem> quiz = List.of(enumerationItem());
+
+        Map<String, Object> state = QuizSessionStateUtils.withQuiz(quiz, Map.of());
+        List<QuizItem> restored = QuizSessionStateUtils.extractQuiz(state);
+
+        assertThat(restored).hasSize(1);
+        assertThat(restored.getFirst().choices()).isEmpty();
+        assertThat(restored.getFirst().correctIndex()).isNull();
+        assertThat(restored.getFirst().questionFormat()).isEqualTo("ENUMERATION");
+        assertThat(restored.getFirst().acceptableAnswerGroups())
+                .containsExactly(
+                        List.of("Legislative", "Legislature"),
+                        List.of("Executive"),
+                        List.of("Judicial", "Judiciary")
+                );
+    }
+
+    @Test
+    void withSelectedEnumerationAnswer_andExtractSelectedEnumerationAnswers_roundTripPreservesBlankSlots() {
+        Map<String, Object> state = QuizSessionStateUtils.withSelectedEnumerationAnswer(
+                Map.of(),
+                0,
+                List.of("Legislative", "", "Judicial")
+        );
+
+        assertThat(QuizSessionStateUtils.extractSelectedEnumerationAnswers(state, List.of(enumerationItem())))
+                .containsEntry(0, List.of("Legislative", "", "Judicial"));
+    }
+
+    @Test
+    void withSelectedEnumerationAnswer_removesEntryWhenAllSlotsBlank() {
+        Map<String, Object> state = QuizSessionStateUtils.withSelectedEnumerationAnswer(Map.of(), 0, List.of("Legislative"));
+
+        Map<String, Object> cleared = QuizSessionStateUtils.withSelectedEnumerationAnswer(state, 0, List.of("", "  "));
+
+        assertThat(QuizSessionStateUtils.extractSelectedEnumerationAnswers(cleared, List.of(enumerationItem())))
+                .isEmpty();
     }
 
     @Test
@@ -190,7 +232,27 @@ class QuizSessionStateUtilsTest {
                 null,
                 null,
                 "Ohm's Law",
-                List.of("Ohm's Law", "Ohms law")
+                List.of("Ohm's Law", "Ohms law"),
+                null
+        );
+    }
+
+    private QuizItem enumerationItem() {
+        return new QuizItem(
+                "Name the three branches of government.",
+                List.of(),
+                null,
+                "Branches of government",
+                "The three branches are legislative, executive, and judicial.",
+                null,
+                "ENUMERATION",
+                null,
+                null,
+                null,
+                null,
+                "Branches of government",
+                null,
+                List.of(List.of("Legislative", "Legislature"), List.of("Executive"), List.of("Judicial", "Judiciary"))
         );
     }
 }

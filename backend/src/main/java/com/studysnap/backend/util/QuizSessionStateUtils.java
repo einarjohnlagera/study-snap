@@ -31,6 +31,8 @@ public class QuizSessionStateUtils {
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
     private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
     private static final String SELECTED_IDENTIFICATION_ANSWERS_KEY = "selectedIdentificationAnswers";
+    private static final String SELECTED_ENUMERATION_ANSWERS_KEY = "selectedEnumerationAnswers";
+    private static final String ACCEPTABLE_ANSWER_GROUPS_KEY = "acceptableAnswerGroups";
     private static final String SUB_MODE_KEY = "subMode";
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
@@ -41,6 +43,7 @@ public class QuizSessionStateUtils {
     private static final String SOURCE_NOTE_TITLE_KEY = "noteTitle";
     private static final String SOURCE_QUESTION_COUNT_KEY = "questionCount";
     private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
+    private static final String ENUMERATION_FORMAT = "ENUMERATION";
     public static final String SESSION_STATE_POOL_SOURCED = "poolSourced";
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
@@ -134,6 +137,30 @@ public class QuizSessionStateUtils {
             selectedAnswers.put(String.valueOf(questionIndex), normalized);
         }
         state.put(SELECTED_IDENTIFICATION_ANSWERS_KEY, selectedAnswers);
+        return state;
+    }
+
+    public Map<String, Object> withSelectedEnumerationAnswer(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            List<String> answers
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+
+        Map<String, Object> selectedAnswers = copyStringKeyMap(state.get(SELECTED_ENUMERATION_ANSWERS_KEY));
+        List<String> normalized = answers == null
+                ? List.of()
+                : answers.stream().map(answer -> answer == null ? "" : answer.trim()).toList();
+        boolean allBlank = normalized.stream().allMatch(String::isBlank);
+        if (allBlank) {
+            selectedAnswers.remove(String.valueOf(questionIndex));
+        } else {
+            selectedAnswers.put(String.valueOf(questionIndex), normalized);
+        }
+        state.put(SELECTED_ENUMERATION_ANSWERS_KEY, selectedAnswers);
         return state;
     }
 
@@ -256,6 +283,7 @@ public class QuizSessionStateUtils {
             Object correctAnswerIndexRaw = rawMap.get(CORRECT_ANSWER_INDEX_KEY);
             Object answerRaw = rawMap.get(ANSWER_KEY);
             Object acceptableAnswersRaw = rawMap.get(ACCEPTABLE_ANSWERS_KEY);
+            Object acceptableAnswerGroupsRaw = rawMap.get(ACCEPTABLE_ANSWER_GROUPS_KEY);
             Object correctIndicesRaw = rawMap.get(CORRECT_INDICES_KEY);
             Object conceptRaw = rawMap.get(CONCEPT_KEY);
             Object keyConceptRaw = rawMap.get(KEY_CONCEPT_KEY);
@@ -283,15 +311,17 @@ public class QuizSessionStateUtils {
             Integer correctIndex = parseCorrectIndex(choices.size(), correctIndexRaw, answerIndexRaw, correctAnswerIndexRaw);
             List<Integer> correctIndices = parseIndexList(choices.size(), correctIndicesRaw);
             List<String> acceptableAnswers = parseStringList(acceptableAnswersRaw);
+            List<List<String>> acceptableAnswerGroups = parseStringListList(acceptableAnswerGroupsRaw);
             String answer = answerRaw instanceof String value ? value : null;
             String questionFormat = questionFormatRaw instanceof String value ? value : null;
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
             String questionGroup = questionGroupRaw instanceof String value ? value : null;
-            if (choices.isEmpty() && !IDENTIFICATION_FORMAT.equals(questionFormat)) {
+            boolean isChoicelessFormat = IDENTIFICATION_FORMAT.equals(questionFormat) || ENUMERATION_FORMAT.equals(questionFormat);
+            if (choices.isEmpty() && !isChoicelessFormat) {
                 continue;
             }
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept, acceptableAnswers));
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups));
         }
 
         return quiz;
@@ -453,6 +483,37 @@ public class QuizSessionStateUtils {
         return selectedAnswers.isEmpty() ? Map.of() : Map.copyOf(selectedAnswers);
     }
 
+    public Map<Integer, List<String>> extractSelectedEnumerationAnswers(Map<String, Object> sessionState, List<QuizItem> quiz) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = sessionState.get(SELECTED_ENUMERATION_ANSWERS_KEY);
+        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, List<String>> selectedAnswers = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            Object key = entry.getKey();
+            if (!(key instanceof String keyString)) {
+                continue;
+            }
+            try {
+                int questionIndex = Integer.parseInt(keyString);
+                if (questionIndex < 0 || questionIndex >= quiz.size()) {
+                    continue;
+                }
+                List<String> answers = parseRawStringList(entry.getValue());
+                if (!answers.isEmpty()) {
+                    selectedAnswers.put(questionIndex, answers);
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return selectedAnswers.isEmpty() ? Map.of() : Map.copyOf(selectedAnswers);
+    }
+
     private List<Map<String, Object>> serializeQuiz(List<QuizItem> quiz) {
         if (quiz == null || quiz.isEmpty()) {
             return List.of();
@@ -469,6 +530,9 @@ public class QuizSessionStateUtils {
             quizItem.put(CORRECT_INDEX_KEY, item.correctIndex());
             quizItem.put(CORRECT_INDICES_KEY, item.correctIndices() == null ? List.of() : new ArrayList<>(item.correctIndices()));
             quizItem.put(ACCEPTABLE_ANSWERS_KEY, item.acceptableAnswers() == null ? List.of() : new ArrayList<>(item.acceptableAnswers()));
+            quizItem.put(ACCEPTABLE_ANSWER_GROUPS_KEY, item.acceptableAnswerGroups() == null
+                    ? List.of()
+                    : item.acceptableAnswerGroups().stream().map(ArrayList::new).toList());
             quizItem.put(CONCEPT_KEY, item.concept());
             quizItem.put(KEY_CONCEPT_KEY, item.keyConcept());
             quizItem.put(EXPLANATION_KEY, item.explanation());
@@ -593,6 +657,30 @@ public class QuizSessionStateUtils {
             }
         }
         return values.isEmpty() ? List.of() : List.copyOf(values);
+    }
+
+    private List<String> parseRawStringList(Object rawValue) {
+        if (!(rawValue instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (Object rawItem : rawList) {
+            values.add(rawItem instanceof String value ? value.trim() : "");
+        }
+        return values.stream().allMatch(String::isBlank) ? List.of() : List.copyOf(values);
+    }
+
+    private List<List<String>> parseStringListList(Object rawValue) {
+        if (!(rawValue instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        List<List<String>> groups = new ArrayList<>();
+        for (Object rawItem : rawList) {
+            if (rawItem instanceof List<?> rawGroup) {
+                groups.add(parseStringList(rawGroup));
+            }
+        }
+        return groups.isEmpty() ? List.of() : List.copyOf(groups);
     }
 
     private List<Integer> normalizeIntegerList(List<Integer> values) {

@@ -178,7 +178,8 @@ public final class QuizVersionShuffleUtils {
                 correctIndices,
                 question.questionGroup(),
                 question.keyConcept(),
-                question.acceptableAnswers()
+                question.acceptableAnswers(),
+                question.acceptableAnswerGroups()
         );
     }
 

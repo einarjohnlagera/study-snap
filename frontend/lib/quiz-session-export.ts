@@ -3,9 +3,11 @@ import { computeScore, mapPerformanceLevel } from "@/lib/challenge-quiz-results"
 import {
   getDisplayedQuizChoices,
   isQuizSelectionCorrect,
+  resolveEnumerationAcceptedAnswerGroups,
   resolveIdentificationAcceptedAnswers,
   resolveQuizCorrectIndex,
   toSelectedChoiceIndexRecord,
+  toSelectedEnumerationAnswersRecord,
   toSelectedIdentificationAnswerRecord,
   toSelectedMultiChoiceIndicesRecord,
   type QuizDisplayChoice,
@@ -182,21 +184,26 @@ function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQu
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
   const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
   const selectedIdentificationAnswers = toSelectedIdentificationAnswerRecord(review.selectedIdentificationAnswers, review.quiz);
+  const selectedEnumerationAnswers = toSelectedEnumerationAnswersRecord(review.selectedEnumerationAnswers, review.quiz);
 
   return review.quiz.map((item, index) => {
     const displayedChoices = getDisplayedQuizChoices(item);
     const selectedChoiceIndex = selectedChoices[index] ?? null;
     const correctIndex = resolveQuizCorrectIndex(item);
     const selectedIdentificationAnswer = selectedIdentificationAnswers[index] ?? "";
+    const selectedEnumerationAnswer = selectedEnumerationAnswers[index] ?? [];
     const acceptedIdentificationAnswers = resolveIdentificationAcceptedAnswers(item);
+    const acceptedEnumerationAnswerGroups = resolveEnumerationAcceptedAnswerGroups(item);
     const selectedChoice = displayedChoices.find((choice) => choice.canonicalIndex === selectedChoiceIndex) ?? null;
     const correctChoice = displayedChoices.find((choice) => choice.canonicalIndex === correctIndex) ?? null;
 
     const selectedForScoring = item.questionFormat === "IDENTIFICATION"
       ? selectedIdentificationAnswer
-      : item.questionFormat === "MULTI_SELECT"
-        ? selectedMultiChoices[index]
-        : selectedChoiceIndex;
+      : item.questionFormat === "ENUMERATION"
+        ? selectedEnumerationAnswer
+        : item.questionFormat === "MULTI_SELECT"
+          ? selectedMultiChoices[index]
+          : selectedChoiceIndex;
 
     return {
       index,
@@ -206,8 +213,16 @@ function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQu
       isCorrect: isQuizSelectionCorrect(item, selectedForScoring),
       selectedChoice,
       correctChoice,
-      selectedAnswerText: item.questionFormat === "IDENTIFICATION" ? selectedIdentificationAnswer || null : null,
-      correctAnswerText: item.questionFormat === "IDENTIFICATION" ? acceptedIdentificationAnswers.join("; ") || null : null,
+      selectedAnswerText: item.questionFormat === "IDENTIFICATION"
+        ? selectedIdentificationAnswer || null
+        : item.questionFormat === "ENUMERATION"
+          ? selectedEnumerationAnswer.filter((value) => value.trim().length > 0).join("; ") || null
+          : null,
+      correctAnswerText: item.questionFormat === "IDENTIFICATION"
+        ? acceptedIdentificationAnswers.join("; ") || null
+        : item.questionFormat === "ENUMERATION"
+          ? acceptedEnumerationAnswerGroups.map((group) => group.join(" / ")).join("; ") || null
+          : null,
       choices: displayedChoices.map((choice) => ({
         choice,
         isCorrect: choice.canonicalIndex === correctIndex,
@@ -391,7 +406,8 @@ function buildPdfCommands(
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
   const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
   const selectedIdentificationAnswers = toSelectedIdentificationAnswerRecord(review.selectedIdentificationAnswers, review.quiz);
-  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+  const selectedEnumerationAnswers = toSelectedEnumerationAnswersRecord(review.selectedEnumerationAnswers, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
   const performanceLevel = mapPerformanceLevel(score.scorePercentage);
   const questionItems = buildQuestionReviewItems(review);
   const builder = new SimplePdfDocumentBuilder();
@@ -452,7 +468,8 @@ function buildMistakesPdfCommands(
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
   const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
   const selectedIdentificationAnswers = toSelectedIdentificationAnswerRecord(review.selectedIdentificationAnswers, review.quiz);
-  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+  const selectedEnumerationAnswers = toSelectedEnumerationAnswersRecord(review.selectedEnumerationAnswers, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
   const questionItems = buildQuestionReviewItems(review);
   const mistakeItems = questionItems.filter((item) => !item.isCorrect);
   const mistakeWeakConcepts = [
@@ -604,7 +621,8 @@ function buildAdaptivePracticePdfCommands(
   const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
   const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
   const selectedIdentificationAnswers = toSelectedIdentificationAnswerRecord(review.selectedIdentificationAnswers, review.quiz);
-  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers);
+  const selectedEnumerationAnswers = toSelectedEnumerationAnswersRecord(review.selectedEnumerationAnswers, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
   const performanceLevel = mapPerformanceLevel(score.scorePercentage);
   const questionItems = buildQuestionReviewItems(review);
   const builder = new SimplePdfDocumentBuilder();
@@ -814,14 +832,17 @@ export function hasExportableContent(
     const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
     const selectedMultiChoices = toSelectedMultiChoiceIndicesRecord(review.selectedMultiChoices, review.quiz);
     const selectedIdentificationAnswers = toSelectedIdentificationAnswerRecord(review.selectedIdentificationAnswers, review.quiz);
+    const selectedEnumerationAnswers = toSelectedEnumerationAnswersRecord(review.selectedEnumerationAnswers, review.quiz);
     return review.quiz.some(
       (item, index) => !isQuizSelectionCorrect(
         item,
         item.questionFormat === "IDENTIFICATION"
           ? selectedIdentificationAnswers[index] ?? null
-          : item.questionFormat === "MULTI_SELECT"
-            ? selectedMultiChoices[index]
-            : selectedChoices[index] ?? null,
+          : item.questionFormat === "ENUMERATION"
+            ? selectedEnumerationAnswers[index] ?? null
+            : item.questionFormat === "MULTI_SELECT"
+              ? selectedMultiChoices[index]
+              : selectedChoices[index] ?? null,
       ),
     );
   }

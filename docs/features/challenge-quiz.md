@@ -89,8 +89,11 @@ Challenge Quiz can generate:
 - `MULTI_SELECT`
 - `MATCHING`
 - `IDENTIFICATION`
+- `ENUMERATION`
 
 `IDENTIFICATION` is a free-text active-recall format scored through deterministic `acceptableAnswers[]` matching. It is Challenge Quiz-only for now and has no per-submission LLM call. See `docs/features/identification.md`.
+
+`ENUMERATION` is a multi-slot free-text format (2-5 required items) scored all-or-nothing via exhaustive bipartite matching against `acceptableAnswerGroups[]`. Same Challenge Quiz-only scope and no per-submission LLM call. See `docs/features/enumeration.md`.
 
 ## Progressive Quiz Generation (Challenge mode only)
 
@@ -125,7 +128,7 @@ Challenge mode supports on-demand question batching within a live session:
 
 ## Scoring
 
-- Score is based on **answered questions** (selected single-choice answers, selected multi-choice answers, and nonblank Identification answers), not the total questions in the session
+- Score is based on **answered questions** (selected single-choice answers, selected multi-choice answers, nonblank Identification answers, and Enumeration answers with at least one nonblank slot), not the total questions in the session
 - `computeStatistics()` uses the answered-question index set as `totalQuestions` when the user has answered at least one question; falls back to `quiz.size()` only when nothing is answered
 - This allows users to finish early and receive a fair score based only on what they attempted
 

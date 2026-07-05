@@ -3,6 +3,7 @@ import type { QuizItem } from "@/lib/api";
 const CHOICE_LABELS = ["A", "B", "C", "D"] as const;
 const LEADING_CHOICE_LABEL_PATTERN = /^\s*[A-D]\s*[.)]\s*/i;
 const IDENTIFICATION_FORMAT = "IDENTIFICATION";
+const ENUMERATION_FORMAT = "ENUMERATION";
 
 export type QuizDisplayChoice = {
   displayIndex: number;
@@ -110,6 +111,10 @@ export function resolveQuizCorrectAnswer(item: QuizItem): string | null {
   if (item.questionFormat === IDENTIFICATION_FORMAT) {
     return resolveIdentificationAcceptedAnswers(item)[0] ?? null;
   }
+  if (item.questionFormat === ENUMERATION_FORMAT) {
+    const groups = resolveEnumerationAcceptedAnswerGroups(item);
+    return groups.length > 0 ? groups.map((group) => group[0] ?? "").join(", ") : null;
+  }
   const correctIndex = resolveQuizCorrectIndex(item);
   return correctIndex >= 0 && correctIndex < item.choices.length ? item.choices[correctIndex] : null;
 }
@@ -131,16 +136,21 @@ export function isMultiSelectSelectionCorrect(item: QuizItem, selectedIndices: n
 
 export function isQuizSelectionCorrect(
   item: QuizItem,
-  selectedChoiceIndex: number | number[] | string | null | undefined,
+  selectedChoiceIndex: number | number[] | string | string[] | null | undefined,
 ): boolean {
   if (item.questionFormat === IDENTIFICATION_FORMAT) {
     return typeof selectedChoiceIndex === "string"
       ? isIdentificationAnswerCorrect(item, selectedChoiceIndex)
       : false;
   }
+  if (item.questionFormat === ENUMERATION_FORMAT) {
+    return Array.isArray(selectedChoiceIndex) && selectedChoiceIndex.every((value) => typeof value === "string")
+      ? isEnumerationAnswerCorrect(item, selectedChoiceIndex as string[])
+      : false;
+  }
   if (item.questionFormat === "MULTI_SELECT") {
     return Array.isArray(selectedChoiceIndex)
-      ? isMultiSelectSelectionCorrect(item, selectedChoiceIndex)
+      ? isMultiSelectSelectionCorrect(item, selectedChoiceIndex as number[])
       : false;
   }
   return selectedChoiceIndex != null && selectedChoiceIndex === resolveQuizCorrectIndex(item);
@@ -168,6 +178,54 @@ export function isIdentificationAnswerCorrect(item: QuizItem, selectedAnswer: st
   return resolveIdentificationAcceptedAnswers(item)
     .map(normalizeIdentificationAnswer)
     .some((answer) => answer === normalizedSelected);
+}
+
+export function resolveEnumerationAcceptedAnswerGroups(item: QuizItem): string[][] {
+  if (!Array.isArray(item.acceptableAnswerGroups)) {
+    return [];
+  }
+  return item.acceptableAnswerGroups
+    .filter((group): group is string[] => Array.isArray(group))
+    .map((group) => group.map((answer) => answer.trim()).filter(Boolean));
+}
+
+export function isEnumerationAnswerCorrect(item: QuizItem, selectedAnswers: (string | null | undefined)[]): boolean {
+  const groups = resolveEnumerationAcceptedAnswerGroups(item);
+  if (groups.length === 0) {
+    return false;
+  }
+  const submitted = (selectedAnswers ?? [])
+    .map(normalizeIdentificationAnswer)
+    .filter((value): value is string => value !== null);
+  if (submitted.length !== groups.length) {
+    return false;
+  }
+  const normalizedGroups = groups.map((group) => group.map(normalizeIdentificationAnswer));
+  const usedGroups = new Array(groups.length).fill(false);
+  return hasCompleteEnumerationAssignment(submitted, normalizedGroups, usedGroups, 0);
+}
+
+function hasCompleteEnumerationAssignment(
+  submitted: string[],
+  normalizedGroups: (string | null)[][],
+  usedGroups: boolean[],
+  submittedIndex: number,
+): boolean {
+  if (submittedIndex === submitted.length) {
+    return true;
+  }
+  const submittedAnswer = submitted[submittedIndex];
+  for (let groupIndex = 0; groupIndex < normalizedGroups.length; groupIndex += 1) {
+    if (usedGroups[groupIndex] || !normalizedGroups[groupIndex].includes(submittedAnswer)) {
+      continue;
+    }
+    usedGroups[groupIndex] = true;
+    if (hasCompleteEnumerationAssignment(submitted, normalizedGroups, usedGroups, submittedIndex + 1)) {
+      return true;
+    }
+    usedGroups[groupIndex] = false;
+  }
+  return false;
 }
 
 export function toSelectedChoiceIndexRecord(value: unknown, quiz: QuizItem[]): Record<number, number> {
@@ -255,6 +313,36 @@ export function serializeSelectedIdentificationAnswerRecord(value: Record<number
     Object.entries(value)
       .map(([questionIndex, answer]) => [String(questionIndex), typeof answer === "string" ? answer.trim() : ""])
       .filter(([, answer]) => typeof answer === "string" && answer.length > 0),
+  );
+}
+
+export function toSelectedEnumerationAnswersRecord(value: unknown, quiz: QuizItem[]): Record<number, string[]> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const selectedAnswers: Record<number, string[]> = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const questionIndex = Number(rawKey);
+    if (!Number.isInteger(questionIndex) || questionIndex < 0 || questionIndex >= quiz.length) {
+      continue;
+    }
+    if (Array.isArray(rawValue)) {
+      selectedAnswers[questionIndex] = rawValue.map((entry) => (typeof entry === "string" ? entry : ""));
+    }
+  }
+
+  return selectedAnswers;
+}
+
+export function serializeSelectedEnumerationAnswersRecord(value: Record<number, string[]>): Record<string, string[]> {
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, answers]) => Array.isArray(answers))
+      .map(([questionIndex, answers]) => [
+        String(questionIndex),
+        answers.map((answer) => (typeof answer === "string" ? answer : "")),
+      ]),
   );
 }
 

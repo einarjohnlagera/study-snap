@@ -221,7 +221,8 @@ public class ShareService {
                     item.correctIndices(),
                     item.questionGroup(),
                     item.keyConcept(),
-                    item.acceptableAnswers()
+                    item.acceptableAnswers(),
+                    item.acceptableAnswerGroups()
             );
         }
         return new QuizItem(
@@ -237,7 +238,8 @@ public class ShareService {
                 item.correctIndices(),
                 item.questionGroup(),
                 item.keyConcept(),
-                item.acceptableAnswers()
+                item.acceptableAnswers(),
+                item.acceptableAnswerGroups()
         );
     }
 

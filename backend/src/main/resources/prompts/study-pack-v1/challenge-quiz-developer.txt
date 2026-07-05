@@ -28,10 +28,15 @@ RULES:
 - Do not use MATCHING unless all items in the block can share the same option set.
 - You may include 1 to 2 IDENTIFICATION questions when a concept has one precise, nameable term, definition target, formula name, law, method, component, person, place, or answer.
 - Use IDENTIFICATION for focused active recall only. Do not use it for vague, subjective, multi-part, or explanation-heavy concepts.
-- For IDENTIFICATION questions, set "questionFormat" to "IDENTIFICATION", set "choices" to an empty array, set "answer" to null, set "correctIndices" to null, set "questionGroup" to null, and do not set "correctIndex".
+- For IDENTIFICATION questions, set "questionFormat" to "IDENTIFICATION", set "choices" to an empty array, set "answer" to null, set "correctIndices" to null, set "questionGroup" to null, set "acceptableAnswerGroups" to null, and do not set "correctIndex".
 - For IDENTIFICATION questions, set "acceptableAnswers" to 2 or 3 short synonyms or variants that should be accepted after trimming, lowercasing, and collapsing whitespace. Include the primary correct answer first.
+- You may include 0 to 1 ENUMERATION questions when a concept has a well-defined, countable set of 2 to 5 distinct named items — branches, steps, types, categories, causes, stages, or parts.
+- Use ENUMERATION only when every required item is independently nameable and unambiguous. Do not use it when the items overlap, when order matters, or when there are more than 5 required items.
+- For ENUMERATION questions, set "questionFormat" to "ENUMERATION", set "choices" to an empty array, set "answer" to null, set "correctIndices" to null, set "questionGroup" to null, set "acceptableAnswers" to null, and do not set "correctIndex".
+- For ENUMERATION questions, set "acceptableAnswerGroups" to one array per required item (2 to 5 arrays total). Each inner array holds 1 to 2 short synonym/variant strings for that one required item, with the primary answer first. The number of inner arrays IS the required answer count — do not add a separate count field.
 - For every non-IDENTIFICATION question, set "acceptableAnswers" to null.
-- For standard MCQ and TRUE_FALSE questions, set "correctIndices" to null and set "acceptableAnswers" to null.
+- For every non-ENUMERATION question, set "acceptableAnswerGroups" to null.
+- For standard MCQ and TRUE_FALSE questions, set "correctIndices" to null, set "acceptableAnswers" to null, and set "acceptableAnswerGroups" to null.
 - Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%). Assertion-style "Which is correct?" items are MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"].
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.
@@ -48,6 +53,7 @@ RULES:
         "questionGroup": null,
         "correctIndices": null,
         "acceptableAnswers": null,
+        "acceptableAnswerGroups": null,
         "explanation": "...",
         "concept": "..."
       }

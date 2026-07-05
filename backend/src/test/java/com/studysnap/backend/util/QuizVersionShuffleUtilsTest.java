@@ -36,6 +36,7 @@ class QuizVersionShuffleUtilsTest {
                 null,
                 null,
                 "Versioned key concept",
+                null,
                 null
         );
 

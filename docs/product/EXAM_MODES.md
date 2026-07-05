@@ -148,8 +148,8 @@ Identification and Enumeration are new **question formats on the existing Quiz S
 
 | Format | Status | Where it generates | Scoring |
 |---|---|---|---|
-| Identification | In progress (v0.39.0) | Challenge Quiz first; Long Exam fast-follow | Free-text input matched against a generation-time `acceptableAnswers[]` list (normalized, case-insensitive). No per-submission LLM call. |
-| Enumeration | Planned next (chained after Identification) | Same as Identification, reusing its free-text plumbing | Same mechanism, extended to multiple required answers per question. |
+| Identification | Shipped (v0.39.0) | Challenge Quiz first; Long Exam fast-follow | Free-text input matched against a generation-time `acceptableAnswers[]` list (normalized, case-insensitive). No per-submission LLM call. |
+| Enumeration | Shipped (v0.39.0) | Challenge Quiz | Fixed-N free-text inputs (N = required item count), each matched order-independently against a generation-time `acceptableAnswerGroups: List<List<String>>` (one synonym group per required item) via exhaustive bipartite matching — a naive first-match-greedy assignment can wrongly reject a valid answer when synonym groups overlap. **All-or-nothing**: every required item must match a distinct group for the question to count correct — same boolean correct/incorrect model as every other format, no partial credit. Same normalization, no per-submission LLM call. |
 
 - **Ungated — available to every plan tier.** Per the product principle "gate control/workflows, not learning quality": question-format variety is a learning-quality dimension, so it is not a Plus/Pro differentiator. This applies to both formats regardless of which mode they later reach. Monetization continues to live in existing mode-level and quota-level differentiation (Board Exam Pro-only, Adaptive Practice quota tiers, Difficulty Selection Pro-only) — not in which question formats a user can see.
 - **Consistent mix per progressive-generation batch.** Challenge Quiz's 5→20 progressive batches must each carry the same format mix (some MCQ, some Identification) rather than segregating by type across batches (e.g. never "first 5 MCQ, then next 5 Identification") — segregating by batch reads as arbitrary rather than intentional variety.
@@ -394,7 +394,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - **Cross-profile mode unlock** (Students opting into Board Exam without changing profile).
 - **Curated exam decks / cohort content** (Pro+).
 - **Cross-profile journey** (Student → Board Taker upgrade flow with continuity).
-- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.39.0, in progress) — see "Non-Engine Review Surfaces" above for Flashcards/Memorization (shipped), and "New Question Formats" above for Identification (in progress, Challenge Quiz first) and Enumeration (planned next).
+- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.39.0) — see "Non-Engine Review Surfaces" above for Flashcards/Memorization (shipped), and "New Question Formats" above for Identification and Enumeration (both shipped, Challenge Quiz only).
 
 ---
 
