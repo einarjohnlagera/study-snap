@@ -80,6 +80,18 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - Board Exam uses `board-exam-*.txt` prompts for high-stakes licensure / certification simulation framing.
 - Do not route Board Exam through `generateChallengeQuiz()`; it must call the dedicated Board Exam generation method while keeping the fixed question count and no-progressive-generation contract.
 
+### Question formats
+
+Challenge Quiz can generate:
+
+- `MCQ`
+- `TRUE_FALSE`
+- `MULTI_SELECT`
+- `MATCHING`
+- `IDENTIFICATION`
+
+`IDENTIFICATION` is a free-text active-recall format scored through deterministic `acceptableAnswers[]` matching. It is Challenge Quiz-only for now and has no per-submission LLM call. See `docs/features/identification.md`.
+
 ## Progressive Quiz Generation (Challenge mode only)
 
 Challenge mode supports on-demand question batching within a live session:
@@ -113,8 +125,8 @@ Challenge mode supports on-demand question batching within a live session:
 
 ## Scoring
 
-- Score is based on **answered questions** (`selectedChoices.size()`), not the total questions in the session
-- `computeStatistics()` uses `selectedChoices.size()` as `totalQuestions` when the user has answered at least one question; falls back to `quiz.size()` only when nothing is answered
+- Score is based on **answered questions** (selected single-choice answers, selected multi-choice answers, and nonblank Identification answers), not the total questions in the session
+- `computeStatistics()` uses the answered-question index set as `totalQuestions` when the user has answered at least one question; falls back to `quiz.size()` only when nothing is answered
 - This allows users to finish early and receive a fair score based only on what they attempted
 
 ### Dual score display (Challenge mode only)

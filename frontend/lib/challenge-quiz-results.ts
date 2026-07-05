@@ -58,12 +58,15 @@ export function computeScore(
   quiz: QuizItem[],
   selectedChoices: Record<number, number>,
   selectedMultiChoices: Record<number, number[]> = {},
+  selectedIdentificationAnswers: Record<number, string> = {},
 ): QuizScore {
   const totalQuestions = quiz.length;
   const correctAnswers = quiz.reduce((count, item, index) => {
-    const selected = item.questionFormat === "MULTI_SELECT"
-      ? selectedMultiChoices[index]
-      : selectedChoices[index];
+    const selected = item.questionFormat === "IDENTIFICATION"
+      ? selectedIdentificationAnswers[index]
+      : item.questionFormat === "MULTI_SELECT"
+        ? selectedMultiChoices[index]
+        : selectedChoices[index];
     return isQuizSelectionCorrect(item, selected) ? count + 1 : count;
   }, 0);
   const scorePercentage =
@@ -82,15 +85,18 @@ export function computeConceptBreakdown(
   quiz: QuizItem[],
   selectedChoices: Record<number, number>,
   selectedMultiChoices: Record<number, number[]> = {},
+  selectedIdentificationAnswers: Record<number, string> = {},
 ): ConceptStat[] {
   const accumulator = new Map<string, { correct: number; total: number }>();
 
   for (let index = 0; index < quiz.length; index++) {
     const item = quiz[index];
     const concept = item.concept?.trim() || "Unknown";
-    const selected = item.questionFormat === "MULTI_SELECT"
-      ? selectedMultiChoices[index]
-      : selectedChoices[index];
+    const selected = item.questionFormat === "IDENTIFICATION"
+      ? selectedIdentificationAnswers[index]
+      : item.questionFormat === "MULTI_SELECT"
+        ? selectedMultiChoices[index]
+        : selectedChoices[index];
     const isCorrect = isQuizSelectionCorrect(item, selected);
 
     const existing = accumulator.get(concept) ?? { correct: 0, total: 0 };

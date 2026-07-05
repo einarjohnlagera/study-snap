@@ -17,6 +17,7 @@ public class QuizValidationUtils {
     private static final int TRUE_FALSE_CHOICE_COUNT = 2;
     private static final String TRUE_FALSE_FORMAT = "TRUE_FALSE";
     private static final String MULTI_SELECT_FORMAT = "MULTI_SELECT";
+    private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     private static final String TRUE_CHOICE = "true";
     private static final String FALSE_CHOICE = "false";
     private static final int MIN_MULTI_SELECT_CORRECT_INDICES = 2;
@@ -28,6 +29,9 @@ public class QuizValidationUtils {
     private static final Pattern ALL_EXCEPT_PATTERN = Pattern.compile("all of the following.{0,40}except");
 
     public boolean hasInvalidChoices(List<String> choices, String questionFormat) {
+        if (IDENTIFICATION_FORMAT.equals(questionFormat)) {
+            return choices != null && !choices.isEmpty();
+        }
         int expectedChoiceCount = TRUE_FALSE_FORMAT.equals(questionFormat)
                 ? TRUE_FALSE_CHOICE_COUNT
                 : MCQ_CHOICE_COUNT;

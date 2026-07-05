@@ -50,6 +50,7 @@
           "questionFormat",
           "questionGroup",
           "correctIndices",
+          "acceptableAnswers",
           "questionType",
           "workingSolution"
         ],
@@ -59,15 +60,14 @@
           },
           "choices": {
             "type": "array",
-            "minItems": 2,
+            "minItems": 0,
             "maxItems": 4,
             "items": {
               "type": "string"
             }
           },
           "answer": {
-            "type": "string",
-            "enum": ["A", "B", "C", "D"]
+            "type": ["string", "null"]
           },
           "explanation": {
             "type": "string",
@@ -75,7 +75,7 @@
           },
           "questionFormat": {
             "type": ["string", "null"],
-            "enum": ["MCQ", "TRUE_FALSE", "MULTI_SELECT", "MATCHING", null]
+            "enum": ["MCQ", "TRUE_FALSE", "MULTI_SELECT", "MATCHING", "IDENTIFICATION", null]
           },
           "questionGroup": {
             "type": ["string", "null"],
@@ -89,6 +89,12 @@
               },
               {"type": "null"}
             ]
+          },
+          "acceptableAnswers": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            }
           },
           "questionType": {
             "type": ["string", "null"],

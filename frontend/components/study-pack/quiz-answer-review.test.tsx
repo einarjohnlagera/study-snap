@@ -126,4 +126,27 @@ describe("QuizAnswerReview", () => {
     expect(screen.getByText(/pneumonoultramicroscopicsilicovolcanoconiosis/i)).toHaveClass("break-words");
     expect(screen.getByText(/Supercalifragilisticexpialidocious-style terminology/i)).toHaveClass("break-words");
   });
+
+  it("renders identification answers with accepted answer reveal", () => {
+    render(
+      <QuizAnswerReview
+        quiz={[{
+          question: "Identify the law that relates voltage, current, and resistance.",
+          choices: [],
+          correctIndex: null,
+          questionFormat: "IDENTIFICATION",
+          acceptableAnswers: ["Ohm's Law", "Ohms law"],
+          concept: "Circuit laws",
+          explanation: "Ohm's Law relates voltage, current, and resistance.",
+        }]}
+        selectedChoices={{}}
+        selectedIdentificationAnswers={{ 0: "  OHM'S   LAW " }}
+      />,
+    );
+
+    expect(screen.getByLabelText("Identification answer")).toHaveValue("  OHM'S   LAW ");
+    expect(screen.getByText("Accepted answers: Ohm's Law; Ohms law")).toBeInTheDocument();
+    expect(screen.getByLabelText("Answer review")).toHaveTextContent(/Your Answer[\s\S]*OHM'S\s+LAW/);
+    expect(screen.getByLabelText("Answer review")).toHaveTextContent(/Correct Answer[\s\S]*Ohm's Law; Ohms law/);
+  });
 });

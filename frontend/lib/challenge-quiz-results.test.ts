@@ -134,6 +134,27 @@ describe("computeScore", () => {
     });
     expect(computeScore(quiz, { 1: 1 }, { 0: [0] }).correctAnswers).toBe(1);
   });
+
+  it("scores identification questions using accepted answers", () => {
+    const quiz: QuizItem[] = [
+      makeItem("Single answer", 0, "MCQ"),
+      {
+        question: "Identify the law that relates voltage, current, and resistance.",
+        choices: [],
+        correctIndex: null,
+        questionFormat: "IDENTIFICATION",
+        acceptableAnswers: ["Ohm's Law", "Ohms law"],
+        concept: "Identification",
+        explanation: "Ohm's Law relates voltage, current, and resistance.",
+      },
+    ];
+
+    expect(computeScore(quiz, { 0: 0 }, {}, { 1: "  OHM'S   LAW " })).toEqual({
+      correctAnswers: 2,
+      totalQuestions: 2,
+      scorePercentage: 100,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

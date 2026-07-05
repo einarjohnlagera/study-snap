@@ -20,6 +20,7 @@ public class QuizSessionStateUtils {
     private static final String ANSWER_INDEX_KEY = "answerIndex";
     private static final String CORRECT_ANSWER_INDEX_KEY = "correctAnswerIndex";
     private static final String ANSWER_KEY = "answer";
+    private static final String ACCEPTABLE_ANSWERS_KEY = "acceptableAnswers";
     private static final String CONCEPT_KEY = "concept";
     private static final String KEY_CONCEPT_KEY = "keyConcept";
     private static final String EXPLANATION_KEY = "explanation";
@@ -29,6 +30,7 @@ public class QuizSessionStateUtils {
     private static final String QUESTION_GROUP_KEY = "questionGroup";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
     private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
+    private static final String SELECTED_IDENTIFICATION_ANSWERS_KEY = "selectedIdentificationAnswers";
     private static final String SUB_MODE_KEY = "subMode";
     private static final String AI_FEEDBACK_KEY = "aiFeedback";
     private static final String SOFT_TIMER_SECONDS_KEY = "softTimerSeconds";
@@ -38,6 +40,7 @@ public class QuizSessionStateUtils {
     private static final String SOURCE_NOTE_ID_KEY = "noteId";
     private static final String SOURCE_NOTE_TITLE_KEY = "noteTitle";
     private static final String SOURCE_QUESTION_COUNT_KEY = "questionCount";
+    private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     public static final String SESSION_STATE_POOL_SOURCED = "poolSourced";
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
@@ -110,6 +113,27 @@ public class QuizSessionStateUtils {
             state.putAll(sessionState);
         }
         state.put(SELECTED_MULTI_CHOICES_KEY, Map.of());
+        return state;
+    }
+
+    public Map<String, Object> withSelectedIdentificationAnswer(
+            Map<String, Object> sessionState,
+            int questionIndex,
+            String answerText
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+
+        Map<String, Object> selectedAnswers = copyStringKeyMap(state.get(SELECTED_IDENTIFICATION_ANSWERS_KEY));
+        String normalized = answerText == null ? "" : answerText.trim();
+        if (normalized.isBlank()) {
+            selectedAnswers.remove(String.valueOf(questionIndex));
+        } else {
+            selectedAnswers.put(String.valueOf(questionIndex), normalized);
+        }
+        state.put(SELECTED_IDENTIFICATION_ANSWERS_KEY, selectedAnswers);
         return state;
     }
 
@@ -231,6 +255,7 @@ public class QuizSessionStateUtils {
             Object answerIndexRaw = rawMap.get(ANSWER_INDEX_KEY);
             Object correctAnswerIndexRaw = rawMap.get(CORRECT_ANSWER_INDEX_KEY);
             Object answerRaw = rawMap.get(ANSWER_KEY);
+            Object acceptableAnswersRaw = rawMap.get(ACCEPTABLE_ANSWERS_KEY);
             Object correctIndicesRaw = rawMap.get(CORRECT_INDICES_KEY);
             Object conceptRaw = rawMap.get(CONCEPT_KEY);
             Object keyConceptRaw = rawMap.get(KEY_CONCEPT_KEY);
@@ -252,21 +277,21 @@ public class QuizSessionStateUtils {
                     }
                 }
             }
-            if (choices.isEmpty()) {
-                continue;
-            }
-
             String concept = conceptRaw instanceof String value ? value : null;
             String keyConcept = keyConceptRaw instanceof String value ? value : null;
             String explanation = explanationRaw instanceof String value ? value : null;
             Integer correctIndex = parseCorrectIndex(choices.size(), correctIndexRaw, answerIndexRaw, correctAnswerIndexRaw);
             List<Integer> correctIndices = parseIndexList(choices.size(), correctIndicesRaw);
+            List<String> acceptableAnswers = parseStringList(acceptableAnswersRaw);
             String answer = answerRaw instanceof String value ? value : null;
             String questionFormat = questionFormatRaw instanceof String value ? value : null;
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
             String questionGroup = questionGroupRaw instanceof String value ? value : null;
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept));
+            if (choices.isEmpty() && !IDENTIFICATION_FORMAT.equals(questionFormat)) {
+                continue;
+            }
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept, acceptableAnswers));
         }
 
         return quiz;
@@ -398,6 +423,36 @@ public class QuizSessionStateUtils {
         return selectedChoices.isEmpty() ? Map.of() : Map.copyOf(selectedChoices);
     }
 
+    public Map<Integer, String> extractSelectedIdentificationAnswers(Map<String, Object> sessionState, List<QuizItem> quiz) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = sessionState.get(SELECTED_IDENTIFICATION_ANSWERS_KEY);
+        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, String> selectedAnswers = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            Object key = entry.getKey();
+            if (!(key instanceof String keyString)) {
+                continue;
+            }
+            try {
+                int questionIndex = Integer.parseInt(keyString);
+                if (questionIndex < 0 || questionIndex >= quiz.size()) {
+                    continue;
+                }
+                if (entry.getValue() instanceof String value && !value.isBlank()) {
+                    selectedAnswers.put(questionIndex, value.trim());
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return selectedAnswers.isEmpty() ? Map.of() : Map.copyOf(selectedAnswers);
+    }
+
     private List<Map<String, Object>> serializeQuiz(List<QuizItem> quiz) {
         if (quiz == null || quiz.isEmpty()) {
             return List.of();
@@ -413,6 +468,7 @@ public class QuizSessionStateUtils {
             quizItem.put(CHOICES_KEY, item.choices() == null ? List.of() : new ArrayList<>(item.choices()));
             quizItem.put(CORRECT_INDEX_KEY, item.correctIndex());
             quizItem.put(CORRECT_INDICES_KEY, item.correctIndices() == null ? List.of() : new ArrayList<>(item.correctIndices()));
+            quizItem.put(ACCEPTABLE_ANSWERS_KEY, item.acceptableAnswers() == null ? List.of() : new ArrayList<>(item.acceptableAnswers()));
             quizItem.put(CONCEPT_KEY, item.concept());
             quizItem.put(KEY_CONCEPT_KEY, item.keyConcept());
             quizItem.put(EXPLANATION_KEY, item.explanation());
@@ -524,6 +580,19 @@ public class QuizSessionStateUtils {
             }
         }
         return indexes;
+    }
+
+    private List<String> parseStringList(Object rawValue) {
+        if (!(rawValue instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (Object rawItem : rawList) {
+            if (rawItem instanceof String value && !value.isBlank()) {
+                values.add(value.trim());
+            }
+        }
+        return values.isEmpty() ? List.of() : List.copyOf(values);
     }
 
     private List<Integer> normalizeIntegerList(List<Integer> values) {

@@ -2,6 +2,7 @@ import type { QuizItem } from "@/lib/api";
 
 const CHOICE_LABELS = ["A", "B", "C", "D"] as const;
 const LEADING_CHOICE_LABEL_PATTERN = /^\s*[A-D]\s*[.)]\s*/i;
+const IDENTIFICATION_FORMAT = "IDENTIFICATION";
 
 export type QuizDisplayChoice = {
   displayIndex: number;
@@ -59,7 +60,12 @@ export function resolveQuizItemGroupAt(quiz: QuizItem[], questionIndex: number):
 }
 
 export function resolveQuizCorrectIndex(item: QuizItem): number {
-  if (Number.isInteger(item.correctIndex) && item.correctIndex >= 0 && item.correctIndex < item.choices.length) {
+  if (
+    typeof item.correctIndex === "number"
+    && Number.isInteger(item.correctIndex)
+    && item.correctIndex >= 0
+    && item.correctIndex < item.choices.length
+  ) {
     return item.correctIndex;
   }
   if (item.questionFormat === "MULTI_SELECT") {
@@ -101,6 +107,9 @@ export function resolveQuizCorrectIndex(item: QuizItem): number {
 }
 
 export function resolveQuizCorrectAnswer(item: QuizItem): string | null {
+  if (item.questionFormat === IDENTIFICATION_FORMAT) {
+    return resolveIdentificationAcceptedAnswers(item)[0] ?? null;
+  }
   const correctIndex = resolveQuizCorrectIndex(item);
   return correctIndex >= 0 && correctIndex < item.choices.length ? item.choices[correctIndex] : null;
 }
@@ -122,14 +131,43 @@ export function isMultiSelectSelectionCorrect(item: QuizItem, selectedIndices: n
 
 export function isQuizSelectionCorrect(
   item: QuizItem,
-  selectedChoiceIndex: number | number[] | null | undefined,
+  selectedChoiceIndex: number | number[] | string | null | undefined,
 ): boolean {
+  if (item.questionFormat === IDENTIFICATION_FORMAT) {
+    return typeof selectedChoiceIndex === "string"
+      ? isIdentificationAnswerCorrect(item, selectedChoiceIndex)
+      : false;
+  }
   if (item.questionFormat === "MULTI_SELECT") {
     return Array.isArray(selectedChoiceIndex)
       ? isMultiSelectSelectionCorrect(item, selectedChoiceIndex)
       : false;
   }
   return selectedChoiceIndex != null && selectedChoiceIndex === resolveQuizCorrectIndex(item);
+}
+
+export function resolveIdentificationAcceptedAnswers(item: QuizItem): string[] {
+  return Array.isArray(item.acceptableAnswers)
+    ? item.acceptableAnswers.map((answer) => answer.trim()).filter(Boolean)
+    : [];
+}
+
+export function normalizeIdentificationAnswer(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().replace(/\s+/g, " ").toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function isIdentificationAnswerCorrect(item: QuizItem, selectedAnswer: string | null | undefined): boolean {
+  const normalizedSelected = normalizeIdentificationAnswer(selectedAnswer);
+  if (!normalizedSelected) {
+    return false;
+  }
+  return resolveIdentificationAcceptedAnswers(item)
+    .map(normalizeIdentificationAnswer)
+    .some((answer) => answer === normalizedSelected);
 }
 
 export function toSelectedChoiceIndexRecord(value: unknown, quiz: QuizItem[]): Record<number, number> {
@@ -190,6 +228,33 @@ export function serializeSelectedMultiChoiceIndicesRecord(value: Record<number, 
         normalizeChoiceIndexSet(selectedChoiceIndices, Number.POSITIVE_INFINITY),
       ])
       .filter(([, selectedChoiceIndices]) => Array.isArray(selectedChoiceIndices) && selectedChoiceIndices.length > 0),
+  );
+}
+
+export function toSelectedIdentificationAnswerRecord(value: unknown, quiz: QuizItem[]): Record<number, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const selectedAnswers: Record<number, string> = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const questionIndex = Number(rawKey);
+    if (!Number.isInteger(questionIndex) || questionIndex < 0 || questionIndex >= quiz.length) {
+      continue;
+    }
+    if (typeof rawValue === "string" && rawValue.trim()) {
+      selectedAnswers[questionIndex] = rawValue.trim();
+    }
+  }
+
+  return selectedAnswers;
+}
+
+export function serializeSelectedIdentificationAnswerRecord(value: Record<number, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([questionIndex, answer]) => [String(questionIndex), typeof answer === "string" ? answer.trim() : ""])
+      .filter(([, answer]) => typeof answer === "string" && answer.length > 0),
   );
 }
 
