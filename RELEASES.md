@@ -16,7 +16,10 @@ Anti-drift: no backend changes; no new persisted state for anonymous users; no l
 
 ### Shipped
 
-_(nothing yet)_
+- **Flashcards Preview (frontend).** New `PublicFlashcardsPreview` component (`frontend/components/notes/public-flashcards-preview.tsx`), mirroring `PublicMiniQuizPreview`'s shape: capped at 3 cards via `buildMatchedFlashcards(keyConcepts, quiz)` (reusing the existing `lib/flashcards.ts` concept↔explanation matching logic, so every previewed card has a real definition), tap-to-reveal flip, fully client-side state, no backend calls. Rendered directly after the existing mini quiz preview on `/public/library/[subject]/[slug]`; renders nothing when no concept has a matched explanation. Completion state offers one `Continue Learning` CTA (copy-first, same pattern as every other public-note CTA) firing the new `PUBLIC_NOTE_FLASHCARDS_CLICKED` analytics event (added to both the frontend and backend `AnalyticsEventType` enums). Zero backend change — `keyConcepts` and `quiz` (with `explanation`) were already present in the unauthenticated public note detail response.
+- **Memorization teaser (frontend).** Added as a fourth, tell-only entry to the existing `PublicPracticeModeTeaser` list (`frontend/components/notes/public-practice-mode-teaser.tsx`) alongside Challenge Quiz / Adaptive Practice / Board Exam Mode — name + one-line description of the spaced-repetition scheduling concept, no `pro` badge (Memorization isn't plan-gated), no per-note content, no scheduling logic, no state. Section heading updated from "Practice modes available when you copy this note" to "More ways to study when you copy this note" since Memorization isn't a practice/assessment mode; grid widened to `sm:grid-cols-2 lg:grid-cols-4` to fit four cards.
+- **Existing CTA hierarchy preserved.** No changes to the existing primary/secondary conversion CTA block — Flashcards/Memorization ship as additive sections only, per the anti-drift line above.
+- Docs updated: `docs/features/public-library.md` (recommended page structure, new "Flashcards preview rules" section, updated Practice-mode teaser item).
 
 ---
 

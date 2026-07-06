@@ -403,6 +403,7 @@ Public note pages are shareable learning pages and top-of-funnel acquisition sur
 2. **Topic hook** — a short 1–2 sentence framing of the learning angle (e.g. `This note covers photosynthesis — the process plants use to make food from sunlight.`)
 3. **Tags and subject metadata** — helps the visitor evaluate relevance
 4. **Quick Check / mini quiz preview** — up to 3 questions, interactive, client-side only, no account required
+4a. **Flashcards preview** (v0.39.2) — up to 3 cards, tap-to-reveal, client-side only, no account required; immediately after the mini quiz preview
 5. **Summary and Key Concepts** — the generated study outputs
 6. **Full quiz or gated continuation** — gate behind login after the preview experience
 7. **Soft conversion CTA** — `Turn your own notes into something like this`
@@ -429,6 +430,17 @@ Tags and subject on the public note SEO page must link back to the filtered Publ
 - after the visitor answers, show a small CTA block that invites the next step without replacing the note
 - use Quick Check copy such as `Quick check: see what you remember from the summary.`
 - after signup/login, route the user toward copying the note or creating their own Study Pack — not back to the same mini preview
+
+### Flashcards preview rules (v0.39.2)
+
+Applies the same sanctioned "capped, interactive, client-side, no account required" pattern the mini quiz preview already established, to a second review method:
+
+- expose up to 3 flashcards (`MAX_PREVIEW_CARDS` in `public-flashcards-preview.tsx`) without requiring login, built from `buildMatchedFlashcards(keyConcepts, quiz)` (`lib/flashcards.ts`) so every previewed card has a real matched definition — no "no definition yet" filler in a 3-card teaser
+- tap-to-reveal flip interaction only; no score, no timer, no submit — matches the authenticated Flashcards surface's non-scored identity (`docs/features/flashcards.md`)
+- all state (`currentIndex`, `flipped`, `completed`) is client-side only; no backend call, no `ConceptHealth` write, no session row, no persistence of any kind for anonymous visitors
+- renders directly after the mini quiz preview; returns `null` (renders nothing) when no concept has a matched explanation
+- completion state offers one CTA (`Continue Learning`, `PUBLIC_NOTE_FLASHCARDS_CLICKED` analytics event) that copies the note first, same copy-first pattern as every other public-note interactive CTA — never runs the full deck on the public page itself
+- **Memorization is deliberately not given the same live-preview treatment.** Its entire value is spaced-repetition scheduling that reveals itself over days/return visits; a single anonymous session (or one card flip) cannot demonstrate that and would look identical to Flashcards. Memorization stays a tell-only teaser entry in `PublicPracticeModeTeaser` (see item I below) — no per-note content, no scheduling logic, no state for anonymous users.
 
 ### CTA ordering
 
@@ -545,9 +557,9 @@ When the current public note has a `courseProgram` set, the detail page shows a 
 - `courseProgram` is read from `NoteListItemResponse` (the list endpoint already includes it) — no `PublicNoteDetailResponse` DTO change is needed
 - Next.js deduplicates the `GET /notes/public` fetch within the same render via its built-in fetch deduplication for matching URL + cache options
 
-### I — Practice-mode preview teaser on public note detail (resolved)
+### I — Practice-mode preview teaser on public note detail (resolved, updated v0.39.2)
 
-A non-interactive "Practice modes available once you copy this note" block showing Challenge Quiz, Adaptive Practice, and Board Exam Mode as teaser cards. Implemented as `PublicPracticeModeTeaser` (static server component, no "use client"), placed after Full Notes and before Ownership Actions, gated on `!isDraft`. Board Exam Mode carries a Pro chip; the other two modes are shown as freely available.
+A non-interactive "More ways to study when you copy this note" block showing Challenge Quiz, Adaptive Practice, Board Exam Mode, and (added v0.39.2) Memorization as teaser cards. Implemented as `PublicPracticeModeTeaser` (static server component, no "use client"), placed after Full Notes and before Ownership Actions, gated on `!isDraft`. Board Exam Mode carries a Pro chip; the other three modes (including Memorization) are shown as freely available — Memorization is not plan-gated, matching its authenticated-surface entitlement. Memorization's entry is tell-only (name + description), never a working preview — see "Flashcards preview rules" above for why.
 
 ### J — Subject landing pages (shipped in v0.14.0)
 
