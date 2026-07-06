@@ -538,6 +538,28 @@ class AuthServiceTest {
     }
 
     @Test
+    void getMe_returnsPrimaryCollectionIdFromPersistedUser() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryCollectionId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setPrimaryCollectionId(primaryCollectionId);
+        user.setWeeklySummaryRemindersEnabled(false);
+        user.setMarketingEmailsEnabled(false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.getMe(userId);
+
+        assertThat(response.primaryCollectionId()).isEqualTo(primaryCollectionId);
+    }
+
+    @Test
     void refresh_throwsInvalidRefreshTokenException_whenRefreshTokenUserDoesNotExist() {
         UUID userId = UUID.randomUUID();
         when(refreshTokenService.requireValid("refresh-token"))

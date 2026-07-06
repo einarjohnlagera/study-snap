@@ -25,7 +25,7 @@ Anti-drift: no new top-level entity — the weekly plan is a derived, read-time 
 
 ### Shipped
 
-_(nothing yet)_
+- **Primary Review Set backend foundation.** Added nullable `users.primary_collection_id` (`ON DELETE SET NULL`) plus `PUT /collections/{id}/primary` and `DELETE /collections/{id}/primary`; only owned top-level Goals can be primary, `GET /auth/me` now returns `primaryCollectionId`, and collection create/adopt/adopt-goal/delete/re-parent paths reassert the invariant so a single top-level Goal auto-becomes primary while invalid primaries clear safely.
 
 ---
 
