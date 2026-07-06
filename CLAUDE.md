@@ -6,14 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.39.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.39.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.39.1 — Study Plan Builder Polish
+## Active release: v0.39.2 — Public Library Learning Experience
 
-Base branch for this release: `releases/v0.39.1`. Fixes subject-metadata gaps and improves cold-start adoption discoverability in the Study Plan Builder — surfaced from real usage, not a planned feature push. Two sub-themes:
+Base branch for this release: `releases/v0.39.2`. Connects the Public Library discovery layer to the signed-in workspace's richer review methods, so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction. Validated against an existing, sanctioned precedent (`PublicMiniQuizPreview`'s capped, client-side-only quiz teaser) rather than a new exception.
 
-- **Theme A — Subject metadata completeness.** Add a description field to `AddSubjectModal` (frontend-only). Fix course/program not cascading from a parent Goal to child Subject plans — cascade only when the child's `courseProgram` is currently blank, never a blind overwrite, per the v0.37.2 clobber-bug precedent.
-- **Theme B — Adoption model.** UX/discovery audit of cold-start adoption discoverability — not a new content-generation feature. NoteLib's differentiator stays "review material comes from your own notes"; adoption is the cold-start on-ramp, not the core loop.
+- **Flashcards Preview (frontend).** New `PublicFlashcardsPreview` component mirroring `PublicMiniQuizPreview`'s shape: capped at 3 cards, tap-to-reveal, client-side only, no persistence. Zero backend change — reuses data already exposed in the unauthenticated public note response.
+- **Memorization teaser (frontend).** Static, purely educational section — no per-note content, no scheduling logic, no state for anonymous users.
+- **Existing CTA hierarchy preserved.** Flashcards/Memorization are additive secondary cards; the primary CTA and existing secondary actions are not restructured in this release.
 - **Parked, not in scope:** standalone adoption of a single child Subject plan — unresolved re-parenting interaction with `adoptGoal`'s idempotency check.
 
 ## Source-of-truth docs (read before implementing anything)

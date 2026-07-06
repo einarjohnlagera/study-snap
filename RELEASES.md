@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.39.2 - Public Library Learning Experience
+
+**Status: In Progress**
+
+Theme: connect the Public Library discovery layer to the signed-in workspace's richer review methods — surface Flashcards and Memorization on public note detail so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction. Validated against an existing, documented precedent: `PublicMiniQuizPreview` already runs a capped, client-side-only, no-persistence quiz teaser on public notes today — this release applies the same sanctioned pattern to a second review method.
+
+### Planned Scope
+
+- **Flashcards Preview (frontend).** New `PublicFlashcardsPreview` component mirroring `PublicMiniQuizPreview`'s exact shape: capped at 3 cards (matching the existing `MAX_PREVIEW_QUESTIONS` convention, not an open-ended count), tap-to-reveal, fully client-side state, no backend calls, no persistence. Reuses `keyConcepts` + matching `QuizItem.explanation` pairs already present in the unauthenticated public note detail response — **zero backend change required**. Rendered directly after the existing Quick Check mini-quiz preview.
+- **Memorization teaser (frontend).** Static, purely educational section (copy + timeline illustration) explaining spaced-repetition scheduling. No per-note content, no scheduling logic, and no state of any kind for anonymous users — messaging only, never a working preview, consistent with the existing rule that SRS scheduling state must stay firewalled from anything reachable pre-signup.
+- **Existing CTA hierarchy preserved.** The current single primary CTA (`Quiz yourself on this note`) plus secondary actions (`Create your own Study Pack`, `Copy to My Library`) are not restructured or renamed in this release. Flashcards/Memorization CTAs are additive secondary cards alongside the existing ones, not a replacement of the primary/secondary hierarchy.
+
+Anti-drift: no backend changes; no new persisted state for anonymous users; no live SRS/scheduling logic exposed pre-signup; preview cap matches the existing `MAX_PREVIEW_QUESTIONS` precedent; does not touch the copy-on-signup cookie flow or the existing conversion CTA hierarchy.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.39.1 - Study Plan Builder Polish
 
 **Status: Released**
