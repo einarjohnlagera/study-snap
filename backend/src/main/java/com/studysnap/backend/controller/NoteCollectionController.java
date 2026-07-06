@@ -140,6 +140,28 @@ public class NoteCollectionController {
         return service.updateParent(collectionId, user.userId(), request);
     }
 
+    @PutMapping("/{id}/primary")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ResponseEntity<Void> setPrimary(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        service.setPrimary(collectionId, user.userId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/primary")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ResponseEntity<Void> clearPrimary(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        service.clearPrimary(user.userId());
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/{id}/children/order")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public GoalCollectionDetailResponse setChildrenOrder(

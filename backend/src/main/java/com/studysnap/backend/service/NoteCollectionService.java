@@ -24,11 +24,13 @@ import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
@@ -40,6 +42,7 @@ import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +94,7 @@ public class NoteCollectionService {
     private static final String PARENT_WITH_NOTES_MESSAGE = "A collection must be empty before it can become a goal.";
     private static final String CHILD_ORDER_SET_MISMATCH_MESSAGE = "Child order must include exactly the current child plans.";
     private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
+    private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
@@ -111,6 +115,7 @@ public class NoteCollectionService {
     private final ProgressReportService progressReportService;
     private final AnalyticsService analyticsService;
     private final NoteService noteService;
+    private final UserRepository userRepository;
     private final TransactionOperations collectionTransactionOperations;
 
     @Transactional(readOnly = true)
@@ -177,6 +182,7 @@ public class NoteCollectionService {
 
         List<NoteCollectionItemEntity> items = buildItems(saved.getId(), orderedNoteIds, 0, now);
         itemRepository.saveAll(items);
+        reassertPrimaryInvariant(userId);
         analyticsService.trackEvent(
                 userId,
                 AnalyticsEventType.COLLECTION_CREATED,
@@ -366,6 +372,7 @@ public class NoteCollectionService {
                 touch(child);
                 child = collectionRepository.save(child);
             }
+            reassertPrimaryInvariant(userId);
             return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
         }
         if (parentId.equals(collectionId)) {
@@ -381,7 +388,34 @@ public class NoteCollectionService {
             touch(child);
             child = collectionRepository.save(child);
         }
+        reassertPrimaryInvariant(userId);
         return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
+    }
+
+    @Transactional
+    public void setPrimary(UUID collectionId, UUID userId) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        if (collection.getParentCollectionId() != null) {
+            throw new InvalidCollectionRequestException(PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
+        }
+        UserEntity user = getUserOrThrow(userId);
+        if (collectionId.equals(user.getPrimaryCollectionId())) {
+            return;
+        }
+        user.setPrimaryCollectionId(collectionId);
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void clearPrimary(UUID userId) {
+        UserEntity user = getUserOrThrow(userId);
+        if (user.getPrimaryCollectionId() == null) {
+            return;
+        }
+        user.setPrimaryCollectionId(null);
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
     }
 
     @Transactional
@@ -425,6 +459,10 @@ public class NoteCollectionService {
     }
 
     public AdoptStudyPlanResponse adopt(UUID sourceCollectionId, UUID userId) {
+        return adopt(sourceCollectionId, userId, true);
+    }
+
+    private AdoptStudyPlanResponse adopt(UUID sourceCollectionId, UUID userId, boolean reassertPrimaryAfterPersist) {
         NoteCollectionEntity source = collectionRepository
                 .findByIdAndVisibility(sourceCollectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
@@ -442,7 +480,7 @@ public class NoteCollectionService {
         int skippedCount = copySourceItems(source, userId, copiedItems);
 
         try {
-            return persistAdoptedPlan(source, userId, copiedItems, skippedCount);
+            return persistAdoptedPlan(source, userId, copiedItems, skippedCount, reassertPrimaryAfterPersist);
         } catch (DataIntegrityViolationException raceLost) {
             // A concurrent first-adopt won the (owner_user_id, source_plan_id) unique index — return theirs.
             NoteCollectionEntity winner = collectionRepository
@@ -487,7 +525,7 @@ public class NoteCollectionService {
         int totalNotesSkipped = 0;
         for (int index = 0; index < sourceChildren.size(); index++) {
             NoteCollectionEntity sourceChild = sourceChildren.get(index);
-            AdoptStudyPlanResponse childAdoptResult = adopt(sourceChild.getId(), userId);
+            AdoptStudyPlanResponse childAdoptResult = adopt(sourceChild.getId(), userId, false);
             totalNotesCopied += childAdoptResult.copiedCount();
             totalNotesSkipped += childAdoptResult.skippedCount();
             Optional<NoteCollectionEntity> personalChild =
@@ -519,6 +557,7 @@ public class NoteCollectionService {
                 totalNotesSkipped,
                 false
         );
+        reassertPrimaryInvariant(userId);
         return new AdoptGoalResponse(
                 persistedGoal.collection().getId(),
                 adoptedSubjectCount,
@@ -532,7 +571,11 @@ public class NoteCollectionService {
     @Transactional
     public void delete(UUID collectionId, UUID userId) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        boolean wasTopLevel = collection.getParentCollectionId() == null;
         collectionRepository.delete(collection);
+        if (wasTopLevel) {
+            reassertPrimaryInvariant(userId);
+        }
     }
 
     @Transactional
@@ -615,6 +658,40 @@ public class NoteCollectionService {
     private NoteCollectionEntity getOwnedCollectionOrThrow(UUID collectionId, UUID userId) {
         return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
                 .orElseThrow(CollectionNotFoundException::new);
+    }
+
+    private UserEntity getUserOrThrow(UUID userId) {
+        return userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+    }
+
+    private void reassertPrimaryInvariant(UUID userId) {
+        UserEntity user = getUserOrThrow(userId);
+        UUID primaryCollectionId = user.getPrimaryCollectionId();
+        boolean changed = false;
+        if (primaryCollectionId != null && !isValidPrimaryCollection(primaryCollectionId, userId)) {
+            user.setPrimaryCollectionId(null);
+            primaryCollectionId = null;
+            changed = true;
+        }
+
+        if (primaryCollectionId == null && collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId) == 1) {
+            List<NoteCollectionEntity> topLevelCollections =
+                    collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId);
+            if (topLevelCollections.size() == 1) {
+                user.setPrimaryCollectionId(topLevelCollections.getFirst().getId());
+                changed = true;
+            }
+        }
+        if (changed) {
+            user.setUpdatedAt(OffsetDateTime.now());
+            userRepository.save(user);
+        }
+    }
+
+    private boolean isValidPrimaryCollection(UUID collectionId, UUID userId) {
+        return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
+                .map(collection -> collection.getParentCollectionId() == null)
+                .orElse(false);
     }
 
     private void validateParentCanAcceptChild(NoteCollectionEntity parent) {
@@ -742,7 +819,8 @@ public class NoteCollectionService {
             NoteCollectionEntity source,
             UUID userId,
             List<CopiedPlanItem> copiedItems,
-            int skippedCount
+            int skippedCount,
+            boolean reassertPrimaryAfterPersist
     ) {
         return collectionTransactionOperations.execute(status -> {
             Optional<NoteCollectionEntity> existing =
@@ -770,6 +848,9 @@ public class NoteCollectionService {
             List<NoteCollectionItemEntity> items = buildAdoptedItems(saved.getId(), copiedItems, now);
             itemRepository.saveAll(items);
             trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
+            if (reassertPrimaryAfterPersist) {
+                reassertPrimaryInvariant(userId);
+            }
             return new AdoptStudyPlanResponse(saved.getId(), items.size(), skippedCount, false);
         });
     }

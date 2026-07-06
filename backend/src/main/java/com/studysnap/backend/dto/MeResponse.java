@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.UserStatus;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 public record MeResponse(
         String id,
@@ -39,6 +40,7 @@ public record MeResponse(
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,
         OffsetDateTime productOnboardingCompletedAt,
+        UUID primaryCollectionId,
         long studyPackCount,
         UserRole role,
         UserStatus status,

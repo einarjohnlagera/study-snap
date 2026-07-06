@@ -367,6 +367,10 @@ Base branch for this release: `releases/v0.40.0` (kicked off). Origin: `docs/cla
 
 Anti-drift: no new top-level entity — the weekly plan is a derived, read-time view; the only new persisted state is the `primaryCollectionId` reference, the `target_completion_date` column, and the user-level `studyDaysPerWeek`. No change to `UserEntity.examDate` or the Dashboard board-exam countdown it already drives. Target date is Goal-level only, never on a child Subject plan. No hardcoded profile-specific "Review" vocabulary anywhere the Primary concept is surfaced — must resolve through `getCollectionLabels`. No adaptive/AI-driven scheduling, streaks, or calendar integration. **No nav rename, no Exam Hub change, no Explore page, no Progress full-redesign in this release** — those are recorded in the deferred "Review-Set-Centric Navigation" section and gated on this release proving the Primary concept out in real usage first.
 
+### Completed in v0.40.0 so far
+
+- **Primary Review Set backend foundation.** Added nullable `users.primary_collection_id`, `PUT /collections/{id}/primary`, `DELETE /collections/{id}/primary`, and `primaryCollectionId` on `GET /auth/me`. Backend invariant maintenance now clears invalid primaries and auto-sets the single owned top-level Goal after create, standalone adopt, first-time Goal adopt, top-level delete, and parent changes. Frontend consumption, target dates, user study intensity, and scheduler derivation remain separate follow-up work.
+
 ### Parked (not scoped for this release)
 
 - **Cross-course note reusability.** Its own proposal doc already recommends deferral; revisit only once cross-program overlap is a demonstrated broad-audience maintenance concern, not a single curator's one-off friction. A much cheaper interim exists if the underlying curation pain needs addressing sooner: multi-tag a note/subject with secondary course/programs for discovery, or improve the course/program picker UX during curation — without touching the one-note-one-program architecture.

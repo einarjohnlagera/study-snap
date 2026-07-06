@@ -79,6 +79,12 @@ class NoteCollectionControllerTest {
                 .getMethod("updateParent", String.class, SetNoteCollectionParentRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
+                .getMethod("setPrimary", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("clearPrimary", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
                 .getMethod("setChildrenOrder", String.class, SetNoteCollectionChildrenOrderRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
@@ -210,6 +216,28 @@ class NoteCollectionControllerTest {
 
         assertThat(result).isEqualTo(response);
         verify(service).updateParent(UUID.fromString(COLLECTION_ID), user.userId(), request);
+    }
+
+    @Test
+    void setPrimary_returnsNoContent() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+
+        ResponseEntity<Void> result = controller.setPrimary(COLLECTION_ID, user);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(service).setPrimary(UUID.fromString(COLLECTION_ID), user.userId());
+    }
+
+    @Test
+    void clearPrimary_returnsNoContent() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+
+        ResponseEntity<Void> result = controller.clearPrimary(COLLECTION_ID, user);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(service).clearPrimary(user.userId());
     }
 
     @Test

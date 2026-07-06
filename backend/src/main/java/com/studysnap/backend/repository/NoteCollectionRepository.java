@@ -71,6 +71,8 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
 
     long countByParentCollectionId(UUID parentCollectionId);
 
+    long countByOwnerUserIdAndParentCollectionIdIsNull(UUID ownerUserId);
+
     @Query("""
             select collection.parentCollectionId as collectionId, count(collection.id) as childCount
             from NoteCollectionEntity collection

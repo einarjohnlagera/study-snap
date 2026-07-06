@@ -537,6 +537,7 @@ public class AuthService {
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
                 user.getProductOnboardingCompletedAt(),
+                user.getPrimaryCollectionId(),
                 studyPackCount,
                 user.getRole(),
                 user.getStatus(),

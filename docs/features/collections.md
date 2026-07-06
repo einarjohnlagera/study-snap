@@ -91,6 +91,35 @@ Hierarchy constraints:
 - the first implementation keeps Goals note-free: a collection must be empty before it can become a Goal, and a Goal cannot accept direct note items
 - these rules enforce the maximum two levels and make cycles impossible
 
+### Primary Review Set
+
+`users.primary_collection_id` is a nullable user-level UUID reference to `note_collections.id`. It is stored as a bare UUID column, following the existing collection reference convention, and uses `ON DELETE SET NULL` at the database level like `note_collections.parent_collection_id`.
+
+The reference is the backend source of truth for the learner's default top-level Goal. It remains profile-agnostic: the backend stores and validates the collection id only, while frontend labels still resolve through `getCollectionLabels`.
+
+Rules:
+
+- only an owned top-level Goal can be primary (`parentCollectionId == null`)
+- setting a child Subject plan as primary returns `InvalidCollectionRequestException` / `400`
+- setting a missing or not-owned collection returns `CollectionNotFoundException` / `404`
+- setting the already-primary collection is a no-op success
+- clearing primary is always allowed and is a no-op when nothing is set
+- when a user has no primary and exactly one owned top-level Goal, that Goal is auto-set as primary
+- auto-set applies after top-level Goal creation, standalone public-plan adoption, first-time Goal adoption, deletion, and re-parenting changes that leave exactly one top-level Goal
+- an existing valid primary is never overwritten by auto-set
+- if the current primary stops being an owned top-level Goal, the reference clears before the exactly-one-top-level auto-set rule is considered
+- adopting child Subject plans inside `adoptGoal` does not run primary auto-set for those temporary standalone child copies; the invariant is reasserted once after the first-time Goal adoption is structurally settled
+
+Structural collection mutations reassert this invariant in the same service operation that changes the top-level set:
+
+| Mutation | Primary behavior |
+|---|---|
+| `POST /collections` | Can auto-set the created collection when it is the user's first top-level Goal. |
+| `POST /collections/{id}/adopt` | Can auto-set the adopted standalone plan when it is the user's first top-level collection. |
+| `POST /collections/{id}/adopt-goal` | Can auto-set the adopted Goal on genuine first-time adoption; repeat `alreadyAdopted=true` calls do not alter primary. |
+| `DELETE /collections/{id}` | If the deleted collection was top-level, clears an invalid primary and can auto-set the one remaining top-level Goal. |
+| `PATCH /collections/{id}/parent` | Attaching a primary Goal under another Goal invalidates it; detaching a child back to top-level can trigger auto-set. |
+
 ### Builder Canvas
 
 The builder route is `/collections/{id}/builder`. It first loads the base collection through `GET /collections/{id}`:
@@ -444,6 +473,30 @@ Behavior:
 - child that already has children returns `400`.
 - parent with direct note items returns `400`, because Phase 1 Goals are containers of Subject plans, not mixed note folders.
 - setting the current parent again is a safe no-op.
+
+### Set / Clear Primary
+
+`PUT /collections/{id}/primary`
+
+Behavior:
+
+- parses `{id}` with the same malformed-id-as-collection-404 pattern as other collection endpoints
+- verifies `{id}` exists and is owned by the caller
+- verifies the target collection is top-level (`parentCollectionId == null`)
+- writes `users.primary_collection_id = {id}`
+- setting the existing primary again is a no-op success
+- returns `204`
+
+`DELETE /collections/{id}/primary`
+
+Behavior:
+
+- parses `{id}` for route consistency, but the id does not need to match the current primary
+- clears `users.primary_collection_id`
+- clearing when no primary is set is a no-op success
+- returns `204`
+
+`GET /auth/me` exposes the persisted nullable `primaryCollectionId`; there is no separate profile/preference read endpoint for this value.
 
 ### Reorder Goal Children
 
