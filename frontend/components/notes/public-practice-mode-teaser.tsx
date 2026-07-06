@@ -1,4 +1,4 @@
-import { Clock, Target, Trophy } from "lucide-react";
+import { Clock, Repeat, Target, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 const PRACTICE_MODES = [
@@ -20,18 +20,24 @@ const PRACTICE_MODES = [
     description: "Full timed exam with all questions, no pausing, and results at the end. Built for board exam prep.",
     pro: true,
   },
+  {
+    icon: Repeat,
+    name: "Memorization",
+    description: "Learn once, then get reminded to review again after 1, 3, 7, 14, and 30 days — so it actually sticks.",
+    pro: false,
+  },
 ] as const;
 
 export function PublicPracticeModeTeaser() {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold sm:text-lg">Practice modes available when you copy this note</h2>
+        <h2 className="text-base font-semibold sm:text-lg">More ways to study when you copy this note</h2>
         <p className="text-sm text-foreground/65">
-          Copy this note into your library to unlock focused, exam-style practice sessions.
+          Copy this note into your library to unlock focused practice sessions and long-term review.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {PRACTICE_MODES.map((mode) => (
           <div key={mode.name} className="space-y-2 rounded-xl border border-border bg-background p-4">
             <div className="flex flex-wrap items-center gap-2">

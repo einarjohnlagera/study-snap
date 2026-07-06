@@ -54,6 +54,14 @@ jest.mock("@/components/notes/public-mini-quiz-preview", () => ({
   ),
 }));
 
+jest.mock("@/components/notes/public-flashcards-preview", () => ({
+  PublicFlashcardsPreview: ({ keyConcepts, noteId }: { keyConcepts: string[]; noteId: string }) => (
+    <div data-testid="flashcards-preview">
+      Flashcards for {noteId}: {keyConcepts[0] ?? "no concept"}
+    </div>
+  ),
+}));
+
 jest.mock("@/components/notes/public-seo-copy-cta", () => ({
   PublicSeoCopyCta: ({
     label,
@@ -79,6 +87,7 @@ const baseNote = {
       choices: ["Nucleus", "Cytoplasm", "Membrane", "Ribosome"],
       correctIndex: 0,
       answer: "Nucleus",
+      concept: "Nucleus",
       explanation: "The nucleus controls cell activity.",
     },
   ],
@@ -182,6 +191,49 @@ describe("PublicLibrarySeoPage", () => {
     );
 
     expect(screen.queryByTestId("mini-quiz-preview")).not.toBeInTheDocument();
+  });
+
+  it("renders the flashcards preview for a study-pack-ready note with quiz and key concepts", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByTestId("flashcards-preview")).toBeInTheDocument();
+    expect(screen.getByText(/Flashcards for note-1: Cell membrane/i)).toBeInTheDocument();
+  });
+
+  it("does not render the flashcards preview for a draft note", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByTestId("flashcards-preview")).not.toBeInTheDocument();
+  });
+
+  it("does not render the flashcards preview when the note has no quiz or no key concepts", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      quiz: [],
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByTestId("flashcards-preview")).not.toBeInTheDocument();
   });
 
   it("renders the soft conversion CTA", async () => {

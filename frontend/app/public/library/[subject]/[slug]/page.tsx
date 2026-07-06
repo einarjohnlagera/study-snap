@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { HashScrollListener } from "@/components/navigation/hash-scroll-listener";
 import { PublicMiniQuizPreview } from "@/components/notes/public-mini-quiz-preview";
+import { PublicFlashcardsPreview } from "@/components/notes/public-flashcards-preview";
 import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mode-teaser";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
@@ -217,6 +218,15 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             quiz={note.quiz}
             noteId={note.id}
             relatedNotes={relatedNotes}
+          />
+        ) : null}
+
+        {/* Flashcards Preview */}
+        {!isDraft && note.quiz.length > 0 && keyConcepts.length > 0 ? (
+          <PublicFlashcardsPreview
+            keyConcepts={keyConcepts}
+            quiz={note.quiz}
+            noteId={note.id}
           />
         ) : null}
 

@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.39.1 - Study Plan Builder Polish` is the latest released version (on `releases/v0.39.1`).
+`v0.39.2 - Public Library Learning Experience` is the latest released version (on `releases/v0.39.2`).
+
+`v0.39.1 - Study Plan Builder Polish` is the previous released version (on `releases/v0.39.1`).
 
 `v0.39.0 - Flexible Review Methods` is the previous released version (on `releases/v0.39.0`).
 
@@ -312,6 +314,85 @@ Today, metadata set at the Goal level doesn't reliably reach its child Subject p
 ### Parked (not scoped for this candidate)
 
 - **Adopting a single child Subject plan standalone.** Backend technically permits it today (`adopt()` has no parent-child guard), so this is a pure UX-surfacing question, not a backend change. Not building it yet: the value it would add (grabbing one Subject without its parent Goal) is already served by copying individual public notes, and there's an unresolved interaction — `adopt()` never sets `parentCollectionId`, so a standalone-adopted child lands as a top-level orphan copy; if the user later adopts the parent Goal, `adoptGoal`'s idempotency check finds that existing copy by `sourcePlanId` and **silently re-parents it** into the newly-adopted Goal (no duplicate created, but a surprising structural change with no user confirmation). Revisit only if a real discovery need shows up — resolve the re-parenting UX before shipping.
+
+---
+
+## v0.39.2 - Public Library Learning Experience (released)
+
+Base branch: `releases/v0.39.2`. Origin: a design discussion on how to surface Flexible Review Methods (Flashcards, Memorization — shipped v0.39.0) to anonymous visitors on public note detail, where they're entirely undiscoverable today. Theme: connect the Public Library discovery layer to the signed-in workspace's richer review methods, so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction.
+
+Validated against an existing, documented precedent rather than proposed cold: `PublicMiniQuizPreview` already runs a capped (3-question), client-side-only, no-persistence quiz teaser on public notes today, and `docs/features/public-library.md`'s "Mini quiz preview rules" section explicitly sanctions this exact pattern ("up to 3 questions, interactive, client-side only, no account required") as the carved-out exception to "public note detail must not run an inline full quiz." This release applies the same sanctioned pattern to a second review method rather than inventing a new exception.
+
+### Planned Scope
+
+- **Flashcards Preview (frontend).** New `PublicFlashcardsPreview` component mirroring `PublicMiniQuizPreview`'s exact shape: capped at 3 cards (matching the existing `MAX_PREVIEW_QUESTIONS` convention, not an open-ended count), tap-to-reveal, fully client-side state, no backend calls, no persistence. Reuses `keyConcepts` + matching `QuizItem.explanation` pairs already present in the unauthenticated public note detail response — **zero backend change required**, since the full Study Pack content is already exposed in that response today (only the UI currently chooses to render a subset). Rendered directly after the existing Quick Check mini-quiz preview.
+- **Memorization teaser (frontend).** Static, purely educational section (copy + timeline illustration) explaining spaced-repetition scheduling. No per-note content, no scheduling logic, and no state of any kind for anonymous users — messaging only, never a working preview. A dedicated "try it" experience was explicitly rejected: Memorization's whole value is scheduling that reveals itself over days/return visits, which a single anonymous session can't demo (one card flip looks identical to Flashcards).
+- **Existing CTA hierarchy preserved.** The current single primary CTA (`Quiz yourself on this note`) plus secondary actions (`Create your own Study Pack`, `Copy to My Library`) are not restructured or renamed in this release. Flashcards/Memorization CTAs are additive secondary cards alongside the existing ones, not a replacement of the primary/secondary hierarchy — a full CTA-row redesign is a separate, deliberate decision, not a side effect of this feature.
+
+Anti-drift: no backend changes; no new persisted state for anonymous users; no live SRS/scheduling logic exposed pre-signup; preview cap matches the existing `MAX_PREVIEW_QUESTIONS` precedent; does not touch the copy-on-signup cookie flow or the existing conversion CTA hierarchy.
+
+---
+
+## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
+
+Base branch for this release: `releases/v0.40.0` (not yet kicked off). Origin: `docs/claude-prompt/auto-weekly-study-plan.txt` weighed directly against `docs/claude-prompt/cross-course-note-reusability.txt` as the next major release, then expanded by a design review that identified the **Primary Review Set** as the missing foundation the scheduler needs. Cross-course was ruled out — its own doc explicitly says "Do NOT implement this proposal today," and the trigger for reconsidering it (one curator's friction assigning a single IT plan across overlapping CS/COE programs) is a narrow curation-side pain, not the broad-audience "meaningful maintenance concern" the doc sets as its own revisit bar. It's also a real architecture change (note↔course/program is load-bearing for AI generation context, Public Library, search/filter, Study Plan org) with much higher blast radius than this release's read-time view over already-shipped data. Theme: turn readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed squarely at the exam-taker conversion/monetization segment.
+
+**Why Primary Review Set is in this release, not deferred:** the scheduler needs one unambiguous answer to "which Goal drives the Dashboard / Today / Weekly view?" when a learner owns several dated Goals (multi-Goal ownership is a locked design pillar — that's why the target date lives on the Goal, not the profile). No primary/active-collection concept exists anywhere today (confirmed by codebase audit); the Dashboard currently picks `publicPlans[0]` (top course/program match) implicitly. An **explicit** user-set primary (not "nearest exam date" — that alternative was considered and rejected for its failure modes: two close exams, wanting to focus on a later exam, non-dated goals) gives the scheduler, Dashboard, and Progress a single source of truth, and is the foundation the longer-term navigation vision (see the deferred "Review-Set-Centric Navigation" section below) builds on.
+
+### Scope
+
+- **Primary Review Set (new, foundational).** A new nullable user-level reference (e.g. `primaryCollectionId` on the user) the learner explicitly sets via a lightweight "Set as primary" action. **Profile-agnostic as a concept, but any surfaced label must resolve through the existing `getCollectionLabels` resolver** ("Primary Study Plan" / "Primary Review Set" / "Primary Lesson Plan" / "Primary Collection") — never a hardcoded "Review" string, per the locked anti-drift rule in `collections.md` / `CLAUDE.md`. Edge cases the concept must handle explicitly:
+  - No primary set and zero owned top-level Goals → no primary UI; Dashboard keeps today's top-course-program-match fallback (no regression).
+  - Exactly one owned top-level Goal → auto-set it as primary (don't force an extra step for the common case); user can still change it.
+  - Primary deleted → reference clears, falls back to the "no primary" behavior above.
+  - Primary set but no target date → the weekly countdown/scheduler card is hidden gracefully (same null-safe degradation as the target-date field itself); the primary still drives the Dashboard/Progress default view.
+  - Profiles with no natural "exam" framing (TEACHER, PROFESSIONAL) → the primary still drives Dashboard/Progress default view; the countdown/scheduler is conditional on a target date being set on that primary, not on profile type.
+- **Per-Goal target completion date (backend).** New nullable `note_collections.target_completion_date` column, settable only on top-level Goals (`parentCollectionId == null`) — mirrors the existing `courseProgram`/`estimatedStudyHours` PATCH-semantics pattern in `updateMetadata` (omit preserves, explicit clear supported). Rejecting the set on a non-top-level collection returns `400`, consistent with existing hierarchy validation. Deliberately **decoupled from `UserEntity.examDate`** — the existing profile-level board-exam date stays exactly what it is today (Dashboard-only), unrelated to this field. A learner can have multiple Goals, each with its own optional target date; this also makes the feature available to every profile type (not just `BOARD_EXAM`), since a STUDENT's "Semester 1 Finals" Goal has a real deadline too.
+- **Study intensity on the user, not the Goal (backend).** `studyDaysPerWeek` is a **user/profile-level** capacity attribute, not a Goal field — study capacity is a person attribute; putting it on the Goal would tell a learner with two dated Goals to "study every day" for each independently, which is incoherent since capacity is shared across whatever they study.
+- **Smart dating on adopt/copy (backend).** `adoptGoal` and the self-copy path must never carry a source's `targetCompletionDate` onto the created copy — always reset to null on both adopt and self-copy, same category as the existing generated-content self-copy exclusion in the versioning rule. A curator's or a previous owner's deadline means nothing to the new owner. No auto-guessed default date either (e.g. "8 weeks from today") — null stays null until the user deliberately sets one; this preserves the graceful no-target-date-means-no-weekly-section degradation and avoids fabricating a deadline the user never gave.
+- **Weekly countdown derivation (backend).** New derived fields on `GET /collections/{id}/goal` computing weeks-remaining, concepts-remaining, and today's concept budget, from the existing readiness fields (`totalConcepts`, `masteredConcepts`, `dueConcepts`, `notPracticedConcepts`) plus the target date and `studyDaysPerWeek`. Returns null/absent when no target date is set. No stored per-week schedule entity — **rebalancing after a missed day is not a feature, it falls out of recomputing `remaining concepts ÷ remaining scheduled days` fresh on every request.** No new mastery signal, no new stored progress field, no AI call — pure derivation like the existing Goal readiness rollup.
+- **Scheduling algorithm (decided; deterministic, no LLM).**
+  - Largest-remainder (Hamilton's) method for weighted proportional concept allocation across subjects by concept count — exact totals, no rounding drift.
+  - Due concepts act as a **floor** subtracted from the day's budget first; new-concept learning fills the remainder. Implementation note for the feature doc: due-concept count can *rise* with elapsed time even for a diligent learner (it tracks review timing, not inactivity) — this is correct behavior, not a scheduler bug, and must be documented so it isn't later mistaken for one.
+  - "Learn → Practice → Review → Master" ships as **presentation-layer labels** over the existing concept classification (not-started/due/mastered/struggling) — not a new signal and not an enforced sequential gate.
+- **Three surfaces (frontend).** Dashboard primary CTA (driven by the Primary Review Set), Review Set (Goal) detail (new "This Week" section above the existing `ReadinessSummary`), and the Review Sets list page (replacing/augmenting the empty "Recommended Review Sets" state).
+- **Progress default-view change (frontend, scoped narrowly).** When a Primary Review Set exists, `/progress` defaults to that collection's scoped readiness view — reusing the `PlanPicker` / `?collectionId=` mechanism that **already exists** (no new endpoint). The all-subjects rollup must stay reachable from the picker; this must not orphan mastery for notes that live outside any Review Set (the Public Library "browse and study any note" path is preserved). This does not undo the v0.36.0 Progress/Readiness unification — it changes the default view, not the surface.
+- **Target-date + intensity input (frontend).** Goal-only optional date field on the create/edit metadata surface (hidden for child Subject plan editing); the study-intensity question asked at the same moment as the target date (one screen, sane default if skipped), reading/writing the user-level `studyDaysPerWeek`.
+- **Post-adopt guidance nudge (frontend).** Reuse the existing `pickActiveGuidance()` tip system to suggest the adopter set their own target date (and optionally set the adopted plan as primary) — same discoverability pattern shipped in v0.39.1 for adoption itself, no new tooltip mechanism.
+
+### Phasing within v0.40.0 (recommended split)
+
+- **Phase 1:** Primary Review Set foundation + per-Goal target date (with the never-copy-on-adopt/self-copy rule) + user-level `studyDaysPerWeek` + the simple total-remaining ÷ remaining-scheduled-days computation with the due-as-floor rule + the three surfaces + the Progress default-view change. This delivers the "what do I do today / am I on track" answer at low risk.
+- **Phase 2 (fast-follow, may slip out of v0.40.0):** the weighted largest-remainder subject distribution and day-of-week interleaving (Mon: Site Analysis + Foundations; Tue: …) — the parts most likely to need iteration, gated on Phase 1 proving the countdown mechanic actually gets used.
+
+Anti-drift: no new top-level entity — the weekly plan is a derived, read-time view; the only new persisted state is the `primaryCollectionId` reference, the `target_completion_date` column, and the user-level `studyDaysPerWeek`. No change to `UserEntity.examDate` or the Dashboard board-exam countdown it already drives. Target date is Goal-level only, never on a child Subject plan. No hardcoded profile-specific "Review" vocabulary anywhere the Primary concept is surfaced — must resolve through `getCollectionLabels`. No adaptive/AI-driven scheduling, streaks, or calendar integration. **No nav rename, no Exam Hub change, no Explore page, no Progress full-redesign in this release** — those are recorded in the deferred "Review-Set-Centric Navigation" section and gated on this release proving the Primary concept out in real usage first.
+
+### Parked (not scoped for this release)
+
+- **Cross-course note reusability.** Its own proposal doc already recommends deferral; revisit only once cross-program overlap is a demonstrated broad-audience maintenance concern, not a single curator's one-off friction. A much cheaper interim exists if the underlying curation pain needs addressing sooner: multi-tag a note/subject with secondary course/programs for discovery, or improve the course/program picker UX during curation — without touching the one-note-one-program architecture.
+- **Per-Subject (child-level) target dates.** Only the parent Goal carries a target date in v1; a child Subject plan's contribution is limited to feeding the parent's concepts-remaining count, matching the existing `courseProgram` cascade precedent (parent-level field, children just feed the rollup).
+- **Multi-Goal scheduler orchestration.** v0.40.0 assumes one primary drives the coach; simultaneously scheduling across several active dated Goals is deferred until the single-primary model is validated.
+
+---
+
+## Review-Set-Centric Navigation (deferred future direction — not scoped to any release)
+
+Not a version — no release branch, no implementation scope yet. Captured here so we stop designing around abstractions (chiefly Exam Hub) that may no longer be the right shape, per the user's explicit request to lock the long-term architecture without building it all now. **Gate on the Primary Review Set concept (shipping in v0.40.0) proving useful in real usage before committing any of this.**
+
+Origin: structural realization that Review Sets have become NoteLib's primary study experience, not a secondary feature alongside Public Library/subjects. When the product was designed, users mostly discovered notes through the Public Library, so Dashboard, Progress, and Exam Hub were all built subject-first. That assumption no longer holds now that Official Review Sets, Subject Plans, smart progression, readiness, and (v0.40.0) weekly plans exist.
+
+Direction, as stated by the user:
+
+- **Official Review Set catalog as the scalable replacement for hand-built per-profession pages.** Publishing another Official Review Set should require no new frontend, versus adding an Exam Hub page per profession (Civil/Electrical/Mechanical Engineering, Nutrition, Midwifery, …).
+- **Public Library preserved as a distinct discovery path.** "I want to browse notes" (Public Library) and "I want to study for an exam" (Review Sets) are two valid entry points to the same notes; the Public Library is not absorbed or removed.
+- **Dashboard and Progress reorganized around the Primary Review Set** instead of subject/course-program. Dashboard asks "what review are you preparing for?"; Progress answers "what's happening with my primary study journey?" Subject mastery still exists — it becomes a facet of the Review Set rather than the primary navigation.
+- **Eventual nav shape:** Dashboard / My Reviews / Library / Explore / Progress, where Explore houses the Official Review Set catalog + Public Library + trending/community.
+
+Corrections recorded from the codebase research behind this (so they aren't relitigated later):
+
+- **Exam Hub is not the maintenance burden the original framing assumed.** It is a single dynamic `/exam/[slug]` route over a small hardcoded config (`frontend/lib/exam-hub-config.ts`), and it does a distinct job an authenticated catalog does *not* replace: **anonymous / SEO acquisition** (organic search → signup; authenticated visitors route into a filtered Public Library). The recommended resolution is **convergence, not deletion** — an Explore surface that houses the Official Review Set catalog + Public Library, and lets the existing `/exam/[slug]` SEO pages deep-link into a matching Official Review Set once one exists. Retiring the SEO surface would cost organic acquisition.
+- **Naming stays profile-aware.** Any "Primary Review" / "My Reviews" language must resolve through the existing `getCollectionLabels` pattern, not ship as hardcoded universal copy — the concept is profile-agnostic; the label is not (Study Plan / Review Set / Lesson Plan / Collection).
+- **Progress reorg is a default-view change, not a re-scoping.** The `PlanPicker` + `?collectionId=` machinery already exists; a future reorg defaults it to the primary and must keep the all-subjects rollup reachable so notes outside any Review Set aren't orphaned, and must not undo the v0.36.0 Progress/Readiness unification.
 
 ---
 
