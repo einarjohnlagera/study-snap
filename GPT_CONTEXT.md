@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.33.0 in progress - 2026-06-26
+> Last updated: v0.39.1 - 2026-07-05
 
 ---
 
@@ -20,7 +20,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** `v0.33.0 - Study Plans as a Retention Engine` is in progress. Latest released baseline is `v0.32.2 - Conversion Diagnosis & Quota Honesty`.
+**Current baseline:** `v0.39.1 - Study Plan Builder Polish` is released. Previous baseline is `v0.39.0 - Flexible Review Methods`.
 
 ---
 
@@ -41,9 +41,10 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 - **Note** is the primary entity. State: `DRAFT`, `GENERATING`, `FAILED`, `STUDY_PACK_READY`. Visibility: `PRIVATE`, `PUBLIC`.
 - **Study Pack** is generated content attached to a Note: summary, key concepts, quiz, metadata suggestions, and downstream quiz/exam entry points.
-- **Study Plans / Collections** organize owned notes. Published admin plans can be adopted into a user's private library as snapshot copies.
-- **ConceptHealth** is the recency spine for readiness and Progress: `lastCorrectAt`, `lastIncorrectAt`, due/not-due classification, and struggling state.
-- **Quiz sessions** share `quick_review_sessions` with mode stored as enum and session state in JSONB.
+- **Note Collections (Study Plans / Review Sets)** organize owned notes into an ordered, curated unit, with an optional one-level Goal -> Subject hierarchy. This is the product's primary retention lever — see the dedicated vision section below.
+- **ConceptHealth** is the recency spine for readiness and Progress: `lastCorrectAt`, `lastIncorrectAt`, due/not-due classification, and struggling state. This is the *only* mastery-integrity signal in the app, and it's locked (since v0.37.0) to move only from genuine assessment — see Quiz / Practice Mode Contract.
+- **Quiz sessions** share `quick_review_sessions` with mode stored as enum and session state in JSONB. Question **format** (MCQ, True/False, Multi-Select, Matching, and — new in v0.39.0 — Identification, Enumeration) is a separate axis from mode.
+- **Flashcards and Memorization** (new in v0.39.0) are non-scored review surfaces that sit entirely outside the quiz-session engine — no session row, no `ConceptHealth` write, ever.
 - **Generated teacher quizzes** use `generatedQuiz`, not student quiz sessions.
 
 Versioning rule:
@@ -55,17 +56,44 @@ Versioning rule:
 
 ---
 
+## Note Collections (Study Plans / Review Sets): Vision & Evolution
+
+Profile-aware terminology — "Study Plan" (Student / Board Taker), "Lesson Plan" (Teacher), "Review Set" (Professional) — all the same underlying `NoteCollection` entity, labeled through `getCollectionLabels(profileType)`.
+
+**The vision, in one line:** a Note Collection is not a folder — it is a trackable **readiness journey**, and it is the product's primary retention lever.
+
+**Why this became the retention lever (v0.33.0).** Diagnosis at the time: users activate but don't return — W1→W2 retention was ~5.6%, recent cohorts near 0%, longest observed streak ~2 days. Collections were the natural unit to attack this: give a learner a number (readiness %) that only moves by coming back to practice, and give them a credible reason to start even with zero notes of their own (curated, adoptable plans).
+
+**Structure — a locked two-level hierarchy (v0.33.1+).** A top-level **Goal** collection can contain child **Subject** collections through `parent_collection_id` (self-referential, exactly 2 levels — no arbitrary depth, no per-module mastery, cycles impossible). This is a deliberate, scoped reversal of the original "no parent/child collections" rule, constrained specifically to this one shape.
+
+**Adoption model (v0.31.0, extended through v0.33.3) — the cold-start on-ramp.** Admin-published collections act as public, course/program-targeted curated plans. Adopting is free, idempotent, makes no AI call, and creates a private **snapshot copy** — source edits never sync into adopted copies (`sourcePlanId` is lineage/idempotency only). Recursive Goal adopt (v0.33.3) copies every child Subject plan and its notes in one action. This is meant to be the answer for a learner with nothing of their own yet: adopt a curated plan and start a trackable journey immediately, without writing a single note first.
+
+**Readiness is the headline signal, deliberately not shown everywhere (locked, v0.33.x–v0.37.0).** Readiness derives entirely from existing `ConceptHealth` / `ProgressReportService` — no new mastery signal, no new stored field, ever. But *where* it's allowed to show is tightly scoped: the dedicated plan detail / `/progress` surfaces show it; execution rows, list cards, published-plan cards, and public source plans deliberately do not (list-level mastery display was tried and rolled back — it created role confusion between "browsing" and "monitoring"). Vocabulary is unified and locked: `ready / mastered / due / not started`.
+
+**Mastery integrity is protected, not just displayed (v0.37.0).** Once readiness became the headline number, unlimited free Quick Review grinding could have "satisfied" it for free. Quick Review — and, since v0.39.0, Flashcards/Memorization — are locked to **never write `ConceptHealth`**. Only genuine assessment (Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, Interview Practice, and now Identification/Enumeration) can move the readiness number.
+
+**The Builder is the authoring surface for this hierarchy (v0.33.1–v0.35.0).** `/collections/{id}/builder` is a single canvas for both Goal and leaf plans — add/nest/reorder Subject plans, drag notes between them, mobile-first (collapsible sections, icon-only controls on narrow viewports). The Builder is deliberately **not** a study/monitoring surface — no readiness ring on the Builder itself (v0.33.4 removed one that had crept in); per-module stats in each Subject header are the only inline signal a curator needs.
+
+**Most recent polish (v0.39.1) — closing real gaps found in practice, not a planned feature push:**
+- `AddSubjectModal` gained a description field (was title-only).
+- Fixed a real data-integrity bug: publishing a Goal cascaded `visibility=PUBLIC` to children but never touched `courseProgram`, so newly-published child Subject plans were invisible to course/program-scoped public discovery. `updateMetadata` now cascades a newly-set `courseProgram` to children whose own value is currently blank — never a blind overwrite, same conservative rule as the v0.37.2 clobber-bug fix.
+- **Cold-start adoption discoverability audit.** Found the adoption mechanism worked fine end-to-end once found, but nothing in the actual cold-start path (the zero-notes empty state, the Dashboard's recommended-plan card) told a new learner it existed. Fixed both, without touching the locked `/onboarding` flow — the fix lives entirely on Dashboard surfaces every cold-start learner reaches regardless of how they got there.
+
+**What's intentionally still parked:** standalone adoption of a single child Subject plan (there's an unresolved re-parenting interaction with `adoptGoal`'s idempotency check) — not worth solving until there's a real discovery need for it.
+
+---
+
 ## Profile Types
 
 | Profile | Current focus | Important rules |
 |---|---|---|
 | Student | Notes, Study Packs, Quick Review, Challenge Quiz, Adaptive Practice, Long Exam | Target Audience hidden; backend saves `STUDENT`. |
 | Board Exam / Exam Reviewer | Exam-date context, Board Exam Mode, readiness for licensure-style prep | Target Audience hidden; backend saves `BOARD_TAKER`. |
-| Teacher | Quiz generation, preview, DOCX export, Exam Builder | Teacher flow uses `generatedQuiz` only; never reuse student quiz sessions for preview. |
+| Teacher | Quiz generation, preview, DOCX export, Exam Builder | Teacher flow uses `generatedQuiz` only; never reuse student quiz sessions for preview. No adoption surface — Flashcards/Memorization and the Dashboard adoption nudge are hidden for Teacher. |
 | Professional | Certification review, Long Exam as Full Practice Exam, Interview Practice | Target Audience hidden; backend saves `PROFESSIONAL`. |
 | Parent | Enum exists, no real product implementation | Do not propose implementation without parent-child relationship design. |
 
-Onboarding is active for verified users. It collects profile type, study goal, input method, Study Pack generation, completion, learner level, and course/program. Backend content-creating mutations must enforce profile setup for the legacy completed-but-null profile cohort through `ProfileSetupRequiredException`.
+Onboarding is active for verified users. It collects profile type, study goal, input method, Study Pack generation, completion, learner level, and course/program. This flow is **locked** — do not redesign it. Backend content-creating mutations must enforce profile setup for the legacy completed-but-null profile cohort through `ProfileSetupRequiredException`.
 
 ---
 
@@ -73,7 +101,7 @@ Onboarding is active for verified users. It collects profile type, study goal, i
 
 The product has a locked hierarchy of five top-level modes:
 
-1. **Quick Review** - all plans, saved questions.
+1. **Quick Review** - all plans, saved questions, review-only (never writes `ConceptHealth`).
 2. **Challenge Quiz** - all plans with quota, progressive generation up to 20 questions.
 3. **Adaptive Practice** - Plus/Pro practice targeting weak concepts.
 4. **Long Exam** - Pro exam mode, fixed long-form practice, supports multi-note sources.
@@ -86,6 +114,24 @@ Rules:
 - Do not add a sixth top-level mode without updating `docs/product/EXAM_MODES.md` and roadmap/spec docs together.
 - Premium exam paywalls fire from Start CTAs after setup/prescreen, not from card click.
 - Study Plan premium-exam launches carry `collectionId` and scope additional-note pickers to quiz-ready notes in that plan.
+
+### Question formats (v0.39.0, a separate axis from modes)
+
+Within the five modes above, individual questions carry a `questionFormat`: `MCQ`, `TRUE_FALSE`, `MULTI_SELECT`, `MATCHING`, and two new free-text formats added in v0.39.0:
+
+- **Identification** — fill-in-the-blank / name-the-term. Scored deterministically against a generation-time `acceptableAnswers[]` list (normalized, case-insensitive) — no per-submission LLM call.
+- **Enumeration** — name every item in a well-defined 2–5 item set (e.g. "Name the three branches of government"). Scored **all-or-nothing** via exhaustive bipartite matching against `acceptableAnswerGroups[]` (one synonym group per required item) — deliberately not first-match greedy, which can wrongly reject a valid answer when synonym groups overlap. No partial credit.
+
+Both formats are Challenge Quiz-only for now (Long Exam is a planned fast-follow), and both are **ungated across every plan tier** — a deliberate product stance adopted this release: question-format variety is a learning-quality dimension, not a control/workflow dimension, so it is never a Plus/Pro differentiator. Monetization stays in mode-level and quota-level gates that already exist (Board Exam Pro-only, Adaptive Practice quota tiers) — not in which formats a user can see. Both formats reuse the existing quiz-session engine and `ConceptHealth` write path exactly like MCQ — no new session discriminator, no new mode.
+
+### Non-engine review surfaces (v0.39.0, distinct from both modes and formats)
+
+**Flashcards** and **Memorization** are free, non-scored review surfaces that sit entirely outside the quiz-session engine — no timer, no submit, no `quizSession` discriminator, and critically, **never write `ConceptHealth`** (same rule as Quick Review: review-only surfaces never move mastery, due-state, or Overall Readiness).
+
+- **Flashcards** — flips each `keyConcepts` entry against its matching `quiz[].explanation` (fuzzy concept match) as a self-review deck. No new AI call — reuses existing Study Pack data.
+- **Memorization** — Flashcards' matching logic plus a real spaced-repetition schedule (simplified SM-2: Again/Hard/Good/Easy), stored in a new, separate `memorization_cards` entity — firewalled from `ConceptHealth` and `ProgressReportService` by design, not just convention.
+
+Both entry points sit on the Note Detail Key Concepts tab, hidden from Teacher profile, free for every plan.
 
 ---
 
@@ -101,6 +147,7 @@ Runtime entitlement source of truth is the backend subscription model and `GET /
 - Cancellation is scheduled for period end; paid access remains active until then.
 - Do not add plan flags to `users`.
 - Do not change prices, quota numbers, pass durations, billing, or checkout mechanics as part of readiness/UX work unless explicitly scoped.
+- New question *formats* are explicitly kept out of plan-gating (see Quiz / Practice Mode Contract) — this is a considered exception to "gate new capability," not an oversight.
 
 Upgrade CTA rule:
 
@@ -111,100 +158,47 @@ Upgrade CTA rule:
 
 ---
 
-## Current Release: v0.33.0 - Study Plans as a Retention Engine
+## Current Release: v0.39.1 - Study Plan Builder Polish
 
-Retention diagnosis from v0.32.2: users activate but do not return. W1->W2 retention was about 5.6%, recent cohorts near 0%. The current release focuses on one scoped retention lever: Study Plans as trackable readiness journeys.
+**Status: Released.** Fixed subject-metadata gaps and cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage rather than a planned feature push — see the Note Collections vision section above for the full narrative. Shipped:
 
-Track A shipped:
+- Description field on Add Subject Plan (frontend-only).
+- Course/program cascade fix on `updateMetadata` (backend) — closes a real data-integrity bug where published child Subject plans could sit invisible to course/program-scoped discovery.
+- Cold-start adoption discoverability fixes on Dashboard (`DashboardStudyPlanSection`, `DashboardEmpty`) — frontend-only; `/onboarding`'s locked flow was not touched.
 
-- Study Plan metadata-save is decoupled from publishing. Course/program and description persist independently; Publish remains gated by existing validation.
-- Library selection-create collects collection description.
-- Recommended published plans surface on `/collections`, scoped to the learner's own course/program, using the Dashboard recommended-plan pattern.
+All three verified against a real backend + Postgres instance (not mocks) before shipping — including catching a stale-build false alarm along the way (an already-running dev backend predated the cascade fix and briefly looked broken until rebuilt).
 
-Track B shipped:
-
-- Owner-scoped plan readiness endpoint: `GET /collections/{id}/readiness`.
-- Dedicated plan readiness route: `/collections/[id]/readiness`, reached by a "Check readiness" CTA.
-- Shared `ReadinessSummary` component: inline SVG ring + CSS progress bars, no chart library.
-- `PLAN_READINESS_VIEWED` analytics event fires once after successful readiness load.
-- Private Note Detail shows a compact per-note readiness rollup for ready notes with key concepts.
-- Free users see the readiness signal and per-concept readiness status; Plus/Pro keep per-concept review timing.
-
-Locked v0.33 readiness rules:
-
-- Readiness is derived from ConceptHealth; no new persisted readiness field, no AI call, no generated content.
-- Plan readiness must reuse `ProgressReportService` classification and `masteryPercentage`.
-- Vocabulary is unified: `ready`, `mastered`, `due`, `not started`.
-- Plan readiness belongs only on the dedicated owner-scoped sub-route. Collection execution rows, list cards, published-plan cards, and public source plans keep the no-mastery rule.
-- Note readiness signal is Free-visible; per-concept timing (`daysSinceReview`, timestamps, `Due - Nd ago`) remains Plus/Pro.
-- Dashboard and plan-list readiness badges are deferred to v0.34.0.
-- Teacher bulk-quiz and teacher-flow polish remain deferred until there is a teacher cohort.
+Parked: standalone adoption of a single child Subject plan (unresolved re-parenting interaction with `adoptGoal`'s idempotency check).
 
 ---
 
-## Recent Release Context
+## Previous Release: v0.39.0 - Flexible Review Methods
 
-### v0.32.2 - Conversion Diagnosis & Quota Honesty
+**Status: Released.** Let a Study Pack be reviewed through more than Multiple Choice, while preserving the v0.37.0 review-vs-assessment mastery boundary. Two independent chains:
 
-- Re-scoped the growth problem: checkout is not the main blocker; retention is.
-- Admin funnel got date-windowed metrics and better quota-hit reporting.
-- Long Exam and Board Exam deduct quota per session instead of per source note.
-- Inactivity reminders became reachable by default and budget-aware.
-- Resend suppression handling was added.
-- Backend memory/OOM work reduced session JSONB deserialization and adjusted runtime sizing.
+**Chain A — Review methods (never write `ConceptHealth`):**
+- **Flashcards** — flip-card deck built from existing Study Pack data (`keyConcepts` <-> `quiz[].explanation`, fuzzy concept match). No new AI call.
+- **Memorization** — Flashcards' matching plus real spaced repetition (simplified SM-2), new separate `memorization_cards` entity, firewalled from `ConceptHealth`/readiness by design.
 
-### v0.32.1 - Monetization Surfacing & Pricing Clarity
+**Chain B — Assessment formats (write `ConceptHealth` like Challenge Quiz):**
+- **Identification** — free-text fill-in-the-blank, deterministic `acceptableAnswers[]` matching, no per-submission LLM call.
+- **Enumeration** — free-text "name every item in a 2–5 item set", all-or-nothing scoring via exhaustive bipartite matching against `acceptableAnswerGroups[]`.
 
-- Premium exam paywalls moved to Start CTAs after setup surfaces.
-- Study Plan premium exam CTAs were added.
-- Pricing surfaces were reframed around one-time, time-boxed passes.
-- Settings plan cards got unified pass-length selector.
-- Plan-launched exam prescreens link back to the originating plan and scope additional notes to that plan.
+Both new formats are **ungated across every plan tier** — see Quiz / Practice Mode Contract above for the full reasoning. Both are Challenge Quiz-only for now; Long Exam is a planned fast-follow. Neither adds a 6th/7th mode — `docs/product/EXAM_MODES.md` documents both as new question formats / non-engine surfaces on the existing 5-mode engine, not new modes.
 
-### v0.32.0 - Account & Communication Controls
+---
 
-- Account deletion is reversible first (`PENDING_DELETION`, 30-day grace), then irreversible purge/anonymization.
-- Owner-only data export returns a synchronous JSON attachment.
-- Email Preferences center manages inactivity, weak-concept, weekly summary, and marketing preferences.
-- Tokenized one-click unsubscribe exists for optional emails.
-- Transactional emails are not gated by optional preferences.
+## Recent Release Context (condensed — see `RELEASES.md` for full detail)
 
-### v0.31.2 - Analytics Integrity & Funnel Visibility
+**Collections/retention arc (v0.31.0 → v0.37.0):** see the dedicated Note Collections vision section above for the full narrative — adoption model, Goal/Subject hierarchy, the Builder, readiness-as-retention-lever, the mastery-integrity lock.
 
-- Analytics writes publish after transaction commit and persist asynchronously.
-- Signup analytics no longer fail on FK timing.
-- Analytics event enum and frontend union were audited.
-- Admin Funnel includes retention cohorts and upgrade -> checkout -> paid conversion.
+**v0.38.0 - Read-Path Optimization Pass.** Latency/DB-payload pass on the hottest read endpoints (session history, collection detail, private library list, Goal per-child readiness) via lean projections instead of full entities. Byte-identical API responses; no schema/endpoint/DTO change.
 
-### v0.31.1 - Adoptable Study Plans Discovery & Status
+**v0.37.1–v0.37.4 - Production memory incident response.** A string of Render-instance OOM/restart investigations (glibc malloc arena fragmentation, G1 not releasing idle heap, uncapped Metaspace) resolved via Dockerfile JVM flags — no application code change. v0.37.2 also fixed a real data-loss bug (`updateMetadata` clobbering fields on partial PATCH) — the same class of bug the v0.39.1 courseProgram cascade fix was careful not to repeat.
 
-- `/collections/published` lists all matching published plans for the learner's course/program.
-- Onboarding completion can surface a recommended plan.
-- Study Plan list cards show Not started / In progress / Completed execution status.
-- Study Plan detail rows show learner-facing execution status and Exam Builder exclusion notices.
-- Bulk-generation and bulk-import quota UI became clearer.
+**v0.36.x - OCR incident + Progress/Readiness merge.** Google Vision OCR was temporarily disabled backend-wide after causing production OOM (per-call gRPC client churn); a kill-switch plus honest user messaging shipped as a fast-follow. Separately, `/me/progress` and the plan readiness sub-route merged into one canonical `/progress` surface with unified vocabulary (`ready / mastered / due / not started`).
 
-### v0.31.0 - Adoptable Study Plans
-
-- Admin-published collections can act as public, course/program-targeted Study Plans.
-- Learners adopt plans by snapshot-copying public notes and linked Study Packs into owned notes/collections.
-- Adoption is free, idempotent, and does not call AI.
-- Published plan metadata and publish UX were tightened.
-
-### v0.30.x - Readiness Signals and Copy Polish
-
-- Progress became the canonical subject-level ConceptHealth dashboard.
-- Long Exam, Board Exam, and Interview Practice now write ConceptHealth signals.
-- `lastIncorrectAt` added the struggling/weakness signal across practice modes.
-- Public note copying was reframed as `Add to Library`; public copies can include Study Packs.
-
-### v0.29.x - Bulk Generation and Generation Context
-
-- Bulk Generation creates notes and Study Packs from topic lists using existing async generation infrastructure.
-- Bulk Generation is available to authenticated onboarded users; ADMIN bypasses relevant generation quotas inside the orchestration.
-- The bounded `bulk_generation_result` receipt is the only allowed v0.29.1 relaxation of the no batch/progress infrastructure rule.
-- Content generation is leveled by course/program, not learner level; learner level remains for quiz/exam personalization.
-- Backend onboarding/profile setup enforcement was added for content-creating mutations.
+**v0.32.x and earlier - Monetization, account controls, conversion diagnosis.** Premium exam paywalls moved to Start-CTA moments; pricing reframed as one-time passes; account deletion made reversible-first; the core retention-vs-conversion diagnosis (checkout is not the blocker, retention is) that motivated the whole v0.33.0+ collections push described above.
 
 ---
 
@@ -226,7 +220,7 @@ Locked v0.33 readiness rules:
 - Note creation/generation must respect profile setup, target audience defaults, and Study Pack usage rules.
 - Async generation saves the note first, marks it `GENERATING`, redirects to Note Detail, and lets Note Detail poll.
 - Failed generation preserves note content and exposes Retry Generate.
-- Note Detail is the owner study hub: summary, key concepts, quiz, full notes, practice actions, recent sessions, readiness signal.
+- Note Detail is the owner study hub: summary, key concepts, quiz, full notes, practice actions, recent sessions, readiness signal, plus (v0.39.0) Flashcards/Memorization entry points on the Key Concepts tab.
 
 ### Public Notes and Profiles
 
@@ -236,18 +230,20 @@ Locked v0.33 readiness rules:
 - Profile Settings (`/profile`) is private editing; Public Profile owns visibility and sharing.
 - Share behavior uses a shared modal pattern for notes and profiles.
 
-### Study Plans / Collections
+### Note Collections (Study Plans / Review Sets)
 
-- Owned Study Plans are ordered note collections.
-- Published/admin Study Plans are source plans; adoption creates owned snapshot copies.
-- Recommended plans are course/program-scoped.
-- Plan detail execution rows show action/status, not mastery.
-- Dedicated readiness detail lives at `/collections/[id]/readiness`.
+See the dedicated vision section above for the full narrative. Quick reference:
+
+- A collection is either a top-level **Goal** or a **Subject** (child of a Goal, or standalone) — exactly two levels, no deeper.
+- Published/admin collections are source plans; adoption creates owned snapshot copies (`sourcePlanId` for lineage only, never synced).
+- Recommended plans surface course/program-scoped on Dashboard and `/collections`; `/collections/published` is the full browse surface.
+- The Builder (`/collections/{id}/builder`) is the single authoring canvas for both Goal and leaf plans.
+- Plan detail execution rows show action/status, not mastery. Dedicated readiness detail lives at `/progress?collectionId={id}`.
 - Plan premium exams launch with `collectionId` and use only quiz-ready notes from that plan.
 
 ### Progress and Readiness
 
-- `/progress` is available to all plans and is the canonical subject-level detail surface.
+- `/progress` is available to all plans and is the canonical subject-level detail surface, including plan-scoped readiness via `?collectionId={id}`.
 - It reads ConceptHealth only, not quiz-session report artifacts.
 - Subjects group by Study Pack subject; blank/null subject is `Other`.
 - Classification:
@@ -286,6 +282,10 @@ Locked v0.33 readiness rules:
 - Do not expose per-concept review timing to Free users on Note Detail.
 - Do not move Learning Style or reminder preferences into Profile.
 - Do not label nav as "Account Settings"; use "Settings".
+- Do not let Quick Review, Flashcards, or Memorization write `ConceptHealth` — only genuine assessment modes/formats do (Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, Interview Practice, Identification, Enumeration).
+- Do not plan-gate question *formats* (Identification/Enumeration and any future format) — format variety is a learning-quality dimension, not a monetization lever. Gate modes/workflows/quotas instead.
+- Do not nest Note Collections beyond two levels (Goal -> Subject); no per-module mastery.
+- Do not redesign the locked `/onboarding` flow (Profile Type -> Study Goal -> Input Method -> Study Pack Generation -> Completion).
 - Use `globalThis`, not `window`, in frontend code.
 - Backend exceptions should be named `AppException` subclasses, not inline raw `new AppException(...)`.
 - Repeated logic-bearing strings should be constants.
@@ -381,7 +381,7 @@ Prompt rules:
 - `RELEASES.md` - current and historical release state
 - `docs/product/ROADMAP.md` - current release sequencing and future scope
 - `docs/product/SPEC.md` - canonical product behavior
-- `docs/product/EXAM_MODES.md` - locked quiz mode hierarchy
+- `docs/product/EXAM_MODES.md` - locked quiz mode hierarchy, question formats, and non-engine review surfaces
 - `docs/product/PLANS.md` - plan tiers and quotas
 - `docs/features/` - per-feature behavior rules
 - `docs/codex-prompts/` - ready prompts for active work
