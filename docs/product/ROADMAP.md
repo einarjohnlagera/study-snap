@@ -379,6 +379,32 @@ Anti-drift: no new top-level entity — the weekly plan is a derived, read-time 
 
 ---
 
+## v0.40.1 - Public Review Set Reachability (planned)
+
+Base branch for this release: `releases/v0.40.1` (not yet kicked off). Origin: surfaced while pressure-testing a broader "Review Set discovery redesign" proposal against the Public Library philosophy ("discover knowledge" vs. "follow a structured journey") — the full redesign (Recommended/Trending/Recently-Added/Browse-All ranking) was rejected as premature and overlapping with the deferred Explore-page direction below, but one piece of it survived: a **verified, narrow inconsistency**, not a redesign.
+
+**Verified finding:** `NoteCollectionService.listPublic` already supports `courseProgram == null` and returns every PUBLIC top-level collection unfiltered — the backend capability exists today. But no frontend surface ever calls it that way: both `/collections/published` and the Dashboard's `DashboardStudyPlanSection` widget always pass the user's own course/program, and when a user has none set, the UI shows a dead-end empty state instead of browsing everything. A Nursing student cannot reach an Architecture Official Review Set through any UI path today, even though it is technically PUBLIC. Once a curator marks something PUBLIC, a second system-level gate (course/program match) on top of that undermines what "public" means — the same publish-vs-surface expectation notes already get in Public Library. Commitment happens at *adopt*, not at *browse*, so hiding options at browse time isn't justified by Review Sets being a higher-commitment object than a note.
+
+### Scope
+
+- **Recommended section (unchanged).** Keep today's course/program-scoped result as the default, personalized entry point — preserves the "official set built for your track" trust signal and serves the exam-taker segment's need for direct relevance.
+- **Browse All Official Review Sets (frontend, dedicated page only).** New section on `/collections/published` below Recommended, calling the existing `listPublicStudyPlans({})` (no course/program filter) and reusing existing Review Set cards. **Dashboard does not get this section inline** — `DashboardStudyPlanSection` is a glance widget, not a browse surface; Dashboard instead gets a "Browse all Review Sets" link pointing to the dedicated page's Browse All section.
+- **Deterministic default order.** Browse All must ship with some default sort (alphabetical, or grouped by course/program header) — an unsorted wall of cards past ~a dozen Official Review Sets defeats the point. This is not a ranking/recommendation engine, just a sane default.
+- **Rewire the existing empty state, don't build a new one.** `DashboardStudyPlanSection` already has a `browseWhenEmpty`-gated empty-state card ("No curated Review Sets for X yet") used on the `/collections` page today. The fix is wiring that existing card's CTA to the unfiltered Browse All call, not a parallel component.
+- **Duplication between Recommended and Browse All is expected**, not a bug — standard featured-row + full-catalog pattern (a course/program match legitimately appears in both).
+
+### Explicitly out of scope
+
+Search/filter-component reuse from Public Library (verify feasibility separately, ship Browse All as a flat list first), Trending, Recently Added, Popular, Community Review Sets, any ranking/recommendation engine, Explore page, nav redesign, Dashboard redesign. All remain future roadmap items (see the deferred "Review-Set-Centric Navigation" section below, which this release deliberately does not advance).
+
+### Sequencing note (deliberate, recorded to avoid drift)
+
+v0.40.0's own frontend scope already includes "the Review Sets list page (replacing/augmenting the empty 'Recommended Review Sets' state)" — the **same empty state** this release rewires. The user chose not to change v0.40.0's planned scope to fold this in; v0.40.0 proceeds as originally scoped (including its own empty-state work), and v0.40.1 follows immediately after as a v0.39.1-style polish fast-follow that reworks that same empty state a second time. This is a known, accepted cost (same surface touched in two consecutive releases) — not an oversight.
+
+Anti-drift: no backend changes required (the unfiltered endpoint already exists); no new data model, no new persisted state; pagination is a known future ceiling once the Official Review Set catalog reaches the hundreds, not addressed here.
+
+---
+
 ## Review-Set-Centric Navigation (deferred future direction — not scoped to any release)
 
 Not a version — no release branch, no implementation scope yet. Captured here so we stop designing around abstractions (chiefly Exam Hub) that may no longer be the right shape, per the user's explicit request to lock the long-term architecture without building it all now. **Gate on the Primary Review Set concept (shipping in v0.40.0) proving useful in real usage before committing any of this.**
