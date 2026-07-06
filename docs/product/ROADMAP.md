@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.39.2 - Public Library Learning Experience` is in progress (on `releases/v0.39.2`).
+`v0.39.2 - Public Library Learning Experience` is the latest released version (on `releases/v0.39.2`).
 
 `v0.39.1 - Study Plan Builder Polish` is the previous released version (on `releases/v0.39.1`).
 
@@ -317,7 +317,7 @@ Today, metadata set at the Goal level doesn't reliably reach its child Subject p
 
 ---
 
-## v0.39.2 - Public Library Learning Experience
+## v0.39.2 - Public Library Learning Experience (released)
 
 Base branch: `releases/v0.39.2`. Origin: a design discussion on how to surface Flexible Review Methods (Flashcards, Memorization — shipped v0.39.0) to anonymous visitors on public note detail, where they're entirely undiscoverable today. Theme: connect the Public Library discovery layer to the signed-in workspace's richer review methods, so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction.
 

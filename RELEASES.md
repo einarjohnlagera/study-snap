@@ -2,7 +2,7 @@
 
 ## v0.39.2 - Public Library Learning Experience
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: connect the Public Library discovery layer to the signed-in workspace's richer review methods — surface Flashcards and Memorization on public note detail so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction. Validated against an existing, documented precedent: `PublicMiniQuizPreview` already runs a capped, client-side-only, no-persistence quiz teaser on public notes today — this release applies the same sanctioned pattern to a second review method.
 
