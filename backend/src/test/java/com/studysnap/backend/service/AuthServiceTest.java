@@ -16,6 +16,7 @@ import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
@@ -968,6 +969,53 @@ class AuthServiceTest {
 
         assertThat(response.examDate()).isNull();
         assertThat(user.getExamDate()).isNull();
+    }
+
+    @Test
+    void updateStudyDaysPerWeek_savesValueAndReturnsUpdatedProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateStudyDaysPerWeek(
+            userId,
+            new UpdateStudyDaysPerWeekRequest(5)
+        );
+
+        assertThat(response.studyDaysPerWeek()).isEqualTo(5);
+        assertThat(user.getStudyDaysPerWeek()).isEqualTo(5);
+    }
+
+    @Test
+    void updateStudyDaysPerWeek_acceptsNullAndClearsValue() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "current@example.com");
+        user.setStudyDaysPerWeek(5);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.updateStudyDaysPerWeek(
+            userId,
+            new UpdateStudyDaysPerWeekRequest(null)
+        );
+
+        assertThat(response.studyDaysPerWeek()).isNull();
+        assertThat(user.getStudyDaysPerWeek()).isNull();
     }
 
     @Test

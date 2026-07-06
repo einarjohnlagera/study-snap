@@ -162,6 +162,16 @@ public class NoteCollectionController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/{id}/target-date")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteCollectionDetailResponse clearTargetDate(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.clearTargetDate(collectionId, user.userId());
+    }
+
     @PutMapping("/{id}/children/order")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public GoalCollectionDetailResponse setChildrenOrder(

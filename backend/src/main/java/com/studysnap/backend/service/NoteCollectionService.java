@@ -95,6 +95,7 @@ public class NoteCollectionService {
     private static final String CHILD_ORDER_SET_MISMATCH_MESSAGE = "Child order must include exactly the current child plans.";
     private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
     private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
+    private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
@@ -302,6 +303,7 @@ public class NoteCollectionService {
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                collection.getTargetCompletionDate(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 itemCount,
@@ -350,11 +352,29 @@ public class NoteCollectionService {
             if (request.estimatedStudyHours() != null) {
                 collection.setEstimatedStudyHours(request.estimatedStudyHours());
             }
+            if (request.targetCompletionDate() != null) {
+                if (collection.getParentCollectionId() != null) {
+                    throw new InvalidCollectionRequestException(TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
+                }
+                collection.setTargetCompletionDate(request.targetCompletionDate());
+            }
         }
         touch(collection);
         NoteCollectionEntity saved = collectionRepository.save(collection);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         return toDetailResponse(saved, items);
+    }
+
+    @Transactional
+    public NoteCollectionDetailResponse clearTargetDate(UUID collectionId, UUID userId) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        if (collection.getTargetCompletionDate() != null) {
+            collection.setTargetCompletionDate(null);
+            touch(collection);
+            collection = collectionRepository.save(collection);
+        }
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        return toDetailResponse(collection, items);
     }
 
     @Transactional
@@ -838,6 +858,9 @@ public class NoteCollectionService {
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            // targetCompletionDate is deliberately never copied from source (including on a self-copy where
+            // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
+            // the new owner, so it stays null on the fresh entity until the new owner sets their own.
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
@@ -872,6 +895,9 @@ public class NoteCollectionService {
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            // targetCompletionDate is deliberately never copied from source (including on a self-copy where
+            // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
+            // the new owner, so it stays null on the fresh entity until the new owner sets their own.
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
@@ -1265,6 +1291,7 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getEstimatedStudyHours(),
+                collection.getTargetCompletionDate(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
@@ -1287,6 +1314,7 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getEstimatedStudyHours(),
+                collection.getTargetCompletionDate(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),

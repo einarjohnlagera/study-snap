@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
+import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -67,5 +68,14 @@ public class UserProfileController {
             @Valid @RequestBody UpdatePublicProfileVisibilityRequest request
     ) {
         return authService.updatePublicProfileVisibility(user.userId(), request);
+    }
+
+    @PutMapping("/profile/study-days-per-week")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateStudyDaysPerWeek(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody UpdateStudyDaysPerWeekRequest request
+    ) {
+        return authService.updateStudyDaysPerWeek(user.userId(), request);
     }
 }
