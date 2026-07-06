@@ -1,5 +1,34 @@
 # RELEASES.md - NoteLib
 
+## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
+
+**Status: In Progress**
+
+Theme: turn readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed squarely at the exam-taker conversion/monetization segment. See `docs/product/ROADMAP.md` for full scope, phasing, and the design rationale (why Primary Review Set is the missing foundation the scheduler needs, and why cross-course reusability was ruled out for this release).
+
+### Planned Scope
+
+- **Primary Review Set (backend + frontend, foundational).** A new nullable user-level `primaryCollectionId` reference the learner explicitly sets via a "Set as primary" action. Profile-agnostic as a concept; any surfaced label resolves through `getCollectionLabels`. Auto-set when exactly one top-level Goal is owned; clears gracefully on delete; no-primary and no-target-date states degrade to today's fallback behavior.
+- **Per-Goal target completion date (backend).** New nullable `note_collections.target_completion_date` column, top-level Goals only, PATCH-semantics matching `courseProgram`/`estimatedStudyHours`. Decoupled from `UserEntity.examDate` (unchanged).
+- **Study intensity (backend).** `studyDaysPerWeek` lives on the user/profile, not the Goal — capacity is a person attribute, not shared per-Goal.
+- **Smart dating on adopt/copy (backend).** `adoptGoal` and self-copy always reset `targetCompletionDate` to null on the created copy — never auto-guessed.
+- **Weekly countdown derivation (backend).** New derived fields on `GET /collections/{id}/goal` — weeks-remaining, concepts-remaining, today's concept budget — computed from existing readiness fields + target date + `studyDaysPerWeek`. No stored per-week schedule; rebalancing after a missed day falls out of recomputing fresh each request.
+- **Scheduling algorithm (decided, deterministic, no LLM).** Largest-remainder (Hamilton's) method for proportional concept allocation across subjects; due concepts act as a floor on the day's budget; "Learn → Practice → Review → Master" ships as presentation-layer labels over existing concept classification.
+- **Three surfaces (frontend).** Dashboard primary CTA, Review Set (Goal) detail "This Week" section, Review Sets list page.
+- **Progress default-view change (frontend, scoped narrowly).** `/progress` defaults to the Primary Review Set's scoped readiness view when one exists, reusing the existing `PlanPicker`/`?collectionId=` mechanism. All-subjects rollup stays reachable.
+- **Target-date + intensity input (frontend).** Goal-only optional date field on create/edit metadata (hidden for child Subject plans); intensity question on the same screen.
+- **Post-adopt guidance nudge (frontend).** Reuse `pickActiveGuidance()` to suggest setting a target date / primary after adopting a Goal.
+
+Phasing: Phase 1 (this release, low-risk) ships the Primary Review Set foundation, target date, `studyDaysPerWeek`, simple total-remaining ÷ remaining-days computation with due-as-floor, the three surfaces, and the Progress default-view change. Phase 2 (fast-follow, may slip out of v0.40.0) is the weighted largest-remainder subject distribution and day-of-week interleaving.
+
+Anti-drift: no new top-level entity — the weekly plan is a derived, read-time view; only new persisted state is `primaryCollectionId`, `target_completion_date`, and `studyDaysPerWeek`. No change to `UserEntity.examDate` or the Dashboard board-exam countdown. Target date is Goal-level only, never on a child Subject plan. No hardcoded "Review" vocabulary — must resolve through `getCollectionLabels`. No adaptive/AI-driven scheduling, streaks, or calendar integration. No nav rename, no Exam Hub change, no Explore page, no Progress full-redesign in this release.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.39.2 - Public Library Learning Experience
 
 **Status: Released**

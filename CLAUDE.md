@@ -6,16 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.39.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.40.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.39.2 — Public Library Learning Experience
+## Active release: v0.40.0 — Weekly Study Plan (Exam Countdown) + Primary Review Set
 
-Base branch for this release: `releases/v0.39.2`. Connects the Public Library discovery layer to the signed-in workspace's richer review methods, so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction. Validated against an existing, sanctioned precedent (`PublicMiniQuizPreview`'s capped, client-side-only quiz teaser) rather than a new exception.
+Base branch for this release: `releases/v0.40.0`. Turns readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0, aimed at the exam-taker conversion/monetization segment. Full scope, phasing, and design rationale in `docs/product/ROADMAP.md` and `RELEASES.md`.
 
-- **Flashcards Preview (frontend).** New `PublicFlashcardsPreview` component mirroring `PublicMiniQuizPreview`'s shape: capped at 3 cards, tap-to-reveal, client-side only, no persistence. Zero backend change — reuses data already exposed in the unauthenticated public note response.
-- **Memorization teaser (frontend).** Static, purely educational section — no per-note content, no scheduling logic, no state for anonymous users.
-- **Existing CTA hierarchy preserved.** Flashcards/Memorization are additive secondary cards; the primary CTA and existing secondary actions are not restructured in this release.
-- **Parked, not in scope:** standalone adoption of a single child Subject plan — unresolved re-parenting interaction with `adoptGoal`'s idempotency check.
+- **Primary Review Set (backend + frontend, foundational).** New nullable user-level `primaryCollectionId`, explicitly set by the learner; label always resolves through `getCollectionLabels`. Auto-set when exactly one top-level Goal is owned.
+- **Per-Goal target completion date (backend).** New nullable `note_collections.target_completion_date`, top-level Goals only; decoupled from `UserEntity.examDate`. Never copied on adopt/self-copy.
+- **Study intensity (backend).** `studyDaysPerWeek` lives on the user, not the Goal.
+- **Weekly countdown derivation + scheduling algorithm (backend).** Derived fields on the Goal endpoint (weeks-remaining, concepts-remaining, today's budget); largest-remainder method for subject allocation; due concepts as a floor. No stored per-week schedule, no LLM.
+- **Three surfaces + Progress default-view change (frontend).** Dashboard primary CTA, Review Set "This Week" section, Review Sets list page; `/progress` defaults to the Primary Review Set's scoped view via the existing `PlanPicker` mechanism.
+- **Parked, not in scope:** cross-course note reusability, per-Subject (child-level) target dates, multi-Goal scheduler orchestration, nav rename / Exam Hub change / Explore page / Progress full-redesign.
 
 ## Source-of-truth docs (read before implementing anything)
 

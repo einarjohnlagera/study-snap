@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.39.2 - Public Library Learning Experience` is the latest released version (on `releases/v0.39.2`).
+`v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is the in-progress version (on `releases/v0.40.0`).
 
-`v0.39.1 - Study Plan Builder Polish` is the previous released version (on `releases/v0.39.1`).
+`v0.39.2 - Public Library Learning Experience` is the previous released version (on `releases/v0.39.2`).
 
 `v0.39.0 - Flexible Review Methods` is the previous released version (on `releases/v0.39.0`).
 
@@ -335,7 +335,7 @@ Anti-drift: no backend changes; no new persisted state for anonymous users; no l
 
 ## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
 
-Base branch for this release: `releases/v0.40.0` (not yet kicked off). Origin: `docs/claude-prompt/auto-weekly-study-plan.txt` weighed directly against `docs/claude-prompt/cross-course-note-reusability.txt` as the next major release, then expanded by a design review that identified the **Primary Review Set** as the missing foundation the scheduler needs. Cross-course was ruled out — its own doc explicitly says "Do NOT implement this proposal today," and the trigger for reconsidering it (one curator's friction assigning a single IT plan across overlapping CS/COE programs) is a narrow curation-side pain, not the broad-audience "meaningful maintenance concern" the doc sets as its own revisit bar. It's also a real architecture change (note↔course/program is load-bearing for AI generation context, Public Library, search/filter, Study Plan org) with much higher blast radius than this release's read-time view over already-shipped data. Theme: turn readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed squarely at the exam-taker conversion/monetization segment.
+Base branch for this release: `releases/v0.40.0` (kicked off). Origin: `docs/claude-prompt/auto-weekly-study-plan.txt` weighed directly against `docs/claude-prompt/cross-course-note-reusability.txt` as the next major release, then expanded by a design review that identified the **Primary Review Set** as the missing foundation the scheduler needs. Cross-course was ruled out — its own doc explicitly says "Do NOT implement this proposal today," and the trigger for reconsidering it (one curator's friction assigning a single IT plan across overlapping CS/COE programs) is a narrow curation-side pain, not the broad-audience "meaningful maintenance concern" the doc sets as its own revisit bar. It's also a real architecture change (note↔course/program is load-bearing for AI generation context, Public Library, search/filter, Study Plan org) with much higher blast radius than this release's read-time view over already-shipped data. Theme: turn readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed squarely at the exam-taker conversion/monetization segment.
 
 **Why Primary Review Set is in this release, not deferred:** the scheduler needs one unambiguous answer to "which Goal drives the Dashboard / Today / Weekly view?" when a learner owns several dated Goals (multi-Goal ownership is a locked design pillar — that's why the target date lives on the Goal, not the profile). No primary/active-collection concept exists anywhere today (confirmed by codebase audit); the Dashboard currently picks `publicPlans[0]` (top course/program match) implicitly. An **explicit** user-set primary (not "nearest exam date" — that alternative was considered and rejected for its failure modes: two close exams, wanting to focus on a later exam, non-dated goals) gives the scheduler, Dashboard, and Progress a single source of truth, and is the foundation the longer-term navigation vision (see the deferred "Review-Set-Centric Navigation" section below) builds on.
 

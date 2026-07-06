@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.39.2 - Public Library Learning Experience` (in progress); previous: `v0.39.1 - Study Plan Builder Polish`
+- `v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` (in progress); previous: `v0.39.2 - Public Library Learning Experience`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
