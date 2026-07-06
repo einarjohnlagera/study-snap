@@ -147,6 +147,9 @@ public class UserEntity {
     @Column(name = "primary_collection_id")
     private UUID primaryCollectionId;
 
+    @Column(name = "study_days_per_week")
+    private Integer studyDaysPerWeek;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

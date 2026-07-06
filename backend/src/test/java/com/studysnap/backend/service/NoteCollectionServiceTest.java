@@ -57,6 +57,7 @@ import org.springframework.transaction.support.TransactionOperations;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -954,6 +955,22 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void getGoal_reflectsTargetCompletionDateSetViaUpdateMetadata() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+    }
+
+    @Test
     void getGoal_returnsChildrenInSiblingPositionOrderFromRepository() {
         UUID userId = UUID.randomUUID();
         UUID goalId = UUID.randomUUID();
@@ -1186,7 +1203,8 @@ class NoteCollectionServiceTest {
                 UPDATED_COLLECTION_TITLE,
                 UPDATED_COLLECTION_DESCRIPTION,
                 UPDATED_COURSE_PROGRAM,
-                3
+                3,
+                null
         ));
 
         assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
@@ -1214,6 +1232,7 @@ class NoteCollectionServiceTest {
                 UPDATED_COLLECTION_TITLE,
                 null,
                 null,
+                null,
                 null
         ));
 
@@ -1237,6 +1256,7 @@ class NoteCollectionServiceTest {
                 null,
                 COLLECTION_DESCRIPTION,
                 COURSE_PROGRAM,
+                null,
                 null
         ));
 
@@ -1257,6 +1277,7 @@ class NoteCollectionServiceTest {
         NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
                 null,
                 "",
+                null,
                 null,
                 null
         ));
@@ -1288,6 +1309,7 @@ class NoteCollectionServiceTest {
                 null,
                 null,
                 UPDATED_COURSE_PROGRAM,
+                null,
                 null
         ));
 
@@ -1311,12 +1333,111 @@ class NoteCollectionServiceTest {
                 null,
                 null,
                 "",
+                null,
                 null
         ));
 
         assertThat(goal.getCourseProgram()).isNull();
         verify(collectionRepository, never()).findOrderedChildrenByParentCollectionIdAndOwnerUserId(any(), any());
         verify(collectionRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void updateMetadata_setsTargetCompletionDateOnTopLevelGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                null,
+                null,
+                null,
+                null,
+                LocalDate.parse("2026-12-01")
+        ));
+
+        assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+        assertThat(collection.getTargetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+    }
+
+    @Test
+    void updateMetadata_rejectsTargetCompletionDateOnChildSubjectPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setParentCollectionId(UUID.randomUUID());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        assertThatThrownBy(() -> service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                null,
+                null,
+                null,
+                null,
+                LocalDate.parse("2026-12-01")
+        ))).isInstanceOf(InvalidCollectionRequestException.class);
+    }
+
+    @Test
+    void updateMetadata_preservesTargetCompletionDateWhenRequestValueIsNull() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                UPDATED_COLLECTION_TITLE,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+    }
+
+    @Test
+    void clearTargetDate_clearsExistingDate() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.clearTargetDate(collectionId, userId);
+
+        assertThat(result.targetCompletionDate()).isNull();
+        assertThat(collection.getTargetCompletionDate()).isNull();
+    }
+
+    @Test
+    void clearTargetDate_isNoOpWhenNothingSet() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        service.clearTargetDate(collectionId, userId);
+
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void clearTargetDate_rejectsCollectionOwnedByAnotherUserAsNotFound() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.clearTargetDate(collectionId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
     }
 
     @Test
@@ -1657,6 +1778,47 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void adopt_neverCopiesTargetCompletionDateFromSource() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+    }
+
+    @Test
+    void adopt_neverCopiesTargetCompletionDateOnSelfCopy() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, userId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+    }
+
+    @Test
     void adopt_isolatesUnexpectedCopyFailureAndKeepsTheRest() {
         UUID userId = UUID.randomUUID();
         UUID sourcePlanId = UUID.randomUUID();
@@ -1972,6 +2134,28 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void adoptGoal_neverCopiesTargetCompletionDateFromSourceGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, UUID.randomUUID(), "LET Mastery", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        sourceGoal.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceGoal.getOwnerUserId()))
+                .thenReturn(List.of());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adoptGoal(sourceGoalId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+    }
+
+    @Test
     void adoptGoal_rejectsPrivateSource() {
         UUID userId = UUID.randomUUID();
         UUID sourceGoalId = UUID.randomUUID();
@@ -2220,6 +2404,7 @@ class NoteCollectionServiceTest {
         Method deleteMethod = NoteCollectionService.class.getMethod("delete", UUID.class, UUID.class);
         Method setPrimaryMethod = NoteCollectionService.class.getMethod("setPrimary", UUID.class, UUID.class);
         Method clearPrimaryMethod = NoteCollectionService.class.getMethod("clearPrimary", UUID.class);
+        Method clearTargetDateMethod = NoteCollectionService.class.getMethod("clearTargetDate", UUID.class, UUID.class);
         Method addMethod = NoteCollectionService.class.getMethod("addItems", UUID.class, UUID.class, AddNoteCollectionItemsRequest.class);
         Method removeMethod = NoteCollectionService.class.getMethod("removeItem", UUID.class, UUID.class, UUID.class);
         Method orderMethod = NoteCollectionService.class.getMethod("setOrder", UUID.class, UUID.class, SetNoteCollectionOrderRequest.class);
@@ -2235,6 +2420,7 @@ class NoteCollectionServiceTest {
         assertThat(deleteMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(setPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(clearPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(clearTargetDateMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(addMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(removeMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(orderMethod.getAnnotation(Transactional.class)).isNotNull();

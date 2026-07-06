@@ -85,6 +85,9 @@ class NoteCollectionControllerTest {
                 .getMethod("clearPrimary", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
+                .getMethod("clearTargetDate", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
                 .getMethod("setChildrenOrder", String.class, SetNoteCollectionChildrenOrderRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
@@ -194,7 +197,7 @@ class NoteCollectionControllerTest {
     void patch_returnsUpdatedCollection() {
         NoteCollectionController controller = new NoteCollectionController(service);
         AuthenticatedUser user = authenticatedUser();
-        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null, null, 3);
+        UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null, null, 3, null);
         NoteCollectionDetailResponse response = detailResponse();
         when(service.updateMetadata(UUID.fromString(COLLECTION_ID), user.userId(), request)).thenReturn(response);
 
@@ -238,6 +241,19 @@ class NoteCollectionControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(service).clearPrimary(user.userId());
+    }
+
+    @Test
+    void clearTargetDate_delegatesToServiceAndReturnsUpdatedCollection() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.clearTargetDate(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.clearTargetDate(COLLECTION_ID, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).clearTargetDate(UUID.fromString(COLLECTION_ID), user.userId());
     }
 
     @Test
@@ -453,6 +469,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 now,
                 now,
@@ -468,6 +485,7 @@ class NoteCollectionControllerTest {
                 COLLECTION_TITLE,
                 null,
                 CollectionVisibility.PRIVATE.name(),
+                null,
                 null,
                 null,
                 null,

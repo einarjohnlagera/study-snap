@@ -1,6 +1,7 @@
 package com.studysnap.backend.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ public record GoalCollectionDetailResponse(
         String description,
         String visibility,
         String courseProgram,
+        LocalDate targetCompletionDate,
         UUID sourcePlanId,
         UUID parentCollectionId,
         int itemCount,

@@ -41,6 +41,7 @@ public record MeResponse(
         OffsetDateTime onboardingCompletedAt,
         OffsetDateTime productOnboardingCompletedAt,
         UUID primaryCollectionId,
+        Integer studyDaysPerWeek,
         long studyPackCount,
         UserRole role,
         UserStatus status,

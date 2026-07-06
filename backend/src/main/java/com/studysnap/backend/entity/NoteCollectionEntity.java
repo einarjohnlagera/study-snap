@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -41,6 +42,9 @@ public class NoteCollectionEntity {
 
     @Column(name = "estimated_study_hours")
     private Integer estimatedStudyHours;
+
+    @Column(name = "target_completion_date")
+    private LocalDate targetCompletionDate;
 
     @Column(name = "source_plan_id")
     private UUID sourcePlanId;

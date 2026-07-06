@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
+import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
@@ -88,6 +89,7 @@ class UserProfileControllerTest {
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
                 null,
                 null,
+                null,
                 4,
                 UserRole.USER,
                 UserStatus.ACTIVE,
@@ -157,6 +159,7 @@ class UserProfileControllerTest {
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
                 null,
                 null,
+                null,
                 4,
                 UserRole.USER,
                 UserStatus.ACTIVE,
@@ -202,6 +205,7 @@ class UserProfileControllerTest {
                 ThemePreference.SYSTEM,
                 OffsetDateTime.parse("2026-03-20T00:00:00Z"),
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
                 null,
                 null,
                 4,
@@ -251,6 +255,7 @@ class UserProfileControllerTest {
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
                 null,
                 null,
+                null,
                 4,
                 UserRole.USER,
                 UserStatus.ACTIVE,
@@ -296,6 +301,7 @@ class UserProfileControllerTest {
                 ThemePreference.SYSTEM,
                 OffsetDateTime.parse("2026-03-20T00:00:00Z"),
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
                 null,
                 null,
                 4,
@@ -345,6 +351,7 @@ class UserProfileControllerTest {
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
                 null,
                 null,
+                null,
                 4,
                 UserRole.USER,
                 UserStatus.ACTIVE,
@@ -357,5 +364,77 @@ class UserProfileControllerTest {
 
         assertThat(response.studyGoal()).isEqualTo("Mathematics");
         verify(authService).updateStudyGoal(userId, request);
+    }
+
+    @Test
+    void updateStudyDaysPerWeek_delegatesToAuthService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdateStudyDaysPerWeekRequest request = new UpdateStudyDaysPerWeekRequest(5);
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                "studynote",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Nursing",
+                null,
+                java.util.List.of(),
+                null,
+                true,
+                null,
+                ProfileType.STUDENT,
+                null,
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                false,
+                false,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                null,
+                5,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updateStudyDaysPerWeek(userId, request)).thenReturn(expected);
+
+        MeResponse response = controller.updateStudyDaysPerWeek(user, request);
+
+        assertThat(response.studyDaysPerWeek()).isEqualTo(5);
+        verify(authService).updateStudyDaysPerWeek(userId, request);
+    }
+
+    @Test
+    void updateStudyDaysPerWeekRequest_rejectsValueOutsideOneToSevenRange() {
+        UpdateStudyDaysPerWeekRequest tooLow = new UpdateStudyDaysPerWeekRequest(0);
+        UpdateStudyDaysPerWeekRequest tooHigh = new UpdateStudyDaysPerWeekRequest(8);
+
+        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(validatorFactory.getValidator().validate(tooLow))
+                    .extracting(ConstraintViolation::getMessage)
+                    .contains("Study days per week must be between 1 and 7.");
+            assertThat(validatorFactory.getValidator().validate(tooHigh))
+                    .extracting(ConstraintViolation::getMessage)
+                    .contains("Study days per week must be between 1 and 7.");
+        }
+    }
+
+    @Test
+    void updateStudyDaysPerWeekRequest_allowsNullToClear() {
+        UpdateStudyDaysPerWeekRequest request = new UpdateStudyDaysPerWeekRequest(null);
+
+        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(validatorFactory.getValidator().validate(request)).isEmpty();
+        }
     }
 }

@@ -120,6 +120,22 @@ Structural collection mutations reassert this invariant in the same service oper
 | `DELETE /collections/{id}` | If the deleted collection was top-level, clears an invalid primary and can auto-set the one remaining top-level Goal. |
 | `PATCH /collections/{id}/parent` | Attaching a primary Goal under another Goal invalidates it; detaching a child back to top-level can trigger auto-set. |
 
+### Target Completion Date
+
+`note_collections.target_completion_date` is a nullable `LocalDate` on top-level Goals only (`parentCollectionId == null`) — the optional deadline a learner is aiming for, feeding the not-yet-built v0.40.0 weekly countdown scheduler. Deliberately decoupled from `UserEntity.examDate` (the existing profile-level board-exam date, Dashboard-only, unrelated and untouched).
+
+Set/clear split into two different mechanisms, because a nullable `LocalDate` field has no empty-string-style sentinel to distinguish "omit" from "explicit clear" the way text fields do:
+
+- **Set** goes through the general metadata PATCH: `PATCH /collections/{id}` (`updateMetadata`) accepts `targetCompletionDate` with the same omit-preserves semantics as `courseProgram`/`estimatedStudyHours` — omitting it in the request body leaves the existing value untouched.
+- **Clear** is a dedicated endpoint: `DELETE /collections/{id}/target-date`, mirroring the `DELETE /collections/{id}/primary` shape. No-op success if nothing is set or if the target is a child Subject plan (which can never have a date to begin with).
+
+Rules:
+
+- setting a target date on a child Subject plan via `updateMetadata` returns `InvalidCollectionRequestException` / `400` — Goal-only, same category as the Primary Review Set top-level-only rule
+- `DELETE /collections/{id}/target-date` on a missing/not-owned collection returns `CollectionNotFoundException` / `404`
+- **never copied on adopt or self-copy** — `adopt`/`adoptGoal` (including the case where a user adopts their own PUBLIC collection) never carry a source's `targetCompletionDate` onto the created copy; the field simply isn't set on the new entity and defaults to null. No auto-guessed default is generated either — null stays null until the learner deliberately sets one.
+- exposed on both `NoteCollectionDetailResponse` (the `updateMetadata`/`create` response) and `GoalCollectionDetailResponse` (the `GET /collections/{id}/goal` response the weekly countdown derivation will extend next) — these are two separate DTOs, not one superset of the other.
+
 ### Builder Canvas
 
 The builder route is `/collections/{id}/builder`. It first loads the base collection through `GET /collections/{id}`:
@@ -497,6 +513,28 @@ Behavior:
 - returns `204`
 
 `GET /auth/me` exposes the persisted nullable `primaryCollectionId`; there is no separate profile/preference read endpoint for this value.
+
+### Set / Clear Target Date
+
+Setting a target date reuses the general metadata PATCH rather than a dedicated `PUT`, since it is one field among several on that same endpoint:
+
+`PATCH /collections/{id}` (`updateMetadata`)
+
+Behavior:
+
+- accepts an optional `targetCompletionDate` field alongside `title`/`description`/`courseProgram`/`estimatedStudyHours`
+- omitting the field preserves the existing value (same omit-preserves semantics as the other optional fields on this endpoint)
+- rejects with `InvalidCollectionRequestException` / `400` if the target collection is a child Subject plan (`parentCollectionId != null`)
+
+`DELETE /collections/{id}/target-date`
+
+Behavior:
+
+- parses `{id}` with the same malformed-id-as-collection-404 pattern as other collection endpoints
+- verifies `{id}` exists and is owned by the caller
+- clears `note_collections.target_completion_date`
+- clearing when no date is set, or on a child Subject plan, is a no-op success
+- returns the updated `NoteCollectionDetailResponse`
 
 ### Reorder Goal Children
 
