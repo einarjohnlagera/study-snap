@@ -6,6 +6,7 @@ export type CollectionLabels = {
   plural: string;
   goalSingular: string;
   subjectSingular: string;
+  primarySingular: string;
   navLabel: string;
   newCtaLabel: string;
   emptyTitle: string;
@@ -29,6 +30,7 @@ const DEFAULT_LABELS: CollectionLabels = {
   plural: "Collections",
   goalSingular: "Goal",
   subjectSingular: "Collection",
+  primarySingular: "Primary Collection",
   navLabel: "Collections",
   newCtaLabel: "New Collection",
   emptyTitle: "No collections yet",
@@ -42,6 +44,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
     plural: "Lesson Plans",
     goalSingular: "Course",
     subjectSingular: "Unit",
+    primarySingular: "Primary Lesson Plan",
     navLabel: "Lesson Plans",
     newCtaLabel: "New Lesson Plan",
     emptyTitle: "No lesson plans yet",
@@ -53,6 +56,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
     plural: "Study Plans",
     goalSingular: "Goal",
     subjectSingular: "Subject Plan",
+    primarySingular: "Primary Study Plan",
     navLabel: "Study Plans",
     newCtaLabel: "New Study Plan",
     emptyTitle: "No study plans yet",
@@ -64,6 +68,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
     plural: "Review Sets",
     goalSingular: "Goal",
     subjectSingular: "Subject Plan",
+    primarySingular: "Primary Review Set",
     navLabel: "Review Sets",
     newCtaLabel: "New Review Set",
     emptyTitle: "No review sets yet",
