@@ -535,6 +535,49 @@ function clampPercentage(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
+// A LocalDate-only string like "2026-12-01" must not go through `new Date(isoDate)` for display —
+// that parses as UTC midnight, which can shift a day backward once formatted in a timezone behind
+// UTC. Splitting and constructing via the local-time Date constructor avoids that shift.
+function formatLocalDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function GoalWeeklyCountdownCard({
+  targetCompletionDate,
+  weeksRemaining,
+  conceptsRemaining,
+  todaysConceptBudget,
+}: Readonly<{
+  targetCompletionDate: string | null;
+  weeksRemaining: number | null;
+  conceptsRemaining: number | null;
+  todaysConceptBudget: number | null;
+}>) {
+  if (!targetCompletionDate || weeksRemaining === null || conceptsRemaining === null || todaysConceptBudget === null) {
+    return null;
+  }
+  const weekLabel = weeksRemaining === 1 ? "1 week" : `${weeksRemaining} weeks`;
+  const conceptLabel = conceptsRemaining === 1 ? "1 concept" : `${conceptsRemaining} concepts`;
+  const budgetLabel = todaysConceptBudget === 1 ? "1 concept" : `${todaysConceptBudget} concepts`;
+
+  return (
+    <Card className="space-y-2 p-4 sm:p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">This Week</p>
+      <h2 className="text-lg font-semibold tracking-tight">
+        {weekLabel} until {formatLocalDate(targetCompletionDate)}
+      </h2>
+      <p className="text-sm font-medium text-foreground/80">
+        {conceptLabel} remaining · {budgetLabel} today
+      </p>
+    </Card>
+  );
+}
+
 function GoalDetailView({
   goal,
   labels,
@@ -544,6 +587,13 @@ function GoalDetailView({
 }>) {
   return (
     <div className="space-y-6">
+      <GoalWeeklyCountdownCard
+        targetCompletionDate={goal.targetCompletionDate}
+        weeksRemaining={goal.weeksRemaining}
+        conceptsRemaining={goal.conceptsRemaining}
+        todaysConceptBudget={goal.todaysConceptBudget}
+      />
+
       <ReadinessSummary
         variant="compact"
         title={`${goal.title} readiness`}
@@ -2009,14 +2059,23 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           onClose={() => setEditOpen(false)}
           onSaved={(saved) => {
             setCollection(saved);
-            setGoalDetail((previous) => previous ? {
-              ...previous,
-              title: saved.title,
-              description: saved.description,
-              visibility: saved.visibility,
-              courseProgram: saved.courseProgram,
-              updatedAt: saved.updatedAt,
-            } : previous);
+            // The weekly countdown fields (weeksRemaining/conceptsRemaining/todaysConceptBudget) only
+            // exist on GoalCollectionDetailResponse, not on the NoteCollectionDetail this modal saves —
+            // a client-side field copy can't refresh them. Refetch the Goal view so an edited target
+            // date is reflected immediately instead of going stale until the next page load.
+            void getCollectionGoal(collectionId)
+              .then(setGoalDetail)
+              .catch(() => {
+                setGoalDetail((previous) => previous ? {
+                  ...previous,
+                  title: saved.title,
+                  description: saved.description,
+                  visibility: saved.visibility,
+                  courseProgram: saved.courseProgram,
+                  targetCompletionDate: saved.targetCompletionDate,
+                  updatedAt: saved.updatedAt,
+                } : previous);
+              });
             setItems(sortCollectionItemsByPosition(saved.items));
             setEditOpen(false);
           }}

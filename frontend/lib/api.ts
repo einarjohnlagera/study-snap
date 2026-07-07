@@ -306,6 +306,7 @@ export type GoalCollectionDetailResponse = {
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
+  targetCompletionDate: string | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
@@ -315,6 +316,9 @@ export type GoalCollectionDetailResponse = {
   dueConcepts: number;
   notPracticedConcepts: number;
   totalConcepts: number;
+  weeksRemaining: number | null;
+  conceptsRemaining: number | null;
+  todaysConceptBudget: number | null;
   createdAt: string;
   updatedAt: string;
   children: GoalCollectionChildResponse[];
