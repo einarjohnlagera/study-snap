@@ -122,7 +122,7 @@ Structural collection mutations reassert this invariant in the same service oper
 
 ### Target Completion Date
 
-`note_collections.target_completion_date` is a nullable `LocalDate` on top-level Goals only (`parentCollectionId == null`) — the optional deadline a learner is aiming for, feeding the not-yet-built v0.40.0 weekly countdown scheduler. Deliberately decoupled from `UserEntity.examDate` (the existing profile-level board-exam date, Dashboard-only, unrelated and untouched).
+`note_collections.target_completion_date` is a nullable `LocalDate` on top-level Goals only (`parentCollectionId == null`) — the optional deadline a learner is aiming for, feeding the v0.40.0 weekly countdown derivation (see below). Deliberately decoupled from `UserEntity.examDate` (the existing profile-level board-exam date, Dashboard-only, unrelated and untouched).
 
 Set/clear split into two different mechanisms, because a nullable `LocalDate` field has no empty-string-style sentinel to distinguish "omit" from "explicit clear" the way text fields do:
 
@@ -134,7 +134,25 @@ Rules:
 - setting a target date on a child Subject plan via `updateMetadata` returns `InvalidCollectionRequestException` / `400` — Goal-only, same category as the Primary Review Set top-level-only rule
 - `DELETE /collections/{id}/target-date` on a missing/not-owned collection returns `CollectionNotFoundException` / `404`
 - **never copied on adopt or self-copy** — `adopt`/`adoptGoal` (including the case where a user adopts their own PUBLIC collection) never carry a source's `targetCompletionDate` onto the created copy; the field simply isn't set on the new entity and defaults to null. No auto-guessed default is generated either — null stays null until the learner deliberately sets one.
-- exposed on both `NoteCollectionDetailResponse` (the `updateMetadata`/`create` response) and `GoalCollectionDetailResponse` (the `GET /collections/{id}/goal` response the weekly countdown derivation will extend next) — these are two separate DTOs, not one superset of the other.
+- exposed on both `NoteCollectionDetailResponse` (the `updateMetadata`/`create` response) and `GoalCollectionDetailResponse` (the `GET /collections/{id}/goal` response the weekly countdown derivation reads from — see below) — these are two separate DTOs, not one superset of the other.
+
+### Weekly Countdown Derivation
+
+`GET /collections/{id}/goal` (`getGoal`) computes three additional nullable fields on `GoalCollectionDetailResponse` — `weeksRemaining`, `conceptsRemaining`, `todaysConceptBudget` — from `targetCompletionDate`, `users.study_days_per_week`, and the existing readiness rollup (`totalConcepts`, `masteredConcepts`, `dueConcepts`, `notPracticedConcepts`). Pure derivation, computed fresh on every request — no stored per-week schedule entity, no new mastery signal, no AI call. This is the Phase 1 "simple total-remaining ÷ remaining-scheduled-days" version; the weighted largest-remainder subject allocation and day-of-week interleaving are Phase 2, not implemented here.
+
+All three fields are `null` when `targetCompletionDate` is null — same degrade-gracefully rule as the rest of the Primary Review Set / target-date surface.
+
+Formula (`NoteCollectionService.computeWeeklyCountdown`):
+
+- `conceptsRemaining = totalConcepts − masteredConcepts`
+- `remainingDays = max(0, days between today and targetCompletionDate)` — floored at 0 for an overdue target date, never negative
+- `remainingScheduledDays = max(1, round(remainingDays × studyDaysPerWeek ÷ 7))` — floored at 1 so an overdue or same-day target never divides by zero; the practical effect is "cram everything today"
+- `weeksRemaining = ceil(remainingDays ÷ 7)`
+- `todaysConceptBudget = dueConcepts + ceil(notPracticedConcepts ÷ remainingScheduledDays)` — due concepts are always included as a floor (they're time-sensitive spaced-repetition reviews, not subject to pacing); new-concept learning is paced by spreading only the not-yet-started pool evenly across the remaining scheduled days
+
+**When `users.study_days_per_week` is null** (learner skipped the intensity question), the derivation defaults to 7 (every day) for the math only — nothing is persisted, it's a conservative fallback so the countdown still renders rather than hiding whenever intensity alone is unset. Only a missing `targetCompletionDate` hides the countdown; a missing `studyDaysPerWeek` does not.
+
+Due-concept count can *rise* over time even for a diligent learner — it tracks spaced-repetition review timing, not inactivity. This is correct behavior, not a scheduler bug.
 
 ### Builder Canvas
 

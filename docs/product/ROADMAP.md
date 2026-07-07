@@ -370,6 +370,8 @@ Anti-drift: no new top-level entity — the weekly plan is a derived, read-time 
 ### Completed in v0.40.0 so far
 
 - **Primary Review Set backend foundation.** Added nullable `users.primary_collection_id`, `PUT /collections/{id}/primary`, `DELETE /collections/{id}/primary`, and `primaryCollectionId` on `GET /auth/me`. Backend invariant maintenance now clears invalid primaries and auto-sets the single owned top-level Goal after create, standalone adopt, first-time Goal adopt, top-level delete, and parent changes. Frontend consumption, target dates, user study intensity, and scheduler derivation remain separate follow-up work.
+- **Target completion date + study intensity backend.** Added nullable `note_collections.target_completion_date` (top-level Goals only, set via `updateMetadata` PATCH-omit-preserves, cleared via dedicated `DELETE /collections/{id}/target-date`) and nullable `users.study_days_per_week` (`PUT /users/profile/study-days-per-week`, full-replace, 1-7 validated). Neither field is ever copied on adopt or self-copy.
+- **Weekly countdown derivation backend.** `GET /collections/{id}/goal` computes `weeksRemaining`, `conceptsRemaining`, `todaysConceptBudget` from target date + study intensity + the existing readiness rollup (due concepts as floor, new-concept pacing fills the rest). Missing intensity defaults to 7 days/week for the math only; only a missing target date hides the countdown. All frontend consumption (Dashboard CTA, Goal detail "This Week" section, Review Sets list page, target-date/intensity input, Progress default-view change, post-adopt nudge) remains separate follow-up work.
 
 ### Parked (not scoped for this release)
 

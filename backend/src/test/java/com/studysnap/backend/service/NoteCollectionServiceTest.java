@@ -971,6 +971,129 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void getGoal_returnsNullCountdownFieldsWhenNoTargetDateIsSet() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isNull();
+        assertThat(result.conceptsRemaining()).isNull();
+        assertThat(result.todaysConceptBudget()).isNull();
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void getGoal_computesWeeklyCountdownWithDueConceptsAsFloor() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().plusDays(14));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(goalId);
+        StudyPackEntity pack = buildStudyPack(noteId, List.of("Assessment"));
+        pack.setOwnerUserId(userId);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(7);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of(noteProjection(childId, noteId)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(pack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId, new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(new SubjectProgressEntry("Professional Education", 100, 20, 5, 30, 20)),
+                                null
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isEqualTo(2);
+        assertThat(result.conceptsRemaining()).isEqualTo(80);
+        assertThat(result.todaysConceptBudget()).isEqualTo(8);
+    }
+
+    @Test
+    void getGoal_defaultsToSevenDaysPerWeekWhenStudyIntensityNotSet() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().plusDays(7));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(goalId);
+        StudyPackEntity pack = buildStudyPack(noteId, List.of("Assessment"));
+        pack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of(noteProjection(childId, noteId)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(pack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId, new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(new SubjectProgressEntry("Professional Education", 7, 0, 0, 7, 0)),
+                                null
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+        // userRepository.findById returns a fresh buildUser(userId) via the lenient stub in setUp(),
+        // which leaves studyDaysPerWeek null — asserting the default-to-7 fallback applies.
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isEqualTo(1);
+        assertThat(result.todaysConceptBudget()).isEqualTo(1);
+    }
+
+    @Test
+    void getGoal_countdownFloorsRemainingScheduledDaysAtOneWhenTargetDateIsOverdue() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().minusDays(3));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(goalId);
+        StudyPackEntity pack = buildStudyPack(noteId, List.of("Assessment"));
+        pack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of(noteProjection(childId, noteId)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(pack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId, new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(new SubjectProgressEntry("Professional Education", 12, 0, 2, 10, 0)),
+                                null
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isZero();
+        assertThat(result.todaysConceptBudget()).isEqualTo(12);
+    }
+
+    @Test
     void getGoal_returnsChildrenInSiblingPositionOrderFromRepository() {
         UUID userId = UUID.randomUUID();
         UUID goalId = UUID.randomUUID();

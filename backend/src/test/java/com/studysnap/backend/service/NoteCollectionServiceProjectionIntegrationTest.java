@@ -463,6 +463,9 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 dueConcepts,
                 notPracticedConcepts,
                 totalConcepts,
+                null,
+                null,
+                null,
                 goal.getCreatedAt(),
                 goal.getUpdatedAt(),
                 children

@@ -21,6 +21,9 @@ public record GoalCollectionDetailResponse(
         int dueConcepts,
         int notPracticedConcepts,
         int totalConcepts,
+        Integer weeksRemaining,
+        Integer conceptsRemaining,
+        Integer todaysConceptBudget,
         Instant createdAt,
         Instant updatedAt,
         List<GoalCollectionChildResponse> children
