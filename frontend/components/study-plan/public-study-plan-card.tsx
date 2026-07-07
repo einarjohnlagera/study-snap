@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { adoptGoal, adoptStudyPlan, type NoteCollectionSummary } from "@/lib/api";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 type PublicStudyPlanCardProps = {
@@ -40,6 +41,7 @@ export function PublicStudyPlanCard({ plan, adoptedCollection }: Readonly<Public
       if (isGoal) {
         const result = await adoptGoal(plan.id);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
+        setJustAdoptedNotice(result.goalCollectionId);
         router.push(`/collections/${result.goalCollectionId}`);
         return;
       }

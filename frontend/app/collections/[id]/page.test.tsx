@@ -15,6 +15,7 @@ import {
   getPlanReadiness,
   listCoursePrograms,
   listNotes,
+  trackAnalyticsEvent,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
@@ -22,6 +23,7 @@ import {
   type NoteCollectionItem,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -66,6 +68,7 @@ jest.mock("@/lib/api", () => {
     getPlanReadiness: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
+    trackAnalyticsEvent: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
     updateNoteVisibility: jest.fn(),
@@ -268,6 +271,7 @@ describe("CollectionDetailPageClient", () => {
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
     (updateStudyDaysPerWeek as jest.Mock).mockReset();
@@ -287,6 +291,8 @@ describe("CollectionDetailPageClient", () => {
       configurable: true,
       value: 1024,
     });
+    globalThis.localStorage.clear();
+    globalThis.sessionStorage.clear();
   });
 
   it("renders collection items in persisted order", async () => {
@@ -377,6 +383,56 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+  });
+
+  it("shows a post-adopt target-date tip for a dateless Goal", async () => {
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("Set a target completion date to see your weekly countdown and daily study budget.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set target date" })).toBeInTheDocument();
+  });
+
+  it("does not show the post-adopt target-date tip when the Goal already has a target date", async () => {
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("Set a target completion date to see your weekly countdown and daily study budget.")).not.toBeInTheDocument();
+  });
+
+  it("does not show the post-adopt target-date tip on a normal dateless Goal visit", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("Set a target completion date to see your weekly countdown and daily study budget.")).not.toBeInTheDocument();
+  });
+
+  it("opens the edit modal from the post-adopt target-date tip", async () => {
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Set target date" }));
+
+    expect(await screen.findByLabelText("Target completion date")).toBeInTheDocument();
   });
 
   it("refetches the Goal countdown after editing so it reflects a newly-set target date", async () => {

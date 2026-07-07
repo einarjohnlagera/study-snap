@@ -138,6 +138,14 @@ Rules:
 - **never copied on adopt or self-copy** — `adopt`/`adoptGoal` (including the case where a user adopts their own PUBLIC collection) never carry a source's `targetCompletionDate` onto the created copy; the field simply isn't set on the new entity and defaults to null. No auto-guessed default is generated either — null stays null until the learner deliberately sets one.
 - exposed on both `NoteCollectionDetailResponse` (the `updateMetadata`/`create` response) and `GoalCollectionDetailResponse` (the `GET /collections/{id}/goal` response the weekly countdown derivation reads from — see below) — these are two separate DTOs, not one superset of the other.
 
+Post-adopt guidance:
+
+- recursive Goal adoption from Dashboard and public plan cards writes a session-scoped just-adopted flag keyed by the new personal Goal id
+- the Goal detail page reads and clears that flag once; if the Goal has no `targetCompletionDate`, it shows the shared `GuidanceTip` with a `Set target date` action
+- the action opens the existing edit modal, where target date and study intensity are already edited
+- the tip never appears for leaf-plan adoption, normal non-post-adopt visits, child Subject plans, or Goals that already have a target date
+- dismissal is permanent through the same localStorage-backed `GuidanceTip` behavior used elsewhere; no new nudge mechanism is introduced
+
 ### Weekly Countdown Derivation
 
 `GET /collections/{id}/goal` (`getGoal`) computes three additional nullable fields on `GoalCollectionDetailResponse` — `weeksRemaining`, `conceptsRemaining`, `todaysConceptBudget` — from `targetCompletionDate`, `users.study_days_per_week`, and the existing readiness rollup (`totalConcepts`, `masteredConcepts`, `dueConcepts`, `notPracticedConcepts`). Pure derivation, computed fresh on every request — no stored per-week schedule entity, no new mastery signal, no AI call. This is the Phase 1 "simple total-remaining ÷ remaining-scheduled-days" version; the weighted largest-remainder subject allocation and day-of-week interleaving are Phase 2, not implemented here.

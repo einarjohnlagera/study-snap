@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.39.1 - 2026-07-05
+> Last updated: v0.40.0 (in progress) - 2026-07-07
 
 ---
 
@@ -20,7 +20,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** `v0.39.1 - Study Plan Builder Polish` is released. Previous baseline is `v0.39.0 - Flexible Review Methods`.
+**Current baseline:** `v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is in progress. Previous released baseline is `v0.39.2 - Public Library Learning Experience`.
 
 ---
 
@@ -158,41 +158,45 @@ Upgrade CTA rule:
 
 ---
 
-## Current Release: v0.39.1 - Study Plan Builder Polish
+## Current Release: v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
 
-**Status: Released.** Fixed subject-metadata gaps and cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage rather than a planned feature push — see the Note Collections vision section above for the full narrative. Shipped:
+**Status: In Progress.** Turns readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed at the exam-taker conversion/monetization segment. Full scope and phasing in `docs/product/ROADMAP.md`.
 
-- Description field on Add Subject Plan (frontend-only).
-- Course/program cascade fix on `updateMetadata` (backend) — closes a real data-integrity bug where published child Subject plans could sit invisible to course/program-scoped discovery.
-- Cold-start adoption discoverability fixes on Dashboard (`DashboardStudyPlanSection`, `DashboardEmpty`) — frontend-only; `/onboarding`'s locked flow was not touched.
+**Core idea:** the top-level **Goal** collection (see Note Collections vision above — the container in the locked Goal→Subject hierarchy) is being elevated from "just a folder of Subjects" to a first-class trackable object with its own countdown state. Nothing about the 2-level hierarchy itself changed — new fields were added *onto* the existing Goal object, not a new entity.
 
-All three verified against a real backend + Postgres instance (not mocks) before shipping — including catching a stale-build false alarm along the way (an already-running dev backend predated the cascade fix and briefly looked broken until rebuilt).
+Shipped so far:
 
-Parked: standalone adoption of a single child Subject plan (unresolved re-parenting interaction with `adoptGoal`'s idempotency check).
+- **Primary Review Set backend foundation.** Nullable `users.primary_collection_id`, only owned top-level Goals can be primary. Auto-sets when exactly one top-level Goal is owned (create/adopt/adopt-goal paths reassert this); clears safely on delete. **No manual "Set as primary" UI exists yet** — this only matters once a learner owns a *second* top-level Goal (auto-set deliberately doesn't touch an existing primary), and today there's no way to switch it. Known, scoped gap — not yet decided whether it gets its own small follow-up item.
+- **Target completion date + study intensity (backend).** Nullable `note_collections.target_completion_date` (top-level Goals only, decoupled from `UserEntity.examDate`), nullable `users.study_days_per_week` (1-7, user-level not per-Goal). Neither is ever copied on adopt/self-copy — a freshly adopted Goal always starts dateless.
+- **Weekly countdown derivation (backend).** `GET /collections/{id}/goal` now derives `weeksRemaining`/`conceptsRemaining`/`todaysConceptBudget` from target date + study intensity + the existing readiness rollup — no stored per-week schedule, no LLM, due concepts act as a floor. Phase 1 uses simple division; the weighted largest-remainder subject allocation is Phase 2 (may slip out of this release).
+- **Frontend surfaces:** Dashboard primary CTA (branches on `primaryCollectionId`), target-date + study-intensity inputs on `EditCollectionModal` (Goal-only), Goal detail "This Week" countdown card (hidden entirely with no target date), Review Sets list page primary CTA.
+- **In progress:** post-adopt guidance nudge (reusing `pickActiveGuidance()`/`GuidanceTip` to suggest setting a target date right after adopting a Goal — scoped to target-date only, dropping the original "optionally set as primary" half since that's redundant on first adopt and has no UI to point at yet) and the `/progress` default-view change (defaulting to the Primary Review Set's scoped view via the existing `PlanPicker` mechanism).
+
+Anti-drift: no new top-level entity; no change to `UserEntity.examDate` or the board-exam countdown; no adaptive/AI scheduling, streaks, or calendar integration; no nav rename, no Exam Hub change, no Explore page, no Progress full-redesign this release.
+
+**Explicitly separate, planned as its own release:** `v0.40.1 - Public Review Set Reachability` (not yet kicked off) fixes a different, narrower gap — a learner with no course/program set can't browse *all* PUBLIC top-level Review Sets today even though the backend already supports an unfiltered query. This is a discoverability/browse fix, unrelated to Primary Review Set's manual-designation gap above.
 
 ---
 
-## Previous Release: v0.39.0 - Flexible Review Methods
+## Previous Release: v0.39.2 - Public Library Learning Experience
 
-**Status: Released.** Let a Study Pack be reviewed through more than Multiple Choice, while preserving the v0.37.0 review-vs-assessment mastery boundary. Two independent chains:
+**Status: Released.** Connected the Public Library discovery layer to the signed-in workspace's richer review methods — surfaced Flashcards and Memorization on public note detail so anonymous visitors experience enough of the study system to want to continue. Shipped:
 
-**Chain A — Review methods (never write `ConceptHealth`):**
-- **Flashcards** — flip-card deck built from existing Study Pack data (`keyConcepts` <-> `quiz[].explanation`, fuzzy concept match). No new AI call.
-- **Memorization** — Flashcards' matching plus real spaced repetition (simplified SM-2), new separate `memorization_cards` entity, firewalled from `ConceptHealth`/readiness by design.
-
-**Chain B — Assessment formats (write `ConceptHealth` like Challenge Quiz):**
-- **Identification** — free-text fill-in-the-blank, deterministic `acceptableAnswers[]` matching, no per-submission LLM call.
-- **Enumeration** — free-text "name every item in a 2–5 item set", all-or-nothing scoring via exhaustive bipartite matching against `acceptableAnswerGroups[]`.
-
-Both new formats are **ungated across every plan tier** — see Quiz / Practice Mode Contract above for the full reasoning. Both are Challenge Quiz-only for now; Long Exam is a planned fast-follow. Neither adds a 6th/7th mode — `docs/product/EXAM_MODES.md` documents both as new question formats / non-engine surfaces on the existing 5-mode engine, not new modes.
+- **Flashcards Preview (frontend).** `PublicFlashcardsPreview`, capped at 3 cards, tap-to-reveal, fully client-side, no backend change — reuses `keyConcepts` + `quiz[].explanation` already in the public note detail response.
+- **Memorization teaser (frontend).** Static educational section (copy + illustration) explaining spaced repetition — no per-note content, no scheduling logic, no state for anonymous users.
+- Existing CTA hierarchy (`Quiz yourself on this note` primary, `Create your own Study Pack` / `Copy to My Library` secondary) preserved unchanged; both new sections are additive.
 
 ---
 
 ## Recent Release Context (condensed — see `RELEASES.md` for full detail)
 
-**Collections/retention arc (v0.31.0 → v0.37.0):** see the dedicated Note Collections vision section above for the full narrative — adoption model, Goal/Subject hierarchy, the Builder, readiness-as-retention-lever, the mastery-integrity lock.
+**v0.39.1 - Study Plan Builder Polish.** Fixed subject-metadata gaps and cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage: description field on Add Subject Plan, a `courseProgram` cascade fix on `updateMetadata` (published child Subject plans could sit invisible to course/program-scoped discovery), and Dashboard-level adoption discoverability fixes (locked `/onboarding` flow untouched). Parked: standalone adoption of a single child Subject plan (unresolved re-parenting interaction with `adoptGoal`'s idempotency check).
+
+**v0.39.0 - Flexible Review Methods.** Let a Study Pack be reviewed through more than Multiple Choice, while preserving the v0.37.0 review-vs-assessment mastery boundary. Chain A — review methods that never write `ConceptHealth`: Flashcards (flip-card deck from existing `keyConcepts`/`quiz[].explanation`, no new AI call) and Memorization (Flashcards' matching plus real spaced repetition, separate `memorization_cards` entity, firewalled from readiness by design). Chain B — assessment formats that write `ConceptHealth` like Challenge Quiz: Identification (free-text fill-in-the-blank, deterministic `acceptableAnswers[]` matching) and Enumeration (free-text "name every item in a 2-5 item set", all-or-nothing bipartite-matching scoring). Both new formats are ungated across every plan tier (format variety is a learning-quality dimension, not a monetization lever) and Challenge Quiz-only for now; neither adds a 6th/7th mode.
 
 **v0.38.0 - Read-Path Optimization Pass.** Latency/DB-payload pass on the hottest read endpoints (session history, collection detail, private library list, Goal per-child readiness) via lean projections instead of full entities. Byte-identical API responses; no schema/endpoint/DTO change.
+
+**Collections/retention arc (v0.31.0 → v0.37.0):** see the dedicated Note Collections vision section above for the full narrative — adoption model, Goal/Subject hierarchy, the Builder, readiness-as-retention-lever, the mastery-integrity lock.
 
 **v0.37.1–v0.37.4 - Production memory incident response.** A string of Render-instance OOM/restart investigations (glibc malloc arena fragmentation, G1 not releasing idle heap, uncapped Metaspace) resolved via Dockerfile JVM flags — no application code change. v0.37.2 also fixed a real data-loss bug (`updateMetadata` clobbering fields on partial PATCH) — the same class of bug the v0.39.1 courseProgram cascade fix was careful not to repeat.
 

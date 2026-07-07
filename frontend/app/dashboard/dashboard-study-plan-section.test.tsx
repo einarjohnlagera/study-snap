@@ -6,6 +6,7 @@ import {
   listCollections,
   listPublicStudyPlans,
 } from "@/lib/api";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 
 const pushMock = jest.fn();
 
@@ -20,6 +21,10 @@ jest.mock("@/lib/api", () => ({
   adoptStudyPlan: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
+}));
+
+jest.mock("@/lib/just-adopted-notice", () => ({
+  setJustAdoptedNotice: jest.fn(),
 }));
 
 const publicPlan = {
@@ -44,6 +49,7 @@ describe("DashboardStudyPlanSection", () => {
     (adoptStudyPlan as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
+    (setJustAdoptedNotice as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([publicPlan]);
     (listCollections as jest.Mock).mockResolvedValue([]);
   });
@@ -64,6 +70,7 @@ describe("DashboardStudyPlanSection", () => {
     await waitFor(() => {
       expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");
       expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-plan-1")).toBe("1");
+      expect(setJustAdoptedNotice).not.toHaveBeenCalled();
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1");
     });
   });
@@ -116,6 +123,7 @@ describe("DashboardStudyPlanSection", () => {
       expect(adoptGoal).toHaveBeenCalledWith("source-goal-1");
       expect(adoptStudyPlan).not.toHaveBeenCalled();
       expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-goal-1")).toBe("1");
+      expect(setJustAdoptedNotice).toHaveBeenCalledWith("personal-goal-1");
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
     });
   });
