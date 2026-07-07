@@ -595,6 +595,32 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void updateParent_clearsTargetCompletionDateWhenTopLevelGoalBecomesChild() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
+        when(collectionRepository.findMaxSiblingPosition(parentId, userId)).thenReturn(0);
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(parentId)
+        );
+
+        assertThat(child.getTargetCompletionDate()).isNull();
+        assertThat(result.targetCompletionDate()).isNull();
+    }
+
+    @Test
     void updateParent_clearsParentIdempotently() {
         UUID userId = UUID.randomUUID();
         UUID parentId = UUID.randomUUID();

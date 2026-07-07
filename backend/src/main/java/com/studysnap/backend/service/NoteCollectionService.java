@@ -447,6 +447,10 @@ public class NoteCollectionService {
         if (!parentId.equals(child.getParentCollectionId())) {
             child.setParentCollectionId(parentId);
             child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
+            // targetCompletionDate is a top-level-Goal-only field (see updateMetadata); a collection
+            // that becomes a child must not keep carrying one, or a stale date resurfaces if it is
+            // later detached back to top-level via updateParent(null).
+            child.setTargetCompletionDate(null);
             touch(child);
             child = collectionRepository.save(child);
         }
