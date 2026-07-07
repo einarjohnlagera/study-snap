@@ -10,10 +10,13 @@ import { HelpLink } from "@/components/ui/help-link";
 import { PageHeader } from "@/components/page-header";
 import {
   ApiRequestError,
+  getCollectionGoal,
+  getMe,
   getProgressReport,
   getPlanReadiness,
   listCollections,
   trackAnalyticsEvent,
+  type GoalCollectionDetailResponse,
   type GoalSummaryResponse,
   type NoteCollectionSummary,
   type PlanReadinessResponse,
@@ -275,6 +278,9 @@ function PlanPicker({
     [collections],
   );
   const selectedCollection = selectedCollectionId
+    ? collections.find((collection) => collection.id === selectedCollectionId)
+    : null;
+  const selectedLeafCollection = selectedCollectionId
     ? leafCollections.find((collection) => collection.id === selectedCollectionId)
     : null;
 
@@ -296,8 +302,8 @@ function PlanPicker({
           className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="">All subjects</option>
-          {selectedCollectionId && !selectedCollection ? (
-            <option value={selectedCollectionId}>Selected plan</option>
+          {selectedCollectionId && !selectedLeafCollection ? (
+            <option value={selectedCollectionId}>{selectedCollection?.title ?? "Selected plan"}</option>
           ) : null}
           {leafCollections.map((collection) => (
             <option key={collection.id} value={collection.id}>
@@ -451,6 +457,67 @@ function PlanReadinessContent({
   );
 }
 
+function GoalReadinessContent({
+  goalReadiness,
+  state,
+  loadError,
+  onRetry,
+  labels,
+}: Readonly<{
+  goalReadiness: GoalCollectionDetailResponse | null;
+  state: LoadState;
+  loadError: string | null;
+  onRetry: () => void;
+  labels: ReturnType<typeof getCollectionLabels>;
+}>) {
+  if (state === "loading") {
+    return (
+      <Card className="space-y-4 p-6">
+        <div className="h-5 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-24 w-full animate-pulse rounded bg-muted" />
+      </Card>
+    );
+  }
+
+  if (state === "not-found") {
+    return (
+      <Card className="space-y-4 p-6">
+        <CardTitle>{labels.goalSingular} not found</CardTitle>
+        <CardDescription>This saved set may have been deleted or may not belong to your account.</CardDescription>
+        <Link className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" href="/collections">
+          {labels.plural}
+        </Link>
+      </Card>
+    );
+  }
+
+  if (state === "error" || !goalReadiness) {
+    return (
+      <Card className="space-y-4 p-6">
+        <CardTitle>Could not load readiness</CardTitle>
+        <CardDescription>{loadError ?? "Please try again."}</CardDescription>
+        <Button type="button" variant="outline" onClick={onRetry}>Retry</Button>
+      </Card>
+    );
+  }
+
+  return (
+    <ReadinessSummary
+      variant="compact"
+      title={`${goalReadiness.title} readiness`}
+      eyebrow={`${labels.goalSingular} readiness`}
+      overallReadinessPercentage={goalReadiness.overallReadinessPercentage}
+      totalConcepts={goalReadiness.totalConcepts}
+      masteredConcepts={goalReadiness.masteredConcepts}
+      dueConcepts={goalReadiness.dueConcepts}
+      notPracticedConcepts={goalReadiness.notPracticedConcepts}
+      subjects={[]}
+      emptyTitle="No readiness yet"
+      emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
+    />
+  );
+}
+
 export function ProgressReportClient({
   initialCollectionId = null,
 }: Readonly<{
@@ -463,13 +530,17 @@ export function ProgressReportClient({
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(initialCollectionId);
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [collectionsState, setCollectionsState] = useState<"loading" | "ready" | "error">("loading");
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null | undefined>(undefined);
   const [report, setReport] = useState<ProgressReportResponse | null>(null);
   const [readiness, setReadiness] = useState<PlanReadinessResponse | null>(null);
+  const [goalReadiness, setGoalReadiness] = useState<GoalCollectionDetailResponse | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const requestIdRef = useRef(0);
   const trackedPlanIdsRef = useRef<Set<string>>(new Set());
+  const primaryDefaultResolvedRef = useRef(false);
+  const applyingPrimaryDefaultRef = useRef(false);
 
   useEffect(() => {
     setSelectedCollectionId(initialCollectionId);
@@ -510,6 +581,53 @@ export function ProgressReportClient({
     if (!routeReady) {
       return;
     }
+    let cancelled = false;
+    setPrimaryCollectionId(undefined);
+    getMe()
+      .then((me) => {
+        if (!cancelled) {
+          setPrimaryCollectionId(me.primaryCollectionId ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrimaryCollectionId(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeReady]);
+
+  useEffect(() => {
+    if (!routeReady || primaryDefaultResolvedRef.current || primaryCollectionId === undefined) {
+      return;
+    }
+    primaryDefaultResolvedRef.current = true;
+    if (initialCollectionId) {
+      return;
+    }
+    if (primaryCollectionId) {
+      applyingPrimaryDefaultRef.current = true;
+      setSelectedCollectionId(primaryCollectionId);
+    }
+  }, [initialCollectionId, primaryCollectionId, routeReady]);
+
+  useEffect(() => {
+    if (!routeReady) {
+      return;
+    }
+    if (primaryCollectionId === undefined) {
+      return;
+    }
+    if (
+      applyingPrimaryDefaultRef.current
+      && primaryCollectionId
+      && selectedCollectionId !== primaryCollectionId
+    ) {
+      return;
+    }
 
     let cancelled = false;
     const requestId = requestIdRef.current + 1;
@@ -518,12 +636,55 @@ export function ProgressReportClient({
     setLoadError(null);
 
     if (selectedCollectionId) {
+      if (selectedCollectionId === primaryCollectionId) {
+        applyingPrimaryDefaultRef.current = false;
+        getCollectionGoal(selectedCollectionId)
+          .then((payload) => {
+            if (cancelled || requestIdRef.current !== requestId) {
+              return;
+            }
+            setGoalReadiness(payload);
+            setReadiness(null);
+            setReport(null);
+            setState("ready");
+            if (!trackedPlanIdsRef.current.has(payload.collectionId)) {
+              trackedPlanIdsRef.current.add(payload.collectionId);
+              void trackAnalyticsEvent({
+                eventType: "PLAN_READINESS_VIEWED",
+                entityId: payload.collectionId,
+                metadata: {
+                  totalConcepts: payload.totalConcepts,
+                  overallReadinessPercentage: payload.overallReadinessPercentage,
+                },
+              });
+            }
+          })
+          .catch((error) => {
+            if (cancelled || requestIdRef.current !== requestId) {
+              return;
+            }
+            setGoalReadiness(null);
+            setReadiness(null);
+            setReport(null);
+            if (error instanceof ApiRequestError && error.status === 404) {
+              setState("not-found");
+              return;
+            }
+            setLoadError(error instanceof Error ? error.message : "Could not load readiness.");
+            setState("error");
+          });
+        return () => {
+          cancelled = true;
+        };
+      }
+
       getPlanReadiness(selectedCollectionId)
         .then((payload) => {
           if (cancelled || requestIdRef.current !== requestId) {
             return;
           }
           setReadiness(payload);
+          setGoalReadiness(null);
           setReport(null);
           setState("ready");
           if (!trackedPlanIdsRef.current.has(payload.collectionId)) {
@@ -545,6 +706,8 @@ export function ProgressReportClient({
             return;
           }
           setReadiness(null);
+          setGoalReadiness(null);
+          setReport(null);
           if (error instanceof ApiRequestError && error.status === 404) {
             setState("not-found");
             return;
@@ -564,6 +727,7 @@ export function ProgressReportClient({
         }
         setReport(payload);
         setReadiness(null);
+        setGoalReadiness(null);
         setState("ready");
       })
       .catch(() => {
@@ -571,15 +735,18 @@ export function ProgressReportClient({
           return;
         }
         setReport(null);
+        setReadiness(null);
+        setGoalReadiness(null);
         setState("error");
       });
 
     return () => {
       cancelled = true;
     };
-  }, [routeReady, selectedCollectionId, retryKey]);
+  }, [primaryCollectionId, routeReady, selectedCollectionId, retryKey]);
 
   function handlePlanChange(collectionId: string | null) {
+    applyingPrimaryDefaultRef.current = false;
     setSelectedCollectionId(collectionId);
     router.push(collectionId ? `/progress?collectionId=${encodeURIComponent(collectionId)}` : "/progress");
   }
@@ -597,7 +764,15 @@ export function ProgressReportClient({
         collectionsState={collectionsState}
         onChange={handlePlanChange}
       />
-      {selectedCollectionId ? (
+      {selectedCollectionId && selectedCollectionId === primaryCollectionId ? (
+        <GoalReadinessContent
+          goalReadiness={goalReadiness}
+          state={state}
+          loadError={loadError}
+          onRetry={retryLoad}
+          labels={labels}
+        />
+      ) : selectedCollectionId ? (
         <PlanReadinessContent
           readiness={readiness}
           state={state}
