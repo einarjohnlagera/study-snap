@@ -749,6 +749,12 @@ function EditCollectionModal({
   );
   const [targetCompletionDate, setTargetCompletionDate] = useState<string>(collection.targetCompletionDate ?? "");
   const [studyDaysPerWeek, setStudyDaysPerWeek] = useState<string>("");
+  // Tracks the value actually loaded from getMe(), distinct from the field's current (possibly
+  // edited, possibly still-unloaded) contents. undefined means "not resolved yet" — either the
+  // async prefill hasn't returned or it failed. Save must never send studyDaysPerWeek while this
+  // is undefined, or a save-before-prefill race (or a getMe() failure) would silently wipe the
+  // user's real intensity to null. See docs/features/collections.md.
+  const [studyDaysPerWeekBaseline, setStudyDaysPerWeekBaseline] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -763,11 +769,17 @@ function EditCollectionModal({
       if (isTopLevelGoal) {
         // studyDaysPerWeek is a user-level attribute, not a collection field, so it isn't part of
         // `collection` — asked on this same screen per the target-date UX, but sourced separately.
+        setStudyDaysPerWeekBaseline(undefined);
         void getMe()
-          .then((me) => setStudyDaysPerWeek(me.studyDaysPerWeek === null ? "" : String(me.studyDaysPerWeek)))
+          .then((me) => {
+            const loadedValue = me.studyDaysPerWeek === null ? "" : String(me.studyDaysPerWeek);
+            setStudyDaysPerWeek(loadedValue);
+            setStudyDaysPerWeekBaseline(loadedValue);
+          })
           .catch(() => setStudyDaysPerWeek(""));
       } else {
         setStudyDaysPerWeek("");
+        setStudyDaysPerWeekBaseline(undefined);
       }
     }
   }, [
@@ -809,7 +821,10 @@ function EditCollectionModal({
       if (isTopLevelGoal && !trimmedTargetCompletionDate && collection.targetCompletionDate) {
         saved = await clearCollectionTargetDate(collection.id);
       }
-      if (isTopLevelGoal) {
+      // Only send an intensity update when the loaded baseline actually resolved AND the value
+      // changed from it — never send while the baseline is still undefined (prefill in flight or
+      // failed), and never send a no-op write when the user didn't touch the field.
+      if (isTopLevelGoal && studyDaysPerWeekBaseline !== undefined && trimmedStudyDaysPerWeek !== studyDaysPerWeekBaseline) {
         await updateStudyDaysPerWeek(trimmedStudyDaysPerWeek ? Number(trimmedStudyDaysPerWeek) : null);
       }
       onSaved(saved);

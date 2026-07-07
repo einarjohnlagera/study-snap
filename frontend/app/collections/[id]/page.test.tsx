@@ -1308,6 +1308,52 @@ describe("CollectionDetailPageClient", () => {
     });
   });
 
+  it("does not send a study intensity update if saved before the profile prefill resolves", async () => {
+    (updateCollection as jest.Mock).mockResolvedValue(collection());
+    let resolveGetMe: (value: { studyDaysPerWeek: number | null }) => void = () => {};
+    (getMe as jest.Mock).mockReturnValue(new Promise((resolve) => {
+      resolveGetMe = resolve;
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    // Save before the getMe() prefill promise ever resolves — this must not wipe the user's real
+    // intensity to null. The rest of the form (title/description/etc.) still saves normally.
+    await screen.findByLabelText("Study days per week");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalled();
+    });
+    expect(updateStudyDaysPerWeek).not.toHaveBeenCalled();
+
+    resolveGetMe({ studyDaysPerWeek: 5 });
+  });
+
+  it("does not resend a study intensity update when the field is untouched", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: 5 });
+    (updateCollection as jest.Mock).mockResolvedValue(collection());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const intensityInput = await screen.findByLabelText("Study days per week");
+    await waitFor(() => expect(intensityInput).toHaveValue(5));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalled();
+    });
+    expect(updateStudyDaysPerWeek).not.toHaveBeenCalled();
+  });
+
   it("rejects a study intensity value outside 1-7 before saving", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
     await screen.findByRole("heading", { name: "Midterm Study Plan" });

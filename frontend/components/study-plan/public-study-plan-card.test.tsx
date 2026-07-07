@@ -73,12 +73,26 @@ describe("PublicStudyPlanCard", () => {
 
     render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Start this plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start this Collection" }));
 
     await waitFor(() => {
       expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");
       expect(setJustAdoptedNotice).not.toHaveBeenCalled();
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1");
     });
+  });
+
+  it("resolves the CTA and subject-count labels through profile-aware terminology, not a hardcoded generic word", () => {
+    render(
+      <PublicStudyPlanCard
+        plan={{ ...leafPlan, id: "source-goal-1", childCount: 3 }}
+        adoptedCollection={null}
+        profileType="STUDENT"
+      />,
+    );
+
+    expect(screen.getByText(/3 Subject Plans/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start this Goal" })).toBeInTheDocument();
+    expect(screen.queryByText(/3 Subject plans\b/)).not.toBeInTheDocument();
   });
 });

@@ -160,9 +160,9 @@ export function DashboardStudyPlanSection({
   const ownsSource = continuePlan?.id === displayPlan.id;
   const isGoal = displayPlan.childCount > 0;
   const ctaLabel = continuePlan
-    ? (ownsSource ? "Open this plan" : (isGoal ? "Continue this Goal" : "Continue this plan"))
-    : (isGoal ? "Start this Goal" : "Start this plan");
-  const subjectPlanLabel = `${displayPlan.childCount} ${displayPlan.childCount === 1 ? "Subject plan" : "Subject plans"}`;
+    ? (ownsSource ? "Open this plan" : (isGoal ? `Continue this ${labels.goalSingular}` : `Continue this ${labels.singular}`))
+    : (isGoal ? `Start this ${labels.goalSingular}` : `Start this ${labels.singular}`);
+  const subjectPlanLabel = `${displayPlan.childCount} ${labels.subjectSingular}${displayPlan.childCount === 1 ? "" : "s"}`;
   const noteLabel = `${displayPlan.itemCount} ${displayPlan.itemCount === 1 ? "note" : "notes"}`;
   // A Goal never holds notes directly (only its child Subject plans do), so plan.itemCount
   // is always 0 here — showing "0 notes" alongside "N Subject plans" reads as broken/empty.
@@ -189,7 +189,7 @@ export function DashboardStudyPlanSection({
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       router.push(`/collections/${result.collectionId}`);
     } catch (adoptError) {
-      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? "Goal" : "plan"}.`);
+      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? labels.goalSingular : labels.singular}.`);
     } finally {
       setAdopting(false);
     }
