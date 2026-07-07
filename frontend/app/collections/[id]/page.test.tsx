@@ -133,6 +133,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     description: "Full LET goal",
     visibility: "PRIVATE",
     courseProgram: null,
+    targetCompletionDate: null,
     sourcePlanId: null,
     parentCollectionId: null,
     itemCount: 0,
@@ -142,6 +143,9 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     dueConcepts: 4,
     notPracticedConcepts: 7,
     totalConcepts: 20,
+    weeksRemaining: null,
+    conceptsRemaining: null,
+    todaysConceptBudget: null,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
     children: [
@@ -346,6 +350,59 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
     expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
     expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("This Week")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
+    expect(screen.getByText("11 concepts remaining · 4 concepts today")).toBeInTheDocument();
+  });
+
+  it("hides the This Week countdown card when no target date is set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+  });
+
+  it("refetches the Goal countdown after editing so it reflects a newly-set target date", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (updateCollection as jest.Mock).mockResolvedValue(
+      collection({ title: "LET Mastery", childCount: 2, targetCompletionDate: "2026-12-01" }),
+    );
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 2,
+      conceptsRemaining: 6,
+      todaysConceptBudget: 2,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.change(await screen.findByLabelText("Target completion date"), { target: { value: "2026-12-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("2 weeks until Dec 1, 2026")).toBeInTheDocument();
   });
 
   it("shows the readiness unavailable state without hiding the leaf plan", async () => {
