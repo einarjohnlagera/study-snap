@@ -156,6 +156,15 @@ Formula (`NoteCollectionService.computeWeeklyCountdown`):
 
 Due-concept count can *rise* over time even for a diligent learner — it tracks spaced-repetition review timing, not inactivity. This is correct behavior, not a scheduler bug.
 
+### Target Date + Study Intensity Input (frontend)
+
+`EditCollectionModal` (`frontend/app/collections/[id]/collection-detail-page-client.tsx`) is the single edit surface reused for both top-level Goals and child Subject plans. It derives `isTopLevelGoal = collection.parentCollectionId === null` (no separate prop needed — `collection` is already passed in full) and shows the target-date and study-intensity fields **only** when `isTopLevelGoal` is true, per the locked Goal-only rule. The Create Collection modal (`frontend/app/collections/collections-page-client.tsx`) does not have these fields yet — it also lacks `estimatedStudyHours`, so this is consistent with that surface's existing minimal-fields precedent, not a gap introduced here.
+
+- **Target date** reads/writes through `collection.targetCompletionDate`. On save: a non-empty value is included in the same `updateCollection` PATCH call as title/description/estimated hours (omit-preserves semantics); an emptied *previously-set* date instead calls the dedicated `clearCollectionTargetDate` (`DELETE /collections/{id}/target-date`) — omitting the field from the PATCH would leave the old date untouched, not clear it, since `LocalDate` has no PATCH-clear sentinel. An empty field that was already empty triggers neither call.
+- **Study intensity** (`studyDaysPerWeek`) is a **user-level** attribute, not a collection field, so it isn't part of `collection` — it's asked on this same screen per the locked UX decision ("one screen, sane default if skipped") but sourced and saved separately via `getMe()` (prefill, fetched only when `isTopLevelGoal`) and `updateStudyDaysPerWeek` (`PUT /users/profile/study-days-per-week`, full-replace, called whenever `isTopLevelGoal` is true regardless of whether the value changed — the write is idempotent). Client-side validates 1-7 before submit, mirroring the backend's `@Min`/`@Max`.
+- The `<form>` uses `noValidate` — all validation (title-required, 1-7 intensity range) is custom JS, not native HTML5 constraint validation, so error messages are consistent and don't silently block submission before the app's own error UI can render.
+- Saving updates `collection` state in full (via `setCollection(saved)` in both call sites), so the modal's next open reflects the latest persisted target date. The Goal-detail `goalDetail` sync block does not yet copy `targetCompletionDate` — that lands with the future "This Week" section work.
+
 ### Builder Canvas
 
 The builder route is `/collections/{id}/builder`. It first loads the base collection through `GET /collections/{id}`:

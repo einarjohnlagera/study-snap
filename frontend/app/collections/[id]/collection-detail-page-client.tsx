@@ -28,9 +28,11 @@ import {
 import {
   addCollectionItems,
   ApiRequestError,
+  clearCollectionTargetDate,
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getMe,
   getNoteConceptCounts,
   getPlanReadiness,
   listCoursePrograms,
@@ -40,6 +42,7 @@ import {
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
+  updateStudyDaysPerWeek,
   type GoalCollectionDetailResponse,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
@@ -685,11 +688,14 @@ function EditCollectionModal({
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
 }>) {
+  const isTopLevelGoal = collection.parentCollectionId === null;
   const [title, setTitle] = useState(collection.title);
   const [description, setDescription] = useState(collection.description ?? "");
   const [estimatedStudyHours, setEstimatedStudyHours] = useState<string>(
     collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours),
   );
+  const [targetCompletionDate, setTargetCompletionDate] = useState<string>(collection.targetCompletionDate ?? "");
+  const [studyDaysPerWeek, setStudyDaysPerWeek] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -698,10 +704,27 @@ function EditCollectionModal({
       setTitle(collection.title);
       setDescription(collection.description ?? "");
       setEstimatedStudyHours(collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours));
+      setTargetCompletionDate(collection.targetCompletionDate ?? "");
       setError(null);
       setSubmitting(false);
+      if (isTopLevelGoal) {
+        // studyDaysPerWeek is a user-level attribute, not a collection field, so it isn't part of
+        // `collection` — asked on this same screen per the target-date UX, but sourced separately.
+        void getMe()
+          .then((me) => setStudyDaysPerWeek(me.studyDaysPerWeek === null ? "" : String(me.studyDaysPerWeek)))
+          .catch(() => setStudyDaysPerWeek(""));
+      } else {
+        setStudyDaysPerWeek("");
+      }
     }
-  }, [collection.description, collection.estimatedStudyHours, collection.title, isOpen]);
+  }, [
+    collection.description,
+    collection.estimatedStudyHours,
+    collection.targetCompletionDate,
+    collection.title,
+    isOpen,
+    isTopLevelGoal,
+  ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -710,16 +733,32 @@ function EditCollectionModal({
       setError("Title is required.");
       return;
     }
+    const trimmedStudyDaysPerWeek = studyDaysPerWeek.trim();
+    if (trimmedStudyDaysPerWeek && (Number(trimmedStudyDaysPerWeek) < 1 || Number(trimmedStudyDaysPerWeek) > 7)) {
+      setError("Study days per week must be between 1 and 7.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const saved = await updateCollection(collection.id, {
+      const trimmedTargetCompletionDate = targetCompletionDate.trim();
+      let saved = await updateCollection(collection.id, {
         title: trimmedTitle,
         // Send an empty string (not null) to clear the description: updateMetadata now preserves
         // fields omitted (null) from the request and only clears a text field on an explicit "".
         description: description.trim(),
         estimatedStudyHours: estimatedStudyHours ? Number(estimatedStudyHours) : null,
+        // targetCompletionDate uses the same omit-preserves semantics — a null/omitted value here
+        // leaves the existing date untouched, it does not clear it. Clearing goes through the
+        // dedicated clearCollectionTargetDate call below instead.
+        ...(isTopLevelGoal && trimmedTargetCompletionDate ? { targetCompletionDate: trimmedTargetCompletionDate } : {}),
       });
+      if (isTopLevelGoal && !trimmedTargetCompletionDate && collection.targetCompletionDate) {
+        saved = await clearCollectionTargetDate(collection.id);
+      }
+      if (isTopLevelGoal) {
+        await updateStudyDaysPerWeek(trimmedStudyDaysPerWeek ? Number(trimmedStudyDaysPerWeek) : null);
+      }
       onSaved(saved);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not update this collection.");
@@ -741,7 +780,7 @@ function EditCollectionModal({
         </>
       )}
     >
-      <form id="edit-collection-form" className="space-y-4" onSubmit={handleSubmit}>
+      <form id="edit-collection-form" className="space-y-4" onSubmit={handleSubmit} noValidate>
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-foreground">Title</span>
           <input
@@ -773,6 +812,35 @@ function EditCollectionModal({
           />
           <span className="block text-xs text-foreground/60">Optional. Shown to learners on adoption.</span>
         </label>
+        {isTopLevelGoal ? (
+          <>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Target completion date</span>
+              <input
+                aria-label="Target completion date"
+                type="date"
+                value={targetCompletionDate}
+                onChange={(event) => setTargetCompletionDate(event.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+              <span className="block text-xs text-foreground/60">Optional. When are you aiming to be ready by?</span>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Study days per week</span>
+              <input
+                aria-label="Study days per week"
+                type="number"
+                min="1"
+                max="7"
+                step="1"
+                value={studyDaysPerWeek}
+                onChange={(event) => setStudyDaysPerWeek(event.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+              <span className="block text-xs text-foreground/60">Optional — assumes every day if left blank.</span>
+            </label>
+          </>
+        ) : null}
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
       </form>
     </AppModal>
