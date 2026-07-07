@@ -11,6 +11,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
@@ -52,6 +53,8 @@ import {
   type PlanReadinessResponse,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
+import { getJustAdoptedNotice } from "@/lib/just-adopted-notice";
+import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
@@ -1493,6 +1496,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
+  const [justAdopted, setJustAdopted] = useState(false);
   const [parentTitle, setParentTitle] = useState<string | null>(null);
   const backLinkHref = collection?.parentCollectionId && parentTitle
     ? `/collections/${collection.parentCollectionId}`
@@ -1560,6 +1564,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
+  }, [collectionId]);
+
+  useEffect(() => {
+    setJustAdopted(getJustAdoptedNotice(collectionId));
   }, [collectionId]);
 
   useEffect(() => {
@@ -1884,6 +1892,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     ? `/notes/${dueConceptReviewItem.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`
     : null;
   const hasReadinessActions = dueConceptReviewHref !== null || terminalAction?.kind === "premium-exam";
+  const postAdoptGuidanceRules: GuidanceRule[] = [
+    {
+      id: "post-adopt-target-date",
+      priority: 1,
+      condition: () => justAdopted && !!goalDetail && !goalDetail.targetCompletionDate,
+      message: "Set a target completion date to see your weekly countdown and daily study budget.",
+    },
+  ];
+  const activePostAdoptTip = pickActiveGuidance(postAdoptGuidanceRules);
 
   const dismissContinueBanner = () => {
     setContinueDismissed(true);
@@ -2049,6 +2066,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </Card>
+        ) : null}
+
+        {activePostAdoptTip ? (
+          <GuidanceTip
+            tipId={activePostAdoptTip.id}
+            message={activePostAdoptTip.message}
+            trackAnalytics
+            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
+          />
         ) : null}
 
         <GoalDetailView goal={goalDetail} labels={labels} />

@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 export { getStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
@@ -180,6 +181,7 @@ export function DashboardStudyPlanSection({
       if (isGoal) {
         const result = await adoptGoal(displayPlan.id);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
+        setJustAdoptedNotice(result.goalCollectionId);
         router.push(`/collections/${result.goalCollectionId}`);
         return;
       }
