@@ -140,6 +140,7 @@ Rules:
 - setting a target date on a child Subject plan via `updateMetadata` returns `InvalidCollectionRequestException` / `400` — Goal-only, same category as the Primary Review Set top-level-only rule
 - `DELETE /collections/{id}/target-date` on a missing/not-owned collection returns `CollectionNotFoundException` / `404`
 - **never copied on adopt or self-copy** — `adopt`/`adoptGoal` (including the case where a user adopts their own PUBLIC collection) never carry a source's `targetCompletionDate` onto the created copy; the field simply isn't set on the new entity and defaults to null. No auto-guessed default is generated either — null stays null until the learner deliberately sets one.
+- **cleared on reparent** — `updateParent` (`PATCH /collections/{id}/parent`) clears `targetCompletionDate` whenever a top-level Goal is nested under a new parent (becoming a child), in the same branch that sets `parentCollectionId`. Without this, a dated Goal that gets nested and later detached back to top-level (`updateParent(null)`) would resurface its stale date instead of starting fresh — the same category of invariant `reassertPrimaryInvariant` already enforces for the Primary Review Set on this same method, just for the target-date field instead.
 - exposed on both `NoteCollectionDetailResponse` (the `updateMetadata`/`create` response) and `GoalCollectionDetailResponse` (the `GET /collections/{id}/goal` response the weekly countdown derivation reads from — see below) — these are two separate DTOs, not one superset of the other.
 
 Post-adopt guidance:
