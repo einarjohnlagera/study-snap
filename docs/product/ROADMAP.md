@@ -414,6 +414,25 @@ Anti-drift: no backend changes required (the unfiltered endpoint already exists)
 
 ---
 
+## Post-v0.40.0 Polish Backlog (7 items from live usage — candidates, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Surfaced by the user while using their own v0.40.0 release; captured here so the ideas don't drift/disappear before they're deliberately scoped. Research below was done via direct code trace (some Explore-agent verification hit a session limit and returned nothing — items are marked CONFIRMED where traced directly vs. PARTIAL where grounded but incomplete).
+
+**Fold into v0.40.1 (no new item needed):**
+- **Misleading "No curated Review Sets for X yet" empty state.** `dashboard-study-plan-section.tsx:150` shows this regardless of how many Review Sets the user already owns — it means "no *official curated* set for your track," not "you have none," but reads like the latter. Single-string copy fix on the exact same empty-state card v0.40.1 already rewires (see v0.40.1's "Rewire the existing empty state" bullet above) — fold in, don't ship standalone.
+
+**Open philosophy question — blocks any related scoping until decided:**
+- **Primary Review Set vs. the older Study/Exam Focus mechanism (`studyGoal`/`focusSubjects`, `docs/features/profile.md:85-108`) are unreconciled.** CONFIRMED via `progress-report-client.tsx`: on Progress they're already mutually exclusive at the view level (Primary, once set, fully supersedes the old goalSummary/milestones UI) — but the Profile page has **zero awareness of Primary Review Set** (no `primaryCollectionId` reference anywhere in `frontend/app/profile/`), so it still shows only the old per-subject Exam Focus picker, independently editable, with no cross-reference to the Primary the user separately set. Two "what am I working toward" fields, coincidentally similar-looking values, no link between them.
+  - PARTIAL: whether `studyGoal`/`focusSubjects` also drive Dashboard, onboarding, or the exam-hub intent flow beyond Progress was not verified — don't assume "Primary wins" holds everywhere.
+  - Recommended direction (lowest-drift, matches what Progress's code already does): Primary Review Set becomes the canonical surface; Study/Exam Focus is kept but reframed as the explicit fallback for users with no Goal, and Profile actually shows the Primary. Not purely additive — Study Focus is load-bearing as the no-Goal fallback, so this redefines what it means. Needs a deliberate product decision (user is taking this to GPT) before it becomes a roadmap item.
+
+**Cheap, independent candidates (sequence after the philosophy question above, since it touches the same Profile/Progress neighborhood):**
+- **Show "Adopted" vs. "Created by you" on a Review Set.** CONFIRMED free: `sourcePlanId` already exists on `NoteCollectionSummary`/`NoteCollectionDetail` (`frontend/lib/api.ts:1401,1439`); `sourcePlanId !== null` already means "adopted," no backend change needed for a badge. Showing the *original author's name* (like Public Notes' `authorDisplayName`) is a separate, larger item — needs new backend exposure (no owner/author/official field on collection responses today) and a real edge case (source since deleted/private, no author left to show). Ship the free badge first; author-name is later/separate.
+- **Overdue color-warning on child Subject-plan cards.** `child.dueConcepts` is already rendered as plain text on the Goal detail page (`collection-detail-page-client.tsx:660`) — no color coding today. Cheap, uses existing data. Flag: a warning *color* leans toward the "monitoring" framing the locked list/execution-row anti-drift rule pushes back on; defensible only because this is the Goal's own detail surface, not a list/browse card — needs a conscious sign-off, not an automatic yes. (Distinct from Phase 2 weighted-allocation scheduling above, which remains separately deferred and ungated.)
+- **Make Progress's per-subject "Concept Mastery" cards link to Private Library filtered by subject.** CONFIRMED both halves exist: Private Library already reads `?subject=` (`frontend/app/library/page.tsx:526`); Progress's per-subject rows are plain `ReadinessBar`s today, not links. Cheap to wire. Bonus unprompted finding: the existing "weakest subject" CTA on the same page links to `/public/library?subject=X` (public, not private) for what should be a personal "study this next" action — worth reconciling in the same pass.
+
+---
+
 ## Review-Set-Centric Navigation (deferred future direction — not scoped to any release)
 
 Not a version — no release branch, no implementation scope yet. Captured here so we stop designing around abstractions (chiefly Exam Hub) that may no longer be the right shape, per the user's explicit request to lock the long-term architecture without building it all now. **Gate on the Primary Review Set concept (shipping in v0.40.0) proving useful in real usage before committing any of this.**
