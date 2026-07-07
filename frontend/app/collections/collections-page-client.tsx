@@ -200,6 +200,7 @@ export function CollectionsPageClient() {
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [courseProgram, setCourseProgram] = useState<string | null>(null);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(searchParams.get("new") === "1");
 
   const loadCollections = useCallback(async () => {
@@ -215,12 +216,14 @@ export function CollectionsPageClient() {
     }
   }, []);
 
-  const loadCourseProgram = useCallback(async () => {
+  const loadProfile = useCallback(async () => {
     try {
       const me = await getMe();
       setCourseProgram(me.courseProgram ?? null);
+      setPrimaryCollectionId(me.primaryCollectionId ?? null);
     } catch {
       setCourseProgram(null);
+      setPrimaryCollectionId(null);
     }
   }, []);
 
@@ -229,8 +232,8 @@ export function CollectionsPageClient() {
       return;
     }
     void Promise.resolve().then(loadCollections);
-    void Promise.resolve().then(loadCourseProgram);
-  }, [loadCollections, loadCourseProgram, router]);
+    void Promise.resolve().then(loadProfile);
+  }, [loadCollections, loadProfile, router]);
 
   const headerAction = (
     <ResponsiveActionButton
@@ -300,6 +303,7 @@ export function CollectionsPageClient() {
         <DashboardStudyPlanSection
           courseProgram={courseProgram}
           profileType={profileType}
+          primaryCollectionId={primaryCollectionId}
           viewAllHref="/collections/published"
           browseWhenEmpty
         />

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import CollectionsPage, { metadata } from "./page";
 import { CollectionsPageClient } from "./collections-page-client";
-import { createCollection, listCollections } from "@/lib/api";
+import { createCollection, getMe, listCollections } from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -27,7 +27,14 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   createCollection: jest.fn(),
+  getMe: jest.fn(),
   listCollections: jest.fn(),
+}));
+
+jest.mock("@/app/dashboard/dashboard-study-plan-section", () => ({
+  DashboardStudyPlanSection: (props: { primaryCollectionId?: string | null }) => (
+    <div data-testid="dashboard-study-plan-section" data-primary-collection-id={props.primaryCollectionId ?? ""} />
+  ),
 }));
 
 describe("CollectionsPage", () => {
@@ -35,7 +42,9 @@ describe("CollectionsPage", () => {
     pushMock.mockReset();
     replaceMock.mockReset();
     (createCollection as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: null });
     searchParamsMock = new URLSearchParams();
   });
 
@@ -210,6 +219,20 @@ describe("CollectionsPage", () => {
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({ title: "Finals", description: null });
       expect(pushMock).toHaveBeenCalledWith("/collections/created-1/builder");
+    });
+  });
+
+  it("passes the user's primaryCollectionId through to DashboardStudyPlanSection", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "goal-1" });
+
+    render(<CollectionsPageClient />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("dashboard-study-plan-section")).toHaveAttribute(
+        "data-primary-collection-id",
+        "goal-1",
+      );
     });
   });
 });
