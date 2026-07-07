@@ -213,4 +213,53 @@ describe("DashboardStudyPlanSection", () => {
     expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
   });
+
+  it("shows the owned Primary Review Set instead of the course/program recommendation", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { ...publicPlan, id: "primary-goal-1", visibility: "PRIVATE", sourcePlanId: null, childCount: 2 },
+    ]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        primaryCollectionId="primary-goal-1"
+        viewAllHref="/collections/published"
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Primary Review Set" })).toBeInTheDocument();
+    expect(screen.queryByText("LET")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open this plan" }));
+
+    expect(adoptGoal).not.toHaveBeenCalled();
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/collections/primary-goal-1");
+  });
+
+  it("falls back to the course/program recommendation when the primary reference isn't found", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        primaryCollectionId="stale-primary-id"
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+  });
+
+  it("renders nothing while the primary lookup is still pending", () => {
+    (listCollections as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <DashboardStudyPlanSection courseProgram={null} profileType="STUDENT" primaryCollectionId="primary-goal-1" />,
+    );
+
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+  });
 });

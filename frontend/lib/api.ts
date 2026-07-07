@@ -750,6 +750,8 @@ export type MeResponse = {
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   productOnboardingCompletedAt: string | null;
+  primaryCollectionId: string | null;
+  studyDaysPerWeek: number | null;
   studyPackCount: number;
   role: UserRole;
   status: "ACTIVE" | "SUSPENDED" | "PENDING_DELETION";
