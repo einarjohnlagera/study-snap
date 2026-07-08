@@ -8,6 +8,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   clearCollectionTargetDate,
+  clearCompanion,
   clearPrimaryCollection,
   getCollection,
   getCollectionGoal,
@@ -16,6 +17,7 @@ import {
   getPlanReadiness,
   listCoursePrograms,
   listNotes,
+  setCompanion,
   setPrimaryCollection,
   trackAnalyticsEvent,
   updateCollection,
@@ -62,6 +64,7 @@ jest.mock("@/lib/api", () => {
     addCollectionItems: jest.fn(),
     ApiRequestError,
     clearCollectionTargetDate: jest.fn(),
+    clearCompanion: jest.fn(),
     clearPrimaryCollection: jest.fn(),
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
@@ -71,6 +74,7 @@ jest.mock("@/lib/api", () => {
     getPlanReadiness: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
+    setCompanion: jest.fn(),
     setPrimaryCollection: jest.fn(),
     trackAnalyticsEvent: jest.fn(),
     updateCollection: jest.fn(),
@@ -89,6 +93,7 @@ function collection(overrides: Record<string, unknown> = {}) {
     courseProgram: null,
     estimatedStudyHours: null,
     targetCompletionDate: null,
+    companion: null,
     sourcePlanId: null,
     parentCollectionId: null,
     childCount: 0,
@@ -141,6 +146,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     visibility: "PRIVATE",
     courseProgram: null,
     targetCompletionDate: null,
+    companion: null,
     sourcePlanId: null,
     parentCollectionId: null,
     itemCount: 0,
@@ -272,6 +278,7 @@ describe("CollectionDetailPageClient", () => {
     replaceMock.mockReset();
     (addCollectionItems as jest.Mock).mockReset();
     (clearCollectionTargetDate as jest.Mock).mockReset();
+    (clearCompanion as jest.Mock).mockReset();
     (clearPrimaryCollection as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
@@ -279,6 +286,7 @@ describe("CollectionDetailPageClient", () => {
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
+    (setCompanion as jest.Mock).mockReset();
     (setPrimaryCollection as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
@@ -289,6 +297,8 @@ describe("CollectionDetailPageClient", () => {
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
     (listNotes as jest.Mock).mockResolvedValue([]);
     (updateNoteVisibility as jest.Mock).mockResolvedValue(undefined);
+    (setCompanion as jest.Mock).mockResolvedValue(collection());
+    (clearCompanion as jest.Mock).mockResolvedValue(collection({ companion: null }));
     (setPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
     (clearPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
@@ -521,6 +531,215 @@ describe("CollectionDetailPageClient", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.getByRole("menuitem", { name: "Remove as primary" })).toBeInTheDocument();
+  });
+
+  it("shows the companion editor action for admins on a top-level leaf collection", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({ childCount: 0, parentCollectionId: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+
+    expect(screen.getByRole("menuitem", { name: "Manage Companion" })).toBeInTheDocument();
+  });
+
+  it("shows the companion editor action for admins on the Goal view", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+
+    expect(screen.getByRole("menuitem", { name: "Manage Companion" })).toBeInTheDocument();
+  });
+
+  it("hides the companion editor action for non-admins", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Manage Companion" })).not.toBeInTheDocument();
+  });
+
+  it("hides the companion editor action for child Subject plans", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "goal-1") {
+        return Promise.resolve(collection({ id: "goal-1", title: "Parent Goal", childCount: 1 }));
+      }
+      return Promise.resolve(collection({ parentCollectionId: "goal-1" }));
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-2" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Manage Companion" })).not.toBeInTheDocument();
+  });
+
+  it("seeds the companion editor from existing content", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: "Review one section per day.",
+        commonMistakes: "Skipping practice questions.",
+        faq: [{ question: "How long should I study?", answer: "Use the target date." }],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+
+    expect(screen.getByLabelText("Overview")).toHaveValue("Start with the foundations.");
+    expect(screen.getByLabelText("Study Strategy")).toHaveValue("Review one section per day.");
+    expect(screen.getByLabelText("Common Mistakes")).toHaveValue("Skipping practice questions.");
+    expect(screen.getByLabelText("Question 1")).toHaveValue("How long should I study?");
+    expect(screen.getByLabelText("Answer 1")).toHaveValue("Use the target date.");
+    expect(screen.getByRole("button", { name: "Remove Companion" })).toBeInTheDocument();
+  });
+
+  it("opens an empty companion editor when no companion exists", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+
+    expect(screen.getByLabelText("Overview")).toHaveValue("");
+    expect(screen.getByLabelText("Study Strategy")).toHaveValue("");
+    expect(screen.getByLabelText("Common Mistakes")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Remove Companion" })).not.toBeInTheDocument();
+  });
+
+  it("adds and removes companion FAQ rows by index", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add question" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add question" }));
+    fireEvent.change(screen.getByLabelText("Question 1"), { target: { value: "First question" } });
+    fireEvent.change(screen.getByLabelText("Question 2"), { target: { value: "Second question" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]!);
+
+    expect(screen.getByLabelText("Question 1")).toHaveValue("Second question");
+  });
+
+  it("saves companion content and applies the returned collection locally", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (setCompanion as jest.Mock).mockResolvedValue(collection({
+      title: "Updated Companion Plan",
+      companion: {
+        overview: "Overview draft",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [{ question: "What now?", answer: "Practice." }],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.change(screen.getByLabelText("Overview"), { target: { value: "Overview draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add question" }));
+    fireEvent.change(screen.getByLabelText("Question 1"), { target: { value: "What now?" } });
+    fireEvent.change(screen.getByLabelText("Answer 1"), { target: { value: "Practice." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(setCompanion).toHaveBeenCalledWith("collection-1", {
+        overview: "Overview draft",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [{ question: "What now?", answer: "Practice." }],
+      });
+    });
+    expect(await screen.findByRole("heading", { name: "Updated Companion Plan" })).toBeInTheDocument();
+  });
+
+  it("keeps companion input visible when saving fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (setCompanion as jest.Mock).mockRejectedValue(new Error("Could not save this Companion."));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.change(screen.getByLabelText("Overview"), { target: { value: "Preserve this draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Could not save this Companion.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overview")).toHaveValue("Preserve this draft");
+  });
+
+  it("clears an existing companion and applies the returned collection locally", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Existing overview",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (clearCompanion as jest.Mock).mockResolvedValue(collection({ title: "Companion Removed", companion: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Companion" }));
+
+    await waitFor(() => {
+      expect(clearCompanion).toHaveBeenCalledWith("collection-1");
+    });
+    expect(await screen.findByRole("heading", { name: "Companion Removed" })).toBeInTheDocument();
+  });
+
+  it("keeps companion state unchanged when removing fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Existing overview",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (clearCompanion as jest.Mock).mockRejectedValue(new Error("Could not remove this Companion."));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Companion" }));
+
+    expect(await screen.findByText("Could not remove this Companion.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overview")).toHaveValue("Existing overview");
   });
 
   it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
