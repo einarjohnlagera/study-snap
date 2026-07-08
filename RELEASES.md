@@ -16,7 +16,7 @@ Anti-drift: no new backend endpoint or data model for the discovery slice (the u
 
 ### Shipped
 
-_(nothing yet)_
+- **Browse All Official Review Sets (frontend).** `/collections/published` now keeps the course/program-scoped Recommended section and adds a `#browse-all` "Browse All Official ..." section beneath it that calls the existing unfiltered public collections endpoint, sorts alphabetically by title, and reuses `PublicStudyPlanCard` with the same adopted/continue state. The Browse All section has independent loading/error/empty states and still renders when the learner has no course/program set. The shared Dashboard/Collections empty-state card now clarifies that no official set exists for the learner's track yet and links to `/collections/published#browse-all`.
 
 ---
 

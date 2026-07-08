@@ -146,11 +146,22 @@ export function DashboardStudyPlanSection({
           <h2 className="text-lg font-semibold sm:text-xl">Recommended {labels.singular}</h2>
           <p className="text-xs text-foreground/65">{normalizedCourseProgram}</p>
         </div>
-        <Card className="space-y-1.5 border-dashed p-4 sm:p-6">
-          <CardTitle>No curated {labels.plural.toLowerCase()} for {normalizedCourseProgram} yet</CardTitle>
-          <CardDescription>
-            We add curated {labels.plural.toLowerCase()} per track. Check back soon, or build your own above.
-          </CardDescription>
+        <Card className="space-y-3 border-dashed p-4 sm:p-6">
+          <div className="space-y-1.5">
+            <CardTitle>
+              We don&apos;t have an official {labels.singular.toLowerCase()} for {normalizedCourseProgram} yet
+            </CardTitle>
+            <CardDescription>
+              We add curated {labels.plural.toLowerCase()} per track. Check back soon, build your own above, or
+              browse every official set that is already public.
+            </CardDescription>
+          </div>
+          <Link
+            href="/collections/published#browse-all"
+            className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+          >
+            Browse all {labels.plural.toLowerCase()}
+          </Link>
         </Card>
       </section>
     );
