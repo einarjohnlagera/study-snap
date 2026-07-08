@@ -376,6 +376,9 @@ function PlanHeroCard({
   terminalFooter?: ReactNode;
   onPublishClick: () => void;
 }>) {
+  // Shown only when sourcePlanId != null (adopted from a public source) — nothing renders for
+  // self-created collections; unlabeled implies "yours," matching the /collections list treatment.
+  const adopted = Boolean(collection.sourcePlanId);
   const estimatedStudyHours = collection.estimatedStudyHours && collection.estimatedStudyHours > 0
     ? collection.estimatedStudyHours
     : null;
@@ -397,6 +400,11 @@ function PlanHeroCard({
               </span>
             ) : null}
             {statusBadge}
+            {adopted ? (
+              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
+                Adopted
+              </span>
+            ) : null}
             {isAdmin ? (
               <button
                 type="button"

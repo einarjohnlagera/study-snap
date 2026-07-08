@@ -358,6 +358,39 @@ describe("CollectionDetailPageClient", () => {
     expect(getPlanReadiness).not.toHaveBeenCalled();
   });
 
+  it("shows an Adopted badge on the leaf view only when sourcePlanId is set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Adopted")).toBeInTheDocument();
+  });
+
+  it("hides the Adopted badge on the leaf view for a self-created collection", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByText("Adopted")).not.toBeInTheDocument();
+  });
+
+  it("shows an Adopted badge on the Goal view only when sourcePlanId is set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      sourcePlanId: "source-1",
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("Adopted")).toBeInTheDocument();
+  });
+
   it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({

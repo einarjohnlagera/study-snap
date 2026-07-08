@@ -48,6 +48,16 @@ function CollectionExecutionStatusBadge({ collection }: Readonly<{ collection: N
   );
 }
 
+// Shown only when sourcePlanId != null (adopted from a public source) — nothing renders for
+// self-created collections; unlabeled implies "yours," matching common fork/copy UX patterns.
+function AdoptedBadge() {
+  return (
+    <span className="rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground/65">
+      Adopted
+    </span>
+  );
+}
+
 function formatRelativeUpdatedAt(value: string): string {
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) {
@@ -289,6 +299,7 @@ export function CollectionsPageClient() {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
                   <div className="flex flex-wrap items-center gap-2">
                     <span>{formatCollectionScope(collection)}</span>
+                    {collection.sourcePlanId ? <AdoptedBadge /> : null}
                     {collection.childCount === 0 ? <CollectionExecutionStatusBadge collection={collection} /> : null}
                   </div>
                   <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>
