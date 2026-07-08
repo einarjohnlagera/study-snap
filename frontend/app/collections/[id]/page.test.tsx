@@ -8,6 +8,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   clearCollectionTargetDate,
+  clearPrimaryCollection,
   getCollection,
   getCollectionGoal,
   getMe,
@@ -15,6 +16,7 @@ import {
   getPlanReadiness,
   listCoursePrograms,
   listNotes,
+  setPrimaryCollection,
   trackAnalyticsEvent,
   updateCollection,
   updateCollectionVisibility,
@@ -60,6 +62,7 @@ jest.mock("@/lib/api", () => {
     addCollectionItems: jest.fn(),
     ApiRequestError,
     clearCollectionTargetDate: jest.fn(),
+    clearPrimaryCollection: jest.fn(),
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
@@ -68,6 +71,7 @@ jest.mock("@/lib/api", () => {
     getPlanReadiness: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
+    setPrimaryCollection: jest.fn(),
     trackAnalyticsEvent: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
@@ -149,6 +153,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     weeksRemaining: null,
     conceptsRemaining: null,
     todaysConceptBudget: null,
+    weeklyFocusByDay: [],
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
     children: [
@@ -162,6 +167,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
         dueConcepts: 2,
         notPracticedConcepts: 3,
         totalConcepts: 10,
+        todaysConceptBudget: null,
       },
       {
         collectionId: "child-2",
@@ -173,6 +179,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
         dueConcepts: 2,
         notPracticedConcepts: 4,
         totalConcepts: 10,
+        todaysConceptBudget: null,
       },
     ],
     ...overrides,
@@ -265,12 +272,14 @@ describe("CollectionDetailPageClient", () => {
     replaceMock.mockReset();
     (addCollectionItems as jest.Mock).mockReset();
     (clearCollectionTargetDate as jest.Mock).mockReset();
+    (clearPrimaryCollection as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
+    (setPrimaryCollection as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
@@ -280,10 +289,12 @@ describe("CollectionDetailPageClient", () => {
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
     (listNotes as jest.Mock).mockResolvedValue([]);
     (updateNoteVisibility as jest.Mock).mockResolvedValue(undefined);
+    (setPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
+    (clearPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
-    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null });
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: null });
     (updateStudyDaysPerWeek as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null });
     (getNoteConceptCounts as jest.Mock).mockResolvedValue({});
     (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
@@ -358,6 +369,160 @@ describe("CollectionDetailPageClient", () => {
     expect(getPlanReadiness).not.toHaveBeenCalled();
   });
 
+  it("shows an Adopted badge on the leaf view only when sourcePlanId is set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Adopted")).toBeInTheDocument();
+  });
+
+  it("hides the Adopted badge on the leaf view for a self-created collection", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByText("Adopted")).not.toBeInTheDocument();
+  });
+
+  it("shows an Adopted badge on the Goal view only when sourcePlanId is set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      sourcePlanId: "source-1",
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("Adopted")).toBeInTheDocument();
+  });
+
+  it("sets a top-level collection as primary from the detail menu", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Set as primary" }));
+
+    await waitFor(() => {
+      expect(setPrimaryCollection).toHaveBeenCalledWith("collection-1");
+    });
+    expect(screen.getByText("Primary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.getByRole("menuitem", { name: "Remove as primary" })).toBeInTheDocument();
+  });
+
+  it("removes primary status from the detail menu when the collection is already primary", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: "collection-1" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(await screen.findByText("Primary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove as primary" }));
+
+    await waitFor(() => {
+      expect(clearPrimaryCollection).toHaveBeenCalledWith("collection-1");
+    });
+    expect(screen.queryByText("Primary")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.getByRole("menuitem", { name: "Set as primary" })).toBeInTheDocument();
+  });
+
+  it("keeps primary UI unchanged and shows the error banner when setting primary fails", async () => {
+    (setPrimaryCollection as jest.Mock).mockRejectedValue(new Error("Request failed"));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Set as primary" }));
+
+    expect(await screen.findByText("Could not set this as your primary review set.")).toBeInTheDocument();
+    expect(screen.queryByText("Primary")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.getByRole("menuitem", { name: "Set as primary" })).toBeInTheDocument();
+  });
+
+  it("shows the primary action on a childless top-level leaf collection", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ childCount: 0, parentCollectionId: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+
+    expect(screen.getByRole("menuitem", { name: "Set as primary" })).toBeInTheDocument();
+  });
+
+  it("hides the primary action for a child Subject plan", async () => {
+    (getCollection as jest.Mock).mockImplementation((id: string) => {
+      if (id === "goal-1") {
+        return Promise.resolve(collection({ id: "goal-1", title: "Parent Goal", childCount: 1 }));
+      }
+      return Promise.resolve(collection({ parentCollectionId: "goal-1" }));
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+
+    expect(screen.queryByRole("menuitem", { name: "Set as primary" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Remove as primary" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the detail page usable when loading primary state fails", async () => {
+    (getMe as jest.Mock).mockRejectedValue(new Error("Profile unavailable"));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+
+    expect(screen.getByRole("menuitem", { name: "Set as primary" })).toBeInTheDocument();
+  });
+
+  it("shows primary status on initial load when getMe returns the collection as primary", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: "collection-1" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(await screen.findByText("Primary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.getByRole("menuitem", { name: "Remove as primary" })).toBeInTheDocument();
+  });
+
+  it("shows the primary badge and toggle action on the Goal view", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: "collection-1" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(await screen.findByText("Primary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    expect(screen.getByRole("menuitem", { name: "Remove as primary" })).toBeInTheDocument();
+  });
+
   it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
@@ -383,6 +548,82 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+  });
+
+  it("shows the This Week countdown card on a childless top-level plan while still rendering the leaf view", async () => {
+    // Regression test: a top-level collection with zero children (a flat "leaf" Study Plan, not a
+    // Goal with Subject plans) can still carry a target date — the countdown must appear even though
+    // this collection renders the leaf view (Build/notes list), not the Goal view (children list).
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("This Week")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
+    expect(screen.getByText("11 concepts remaining · 4 concepts today")).toBeInTheDocument();
+    // Still the leaf view — not switched to the Goal view's children list.
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText(/Subject Plans?$/)).not.toBeInTheDocument();
+  });
+
+  it("does not show the This Week countdown card on a childless top-level plan with no target date", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+  });
+
+  it("does not show the post-adopt target-date tip on a freshly-adopted childless leaf plan", async () => {
+    // Leaf-plan adoption is documented to never show this tip (it's Goal-adoption-specific) — must
+    // still hold now that goalDetail is also populated for childless top-level collections.
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText("Set a target completion date to see your weekly countdown and daily study budget."))
+      .not.toBeInTheDocument();
+  });
+
+  it("refetches the leaf-view countdown after editing a childless top-level plan's target date", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValueOnce(goalDetail({ childCount: 0, children: [] }));
+    (updateCollection as jest.Mock).mockResolvedValue(
+      collection({ title: "Midterm Study Plan", childCount: 0, targetCompletionDate: "2026-12-01" }),
+    );
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+
+    (getCollectionGoal as jest.Mock).mockResolvedValueOnce(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("This Week")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
   });
 
   it("shows a post-adopt target-date tip for a dateless Goal", async () => {
@@ -1223,7 +1464,7 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByLabelText("Estimated study time (hours)")).toBeInTheDocument();
     expect(screen.queryByLabelText("Target completion date")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Study days per week")).not.toBeInTheDocument();
-    expect(getMe).not.toHaveBeenCalled();
+    expect(getMe).toHaveBeenCalledTimes(1);
   });
 
   it("sets the target completion date via the general metadata PATCH", async () => {

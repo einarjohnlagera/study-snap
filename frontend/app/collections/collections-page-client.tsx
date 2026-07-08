@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Star } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
@@ -44,6 +45,26 @@ function CollectionExecutionStatusBadge({ collection }: Readonly<{ collection: N
   return (
     <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${COLLECTION_STATUS_CLASS_NAMES[status]}`}>
       {COLLECTION_STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+// Shown only when sourcePlanId != null (adopted from a public source) — nothing renders for
+// self-created collections; unlabeled implies "yours," matching common fork/copy UX patterns.
+function AdoptedBadge() {
+  return (
+    <span className="rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground/65">
+      Adopted
+    </span>
+  );
+}
+
+// Filled (not outline) so it doesn't blend with the other neutral/tinted outline pills in the same row.
+function PrimaryBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-indigo-500">
+      <Star className="h-3 w-3 fill-current" aria-hidden="true" />
+      Primary
     </span>
   );
 }
@@ -235,6 +256,21 @@ export function CollectionsPageClient() {
     void Promise.resolve().then(loadProfile);
   }, [loadCollections, loadProfile, router]);
 
+  // Primary always leads the grid; the rest keep the backend's updatedAt-desc order. Derived
+  // (not sorted at fetch) because collections/primaryCollectionId arrive from two independent
+  // async calls and must re-order once both land, in either arrival order.
+  const orderedCollections = useMemo(() => {
+    if (!primaryCollectionId) {
+      return collections;
+    }
+    const primaryIndex = collections.findIndex((collection) => collection.id === primaryCollectionId);
+    if (primaryIndex <= 0) {
+      return collections;
+    }
+    const primary = collections[primaryIndex];
+    return [primary, ...collections.slice(0, primaryIndex), ...collections.slice(primaryIndex + 1)];
+  }, [collections, primaryCollectionId]);
+
   const headerAction = (
     <ResponsiveActionButton
       action="create"
@@ -277,7 +313,7 @@ export function CollectionsPageClient() {
 
       {loadState === "ready" && collections.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {collections.map((collection) => (
+          {orderedCollections.map((collection) => (
             <Link key={collection.id} href={`/collections/${collection.id}`} className="group block">
               <Card className="flex min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
                 <div className="space-y-2">
@@ -289,6 +325,8 @@ export function CollectionsPageClient() {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
                   <div className="flex flex-wrap items-center gap-2">
                     <span>{formatCollectionScope(collection)}</span>
+                    {collection.id === primaryCollectionId ? <PrimaryBadge /> : null}
+                    {collection.sourcePlanId ? <AdoptedBadge /> : null}
                     {collection.childCount === 0 ? <CollectionExecutionStatusBadge collection={collection} /> : null}
                   </div>
                   <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>

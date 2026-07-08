@@ -1,5 +1,30 @@
 # RELEASES.md - NoteLib
 
+## v0.40.1 - Public Review Set Reachability
+
+**Status: Released**
+
+Theme: a polish fast-follow that closes a narrow, verified discoverability gap — PUBLIC Official Review Sets outside a learner's own course/program are technically public but unreachable through any UI path today — and picks up the weekly-scheduling Phase 2 deferred out of v0.40.0. See `docs/product/ROADMAP.md` for the full scope and the design rationale (why the broader discovery/Explore redesign was rejected in favor of this narrow fix).
+
+### Planned Scope
+
+- **Browse All Official Review Sets (frontend, dedicated page only).** New section on `/collections/published` below the existing course/program-scoped Recommended row, calling the already-supported unfiltered `listPublicStudyPlans({})` (no backend change — `NoteCollectionService.listPublic` already accepts `courseProgram == null`). Dashboard gets only a "Browse all Review Sets" link to the dedicated page, not the inline section (it's a glance widget, not a browse surface). Ships with a deterministic default sort (alphabetical or grouped by course/program header). Rewire the existing `browseWhenEmpty`-gated empty-state card rather than build a parallel component. Duplication between Recommended and Browse All is expected (featured-row + full-catalog pattern).
+- **Empty-state copy fix (frontend).** The misleading "No curated Review Sets for X yet" card means "no *official curated* set for your track," not "you have none" — a single-string fix folded into the same card being rewired.
+- **Weekly scheduling Phase 2 (backend).** The weighted largest-remainder subject distribution + day-of-week interleaving deferred out of v0.40.0, layered over the existing v0.40.0 countdown derivation. Gated on Phase 1's simple countdown proving useful in real usage before implementation starts.
+
+Anti-drift: no new backend endpoint or data model for the discovery slice (the unfiltered `listPublic` path already exists); Public Library preserved as a distinct discovery path (not absorbed); no Explore page, nav redesign, Dashboard redesign, ranking engine, Trending/Popular, or Community Review Sets — all remain deferred to the Review-Set-Centric Navigation direction. Phase 2 scheduling stays deterministic (no LLM), reusing the v0.40.0 readiness rollup.
+
+### Shipped
+
+- **Browse All Official Review Sets (frontend).** `/collections/published` now keeps the course/program-scoped Recommended section and adds a `#browse-all` "Browse All Official ..." section beneath it that calls the existing unfiltered public collections endpoint, sorts alphabetically by title, and reuses `PublicStudyPlanCard` with the same adopted/continue state. The Browse All section has independent loading/error/empty states and still renders when the learner has no course/program set. The shared Dashboard/Collections empty-state card now clarifies that no official set exists for the learner's track yet and links to `/collections/published#browse-all`.
+- **Weekly scheduling Phase 2 (backend).** `GET /collections/{id}/goal` now adds per-child `todaysConceptBudget` values using Hamilton largest-remainder allocation over each child Subject plan's not-started concepts, with due concepts as each subject's floor and exact sum parity with the Goal-level budget. The response also includes `weeklyFocusByDay`, a deterministic weekday-to-child-id focus template derived from `studyDaysPerWeek` and child display order. Still pure derivation: no stored schedule, no new endpoint, no AI call.
+- **Manual Primary Review Set action (frontend).** A top-level collection's detail page now shows a `Primary` badge when it matches `GET /auth/me.primaryCollectionId` and adds `Set as primary` / `Remove as primary` actions to the existing overflow menu. The action is available for any owned top-level collection (`parentCollectionId === null`), including childless leaf plans, and excluded from child Subject plans. It uses the existing `PUT`/`DELETE /collections/{id}/primary` endpoints and updates the page-local badge/menu state immediately on success.
+- **Primary Review Set polish (frontend).** The `/collections` list page now shows the same `Primary` badge on the matching card and sorts the primary collection to the front of the grid (the rest keep the existing `updatedAt`-desc order, unchanged when no primary is set). The `Primary` badge on both the list page and the detail page is now a filled indigo pill with a `Star` icon instead of the neutral outline style it briefly shared with `Adopted`/`Private`, which made it hard to tell apart from `Private` on the detail page.
+- **"This Week" countdown now shows on childless top-level Review Sets (frontend fix).** A top-level collection with zero Subject plans (a flat, notes-holding "leaf" plan) could have a target date set via Edit, but the countdown card never appeared — the page only fetched the Goal endpoint when `childCount > 0`, a documented limitation from v0.40.0 signoff. `goalDetail` is now fetched for any top-level collection (`parentCollectionId === null`); a new `isGoalView` flag (still gated on `childCount > 0`) keeps the leaf view rendering as before, and the leaf view now shows `GoalWeeklyCountdownCard` directly above its own readiness card. The post-adopt guidance tip stays Goal-adoption-specific (unaffected, still never shows on leaf-plan adoption).
+- **"Adopted" ownership badge on Review Sets (frontend).** A small "Adopted" pill now shows on the `/collections` list page cards and on a collection's own detail page (next to Published/Private) whenever `sourcePlanId != null` — closes an existing free backlog item. Nothing shown for self-created collections. No backend change; showing the original author's name stays separate, later work.
+
+---
+
 ## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
 
 **Status: Released**

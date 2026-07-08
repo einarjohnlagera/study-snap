@@ -26,6 +26,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Star,
   Target,
   Trophy,
   Trash2,
@@ -54,6 +55,7 @@ export type ActionIconName =
   | "help"
   | "import"
   | "open"
+  | "primary"
   | "private"
   | "profile"
   | "progress"
@@ -88,6 +90,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   help: HelpCircle,
   import: Upload,
   open: ArrowUpRight,
+  primary: Star,
   private: Lock,
   profile: User,
   progress: BarChart2,

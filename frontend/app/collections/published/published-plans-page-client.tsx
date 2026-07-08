@@ -40,40 +40,73 @@ export function PublishedPlansPageClient() {
   const router = useRouter();
   const profileType = useMemo(() => getAuthUser()?.profileType ?? null, []);
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [recommendedState, setRecommendedState] = useState<LoadState>("loading");
+  const [browseAllState, setBrowseAllState] = useState<LoadState>("loading");
   const [courseProgram, setCourseProgram] = useState<string | null>(null);
   const [plans, setPlans] = useState<PlanWithAdoption[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [browseAllPlans, setBrowseAllPlans] = useState<PlanWithAdoption[]>([]);
+  const [recommendedError, setRecommendedError] = useState<string | null>(null);
+  const [browseAllError, setBrowseAllError] = useState<string | null>(null);
+
+  const joinAdoptedCollections = useCallback((
+    publicPlans: NoteCollectionSummary[],
+    personalCollections: NoteCollectionSummary[],
+  ): PlanWithAdoption[] => publicPlans.map((plan) => ({
+    plan,
+    adoptedCollection:
+      personalCollections.find((collection) => collection.sourcePlanId === plan.id) ?? null,
+  })), []);
+
+  const sortPlansByTitle = useCallback((publicPlans: NoteCollectionSummary[]): NoteCollectionSummary[] => (
+    [...publicPlans].sort((first, second) => first.title.localeCompare(second.title, undefined, { sensitivity: "base" }))
+  ), []);
 
   const loadPlans = useCallback(async () => {
-    setLoadState("loading");
-    setLoadError(null);
-    try {
-      const me = await getMe();
-      const normalized = normalizeCourseProgram(me.courseProgram);
-      setCourseProgram(normalized);
-      if (!normalized) {
-        setPlans([]);
-        setLoadState("ready");
-        return;
+    setRecommendedState("loading");
+    setBrowseAllState("loading");
+    setRecommendedError(null);
+    setBrowseAllError(null);
+
+    const personalCollectionsPromise = listCollections().catch(() => []);
+
+    const loadRecommended = async () => {
+      try {
+        const me = await getMe();
+        const normalized = normalizeCourseProgram(me.courseProgram);
+        setCourseProgram(normalized);
+        if (!normalized) {
+          setPlans([]);
+          setRecommendedState("ready");
+          return;
+        }
+        const [publicPlans, personalCollections] = await Promise.all([
+          listPublicStudyPlans({ courseProgram: normalized }),
+          personalCollectionsPromise,
+        ]);
+        setPlans(joinAdoptedCollections(publicPlans, personalCollections));
+        setRecommendedState("ready");
+      } catch (error) {
+        setRecommendedError(error instanceof Error ? error.message : "Could not load published plans.");
+        setRecommendedState("error");
       }
-      const [publicPlans, personalCollections] = await Promise.all([
-        listPublicStudyPlans({ courseProgram: normalized }),
-        listCollections(),
-      ]);
-      setPlans(
-        publicPlans.map((plan) => ({
-          plan,
-          adoptedCollection:
-            personalCollections.find((collection) => collection.sourcePlanId === plan.id) ?? null,
-        })),
-      );
-      setLoadState("ready");
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load published plans.");
-      setLoadState("error");
-    }
-  }, []);
+    };
+
+    const loadBrowseAll = async () => {
+      try {
+        const [publicPlans, personalCollections] = await Promise.all([
+          listPublicStudyPlans({}),
+          personalCollectionsPromise,
+        ]);
+        setBrowseAllPlans(joinAdoptedCollections(sortPlansByTitle(publicPlans), personalCollections));
+        setBrowseAllState("ready");
+      } catch (error) {
+        setBrowseAllError(error instanceof Error ? error.message : "Could not load official review sets.");
+        setBrowseAllState("error");
+      }
+    };
+
+    await Promise.allSettled([loadRecommended(), loadBrowseAll()]);
+  }, [joinAdoptedCollections, sortPlansByTitle]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -96,19 +129,19 @@ export function PublishedPlansPageClient() {
         }
       />
 
-      {loadState === "loading" ? <PlanSkeletonGrid /> : null}
+      {recommendedState === "loading" ? <PlanSkeletonGrid /> : null}
 
-      {loadState === "error" ? (
+      {recommendedState === "error" ? (
         <Card className="space-y-4 p-6">
           <CardTitle>Could not load {labels.plural.toLowerCase()}</CardTitle>
-          <CardDescription>{loadError ?? "Please try again."}</CardDescription>
+          <CardDescription>{recommendedError ?? "Please try again."}</CardDescription>
           <Button type="button" variant="outline" onClick={() => void loadPlans()}>
             Retry
           </Button>
         </Card>
       ) : null}
 
-      {loadState === "ready" && !courseProgram ? (
+      {recommendedState === "ready" && !courseProgram ? (
         <Card className="space-y-4 p-6 text-center">
           <CardTitle>Set your course or program first</CardTitle>
           <CardDescription>
@@ -126,7 +159,7 @@ export function PublishedPlansPageClient() {
         </Card>
       ) : null}
 
-      {loadState === "ready" && courseProgram && plans.length === 0 ? (
+      {recommendedState === "ready" && courseProgram && plans.length === 0 ? (
         <Card className="space-y-4 p-6 text-center">
           <CardTitle>No published {labels.plural.toLowerCase()} yet</CardTitle>
           <CardDescription>
@@ -144,13 +177,46 @@ export function PublishedPlansPageClient() {
         </Card>
       ) : null}
 
-      {loadState === "ready" && courseProgram && plans.length > 0 ? (
+      {recommendedState === "ready" && courseProgram && plans.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {plans.map(({ plan, adoptedCollection }) => (
             <PublicStudyPlanCard key={plan.id} plan={plan} adoptedCollection={adoptedCollection} profileType={profileType} />
           ))}
         </div>
       ) : null}
+
+      <section id="browse-all" className="space-y-3 sm:space-y-4">
+        <h2 className="text-lg font-semibold sm:text-xl">Browse All Official {labels.plural}</h2>
+
+        {browseAllState === "loading" ? <PlanSkeletonGrid /> : null}
+
+        {browseAllState === "error" ? (
+          <Card className="space-y-4 p-6">
+            <CardTitle>Could not load official {labels.plural.toLowerCase()}</CardTitle>
+            <CardDescription>{browseAllError ?? "Please try again."}</CardDescription>
+            <Button type="button" variant="outline" onClick={() => void loadPlans()}>
+              Retry
+            </Button>
+          </Card>
+        ) : null}
+
+        {browseAllState === "ready" && browseAllPlans.length === 0 ? (
+          <Card className="space-y-4 p-6 text-center">
+            <CardTitle>No Official {labels.plural} have been published yet</CardTitle>
+            <CardDescription>
+              Check back later for curated sets from the NoteLib team.
+            </CardDescription>
+          </Card>
+        ) : null}
+
+        {browseAllState === "ready" && browseAllPlans.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {browseAllPlans.map(({ plan, adoptedCollection }) => (
+              <PublicStudyPlanCard key={plan.id} plan={plan} adoptedCollection={adoptedCollection} profileType={profileType} />
+            ))}
+          </div>
+        ) : null}
+      </section>
     </main>
   );
 }

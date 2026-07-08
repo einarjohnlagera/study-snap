@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, ChevronDown, Clock, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Clock, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   clearCollectionTargetDate,
+  clearPrimaryCollection,
   deleteCollection,
   getCollection,
   getCollectionGoal,
@@ -40,6 +41,7 @@ import {
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
+  setPrimaryCollection,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
@@ -363,6 +365,7 @@ function PlanHeroCard({
   collection,
   eyebrowLabel,
   statusBadge,
+  isPrimary,
   isAdmin,
   actions,
   terminalFooter,
@@ -371,11 +374,15 @@ function PlanHeroCard({
   collection: NoteCollectionDetail;
   eyebrowLabel: string;
   statusBadge: ReactNode;
+  isPrimary: boolean;
   isAdmin: boolean;
   actions: ReactNode;
   terminalFooter?: ReactNode;
   onPublishClick: () => void;
 }>) {
+  // Shown only when sourcePlanId != null (adopted from a public source) — nothing renders for
+  // self-created collections; unlabeled implies "yours," matching the /collections list treatment.
+  const adopted = Boolean(collection.sourcePlanId);
   const estimatedStudyHours = collection.estimatedStudyHours && collection.estimatedStudyHours > 0
     ? collection.estimatedStudyHours
     : null;
@@ -397,6 +404,17 @@ function PlanHeroCard({
               </span>
             ) : null}
             {statusBadge}
+            {adopted ? (
+              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
+                Adopted
+              </span>
+            ) : null}
+            {isPrimary ? (
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
+                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                Primary
+              </span>
+            ) : null}
             {isAdmin ? (
               <button
                 type="button"
@@ -1490,6 +1508,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [sectionCounts, setSectionCounts] = useState<Map<string, SectionReadiness> | null>(null);
   const [planReadiness, setPlanReadiness] = useState<PlanReadinessResponse | null>(null);
   const [planReadinessLoadState, setPlanReadinessLoadState] = useState<ReadinessLoadState>("idle");
+  // A top-level collection can either have child Subject plans (a "Goal") or hold notes directly (a
+  // "leaf" plan) — the two are mutually exclusive. A childless top-level collection can still carry a
+  // target date, so `goalDetail` is fetched for it too (see loadCollection below), but it renders as
+  // the leaf view, not the Goal view — this flag is the single source of truth for that branch choice.
+  const isGoalView = Boolean(goalDetail) && (collection?.childCount ?? 0) > 0;
   const [continueDismissed, setContinueDismissed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -1512,6 +1535,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
   const [justAdopted, setJustAdopted] = useState(false);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [parentTitle, setParentTitle] = useState<string | null>(null);
   const backLinkHref = collection?.parentCollectionId && parentTitle
     ? `/collections/${collection.parentCollectionId}`
@@ -1542,7 +1566,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         setNoteListLoadFailed(true);
       }
       const collectionResult = result.value;
-      const goalResult = collectionResult.childCount > 0
+      // Fetch the Goal endpoint for any top-level collection, not just ones with children today — a
+      // childless top-level ("leaf") collection can still carry a target completion date, and the
+      // countdown fields it needs are surfaced in the leaf view below (see isGoalView).
+      const goalResult = collectionResult.parentCollectionId === null
         ? await getCollectionGoal(collectionId)
         : null;
       setCollection(collectionResult);
@@ -1586,6 +1613,25 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   }, [collectionId]);
 
   useEffect(() => {
+    let mounted = true;
+    setPrimaryCollectionId(null);
+    void getMe()
+      .then((me) => {
+        if (mounted) {
+          setPrimaryCollectionId(me.primaryCollectionId ?? null);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPrimaryCollectionId(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [collectionId]);
+
+  useEffect(() => {
     setContinueDismissed(false);
     try {
       setContinueDismissed(globalThis.sessionStorage?.getItem(`${CONTINUE_DISMISS_STORAGE_PREFIX}${collectionId}`) === "true");
@@ -1595,7 +1641,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   }, [collectionId]);
 
   useEffect(() => {
-    if (loadState !== "ready" || goalDetail || items.length === 0) {
+    if (loadState !== "ready" || isGoalView || items.length === 0) {
       setSectionCounts(null);
       return;
     }
@@ -1614,10 +1660,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     return () => {
       mounted = false;
     };
-  }, [collectionId, goalDetail, items, loadState]);
+  }, [collectionId, isGoalView, items, loadState]);
 
   useEffect(() => {
-    if (loadState !== "ready" || goalDetail) {
+    if (loadState !== "ready" || isGoalView) {
       setPlanReadiness(null);
       setPlanReadinessLoadState("idle");
       return;
@@ -1640,7 +1686,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     return () => {
       mounted = false;
     };
-  }, [collectionId, goalDetail, loadState]);
+  }, [collectionId, isGoalView, loadState]);
 
   const loadNoteVisibility = useCallback(async () => {
     try {
@@ -1686,7 +1732,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     try {
       const result = await getCollection(collectionId);
       setCollection(result);
-      setGoalDetail(result.childCount > 0 ? await getCollectionGoal(collectionId) : null);
+      setGoalDetail(result.parentCollectionId === null ? await getCollectionGoal(collectionId) : null);
       setItems(sortCollectionItemsByPosition(result.items));
     } catch {
       // Keep the visible error; the page-level retry can recover if this fails too.
@@ -1767,7 +1813,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       await removeCollectionItem(collectionId, noteId);
       const result = await getCollection(collectionId);
       setCollection(result);
-      setGoalDetail(result.childCount > 0 ? await getCollectionGoal(collectionId) : null);
+      setGoalDetail(result.parentCollectionId === null ? await getCollectionGoal(collectionId) : null);
       setItems(sortCollectionItemsByPosition(result.items));
     } catch (error) {
       await refetchAfterFailure(error instanceof Error ? error.message : "Could not remove this note.");
@@ -1800,6 +1846,30 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "Could not delete this collection.");
       setMutationKind(null);
+    }
+  };
+
+  const handlePrimaryToggle = async () => {
+    if (!collection) {
+      return;
+    }
+    setActionsMenuOpen(false);
+    setMutationError(null);
+    const isCurrentlyPrimary = collection.id === primaryCollectionId;
+    try {
+      if (isCurrentlyPrimary) {
+        await clearPrimaryCollection(collection.id);
+        setPrimaryCollectionId(null);
+        return;
+      }
+      await setPrimaryCollection(collection.id);
+      setPrimaryCollectionId(collection.id);
+    } catch {
+      setMutationError(
+        isCurrentlyPrimary
+          ? "Could not remove this as your primary review set."
+          : "Could not set this as your primary review set.",
+      );
     }
   };
 
@@ -1890,6 +1960,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const hasNonQuizReadyItems = quizReadyNoteIds.length < items.length;
   const hasNonPremiumReadyItems = premiumExamReadyNoteIds.length < items.length;
   const mutationInProgress = mutationKind !== null;
+  const isPrimaryCollection = collection?.id === primaryCollectionId;
+  const primaryActionLabel = isPrimaryCollection ? "Remove as primary" : "Set as primary";
   const premiumExamDisabled = noteListLoadFailed
     || !primaryExamItem
     || (terminalAction?.kind === "premium-exam" && terminalAction.mode === "board_exam" && !primaryExamStudyPackId);
@@ -1911,7 +1983,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     {
       id: "post-adopt-target-date",
       priority: 1,
-      condition: () => justAdopted && !!goalDetail && !goalDetail.targetCompletionDate,
+      // isGoalView (not raw goalDetail) preserves the pre-existing rule that leaf-plan adoption never
+      // shows this tip — goalDetail is now also populated for childless top-level collections, but the
+      // post-adopt nudge is Goal-adoption-specific (adoptGoal always produces a Goal with children).
+      condition: () => justAdopted && isGoalView && !goalDetail?.targetCompletionDate,
       message: "Set a target completion date to see your weekly countdown and daily study budget.",
     },
   ];
@@ -2009,7 +2084,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     );
   }
 
-  if (goalDetail) {
+  if (isGoalView && goalDetail) {
     return (
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
         <BackLink href={backLinkHref} label={backLinkLabel} />
@@ -2021,6 +2096,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               {goalDetail.childCount} {labels.subjectSingular}{goalDetail.childCount === 1 ? "" : "s"}
             </span>
           )}
+          isPrimary={isPrimaryCollection}
           isAdmin={isAdmin}
           onPublishClick={() => setPublishOpen(true)}
           actions={(
@@ -2059,6 +2135,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     >
                       <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
                     </button>
+                    {collection.parentCollectionId === null ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                        onClick={() => void handlePrimaryToggle()}
+                      >
+                        <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -2162,6 +2248,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready
           </span>
         )}
+        isPrimary={isPrimaryCollection}
         isAdmin={isAdmin}
         onPublishClick={() => setPublishOpen(true)}
         actions={(
@@ -2207,6 +2294,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   >
                     <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
                   </button>
+                  {collection.parentCollectionId === null ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => void handlePrimaryToggle()}
+                    >
+                      <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
@@ -2249,6 +2346,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             ) : null}
           </div>
         ) : undefined}
+      />
+
+      {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
+          is fetched for it above, and this card self-guards to null when no target date is set. */}
+      <GoalWeeklyCountdownCard
+        targetCompletionDate={goalDetail?.targetCompletionDate ?? null}
+        weeksRemaining={goalDetail?.weeksRemaining ?? null}
+        conceptsRemaining={goalDetail?.conceptsRemaining ?? null}
+        todaysConceptBudget={goalDetail?.todaysConceptBudget ?? null}
       />
 
       <section className={cn("grid gap-4", hasReadinessActions ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "")}>
@@ -2497,6 +2603,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           setCollection(saved);
           setItems(sortCollectionItemsByPosition(saved.items));
           setEditOpen(false);
+          // Same reasoning as the Goal branch's onSaved: the weekly countdown fields only exist on
+          // GoalCollectionDetailResponse, not on the NoteCollectionDetail this modal saves — refetch so
+          // an edited target date on this (possibly childless) top-level collection shows immediately.
+          if (saved.parentCollectionId === null) {
+            void getCollectionGoal(collectionId)
+              .then(setGoalDetail)
+              .catch(() => {
+                setGoalDetail((previous) => previous ? {
+                  ...previous,
+                  title: saved.title,
+                  description: saved.description,
+                  visibility: saved.visibility,
+                  courseProgram: saved.courseProgram,
+                  targetCompletionDate: saved.targetCompletionDate,
+                  updatedAt: saved.updatedAt,
+                } : previous);
+              });
+          }
         }}
       />
       <DeleteCollectionModal

@@ -135,6 +135,7 @@ function goalReadiness(overrides: Partial<GoalCollectionDetailResponse> = {}): G
     weeksRemaining: null,
     conceptsRemaining: null,
     todaysConceptBudget: null,
+    weeklyFocusByDay: [],
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     children: [],

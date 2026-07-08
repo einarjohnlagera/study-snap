@@ -11,6 +11,7 @@ public record GoalCollectionChildResponse(
         int masteredConcepts,
         int dueConcepts,
         int notPracticedConcepts,
-        int totalConcepts
+        int totalConcepts,
+        Integer todaysConceptBudget
 ) {
 }

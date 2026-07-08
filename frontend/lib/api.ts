@@ -298,6 +298,12 @@ export type GoalCollectionChildResponse = {
   dueConcepts: number;
   notPracticedConcepts: number;
   totalConcepts: number;
+  todaysConceptBudget: number | null;
+};
+
+export type WeeklyFocusDayEntry = {
+  dayOfWeek: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+  collectionIds: string[];
 };
 
 export type GoalCollectionDetailResponse = {
@@ -319,6 +325,7 @@ export type GoalCollectionDetailResponse = {
   weeksRemaining: number | null;
   conceptsRemaining: number | null;
   todaysConceptBudget: number | null;
+  weeklyFocusByDay: WeeklyFocusDayEntry[];
   createdAt: string;
   updatedAt: string;
   children: GoalCollectionChildResponse[];
@@ -3872,6 +3879,36 @@ export async function getCollectionGoal(id: string): Promise<GoalCollectionDetai
     true,
   );
   return parseApiResponse<GoalCollectionDetailResponse>(response, "Could not load goal details.");
+}
+
+export async function setPrimaryCollection(id: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/primary`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.ok) {
+    return;
+  }
+  await parseApiResponse<never>(response, "Could not set primary collection.");
+}
+
+export async function clearPrimaryCollection(id: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/primary`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.ok) {
+    return;
+  }
+  await parseApiResponse<never>(response, "Could not clear primary collection.");
 }
 
 export async function setCollectionParent(id: string, parentId: string | null): Promise<NoteCollectionDetail> {

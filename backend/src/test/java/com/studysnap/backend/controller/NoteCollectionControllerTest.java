@@ -499,6 +499,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                List.of(),
                 now,
                 now,
                 List.of()

@@ -199,7 +199,10 @@ describe("DashboardStudyPlanSection", () => {
 
     render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" browseWhenEmpty />);
 
-    expect(await screen.findByText(/No curated study plans for/i)).toBeInTheDocument();
+    expect(await screen.findByText("We don't have an official study plan for LET yet")).toBeInTheDocument();
+    expect(screen.getByText(/browse every official set that is already public/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse all study plans" }))
+      .toHaveAttribute("href", "/collections/published#browse-all");
   });
 
   it("shows a view-all link only when multiple plans match and a href is provided", async () => {

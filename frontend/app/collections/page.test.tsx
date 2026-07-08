@@ -154,6 +154,18 @@ describe("CollectionsPage", () => {
     expect(screen.queryByText("Not started")).not.toBeInTheDocument();
   });
 
+  it("shows an Adopted badge only for a collection with a sourcePlanId", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "Adopted Plan", sourcePlanId: "source-1" }),
+      buildCollectionSummary({ id: "collection-2", title: "Own Plan", sourcePlanId: null }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    await screen.findByText("Adopted Plan");
+    expect(screen.getAllByText("Adopted")).toHaveLength(1);
+  });
+
   it("shows Not started for an empty plan", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       buildCollectionSummary({ itemCount: 0, notesPracticed: 0 }),
@@ -235,6 +247,53 @@ describe("CollectionsPage", () => {
       );
     });
   });
+
+  it("shows a Primary badge only on the card matching primaryCollectionId", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "Own Plan" }),
+      buildCollectionSummary({ id: "collection-2", title: "Primary Plan" }),
+    ]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "collection-2" });
+
+    render(<CollectionsPageClient />);
+
+    await screen.findByText("Primary Plan");
+    expect(screen.getAllByText("Primary")).toHaveLength(1);
+  });
+
+  it("sorts the primary collection to the front of the grid regardless of API order", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "First By Date" }),
+      buildCollectionSummary({ id: "collection-2", title: "Second By Date" }),
+      buildCollectionSummary({ id: "collection-3", title: "Primary Plan" }),
+    ]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "collection-3" });
+
+    render(<CollectionsPageClient />);
+
+    await screen.findByText("Primary Plan");
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      "Primary Plan",
+      "First By Date",
+      "Second By Date",
+    ]);
+  });
+
+  it("keeps the API-returned order when no primary collection is set", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "First By Date" }),
+      buildCollectionSummary({ id: "collection-2", title: "Second By Date" }),
+    ]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: null });
+
+    render(<CollectionsPageClient />);
+
+    await screen.findByText("First By Date");
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    expect(headings.map((heading) => heading.textContent)).toEqual(["First By Date", "Second By Date"]);
+    expect(screen.queryByText("Primary")).not.toBeInTheDocument();
+  });
 });
 
 function buildCollectionSummary(overrides: Partial<{
@@ -244,6 +303,7 @@ function buildCollectionSummary(overrides: Partial<{
   itemCount: number;
   childCount: number;
   notesPracticed: number;
+  sourcePlanId: string | null;
 }> = {}) {
   return {
     id: overrides.id ?? "collection-1",
@@ -251,7 +311,7 @@ function buildCollectionSummary(overrides: Partial<{
     description: overrides.description ?? "Weeks 1-4",
     visibility: "PRIVATE" as const,
     courseProgram: null,
-    sourcePlanId: null,
+    sourcePlanId: overrides.sourcePlanId ?? null,
     parentCollectionId: null,
     itemCount: overrides.itemCount ?? 2,
     childCount: overrides.childCount ?? 0,

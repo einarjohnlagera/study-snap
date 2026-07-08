@@ -1384,6 +1384,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       dueConcepts: 0,
       notPracticedConcepts: 0,
       totalConcepts: 0,
+      todaysConceptBudget: null,
       items: [],
     };
     setMutationKind("add-subject");
