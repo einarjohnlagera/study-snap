@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   aggregateSectionReadiness,
   CollectionDetailPageClient,
@@ -602,13 +602,14 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Manage Companion" }));
 
-    expect(screen.getByLabelText("Overview")).toHaveValue("Start with the foundations.");
-    expect(screen.getByLabelText("Study Strategy")).toHaveValue("Review one section per day.");
-    expect(screen.getByLabelText("Common Mistakes")).toHaveValue("Skipping practice questions.");
-    expect(screen.getByLabelText("Question 1")).toHaveValue("How long should I study?");
-    expect(screen.getByLabelText("Answer 1")).toHaveValue("Use the target date.");
-    expect(screen.getByRole("button", { name: "Remove Companion" })).toBeInTheDocument();
+    expect(dialog.getByLabelText("Overview")).toHaveValue("Start with the foundations.");
+    expect(dialog.getByLabelText("Study Strategy")).toHaveValue("Review one section per day.");
+    expect(dialog.getByLabelText("Common Mistakes")).toHaveValue("Skipping practice questions.");
+    expect(dialog.getByLabelText("Question 1")).toHaveValue("How long should I study?");
+    expect(dialog.getByLabelText("Answer 1")).toHaveValue("Use the target date.");
+    expect(dialog.getByRole("button", { name: "Remove Companion" })).toBeInTheDocument();
   });
 
   it("opens an empty companion editor when no companion exists", async () => {
@@ -676,6 +677,11 @@ describe("CollectionDetailPageClient", () => {
       });
     });
     expect(await screen.findByRole("heading", { name: "Updated Companion Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByText("Overview draft")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
+    expect(screen.getByText("What now?")).toBeInTheDocument();
+    expect(screen.getByText("Practice.")).toBeInTheDocument();
   });
 
   it("keeps companion input visible when saving fails", async () => {
@@ -739,7 +745,151 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove Companion" }));
 
     expect(await screen.findByText("Could not remove this Companion.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Overview")).toHaveValue("Existing overview");
+    expect(within(screen.getByRole("dialog", { name: "Manage Companion" })).getByLabelText("Overview")).toHaveValue("Existing overview");
+  });
+
+  it("does not render a companion display card when companion is null", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Companion")).not.toBeInTheDocument();
+  });
+
+  it("does not render a companion display card for an empty draft", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: " ",
+        studyStrategy: null,
+        commonMistakes: "",
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
+  });
+
+  it("renders only populated companion prose sections", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "**Start** with the foundations.",
+        studyStrategy: " ",
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
+    expect(screen.queryByRole("heading", { name: "Study Strategy" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Common Mistakes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+  });
+
+  it("skips the companion FAQ section when every entry is blank", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [
+          { question: " ", answer: null },
+          { question: "", answer: " " },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+  });
+
+  it("renders populated companion FAQ entries and skips blank entries", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [
+          { question: " ", answer: null },
+          { question: "How should I start?", answer: "Read the **overview** first." },
+          { question: null, answer: "Then practice the weakest concepts." },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
+    expect(screen.getByText("How should I start?")).toBeInTheDocument();
+    expect(screen.getAllByTestId("summary-markdown").map((element) => element.textContent)).toEqual([
+      "Read the **overview** first.",
+      "Then practice the weakest concepts.",
+    ]);
+    expect(screen.getByText("Then practice the weakest concepts.")).toBeInTheDocument();
+    expect(screen.queryByText(/^ $/)).not.toBeInTheDocument();
+  });
+
+  it("renders the companion before Goal-view readiness content", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      items: [],
+      companion: {
+        overview: "Goal guidance first.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const companionHeading = await screen.findByRole("heading", { name: "Learning Companion" });
+    const thisWeekLabel = screen.getByText("This Week");
+
+    expect(companionHeading.compareDocumentPosition(thisWeekLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders the companion before leaf-view countdown content", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Leaf guidance first.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const companionHeading = await screen.findByRole("heading", { name: "Learning Companion" });
+    const thisWeekLabel = screen.getByText("This Week");
+
+    expect(companionHeading.compareDocumentPosition(thisWeekLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows the This Week countdown card when a target date and countdown fields are set", async () => {

@@ -19,7 +19,8 @@ Anti-drift: no runtime LLM call to serve a Companion (authored once, served stat
 ### Shipped
 
 - **Learning Companion backend content model.** Added nullable `note_collections.companion` JSONB plus `CompanionContent` / `CompanionFaqItem` DTO records, surfaced Companion on existing collection detail reads (`GET /collections/{id}` and `GET /collections/{id}/goal`), and added ADMIN-only `PUT`/`DELETE /collections/{id}/companion` write endpoints for top-level collections (`parentCollectionId == null`, not child count). Adopt now copies Companion on genuine cross-owner Review Set adoption and excludes it on same-owner self-copy; publish cascade remains row-local with no child Companion logic.
-- **Learning Companion authoring UI.** Added an ADMIN-only `Manage Companion` action on eligible top-level Review Sets with a modal for Overview, Study Strategy, Common Mistakes, and FAQ authoring, wired to the existing full-replace and clear endpoints. Learner-facing Companion display remains a separate later PR.
+- **Learning Companion authoring UI.** Added an ADMIN-only `Manage Companion` action on eligible top-level Review Sets with a modal for Overview, Study Strategy, Common Mistakes, and FAQ authoring, wired to the existing full-replace and clear endpoints.
+- **Learning Companion learner display.** Collection detail now renders authored Companion guidance for top-level Review Sets in both Goal and leaf views, using the shared markdown prose renderer and skipping empty draft sections. This completes v0.41.0's planned Companion scope: content model, official authoring UI, and learner-facing display.
 
 ---
 
