@@ -2,7 +2,7 @@
 
 ## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: turn readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed squarely at the exam-taker conversion/monetization segment. See `docs/product/ROADMAP.md` for full scope, phasing, and the design rationale (why Primary Review Set is the missing foundation the scheduler needs, and why cross-course reusability was ruled out for this release).
 

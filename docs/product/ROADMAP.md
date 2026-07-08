@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is the in-progress version (on `releases/v0.40.0`).
+`v0.40.1 - Public Review Set Reachability` is the next planned version (not yet kicked off).
+
+`v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is the previous released version (on `releases/v0.40.0`).
 
 `v0.39.2 - Public Library Learning Experience` is the previous released version (on `releases/v0.39.2`).
 
@@ -333,7 +335,7 @@ Anti-drift: no backend changes; no new persisted state for anonymous users; no l
 
 ---
 
-## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
+## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set (released)
 
 Base branch for this release: `releases/v0.40.0` (kicked off). Origin: `docs/claude-prompt/auto-weekly-study-plan.txt` weighed directly against `docs/claude-prompt/cross-course-note-reusability.txt` as the next major release, then expanded by a design review that identified the **Primary Review Set** as the missing foundation the scheduler needs. Cross-course was ruled out — its own doc explicitly says "Do NOT implement this proposal today," and the trigger for reconsidering it (one curator's friction assigning a single IT plan across overlapping CS/COE programs) is a narrow curation-side pain, not the broad-audience "meaningful maintenance concern" the doc sets as its own revisit bar. It's also a real architecture change (note↔course/program is load-bearing for AI generation context, Public Library, search/filter, Study Plan org) with much higher blast radius than this release's read-time view over already-shipped data. Theme: turn readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed squarely at the exam-taker conversion/monetization segment.
 
@@ -363,7 +365,7 @@ Base branch for this release: `releases/v0.40.0` (kicked off). Origin: `docs/cla
 ### Phasing within v0.40.0 (recommended split)
 
 - **Phase 1:** Primary Review Set foundation + per-Goal target date (with the never-copy-on-adopt/self-copy rule) + user-level `studyDaysPerWeek` + the simple total-remaining ÷ remaining-scheduled-days computation with the due-as-floor rule + the three surfaces + the Progress default-view change. This delivers the "what do I do today / am I on track" answer at low risk.
-- **Phase 2 (fast-follow, may slip out of v0.40.0):** the weighted largest-remainder subject distribution and day-of-week interleaving (Mon: Site Analysis + Foundations; Tue: …) — the parts most likely to need iteration, gated on Phase 1 proving the countdown mechanic actually gets used.
+- **Phase 2 (decided at v0.40.0 signoff: slipped to v0.40.1):** the weighted largest-remainder subject distribution and day-of-week interleaving (Mon: Site Analysis + Foundations; Tue: …) — the parts most likely to need iteration. v0.40.0 ships Phase 1's simple total-remaining ÷ remaining-scheduled-days computation only; Phase 2 is gated on Phase 1 proving the countdown mechanic actually gets used, and is picked up as additional scope in `v0.40.1` alongside that release's existing Public Review Set Reachability work (see below).
 
 Anti-drift: no new top-level entity — the weekly plan is a derived, read-time view; the only new persisted state is the `primaryCollectionId` reference, the `target_completion_date` column, and the user-level `studyDaysPerWeek`. No change to `UserEntity.examDate` or the Dashboard board-exam countdown it already drives. Target date is Goal-level only, never on a child Subject plan. No hardcoded profile-specific "Review" vocabulary anywhere the Primary concept is surfaced — must resolve through `getCollectionLabels`. No adaptive/AI-driven scheduling, streaks, or calendar integration. **No nav rename, no Exam Hub change, no Explore page, no Progress full-redesign in this release** — those are recorded in the deferred "Review-Set-Centric Navigation" section and gated on this release proving the Primary concept out in real usage first.
 
@@ -411,6 +413,10 @@ Search/filter-component reuse from Public Library (verify feasibility separately
 v0.40.0's own frontend scope already includes "the Review Sets list page (replacing/augmenting the empty 'Recommended Review Sets' state)" — the **same empty state** this release rewires. The user chose not to change v0.40.0's planned scope to fold this in; v0.40.0 proceeds as originally scoped (including its own empty-state work), and v0.40.1 follows immediately after as a v0.39.1-style polish fast-follow that reworks that same empty state a second time. This is a known, accepted cost (same surface touched in two consecutive releases) — not an oversight.
 
 Anti-drift: no backend changes required (the unfiltered endpoint already exists); no new data model, no new persisted state; pagination is a known future ceiling once the Official Review Set catalog reaches the hundreds, not addressed here.
+
+### Also targeted for v0.40.1: weekly scheduling Phase 2
+
+Decided at v0.40.0 signoff: the weighted largest-remainder subject distribution and day-of-week interleaving deferred out of v0.40.0 (see that release's Phasing section above) is picked up in `v0.40.1` as additional scope alongside Public Review Set Reachability, not deferred further. Still gated on Phase 1's simple countdown proving useful in real usage before implementation starts; not yet broken into its own scoped bullet list.
 
 ---
 
