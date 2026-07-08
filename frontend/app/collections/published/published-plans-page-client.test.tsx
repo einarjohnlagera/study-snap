@@ -1,11 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import PublishedPlansPage, { metadata } from "./page";
 import { adoptGoal, adoptStudyPlan, getMe, listCollections, listPublicStudyPlans } from "@/lib/api";
 
 const pushMock = jest.fn();
+const routerMock = { push: pushMock };
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => routerMock,
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -67,10 +68,14 @@ describe("PublishedPlansPage", () => {
   it("lists every published plan for the learner's course/program", async () => {
     render(<PublishedPlansPage />);
 
-    expect(await screen.findByText("LET Reviewer Plan")).toBeInTheDocument();
-    expect(screen.getByText("LET Math Focus")).toBeInTheDocument();
+    expect(await screen.findByText("Recommended Study Plans")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Browse All Official Study Plans" })).toBeInTheDocument();
+    expect(await screen.findAllByText("LET Reviewer Plan")).toHaveLength(2);
+    expect(screen.getAllByText("LET Math Focus")).toHaveLength(2);
     expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "LET" });
-    expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(2);
+    expect(listPublicStudyPlans).toHaveBeenCalledWith({});
+    expect(listCollections).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(4);
   });
 
   it("shows Continue for an already-adopted plan and Start for the rest", async () => {
@@ -80,12 +85,14 @@ describe("PublishedPlansPage", () => {
 
     render(<PublishedPlansPage />);
 
-    expect(await screen.findByRole("button", { name: "Continue this Study Plan" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start this Study Plan" })).toBeInTheDocument();
+    expect(await screen.findAllByRole("button", { name: "Continue this Study Plan" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(2);
   });
 
   it("adopts a plan and records the skipped notice before navigating", async () => {
-    (listPublicStudyPlans as jest.Mock).mockResolvedValue([planOne]);
+    (listPublicStudyPlans as jest.Mock).mockImplementation((params?: { courseProgram?: string }) => (
+      params?.courseProgram ? Promise.resolve([planOne]) : Promise.resolve([])
+    ));
     (adoptStudyPlan as jest.Mock).mockResolvedValue({
       collectionId: "personal-1",
       copiedCount: 2,
@@ -112,7 +119,9 @@ describe("PublishedPlansPage", () => {
       itemCount: 8,
       childCount: 2,
     };
-    (listPublicStudyPlans as jest.Mock).mockResolvedValue([goalPlan]);
+    (listPublicStudyPlans as jest.Mock).mockImplementation((params?: { courseProgram?: string }) => (
+      params?.courseProgram ? Promise.resolve([goalPlan]) : Promise.resolve([])
+    ));
     (adoptGoal as jest.Mock).mockResolvedValue({
       goalCollectionId: "personal-goal-1",
       adoptedSubjectCount: 2,
@@ -142,7 +151,9 @@ describe("PublishedPlansPage", () => {
       title: "LET Goal",
       childCount: 2,
     };
-    (listPublicStudyPlans as jest.Mock).mockResolvedValue([goalPlan]);
+    (listPublicStudyPlans as jest.Mock).mockImplementation((params?: { courseProgram?: string }) => (
+      params?.courseProgram ? Promise.resolve([goalPlan]) : Promise.resolve([])
+    ));
     (adoptGoal as jest.Mock).mockRejectedValue(new Error("Could not adopt Goal."));
 
     render(<PublishedPlansPage />);
@@ -159,7 +170,10 @@ describe("PublishedPlansPage", () => {
     render(<PublishedPlansPage />);
 
     expect(await screen.findByText("Set your course or program first")).toBeInTheDocument();
-    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+    expect(screen.getByText("LET Reviewer Plan")).toBeInTheDocument();
+    expect(screen.getByText("LET Math Focus")).toBeInTheDocument();
+    expect(listPublicStudyPlans).toHaveBeenCalledWith({});
+    expect((listPublicStudyPlans as jest.Mock).mock.calls.every(([params]) => !params?.courseProgram)).toBe(true);
   });
 
   it("shows an empty state when the track has no published plans", async () => {
@@ -168,5 +182,55 @@ describe("PublishedPlansPage", () => {
     render(<PublishedPlansPage />);
 
     expect(await screen.findByText("No published study plans yet")).toBeInTheDocument();
+  });
+
+  it("sorts Browse All alphabetically by title without deduplicating recommended plans", async () => {
+    const alphaPlan = { ...planOne, id: "source-alpha", title: "Alpha Review" };
+    const zetaPlan = { ...planOne, id: "source-zeta", title: "zeta Review" };
+    (listPublicStudyPlans as jest.Mock).mockImplementation((params?: { courseProgram?: string }) => (
+      params?.courseProgram ? Promise.resolve([zetaPlan]) : Promise.resolve([zetaPlan, alphaPlan])
+    ));
+
+    render(<PublishedPlansPage />);
+
+    const browseAllSection = (await screen.findByRole("heading", { name: "Browse All Official Study Plans" }))
+      .closest("section");
+    expect(browseAllSection).not.toBeNull();
+    const browseTitles = (await within(browseAllSection as HTMLElement).findAllByRole("heading", { level: 3 }))
+      .map((heading) => heading.textContent);
+
+    expect(browseTitles).toEqual(["Alpha Review", "zeta Review"]);
+    expect(screen.getAllByText("zeta Review")).toHaveLength(2);
+  });
+
+  it("renders Browse All errors independently from Recommended", async () => {
+    (listPublicStudyPlans as jest.Mock).mockImplementation((params?: { courseProgram?: string }) => (
+      params?.courseProgram ? Promise.resolve([planOne]) : Promise.reject(new Error("Browse failed"))
+    ));
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findByText("LET Reviewer Plan")).toBeInTheDocument();
+    expect(screen.getByText("Could not load official study plans")).toBeInTheDocument();
+    expect(screen.getByText("Browse failed")).toBeInTheDocument();
+  });
+
+  it("renders a distinct Browse All empty state when no public plans exist", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findByText("No Official Study Plans have been published yet")).toBeInTheDocument();
+    expect(screen.getByText("Check back later for curated sets from the NoteLib team.")).toBeInTheDocument();
+  });
+
+  it("still renders public plans when the owned-collection adoption join fails", async () => {
+    (listCollections as jest.Mock).mockRejectedValue(new Error("Owned collections unavailable"));
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findAllByText("LET Reviewer Plan")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(4);
+    expect(screen.queryByText("In your library")).not.toBeInTheDocument();
   });
 });
