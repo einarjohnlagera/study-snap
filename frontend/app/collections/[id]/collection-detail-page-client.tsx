@@ -1811,14 +1811,14 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
-  const actionToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionToastTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
   const showActionToast = useCallback((message: string) => {
     if (actionToastTimerRef.current) {
-      clearTimeout(actionToastTimerRef.current);
+      globalThis.clearTimeout(actionToastTimerRef.current);
     }
     setActionToast(message);
-    actionToastTimerRef.current = setTimeout(() => {
+    actionToastTimerRef.current = globalThis.setTimeout(() => {
       setActionToast(null);
     }, 4000);
   }, []);
@@ -1827,7 +1827,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     const ref = actionToastTimerRef;
     return () => {
       if (ref.current) {
-        clearTimeout(ref.current);
+        globalThis.clearTimeout(ref.current);
       }
     };
   }, []);

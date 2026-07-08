@@ -774,6 +774,10 @@ public class NoteCollectionService {
             if (child.getParentCollectionId() == null) {
                 child.setParentCollectionId(persistedGoal.collection().getId());
                 child.setSiblingPosition(index);
+                // Same invariant as updateParent(): a collection that becomes a child must not
+                // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
+                child.setTargetCompletionDate(null);
+                child.setCompanion(null);
                 touch(child);
                 collectionRepository.save(child);
                 adoptedSubjectCount++;

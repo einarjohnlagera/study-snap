@@ -263,8 +263,8 @@ export function CollectionsPageClient() {
     if (!actionToast) {
       return;
     }
-    const timer = setTimeout(() => setActionToast(null), 4000);
-    return () => clearTimeout(timer);
+    const timer = globalThis.setTimeout(() => setActionToast(null), 4000);
+    return () => globalThis.clearTimeout(timer);
   }, [actionToast]);
 
   // Primary always leads the grid; the rest keep the backend's updatedAt-desc order. Derived
