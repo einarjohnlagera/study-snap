@@ -2,7 +2,7 @@
 
 ## v0.40.1 - Public Review Set Reachability
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: a polish fast-follow that closes a narrow, verified discoverability gap — PUBLIC Official Review Sets outside a learner's own course/program are technically public but unreachable through any UI path today — and picks up the weekly-scheduling Phase 2 deferred out of v0.40.0. See `docs/product/ROADMAP.md` for the full scope and the design rationale (why the broader discovery/Explore redesign was rejected in favor of this narrow fix).
 

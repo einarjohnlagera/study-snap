@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.40.1 - Public Review Set Reachability` is the in-progress version (on `releases/v0.40.1`, kicked off).
+`v0.41.0 - Learning Companion (MVP)` is the next planned version (not yet kicked off).
 
-`v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is the previous released version (on `releases/v0.40.0`).
+`v0.40.1 - Public Review Set Reachability` is the previous released version (on `releases/v0.40.1`).
 
 `v0.39.2 - Public Library Learning Experience` is the previous released version (on `releases/v0.39.2`).
 
@@ -390,9 +390,9 @@ Anti-drift: no new top-level entity — the weekly plan is a derived, read-time 
 
 ---
 
-## v0.40.1 - Public Review Set Reachability (in progress)
+## v0.40.1 - Public Review Set Reachability (released)
 
-Base branch for this release: `releases/v0.40.1` (kicked off). Origin: surfaced while pressure-testing a broader "Review Set discovery redesign" proposal against the Public Library philosophy ("discover knowledge" vs. "follow a structured journey") — the full redesign (Recommended/Trending/Recently-Added/Browse-All ranking) was rejected as premature and overlapping with the deferred Explore-page direction below, but one piece of it survived: a **verified, narrow inconsistency**, not a redesign.
+Base branch for this release: `releases/v0.40.1` (released). Origin: surfaced while pressure-testing a broader "Review Set discovery redesign" proposal against the Public Library philosophy ("discover knowledge" vs. "follow a structured journey") — the full redesign (Recommended/Trending/Recently-Added/Browse-All ranking) was rejected as premature and overlapping with the deferred Explore-page direction below, but one piece of it survived: a **verified, narrow inconsistency**, not a redesign.
 
 **Verified finding:** `NoteCollectionService.listPublic` already supports `courseProgram == null` and returns every PUBLIC top-level collection unfiltered — the backend capability exists today. But no frontend surface ever calls it that way: both `/collections/published` and the Dashboard's `DashboardStudyPlanSection` widget always pass the user's own course/program, and when a user has none set, the UI shows a dead-end empty state instead of browsing everything. A Nursing student cannot reach an Architecture Official Review Set through any UI path today, even though it is technically PUBLIC. Once a curator marks something PUBLIC, a second system-level gate (course/program match) on top of that undermines what "public" means — the same publish-vs-surface expectation notes already get in Public Library. Commitment happens at *adopt*, not at *browse*, so hiding options at browse time isn't justified by Review Sets being a higher-commitment object than a note.
 
