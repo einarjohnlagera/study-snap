@@ -412,6 +412,23 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("Adopted")).toBeInTheDocument();
   });
 
+  it("places the Adopted and Primary badges next to the title, not in the top eyebrow chip row", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1", courseProgram: "Nursing" }));
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: "collection-1" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const title = await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    const courseProgramBadge = screen.getByText("Nursing");
+    const adoptedBadge = screen.getByText("Adopted");
+    const primaryBadge = screen.getByText("Primary");
+
+    // The courseProgram chip stays in the eyebrow row, above the title; Adopted/Primary sit after it.
+    expect(courseProgramBadge.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.compareDocumentPosition(adoptedBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.compareDocumentPosition(primaryBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("sets a top-level collection as primary from the detail menu", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 

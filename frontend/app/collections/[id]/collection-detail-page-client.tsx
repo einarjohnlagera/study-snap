@@ -408,17 +408,6 @@ function PlanHeroCard({
               </span>
             ) : null}
             {statusBadge}
-            {adopted ? (
-              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
-                Adopted
-              </span>
-            ) : null}
-            {isPrimary ? (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
-                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                Primary
-              </span>
-            ) : null}
             {isAdmin ? (
               <button
                 type="button"
@@ -438,7 +427,20 @@ function PlanHeroCard({
           </div>
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{eyebrowLabel}</p>
-            <CardTitle className="text-2xl sm:text-3xl">{collection.title}</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-2xl sm:text-3xl">{collection.title}</CardTitle>
+              {adopted ? (
+                <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
+                  Adopted
+                </span>
+              ) : null}
+              {isPrimary ? (
+                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
+                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  Primary
+                </span>
+              ) : null}
+            </div>
             {collection.description ? (
               <CardDescription className="line-clamp-3 text-sm sm:text-base">{collection.description}</CardDescription>
             ) : null}

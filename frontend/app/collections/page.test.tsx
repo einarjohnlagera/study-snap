@@ -166,6 +166,29 @@ describe("CollectionsPage", () => {
     expect(screen.getAllByText("Adopted")).toHaveLength(1);
   });
 
+  it("groups Primary/Adopted identity badges under the title, above status, above the notes count/updated-at row", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "Flagship Plan", sourcePlanId: "source-1", itemCount: 3, notesPracticed: 1 }),
+    ]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "collection-1" });
+
+    render(<CollectionsPage />);
+
+    const title = await screen.findByText("Flagship Plan");
+    const primaryBadge = screen.getByText("Primary");
+    const adoptedBadge = screen.getByText("Adopted");
+    const statusBadge = screen.getByText("In progress");
+    const notesScope = screen.getByText("3 notes");
+    const updatedAt = screen.getByText(/Updated/);
+
+    // DOCUMENT_POSITION_FOLLOWING on other.compareDocumentPosition(this) means `this` comes after `other`.
+    expect(title.compareDocumentPosition(primaryBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(primaryBadge.compareDocumentPosition(adoptedBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(adoptedBadge.compareDocumentPosition(statusBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(statusBadge.compareDocumentPosition(notesScope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notesScope.compareDocumentPosition(updatedAt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows Not started for an empty plan", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       buildCollectionSummary({ itemCount: 0, notesPracticed: 0 }),

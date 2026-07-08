@@ -312,7 +312,7 @@ export function CollectionsPageClient() {
       ) : null}
 
       {loadState === "ready" && collections.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {orderedCollections.map((collection) => (
             <Link key={collection.id} href={`/collections/${collection.id}`} className="group block">
               <Card className="flex min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
@@ -321,14 +321,20 @@ export function CollectionsPageClient() {
                   {collection.courseProgram ? (
                     <CardDescription className="line-clamp-1 text-sm">{collection.courseProgram}</CardDescription>
                   ) : null}
+                  {collection.id === primaryCollectionId || collection.sourcePlanId ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {collection.id === primaryCollectionId ? <PrimaryBadge /> : null}
+                      {collection.sourcePlanId ? <AdoptedBadge /> : null}
+                    </div>
+                  ) : null}
+                  {collection.childCount === 0 ? (
+                    <div>
+                      <CollectionExecutionStatusBadge collection={collection} />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-foreground/60">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span>{formatCollectionScope(collection)}</span>
-                    {collection.id === primaryCollectionId ? <PrimaryBadge /> : null}
-                    {collection.sourcePlanId ? <AdoptedBadge /> : null}
-                    {collection.childCount === 0 ? <CollectionExecutionStatusBadge collection={collection} /> : null}
-                  </div>
+                  <span>{formatCollectionScope(collection)}</span>
                   <span>{formatRelativeUpdatedAt(collection.updatedAt)}</span>
                 </div>
               </Card>
