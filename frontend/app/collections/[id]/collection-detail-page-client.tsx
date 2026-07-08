@@ -16,6 +16,7 @@ import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
@@ -569,6 +570,74 @@ function formatLocalDate(isoDate: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function renderableCompanionText(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function CompanionDisplayCard({ companion }: Readonly<{ companion: CompanionContent | null }>) {
+  if (!companion) {
+    return null;
+  }
+
+  const overview = renderableCompanionText(companion.overview);
+  const studyStrategy = renderableCompanionText(companion.studyStrategy);
+  const commonMistakes = renderableCompanionText(companion.commonMistakes);
+  const faqItems = companion.faq
+    .map((item) => ({
+      question: renderableCompanionText(item.question),
+      answer: renderableCompanionText(item.answer),
+    }))
+    .filter((item) => item.question || item.answer);
+
+  if (!overview && !studyStrategy && !commonMistakes && faqItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card className="space-y-5 p-4 sm:p-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Companion</p>
+        <h2 className="text-lg font-semibold tracking-tight">Learning Companion</h2>
+      </div>
+
+      {overview ? (
+        <section className="space-y-2" aria-labelledby="companion-overview-heading">
+          <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">Overview</h3>
+          <SummaryMarkdown content={overview} />
+        </section>
+      ) : null}
+
+      {studyStrategy ? (
+        <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
+          <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">Study Strategy</h3>
+          <SummaryMarkdown content={studyStrategy} />
+        </section>
+      ) : null}
+
+      {commonMistakes ? (
+        <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
+          <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">Common Mistakes</h3>
+          <SummaryMarkdown content={commonMistakes} />
+        </section>
+      ) : null}
+
+      {faqItems.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
+          <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">FAQ</h3>
+          <div className="space-y-3">
+            {faqItems.map((item, index) => (
+              <div key={`${item.question}:${index}`} className="space-y-1.5">
+                {item.question ? <p className="text-sm font-semibold text-foreground">{item.question}</p> : null}
+                {item.answer ? <SummaryMarkdown content={item.answer} /> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </Card>
+  );
 }
 
 function GoalWeeklyCountdownCard({
@@ -2386,6 +2455,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           )}
         />
 
+        <CompanionDisplayCard companion={collection.companion} />
+
         {mutationError ? (
           <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
             <p className="text-sm">{mutationError}</p>
@@ -2604,6 +2675,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         ) : undefined}
       />
+
+      <CompanionDisplayCard companion={collection.companion} />
 
       {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
           is fetched for it above, and this card self-guards to null when no target date is set. */}

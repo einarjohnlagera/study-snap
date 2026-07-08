@@ -69,6 +69,8 @@ Companion is surfaced on existing collection detail responses:
 
 There is no separate read endpoint.
 
+The collection detail page renders Companion content in both top-level view branches when renderable content exists. Overview, Study Strategy, Common Mistakes, and FAQ answers use the shared `SummaryMarkdown` renderer. Empty individual sections are skipped, and the whole card is hidden when the Companion is null or only contains empty draft fields.
+
 ## Publish And Adopt
 
 Publishing a top-level collection does not need special Companion cascade logic. Companion lives on the same parent row as `visibility`, so publishing the parent preserves and exposes that row's authored content. Child publish cascade does not copy Companion to children.
