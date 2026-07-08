@@ -154,6 +154,18 @@ describe("CollectionsPage", () => {
     expect(screen.queryByText("Not started")).not.toBeInTheDocument();
   });
 
+  it("shows an Adopted badge only for a collection with a sourcePlanId", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "Adopted Plan", sourcePlanId: "source-1" }),
+      buildCollectionSummary({ id: "collection-2", title: "Own Plan", sourcePlanId: null }),
+    ]);
+
+    render(<CollectionsPage />);
+
+    await screen.findByText("Adopted Plan");
+    expect(screen.getAllByText("Adopted")).toHaveLength(1);
+  });
+
   it("shows Not started for an empty plan", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       buildCollectionSummary({ itemCount: 0, notesPracticed: 0 }),
@@ -244,6 +256,7 @@ function buildCollectionSummary(overrides: Partial<{
   itemCount: number;
   childCount: number;
   notesPracticed: number;
+  sourcePlanId: string | null;
 }> = {}) {
   return {
     id: overrides.id ?? "collection-1",
@@ -251,7 +264,7 @@ function buildCollectionSummary(overrides: Partial<{
     description: overrides.description ?? "Weeks 1-4",
     visibility: "PRIVATE" as const,
     courseProgram: null,
-    sourcePlanId: null,
+    sourcePlanId: overrides.sourcePlanId ?? null,
     parentCollectionId: null,
     itemCount: overrides.itemCount ?? 2,
     childCount: overrides.childCount ?? 0,

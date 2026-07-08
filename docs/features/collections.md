@@ -695,6 +695,7 @@ Behavior:
 - adoption bills no quota and makes no AI calls
 - `sourcePlanId` is lineage/idempotency only; source edits never sync into adopted personal plans
 - server analytics fires `STUDY_PLAN_ADOPTED` with `sourcePlanId`, `copiedCount`, `skippedCount`, and `alreadyAdopted`
+- **Ownership badge (frontend, v0.40.1).** An "Adopted" pill shows on the `/collections` list page cards and on a collection's own detail page (in the `PlanHeroCard` badge row, alongside Published/Private) whenever `sourcePlanId != null` — for both a leaf plan and a Goal. Nothing shows for self-created collections (unlabeled implies "yours"). No backend change; `sourcePlanId` already existed on every collection response. Showing the *original author's name* is separate, larger, later work — no `authorDisplayName`/`isOfficial`-type field exists on any collection response today.
 
 ### Goal Adopt
 
