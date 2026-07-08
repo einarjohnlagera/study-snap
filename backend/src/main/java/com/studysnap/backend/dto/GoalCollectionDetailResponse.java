@@ -24,6 +24,7 @@ public record GoalCollectionDetailResponse(
         Integer weeksRemaining,
         Integer conceptsRemaining,
         Integer todaysConceptBudget,
+        List<WeeklyFocusDayEntry> weeklyFocusByDay,
         Instant createdAt,
         Instant updatedAt,
         List<GoalCollectionChildResponse> children

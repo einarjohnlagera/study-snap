@@ -18,6 +18,7 @@ import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
 import com.studysnap.backend.dto.SetNoteCollectionOrderRequest;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
+import com.studysnap.backend.dto.WeeklyFocusDayEntry;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.NoteCollectionEntity;
@@ -51,12 +52,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -308,6 +311,15 @@ public class NoteCollectionService {
                 notPracticedConcepts,
                 totalConcepts
         );
+        List<GoalCollectionChildResponse> scheduledChildResponses = applyTodaysConceptBudgets(
+                childResponses,
+                countdown.newConceptsToday()
+        );
+        List<WeeklyFocusDayEntry> weeklyFocusByDay = buildWeeklyFocusByDay(
+                collection.getTargetCompletionDate(),
+                countdown.studyDaysPerWeek(),
+                scheduledChildResponses.stream().map(GoalCollectionChildResponse::collectionId).toList()
+        );
         return new GoalCollectionDetailResponse(
                 collection.getId(),
                 collection.getTitle(),
@@ -327,14 +339,21 @@ public class NoteCollectionService {
                 countdown.weeksRemaining(),
                 countdown.conceptsRemaining(),
                 countdown.todaysConceptBudget(),
+                weeklyFocusByDay,
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
-                childResponses
+                scheduledChildResponses
         );
     }
 
-    private record WeeklyCountdown(Integer weeksRemaining, Integer conceptsRemaining, Integer todaysConceptBudget) {
-        private static final WeeklyCountdown NONE = new WeeklyCountdown(null, null, null);
+    private record WeeklyCountdown(
+            Integer weeksRemaining,
+            Integer conceptsRemaining,
+            Integer todaysConceptBudget,
+            Integer newConceptsToday,
+            Integer studyDaysPerWeek
+    ) {
+        private static final WeeklyCountdown NONE = new WeeklyCountdown(null, null, null, null, null);
     }
 
     private WeeklyCountdown computeWeeklyCountdown(
@@ -358,7 +377,122 @@ public class NoteCollectionService {
         int conceptsRemaining = totalConcepts - masteredConcepts;
         int newConceptsToday = (int) Math.ceil(notPracticedConcepts / (double) remainingScheduledDays);
         int todaysConceptBudget = dueConcepts + newConceptsToday;
-        return new WeeklyCountdown(weeksRemaining, conceptsRemaining, todaysConceptBudget);
+        return new WeeklyCountdown(weeksRemaining, conceptsRemaining, todaysConceptBudget, newConceptsToday, studyDaysPerWeek);
+    }
+
+    private record SubjectAllocation(UUID collectionId, int floorShare, double fractionalRemainder, int order) {
+    }
+
+    private List<GoalCollectionChildResponse> applyTodaysConceptBudgets(
+            List<GoalCollectionChildResponse> childResponses,
+            Integer newConceptsToday
+    ) {
+        if (newConceptsToday == null) {
+            return childResponses.stream()
+                    .map(child -> withTodaysConceptBudget(child, null))
+                    .toList();
+        }
+        Map<UUID, Integer> allocatedNewConceptsByChildId = allocateNewConceptsByChild(childResponses, newConceptsToday);
+        return childResponses.stream()
+                .map(child -> withTodaysConceptBudget(
+                        child,
+                        child.dueConcepts() + allocatedNewConceptsByChildId.getOrDefault(child.collectionId(), 0)
+                ))
+                .toList();
+    }
+
+    private Map<UUID, Integer> allocateNewConceptsByChild(
+            List<GoalCollectionChildResponse> childResponses,
+            int newConceptsToday
+    ) {
+        int totalNotPracticed = childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
+        if (totalNotPracticed == 0 || newConceptsToday == 0) {
+            return childResponses.stream()
+                    .collect(Collectors.toMap(
+                            GoalCollectionChildResponse::collectionId,
+                            ignored -> 0,
+                            (left, right) -> left,
+                            LinkedHashMap::new
+                    ));
+        }
+
+        List<SubjectAllocation> allocations = new ArrayList<>();
+        int floorTotal = 0;
+        for (int index = 0; index < childResponses.size(); index++) {
+            GoalCollectionChildResponse child = childResponses.get(index);
+            double exactShare = newConceptsToday * child.notPracticedConcepts() / (double) totalNotPracticed;
+            int floorShare = (int) Math.floor(exactShare);
+            floorTotal += floorShare;
+            allocations.add(new SubjectAllocation(
+                    child.collectionId(),
+                    floorShare,
+                    exactShare - floorShare,
+                    index
+            ));
+        }
+
+        Map<UUID, Integer> result = allocations.stream()
+                .collect(Collectors.toMap(
+                        SubjectAllocation::collectionId,
+                        SubjectAllocation::floorShare,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        int leftover = newConceptsToday - floorTotal;
+        allocations.stream()
+                .sorted(Comparator
+                        .comparingDouble(SubjectAllocation::fractionalRemainder)
+                        .reversed()
+                        .thenComparingInt(SubjectAllocation::order))
+                .limit(leftover)
+                .forEach(allocation -> result.computeIfPresent(
+                        allocation.collectionId(),
+                        (ignored, current) -> current + 1
+                ));
+        return result;
+    }
+
+    private GoalCollectionChildResponse withTodaysConceptBudget(
+            GoalCollectionChildResponse child,
+            Integer todaysConceptBudget
+    ) {
+        return new GoalCollectionChildResponse(
+                child.collectionId(),
+                child.title(),
+                child.description(),
+                child.itemCount(),
+                child.overallReadinessPercentage(),
+                child.masteredConcepts(),
+                child.dueConcepts(),
+                child.notPracticedConcepts(),
+                child.totalConcepts(),
+                todaysConceptBudget
+        );
+    }
+
+    private List<WeeklyFocusDayEntry> buildWeeklyFocusByDay(
+            LocalDate targetCompletionDate,
+            Integer studyDaysPerWeek,
+            List<UUID> childCollectionIds
+    ) {
+        if (targetCompletionDate == null || childCollectionIds.isEmpty()) {
+            return List.of();
+        }
+        int effectiveStudyDaysPerWeek = studyDaysPerWeek != null ? studyDaysPerWeek : DEFAULT_STUDY_DAYS_PER_WEEK;
+        List<DayOfWeek> studyDays = new ArrayList<>();
+        for (int index = 0; index < effectiveStudyDaysPerWeek; index++) {
+            studyDays.add(DayOfWeek.of(1 + (index * 7) / effectiveStudyDaysPerWeek));
+        }
+
+        Map<DayOfWeek, List<UUID>> collectionIdsByDay = new LinkedHashMap<>();
+        for (int index = 0; index < childCollectionIds.size(); index++) {
+            DayOfWeek studyDay = studyDays.get(index % studyDays.size());
+            collectionIdsByDay.computeIfAbsent(studyDay, ignored -> new ArrayList<>())
+                    .add(childCollectionIds.get(index));
+        }
+        return collectionIdsByDay.entrySet().stream()
+                .map(entry -> new WeeklyFocusDayEntry(entry.getKey(), List.copyOf(entry.getValue())))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -1445,7 +1579,8 @@ public class NoteCollectionService {
                     totals.masteredConcepts(),
                     totals.dueConcepts(),
                     totals.notPracticedConcepts(),
-                    totals.totalConcepts()
+                    totals.totalConcepts(),
+                    null
             );
         }
 
@@ -1466,7 +1601,8 @@ public class NoteCollectionService {
                 0,
                 0,
                 0,
-                0
+                0,
+                null
         );
     }
 

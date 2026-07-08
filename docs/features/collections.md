@@ -153,7 +153,7 @@ Post-adopt guidance:
 
 ### Weekly Countdown Derivation
 
-`GET /collections/{id}/goal` (`getGoal`) computes three additional nullable fields on `GoalCollectionDetailResponse` — `weeksRemaining`, `conceptsRemaining`, `todaysConceptBudget` — from `targetCompletionDate`, `users.study_days_per_week`, and the existing readiness rollup (`totalConcepts`, `masteredConcepts`, `dueConcepts`, `notPracticedConcepts`). Pure derivation, computed fresh on every request — no stored per-week schedule entity, no new mastery signal, no AI call. This is the Phase 1 "simple total-remaining ÷ remaining-scheduled-days" version; the weighted largest-remainder subject allocation and day-of-week interleaving are Phase 2, not implemented here.
+`GET /collections/{id}/goal` (`getGoal`) computes three additional nullable fields on `GoalCollectionDetailResponse` — `weeksRemaining`, `conceptsRemaining`, `todaysConceptBudget` — from `targetCompletionDate`, `users.study_days_per_week`, and the existing readiness rollup (`totalConcepts`, `masteredConcepts`, `dueConcepts`, `notPracticedConcepts`). Pure derivation, computed fresh on every request — no stored per-week schedule entity, no new mastery signal, no AI call. Phase 2 layers two additional derived fields onto this same response: nullable per-child `GoalCollectionChildResponse.todaysConceptBudget` values and non-null `weeklyFocusByDay`.
 
 All three fields are `null` when `targetCompletionDate` is null — same degrade-gracefully rule as the rest of the Primary Review Set / target-date surface.
 
@@ -168,6 +168,21 @@ Formula (`NoteCollectionService.computeWeeklyCountdown`):
 **When `users.study_days_per_week` is null** (learner skipped the intensity question), the derivation defaults to 7 (every day) for the math only — nothing is persisted, it's a conservative fallback so the countdown still renders rather than hiding whenever intensity alone is unset. Only a missing `targetCompletionDate` hides the countdown; a missing `studyDaysPerWeek` does not.
 
 Due-concept count can *rise* over time even for a diligent learner — it tracks spaced-repetition review timing, not inactivity. This is correct behavior, not a scheduler bug.
+
+Phase 2 subject allocation:
+
+- `GoalCollectionChildResponse.todaysConceptBudget` is `null` whenever the Goal has no `targetCompletionDate`; otherwise it is `child.dueConcepts + allocatedNewConcepts`.
+- The allocated new-concept pool is the exact `newConceptsToday` value used by the Goal-level `todaysConceptBudget` formula above, not a separate recomputation.
+- New concepts are split across child Subject plans using largest-remainder (Hamilton's) method weighted by each child's `notPracticedConcepts`: floor every exact proportional share, then distribute leftover units by largest fractional remainder.
+- Remainder ties break by the existing child display order (`siblingPosition` / the order already returned in `children`), so identical inputs produce stable output.
+- The sum of all non-null child `todaysConceptBudget` values equals the Goal-level `todaysConceptBudget` exactly.
+
+Phase 2 weekday focus:
+
+- `weeklyFocusByDay` is a non-null list of `{ dayOfWeek, collectionIds }` entries. It is empty when the Goal has no `targetCompletionDate` or no child Subject plans.
+- `studyDaysPerWeek` remains a count, not a stored weekday preference. The derived weekly template is evenly spaced from Monday: for each position `i` from `0` to `count - 1`, `dayOfWeek = DayOfWeek.of(1 + (i * 7) / count)`.
+- Child Subject plan ids are assigned round-robin across those derived study days in the existing child display order. When there are more children than study days, multiple child ids share a day. When there are fewer children than study days, only days that receive at least one child id are returned.
+- Entries carry child collection ids only; titles and labels are already present in `GoalCollectionDetailResponse.children`.
 
 ### Target Date + Study Intensity Input (frontend)
 
