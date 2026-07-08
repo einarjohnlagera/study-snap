@@ -385,6 +385,82 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByText("This Week")).not.toBeInTheDocument();
   });
 
+  it("shows the This Week countdown card on a childless top-level plan while still rendering the leaf view", async () => {
+    // Regression test: a top-level collection with zero children (a flat "leaf" Study Plan, not a
+    // Goal with Subject plans) can still carry a target date — the countdown must appear even though
+    // this collection renders the leaf view (Build/notes list), not the Goal view (children list).
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("This Week")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
+    expect(screen.getByText("11 concepts remaining · 4 concepts today")).toBeInTheDocument();
+    // Still the leaf view — not switched to the Goal view's children list.
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText(/Subject Plans?$/)).not.toBeInTheDocument();
+  });
+
+  it("does not show the This Week countdown card on a childless top-level plan with no target date", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+  });
+
+  it("does not show the post-adopt target-date tip on a freshly-adopted childless leaf plan", async () => {
+    // Leaf-plan adoption is documented to never show this tip (it's Goal-adoption-specific) — must
+    // still hold now that goalDetail is also populated for childless top-level collections.
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText("Set a target completion date to see your weekly countdown and daily study budget."))
+      .not.toBeInTheDocument();
+  });
+
+  it("refetches the leaf-view countdown after editing a childless top-level plan's target date", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
+    (getCollectionGoal as jest.Mock).mockResolvedValueOnce(goalDetail({ childCount: 0, children: [] }));
+    (updateCollection as jest.Mock).mockResolvedValue(
+      collection({ title: "Midterm Study Plan", childCount: 0, targetCompletionDate: "2026-12-01" }),
+    );
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+
+    (getCollectionGoal as jest.Mock).mockResolvedValueOnce(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("This Week")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
+  });
+
   it("shows a post-adopt target-date tip for a dateless Goal", async () => {
     setJustAdoptedNotice("collection-1");
     (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
