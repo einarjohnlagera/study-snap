@@ -42,6 +42,14 @@ describe("getCollectionLabels", () => {
       newCtaLabel: "New Collection",
     });
   });
+
+  it("returns profile-aware primary labels", () => {
+    expect(getCollectionLabels("TEACHER").primarySingular).toBe("Primary Lesson Plan");
+    expect(getCollectionLabels("STUDENT").primarySingular).toBe("Primary Study Plan");
+    expect(getCollectionLabels("BOARD_EXAM").primarySingular).toBe("Primary Review Set");
+    expect(getCollectionLabels("PROFESSIONAL").primarySingular).toBe("Primary Collection");
+    expect(getCollectionLabels(null).primarySingular).toBe("Primary Collection");
+  });
 });
 
 describe("getCollectionTerminalAction", () => {

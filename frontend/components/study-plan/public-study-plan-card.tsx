@@ -1,23 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { adoptGoal, adoptStudyPlan, type NoteCollectionSummary } from "@/lib/api";
+import { adoptGoal, adoptStudyPlan, type NoteCollectionSummary, type ProfileType } from "@/lib/api";
+import { getCollectionLabels } from "@/lib/collection-labels";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 type PublicStudyPlanCardProps = {
   plan: NoteCollectionSummary;
   adoptedCollection: NoteCollectionSummary | null;
+  profileType?: ProfileType | null;
 };
 
-export function PublicStudyPlanCard({ plan, adoptedCollection }: Readonly<PublicStudyPlanCardProps>) {
+export function PublicStudyPlanCard({ plan, adoptedCollection, profileType = null }: Readonly<PublicStudyPlanCardProps>) {
   const router = useRouter();
+  const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isGoal = plan.childCount > 0;
-  const subjectPlanLabel = `${plan.childCount} ${plan.childCount === 1 ? "Subject plan" : "Subject plans"}`;
+  const subjectPlanLabel = `${plan.childCount} ${labels.subjectSingular}${plan.childCount === 1 ? "" : "s"}`;
   const noteLabel = `${plan.itemCount} ${plan.itemCount === 1 ? "note" : "notes"}`;
   const descriptionFallback = isGoal
     ? `${subjectPlanLabel} · ${noteLabel}`
@@ -26,8 +30,8 @@ export function PublicStudyPlanCard({ plan, adoptedCollection }: Readonly<Public
     ? `${subjectPlanLabel} · ${noteLabel}`
     : `${noteLabel} curated for this track.`;
   const buttonLabel = adoptedCollection
-    ? (isGoal ? "Continue this Goal" : "Continue this plan")
-    : (isGoal ? "Start this Goal" : "Start this plan");
+    ? (isGoal ? `Continue this ${labels.goalSingular}` : `Continue this ${labels.singular}`)
+    : (isGoal ? `Start this ${labels.goalSingular}` : `Start this ${labels.singular}`);
 
   const handleStart = async () => {
     if (adoptedCollection) {
@@ -40,6 +44,7 @@ export function PublicStudyPlanCard({ plan, adoptedCollection }: Readonly<Public
       if (isGoal) {
         const result = await adoptGoal(plan.id);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
+        setJustAdoptedNotice(result.goalCollectionId);
         router.push(`/collections/${result.goalCollectionId}`);
         return;
       }
@@ -47,7 +52,7 @@ export function PublicStudyPlanCard({ plan, adoptedCollection }: Readonly<Public
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       router.push(`/collections/${result.collectionId}`);
     } catch (adoptError) {
-      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? "Goal" : "plan"}.`);
+      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? labels.goalSingular : labels.singular}.`);
     } finally {
       setAdopting(false);
     }

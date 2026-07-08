@@ -306,6 +306,7 @@ export type GoalCollectionDetailResponse = {
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
+  targetCompletionDate: string | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
@@ -315,6 +316,9 @@ export type GoalCollectionDetailResponse = {
   dueConcepts: number;
   notPracticedConcepts: number;
   totalConcepts: number;
+  weeksRemaining: number | null;
+  conceptsRemaining: number | null;
+  todaysConceptBudget: number | null;
   createdAt: string;
   updatedAt: string;
   children: GoalCollectionChildResponse[];
@@ -750,6 +754,8 @@ export type MeResponse = {
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   productOnboardingCompletedAt: string | null;
+  primaryCollectionId: string | null;
+  studyDaysPerWeek: number | null;
   studyPackCount: number;
   role: UserRole;
   status: "ACTIVE" | "SUSPENDED" | "PENDING_DELETION";
@@ -1429,6 +1435,7 @@ export type NoteCollectionDetail = {
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
   estimatedStudyHours: number | null;
+  targetCompletionDate: string | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   childCount: number;
@@ -1995,6 +2002,21 @@ export async function updateExamDate(examDate: string | null): Promise<MeRespons
     true,
   );
   const me = await parseApiResponse<MeResponse>(response, "Could not update exam date. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function updateStudyDaysPerWeek(studyDaysPerWeek: number | null): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile/study-days-per-week",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ studyDaysPerWeek: studyDaysPerWeek ?? null }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update study intensity. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }
@@ -3880,7 +3902,13 @@ export async function reorderCollectionChildren(id: string, childIds: string[]):
 
 export async function updateCollection(
   id: string,
-  request: { title?: string; description?: string | null; courseProgram?: string | null; estimatedStudyHours?: number | null },
+  request: {
+    title?: string;
+    description?: string | null;
+    courseProgram?: string | null;
+    estimatedStudyHours?: number | null;
+    targetCompletionDate?: string | null;
+  },
 ): Promise<NoteCollectionDetail> {
   const response = await fetchWithAuth(
     `/collections/${id}`,
@@ -3892,6 +3920,18 @@ export async function updateCollection(
     true,
   );
   return parseApiResponse<NoteCollectionDetail>(response, "Could not update this collection.");
+}
+
+export async function clearCollectionTargetDate(id: string): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/target-date`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders("application/json"),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not clear the target completion date.");
 }
 
 export async function updateCollectionVisibility(

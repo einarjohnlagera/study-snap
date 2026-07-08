@@ -691,6 +691,7 @@ export default function DashboardPage() {
               <DashboardStudyPlanSection
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
+                primaryCollectionId={profile?.primaryCollectionId ?? null}
                 viewAllHref="/collections/published"
                 browseWhenEmpty={items.length === 0}
               />
@@ -774,6 +775,7 @@ export default function DashboardPage() {
               <DashboardStudyPlanSection
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
+                primaryCollectionId={profile?.primaryCollectionId ?? null}
                 viewAllHref="/collections/published"
                 browseWhenEmpty={items.length === 0}
               />

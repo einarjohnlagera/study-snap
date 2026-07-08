@@ -6,6 +6,7 @@ import {
   listCollections,
   listPublicStudyPlans,
 } from "@/lib/api";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 
 const pushMock = jest.fn();
 
@@ -20,6 +21,10 @@ jest.mock("@/lib/api", () => ({
   adoptStudyPlan: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
+}));
+
+jest.mock("@/lib/just-adopted-notice", () => ({
+  setJustAdoptedNotice: jest.fn(),
 }));
 
 const publicPlan = {
@@ -44,6 +49,7 @@ describe("DashboardStudyPlanSection", () => {
     (adoptStudyPlan as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
+    (setJustAdoptedNotice as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([publicPlan]);
     (listCollections as jest.Mock).mockResolvedValue([]);
   });
@@ -59,13 +65,29 @@ describe("DashboardStudyPlanSection", () => {
     render(<DashboardStudyPlanSection courseProgram=" let " profileType="STUDENT" />);
 
     expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start this plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
 
     await waitFor(() => {
       expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");
       expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-plan-1")).toBe("1");
+      expect(setJustAdoptedNotice).not.toHaveBeenCalled();
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1");
     });
+  });
+
+  it("resolves the CTA and subject-count labels through profile-aware terminology, not a hardcoded generic word", async () => {
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({
+      collectionId: "personal-plan-1",
+      copiedCount: 3,
+      skippedCount: 0,
+      alreadyAdopted: false,
+    });
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="BOARD_EXAM" />);
+
+    expect(await screen.findByRole("heading", { name: "Recommended Review Set" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start this Review Set" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start this plan" })).not.toBeInTheDocument();
   });
 
   it("continues an already adopted plan without adopting again", async () => {
@@ -80,7 +102,7 @@ describe("DashboardStudyPlanSection", () => {
 
     render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
 
-    const continueButton = await screen.findByRole("button", { name: "Continue this plan" });
+    const continueButton = await screen.findByRole("button", { name: "Continue this Study Plan" });
     fireEvent.click(continueButton);
 
     expect(adoptStudyPlan).not.toHaveBeenCalled();
@@ -109,13 +131,14 @@ describe("DashboardStudyPlanSection", () => {
 
     render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
 
-    expect(await screen.findByText("3 Subject plans")).toBeInTheDocument();
+    expect(await screen.findByText("3 Subject Plans")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start this Goal" }));
 
     await waitFor(() => {
       expect(adoptGoal).toHaveBeenCalledWith("source-goal-1");
       expect(adoptStudyPlan).not.toHaveBeenCalled();
       expect(globalThis.sessionStorage.getItem("notelib-study-plan-skipped-personal-goal-1")).toBe("1");
+      expect(setJustAdoptedNotice).toHaveBeenCalledWith("personal-goal-1");
       expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
     });
   });
@@ -212,5 +235,54 @@ describe("DashboardStudyPlanSection", () => {
 
     expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the owned Primary Review Set instead of the course/program recommendation", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { ...publicPlan, id: "primary-goal-1", visibility: "PRIVATE", sourcePlanId: null, childCount: 2 },
+    ]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        primaryCollectionId="primary-goal-1"
+        viewAllHref="/collections/published"
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Primary Review Set" })).toBeInTheDocument();
+    expect(screen.queryByText("LET")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open this plan" }));
+
+    expect(adoptGoal).not.toHaveBeenCalled();
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/collections/primary-goal-1");
+  });
+
+  it("falls back to the course/program recommendation when the primary reference isn't found", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        primaryCollectionId="stale-primary-id"
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+  });
+
+  it("renders nothing while the primary lookup is still pending", () => {
+    (listCollections as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <DashboardStudyPlanSection courseProgram={null} profileType="STUDENT" primaryCollectionId="primary-goal-1" />,
+    );
+
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 });

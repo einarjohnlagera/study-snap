@@ -455,7 +455,7 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("You just started your study loop.")).toBeInTheDocument();
     expect(await screen.findByText("AWS Certification Plan")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Start this plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
 
     await waitFor(() => {
       expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");

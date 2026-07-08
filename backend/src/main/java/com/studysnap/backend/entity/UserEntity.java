@@ -144,6 +144,12 @@ public class UserEntity {
     @Column(name = "product_onboarding_completed_at")
     private OffsetDateTime productOnboardingCompletedAt;
 
+    @Column(name = "primary_collection_id")
+    private UUID primaryCollectionId;
+
+    @Column(name = "study_days_per_week")
+    private Integer studyDaysPerWeek;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

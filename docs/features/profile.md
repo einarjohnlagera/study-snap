@@ -72,6 +72,14 @@ Important product rule:
 
 For Board Taker profile, an Exam Date field is shown in the Profile Type card and saved independently. Clearing the date removes the dashboard countdown.
 
+## Study Intensity (backend only, no UI yet)
+
+`studyDaysPerWeek` is a nullable, user-level capacity attribute — how many days a week the learner can study — feeding the not-yet-built v0.40.0 weekly countdown scheduler. It lives on the user, not on any single Goal, because study capacity is a person attribute shared across whatever the learner is studying.
+
+- `PUT /users/profile/study-days-per-week` fully replaces the value (including `null` to clear) — same full-replace semantics as `PUT /users/profile/exam-date`, not a PATCH-omit-preserves field.
+- Valid range is 1-7; values outside that range are rejected with a 400 validation error.
+- No Profile UI surface exists for this yet — the input screen (paired with the per-Goal target date, asked together on one screen) is separate, later frontend work.
+
 ## Study Focus
 
 Study Focus is the profile-owned setup surface for progress goals that are not set by the exam hub intent flow.

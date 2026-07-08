@@ -26,6 +26,7 @@ import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
+import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
@@ -507,6 +508,13 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse updateStudyDaysPerWeek(UUID userId, UpdateStudyDaysPerWeekRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        user.setStudyDaysPerWeek(request.studyDaysPerWeek());
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
     private MeResponse toMeResponse(UserEntity user) {
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(user.getId());
         long studyPackCount = studyPackRepository.countByOwnerUserId(user.getId());
@@ -537,6 +545,8 @@ public class AuthService {
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
                 user.getProductOnboardingCompletedAt(),
+                user.getPrimaryCollectionId(),
+                user.getStudyDaysPerWeek(),
                 studyPackCount,
                 user.getRole(),
                 user.getStatus(),

@@ -70,7 +70,7 @@ describe("PublishedPlansPage", () => {
     expect(await screen.findByText("LET Reviewer Plan")).toBeInTheDocument();
     expect(screen.getByText("LET Math Focus")).toBeInTheDocument();
     expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "LET" });
-    expect(screen.getAllByRole("button", { name: "Start this plan" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(2);
   });
 
   it("shows Continue for an already-adopted plan and Start for the rest", async () => {
@@ -80,8 +80,8 @@ describe("PublishedPlansPage", () => {
 
     render(<PublishedPlansPage />);
 
-    expect(await screen.findByRole("button", { name: "Continue this plan" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start this plan" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Continue this Study Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start this Study Plan" })).toBeInTheDocument();
   });
 
   it("adopts a plan and records the skipped notice before navigating", async () => {
@@ -95,7 +95,7 @@ describe("PublishedPlansPage", () => {
 
     render(<PublishedPlansPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start this plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start this Study Plan" }));
 
     await waitFor(() => {
       expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");
@@ -124,7 +124,7 @@ describe("PublishedPlansPage", () => {
 
     render(<PublishedPlansPage />);
 
-    expect(await screen.findByText("2 Subject plans · 8 notes")).toBeInTheDocument();
+    expect(await screen.findByText("2 Subject Plans · 8 notes")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start this Goal" }));
 
     await waitFor(() => {

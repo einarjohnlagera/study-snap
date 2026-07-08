@@ -4,10 +4,13 @@ import { MILESTONES, ProgressReportClient } from "./progress-report-client";
 import { DashboardFocusAreasCard } from "../dashboard/dashboard-focus-areas-card";
 import {
   ApiRequestError,
+  getCollectionGoal,
+  getMe,
   getPlanReadiness,
   getProgressReport,
   listCollections,
   trackAnalyticsEvent,
+  type GoalCollectionDetailResponse,
   type GoalSummaryResponse,
   type NoteCollectionSummary,
   type PlanReadinessResponse,
@@ -62,6 +65,8 @@ jest.mock("@/lib/api", () => ({
       this.code = options.code ?? null;
     }
   },
+  getCollectionGoal: jest.fn(),
+  getMe: jest.fn(),
   getProgressReport: jest.fn(),
   getPlanReadiness: jest.fn(),
   listCollections: jest.fn(),
@@ -110,10 +115,39 @@ function planReadiness(overrides: Partial<PlanReadinessResponse> = {}): PlanRead
   };
 }
 
+function goalReadiness(overrides: Partial<GoalCollectionDetailResponse> = {}): GoalCollectionDetailResponse {
+  return {
+    collectionId: "goal-1",
+    title: "LET Goal",
+    description: null,
+    visibility: "PRIVATE",
+    courseProgram: null,
+    targetCompletionDate: null,
+    sourcePlanId: null,
+    parentCollectionId: null,
+    itemCount: 0,
+    childCount: 2,
+    overallReadinessPercentage: 65,
+    masteredConcepts: 13,
+    dueConcepts: 2,
+    notPracticedConcepts: 5,
+    totalConcepts: 20,
+    weeksRemaining: null,
+    conceptsRemaining: null,
+    todaysConceptBudget: null,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    children: [],
+    ...overrides,
+  };
+}
+
 describe("ProgressPage", () => {
   beforeEach(() => {
     routerMock.replace.mockReset();
     routerMock.push.mockReset();
+    (getCollectionGoal as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
     (getProgressReport as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
@@ -123,6 +157,8 @@ describe("ProgressPage", () => {
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
     (listCollections as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: null });
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalReadiness());
     (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
   });
 
@@ -407,6 +443,133 @@ describe("ProgressPage", () => {
     expect(getProgressReport).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "My Progress" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("Biology Plan")).toBeInTheDocument();
+  });
+
+  it("defaults to the primary goal readiness view when no collectionId is present", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: "goal-1" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      collection({ id: "goal-1", title: "LET Goal", childCount: 2 }),
+      collection({ id: "collection-1", title: "Biology Plan", childCount: 0 }),
+    ]);
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalReadiness({
+      collectionId: "goal-1",
+      title: "LET Goal",
+    }));
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByRole("heading", { name: "LET Goal readiness" })).toBeInTheDocument();
+    expect(screen.getByText(/65% ready.*13\/20 mastered.*2 due/)).toBeInTheDocument();
+    expect(screen.getByText("5 not started")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("LET Goal")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Selected plan")).not.toBeInTheDocument();
+    expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+    expect(getProgressReport).not.toHaveBeenCalled();
+  });
+
+  it("falls back to all subjects when no primary goal is set", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: null });
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [
+        {
+          subject: "Chemistry",
+          totalConcepts: 2,
+          masteredConcepts: 1,
+          dueConcepts: 1,
+          notPracticedConcepts: 0,
+          masteryPercentage: 50,
+        },
+      ],
+      goalSummary: null,
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByRole("heading", { name: "Chemistry" })).toBeInTheDocument();
+    expect(getProgressReport).toHaveBeenCalledTimes(1);
+    expect(getCollectionGoal).not.toHaveBeenCalled();
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("honors an explicit leaf collectionId even when a primary goal exists", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: "goal-1" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      collection({ id: "goal-1", title: "LET Goal", childCount: 2 }),
+      collection({ id: "collection-1", title: "Biology Plan", childCount: 0 }),
+    ]);
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({ collectionId: "collection-1" }));
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    expect(await screen.findByText(/1 of 3 notes in this study plan don't have a Study Pack yet/)).toBeInTheDocument();
+    expect(getPlanReadiness).toHaveBeenCalledWith("collection-1");
+    expect(getCollectionGoal).not.toHaveBeenCalled();
+    expect(getProgressReport).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue("Biology Plan")).toBeInTheDocument();
+  });
+
+  it("keeps all subjects reachable after the primary goal auto-default is applied", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: "goal-1" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      collection({ id: "goal-1", title: "LET Goal", childCount: 2 }),
+      collection({ id: "collection-1", title: "Biology Plan", childCount: 0 }),
+    ]);
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalReadiness({ collectionId: "goal-1", title: "LET Goal" }));
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [
+        {
+          subject: "Chemistry",
+          totalConcepts: 2,
+          masteredConcepts: 1,
+          dueConcepts: 1,
+          notPracticedConcepts: 0,
+          masteryPercentage: 50,
+        },
+      ],
+      goalSummary: null,
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByRole("heading", { name: "LET Goal readiness" })).toBeInTheDocument();
+    expect(getCollectionGoal).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Progress view"), { target: { value: "" } });
+
+    expect(routerMock.push).toHaveBeenCalledWith("/progress");
+    expect(await screen.findByRole("heading", { name: "Chemistry" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("All subjects")).toBeInTheDocument();
+    expect(getProgressReport).toHaveBeenCalledTimes(1);
+    expect(getCollectionGoal).toHaveBeenCalledTimes(1);
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("renders not found for a stale primary goal default", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock).mockRejectedValue(new ApiRequestError("Missing", { status: 404 }));
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByText("Goal not found")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalled();
+  });
+
+  it("renders primary goal readiness errors with retry", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock)
+      .mockRejectedValueOnce(new Error("Network failed"))
+      .mockResolvedValueOnce(goalReadiness({ collectionId: "goal-1", title: "LET Goal" }));
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByText("Could not load readiness")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByRole("heading", { name: "LET Goal readiness" })).toBeInTheDocument();
+    expect(getCollectionGoal).toHaveBeenCalledTimes(2);
   });
 
   it("switches back to all subjects and clears the collectionId query param", async () => {

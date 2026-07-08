@@ -38,7 +38,8 @@ function PlanSkeletonGrid() {
 
 export function PublishedPlansPageClient() {
   const router = useRouter();
-  const labels = useMemo(() => getCollectionLabels(getAuthUser()?.profileType), []);
+  const profileType = useMemo(() => getAuthUser()?.profileType ?? null, []);
+  const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [courseProgram, setCourseProgram] = useState<string | null>(null);
   const [plans, setPlans] = useState<PlanWithAdoption[]>([]);
@@ -146,7 +147,7 @@ export function PublishedPlansPageClient() {
       {loadState === "ready" && courseProgram && plans.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {plans.map(({ plan, adoptedCollection }) => (
-            <PublicStudyPlanCard key={plan.id} plan={plan} adoptedCollection={adoptedCollection} />
+            <PublicStudyPlanCard key={plan.id} plan={plan} adoptedCollection={adoptedCollection} profileType={profileType} />
           ))}
         </div>
       ) : null}

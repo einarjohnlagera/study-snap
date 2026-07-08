@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 export { getStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
@@ -22,6 +23,7 @@ export { getStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 type DashboardStudyPlanSectionProps = {
   courseProgram: string | null;
   profileType: ProfileType | null;
+  primaryCollectionId?: string | null;
   viewAllHref?: string;
   browseWhenEmpty?: boolean;
 };
@@ -29,6 +31,7 @@ type DashboardStudyPlanSectionProps = {
 export function DashboardStudyPlanSection({
   courseProgram,
   profileType,
+  primaryCollectionId,
   viewAllHref,
   browseWhenEmpty = false,
 }: Readonly<DashboardStudyPlanSectionProps>) {
@@ -41,6 +44,43 @@ export function DashboardStudyPlanSection({
   const [loadedCourseProgram, setLoadedCourseProgram] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [primaryMatch, setPrimaryMatch] = useState<NoteCollectionSummary | null>(null);
+  const [primaryLoaded, setPrimaryLoaded] = useState(false);
+
+  // The Primary Review Set is an explicit, already-owned choice — it takes precedence over the
+  // course/program-matched recommendation below and skips the adopt flow entirely (see the
+  // ownsSource render path further down). If it comes back not-found (a defensive fallback; the
+  // backend invariant should keep this reference valid), rendering falls through to the
+  // course/program-driven effect below, same as if no primary were set.
+  useEffect(() => {
+    if (!primaryCollectionId) {
+      setPrimaryMatch(null);
+      setPrimaryLoaded(true);
+      return;
+    }
+
+    let cancelled = false;
+    setPrimaryLoaded(false);
+    void listCollections()
+      .then((collections) => {
+        if (cancelled) {
+          return;
+        }
+        setPrimaryMatch(collections.find((collection) => collection.id === primaryCollectionId) ?? null);
+        setPrimaryLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrimaryMatch(null);
+          setPrimaryLoaded(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryCollectionId]);
 
   useEffect(() => {
     if (!normalizedCourseProgram) {
@@ -86,11 +126,17 @@ export function DashboardStudyPlanSection({
     };
   }, [normalizedCourseProgram]);
 
-  if (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram) {
+  const primaryPending = Boolean(primaryCollectionId) && !primaryLoaded;
+  const usingPrimary = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch !== null;
+  const courseProgramPending = !usingPrimary && (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram);
+
+  if (primaryPending || courseProgramPending) {
     return null;
   }
 
-  if (!plan) {
+  const displayPlan = usingPrimary ? primaryMatch : plan;
+
+  if (!displayPlan) {
     if (!browseWhenEmpty) {
       return null;
     }
@@ -110,14 +156,14 @@ export function DashboardStudyPlanSection({
     );
   }
 
-  const continuePlan = adoptedPlan ?? null;
-  const ownsSource = continuePlan?.id === plan.id;
-  const isGoal = plan.childCount > 0;
+  const continuePlan = usingPrimary ? primaryMatch : (adoptedPlan ?? null);
+  const ownsSource = continuePlan?.id === displayPlan.id;
+  const isGoal = displayPlan.childCount > 0;
   const ctaLabel = continuePlan
-    ? (ownsSource ? "Open this plan" : (isGoal ? "Continue this Goal" : "Continue this plan"))
-    : (isGoal ? "Start this Goal" : "Start this plan");
-  const subjectPlanLabel = `${plan.childCount} ${plan.childCount === 1 ? "Subject plan" : "Subject plans"}`;
-  const noteLabel = `${plan.itemCount} ${plan.itemCount === 1 ? "note" : "notes"}`;
+    ? (ownsSource ? "Open this plan" : (isGoal ? `Continue this ${labels.goalSingular}` : `Continue this ${labels.singular}`))
+    : (isGoal ? `Start this ${labels.goalSingular}` : `Start this ${labels.singular}`);
+  const subjectPlanLabel = `${displayPlan.childCount} ${labels.subjectSingular}${displayPlan.childCount === 1 ? "" : "s"}`;
+  const noteLabel = `${displayPlan.itemCount} ${displayPlan.itemCount === 1 ? "note" : "notes"}`;
   // A Goal never holds notes directly (only its child Subject plans do), so plan.itemCount
   // is always 0 here — showing "0 notes" alongside "N Subject plans" reads as broken/empty.
   // Omit the note count for Goals rather than show a truthful-but-misleading zero.
@@ -133,16 +179,17 @@ export function DashboardStudyPlanSection({
     setError(null);
     try {
       if (isGoal) {
-        const result = await adoptGoal(plan.id);
+        const result = await adoptGoal(displayPlan.id);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
+        setJustAdoptedNotice(result.goalCollectionId);
         router.push(`/collections/${result.goalCollectionId}`);
         return;
       }
-      const result = await adoptStudyPlan(plan.id);
+      const result = await adoptStudyPlan(displayPlan.id);
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       router.push(`/collections/${result.collectionId}`);
     } catch (adoptError) {
-      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? "Goal" : "plan"}.`);
+      setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? labels.goalSingular : labels.singular}.`);
     } finally {
       setAdopting(false);
     }
@@ -151,20 +198,22 @@ export function DashboardStudyPlanSection({
   return (
     <section className="space-y-3 sm:space-y-4">
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold sm:text-xl">Recommended {labels.singular}</h2>
-        <p className="text-xs text-foreground/65">{normalizedCourseProgram}</p>
+        <h2 className="text-lg font-semibold sm:text-xl">
+          {usingPrimary ? labels.primarySingular : `Recommended ${labels.singular}`}
+        </h2>
+        {usingPrimary ? null : <p className="text-xs text-foreground/65">{normalizedCourseProgram}</p>}
       </div>
       <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4 sm:p-6">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle>{plan.title}</CardTitle>
+            <CardTitle>{displayPlan.title}</CardTitle>
             {continuePlan ? (
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                 In your library
               </span>
             ) : null}
           </div>
-          <CardDescription>{plan.description || descriptionFallback}</CardDescription>
+          <CardDescription>{displayPlan.description || descriptionFallback}</CardDescription>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-foreground/70">{detailLine}</p>
@@ -178,7 +227,7 @@ export function DashboardStudyPlanSection({
           </p>
         ) : null}
       </Card>
-      {viewAllHref && matchCount > 1 ? (
+      {!usingPrimary && viewAllHref && matchCount > 1 ? (
         <Link
           href={viewAllHref}
           className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"

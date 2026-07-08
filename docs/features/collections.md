@@ -91,6 +91,101 @@ Hierarchy constraints:
 - the first implementation keeps Goals note-free: a collection must be empty before it can become a Goal, and a Goal cannot accept direct note items
 - these rules enforce the maximum two levels and make cycles impossible
 
+### Primary Review Set
+
+`users.primary_collection_id` is a nullable user-level UUID reference to `note_collections.id`. It is stored as a bare UUID column, following the existing collection reference convention, and uses `ON DELETE SET NULL` at the database level like `note_collections.parent_collection_id`.
+
+The reference is the backend source of truth for the learner's default top-level Goal. It remains profile-agnostic: the backend stores and validates the collection id only, while frontend labels still resolve through `getCollectionLabels`.
+
+Rules:
+
+- only an owned top-level Goal can be primary (`parentCollectionId == null`)
+- setting a child Subject plan as primary returns `InvalidCollectionRequestException` / `400`
+- setting a missing or not-owned collection returns `CollectionNotFoundException` / `404`
+- setting the already-primary collection is a no-op success
+- clearing primary is always allowed and is a no-op when nothing is set
+- when a user has no primary and exactly one owned top-level Goal, that Goal is auto-set as primary
+- auto-set applies after top-level Goal creation, standalone public-plan adoption, first-time Goal adoption, deletion, and re-parenting changes that leave exactly one top-level Goal
+- an existing valid primary is never overwritten by auto-set
+- if the current primary stops being an owned top-level Goal, the reference clears before the exactly-one-top-level auto-set rule is considered
+- adopting child Subject plans inside `adoptGoal` does not run primary auto-set for those temporary standalone child copies; the invariant is reasserted once after the first-time Goal adoption is structurally settled
+
+Structural collection mutations reassert this invariant in the same service operation that changes the top-level set:
+
+| Mutation | Primary behavior |
+|---|---|
+| `POST /collections` | Can auto-set the created collection when it is the user's first top-level Goal. |
+| `POST /collections/{id}/adopt` | Can auto-set the adopted standalone plan when it is the user's first top-level collection. |
+| `POST /collections/{id}/adopt-goal` | Can auto-set the adopted Goal on genuine first-time adoption; repeat `alreadyAdopted=true` calls do not alter primary. |
+| `DELETE /collections/{id}` | If the deleted collection was top-level, clears an invalid primary and can auto-set the one remaining top-level Goal. |
+| `PATCH /collections/{id}/parent` | Attaching a primary Goal under another Goal invalidates it; detaching a child back to top-level can trigger auto-set. |
+
+**Frontend consumption (Dashboard + Review Sets list page):** `DashboardStudyPlanSection` (`frontend/app/dashboard/dashboard-study-plan-section.tsx`) accepts an optional `primaryCollectionId` prop. When set, it looks the id up via `listCollections()` and, if found, renders that owned collection instead of the course/program-matched public recommendation — skipping the adopt flow entirely (the CTA always resolves to the existing "already owned" render path, i.e. `router.push` straight to `/collections/{id}`, never `adoptGoal`/`adoptStudyPlan`). The heading swaps from `Recommended {labels.singular}` to `labels.primarySingular` (a new field on `CollectionLabels` in `frontend/lib/collection-labels.ts`: "Primary Study Plan" / "Primary Review Set" / "Primary Lesson Plan" / "Primary Collection", resolved the same profile-aware way as every other collection label), the course/program subtitle and the "See all N" link are both suppressed (neither applies once the plan is an explicit choice rather than a recommendation). If the id isn't found among the user's owned collections (a defensive fallback — the backend invariant should keep this reference valid), rendering falls through to the existing course/program-matched flow, same as if no primary were set at all. Wired into both Dashboard call sites (`STUDENT`/`PROFESSIONAL` and `BOARD_EXAM`) and the `/collections` list page (`frontend/app/collections/collections-page-client.tsx` — the `getMe()` call already fetching `courseProgram` there was renamed `loadProfile` and extended to also read `primaryCollectionId`). The onboarding call site of the same component does not pass this prop — a new user going through onboarding has no owned collections yet, so there's nothing to be primary. The Review Sets list page's empty-state augmentation ("Browse All Official Review Sets") is separate, later work — see `docs/product/ROADMAP.md`'s v0.40.1 section.
+
+The CTA verb (`Start`/`Continue this {label}`) and the child-count line (`N {label}s`) in `DashboardStudyPlanSection` and `PublicStudyPlanCard` (`frontend/components/study-plan/public-study-plan-card.tsx`) resolve through `labels.goalSingular`/`labels.singular`/`labels.subjectSingular`, same as `primarySingular` above — a hardcoded "Goal"/"Subject plan(s)" wording briefly shipped in these two components (the Goal detail page always did this correctly) and was fixed as part of the v0.40.0 pre-signoff pass. `PublicStudyPlanCard` takes an optional `profileType` prop for this purpose; `published-plans-page-client.tsx` passes the same `profileType` it already resolves for its own page-level labels.
+
+**Frontend consumption (Progress):** `/progress` also reads `primaryCollectionId` from `GET /auth/me`. When the URL has no explicit `?collectionId=`, it applies the Primary Review Set once as the initial scoped readiness view; explicit query-param selections and later `All subjects` picker changes win after that first resolution. Because a primary is always a top-level Goal, Progress uses `GET /collections/{id}/goal` for that default aggregate view, not `GET /collections/{id}/readiness` (which reads only direct note items and is reserved for explicit leaf/Subject plan selections).
+
+### Target Completion Date
+
+`note_collections.target_completion_date` is a nullable `LocalDate` on top-level Goals only (`parentCollectionId == null`) — the optional deadline a learner is aiming for, feeding the v0.40.0 weekly countdown derivation (see below). Deliberately decoupled from `UserEntity.examDate` (the existing profile-level board-exam date, Dashboard-only, unrelated and untouched).
+
+Set/clear split into two different mechanisms, because a nullable `LocalDate` field has no empty-string-style sentinel to distinguish "omit" from "explicit clear" the way text fields do:
+
+- **Set** goes through the general metadata PATCH: `PATCH /collections/{id}` (`updateMetadata`) accepts `targetCompletionDate` with the same omit-preserves semantics as `courseProgram`/`estimatedStudyHours` — omitting it in the request body leaves the existing value untouched.
+- **Clear** is a dedicated endpoint: `DELETE /collections/{id}/target-date`, mirroring the `DELETE /collections/{id}/primary` shape. No-op success if nothing is set or if the target is a child Subject plan (which can never have a date to begin with).
+
+Rules:
+
+- setting a target date on a child Subject plan via `updateMetadata` returns `InvalidCollectionRequestException` / `400` — Goal-only, same category as the Primary Review Set top-level-only rule
+- `DELETE /collections/{id}/target-date` on a missing/not-owned collection returns `CollectionNotFoundException` / `404`
+- **never copied on adopt or self-copy** — `adopt`/`adoptGoal` (including the case where a user adopts their own PUBLIC collection) never carry a source's `targetCompletionDate` onto the created copy; the field simply isn't set on the new entity and defaults to null. No auto-guessed default is generated either — null stays null until the learner deliberately sets one.
+- **cleared on reparent** — `updateParent` (`PATCH /collections/{id}/parent`) clears `targetCompletionDate` whenever a top-level Goal is nested under a new parent (becoming a child), in the same branch that sets `parentCollectionId`. Without this, a dated Goal that gets nested and later detached back to top-level (`updateParent(null)`) would resurface its stale date instead of starting fresh — the same category of invariant `reassertPrimaryInvariant` already enforces for the Primary Review Set on this same method, just for the target-date field instead.
+- exposed on both `NoteCollectionDetailResponse` (the `updateMetadata`/`create` response) and `GoalCollectionDetailResponse` (the `GET /collections/{id}/goal` response the weekly countdown derivation reads from — see below) — these are two separate DTOs, not one superset of the other.
+
+Post-adopt guidance:
+
+- recursive Goal adoption from Dashboard and public plan cards writes a session-scoped just-adopted flag keyed by the new personal Goal id
+- the Goal detail page reads and clears that flag once; if the Goal has no `targetCompletionDate`, it shows the shared `GuidanceTip` with a `Set target date` action
+- the action opens the existing edit modal, where target date and study intensity are already edited
+- the tip never appears for leaf-plan adoption, normal non-post-adopt visits, child Subject plans, or Goals that already have a target date
+- dismissal is permanent through the same localStorage-backed `GuidanceTip` behavior used elsewhere; no new nudge mechanism is introduced
+
+### Weekly Countdown Derivation
+
+`GET /collections/{id}/goal` (`getGoal`) computes three additional nullable fields on `GoalCollectionDetailResponse` — `weeksRemaining`, `conceptsRemaining`, `todaysConceptBudget` — from `targetCompletionDate`, `users.study_days_per_week`, and the existing readiness rollup (`totalConcepts`, `masteredConcepts`, `dueConcepts`, `notPracticedConcepts`). Pure derivation, computed fresh on every request — no stored per-week schedule entity, no new mastery signal, no AI call. This is the Phase 1 "simple total-remaining ÷ remaining-scheduled-days" version; the weighted largest-remainder subject allocation and day-of-week interleaving are Phase 2, not implemented here.
+
+All three fields are `null` when `targetCompletionDate` is null — same degrade-gracefully rule as the rest of the Primary Review Set / target-date surface.
+
+Formula (`NoteCollectionService.computeWeeklyCountdown`):
+
+- `conceptsRemaining = totalConcepts − masteredConcepts`
+- `remainingDays = max(0, days between today and targetCompletionDate)` — floored at 0 for an overdue target date, never negative
+- `remainingScheduledDays = max(1, round(remainingDays × studyDaysPerWeek ÷ 7))` — floored at 1 so an overdue or same-day target never divides by zero; the practical effect is "cram everything today"
+- `weeksRemaining = ceil(remainingDays ÷ 7)`
+- `todaysConceptBudget = dueConcepts + ceil(notPracticedConcepts ÷ remainingScheduledDays)` — due concepts are always included as a floor (they're time-sensitive spaced-repetition reviews, not subject to pacing); new-concept learning is paced by spreading only the not-yet-started pool evenly across the remaining scheduled days
+
+**When `users.study_days_per_week` is null** (learner skipped the intensity question), the derivation defaults to 7 (every day) for the math only — nothing is persisted, it's a conservative fallback so the countdown still renders rather than hiding whenever intensity alone is unset. Only a missing `targetCompletionDate` hides the countdown; a missing `studyDaysPerWeek` does not.
+
+Due-concept count can *rise* over time even for a diligent learner — it tracks spaced-repetition review timing, not inactivity. This is correct behavior, not a scheduler bug.
+
+### Target Date + Study Intensity Input (frontend)
+
+`EditCollectionModal` (`frontend/app/collections/[id]/collection-detail-page-client.tsx`) is the single edit surface reused for both top-level Goals and child Subject plans. It derives `isTopLevelGoal = collection.parentCollectionId === null` (no separate prop needed — `collection` is already passed in full) and shows the target-date and study-intensity fields **only** when `isTopLevelGoal` is true, per the locked Goal-only rule. The Create Collection modal (`frontend/app/collections/collections-page-client.tsx`) does not have these fields yet — it also lacks `estimatedStudyHours`, so this is consistent with that surface's existing minimal-fields precedent, not a gap introduced here.
+
+- **Target date** reads/writes through `collection.targetCompletionDate`. On save: a non-empty value is included in the same `updateCollection` PATCH call as title/description/estimated hours (omit-preserves semantics); an emptied *previously-set* date instead calls the dedicated `clearCollectionTargetDate` (`DELETE /collections/{id}/target-date`) — omitting the field from the PATCH would leave the old date untouched, not clear it, since `LocalDate` has no PATCH-clear sentinel. An empty field that was already empty triggers neither call.
+- **Study intensity** (`studyDaysPerWeek`) is a **user-level** attribute, not a collection field, so it isn't part of `collection` — it's asked on this same screen per the locked UX decision ("one screen, sane default if skipped") but sourced and saved separately via `getMe()` (prefill, fetched only when `isTopLevelGoal`) and `updateStudyDaysPerWeek` (`PUT /users/profile/study-days-per-week`, full-replace). The modal tracks the *baseline* value actually returned by that `getMe()` prefill separately from the field's live contents, and only calls `updateStudyDaysPerWeek` when the baseline resolved **and** the trimmed value differs from it — never while the prefill is still in flight or failed. This is a deliberate fix for a save-before-prefill race (and a `getMe()` failure) that could otherwise silently send `null` and wipe a learner's real intensity before the async prefill ever landed; it is not a fire-and-forget full-replace on every save. Client-side validates 1-7 before submit, mirroring the backend's `@Min`/`@Max`.
+- The `<form>` uses `noValidate` — all validation (title-required, 1-7 intensity range) is custom JS, not native HTML5 constraint validation, so error messages are consistent and don't silently block submission before the app's own error UI can render.
+- Saving updates `collection` state in full (via `setCollection(saved)` in both call sites), so the modal's next open reflects the latest persisted target date. On the Goal-branch call site, saving also refetches `getCollectionGoal` (see "This Week" section below) so the weekly countdown reflects an edited target date immediately, not just on next page load.
+
+### This Week Section (frontend)
+
+`GoalWeeklyCountdownCard` (`frontend/app/collections/[id]/collection-detail-page-client.tsx`) renders above the existing `ReadinessSummary` inside `GoalDetailView`, showing `weeksRemaining`, `conceptsRemaining`, and `todaysConceptBudget` from `GoalCollectionDetailResponse`. Returns `null` (renders nothing) when `targetCompletionDate` or any of the three derived fields is `null` — same degrade-gracefully contract as the backend derivation itself.
+
+- Date display uses a `formatLocalDate` helper that splits the `LocalDate` string and constructs via the local-time `Date(year, month, day)` constructor rather than `new Date(isoDate)` — the latter parses a date-only string as UTC midnight, which can silently shift a day backward once formatted in a timezone behind UTC (e.g. US timezones). This is a real, easy-to-reintroduce bug if "simplified" later; verified explicitly under `TZ=America/Los_Angeles` in tests.
+- **Known gap, by design, not fixed here:** `GoalDetailView` (and therefore this card) only renders when `goalDetail` is non-null, which the page only populates when `childCount > 0` — a brand-new top-level Goal with zero Subject plans yet added falls into the leaf-view branch instead, same as it already does for the existing readiness summary and subject grid. A target date set on such a Goal won't show a "This Week" card until at least one child Subject plan exists. This mirrors an existing limitation of the page's Goal-vs-leaf branching (keyed on `childCount`, not `parentCollectionId`), not a new one introduced by this feature.
+- **Refetch on edit:** because `weeksRemaining`/`conceptsRemaining`/`todaysConceptBudget` only exist on `GoalCollectionDetailResponse` (not on `NoteCollectionDetail`, which is all `updateCollection`/`clearCollectionTargetDate` return), a client-side field copy after editing the target date cannot refresh these three fields. `EditCollectionModal`'s `onSaved` on the Goal-branch call site instead calls `getCollectionGoal(collectionId)` again and replaces `goalDetail` wholesale; if that refetch fails, it falls back to the previous partial-merge behavior (now including `targetCompletionDate`) so the rest of the page doesn't break, at the cost of a stale countdown until the next successful load.
+
 ### Builder Canvas
 
 The builder route is `/collections/{id}/builder`. It first loads the base collection through `GET /collections/{id}`:
@@ -444,6 +539,52 @@ Behavior:
 - child that already has children returns `400`.
 - parent with direct note items returns `400`, because Phase 1 Goals are containers of Subject plans, not mixed note folders.
 - setting the current parent again is a safe no-op.
+
+### Set / Clear Primary
+
+`PUT /collections/{id}/primary`
+
+Behavior:
+
+- parses `{id}` with the same malformed-id-as-collection-404 pattern as other collection endpoints
+- verifies `{id}` exists and is owned by the caller
+- verifies the target collection is top-level (`parentCollectionId == null`)
+- writes `users.primary_collection_id = {id}`
+- setting the existing primary again is a no-op success
+- returns `204`
+
+`DELETE /collections/{id}/primary`
+
+Behavior:
+
+- parses `{id}` for route consistency, but the id does not need to match the current primary
+- clears `users.primary_collection_id`
+- clearing when no primary is set is a no-op success
+- returns `204`
+
+`GET /auth/me` exposes the persisted nullable `primaryCollectionId`; there is no separate profile/preference read endpoint for this value.
+
+### Set / Clear Target Date
+
+Setting a target date reuses the general metadata PATCH rather than a dedicated `PUT`, since it is one field among several on that same endpoint:
+
+`PATCH /collections/{id}` (`updateMetadata`)
+
+Behavior:
+
+- accepts an optional `targetCompletionDate` field alongside `title`/`description`/`courseProgram`/`estimatedStudyHours`
+- omitting the field preserves the existing value (same omit-preserves semantics as the other optional fields on this endpoint)
+- rejects with `InvalidCollectionRequestException` / `400` if the target collection is a child Subject plan (`parentCollectionId != null`)
+
+`DELETE /collections/{id}/target-date`
+
+Behavior:
+
+- parses `{id}` with the same malformed-id-as-collection-404 pattern as other collection endpoints
+- verifies `{id}` exists and is owned by the caller
+- clears `note_collections.target_completion_date`
+- clearing when no date is set, or on a child Subject plan, is a no-op success
+- returns the updated `NoteCollectionDetailResponse`
 
 ### Reorder Goal Children
 

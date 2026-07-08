@@ -27,6 +27,7 @@ import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.exception.CollectionNotFoundException;
@@ -43,6 +44,7 @@ import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +57,7 @@ import org.springframework.transaction.support.TransactionOperations;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +71,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -132,10 +136,17 @@ class NoteCollectionServiceTest {
     @Mock
     private NoteService noteService;
 
+    @Mock
+    private UserRepository userRepository;
+
     private NoteCollectionService service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(userRepository.findById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID userId = invocation.getArgument(0);
+            return Optional.of(buildUser(userId));
+        });
         service = new NoteCollectionService(
                 collectionRepository,
                 itemRepository,
@@ -147,6 +158,7 @@ class NoteCollectionServiceTest {
                 progressReportService,
                 analyticsService,
                 noteService,
+                userRepository,
                 TransactionOperations.withoutTransaction()
         );
     }
@@ -583,6 +595,32 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void updateParent_clearsTargetCompletionDateWhenTopLevelGoalBecomesChild() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(childId)).thenReturn(0L);
+        when(collectionRepository.findMaxSiblingPosition(parentId, userId)).thenReturn(0);
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateParent(
+                childId,
+                userId,
+                new SetNoteCollectionParentRequest(parentId)
+        );
+
+        assertThat(child.getTargetCompletionDate()).isNull();
+        assertThat(result.targetCompletionDate()).isNull();
+    }
+
+    @Test
     void updateParent_clearsParentIdempotently() {
         UUID userId = UUID.randomUUID();
         UUID parentId = UUID.randomUUID();
@@ -676,6 +714,199 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void setPrimary_setsOwnedTopLevelCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.setPrimary(collectionId, userId);
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(collectionId);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void setPrimary_rejectsCollectionOwnedByAnotherUserAsNotFound() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setPrimary(collectionId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
+    }
+
+    @Test
+    void setPrimary_rejectsChildCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "Professional Education", Instant.now());
+        collection.setParentCollectionId(UUID.randomUUID());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        assertThatThrownBy(() -> service.setPrimary(collectionId, userId))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("Only a top-level Goal can be primary.");
+    }
+
+    @Test
+    void setPrimary_isNoOpWhenCollectionIsAlreadyPrimary() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(collectionId);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.setPrimary(collectionId, userId);
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(collectionId);
+        verify(userRepository, never()).save(user);
+    }
+
+    @Test
+    void clearPrimaryClearsExistingPrimaryAndIsIdempotent() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(collectionId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.clearPrimary(userId);
+        service.clearPrimary(userId);
+
+        assertThat(user.getPrimaryCollectionId()).isNull();
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void create_autoSetsFirstTopLevelCollectionAsPrimary() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity[] savedCollection = new NoteCollectionEntity[1];
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
+            savedCollection[0] = invocation.getArgument(0);
+            return savedCollection[0];
+        });
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenAnswer(invocation -> List.of(savedCollection[0]));
+
+        NoteCollectionDetailResponse result = service.create(userId, new CreateNoteCollectionRequest(COLLECTION_TITLE, null, null));
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(result.id());
+    }
+
+    @Test
+    void create_doesNotOverwriteExistingPrimaryWhenSecondGoalIsCreated() {
+        UUID userId = UUID.randomUUID();
+        UUID existingPrimaryId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(existingPrimaryId);
+        NoteCollectionEntity existingPrimary = buildCollection(existingPrimaryId, userId, "Existing Goal", Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(existingPrimaryId, userId)).thenReturn(Optional.of(existingPrimary));
+        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.create(userId, new CreateNoteCollectionRequest(COLLECTION_TITLE, null, null));
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(existingPrimaryId);
+    }
+
+    @Test
+    void deletePrimaryAutoSetsOnlyRemainingTopLevelCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryId = UUID.randomUUID();
+        UUID remainingId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(primaryId);
+        NoteCollectionEntity primary = buildCollection(primaryId, userId, "Primary Goal", Instant.now());
+        NoteCollectionEntity remaining = buildCollection(remainingId, userId, "Remaining Goal", Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(primaryId, userId))
+                .thenReturn(Optional.of(primary))
+                .thenReturn(Optional.empty());
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(List.of(remaining));
+
+        service.delete(primaryId, userId);
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(remainingId);
+    }
+
+    @Test
+    void deleteNonPrimaryKeepsPrimaryUnchanged() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryId = UUID.randomUUID();
+        UUID deletedId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(primaryId);
+        NoteCollectionEntity primary = buildCollection(primaryId, userId, "Primary Goal", Instant.now());
+        NoteCollectionEntity deleted = buildCollection(deletedId, userId, "Other Goal", Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(deletedId, userId)).thenReturn(Optional.of(deleted));
+        when(collectionRepository.findByIdAndOwnerUserId(primaryId, userId)).thenReturn(Optional.of(primary));
+
+        service.delete(deletedId, userId);
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(primaryId);
+    }
+
+    @Test
+    void updateParentClearsPrimaryWhenPrimaryBecomesChildWithMultipleTopLevelGoalsRemaining() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(primaryId);
+        NoteCollectionEntity primary = buildCollection(primaryId, userId, "Primary Goal", Instant.now());
+        NoteCollectionEntity parent = buildCollection(parentId, userId, "Parent Goal", Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(primaryId, userId))
+                .thenReturn(Optional.of(primary))
+                .thenReturn(Optional.of(primary));
+        when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
+        when(collectionRepository.countByParentCollectionId(primaryId)).thenReturn(0L);
+        when(collectionRepository.findMaxSiblingPosition(parentId, userId)).thenReturn(-1);
+        when(collectionRepository.save(primary)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(2L);
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(primaryId)).thenReturn(List.of());
+
+        service.updateParent(primaryId, userId, new SetNoteCollectionParentRequest(parentId));
+
+        assertThat(user.getPrimaryCollectionId()).isNull();
+    }
+
+    @Test
+    void updateParentAutoSetsDetachedChildWhenItIsOnlyTopLevelCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(parentId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
+        when(collectionRepository.save(child)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(childId)).thenReturn(List.of());
+
+        service.updateParent(childId, userId, new SetNoteCollectionParentRequest(null));
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(childId);
+    }
+
+    @Test
     void getGoal_rollsUpChildReadinessBySummedCountsWithoutMergedConceptDeduplication() {
         UUID userId = UUID.randomUUID();
         UUID goalId = UUID.randomUUID();
@@ -747,6 +978,145 @@ class NoteCollectionServiceTest {
         assertThat(result.totalConcepts()).isZero();
         assertThat(result.overallReadinessPercentage()).isZero();
         assertThat(result.children()).isEmpty();
+    }
+
+    @Test
+    void getGoal_reflectsTargetCompletionDateSetViaUpdateMetadata() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+    }
+
+    @Test
+    void getGoal_returnsNullCountdownFieldsWhenNoTargetDateIsSet() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isNull();
+        assertThat(result.conceptsRemaining()).isNull();
+        assertThat(result.todaysConceptBudget()).isNull();
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void getGoal_computesWeeklyCountdownWithDueConceptsAsFloor() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().plusDays(14));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(goalId);
+        StudyPackEntity pack = buildStudyPack(noteId, List.of("Assessment"));
+        pack.setOwnerUserId(userId);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(7);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of(noteProjection(childId, noteId)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(pack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId, new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(new SubjectProgressEntry("Professional Education", 100, 20, 5, 30, 20)),
+                                null
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isEqualTo(2);
+        assertThat(result.conceptsRemaining()).isEqualTo(80);
+        assertThat(result.todaysConceptBudget()).isEqualTo(8);
+    }
+
+    @Test
+    void getGoal_defaultsToSevenDaysPerWeekWhenStudyIntensityNotSet() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().plusDays(7));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(goalId);
+        StudyPackEntity pack = buildStudyPack(noteId, List.of("Assessment"));
+        pack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of(noteProjection(childId, noteId)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(pack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId, new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(new SubjectProgressEntry("Professional Education", 7, 0, 0, 7, 0)),
+                                null
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+        // userRepository.findById returns a fresh buildUser(userId) via the lenient stub in setUp(),
+        // which leaves studyDaysPerWeek null — asserting the default-to-7 fallback applies.
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isEqualTo(1);
+        assertThat(result.todaysConceptBudget()).isEqualTo(1);
+    }
+
+    @Test
+    void getGoal_countdownFloorsRemainingScheduledDaysAtOneWhenTargetDateIsOverdue() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(LocalDate.now().minusDays(3));
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setParentCollectionId(goalId);
+        StudyPackEntity pack = buildStudyPack(noteId, List.of("Assessment"));
+        pack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of(child));
+        when(itemRepository.countItemsByCollectionIds(List.of(childId))).thenReturn(List.of(countProjection(childId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(childId))).thenReturn(List.of(noteProjection(childId, noteId)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(pack));
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(
+                        childId, new ProgressReportService.SubjectProgressBatchResult(
+                                List.of(new SubjectProgressEntry("Professional Education", 12, 0, 2, 10, 0)),
+                                null
+                        )
+                ));
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeksRemaining()).isZero();
+        assertThat(result.todaysConceptBudget()).isEqualTo(12);
     }
 
     @Test
@@ -982,7 +1352,8 @@ class NoteCollectionServiceTest {
                 UPDATED_COLLECTION_TITLE,
                 UPDATED_COLLECTION_DESCRIPTION,
                 UPDATED_COURSE_PROGRAM,
-                3
+                3,
+                null
         ));
 
         assertThat(result.title()).isEqualTo(UPDATED_COLLECTION_TITLE);
@@ -1010,6 +1381,7 @@ class NoteCollectionServiceTest {
                 UPDATED_COLLECTION_TITLE,
                 null,
                 null,
+                null,
                 null
         ));
 
@@ -1033,6 +1405,7 @@ class NoteCollectionServiceTest {
                 null,
                 COLLECTION_DESCRIPTION,
                 COURSE_PROGRAM,
+                null,
                 null
         ));
 
@@ -1053,6 +1426,7 @@ class NoteCollectionServiceTest {
         NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
                 null,
                 "",
+                null,
                 null,
                 null
         ));
@@ -1084,6 +1458,7 @@ class NoteCollectionServiceTest {
                 null,
                 null,
                 UPDATED_COURSE_PROGRAM,
+                null,
                 null
         ));
 
@@ -1107,12 +1482,111 @@ class NoteCollectionServiceTest {
                 null,
                 null,
                 "",
+                null,
                 null
         ));
 
         assertThat(goal.getCourseProgram()).isNull();
         verify(collectionRepository, never()).findOrderedChildrenByParentCollectionIdAndOwnerUserId(any(), any());
         verify(collectionRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void updateMetadata_setsTargetCompletionDateOnTopLevelGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                null,
+                null,
+                null,
+                null,
+                LocalDate.parse("2026-12-01")
+        ));
+
+        assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+        assertThat(collection.getTargetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+    }
+
+    @Test
+    void updateMetadata_rejectsTargetCompletionDateOnChildSubjectPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setParentCollectionId(UUID.randomUUID());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        assertThatThrownBy(() -> service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                null,
+                null,
+                null,
+                null,
+                LocalDate.parse("2026-12-01")
+        ))).isInstanceOf(InvalidCollectionRequestException.class);
+    }
+
+    @Test
+    void updateMetadata_preservesTargetCompletionDateWhenRequestValueIsNull() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.updateMetadata(collectionId, userId, new UpdateNoteCollectionRequest(
+                UPDATED_COLLECTION_TITLE,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+    }
+
+    @Test
+    void clearTargetDate_clearsExistingDate() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.clearTargetDate(collectionId, userId);
+
+        assertThat(result.targetCompletionDate()).isNull();
+        assertThat(collection.getTargetCompletionDate()).isNull();
+    }
+
+    @Test
+    void clearTargetDate_isNoOpWhenNothingSet() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        service.clearTargetDate(collectionId, userId);
+
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void clearTargetDate_rejectsCollectionOwnedByAnotherUserAsNotFound() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.clearTargetDate(collectionId, userId))
+                .isInstanceOf(CollectionNotFoundException.class);
     }
 
     @Test
@@ -1453,6 +1927,47 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void adopt_neverCopiesTargetCompletionDateFromSource() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+    }
+
+    @Test
+    void adopt_neverCopiesTargetCompletionDateOnSelfCopy() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, userId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+    }
+
+    @Test
     void adopt_isolatesUnexpectedCopyFailureAndKeepsTheRest() {
         UUID userId = UUID.randomUUID();
         UUID sourcePlanId = UUID.randomUUID();
@@ -1522,6 +2037,34 @@ class NoteCollectionServiceTest {
 
         assertThat(result.collectionId()).isEqualTo(winnerPlanId);
         assertThat(result.alreadyAdopted()).isTrue();
+    }
+
+    @Test
+    void adopt_autoSetsStandalonePlanWhenItIsFirstTopLevelCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity[] savedCollection = new NoteCollectionEntity[1];
+        NoteCollectionEntity source = buildCollection(sourcePlanId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
+            savedCollection[0] = invocation.getArgument(0);
+            return savedCollection[0];
+        });
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenAnswer(invocation -> List.of(savedCollection[0]));
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.alreadyAdopted()).isFalse();
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(result.collectionId());
     }
 
     @Test
@@ -1708,6 +2251,57 @@ class NoteCollectionServiceTest {
 
         assertThat(result.goalCollectionId()).isEqualTo(winnerGoalId);
         assertThat(result.alreadyAdopted()).isTrue();
+    }
+
+    @Test
+    void adoptGoal_autoSetsFirstTimeGoalWhenItIsFirstTopLevelCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity[] savedGoal = new NoteCollectionEntity[1];
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, UUID.randomUUID(), "LET Mastery", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceGoal.getOwnerUserId()))
+                .thenReturn(List.of());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
+            savedGoal[0] = invocation.getArgument(0);
+            return savedGoal[0];
+        });
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenAnswer(invocation -> List.of(savedGoal[0]));
+
+        AdoptGoalResponse result = service.adoptGoal(sourceGoalId, userId);
+
+        assertThat(result.alreadyAdopted()).isFalse();
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(result.goalCollectionId());
+    }
+
+    @Test
+    void adoptGoal_neverCopiesTargetCompletionDateFromSourceGoal() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, UUID.randomUUID(), "LET Mastery", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        sourceGoal.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceGoal.getOwnerUserId()))
+                .thenReturn(List.of());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adoptGoal(sourceGoalId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
     }
 
     @Test
@@ -1957,6 +2551,9 @@ class NoteCollectionServiceTest {
         Method createMethod = NoteCollectionService.class.getMethod("create", UUID.class, CreateNoteCollectionRequest.class);
         Method updateMethod = NoteCollectionService.class.getMethod("updateMetadata", UUID.class, UUID.class, UpdateNoteCollectionRequest.class);
         Method deleteMethod = NoteCollectionService.class.getMethod("delete", UUID.class, UUID.class);
+        Method setPrimaryMethod = NoteCollectionService.class.getMethod("setPrimary", UUID.class, UUID.class);
+        Method clearPrimaryMethod = NoteCollectionService.class.getMethod("clearPrimary", UUID.class);
+        Method clearTargetDateMethod = NoteCollectionService.class.getMethod("clearTargetDate", UUID.class, UUID.class);
         Method addMethod = NoteCollectionService.class.getMethod("addItems", UUID.class, UUID.class, AddNoteCollectionItemsRequest.class);
         Method removeMethod = NoteCollectionService.class.getMethod("removeItem", UUID.class, UUID.class, UUID.class);
         Method orderMethod = NoteCollectionService.class.getMethod("setOrder", UUID.class, UUID.class, SetNoteCollectionOrderRequest.class);
@@ -1970,6 +2567,9 @@ class NoteCollectionServiceTest {
         assertThat(createMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(updateMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(deleteMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(setPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(clearPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(clearTargetDateMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(addMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(removeMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(orderMethod.getAnnotation(Transactional.class)).isNotNull();
@@ -1992,6 +2592,13 @@ class NoteCollectionServiceTest {
         collection.setCreatedAt(updatedAt.minusSeconds(60));
         collection.setUpdatedAt(updatedAt);
         return collection;
+    }
+
+    private UserEntity buildUser(UUID userId) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setUpdatedAt(OffsetDateTime.parse("2026-04-01T01:00:00Z"));
+        return user;
     }
 
     private NoteCollectionItemEntity buildItem(UUID collectionId, UUID noteId, int position, String label) {

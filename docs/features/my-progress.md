@@ -92,15 +92,21 @@ ConceptHealth write sources:
 
 The due threshold stays owned by `ConceptHealthService`; do not hardcode the day count in progress-report code.
 
-## Plan Readiness Cross-Reference
+## Plan / Goal Readiness Cross-Reference
 
 `GET /collections/{id}/readiness` reuses the same ConceptHealth spine and `ProgressReportService` classification for a single owned collection's Study Packs. For the same concept set, plan readiness must match `/me/progress`: mastered, due, not started, and `masteryPercentage` use the same rules and thresholds.
 
 Plan readiness now lives inside the canonical `/progress` route as the plan-scoped view at `/progress?collectionId={id}`. The in-page picker is the primary way to switch between `All subjects` and one saved leaf/Subject plan, and the plan detail `Check readiness` CTA deep-links to the same query-param view. The frontend still calls `GET /collections/{id}/readiness` for the scoped payload; only the rendering location moved.
 
+When `/progress` loads with no explicit `?collectionId=`, the frontend resolves `primaryCollectionId` from `GET /auth/me`. If a Primary Review Set exists, the page applies it as a one-time default selection; if profile loading fails or no primary exists, the page stays on the all-subjects rollup. Once that first resolution is complete, the picker owns navigation normally, so choosing `All subjects` pushes `/progress` and must not snap back to primary.
+
+Primary Review Set ids are always top-level Goals, not leaf/Subject plans. The Goal default path therefore uses `GET /collections/{id}/goal` (`getCollectionGoal`) and renders the aggregate readiness fields from `GoalCollectionDetailResponse`: `overallReadinessPercentage`, `totalConcepts`, `masteredConcepts`, `dueConcepts`, and `notPracticedConcepts`. It must not call `GET /collections/{id}/readiness`, because that endpoint reads only the selected collection's direct note items and a Goal usually stores notes under child Subject plans. Explicit leaf selections still use `GET /collections/{id}/readiness`.
+
 When no `collectionId` is selected, `/progress` remains the canonical all-subject detail surface for owned Study Packs, goals, milestones, weakest-subject routing, and study-focus guidance. When a `collectionId` is selected, `/progress` renders only the scoped readiness data supported by `PlanReadinessResponse`: overall readiness and per-subject readiness.
 
 Study Pack generation status (`notesWithStudyPack`/`totalNotes`) is not shown as a standing stat on either view — it is a content/authoring status, not a mastery or practice signal, and duplicates the `N/N notes ready` badge already on the plan detail Hero card (see `docs/features/collections.md`). The plan-scoped view shows it only as a conditional caveat when `notesWithStudyPack < totalNotes` (`N of M notes in this {plan} don't have a Study Pack yet, so they aren't reflected below`, linking to `/collections/{id}`), explaining why readiness may look artificially complete for a partially-generated plan. The caveat disappears once every note has a Study Pack.
+
+The Goal-scoped primary default does not show the missing-Study-Pack caveat, because `GoalCollectionDetailResponse` does not include `totalNotes` or `notesWithStudyPack`.
 
 ## Note Readiness Cross-Reference
 
@@ -124,12 +130,13 @@ The page renders:
 
 - Header: `My Progress`
 - Subtitle: `Concept mastery across your subjects, based on your recent practice.`
-- An in-page picker with `All subjects` plus leaf/Subject plans from `listCollections()` filtered to `childCount === 0`; selecting a plan updates `/progress?collectionId={id}` without a full reload.
+- An in-page picker with `All subjects` plus leaf/Subject plans from `listCollections()` filtered to `childCount === 0`; selecting a plan updates `/progress?collectionId={id}` without a full reload. If the one-time Primary Review Set default selects a top-level Goal, the picker includes that selected Goal as the current value so its real title displays, but the selectable plan list remains leaf/Subject plans.
 - Goal summary header when a study goal is set.
 - Goal milestone card between the goal summary header and `What to study next` card when `goalSummary.totalConcepts > 0`.
 - `What to study next` routes `SUBJECT_FOCUS` goals to `/public/library?subject={weakestGoalSubject}` when a weakest subject exists, otherwise `/public/library`.
 - A per-subject readiness bar with `X% ready` or `Not started`, plus counts for mastered, due, and not started concepts.
 - Plan-scoped mode (`?collectionId={id}`): overall readiness summary and per-subject readiness from `GET /collections/{id}/readiness`; goal summary, milestones, next-study, and study-focus cards are intentionally absent. A conditional caveat (`N of M notes in this {plan} don't have a Study Pack yet, so they aren't reflected below`, linking to `/collections/{id}`) shows only when `notesWithStudyPack < totalNotes`; there is no standing Study Pack coverage stat.
+- Primary Goal-scoped default mode (no explicit `?collectionId=`, primary exists): compact overall readiness from `GET /collections/{id}/goal`; no per-subject breakdown and no missing-Study-Pack caveat because the Goal aggregate response does not expose those fields.
 - Empty state: `No study packs with concepts yet. Generate a Study Pack to start tracking your progress.`
 - No-goal actionable state: when `goalSummary` is null but subject progress exists, show `Set your study focus`, up to 5 weakest subject chips linking to `/profile#study-focus`, and an `Or set from Profile →` link.
 - Inline load failure state: `Could not load your progress report. Try refreshing.`

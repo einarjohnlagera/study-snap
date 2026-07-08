@@ -6,16 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.39.2** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.40.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.39.2 — Public Library Learning Experience
+## Active release: v0.40.0 — Weekly Study Plan (Exam Countdown) + Primary Review Set
 
-Base branch for this release: `releases/v0.39.2`. Connects the Public Library discovery layer to the signed-in workspace's richer review methods, so anonymous visitors experience enough of the study system to want to continue, without weakening the discovery/workspace distinction. Validated against an existing, sanctioned precedent (`PublicMiniQuizPreview`'s capped, client-side-only quiz teaser) rather than a new exception.
+Base branch for this release: `releases/v0.40.0`. Turns readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0, aimed at the exam-taker conversion/monetization segment. Full scope, phasing, and design rationale in `docs/product/ROADMAP.md` and `RELEASES.md`.
 
-- **Flashcards Preview (frontend).** New `PublicFlashcardsPreview` component mirroring `PublicMiniQuizPreview`'s shape: capped at 3 cards, tap-to-reveal, client-side only, no persistence. Zero backend change — reuses data already exposed in the unauthenticated public note response.
-- **Memorization teaser (frontend).** Static, purely educational section — no per-note content, no scheduling logic, no state for anonymous users.
-- **Existing CTA hierarchy preserved.** Flashcards/Memorization are additive secondary cards; the primary CTA and existing secondary actions are not restructured in this release.
-- **Parked, not in scope:** standalone adoption of a single child Subject plan — unresolved re-parenting interaction with `adoptGoal`'s idempotency check.
+- **Primary Review Set (backend + frontend, foundational).** New nullable user-level `primaryCollectionId`, explicitly set by the learner; label always resolves through `getCollectionLabels`. Auto-set when exactly one top-level Goal is owned.
+- **Per-Goal target completion date (backend).** New nullable `note_collections.target_completion_date`, top-level Goals only; decoupled from `UserEntity.examDate`. Never copied on adopt/self-copy.
+- **Study intensity (backend).** `studyDaysPerWeek` lives on the user, not the Goal.
+- **Weekly countdown derivation + scheduling algorithm (backend).** Derived fields on the Goal endpoint (weeks-remaining, concepts-remaining, today's budget); largest-remainder method for subject allocation; due concepts as a floor. No stored per-week schedule, no LLM.
+- **Three surfaces + Progress default-view change (frontend).** Dashboard primary CTA, Review Set "This Week" section, Review Sets list page; `/progress` defaults to the Primary Review Set's scoped view via the existing `PlanPicker` mechanism.
+- **Parked, not in scope:** cross-course note reusability, per-Subject (child-level) target dates, multi-Goal scheduler orchestration, nav rename / Exam Hub change / Explore page / Progress full-redesign.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -200,9 +202,16 @@ type: concise subject
 
 **Release-management commits go directly on the release branch.** Release **kickoff** (opening a version) and release **sign-off** (closing / marking a version Released) are committed straight to `releases/vX.Y.Z` — do **not** create a separate sub-branch or PR for them. Feature and fix work still goes on its own branch and is merged into `releases/vX.Y.Z` via PR. (`main` stays protected; only the release branch receives these direct release-management commits.)
 
+**Small documentation-only fixes may also go directly on the release branch, no branch/PR.** Scope: doc files only (`.md`, no `.java`/`.ts`/`.tsx`/migration/config/test changes), typically touching one file, correcting something rather than introducing new scope (a version-drift correction, a stale tracker line, a doc/copy fix, adding a process note or rule). Branch+PR overhead isn't worth it at this size. Anything touching actual code — even a genuine one-line bug fix — still goes on its own branch and PR regardless of size, since code changes should go through the normal review/CI path. Still wait for an explicit "commit it" before committing, per the rule above — this only changes *where* the commit lands, not whether to ask first.
+
 Always update `RELEASES.md` with a bullet under the current version section when shipping any change.
 
 When closing a release (marking it Released), commit the closure directly on the `releases/vX.Y.Z` branch (no separate branch/PR), and write a release notes file to `docs/releases/v{X.Y.Z}.md` using the Write tool. Follow the structure of existing files there: `# Release Notes: vX.Y.Z — Theme`, `## Release Theme` (one-sentence), `## Key Features` (bold emoji-prefixed titles with bullet points), `## Polish & Fixes` (flat bullet list). Do not output release notes as plain conversation text.
+
+**Before closing a release, decide the right depth of pre-signoff pressure test — do not default to the heaviest option every time.** Per-PR `/audit-diff` is diff-scoped: it cannot see (a) pre-existing code a PR didn't touch that a new feature increases exposure to, or (b) an invariant interaction between two features shipped in *different* PRs that both touch the same shared method. Both classes of bug only surface via a whole-release view, but that view is expensive, so gate it on release shape:
+- **Full pressure test** (multiple Explore agents inventorying every backend/frontend file touched this release, synthesized and pressure-tested via `advisor`) when the release has a single concept/entity touching 3+ surfaces (e.g. backend + several frontend consumers), OR roughly 6+ PRs, OR more than one PR touched the same pre-existing shared method/component.
+- **Otherwise**, a single `advisor()` call summarizing what shipped is enough — cheaper, and still catches anti-drift violations.
+- Fix or explicitly document (in `RELEASES.md`, as a "Known limitations" note) every finding before signing off — never silently drop a finding.
 
 **Always kick off a version before any implementation.** The kickoff checklist below is the **first commit** on a new `releases/vX.Y.Z` branch — committed directly to that branch — and must land **before** any feature/fix branch is cut or any code is written for the release. Do not start implementation on a version that has not been kicked off. If you find yourself implementing and the version is not yet opened (no `RELEASES.md` section, version refs not bumped), stop and run the kickoff first.
 

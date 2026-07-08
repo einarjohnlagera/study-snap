@@ -24,11 +24,13 @@ import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressView;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizNoteProjection;
@@ -40,6 +42,7 @@ import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +52,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -73,6 +78,7 @@ public class NoteCollectionService {
     private static final int TITLE_MAX_LENGTH = 150;
     private static final int LABEL_MAX_LENGTH = 120;
     private static final int DUE_CONCEPT_DISPLAY_LIMIT = 3;
+    private static final int DEFAULT_STUDY_DAYS_PER_WEEK = 7;
     private static final String TITLE_REQUIRED_MESSAGE = "Collection title is required.";
     private static final String TITLE_TOO_LONG_MESSAGE = "Collection title must be 150 characters or fewer.";
     private static final String LABEL_TOO_LONG_MESSAGE = "Collection item label must be 120 characters or fewer.";
@@ -91,6 +97,8 @@ public class NoteCollectionService {
     private static final String PARENT_WITH_NOTES_MESSAGE = "A collection must be empty before it can become a goal.";
     private static final String CHILD_ORDER_SET_MISMATCH_MESSAGE = "Child order must include exactly the current child plans.";
     private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
+    private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
+    private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
@@ -111,6 +119,7 @@ public class NoteCollectionService {
     private final ProgressReportService progressReportService;
     private final AnalyticsService analyticsService;
     private final NoteService noteService;
+    private final UserRepository userRepository;
     private final TransactionOperations collectionTransactionOperations;
 
     @Transactional(readOnly = true)
@@ -177,6 +186,7 @@ public class NoteCollectionService {
 
         List<NoteCollectionItemEntity> items = buildItems(saved.getId(), orderedNoteIds, 0, now);
         itemRepository.saveAll(items);
+        reassertPrimaryInvariant(userId);
         analyticsService.trackEvent(
                 userId,
                 AnalyticsEventType.COLLECTION_CREATED,
@@ -290,12 +300,21 @@ public class NoteCollectionService {
         int dueConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum();
         int notPracticedConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
         int itemCount = Math.toIntExact(itemRepository.countByCollectionId(collectionId));
+        WeeklyCountdown countdown = computeWeeklyCountdown(
+                userId,
+                collection.getTargetCompletionDate(),
+                masteredConcepts,
+                dueConcepts,
+                notPracticedConcepts,
+                totalConcepts
+        );
         return new GoalCollectionDetailResponse(
                 collection.getId(),
                 collection.getTitle(),
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                collection.getTargetCompletionDate(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 itemCount,
@@ -305,10 +324,41 @@ public class NoteCollectionService {
                 dueConcepts,
                 notPracticedConcepts,
                 totalConcepts,
+                countdown.weeksRemaining(),
+                countdown.conceptsRemaining(),
+                countdown.todaysConceptBudget(),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
                 childResponses
         );
+    }
+
+    private record WeeklyCountdown(Integer weeksRemaining, Integer conceptsRemaining, Integer todaysConceptBudget) {
+        private static final WeeklyCountdown NONE = new WeeklyCountdown(null, null, null);
+    }
+
+    private WeeklyCountdown computeWeeklyCountdown(
+            UUID userId,
+            LocalDate targetCompletionDate,
+            int masteredConcepts,
+            int dueConcepts,
+            int notPracticedConcepts,
+            int totalConcepts
+    ) {
+        if (targetCompletionDate == null) {
+            return WeeklyCountdown.NONE;
+        }
+        UserEntity user = getUserOrThrow(userId);
+        int studyDaysPerWeek = user.getStudyDaysPerWeek() != null
+                ? user.getStudyDaysPerWeek()
+                : DEFAULT_STUDY_DAYS_PER_WEEK;
+        long remainingDays = Math.max(0, ChronoUnit.DAYS.between(LocalDate.now(), targetCompletionDate));
+        long remainingScheduledDays = Math.max(1, Math.round(remainingDays * studyDaysPerWeek / 7.0));
+        int weeksRemaining = (int) Math.ceil(remainingDays / 7.0);
+        int conceptsRemaining = totalConcepts - masteredConcepts;
+        int newConceptsToday = (int) Math.ceil(notPracticedConcepts / (double) remainingScheduledDays);
+        int todaysConceptBudget = dueConcepts + newConceptsToday;
+        return new WeeklyCountdown(weeksRemaining, conceptsRemaining, todaysConceptBudget);
     }
 
     @Transactional(readOnly = true)
@@ -344,11 +394,29 @@ public class NoteCollectionService {
             if (request.estimatedStudyHours() != null) {
                 collection.setEstimatedStudyHours(request.estimatedStudyHours());
             }
+            if (request.targetCompletionDate() != null) {
+                if (collection.getParentCollectionId() != null) {
+                    throw new InvalidCollectionRequestException(TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
+                }
+                collection.setTargetCompletionDate(request.targetCompletionDate());
+            }
         }
         touch(collection);
         NoteCollectionEntity saved = collectionRepository.save(collection);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
         return toDetailResponse(saved, items);
+    }
+
+    @Transactional
+    public NoteCollectionDetailResponse clearTargetDate(UUID collectionId, UUID userId) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        if (collection.getTargetCompletionDate() != null) {
+            collection.setTargetCompletionDate(null);
+            touch(collection);
+            collection = collectionRepository.save(collection);
+        }
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        return toDetailResponse(collection, items);
     }
 
     @Transactional
@@ -366,6 +434,7 @@ public class NoteCollectionService {
                 touch(child);
                 child = collectionRepository.save(child);
             }
+            reassertPrimaryInvariant(userId);
             return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
         }
         if (parentId.equals(collectionId)) {
@@ -378,10 +447,41 @@ public class NoteCollectionService {
         if (!parentId.equals(child.getParentCollectionId())) {
             child.setParentCollectionId(parentId);
             child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
+            // targetCompletionDate is a top-level-Goal-only field (see updateMetadata); a collection
+            // that becomes a child must not keep carrying one, or a stale date resurfaces if it is
+            // later detached back to top-level via updateParent(null).
+            child.setTargetCompletionDate(null);
             touch(child);
             child = collectionRepository.save(child);
         }
+        reassertPrimaryInvariant(userId);
         return toDetailResponse(child, itemRepository.findByCollectionIdOrderByPositionAsc(collectionId));
+    }
+
+    @Transactional
+    public void setPrimary(UUID collectionId, UUID userId) {
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        if (collection.getParentCollectionId() != null) {
+            throw new InvalidCollectionRequestException(PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
+        }
+        UserEntity user = getUserOrThrow(userId);
+        if (collectionId.equals(user.getPrimaryCollectionId())) {
+            return;
+        }
+        user.setPrimaryCollectionId(collectionId);
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void clearPrimary(UUID userId) {
+        UserEntity user = getUserOrThrow(userId);
+        if (user.getPrimaryCollectionId() == null) {
+            return;
+        }
+        user.setPrimaryCollectionId(null);
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
     }
 
     @Transactional
@@ -425,6 +525,10 @@ public class NoteCollectionService {
     }
 
     public AdoptStudyPlanResponse adopt(UUID sourceCollectionId, UUID userId) {
+        return adopt(sourceCollectionId, userId, true);
+    }
+
+    private AdoptStudyPlanResponse adopt(UUID sourceCollectionId, UUID userId, boolean reassertPrimaryAfterPersist) {
         NoteCollectionEntity source = collectionRepository
                 .findByIdAndVisibility(sourceCollectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
@@ -442,7 +546,7 @@ public class NoteCollectionService {
         int skippedCount = copySourceItems(source, userId, copiedItems);
 
         try {
-            return persistAdoptedPlan(source, userId, copiedItems, skippedCount);
+            return persistAdoptedPlan(source, userId, copiedItems, skippedCount, reassertPrimaryAfterPersist);
         } catch (DataIntegrityViolationException raceLost) {
             // A concurrent first-adopt won the (owner_user_id, source_plan_id) unique index — return theirs.
             NoteCollectionEntity winner = collectionRepository
@@ -487,7 +591,7 @@ public class NoteCollectionService {
         int totalNotesSkipped = 0;
         for (int index = 0; index < sourceChildren.size(); index++) {
             NoteCollectionEntity sourceChild = sourceChildren.get(index);
-            AdoptStudyPlanResponse childAdoptResult = adopt(sourceChild.getId(), userId);
+            AdoptStudyPlanResponse childAdoptResult = adopt(sourceChild.getId(), userId, false);
             totalNotesCopied += childAdoptResult.copiedCount();
             totalNotesSkipped += childAdoptResult.skippedCount();
             Optional<NoteCollectionEntity> personalChild =
@@ -519,6 +623,7 @@ public class NoteCollectionService {
                 totalNotesSkipped,
                 false
         );
+        reassertPrimaryInvariant(userId);
         return new AdoptGoalResponse(
                 persistedGoal.collection().getId(),
                 adoptedSubjectCount,
@@ -532,7 +637,11 @@ public class NoteCollectionService {
     @Transactional
     public void delete(UUID collectionId, UUID userId) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        boolean wasTopLevel = collection.getParentCollectionId() == null;
         collectionRepository.delete(collection);
+        if (wasTopLevel) {
+            reassertPrimaryInvariant(userId);
+        }
     }
 
     @Transactional
@@ -615,6 +724,40 @@ public class NoteCollectionService {
     private NoteCollectionEntity getOwnedCollectionOrThrow(UUID collectionId, UUID userId) {
         return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
                 .orElseThrow(CollectionNotFoundException::new);
+    }
+
+    private UserEntity getUserOrThrow(UUID userId) {
+        return userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+    }
+
+    private void reassertPrimaryInvariant(UUID userId) {
+        UserEntity user = getUserOrThrow(userId);
+        UUID primaryCollectionId = user.getPrimaryCollectionId();
+        boolean changed = false;
+        if (primaryCollectionId != null && !isValidPrimaryCollection(primaryCollectionId, userId)) {
+            user.setPrimaryCollectionId(null);
+            primaryCollectionId = null;
+            changed = true;
+        }
+
+        if (primaryCollectionId == null && collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId) == 1) {
+            List<NoteCollectionEntity> topLevelCollections =
+                    collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId);
+            if (topLevelCollections.size() == 1) {
+                user.setPrimaryCollectionId(topLevelCollections.getFirst().getId());
+                changed = true;
+            }
+        }
+        if (changed) {
+            user.setUpdatedAt(OffsetDateTime.now());
+            userRepository.save(user);
+        }
+    }
+
+    private boolean isValidPrimaryCollection(UUID collectionId, UUID userId) {
+        return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
+                .map(collection -> collection.getParentCollectionId() == null)
+                .orElse(false);
     }
 
     private void validateParentCanAcceptChild(NoteCollectionEntity parent) {
@@ -742,7 +885,8 @@ public class NoteCollectionService {
             NoteCollectionEntity source,
             UUID userId,
             List<CopiedPlanItem> copiedItems,
-            int skippedCount
+            int skippedCount,
+            boolean reassertPrimaryAfterPersist
     ) {
         return collectionTransactionOperations.execute(status -> {
             Optional<NoteCollectionEntity> existing =
@@ -760,6 +904,9 @@ public class NoteCollectionService {
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            // targetCompletionDate is deliberately never copied from source (including on a self-copy where
+            // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
+            // the new owner, so it stays null on the fresh entity until the new owner sets their own.
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
@@ -770,6 +917,9 @@ public class NoteCollectionService {
             List<NoteCollectionItemEntity> items = buildAdoptedItems(saved.getId(), copiedItems, now);
             itemRepository.saveAll(items);
             trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
+            if (reassertPrimaryAfterPersist) {
+                reassertPrimaryInvariant(userId);
+            }
             return new AdoptStudyPlanResponse(saved.getId(), items.size(), skippedCount, false);
         });
     }
@@ -791,6 +941,9 @@ public class NoteCollectionService {
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            // targetCompletionDate is deliberately never copied from source (including on a self-copy where
+            // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
+            // the new owner, so it stays null on the fresh entity until the new owner sets their own.
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
@@ -1184,6 +1337,7 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getEstimatedStudyHours(),
+                collection.getTargetCompletionDate(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
@@ -1206,6 +1360,7 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getEstimatedStudyHours(),
+                collection.getTargetCompletionDate(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),

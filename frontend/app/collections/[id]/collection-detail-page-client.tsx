@@ -11,6 +11,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
@@ -28,9 +29,11 @@ import {
 import {
   addCollectionItems,
   ApiRequestError,
+  clearCollectionTargetDate,
   deleteCollection,
   getCollection,
   getCollectionGoal,
+  getMe,
   getNoteConceptCounts,
   getPlanReadiness,
   listCoursePrograms,
@@ -40,6 +43,7 @@ import {
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
+  updateStudyDaysPerWeek,
   type GoalCollectionDetailResponse,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
@@ -49,6 +53,8 @@ import {
   type PlanReadinessResponse,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
+import { getJustAdoptedNotice } from "@/lib/just-adopted-notice";
+import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
@@ -532,6 +538,49 @@ function clampPercentage(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
+// A LocalDate-only string like "2026-12-01" must not go through `new Date(isoDate)` for display —
+// that parses as UTC midnight, which can shift a day backward once formatted in a timezone behind
+// UTC. Splitting and constructing via the local-time Date constructor avoids that shift.
+function formatLocalDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function GoalWeeklyCountdownCard({
+  targetCompletionDate,
+  weeksRemaining,
+  conceptsRemaining,
+  todaysConceptBudget,
+}: Readonly<{
+  targetCompletionDate: string | null;
+  weeksRemaining: number | null;
+  conceptsRemaining: number | null;
+  todaysConceptBudget: number | null;
+}>) {
+  if (!targetCompletionDate || weeksRemaining === null || conceptsRemaining === null || todaysConceptBudget === null) {
+    return null;
+  }
+  const weekLabel = weeksRemaining === 1 ? "1 week" : `${weeksRemaining} weeks`;
+  const conceptLabel = conceptsRemaining === 1 ? "1 concept" : `${conceptsRemaining} concepts`;
+  const budgetLabel = todaysConceptBudget === 1 ? "1 concept" : `${todaysConceptBudget} concepts`;
+
+  return (
+    <Card className="space-y-2 p-4 sm:p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">This Week</p>
+      <h2 className="text-lg font-semibold tracking-tight">
+        {weekLabel} until {formatLocalDate(targetCompletionDate)}
+      </h2>
+      <p className="text-sm font-medium text-foreground/80">
+        {conceptLabel} remaining · {budgetLabel} today
+      </p>
+    </Card>
+  );
+}
+
 function GoalDetailView({
   goal,
   labels,
@@ -541,6 +590,13 @@ function GoalDetailView({
 }>) {
   return (
     <div className="space-y-6">
+      <GoalWeeklyCountdownCard
+        targetCompletionDate={goal.targetCompletionDate}
+        weeksRemaining={goal.weeksRemaining}
+        conceptsRemaining={goal.conceptsRemaining}
+        todaysConceptBudget={goal.todaysConceptBudget}
+      />
+
       <ReadinessSummary
         variant="compact"
         title={`${goal.title} readiness`}
@@ -685,11 +741,20 @@ function EditCollectionModal({
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
 }>) {
+  const isTopLevelGoal = collection.parentCollectionId === null;
   const [title, setTitle] = useState(collection.title);
   const [description, setDescription] = useState(collection.description ?? "");
   const [estimatedStudyHours, setEstimatedStudyHours] = useState<string>(
     collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours),
   );
+  const [targetCompletionDate, setTargetCompletionDate] = useState<string>(collection.targetCompletionDate ?? "");
+  const [studyDaysPerWeek, setStudyDaysPerWeek] = useState<string>("");
+  // Tracks the value actually loaded from getMe(), distinct from the field's current (possibly
+  // edited, possibly still-unloaded) contents. undefined means "not resolved yet" — either the
+  // async prefill hasn't returned or it failed. Save must never send studyDaysPerWeek while this
+  // is undefined, or a save-before-prefill race (or a getMe() failure) would silently wipe the
+  // user's real intensity to null. See docs/features/collections.md.
+  const [studyDaysPerWeekBaseline, setStudyDaysPerWeekBaseline] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -698,10 +763,33 @@ function EditCollectionModal({
       setTitle(collection.title);
       setDescription(collection.description ?? "");
       setEstimatedStudyHours(collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours));
+      setTargetCompletionDate(collection.targetCompletionDate ?? "");
       setError(null);
       setSubmitting(false);
+      if (isTopLevelGoal) {
+        // studyDaysPerWeek is a user-level attribute, not a collection field, so it isn't part of
+        // `collection` — asked on this same screen per the target-date UX, but sourced separately.
+        setStudyDaysPerWeekBaseline(undefined);
+        void getMe()
+          .then((me) => {
+            const loadedValue = me.studyDaysPerWeek === null ? "" : String(me.studyDaysPerWeek);
+            setStudyDaysPerWeek(loadedValue);
+            setStudyDaysPerWeekBaseline(loadedValue);
+          })
+          .catch(() => setStudyDaysPerWeek(""));
+      } else {
+        setStudyDaysPerWeek("");
+        setStudyDaysPerWeekBaseline(undefined);
+      }
     }
-  }, [collection.description, collection.estimatedStudyHours, collection.title, isOpen]);
+  }, [
+    collection.description,
+    collection.estimatedStudyHours,
+    collection.targetCompletionDate,
+    collection.title,
+    isOpen,
+    isTopLevelGoal,
+  ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -710,16 +798,35 @@ function EditCollectionModal({
       setError("Title is required.");
       return;
     }
+    const trimmedStudyDaysPerWeek = studyDaysPerWeek.trim();
+    if (trimmedStudyDaysPerWeek && (Number(trimmedStudyDaysPerWeek) < 1 || Number(trimmedStudyDaysPerWeek) > 7)) {
+      setError("Study days per week must be between 1 and 7.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const saved = await updateCollection(collection.id, {
+      const trimmedTargetCompletionDate = targetCompletionDate.trim();
+      let saved = await updateCollection(collection.id, {
         title: trimmedTitle,
         // Send an empty string (not null) to clear the description: updateMetadata now preserves
         // fields omitted (null) from the request and only clears a text field on an explicit "".
         description: description.trim(),
         estimatedStudyHours: estimatedStudyHours ? Number(estimatedStudyHours) : null,
+        // targetCompletionDate uses the same omit-preserves semantics — a null/omitted value here
+        // leaves the existing date untouched, it does not clear it. Clearing goes through the
+        // dedicated clearCollectionTargetDate call below instead.
+        ...(isTopLevelGoal && trimmedTargetCompletionDate ? { targetCompletionDate: trimmedTargetCompletionDate } : {}),
       });
+      if (isTopLevelGoal && !trimmedTargetCompletionDate && collection.targetCompletionDate) {
+        saved = await clearCollectionTargetDate(collection.id);
+      }
+      // Only send an intensity update when the loaded baseline actually resolved AND the value
+      // changed from it — never send while the baseline is still undefined (prefill in flight or
+      // failed), and never send a no-op write when the user didn't touch the field.
+      if (isTopLevelGoal && studyDaysPerWeekBaseline !== undefined && trimmedStudyDaysPerWeek !== studyDaysPerWeekBaseline) {
+        await updateStudyDaysPerWeek(trimmedStudyDaysPerWeek ? Number(trimmedStudyDaysPerWeek) : null);
+      }
       onSaved(saved);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not update this collection.");
@@ -741,7 +848,7 @@ function EditCollectionModal({
         </>
       )}
     >
-      <form id="edit-collection-form" className="space-y-4" onSubmit={handleSubmit}>
+      <form id="edit-collection-form" className="space-y-4" onSubmit={handleSubmit} noValidate>
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-foreground">Title</span>
           <input
@@ -773,6 +880,35 @@ function EditCollectionModal({
           />
           <span className="block text-xs text-foreground/60">Optional. Shown to learners on adoption.</span>
         </label>
+        {isTopLevelGoal ? (
+          <>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Target completion date</span>
+              <input
+                aria-label="Target completion date"
+                type="date"
+                value={targetCompletionDate}
+                onChange={(event) => setTargetCompletionDate(event.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+              <span className="block text-xs text-foreground/60">Optional. When are you aiming to be ready by?</span>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-foreground">Study days per week</span>
+              <input
+                aria-label="Study days per week"
+                type="number"
+                min="1"
+                max="7"
+                step="1"
+                value={studyDaysPerWeek}
+                onChange={(event) => setStudyDaysPerWeek(event.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+              <span className="block text-xs text-foreground/60">Optional — assumes every day if left blank.</span>
+            </label>
+          </>
+        ) : null}
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
       </form>
     </AppModal>
@@ -1375,6 +1511,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [noteListLoadFailed, setNoteListLoadFailed] = useState(false);
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
+  const [justAdopted, setJustAdopted] = useState(false);
   const [parentTitle, setParentTitle] = useState<string | null>(null);
   const backLinkHref = collection?.parentCollectionId && parentTitle
     ? `/collections/${collection.parentCollectionId}`
@@ -1442,6 +1579,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
   useEffect(() => {
     setSkippedNoticeCount(getStudyPlanSkippedNotice(collectionId));
+  }, [collectionId]);
+
+  useEffect(() => {
+    setJustAdopted(getJustAdoptedNotice(collectionId));
   }, [collectionId]);
 
   useEffect(() => {
@@ -1766,6 +1907,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     ? `/notes/${dueConceptReviewItem.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`
     : null;
   const hasReadinessActions = dueConceptReviewHref !== null || terminalAction?.kind === "premium-exam";
+  const postAdoptGuidanceRules: GuidanceRule[] = [
+    {
+      id: "post-adopt-target-date",
+      priority: 1,
+      condition: () => justAdopted && !!goalDetail && !goalDetail.targetCompletionDate,
+      message: "Set a target completion date to see your weekly countdown and daily study budget.",
+    },
+  ];
+  const activePostAdoptTip = pickActiveGuidance(postAdoptGuidanceRules);
 
   const dismissContinueBanner = () => {
     setContinueDismissed(true);
@@ -1933,6 +2083,15 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </Card>
         ) : null}
 
+        {activePostAdoptTip ? (
+          <GuidanceTip
+            tipId={activePostAdoptTip.id}
+            message={activePostAdoptTip.message}
+            trackAnalytics
+            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
+          />
+        ) : null}
+
         <GoalDetailView goal={goalDetail} labels={labels} />
 
         <EditCollectionModal
@@ -1941,14 +2100,23 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           onClose={() => setEditOpen(false)}
           onSaved={(saved) => {
             setCollection(saved);
-            setGoalDetail((previous) => previous ? {
-              ...previous,
-              title: saved.title,
-              description: saved.description,
-              visibility: saved.visibility,
-              courseProgram: saved.courseProgram,
-              updatedAt: saved.updatedAt,
-            } : previous);
+            // The weekly countdown fields (weeksRemaining/conceptsRemaining/todaysConceptBudget) only
+            // exist on GoalCollectionDetailResponse, not on the NoteCollectionDetail this modal saves —
+            // a client-side field copy can't refresh them. Refetch the Goal view so an edited target
+            // date is reflected immediately instead of going stale until the next page load.
+            void getCollectionGoal(collectionId)
+              .then(setGoalDetail)
+              .catch(() => {
+                setGoalDetail((previous) => previous ? {
+                  ...previous,
+                  title: saved.title,
+                  description: saved.description,
+                  visibility: saved.visibility,
+                  courseProgram: saved.courseProgram,
+                  targetCompletionDate: saved.targetCompletionDate,
+                  updatedAt: saved.updatedAt,
+                } : previous);
+              });
             setItems(sortCollectionItemsByPosition(saved.items));
             setEditOpen(false);
           }}

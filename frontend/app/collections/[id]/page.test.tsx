@@ -7,18 +7,23 @@ import {
 import {
   addCollectionItems,
   ApiRequestError,
+  clearCollectionTargetDate,
   getCollection,
   getCollectionGoal,
+  getMe,
   getNoteConceptCounts,
   getPlanReadiness,
   listCoursePrograms,
   listNotes,
+  trackAnalyticsEvent,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
+  updateStudyDaysPerWeek,
   type NoteCollectionItem,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -54,16 +59,20 @@ jest.mock("@/lib/api", () => {
   return {
     addCollectionItems: jest.fn(),
     ApiRequestError,
+    clearCollectionTargetDate: jest.fn(),
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
+    getMe: jest.fn(),
     getNoteConceptCounts: jest.fn(),
     getPlanReadiness: jest.fn(),
     listCoursePrograms: jest.fn(),
     listNotes: jest.fn(),
+    trackAnalyticsEvent: jest.fn(),
     updateCollection: jest.fn(),
     updateCollectionVisibility: jest.fn(),
     updateNoteVisibility: jest.fn(),
+    updateStudyDaysPerWeek: jest.fn(),
   };
 });
 
@@ -75,6 +84,7 @@ function collection(overrides: Record<string, unknown> = {}) {
     visibility: "PRIVATE",
     courseProgram: null,
     estimatedStudyHours: null,
+    targetCompletionDate: null,
     sourcePlanId: null,
     parentCollectionId: null,
     childCount: 0,
@@ -126,6 +136,7 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     description: "Full LET goal",
     visibility: "PRIVATE",
     courseProgram: null,
+    targetCompletionDate: null,
     sourcePlanId: null,
     parentCollectionId: null,
     itemCount: 0,
@@ -135,6 +146,9 @@ function goalDetail(overrides: Record<string, unknown> = {}) {
     dueConcepts: 4,
     notPracticedConcepts: 7,
     totalConcepts: 20,
+    weeksRemaining: null,
+    conceptsRemaining: null,
+    todaysConceptBudget: null,
     createdAt: "2026-06-01T00:00:00Z",
     updatedAt: "2026-06-02T00:00:00Z",
     children: [
@@ -250,13 +264,17 @@ describe("CollectionDetailPageClient", () => {
     pushMock.mockReset();
     replaceMock.mockReset();
     (addCollectionItems as jest.Mock).mockReset();
+    (clearCollectionTargetDate as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (updateCollectionVisibility as jest.Mock).mockReset();
+    (updateStudyDaysPerWeek as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
@@ -265,12 +283,16 @@ describe("CollectionDetailPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null });
+    (updateStudyDaysPerWeek as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null });
     (getNoteConceptCounts as jest.Mock).mockResolvedValue({});
     (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
       value: 1024,
     });
+    globalThis.localStorage.clear();
+    globalThis.sessionStorage.clear();
   });
 
   it("renders collection items in persisted order", async () => {
@@ -334,6 +356,109 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
     expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
     expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("This Week")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
+    expect(screen.getByText("11 concepts remaining · 4 concepts today")).toBeInTheDocument();
+  });
+
+  it("hides the This Week countdown card when no target date is set", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+  });
+
+  it("shows a post-adopt target-date tip for a dateless Goal", async () => {
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("Set a target completion date to see your weekly countdown and daily study budget.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set target date" })).toBeInTheDocument();
+  });
+
+  it("does not show the post-adopt target-date tip when the Goal already has a target date", async () => {
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("Set a target completion date to see your weekly countdown and daily study budget.")).not.toBeInTheDocument();
+  });
+
+  it("does not show the post-adopt target-date tip on a normal dateless Goal visit", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("Set a target completion date to see your weekly countdown and daily study budget.")).not.toBeInTheDocument();
+  });
+
+  it("opens the edit modal from the post-adopt target-date tip", async () => {
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Set target date" }));
+
+    expect(await screen.findByLabelText("Target completion date")).toBeInTheDocument();
+  });
+
+  it("refetches the Goal countdown after editing so it reflects a newly-set target date", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (updateCollection as jest.Mock).mockResolvedValue(
+      collection({ title: "LET Mastery", childCount: 2, targetCompletionDate: "2026-12-01" }),
+    );
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 2,
+      conceptsRemaining: 6,
+      todaysConceptBudget: 2,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.change(await screen.findByLabelText("Target completion date"), { target: { value: "2026-12-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("2 weeks until Dec 1, 2026")).toBeInTheDocument();
   });
 
   it("shows the readiness unavailable state without hiding the leaf plan", async () => {
@@ -1073,6 +1198,179 @@ describe("CollectionDetailPageClient", () => {
         estimatedStudyHours: null,
       });
     });
+  });
+
+  it("shows the target date and study intensity fields for a top-level Goal", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    expect(await screen.findByLabelText("Target completion date")).toBeInTheDocument();
+    expect(screen.getByLabelText("Study days per week")).toBeInTheDocument();
+  });
+
+  it("hides the target date and study intensity fields when editing a child Subject plan", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ parentCollectionId: "goal-1" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    expect(await screen.findByLabelText("Estimated study time (hours)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Target completion date")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Study days per week")).not.toBeInTheDocument();
+    expect(getMe).not.toHaveBeenCalled();
+  });
+
+  it("sets the target completion date via the general metadata PATCH", async () => {
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ targetCompletionDate: "2026-12-01" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    fireEvent.change(await screen.findByLabelText("Target completion date"), { target: { value: "2026-12-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalledWith("collection-1", {
+        title: "Midterm Study Plan",
+        description: "Weeks 1-4",
+        estimatedStudyHours: null,
+        targetCompletionDate: "2026-12-01",
+      });
+    });
+    expect(clearCollectionTargetDate).not.toHaveBeenCalled();
+  });
+
+  it("clears a previously-set target date via the dedicated endpoint when the field is emptied", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ targetCompletionDate: "2026-12-01" }));
+    (clearCollectionTargetDate as jest.Mock).mockResolvedValue(collection({ targetCompletionDate: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const dateInput = await screen.findByLabelText("Target completion date");
+    expect(dateInput).toHaveValue("2026-12-01");
+    fireEvent.change(dateInput, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(clearCollectionTargetDate).toHaveBeenCalledWith("collection-1");
+    });
+    expect(updateCollection).toHaveBeenCalledWith("collection-1", {
+      title: "Midterm Study Plan",
+      description: "Weeks 1-4",
+      estimatedStudyHours: null,
+    });
+  });
+
+  it("does not call the clear endpoint when the target date field was already empty", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalled();
+    });
+    expect(clearCollectionTargetDate).not.toHaveBeenCalled();
+  });
+
+  it("pre-fills study intensity from the user's profile and saves a change", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: 5 });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const intensityInput = await screen.findByLabelText("Study days per week");
+    await waitFor(() => expect(intensityInput).toHaveValue(5));
+    fireEvent.change(intensityInput, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateStudyDaysPerWeek).toHaveBeenCalledWith(3);
+    });
+  });
+
+  it("does not send a study intensity update if saved before the profile prefill resolves", async () => {
+    (updateCollection as jest.Mock).mockResolvedValue(collection());
+    let resolveGetMe: (value: { studyDaysPerWeek: number | null }) => void = () => {};
+    (getMe as jest.Mock).mockReturnValue(new Promise((resolve) => {
+      resolveGetMe = resolve;
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    // Save before the getMe() prefill promise ever resolves — this must not wipe the user's real
+    // intensity to null. The rest of the form (title/description/etc.) still saves normally.
+    await screen.findByLabelText("Study days per week");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalled();
+    });
+    expect(updateStudyDaysPerWeek).not.toHaveBeenCalled();
+
+    resolveGetMe({ studyDaysPerWeek: 5 });
+  });
+
+  it("does not resend a study intensity update when the field is untouched", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: 5 });
+    (updateCollection as jest.Mock).mockResolvedValue(collection());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const intensityInput = await screen.findByLabelText("Study days per week");
+    await waitFor(() => expect(intensityInput).toHaveValue(5));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateCollection).toHaveBeenCalled();
+    });
+    expect(updateStudyDaysPerWeek).not.toHaveBeenCalled();
+  });
+
+  it("rejects a study intensity value outside 1-7 before saving", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const intensityInput = await screen.findByLabelText("Study days per week");
+    // Wait for the async studyDaysPerWeek prefill from getMe() to fully resolve and apply before
+    // changing the field — otherwise its resolution can land after fireEvent.change and overwrite
+    // the "8" back to empty.
+    await waitFor(() => expect(intensityInput).toHaveValue(null));
+    fireEvent.change(intensityInput, { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Study days per week must be between 1 and 7.")).toBeInTheDocument();
+    expect(updateCollection).not.toHaveBeenCalled();
   });
 
   it("does not show an Add notes button on the detail page (note addition moved to Builder)", async () => {
