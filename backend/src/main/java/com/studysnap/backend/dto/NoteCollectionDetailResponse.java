@@ -13,6 +13,7 @@ public record NoteCollectionDetailResponse(
         String courseProgram,
         Integer estimatedStudyHours,
         LocalDate targetCompletionDate,
+        CompanionContent companion,
         UUID sourcePlanId,
         UUID parentCollectionId,
         int childCount,

@@ -3,6 +3,8 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionFaqItem;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
@@ -28,6 +30,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.exception.CollectionNotFoundException;
@@ -52,6 +55,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -475,11 +479,13 @@ class NoteCollectionServiceTest {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
         NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        collection.setCompanion(companionContent());
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
 
         NoteCollectionDetailResponse result = service.get(collectionId, userId);
 
+        assertThat(result.companion()).isEqualTo(companionContent());
         assertThat(result.progress().totalNotes()).isZero();
         assertThat(result.progress().notesWithStudyPack()).isZero();
         assertThat(result.progress().notesPracticed()).isZero();
@@ -596,13 +602,14 @@ class NoteCollectionServiceTest {
     }
 
     @Test
-    void updateParent_clearsTargetCompletionDateWhenTopLevelGoalBecomesChild() {
+    void updateParent_clearsTopLevelOnlyFieldsWhenTopLevelGoalBecomesChild() {
         UUID userId = UUID.randomUUID();
         UUID parentId = UUID.randomUUID();
         UUID childId = UUID.randomUUID();
         NoteCollectionEntity parent = buildCollection(parentId, userId, "LET Mastery", Instant.now());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        child.setCompanion(companionContent());
         when(collectionRepository.findByIdAndOwnerUserId(childId, userId)).thenReturn(Optional.of(child));
         when(collectionRepository.findByIdAndOwnerUserId(parentId, userId)).thenReturn(Optional.of(parent));
         when(itemRepository.findByCollectionIdOrderByPositionAsc(parentId)).thenReturn(List.of());
@@ -618,7 +625,9 @@ class NoteCollectionServiceTest {
         );
 
         assertThat(child.getTargetCompletionDate()).isNull();
+        assertThat(child.getCompanion()).isNull();
         assertThat(result.targetCompletionDate()).isNull();
+        assertThat(result.companion()).isNull();
     }
 
     @Test
@@ -781,6 +790,117 @@ class NoteCollectionServiceTest {
 
         assertThat(user.getPrimaryCollectionId()).isNull();
         verify(userRepository).save(user);
+    }
+
+    @Test
+    void setCompanion_setsOwnedTopLevelCollectionForAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        CompanionContent content = companionContent();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.setCompanion(collectionId, userId, content);
+
+        assertThat(collection.getCompanion()).isEqualTo(content);
+        assertThat(result.companion()).isEqualTo(content);
+    }
+
+    @Test
+    void setCompanion_acceptsIncrementalEmptyContent() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        CompanionContent content = new CompanionContent(null, null, null, List.of());
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.setCompanion(collectionId, userId, content);
+
+        assertThat(result.companion()).isEqualTo(content);
+    }
+
+    @Test
+    void setCompanion_rejectsNonAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.USER);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.setCompanion(collectionId, userId, companionContent()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(collectionRepository, never()).findByIdAndOwnerUserId(any(), any());
+    }
+
+    @Test
+    void setCompanion_rejectsCollectionOwnedByAnotherUserAsNotFoundForAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setCompanion(collectionId, userId, companionContent()))
+                .isInstanceOf(CollectionNotFoundException.class);
+    }
+
+    @Test
+    void setCompanion_rejectsChildCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "Professional Education", Instant.now());
+        collection.setParentCollectionId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        assertThatThrownBy(() -> service.setCompanion(collectionId, userId, companionContent()))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("Only a top-level Goal can have a Companion.");
+    }
+
+    @Test
+    void clearCompanion_clearsExistingCompanionForAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        collection.setCompanion(companionContent());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse result = service.clearCompanion(collectionId, userId);
+
+        assertThat(collection.getCompanion()).isNull();
+        assertThat(result.companion()).isNull();
+    }
+
+    @Test
+    void clearCompanion_rejectsNonAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.USER);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.clearCompanion(collectionId, userId))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -968,6 +1088,7 @@ class NoteCollectionServiceTest {
         UUID userId = UUID.randomUUID();
         UUID goalId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setCompanion(companionContent());
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of());
@@ -975,6 +1096,7 @@ class NoteCollectionServiceTest {
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
+        assertThat(result.companion()).isEqualTo(companionContent());
         assertThat(result.childCount()).isZero();
         assertThat(result.totalConcepts()).isZero();
         assertThat(result.overallReadinessPercentage()).isZero();
@@ -1931,6 +2053,7 @@ class NoteCollectionServiceTest {
         UUID goalId = UUID.randomUUID();
         UUID childId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setCompanion(companionContent());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(goalId);
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
@@ -1951,6 +2074,7 @@ class NoteCollectionServiceTest {
         UUID childId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setCompanion(companionContent());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(goalId);
         NoteCollectionItemEntity item = buildItem(childId, noteId, 0, null);
@@ -1974,6 +2098,7 @@ class NoteCollectionServiceTest {
         UUID childId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setCompanion(companionContent());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setParentCollectionId(goalId);
         NoteCollectionItemEntity item = buildItem(childId, noteId, 0, null);
@@ -1992,6 +2117,8 @@ class NoteCollectionServiceTest {
         NoteCollectionDetailResponse result = service.updateVisibility(goalId, userId, CollectionVisibility.PUBLIC.name());
 
         assertThat(result.visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
+        assertThat(result.companion()).isEqualTo(companionContent());
+        assertThat(child.getCompanion()).isNull();
         assertThat(child.getVisibility()).isEqualTo(CollectionVisibility.PUBLIC);
         verify(collectionRepository).saveAll(List.of(child));
     }
@@ -2048,6 +2175,7 @@ class NoteCollectionServiceTest {
         source.setVisibility(CollectionVisibility.PUBLIC);
         source.setCourseProgram(UPDATED_COURSE_PROGRAM);
         source.setEstimatedStudyHours(2);
+        source.setCompanion(companionContent());
         NoteCollectionItemEntity firstItem = buildItem(sourcePlanId, firstNoteId, 0, WEEK_ONE_LABEL);
         NoteCollectionItemEntity privateItem = buildItem(sourcePlanId, privateNoteId, 1, WEEK_TWO_LABEL);
         NoteEntity publicNote = buildNote(firstNoteId, sourceOwnerId, NOTE_TITLE_ONE);
@@ -2075,6 +2203,7 @@ class NoteCollectionServiceTest {
         assertThat(collectionCaptor.getValue().getVisibility()).isEqualTo(CollectionVisibility.PRIVATE);
         assertThat(collectionCaptor.getValue().getSourcePlanId()).isEqualTo(sourcePlanId);
         assertThat(collectionCaptor.getValue().getEstimatedStudyHours()).isEqualTo(2);
+        assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
     }
 
     @Test
@@ -2120,12 +2249,34 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void adopt_copiesCompanionOnCrossOwnerAdopt() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID sourceOwnerId = UUID.randomUUID();
+        NoteCollectionEntity source = buildCollection(sourcePlanId, sourceOwnerId, COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        source.setCompanion(companionContent());
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
+    }
+
+    @Test
     void adopt_neverCopiesTargetCompletionDateOnSelfCopy() {
         UUID userId = UUID.randomUUID();
         UUID sourcePlanId = UUID.randomUUID();
         NoteCollectionEntity source = buildCollection(sourcePlanId, userId, COLLECTION_TITLE, Instant.now());
         source.setVisibility(CollectionVisibility.PUBLIC);
         source.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        source.setCompanion(companionContent());
         when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
         when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
@@ -2137,6 +2288,7 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
         assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+        assertThat(collectionCaptor.getValue().getCompanion()).isNull();
     }
 
     @Test
@@ -2254,6 +2406,7 @@ class NoteCollectionServiceTest {
         sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
         sourceGoal.setCourseProgram(UPDATED_COURSE_PROGRAM);
         sourceGoal.setEstimatedStudyHours(3);
+        sourceGoal.setCompanion(companionContent());
         NoteCollectionEntity firstChild = buildCollection(firstChildId, sourceOwnerId, "General Education", Instant.now());
         NoteCollectionEntity secondChild = buildCollection(secondChildId, sourceOwnerId, "Professional Education", Instant.now());
         firstChild.setVisibility(CollectionVisibility.PUBLIC);
@@ -2309,6 +2462,7 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<NoteCollectionEntity> goalCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository, times(3)).saveAndFlush(goalCaptor.capture());
         assertThat(goalCaptor.getAllValues().getFirst().getEstimatedStudyHours()).isEqualTo(3);
+        assertThat(goalCaptor.getAllValues().getFirst().getCompanion()).isEqualTo(companionContent());
         verify(analyticsService).trackEvent(
                 eq(userId),
                 eq(AnalyticsEventType.STUDY_GOAL_ADOPTED),
@@ -2461,6 +2615,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, UUID.randomUUID(), "LET Mastery", Instant.now());
         sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
         sourceGoal.setTargetCompletionDate(LocalDate.parse("2026-12-01"));
+        sourceGoal.setCompanion(companionContent());
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
         when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
@@ -2474,6 +2629,29 @@ class NoteCollectionServiceTest {
         ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
         verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
         assertThat(collectionCaptor.getValue().getTargetCompletionDate()).isNull();
+        assertThat(collectionCaptor.getValue().getCompanion()).isEqualTo(companionContent());
+    }
+
+    @Test
+    void adoptGoal_excludesCompanionOnSelfCopy() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceGoalId = UUID.randomUUID();
+        NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, userId, "LET Mastery", Instant.now());
+        sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
+        sourceGoal.setCompanion(companionContent());
+        when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
+        when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(1L);
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, userId))
+                .thenReturn(List.of());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adoptGoal(sourceGoalId, userId);
+
+        ArgumentCaptor<NoteCollectionEntity> collectionCaptor = ArgumentCaptor.forClass(NoteCollectionEntity.class);
+        verify(collectionRepository).saveAndFlush(collectionCaptor.capture());
+        assertThat(collectionCaptor.getValue().getCompanion()).isNull();
     }
 
     @Test
@@ -2725,6 +2903,13 @@ class NoteCollectionServiceTest {
         Method deleteMethod = NoteCollectionService.class.getMethod("delete", UUID.class, UUID.class);
         Method setPrimaryMethod = NoteCollectionService.class.getMethod("setPrimary", UUID.class, UUID.class);
         Method clearPrimaryMethod = NoteCollectionService.class.getMethod("clearPrimary", UUID.class);
+        Method setCompanionMethod = NoteCollectionService.class.getMethod(
+                "setCompanion",
+                UUID.class,
+                UUID.class,
+                CompanionContent.class
+        );
+        Method clearCompanionMethod = NoteCollectionService.class.getMethod("clearCompanion", UUID.class, UUID.class);
         Method clearTargetDateMethod = NoteCollectionService.class.getMethod("clearTargetDate", UUID.class, UUID.class);
         Method addMethod = NoteCollectionService.class.getMethod("addItems", UUID.class, UUID.class, AddNoteCollectionItemsRequest.class);
         Method removeMethod = NoteCollectionService.class.getMethod("removeItem", UUID.class, UUID.class, UUID.class);
@@ -2741,6 +2926,8 @@ class NoteCollectionServiceTest {
         assertThat(deleteMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(setPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(clearPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(setCompanionMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(clearCompanionMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(clearTargetDateMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(addMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(removeMethod.getAnnotation(Transactional.class)).isNotNull();
@@ -2846,6 +3033,15 @@ class NoteCollectionServiceTest {
         user.setId(userId);
         user.setUpdatedAt(OffsetDateTime.parse("2026-04-01T01:00:00Z"));
         return user;
+    }
+
+    private CompanionContent companionContent() {
+        return new CompanionContent(
+                "Overview",
+                "Study strategy",
+                "Common mistakes",
+                List.of(new CompanionFaqItem("Question?", "Answer."))
+        );
     }
 
     private NoteCollectionItemEntity buildItem(UUID collectionId, UUID noteId, int position, String label) {
