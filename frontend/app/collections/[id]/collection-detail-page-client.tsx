@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
@@ -60,6 +61,7 @@ import {
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
 import { getJustAdoptedNotice } from "@/lib/just-adopted-notice";
+import { setCollectionActionNotice } from "@/lib/collection-action-notice";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
@@ -1808,6 +1810,28 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const actionToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showActionToast = useCallback((message: string) => {
+    if (actionToastTimerRef.current) {
+      clearTimeout(actionToastTimerRef.current);
+    }
+    setActionToast(message);
+    actionToastTimerRef.current = setTimeout(() => {
+      setActionToast(null);
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    const ref = actionToastTimerRef;
+    return () => {
+      if (ref.current) {
+        clearTimeout(ref.current);
+      }
+    };
+  }, []);
+
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -2134,6 +2158,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     setMutationError(null);
     try {
       await deleteCollection(collectionId);
+      setCollectionActionNotice(`${labels.singular} deleted.`);
       router.push("/collections");
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "Could not delete this collection.");
@@ -2152,10 +2177,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       if (isCurrentlyPrimary) {
         await clearPrimaryCollection(collection.id);
         setPrimaryCollectionId(null);
+        showActionToast("Removed as primary.");
         return;
       }
       await setPrimaryCollection(collection.id);
       setPrimaryCollectionId(collection.id);
+      showActionToast("Set as primary.");
     } catch {
       setMutationError(
         isCurrentlyPrimary
@@ -2510,6 +2537,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               });
             setItems(sortCollectionItemsByPosition(saved.items));
             setEditOpen(false);
+            showActionToast("Saved.");
           }}
         />
         <CompanionEditorModal
@@ -2531,6 +2559,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             } : previous);
             setItems(sortCollectionItemsByPosition(saved.items));
             setCompanionOpen(false);
+            showActionToast(saved.companion ? `${labels.companionSingular} saved.` : `${labels.companionSingular} removed.`);
           }}
         />
         <DeleteCollectionModal
@@ -2559,6 +2588,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             onNotesPublished={loadNoteVisibility}
           />
         ) : null}
+        {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
       </main>
     );
   }
@@ -2960,6 +2990,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                 } : previous);
               });
           }
+          showActionToast("Saved.");
         }}
       />
       <CompanionEditorModal
@@ -2981,6 +3012,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           } : previous);
           setItems(sortCollectionItemsByPosition(saved.items));
           setCompanionOpen(false);
+          showActionToast(saved.companion ? `${labels.companionSingular} saved.` : `${labels.companionSingular} removed.`);
         }}
       />
       <DeleteCollectionModal
@@ -3056,6 +3088,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         )}
       />
+      {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
     </main>
   );
 }

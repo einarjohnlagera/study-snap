@@ -46,6 +46,7 @@ describe("CollectionsPage", () => {
     (listCollections as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: null });
     searchParamsMock = new URLSearchParams();
+    globalThis.sessionStorage.clear();
   });
 
   it("auto-opens the create modal when arriving with ?new=1", async () => {
@@ -197,6 +198,21 @@ describe("CollectionsPage", () => {
     render(<CollectionsPage />);
 
     expect(await screen.findByText("Not started")).toBeInTheDocument();
+  });
+
+  it("shows a pending action notice once as a toast and clears it", async () => {
+    globalThis.sessionStorage.setItem("notelib-collection-action-notice", "Study Plan deleted.");
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    const { unmount } = render(<CollectionsPage />);
+
+    expect(await screen.findByText("Study Plan deleted.")).toBeInTheDocument();
+    expect(globalThis.sessionStorage.getItem("notelib-collection-action-notice")).toBeNull();
+    unmount();
+
+    render(<CollectionsPage />);
+    await screen.findByText("No study plans yet");
+    expect(screen.queryByText("Study Plan deleted.")).not.toBeInTheDocument();
   });
 
   it("shows profile-aware empty state when there are no collections", async () => {

@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
+import { getCollectionActionNotice } from "@/lib/collection-action-notice";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { createCollection, getMe, listCollections, type NoteCollectionSummary } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -223,6 +225,7 @@ export function CollectionsPageClient() {
   const [courseProgram, setCourseProgram] = useState<string | null>(null);
   const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(searchParams.get("new") === "1");
+  const [actionToast, setActionToast] = useState<string | null>(() => getCollectionActionNotice());
 
   const loadCollections = useCallback(async () => {
     setLoadState("loading");
@@ -255,6 +258,14 @@ export function CollectionsPageClient() {
     void Promise.resolve().then(loadCollections);
     void Promise.resolve().then(loadProfile);
   }, [loadCollections, loadProfile, router]);
+
+  useEffect(() => {
+    if (!actionToast) {
+      return;
+    }
+    const timer = setTimeout(() => setActionToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [actionToast]);
 
   // Primary always leads the grid; the rest keep the backend's updatedAt-desc order. Derived
   // (not sorted at fetch) because collections/primaryCollectionId arrive from two independent
@@ -312,10 +323,10 @@ export function CollectionsPageClient() {
       ) : null}
 
       {loadState === "ready" && collections.length > 0 ? (
-        <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {orderedCollections.map((collection) => (
-            <Link key={collection.id} href={`/collections/${collection.id}`} className="group block">
-              <Card className="flex min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
+            <Link key={collection.id} href={`/collections/${collection.id}`} className="group block h-full">
+              <Card className="flex h-full min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
                 <div className="space-y-2">
                   <CardTitle className="line-clamp-2">{collection.title}</CardTitle>
                   {collection.courseProgram ? (
@@ -359,6 +370,7 @@ export function CollectionsPageClient() {
         onClose={() => setCreateOpen(false)}
         onCreated={(collection) => router.push(`/collections/${collection.id}/builder`)}
       />
+      {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
     </main>
   );
 }
