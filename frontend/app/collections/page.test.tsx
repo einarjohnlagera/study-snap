@@ -46,6 +46,7 @@ describe("CollectionsPage", () => {
     (listCollections as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: null });
     searchParamsMock = new URLSearchParams();
+    globalThis.sessionStorage.clear();
   });
 
   it("auto-opens the create modal when arriving with ?new=1", async () => {
@@ -166,6 +167,29 @@ describe("CollectionsPage", () => {
     expect(screen.getAllByText("Adopted")).toHaveLength(1);
   });
 
+  it("groups Primary/Adopted identity badges under the title, above status, above the notes count/updated-at row", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      buildCollectionSummary({ id: "collection-1", title: "Flagship Plan", sourcePlanId: "source-1", itemCount: 3, notesPracticed: 1 }),
+    ]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "collection-1" });
+
+    render(<CollectionsPage />);
+
+    const title = await screen.findByText("Flagship Plan");
+    const primaryBadge = screen.getByText("Primary");
+    const adoptedBadge = screen.getByText("Adopted");
+    const statusBadge = screen.getByText("In progress");
+    const notesScope = screen.getByText("3 notes");
+    const updatedAt = screen.getByText(/Updated/);
+
+    // DOCUMENT_POSITION_FOLLOWING on other.compareDocumentPosition(this) means `this` comes after `other`.
+    expect(title.compareDocumentPosition(primaryBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(primaryBadge.compareDocumentPosition(adoptedBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(adoptedBadge.compareDocumentPosition(statusBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(statusBadge.compareDocumentPosition(notesScope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notesScope.compareDocumentPosition(updatedAt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows Not started for an empty plan", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       buildCollectionSummary({ itemCount: 0, notesPracticed: 0 }),
@@ -174,6 +198,21 @@ describe("CollectionsPage", () => {
     render(<CollectionsPage />);
 
     expect(await screen.findByText("Not started")).toBeInTheDocument();
+  });
+
+  it("shows a pending action notice once as a toast and clears it", async () => {
+    globalThis.sessionStorage.setItem("notelib-collection-action-notice", "Study Plan deleted.");
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    const { unmount } = render(<CollectionsPage />);
+
+    expect(await screen.findByText("Study Plan deleted.")).toBeInTheDocument();
+    expect(globalThis.sessionStorage.getItem("notelib-collection-action-notice")).toBeNull();
+    unmount();
+
+    render(<CollectionsPage />);
+    await screen.findByText("No study plans yet");
+    expect(screen.queryByText("Study Plan deleted.")).not.toBeInTheDocument();
   });
 
   it("shows profile-aware empty state when there are no collections", async () => {

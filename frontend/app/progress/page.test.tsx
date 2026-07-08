@@ -123,6 +123,7 @@ function goalReadiness(overrides: Partial<GoalCollectionDetailResponse> = {}): G
     visibility: "PRIVATE",
     courseProgram: null,
     targetCompletionDate: null,
+    companion: null,
     sourcePlanId: null,
     parentCollectionId: null,
     itemCount: 0,

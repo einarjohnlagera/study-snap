@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.41.0 - Learning Companion (MVP)` is the next planned version (not yet kicked off).
+`v0.42.0 - AI-assisted Companion authoring + regeneration` is the next planned version (not yet kicked off).
 
-`v0.40.1 - Public Review Set Reachability` is the previous released version (on `releases/v0.40.1`).
+`v0.41.0 - Learning Companion (MVP)` is the previous released version (on `releases/v0.41.0`).
+
+`v0.40.1 - Public Review Set Reachability` is the previous released version.
 
 `v0.39.2 - Public Library Learning Experience` is the previous released version (on `releases/v0.39.2`).
 
@@ -453,7 +455,7 @@ Not a version — no release branch yet, planned to kick off after v0.40.1. Orig
 - **Runtime AI / personalization** — deferred premium tiers, gated on the Companion existing first (see Monetization below); does **not** violate the locked "no interactive AI / no mid-exam coaching" constraint in `EXAM_MODES.md` because the Companion MVP is authored static content, not a chatbot.
 - **Profile-aware terminology** — a constraint, not a feature: any "Companion" label resolves through `getCollectionLabels` (candidate new field, e.g. `companionSingular`), same as `primarySingular`.
 
-### v0.41.0 — Learning Companion (MVP), planned next after v0.40.1
+### v0.41.0 — Learning Companion (MVP), released (base branch `releases/v0.41.0`)
 
 - **Persisted Companion content model.** A JSONB column on the top-level `note_collections` row (not a new table) — lowest-drift, mirrors the existing `sessionState` JSONB precedent, and copies naturally with the row on adopt. Promotable to its own table later if it grows. Companion is 1:1 with a top-level collection only (mirrors the `targetCompletionDate`/primary constraint — rejected on child Subject Plans, same `400` pattern as existing hierarchy validation).
 - **Four sections only, deliberately small:** Overview, Study Strategy, Common Mistakes, FAQ. **Study Timeline and Final Checklist are explicitly deferred and must NOT be static prose** — when built (v0.42.0+) they link the already-shipped, already-free **live** features (the v0.40.0 weekly countdown and readiness), never re-author them. Resources/Updates sections deferred to v0.42.0.
@@ -464,6 +466,12 @@ Not a version — no release branch yet, planned to kick off after v0.40.1. Orig
 - **FREE for all learners.** Zero paid uplift by design in v0.41.0 — this is an activation/retention bet, consistent with the success criterion being about experience quality, not revenue.
 
 Anti-drift: no runtime LLM call to serve a Companion (authored once, served static — zero per-view cost); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels`.
+
+## Post-v0.41.0 Polish Backlog (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Surfaced by the user while using their own v0.41.0 release.
+
+- **App-wide CRUD success-toast feedback.** Currently a Review Set-scoped pass (edit details, set/clear primary, Companion save/clear, create, delete) reuses the existing `ToastMessage` component (`frontend/components/ui/toast-message.tsx`) with local-state + `setTimeout` auto-dismiss, matching the pattern already used in 10 other files (profile, study, admin, etc.). Extending this to every mutating action across the whole app is a separate, larger initiative — the current pattern is per-page local state with no shared queue, so app-wide rollout needs a `useToast()` provider/hook first (concurrent toasts aren't handled today). Gate: scope and design the shared provider before starting; don't replicate local-state toasts file-by-file at app-wide scale.
 
 ### v0.42.0 — AI-assisted Companion authoring + regeneration (candidate, after v0.41.0 proves the content model)
 

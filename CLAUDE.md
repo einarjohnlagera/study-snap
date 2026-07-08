@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.40.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.41.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.40.1 — Public Review Set Reachability
+## Active release: v0.41.0 — Learning Companion (MVP)
 
-Base branch for this release: `releases/v0.40.1`. A v0.39.1-style polish fast-follow: closes a narrow, verified discoverability gap (PUBLIC Official Review Sets outside the learner's own course/program are currently unreachable in the UI) and picks up weekly-scheduling Phase 2 deferred out of v0.40.0. Full scope and design rationale in `docs/product/ROADMAP.md` and `RELEASES.md`.
+Base branch for this release: `releases/v0.41.0`. Adds a persisted, curator-authored guidance layer on top of Official Review Sets — the first phase of the Guided Learning Initiative. Full scope and design rationale in `docs/product/ROADMAP.md` ("Guided Learning Initiative (Companion)") and `RELEASES.md`.
 
-- **Browse All Official Review Sets (frontend, dedicated page only).** New section on `/collections/published` below the existing course/program-scoped Recommended row, calling the already-supported unfiltered `listPublicStudyPlans({})`. Dashboard gets only a "Browse all Review Sets" link, not the inline section. Deterministic default sort. Rewire the existing `browseWhenEmpty` empty-state card — don't build a new one.
-- **Empty-state copy fix (frontend).** The misleading "No curated Review Sets for X yet" card (means "no *official* set for your track," reads like "you have none") — single-string fix on the same card being rewired.
-- **Weekly scheduling Phase 2 (backend).** Weighted largest-remainder subject distribution + day-of-week interleaving over the v0.40.0 countdown; gated on Phase 1 proving useful in real usage.
-- **Parked, not in scope:** Public-Library search/filter reuse, Trending/Recently-Added/Popular, ranking/recommendation engine, Explore page, nav redesign, Dashboard redesign — all remain deferred (see the Review-Set-Centric Navigation section in ROADMAP).
-
-The next major initiative after this fast-follow is **Guided Learning** (v0.41.0 Learning Companion + v0.42.0 AI-assisted authoring) — see `docs/product/ROADMAP.md`.
+- **Persisted Companion content model (backend).** A JSONB column on the top-level `note_collections` row (not a new table), mirroring the existing `sessionState` JSONB precedent. 1:1 with a top-level collection only.
+- **Four sections only: Overview, Study Strategy, Common Mistakes, FAQ.** Study Timeline and Final Checklist are deferred to v0.42.0+ and must link the live weekly countdown/readiness features when built, never re-author them as static prose.
+- **Manual authoring only, Official Companions only.** No AI generation yet.
+- **Publish/adopt integration.** Publishes with the Review Set; travels on adopt; excluded from owner self-copy (same category as other generated content).
+- **FREE for all learners.**
+- **Parked, not in scope:** AI-assisted authoring/regeneration (v0.42.0), Resources section, Ask Companion, Personalized/Adaptive guidance — all remain deferred (see "Guided Learning Initiative" in ROADMAP).
 
 ## Source-of-truth docs (read before implementing anything)
 

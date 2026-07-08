@@ -16,6 +16,8 @@ import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
+import { SummaryMarkdown } from "@/components/ui/summary-markdown";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
@@ -30,6 +32,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   clearCollectionTargetDate,
+  clearCompanion,
   clearPrimaryCollection,
   deleteCollection,
   getCollection,
@@ -41,11 +44,13 @@ import {
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
+  setCompanion,
   setPrimaryCollection,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
   updateStudyDaysPerWeek,
+  type CompanionContent,
   type GoalCollectionDetailResponse,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
@@ -56,6 +61,7 @@ import {
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
 import { getJustAdoptedNotice } from "@/lib/just-adopted-notice";
+import { setCollectionActionNotice } from "@/lib/collection-action-notice";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
@@ -404,17 +410,6 @@ function PlanHeroCard({
               </span>
             ) : null}
             {statusBadge}
-            {adopted ? (
-              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
-                Adopted
-              </span>
-            ) : null}
-            {isPrimary ? (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
-                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                Primary
-              </span>
-            ) : null}
             {isAdmin ? (
               <button
                 type="button"
@@ -434,7 +429,20 @@ function PlanHeroCard({
           </div>
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{eyebrowLabel}</p>
-            <CardTitle className="text-2xl sm:text-3xl">{collection.title}</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-2xl sm:text-3xl">{collection.title}</CardTitle>
+              {adopted ? (
+                <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
+                  Adopted
+                </span>
+              ) : null}
+              {isPrimary ? (
+                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
+                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  Primary
+                </span>
+              ) : null}
+            </div>
             {collection.description ? (
               <CardDescription className="line-clamp-3 text-sm sm:text-base">{collection.description}</CardDescription>
             ) : null}
@@ -566,6 +574,77 @@ function formatLocalDate(isoDate: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function renderableCompanionText(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function CompanionDisplayCard({
+  companion,
+  labels,
+}: Readonly<{ companion: CompanionContent | null; labels: ReturnType<typeof getCollectionLabels> }>) {
+  if (!companion) {
+    return null;
+  }
+
+  const overview = renderableCompanionText(companion.overview);
+  const studyStrategy = renderableCompanionText(companion.studyStrategy);
+  const commonMistakes = renderableCompanionText(companion.commonMistakes);
+  const faqItems = companion.faq
+    .map((item) => ({
+      question: renderableCompanionText(item.question),
+      answer: renderableCompanionText(item.answer),
+    }))
+    .filter((item) => item.question || item.answer);
+
+  if (!overview && !studyStrategy && !commonMistakes && faqItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card className="space-y-5 p-4 sm:p-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
+        <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+      </div>
+
+      {overview ? (
+        <section className="space-y-2" aria-labelledby="companion-overview-heading">
+          <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">Overview</h3>
+          <SummaryMarkdown content={overview} />
+        </section>
+      ) : null}
+
+      {studyStrategy ? (
+        <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
+          <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">Study Strategy</h3>
+          <SummaryMarkdown content={studyStrategy} />
+        </section>
+      ) : null}
+
+      {commonMistakes ? (
+        <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
+          <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">Common Mistakes</h3>
+          <SummaryMarkdown content={commonMistakes} />
+        </section>
+      ) : null}
+
+      {faqItems.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
+          <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">FAQ</h3>
+          <div className="space-y-3">
+            {faqItems.map((item, index) => (
+              <div key={`${item.question}:${index}`} className="space-y-1.5">
+                {item.question ? <p className="text-sm font-semibold text-foreground">{item.question}</p> : null}
+                {item.answer ? <SummaryMarkdown content={item.answer} /> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </Card>
+  );
 }
 
 function GoalWeeklyCountdownCard({
@@ -748,6 +827,44 @@ function filterPickerNotes(notes: NoteListItemResponse[], presentNoteIds: Set<st
     });
 }
 
+type CompanionFaqDraft = {
+  question: string;
+  answer: string;
+};
+
+function companionInputValue(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+function companionPayloadValue(value: string): string | null {
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : null;
+}
+
+function toCompanionFaqDrafts(content: CompanionContent | null): CompanionFaqDraft[] {
+  return (content?.faq ?? []).map((item) => ({
+    question: companionInputValue(item.question),
+    answer: companionInputValue(item.answer),
+  }));
+}
+
+function buildCompanionContent(
+  overview: string,
+  studyStrategy: string,
+  commonMistakes: string,
+  faq: CompanionFaqDraft[],
+): CompanionContent {
+  return {
+    overview: companionPayloadValue(overview),
+    studyStrategy: companionPayloadValue(studyStrategy),
+    commonMistakes: companionPayloadValue(commonMistakes),
+    faq: faq.map((item) => ({
+      question: companionPayloadValue(item.question),
+      answer: companionPayloadValue(item.answer),
+    })),
+  };
+}
+
 function EditCollectionModal({
   collection,
   isOpen,
@@ -927,6 +1044,182 @@ function EditCollectionModal({
             </label>
           </>
         ) : null}
+        {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+      </form>
+    </AppModal>
+  );
+}
+
+function CompanionEditorModal({
+  collection,
+  labels,
+  isOpen,
+  onClose,
+  onSaved,
+}: Readonly<{
+  collection: NoteCollectionDetail;
+  labels: ReturnType<typeof getCollectionLabels>;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (collection: NoteCollectionDetail) => void;
+}>) {
+  const [overview, setOverview] = useState(companionInputValue(collection.companion?.overview));
+  const [studyStrategy, setStudyStrategy] = useState(companionInputValue(collection.companion?.studyStrategy));
+  const [commonMistakes, setCommonMistakes] = useState(companionInputValue(collection.companion?.commonMistakes));
+  const [faq, setFaq] = useState<CompanionFaqDraft[]>(toCompanionFaqDrafts(collection.companion));
+  const [submitting, setSubmitting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasCompanion = collection.companion !== null;
+
+  useEffect(() => {
+    if (isOpen) {
+      setOverview(companionInputValue(collection.companion?.overview));
+      setStudyStrategy(companionInputValue(collection.companion?.studyStrategy));
+      setCommonMistakes(companionInputValue(collection.companion?.commonMistakes));
+      setFaq(toCompanionFaqDrafts(collection.companion));
+      setSubmitting(false);
+      setClearing(false);
+      setError(null);
+    }
+  }, [collection.companion, isOpen]);
+
+  const updateFaqItem = (index: number, field: keyof CompanionFaqDraft, value: string) => {
+    setFaq((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const addFaqItem = () => {
+    setFaq((current) => [...current, { question: "", answer: "" }]);
+  };
+
+  const removeFaqItem = (index: number) => {
+    setFaq((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, faq));
+      onSaved(saved);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : `Could not save this ${labels.companionSingular}.`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setClearing(true);
+    setError(null);
+    try {
+      const saved = await clearCompanion(collection.id);
+      onSaved(saved);
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : `Could not remove this ${labels.companionSingular}.`);
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  return (
+    <AppModal
+      isOpen={isOpen}
+      title={`Manage ${labels.companionSingular}`}
+      description={`Author curated guidance for this ${labels.singular.toLowerCase()}.`}
+      onClose={onClose}
+      panelClassName="sm:max-w-2xl"
+      actions={(
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            {hasCompanion ? (
+              <Button
+                type="button"
+                variant="destructiveOutline"
+                loading={clearing}
+                loadingText="Removing..."
+                disabled={submitting}
+                onClick={() => void handleClear()}
+              >
+                Remove {labels.companionSingular}
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="secondary" disabled={submitting || clearing} onClick={onClose}>Cancel</Button>
+            <Button type="submit" form="companion-editor-form" loading={submitting} loadingText="Saving..." disabled={clearing}>
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+    >
+      <form id="companion-editor-form" className="space-y-5" onSubmit={handleSubmit} noValidate>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Overview</span>
+          <textarea
+            data-autofocus="true"
+            value={overview}
+            onChange={(event) => setOverview(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Study Strategy</span>
+          <textarea
+            value={studyStrategy}
+            onChange={(event) => setStudyStrategy(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Common Mistakes</span>
+          <textarea
+            value={commonMistakes}
+            onChange={(event) => setCommonMistakes(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+
+        <section className="space-y-3" aria-labelledby="companion-faq-heading">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="companion-faq-heading" className="text-sm font-medium text-foreground">FAQ</h3>
+            <Button type="button" variant="outline" size="sm" onClick={addFaqItem}>
+              Add question
+            </Button>
+          </div>
+          {faq.length > 0 ? (
+            <div className="space-y-3">
+              {faq.map((item, index) => (
+                <div key={index} className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-foreground">Question {index + 1}</span>
+                    <input
+                      value={item.question}
+                      onChange={(event) => updateFaqItem(index, "question", event.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-foreground">Answer {index + 1}</span>
+                    <input
+                      value={item.answer}
+                      onChange={(event) => updateFaqItem(index, "answer", event.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => removeFaqItem(index)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
       </form>
     </AppModal>
@@ -1517,10 +1810,33 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const actionToastTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+
+  const showActionToast = useCallback((message: string) => {
+    if (actionToastTimerRef.current) {
+      globalThis.clearTimeout(actionToastTimerRef.current);
+    }
+    setActionToast(message);
+    actionToastTimerRef.current = globalThis.setTimeout(() => {
+      setActionToast(null);
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    const ref = actionToastTimerRef;
+    return () => {
+      if (ref.current) {
+        globalThis.clearTimeout(ref.current);
+      }
+    };
+  }, []);
+
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [companionOpen, setCompanionOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const [organizeMode] = useState(false);
@@ -1842,6 +2158,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     setMutationError(null);
     try {
       await deleteCollection(collectionId);
+      setCollectionActionNotice(`${labels.singular} deleted.`);
       router.push("/collections");
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "Could not delete this collection.");
@@ -1860,10 +2177,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       if (isCurrentlyPrimary) {
         await clearPrimaryCollection(collection.id);
         setPrimaryCollectionId(null);
+        showActionToast("Removed as primary.");
         return;
       }
       await setPrimaryCollection(collection.id);
       setPrimaryCollectionId(collection.id);
+      showActionToast("Set as primary.");
     } catch {
       setMutationError(
         isCurrentlyPrimary
@@ -2145,6 +2464,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                         <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
                       </button>
                     ) : null}
+                    {isAdmin && collection.parentCollectionId === null ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                        onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
+                      >
+                        <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -2159,6 +2488,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             </div>
           )}
         />
+
+        <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
         {mutationError ? (
           <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -2200,11 +2531,35 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   visibility: saved.visibility,
                   courseProgram: saved.courseProgram,
                   targetCompletionDate: saved.targetCompletionDate,
+                  companion: saved.companion,
                   updatedAt: saved.updatedAt,
                 } : previous);
               });
             setItems(sortCollectionItemsByPosition(saved.items));
             setEditOpen(false);
+            showActionToast("Saved.");
+          }}
+        />
+        <CompanionEditorModal
+          collection={collection}
+          labels={labels}
+          isOpen={companionOpen}
+          onClose={() => setCompanionOpen(false)}
+          onSaved={(saved) => {
+            setCollection(saved);
+            setGoalDetail((previous) => previous ? {
+              ...previous,
+              title: saved.title,
+              description: saved.description,
+              visibility: saved.visibility,
+              courseProgram: saved.courseProgram,
+              targetCompletionDate: saved.targetCompletionDate,
+              companion: saved.companion,
+              updatedAt: saved.updatedAt,
+            } : previous);
+            setItems(sortCollectionItemsByPosition(saved.items));
+            setCompanionOpen(false);
+            showActionToast(saved.companion ? `${labels.companionSingular} saved.` : `${labels.companionSingular} removed.`);
           }}
         />
         <DeleteCollectionModal
@@ -2233,6 +2588,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             onNotesPublished={loadNoteVisibility}
           />
         ) : null}
+        {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
       </main>
     );
   }
@@ -2304,6 +2660,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                       <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
                     </button>
                   ) : null}
+                  {isAdmin && collection.parentCollectionId === null ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
+                    >
+                      <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
@@ -2347,6 +2713,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         ) : undefined}
       />
+
+      <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
       {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
           is fetched for it above, and this card self-guards to null when no target date is set. */}
@@ -2617,10 +2985,34 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   visibility: saved.visibility,
                   courseProgram: saved.courseProgram,
                   targetCompletionDate: saved.targetCompletionDate,
+                  companion: saved.companion,
                   updatedAt: saved.updatedAt,
                 } : previous);
               });
           }
+          showActionToast("Saved.");
+        }}
+      />
+      <CompanionEditorModal
+        collection={collection}
+        labels={labels}
+        isOpen={companionOpen}
+        onClose={() => setCompanionOpen(false)}
+        onSaved={(saved) => {
+          setCollection(saved);
+          setGoalDetail((previous) => previous ? {
+            ...previous,
+            title: saved.title,
+            description: saved.description,
+            visibility: saved.visibility,
+            courseProgram: saved.courseProgram,
+            targetCompletionDate: saved.targetCompletionDate,
+            companion: saved.companion,
+            updatedAt: saved.updatedAt,
+          } : previous);
+          setItems(sortCollectionItemsByPosition(saved.items));
+          setCompanionOpen(false);
+          showActionToast(saved.companion ? `${labels.companionSingular} saved.` : `${labels.companionSingular} removed.`);
         }}
       />
       <DeleteCollectionModal
@@ -2696,6 +3088,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </div>
         )}
       />
+      {actionToast ? <ToastMessage message={actionToast} tone="success" /> : null}
     </main>
   );
 }

@@ -306,6 +306,18 @@ export type WeeklyFocusDayEntry = {
   collectionIds: string[];
 };
 
+export type CompanionFaqItem = {
+  question: string | null;
+  answer: string | null;
+};
+
+export type CompanionContent = {
+  overview: string | null;
+  studyStrategy: string | null;
+  commonMistakes: string | null;
+  faq: CompanionFaqItem[];
+};
+
 export type GoalCollectionDetailResponse = {
   collectionId: string;
   title: string;
@@ -313,6 +325,7 @@ export type GoalCollectionDetailResponse = {
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
   targetCompletionDate: string | null;
+  companion: CompanionContent | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
@@ -1443,6 +1456,7 @@ export type NoteCollectionDetail = {
   courseProgram: string | null;
   estimatedStudyHours: number | null;
   targetCompletionDate: string | null;
+  companion: CompanionContent | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   childCount: number;
@@ -3909,6 +3923,31 @@ export async function clearPrimaryCollection(id: string): Promise<void> {
     return;
   }
   await parseApiResponse<never>(response, "Could not clear primary collection.");
+}
+
+export async function setCompanion(id: string, content: CompanionContent): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/companion`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(content),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not save this Companion.");
+}
+
+export async function clearCompanion(id: string): Promise<NoteCollectionDetail> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/companion`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not remove this Companion.");
 }
 
 export async function setCollectionParent(id: string, parentId: string | null): Promise<NoteCollectionDetail> {

@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
+import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
@@ -26,6 +27,7 @@ import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CollectionItemNotFoundException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.CollectionNotPublishableException;
@@ -49,6 +51,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -102,6 +105,8 @@ public class NoteCollectionService {
     private static final String CHILD_ID_REQUIRED_MESSAGE = "Child collection id is required.";
     private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
     private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
+    private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
+    private static final String ADMIN_REQUIRED_MESSAGE = "You do not have permission to access this endpoint.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
     private static final String COPIED_COUNT_METADATA_KEY = "copiedCount";
@@ -327,6 +332,7 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 collection.getTargetCompletionDate(),
+                collection.getCompanion(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 itemCount,
@@ -581,10 +587,11 @@ public class NoteCollectionService {
         if (!parentId.equals(child.getParentCollectionId())) {
             child.setParentCollectionId(parentId);
             child.setSiblingPosition(collectionRepository.findMaxSiblingPosition(parentId, userId) + 1);
-            // targetCompletionDate is a top-level-Goal-only field (see updateMetadata); a collection
-            // that becomes a child must not keep carrying one, or a stale date resurfaces if it is
-            // later detached back to top-level via updateParent(null).
+            // targetCompletionDate and Companion are top-level-Goal-only fields; a collection
+            // that becomes a child must not keep carrying either one, or stale top-level data
+            // resurfaces if it is later detached back to top-level via updateParent(null).
             child.setTargetCompletionDate(null);
+            child.setCompanion(null);
             touch(child);
             child = collectionRepository.save(child);
         }
@@ -616,6 +623,34 @@ public class NoteCollectionService {
         user.setPrimaryCollectionId(null);
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
+    }
+
+    @Transactional
+    public NoteCollectionDetailResponse setCompanion(UUID collectionId, UUID userId, CompanionContent content) {
+        UserEntity user = getUserOrThrow(userId);
+        assertAdmin(user);
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        validateCompanionTarget(collection);
+        collection.setCompanion(content);
+        touch(collection);
+        NoteCollectionEntity saved = collectionRepository.save(collection);
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        return toDetailResponse(saved, items);
+    }
+
+    @Transactional
+    public NoteCollectionDetailResponse clearCompanion(UUID collectionId, UUID userId) {
+        UserEntity user = getUserOrThrow(userId);
+        assertAdmin(user);
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        validateCompanionTarget(collection);
+        if (collection.getCompanion() != null) {
+            collection.setCompanion(null);
+            touch(collection);
+            collection = collectionRepository.save(collection);
+        }
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        return toDetailResponse(collection, items);
     }
 
     @Transactional
@@ -739,6 +774,10 @@ public class NoteCollectionService {
             if (child.getParentCollectionId() == null) {
                 child.setParentCollectionId(persistedGoal.collection().getId());
                 child.setSiblingPosition(index);
+                // Same invariant as updateParent(): a collection that becomes a child must not
+                // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
+                child.setTargetCompletionDate(null);
+                child.setCompanion(null);
                 touch(child);
                 collectionRepository.save(child);
                 adoptedSubjectCount++;
@@ -862,6 +901,22 @@ public class NoteCollectionService {
 
     private UserEntity getUserOrThrow(UUID userId) {
         return userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
+    }
+
+    private void assertAdmin(UserEntity user) {
+        if (user == null || user.getRole() != UserRole.ADMIN) {
+            throw new AccessDeniedException(ADMIN_REQUIRED_MESSAGE);
+        }
+    }
+
+    private void validateCompanionTarget(NoteCollectionEntity collection) {
+        if (collection.getParentCollectionId() != null) {
+            throw new InvalidCollectionRequestException(COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
+        }
+    }
+
+    private boolean shouldCopyCompanion(NoteCollectionEntity source, UUID userId) {
+        return source.getParentCollectionId() == null && !source.getOwnerUserId().equals(userId);
     }
 
     private void reassertPrimaryInvariant(UUID userId) {
@@ -1038,6 +1093,9 @@ public class NoteCollectionService {
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            if (shouldCopyCompanion(source, userId)) {
+                collection.setCompanion(source.getCompanion());
+            }
             // targetCompletionDate is deliberately never copied from source (including on a self-copy where
             // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
             // the new owner, so it stays null on the fresh entity until the new owner sets their own.
@@ -1075,6 +1133,9 @@ public class NoteCollectionService {
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
+            if (shouldCopyCompanion(source, userId)) {
+                collection.setCompanion(source.getCompanion());
+            }
             // targetCompletionDate is deliberately never copied from source (including on a self-copy where
             // ownerUserId == source's owner) — a curator's or previous owner's target date means nothing to
             // the new owner, so it stays null on the fresh entity until the new owner sets their own.
@@ -1472,6 +1533,7 @@ public class NoteCollectionService {
                 collection.getCourseProgram(),
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
+                collection.getCompanion(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
@@ -1495,6 +1557,7 @@ public class NoteCollectionService {
                 collection.getCourseProgram(),
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
+                collection.getCompanion(),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),

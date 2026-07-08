@@ -1,5 +1,33 @@
 # RELEASES.md - NoteLib
 
+## v0.41.0 - Learning Companion (MVP)
+
+**Status: Released**
+
+Theme: add a persisted, curator-authored guidance layer on top of Official Review Sets — the missing piece between "a collection of notes" and a premium guided learning experience. See `docs/product/ROADMAP.md`'s "Guided Learning Initiative (Companion)" section for the full design rationale.
+
+### Planned Scope
+
+- **Persisted Companion content model (backend).** A JSONB column on the top-level `note_collections` row (not a new table), mirroring the existing `sessionState` JSONB precedent. 1:1 with a top-level collection only — rejected on child Subject Plans with the same `400` pattern as the existing `targetCompletionDate`/primary hierarchy validation.
+- **Four sections only: Overview, Study Strategy, Common Mistakes, FAQ.** Study Timeline and Final Checklist are explicitly deferred to v0.42.0+ and must never be static prose when built — they link the already-shipped live weekly countdown/readiness features instead of re-authoring them.
+- **Manual authoring only, Official Companions only (frontend + backend).** No AI generation yet. Only the NoteLib official author can author a Companion in this version.
+- **Publish/adopt integration (backend).** Publishes with the Review Set via the existing `updateVisibility`/`publishChildCollections` cascade. Travels on adopt (added to `persistAdoptedGoal`'s copied set, the opposite of `targetCompletionDate`'s exclusion). Owner self-copy excludes the Companion, same category as the existing generated-content exclusion.
+- **FREE for all learners.** Zero paid uplift by design — an activation/retention bet.
+
+Anti-drift: no runtime LLM call to serve a Companion (authored once, served static); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels` (new `companionSingular` field, same pattern as `primarySingular`).
+
+### Shipped
+
+- **Learning Companion backend content model.** Added nullable `note_collections.companion` JSONB plus `CompanionContent` / `CompanionFaqItem` DTO records, surfaced Companion on existing collection detail reads (`GET /collections/{id}` and `GET /collections/{id}/goal`), and added ADMIN-only `PUT`/`DELETE /collections/{id}/companion` write endpoints for top-level collections (`parentCollectionId == null`, not child count). Adopt now copies Companion on genuine cross-owner Review Set adoption and excludes it on same-owner self-copy; publish cascade remains row-local with no child Companion logic.
+- **Learning Companion authoring UI.** Added an ADMIN-only `Manage Companion` action on eligible top-level Review Sets with a modal for Overview, Study Strategy, Common Mistakes, and FAQ authoring, wired to the existing full-replace and clear endpoints.
+- **Learning Companion learner display.** Collection detail now renders authored Companion guidance for top-level Review Sets in both Goal and leaf views, using the shared markdown prose renderer and skipping empty draft sections. This completes v0.41.0's planned Companion scope: content model, official authoring UI, and learner-facing display.
+- **Companion terminology fix (pre-signoff pressure test finding).** All "Companion" copy on the collection detail page now resolves through a new `companionSingular` field on `getCollectionLabels`, per the kickoff's own anti-drift rule, instead of hardcoded literal strings. Also fixed one adjacent hardcoded "Review Set" in the Companion editor's description text. No visible copy change today (the value is `"Companion"` across every profile), but closes a real cross-PR consistency gap a per-PR review wouldn't catch.
+- **Review Set badge hierarchy (frontend polish).** `Primary`/`Adopted` identity badges moved next to the title (detail page hero) or directly under it (list page cards), out of the flattened row they previously shared with the notes count and the execution-status badge. List cards now stack cleanly: title → identity badges → status badge → notes-or-plans count + last-updated at the bottom. courseProgram/estimated-hours/Published stay in the existing top eyebrow row on the detail page — no conflict since they're a different tier from Primary/Adopted. Also fixed a related grid-height bug: `/collections` list cards now stretch to a uniform height per row (`h-full` on the card, matching the pre-existing `flex flex-col justify-between` internal layout) so the notes-count/last-updated footer stays pinned to the bottom of every card regardless of title length or badge count, instead of each card sizing independently and producing a visibly ragged row.
+- **Review Set success-toast feedback (frontend polish).** Editing details, setting/removing primary, and saving/removing a Companion now show a success toast on the collection detail page, reusing the existing `ToastMessage` component and the same local-state pattern already used elsewhere in the app. Deleting a collection shows the toast on the `/collections` list page after navigating back, via a new one-shot `sessionStorage` flash notice (mirroring the existing `just-adopted-notice`/`study-plan-skipped-notice` pattern). Scoped to Review Set actions only; app-wide CRUD feedback is tracked separately in `docs/product/ROADMAP.md`'s Post-v0.41.0 Polish Backlog.
+- **Pre-signoff pressure test fixes.** A full whole-release audit (two source-reading agents covering every backend/frontend file touched this release, since 4 different PRs touched the same `collection-detail-page-client.tsx`) found two real issues, both fixed: (1) `adoptGoal`'s inline child-reparenting loop didn't null out `targetCompletionDate`/`companion` the way `updateParent()` already does for the identical operation — currently unreachable because a child never has a Companion to begin with, but now defended the same way at both reparenting call sites so a future change to the adopt/copy path can't silently leak one; (2) the success-toast timers on both `/collections` and the collection detail page used bare `setTimeout`/`clearTimeout` instead of `globalThis.setTimeout`/`globalThis.clearTimeout`, contradicting this file's own established convention and CLAUDE.md's `globalThis` rule — fixed at all call sites. A third suspected issue (list-page flash toast never auto-dismissing) was checked against source and found to be a false positive — the 4-second auto-dismiss effect was already present and working.
+
+---
+
 ## v0.40.1 - Public Review Set Reachability
 
 **Status: Released**
