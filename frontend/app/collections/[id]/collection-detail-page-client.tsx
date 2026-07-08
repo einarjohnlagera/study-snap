@@ -30,6 +30,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   clearCollectionTargetDate,
+  clearCompanion,
   clearPrimaryCollection,
   deleteCollection,
   getCollection,
@@ -41,11 +42,13 @@ import {
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
+  setCompanion,
   setPrimaryCollection,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
   updateStudyDaysPerWeek,
+  type CompanionContent,
   type GoalCollectionDetailResponse,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
@@ -748,6 +751,44 @@ function filterPickerNotes(notes: NoteListItemResponse[], presentNoteIds: Set<st
     });
 }
 
+type CompanionFaqDraft = {
+  question: string;
+  answer: string;
+};
+
+function companionInputValue(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+function companionPayloadValue(value: string): string | null {
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : null;
+}
+
+function toCompanionFaqDrafts(content: CompanionContent | null): CompanionFaqDraft[] {
+  return (content?.faq ?? []).map((item) => ({
+    question: companionInputValue(item.question),
+    answer: companionInputValue(item.answer),
+  }));
+}
+
+function buildCompanionContent(
+  overview: string,
+  studyStrategy: string,
+  commonMistakes: string,
+  faq: CompanionFaqDraft[],
+): CompanionContent {
+  return {
+    overview: companionPayloadValue(overview),
+    studyStrategy: companionPayloadValue(studyStrategy),
+    commonMistakes: companionPayloadValue(commonMistakes),
+    faq: faq.map((item) => ({
+      question: companionPayloadValue(item.question),
+      answer: companionPayloadValue(item.answer),
+    })),
+  };
+}
+
 function EditCollectionModal({
   collection,
   isOpen,
@@ -927,6 +968,180 @@ function EditCollectionModal({
             </label>
           </>
         ) : null}
+        {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+      </form>
+    </AppModal>
+  );
+}
+
+function CompanionEditorModal({
+  collection,
+  isOpen,
+  onClose,
+  onSaved,
+}: Readonly<{
+  collection: NoteCollectionDetail;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (collection: NoteCollectionDetail) => void;
+}>) {
+  const [overview, setOverview] = useState(companionInputValue(collection.companion?.overview));
+  const [studyStrategy, setStudyStrategy] = useState(companionInputValue(collection.companion?.studyStrategy));
+  const [commonMistakes, setCommonMistakes] = useState(companionInputValue(collection.companion?.commonMistakes));
+  const [faq, setFaq] = useState<CompanionFaqDraft[]>(toCompanionFaqDrafts(collection.companion));
+  const [submitting, setSubmitting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasCompanion = collection.companion !== null;
+
+  useEffect(() => {
+    if (isOpen) {
+      setOverview(companionInputValue(collection.companion?.overview));
+      setStudyStrategy(companionInputValue(collection.companion?.studyStrategy));
+      setCommonMistakes(companionInputValue(collection.companion?.commonMistakes));
+      setFaq(toCompanionFaqDrafts(collection.companion));
+      setSubmitting(false);
+      setClearing(false);
+      setError(null);
+    }
+  }, [collection.companion, isOpen]);
+
+  const updateFaqItem = (index: number, field: keyof CompanionFaqDraft, value: string) => {
+    setFaq((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const addFaqItem = () => {
+    setFaq((current) => [...current, { question: "", answer: "" }]);
+  };
+
+  const removeFaqItem = (index: number) => {
+    setFaq((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, faq));
+      onSaved(saved);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not save this Companion.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setClearing(true);
+    setError(null);
+    try {
+      const saved = await clearCompanion(collection.id);
+      onSaved(saved);
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : "Could not remove this Companion.");
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  return (
+    <AppModal
+      isOpen={isOpen}
+      title="Manage Companion"
+      description="Author curated guidance for this Review Set."
+      onClose={onClose}
+      panelClassName="sm:max-w-2xl"
+      actions={(
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            {hasCompanion ? (
+              <Button
+                type="button"
+                variant="destructiveOutline"
+                loading={clearing}
+                loadingText="Removing..."
+                disabled={submitting}
+                onClick={() => void handleClear()}
+              >
+                Remove Companion
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="secondary" disabled={submitting || clearing} onClick={onClose}>Cancel</Button>
+            <Button type="submit" form="companion-editor-form" loading={submitting} loadingText="Saving..." disabled={clearing}>
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+    >
+      <form id="companion-editor-form" className="space-y-5" onSubmit={handleSubmit} noValidate>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Overview</span>
+          <textarea
+            data-autofocus="true"
+            value={overview}
+            onChange={(event) => setOverview(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Study Strategy</span>
+          <textarea
+            value={studyStrategy}
+            onChange={(event) => setStudyStrategy(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Common Mistakes</span>
+          <textarea
+            value={commonMistakes}
+            onChange={(event) => setCommonMistakes(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
+
+        <section className="space-y-3" aria-labelledby="companion-faq-heading">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="companion-faq-heading" className="text-sm font-medium text-foreground">FAQ</h3>
+            <Button type="button" variant="outline" size="sm" onClick={addFaqItem}>
+              Add question
+            </Button>
+          </div>
+          {faq.length > 0 ? (
+            <div className="space-y-3">
+              {faq.map((item, index) => (
+                <div key={index} className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-foreground">Question {index + 1}</span>
+                    <input
+                      value={item.question}
+                      onChange={(event) => updateFaqItem(index, "question", event.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-foreground">Answer {index + 1}</span>
+                    <input
+                      value={item.answer}
+                      onChange={(event) => updateFaqItem(index, "answer", event.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => removeFaqItem(index)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
       </form>
     </AppModal>
@@ -1521,6 +1736,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [companionOpen, setCompanionOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const [organizeMode] = useState(false);
@@ -2145,6 +2361,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                         <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
                       </button>
                     ) : null}
+                    {isAdmin && collection.parentCollectionId === null ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                        onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
+                      >
+                        <ResponsiveActionContent action="companion" label="Manage Companion" showTextOnMobile iconClassName="h-4 w-4" />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -2200,11 +2426,32 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   visibility: saved.visibility,
                   courseProgram: saved.courseProgram,
                   targetCompletionDate: saved.targetCompletionDate,
+                  companion: saved.companion,
                   updatedAt: saved.updatedAt,
                 } : previous);
               });
             setItems(sortCollectionItemsByPosition(saved.items));
             setEditOpen(false);
+          }}
+        />
+        <CompanionEditorModal
+          collection={collection}
+          isOpen={companionOpen}
+          onClose={() => setCompanionOpen(false)}
+          onSaved={(saved) => {
+            setCollection(saved);
+            setGoalDetail((previous) => previous ? {
+              ...previous,
+              title: saved.title,
+              description: saved.description,
+              visibility: saved.visibility,
+              courseProgram: saved.courseProgram,
+              targetCompletionDate: saved.targetCompletionDate,
+              companion: saved.companion,
+              updatedAt: saved.updatedAt,
+            } : previous);
+            setItems(sortCollectionItemsByPosition(saved.items));
+            setCompanionOpen(false);
           }}
         />
         <DeleteCollectionModal
@@ -2302,6 +2549,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                       onClick={() => void handlePrimaryToggle()}
                     >
                       <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  {isAdmin && collection.parentCollectionId === null ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
+                    >
+                      <ResponsiveActionContent action="companion" label="Manage Companion" showTextOnMobile iconClassName="h-4 w-4" />
                     </button>
                   ) : null}
                   <button
@@ -2617,10 +2874,31 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   visibility: saved.visibility,
                   courseProgram: saved.courseProgram,
                   targetCompletionDate: saved.targetCompletionDate,
+                  companion: saved.companion,
                   updatedAt: saved.updatedAt,
                 } : previous);
               });
           }
+        }}
+      />
+      <CompanionEditorModal
+        collection={collection}
+        isOpen={companionOpen}
+        onClose={() => setCompanionOpen(false)}
+        onSaved={(saved) => {
+          setCollection(saved);
+          setGoalDetail((previous) => previous ? {
+            ...previous,
+            title: saved.title,
+            description: saved.description,
+            visibility: saved.visibility,
+            courseProgram: saved.courseProgram,
+            targetCompletionDate: saved.targetCompletionDate,
+            companion: saved.companion,
+            updatedAt: saved.updatedAt,
+          } : previous);
+          setItems(sortCollectionItemsByPosition(saved.items));
+          setCompanionOpen(false);
         }}
       />
       <DeleteCollectionModal

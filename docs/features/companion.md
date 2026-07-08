@@ -56,7 +56,9 @@ Only ADMIN users may write or clear Companion content in v0.41.0:
 
 The write gate is role-based (`UserRole.ADMIN`). It does not reuse public-profile official-email display checks.
 
-There is no authoring UI in this phase, no AI generation, no feature gate, and no quota check.
+The collection detail page now exposes ADMIN-only authoring for eligible top-level collections through the overflow menu's `Manage Companion` action. The modal edits all four sections as one full replacement request and can clear the Companion back to null. The menu item is hidden for non-admin users and for child Subject plans; backend enforcement remains the security boundary.
+
+There is no learner-facing Companion display yet, no AI generation, no feature gate, and no quota check.
 
 ## Reads
 

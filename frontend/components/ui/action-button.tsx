@@ -11,6 +11,7 @@ import {
   Briefcase,
   Copy,
   Download,
+  GraduationCap,
   Globe,
   HelpCircle,
   House,
@@ -64,6 +65,7 @@ export type ActionIconName =
   | "quickReview"
   | "challengeQuiz"
   | "adaptivePractice"
+  | "companion"
   | "flashcards"
   | "memorization"
   | "interviewPractice"
@@ -99,6 +101,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   quickReview: Zap,
   challengeQuiz: Trophy,
   adaptivePractice: Target,
+  companion: GraduationCap,
   flashcards: BookMarked,
   memorization: Brain,
   interviewPractice: Briefcase,
