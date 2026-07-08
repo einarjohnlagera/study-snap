@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, ChevronDown, Clock, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Clock, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -410,7 +410,8 @@ function PlanHeroCard({
               </span>
             ) : null}
             {isPrimary ? (
-              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
+                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
                 Primary
               </span>
             ) : null}
