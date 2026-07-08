@@ -30,6 +30,7 @@ import {
   addCollectionItems,
   ApiRequestError,
   clearCollectionTargetDate,
+  clearPrimaryCollection,
   deleteCollection,
   getCollection,
   getCollectionGoal,
@@ -40,6 +41,7 @@ import {
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
+  setPrimaryCollection,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
@@ -363,6 +365,7 @@ function PlanHeroCard({
   collection,
   eyebrowLabel,
   statusBadge,
+  isPrimary,
   isAdmin,
   actions,
   terminalFooter,
@@ -371,6 +374,7 @@ function PlanHeroCard({
   collection: NoteCollectionDetail;
   eyebrowLabel: string;
   statusBadge: ReactNode;
+  isPrimary: boolean;
   isAdmin: boolean;
   actions: ReactNode;
   terminalFooter?: ReactNode;
@@ -403,6 +407,11 @@ function PlanHeroCard({
             {adopted ? (
               <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
                 Adopted
+              </span>
+            ) : null}
+            {isPrimary ? (
+              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/65">
+                Primary
               </span>
             ) : null}
             {isAdmin ? (
@@ -1525,6 +1534,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [showReviewFirstModal, setShowReviewFirstModal] = useState(false);
   const [skippedNoticeCount, setSkippedNoticeCount] = useState<number | null>(null);
   const [justAdopted, setJustAdopted] = useState(false);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [parentTitle, setParentTitle] = useState<string | null>(null);
   const backLinkHref = collection?.parentCollectionId && parentTitle
     ? `/collections/${collection.parentCollectionId}`
@@ -1599,6 +1609,25 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
   useEffect(() => {
     setJustAdopted(getJustAdoptedNotice(collectionId));
+  }, [collectionId]);
+
+  useEffect(() => {
+    let mounted = true;
+    setPrimaryCollectionId(null);
+    void getMe()
+      .then((me) => {
+        if (mounted) {
+          setPrimaryCollectionId(me.primaryCollectionId ?? null);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPrimaryCollectionId(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
   }, [collectionId]);
 
   useEffect(() => {
@@ -1819,6 +1848,30 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
+  const handlePrimaryToggle = async () => {
+    if (!collection) {
+      return;
+    }
+    setActionsMenuOpen(false);
+    setMutationError(null);
+    const isCurrentlyPrimary = collection.id === primaryCollectionId;
+    try {
+      if (isCurrentlyPrimary) {
+        await clearPrimaryCollection(collection.id);
+        setPrimaryCollectionId(null);
+        return;
+      }
+      await setPrimaryCollection(collection.id);
+      setPrimaryCollectionId(collection.id);
+    } catch {
+      setMutationError(
+        isCurrentlyPrimary
+          ? "Could not remove this as your primary review set."
+          : "Could not set this as your primary review set.",
+      );
+    }
+  };
+
   const presentNoteIds = useMemo(() => new Set(items.map((item) => item.noteId)), [items]);
   const privateNoteIds = useMemo(
     () => (isAdmin ? items.filter((item) => noteVisibility.get(item.noteId) === "PRIVATE").map((item) => item.noteId) : []),
@@ -1906,6 +1959,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const hasNonQuizReadyItems = quizReadyNoteIds.length < items.length;
   const hasNonPremiumReadyItems = premiumExamReadyNoteIds.length < items.length;
   const mutationInProgress = mutationKind !== null;
+  const isPrimaryCollection = collection?.id === primaryCollectionId;
+  const primaryActionLabel = isPrimaryCollection ? "Remove as primary" : "Set as primary";
   const premiumExamDisabled = noteListLoadFailed
     || !primaryExamItem
     || (terminalAction?.kind === "premium-exam" && terminalAction.mode === "board_exam" && !primaryExamStudyPackId);
@@ -2040,6 +2095,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               {goalDetail.childCount} {labels.subjectSingular}{goalDetail.childCount === 1 ? "" : "s"}
             </span>
           )}
+          isPrimary={isPrimaryCollection}
           isAdmin={isAdmin}
           onPublishClick={() => setPublishOpen(true)}
           actions={(
@@ -2078,6 +2134,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                     >
                       <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
                     </button>
+                    {collection.parentCollectionId === null ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                        onClick={() => void handlePrimaryToggle()}
+                      >
+                        <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -2181,6 +2247,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready
           </span>
         )}
+        isPrimary={isPrimaryCollection}
         isAdmin={isAdmin}
         onPublishClick={() => setPublishOpen(true)}
         actions={(
@@ -2226,6 +2293,16 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                   >
                     <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
                   </button>
+                  {collection.parentCollectionId === null ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => void handlePrimaryToggle()}
+                    >
+                      <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
