@@ -99,7 +99,7 @@ The reference is the backend source of truth for the learner's default top-level
 
 Rules:
 
-- only an owned top-level Goal can be primary (`parentCollectionId == null`)
+- only an owned top-level collection can be primary (`parentCollectionId == null`); it does not need child Subject plans
 - setting a child Subject plan as primary returns `InvalidCollectionRequestException` / `400`
 - setting a missing or not-owned collection returns `CollectionNotFoundException` / `404`
 - setting the already-primary collection is a no-op success
@@ -121,6 +121,8 @@ Structural collection mutations reassert this invariant in the same service oper
 | `PATCH /collections/{id}/parent` | Attaching a primary Goal under another Goal invalidates it; detaching a child back to top-level can trigger auto-set. |
 
 **Frontend consumption (Dashboard + Review Sets list page):** `DashboardStudyPlanSection` (`frontend/app/dashboard/dashboard-study-plan-section.tsx`) accepts an optional `primaryCollectionId` prop. When set, it looks the id up via `listCollections()` and, if found, renders that owned collection instead of the course/program-matched public recommendation — skipping the adopt flow entirely (the CTA always resolves to the existing "already owned" render path, i.e. `router.push` straight to `/collections/{id}`, never `adoptGoal`/`adoptStudyPlan`). The heading swaps from `Recommended {labels.singular}` to `labels.primarySingular` (a new field on `CollectionLabels` in `frontend/lib/collection-labels.ts`: "Primary Study Plan" / "Primary Review Set" / "Primary Lesson Plan" / "Primary Collection", resolved the same profile-aware way as every other collection label), the course/program subtitle and the "See all N" link are both suppressed (neither applies once the plan is an explicit choice rather than a recommendation). If the id isn't found among the user's owned collections (a defensive fallback — the backend invariant should keep this reference valid), rendering falls through to the existing course/program-matched flow, same as if no primary were set at all. Wired into both Dashboard call sites (`STUDENT`/`PROFESSIONAL` and `BOARD_EXAM`) and the `/collections` list page (`frontend/app/collections/collections-page-client.tsx` — the `getMe()` call already fetching `courseProgram` there was renamed `loadProfile` and extended to also read `primaryCollectionId`). The onboarding call site of the same component does not pass this prop — a new user going through onboarding has no owned collections yet, so there's nothing to be primary. The Review Sets list page's v0.40.1 Browse All section and corrected empty-state CTA are documented below in "Browse published plans".
+
+**Frontend manual override (collection detail page):** `frontend/app/collections/[id]/collection-detail-page-client.tsx` also reads `primaryCollectionId` from `GET /auth/me`. `PlanHeroCard` shows a `Primary` badge when the viewed collection id matches. The existing overflow action menu includes `Set as primary` when a top-level collection is not primary and `Remove as primary` when it is; the action is gated only on `collection.parentCollectionId === null`, so childless top-level leaf plans are eligible and genuine child Subject plans are excluded. Successful toggles update page-local state immediately; failures use the existing mutation error banner.
 
 The CTA verb (`Start`/`Continue this {label}`) and the child-count line (`N {label}s`) in `DashboardStudyPlanSection` and `PublicStudyPlanCard` (`frontend/components/study-plan/public-study-plan-card.tsx`) resolve through `labels.goalSingular`/`labels.singular`/`labels.subjectSingular`, same as `primarySingular` above — a hardcoded "Goal"/"Subject plan(s)" wording briefly shipped in these two components (the Goal detail page always did this correctly) and was fixed as part of the v0.40.0 pre-signoff pass. `PublicStudyPlanCard` takes an optional `profileType` prop for this purpose; `published-plans-page-client.tsx` passes the same `profileType` it already resolves for its own page-level labels.
 
@@ -577,7 +579,7 @@ Behavior:
 - clearing when no primary is set is a no-op success
 - returns `204`
 
-`GET /auth/me` exposes the persisted nullable `primaryCollectionId`; there is no separate profile/preference read endpoint for this value.
+`GET /auth/me` exposes the persisted nullable `primaryCollectionId`; there is no separate profile/preference read endpoint for this value. The collection detail page wraps these endpoints as `setPrimaryCollection(id)` and `clearPrimaryCollection(id)` for the top-level-only manual override action described above.
 
 ### Set / Clear Target Date
 
