@@ -440,6 +440,7 @@ describe("CollectionDetailPageClient", () => {
       expect(setPrimaryCollection).toHaveBeenCalledWith("collection-1");
     });
     expect(screen.getByText("Primary")).toBeInTheDocument();
+    expect(await screen.findByText("Set as primary.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.getByRole("menuitem", { name: "Remove as primary" })).toBeInTheDocument();
@@ -460,9 +461,24 @@ describe("CollectionDetailPageClient", () => {
       expect(clearPrimaryCollection).toHaveBeenCalledWith("collection-1");
     });
     expect(screen.queryByText("Primary")).not.toBeInTheDocument();
+    expect(await screen.findByText("Removed as primary.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
     expect(screen.getByRole("menuitem", { name: "Set as primary" })).toBeInTheDocument();
+  });
+
+  it("records a success notice and navigates to the list after deleting", async () => {
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/collections");
+    });
+    expect(globalThis.sessionStorage.getItem("notelib-collection-action-notice")).toBe("Study Plan deleted.");
   });
 
   it("keeps primary UI unchanged and shows the error banner when setting primary fails", async () => {
@@ -699,6 +715,7 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
     expect(screen.getByText("What now?")).toBeInTheDocument();
     expect(screen.getByText("Practice.")).toBeInTheDocument();
+    expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
   });
 
   it("keeps companion input visible when saving fails", async () => {
@@ -740,6 +757,7 @@ describe("CollectionDetailPageClient", () => {
       expect(clearCompanion).toHaveBeenCalledWith("collection-1");
     });
     expect(await screen.findByRole("heading", { name: "Companion Removed" })).toBeInTheDocument();
+    expect(await screen.findByText("Companion removed.")).toBeInTheDocument();
   });
 
   it("keeps companion state unchanged when removing fails", async () => {
@@ -1779,6 +1797,25 @@ describe("CollectionDetailPageClient", () => {
         estimatedStudyHours: 3,
       });
     });
+    expect(await screen.findByText("Saved.")).toBeInTheDocument();
+  });
+
+  it("shows a Saved toast after editing a Goal-view collection", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [], description: "New notes" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "LET Mastery" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const description = await screen.findByLabelText("Description");
+    fireEvent.change(description, { target: { value: "New notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Saved.")).toBeInTheDocument();
   });
 
   it("sends estimated study hours when set from the edit modal", async () => {

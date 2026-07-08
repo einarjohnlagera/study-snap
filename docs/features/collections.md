@@ -801,6 +801,16 @@ Behavior:
 - Remove item for a note not in the collection -> `CollectionItemNotFoundException` / `404`.
 - `setOrder` adds, drops, or duplicates a note -> `InvalidCollectionRequestException` / `400`.
 
+## Success Feedback (frontend)
+
+The collection detail page (`frontend/app/collections/[id]/collection-detail-page-client.tsx`) and the `/collections` list page show a success toast (reusing the existing `ToastMessage` component, `tone="success"`, 4s auto-dismiss) after: editing details, setting/removing primary, saving/removing a Companion, and deleting a collection. This is page-local state (a `showActionToast` helper + `setTimeout`), matching the pattern already used in `frontend/app/profile/page.tsx` and other pages — not a shared/global toast system.
+
+Delete navigates away before the toast could render, so it uses a one-shot `sessionStorage` flash notice instead (`frontend/lib/collection-action-notice.ts`, mirroring the existing `just-adopted-notice.ts`/`study-plan-skipped-notice.ts` pattern): `setCollectionActionNotice(message)` is called right before `router.push("/collections")`, and the list page reads-and-clears it once via `getCollectionActionNotice()` on mount.
+
+Existing inline error banners (`mutationError`) are unchanged — this is additive success-only feedback, not a replacement for error handling.
+
+**Scope note:** this covers Review Set actions only (create/edit/delete a collection, set/clear primary, Companion CRUD). Extending success-toast feedback to every mutating action across the whole app is tracked as a separate, larger initiative in `docs/product/ROADMAP.md`'s "Post-v0.41.0 Polish Backlog" — the current per-page local-state pattern doesn't scale to app-wide without a shared `useToast()` provider/queue first.
+
 ## Frontend Core UI
 
 The core Collections UI ships as the universal organization surface:
