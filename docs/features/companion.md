@@ -58,7 +58,9 @@ The write gate is role-based (`UserRole.ADMIN`). It does not reuse public-profil
 
 The collection detail page now exposes ADMIN-only authoring for eligible top-level collections through the overflow menu's `Manage Companion` action. The modal edits all four sections as one full replacement request and can clear the Companion back to null. The menu item is hidden for non-admin users and for child Subject plans; backend enforcement remains the security boundary.
 
-There is no learner-facing Companion display yet, no AI generation, no feature gate, and no quota check.
+There is no AI generation, no feature gate, and no quota check. Learner-facing display is documented under "Reads" below.
+
+All "Companion" copy on this page (menu action, modal title/description, remove button, error messages, display eyebrow/heading) resolves through `getCollectionLabels`'s `companionSingular` field, matching the `primarySingular` pattern — currently `"Companion"` identically across every profile, since (unlike "Study Plan"/"Review Set"/"Lesson Plan") Companion is a fixed feature name, not a synonym for the collection noun.
 
 ## Reads
 

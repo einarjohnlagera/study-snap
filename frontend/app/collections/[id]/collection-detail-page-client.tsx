@@ -576,7 +576,10 @@ function renderableCompanionText(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
 
-function CompanionDisplayCard({ companion }: Readonly<{ companion: CompanionContent | null }>) {
+function CompanionDisplayCard({
+  companion,
+  labels,
+}: Readonly<{ companion: CompanionContent | null; labels: ReturnType<typeof getCollectionLabels> }>) {
   if (!companion) {
     return null;
   }
@@ -598,8 +601,8 @@ function CompanionDisplayCard({ companion }: Readonly<{ companion: CompanionCont
   return (
     <Card className="space-y-5 p-4 sm:p-5">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Companion</p>
-        <h2 className="text-lg font-semibold tracking-tight">Learning Companion</h2>
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
+        <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
       </div>
 
       {overview ? (
@@ -1045,11 +1048,13 @@ function EditCollectionModal({
 
 function CompanionEditorModal({
   collection,
+  labels,
   isOpen,
   onClose,
   onSaved,
 }: Readonly<{
   collection: NoteCollectionDetail;
+  labels: ReturnType<typeof getCollectionLabels>;
   isOpen: boolean;
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
@@ -1097,7 +1102,7 @@ function CompanionEditorModal({
       const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, faq));
       onSaved(saved);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Could not save this Companion.");
+      setError(submitError instanceof Error ? submitError.message : `Could not save this ${labels.companionSingular}.`);
     } finally {
       setSubmitting(false);
     }
@@ -1110,7 +1115,7 @@ function CompanionEditorModal({
       const saved = await clearCompanion(collection.id);
       onSaved(saved);
     } catch (clearError) {
-      setError(clearError instanceof Error ? clearError.message : "Could not remove this Companion.");
+      setError(clearError instanceof Error ? clearError.message : `Could not remove this ${labels.companionSingular}.`);
     } finally {
       setClearing(false);
     }
@@ -1119,8 +1124,8 @@ function CompanionEditorModal({
   return (
     <AppModal
       isOpen={isOpen}
-      title="Manage Companion"
-      description="Author curated guidance for this Review Set."
+      title={`Manage ${labels.companionSingular}`}
+      description={`Author curated guidance for this ${labels.singular.toLowerCase()}.`}
       onClose={onClose}
       panelClassName="sm:max-w-2xl"
       actions={(
@@ -1135,7 +1140,7 @@ function CompanionEditorModal({
                 disabled={submitting}
                 onClick={() => void handleClear()}
               >
-                Remove Companion
+                Remove {labels.companionSingular}
               </Button>
             ) : null}
           </div>
@@ -2437,7 +2442,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                         className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                         onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
                       >
-                        <ResponsiveActionContent action="companion" label="Manage Companion" showTextOnMobile iconClassName="h-4 w-4" />
+                        <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
                       </button>
                     ) : null}
                     <button
@@ -2455,7 +2460,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           )}
         />
 
-        <CompanionDisplayCard companion={collection.companion} />
+        <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
         {mutationError ? (
           <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -2507,6 +2512,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         />
         <CompanionEditorModal
           collection={collection}
+          labels={labels}
           isOpen={companionOpen}
           onClose={() => setCompanionOpen(false)}
           onSaved={(saved) => {
@@ -2629,7 +2635,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
                       className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                       onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
                     >
-                      <ResponsiveActionContent action="companion" label="Manage Companion" showTextOnMobile iconClassName="h-4 w-4" />
+                      <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
                     </button>
                   ) : null}
                   <button
@@ -2676,7 +2682,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         ) : undefined}
       />
 
-      <CompanionDisplayCard companion={collection.companion} />
+      <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
       {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
           is fetched for it above, and this card self-guards to null when no target date is set. */}
@@ -2956,6 +2962,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       />
       <CompanionEditorModal
         collection={collection}
+        labels={labels}
         isOpen={companionOpen}
         onClose={() => setCompanionOpen(false)}
         onSaved={(saved) => {
