@@ -2,7 +2,7 @@
 
 ## v0.41.0 - Learning Companion (MVP)
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: add a persisted, curator-authored guidance layer on top of Official Review Sets — the missing piece between "a collection of notes" and a premium guided learning experience. See `docs/product/ROADMAP.md`'s "Guided Learning Initiative (Companion)" section for the full design rationale.
 
