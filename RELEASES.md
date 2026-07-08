@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.40.1 - Public Review Set Reachability
+
+**Status: In Progress**
+
+Theme: a polish fast-follow that closes a narrow, verified discoverability gap — PUBLIC Official Review Sets outside a learner's own course/program are technically public but unreachable through any UI path today — and picks up the weekly-scheduling Phase 2 deferred out of v0.40.0. See `docs/product/ROADMAP.md` for the full scope and the design rationale (why the broader discovery/Explore redesign was rejected in favor of this narrow fix).
+
+### Planned Scope
+
+- **Browse All Official Review Sets (frontend, dedicated page only).** New section on `/collections/published` below the existing course/program-scoped Recommended row, calling the already-supported unfiltered `listPublicStudyPlans({})` (no backend change — `NoteCollectionService.listPublic` already accepts `courseProgram == null`). Dashboard gets only a "Browse all Review Sets" link to the dedicated page, not the inline section (it's a glance widget, not a browse surface). Ships with a deterministic default sort (alphabetical or grouped by course/program header). Rewire the existing `browseWhenEmpty`-gated empty-state card rather than build a parallel component. Duplication between Recommended and Browse All is expected (featured-row + full-catalog pattern).
+- **Empty-state copy fix (frontend).** The misleading "No curated Review Sets for X yet" card means "no *official curated* set for your track," not "you have none" — a single-string fix folded into the same card being rewired.
+- **Weekly scheduling Phase 2 (backend).** The weighted largest-remainder subject distribution + day-of-week interleaving deferred out of v0.40.0, layered over the existing v0.40.0 countdown derivation. Gated on Phase 1's simple countdown proving useful in real usage before implementation starts.
+
+Anti-drift: no new backend endpoint or data model for the discovery slice (the unfiltered `listPublic` path already exists); Public Library preserved as a distinct discovery path (not absorbed); no Explore page, nav redesign, Dashboard redesign, ranking engine, Trending/Popular, or Community Review Sets — all remain deferred to the Review-Set-Centric Navigation direction. Phase 2 scheduling stays deterministic (no LLM), reusing the v0.40.0 readiness rollup.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
 
 **Status: Released**

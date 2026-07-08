@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.40.1 - Public Review Set Reachability` is the next planned version (not yet kicked off).
+`v0.40.1 - Public Review Set Reachability` is the in-progress version (on `releases/v0.40.1`, kicked off).
 
 `v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is the previous released version (on `releases/v0.40.0`).
 
@@ -390,9 +390,9 @@ Anti-drift: no new top-level entity — the weekly plan is a derived, read-time 
 
 ---
 
-## v0.40.1 - Public Review Set Reachability (planned)
+## v0.40.1 - Public Review Set Reachability (in progress)
 
-Base branch for this release: `releases/v0.40.1` (not yet kicked off). Origin: surfaced while pressure-testing a broader "Review Set discovery redesign" proposal against the Public Library philosophy ("discover knowledge" vs. "follow a structured journey") — the full redesign (Recommended/Trending/Recently-Added/Browse-All ranking) was rejected as premature and overlapping with the deferred Explore-page direction below, but one piece of it survived: a **verified, narrow inconsistency**, not a redesign.
+Base branch for this release: `releases/v0.40.1` (kicked off). Origin: surfaced while pressure-testing a broader "Review Set discovery redesign" proposal against the Public Library philosophy ("discover knowledge" vs. "follow a structured journey") — the full redesign (Recommended/Trending/Recently-Added/Browse-All ranking) was rejected as premature and overlapping with the deferred Explore-page direction below, but one piece of it survived: a **verified, narrow inconsistency**, not a redesign.
 
 **Verified finding:** `NoteCollectionService.listPublic` already supports `courseProgram == null` and returns every PUBLIC top-level collection unfiltered — the backend capability exists today. But no frontend surface ever calls it that way: both `/collections/published` and the Dashboard's `DashboardStudyPlanSection` widget always pass the user's own course/program, and when a user has none set, the UI shows a dead-end empty state instead of browsing everything. A Nursing student cannot reach an Architecture Official Review Set through any UI path today, even though it is technically PUBLIC. Once a curator marks something PUBLIC, a second system-level gate (course/program match) on top of that undermines what "public" means — the same publish-vs-surface expectation notes already get in Public Library. Commitment happens at *adopt*, not at *browse*, so hiding options at browse time isn't justified by Review Sets being a higher-commitment object than a note.
 
@@ -436,6 +436,70 @@ Not a version — no release branch, no implementation scope yet. Surfaced by th
 - **Show "Adopted" vs. "Created by you" on a Review Set.** CONFIRMED free: `sourcePlanId` already exists on `NoteCollectionSummary`/`NoteCollectionDetail` (`frontend/lib/api.ts:1401,1439`); `sourcePlanId !== null` already means "adopted," no backend change needed for a badge. Showing the *original author's name* (like Public Notes' `authorDisplayName`) is a separate, larger item — needs new backend exposure (no owner/author/official field on collection responses today) and a real edge case (source since deleted/private, no author left to show). Ship the free badge first; author-name is later/separate.
 - **Overdue color-warning on child Subject-plan cards.** `child.dueConcepts` is already rendered as plain text on the Goal detail page (`collection-detail-page-client.tsx:660`) — no color coding today. Cheap, uses existing data. Flag: a warning *color* leans toward the "monitoring" framing the locked list/execution-row anti-drift rule pushes back on; defensible only because this is the Goal's own detail surface, not a list/browse card — needs a conscious sign-off, not an automatic yes. (Distinct from Phase 2 weighted-allocation scheduling above, which remains separately deferred and ungated.)
 - **Make Progress's per-subject "Concept Mastery" cards link to Private Library filtered by subject.** CONFIRMED both halves exist: Private Library already reads `?subject=` (`frontend/app/library/page.tsx:526`); Progress's per-subject rows are plain `ReadinessBar`s today, not links. Cheap to wire. Bonus unprompted finding: the existing "weakest subject" CTA on the same page links to `/public/library?subject=X` (public, not private) for what should be a personal "study this next" action — worth reconciling in the same pass.
+
+---
+
+## Guided Learning Initiative (Companion) — v0.41.0 and beyond
+
+Not a version — no release branch yet, planned to kick off after v0.40.1. Origin: a product realization surfaced across several planning discussions — Review Centers are not valuable because they provide PDFs or quizzes, they are valuable because they provide **guidance** (structure, direction, pacing, coaching, confidence). NoteLib has the knowledge layer (Notes), the learning engine (Study Packs), and the journey (Review Sets) — but no **guidance layer** riding on top of the journey. This does not turn NoteLib into an online Review Center; it adds one new layer while keeping Notes as the source of truth and Subject Plans strictly academic (no "Exam Strategies"/"FAQs" masquerading as Subject Plans).
+
+**Success criterion (the north star every phase below is judged against):** *"Every Official Review Set should feel like a premium guided learning experience rather than a collection of notes."* Not feature count, not revenue.
+
+**The organizing insight:** of the topics discussed (Companion, AI-assisted authoring, Companion regeneration, AI-generated Review Sets, creation/adoption/discovery UX, Public Library integration, runtime AI, monetization, profile-aware terminology), only **one is a genuinely new concept** — the **Learning Companion**, a persisted, curator-authored, profile-aware, statically-served guidance layer on a top-level Review Set. Confirmed by codebase audit: no entity carries authored narrative content on a collection today (guidance today is client-side ephemeral tips only, `frontend/lib/guidance-engine.ts` — no stored content). Everything else in the discussion is either an authoring enabler for the Companion, already on the roadmap under a different name, a deferred premium tier, or a cross-cutting naming constraint:
+
+- **Review Set creation/adoption UX** — already shipped (Builder Canvas, adopt/adopt-goal) plus already-planned refinements (Post-v0.40.0 Polish Backlog's "Adopted" badge). Not new scope here.
+- **Review Set discovery** — already scoped narrowly in `v0.40.1` (Browse All) and further gated in the deferred "Review-Set-Centric Navigation" section below. This initiative does not reopen that.
+- **Public Library integration** — already shipped (v0.39.2 Flashcards/Memorization preview) plus the same deferred Explore-convergence direction below.
+- **Runtime AI / personalization** — deferred premium tiers, gated on the Companion existing first (see Monetization below); does **not** violate the locked "no interactive AI / no mid-exam coaching" constraint in `EXAM_MODES.md` because the Companion MVP is authored static content, not a chatbot.
+- **Profile-aware terminology** — a constraint, not a feature: any "Companion" label resolves through `getCollectionLabels` (candidate new field, e.g. `companionSingular`), same as `primarySingular`.
+
+### v0.41.0 — Learning Companion (MVP), planned next after v0.40.1
+
+- **Persisted Companion content model.** A JSONB column on the top-level `note_collections` row (not a new table) — lowest-drift, mirrors the existing `sessionState` JSONB precedent, and copies naturally with the row on adopt. Promotable to its own table later if it grows. Companion is 1:1 with a top-level collection only (mirrors the `targetCompletionDate`/primary constraint — rejected on child Subject Plans, same `400` pattern as existing hierarchy validation).
+- **Four sections only, deliberately small:** Overview, Study Strategy, Common Mistakes, FAQ. **Study Timeline and Final Checklist are explicitly deferred and must NOT be static prose** — when built (v0.42.0+) they link the already-shipped, already-free **live** features (the v0.40.0 weekly countdown and readiness), never re-author them. Resources/Updates sections deferred to v0.42.0.
+- **Manual authoring only in v0.41.0** — no AI generation yet; there are few Official sets today so the authoring burden is trivial, and this de-risks the content model before layering LLM on top.
+- **Official Companion authoring only (MVP scope decision, not a permanent limitation).** Only the NoteLib official author can author a Companion in v1; architecture stays open to any top-level-Goal owner later.
+- **Publishes with the Review Set** — hooks into the existing `updateVisibility`/`publishChildCollections` publish cascade.
+- **Travels on adopt, per the locked snapshot-copy rule (v0.31.0, below).** Companion is added to `persistAdoptedGoal`'s copied set (the way `targetCompletionDate` is explicitly *excluded* — Companion is the opposite, it should travel, like a linked Study Pack does on note copy). Source edits do **not** propagate to existing adopters (same as notes today). Owner self-copy **excludes** the Companion (same category as the existing generated-content self-copy exclusion).
+- **FREE for all learners.** Zero paid uplift by design in v0.41.0 — this is an activation/retention bet, consistent with the success criterion being about experience quality, not revenue.
+
+Anti-drift: no runtime LLM call to serve a Companion (authored once, served static — zero per-view cost); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels`.
+
+### v0.42.0 — AI-assisted Companion authoring + regeneration (candidate, after v0.41.0 proves the content model)
+
+- **Curator workflow:** `Generate Companion` (per section or all) → LLM draft → **mandatory human review and edit** → `Publish`. Publishing is never autonomous. Reuses the existing OpenAI service + PREMIUM/CRITIQUE model tiers — no new LLM infra.
+- **Granular per-section regeneration** (Overview / Strategy / FAQ / Checklist independently, not an all-or-nothing regenerate) plus a **"Companion may be outdated"** staleness signal when the set's structure changes — a lightweight stored structure snapshot (child count / note ids / concept count) compared on read, no new job infra.
+- Adds the Resources section and the Timeline/Checklist live-feature embeds deferred from v0.41.0.
+
+### Documented rule clarification (not a reversal) — enables AI-assisted authoring
+
+The standing "Curation, never generation" rule (see v0.31.0 below, "the forbidden version is *auto-generate a personalized plan* — do not build that here") is **clarified, not reversed**, to make v0.42.0 possible:
+
+- **Learner-facing: unchanged.** Curation over generation — a learner never gets an auto-generated plan.
+- **Curator-facing (new, scoped to Official Review Sets/Companions): AI-assisted authoring, with mandatory human review before publish.**
+- **Publishing: never autonomous**, in either case.
+
+This is the same category of deliberate, written rule refinement as v0.33.0's Progress-separation reversal — recorded here so it is never mistaken for scope creep or relitigated later.
+
+### Future, gated — AI-generated Review Sets
+
+Curator pipeline: public notes → suggest Subject Plans → map notes → generate Companion → human review → publish. A separate, larger initiative — gated on v0.42.0's authoring-assist pipeline proving out (this reuses that pipeline rather than building a second one) and on the rule clarification above. Not scoped to a version yet.
+
+### Future, gated — Runtime Companion (Ask Companion, Personalization)
+
+- **Ask Companion (PLUS).** Grounded Q&A over the authored Companion content — cheap, bounded, reuses the existing Interview Practice cost-control template (feature gate + monthly quota + per-minute `AiRateLimitService` + the cheaper CRITIQUE model + capped turns), the only existing runtime/interactive LLM feature in the product today. Deliberately placed at PLUS (not PRO, where Interview Practice's PREMIUM-model generative simulation lives) because it is grounded retrieval over static content, not generation — a documented, deliberate ladder repositioning.
+- **Personalized/Adaptive guidance (PRO).** Must be genuinely adaptive (learning-pattern/LLM-driven) — **not** the existing deterministic v0.40.0 weekly countdown re-labeled with a price tag, which already shipped FREE.
+- Both gated on the persisted Companion existing. Personalization is additionally blocked by the open Primary-Review-Set-vs-Study/Exam-Focus philosophy question (Post-v0.40.0 Polish Backlog, above) — that question is about Profile/Progress, not the Companion, so it does **not** gate v0.41.0 or v0.42.0.
+
+### Monetization philosophy (long-term principle, established here for future features to follow)
+
+Codifies what is already the de facto model in this codebase (readiness was ungated to FREE in v0.33.0 as "access not billing"; interaction-heavy features already sit at PRO) rather than redesigning pricing:
+
+- **FREE — static guidance.** The Companion itself. Near-zero marginal cost (authored once, served static), high perceived value — the activation/retention driver and the conversion hook for paid interaction/personalization. Not a giveaway; a funnel.
+- **PLUS — interaction.** Ask Companion. Gives PLUS its first genuinely distinct capability (today PLUS is quota-only) — strengthens PLUS's reason to exist.
+- **PRO — personalization.** Genuinely adaptive guidance, not a re-paywalled version of something already free. Much of PRO's value (readiness-based prioritization) is derivable from existing ConceptHealth with no per-query LLM — high margin; only conversational/adaptive pieces carry recurring cost, controlled via the Interview Practice template.
+- Applies consistently across profiles (Student/Exam-taker/Teacher/Professional) because it gates capabilities, not content, and all labels route through `getCollectionLabels`.
+- No price/quota/checkout change from this principle alone — it governs how *future* features (Ask Companion, Personalization) get tiered when they're built, not a repricing of today's plans.
 
 ---
 
@@ -746,7 +810,7 @@ The discriminating constraint that fixes the design: the **entire learning loop 
 
 Locked direction:
 
-- **Curation, never generation.** Sequencing is **human/admin curation over existing seeded content**, not AI-synthesized per user. This stays on the right side of the standing "never generate curriculum" rule. The forbidden version is *"auto-generate a personalized plan"* — do not build that here.
+- **Curation, never generation.** Sequencing is **human/admin curation over existing seeded content**, not AI-synthesized per user. This stays on the right side of the standing "never generate curriculum" rule. The forbidden version is *"auto-generate a personalized plan"* — do not build that here. **Clarified (not reversed) under the Guided Learning Initiative, below:** this rule is learner-facing only — a learner never gets an auto-generated plan. Curator-facing AI-assisted authoring of Official Review Sets/Companions, with mandatory human review before publish, is a documented exception (see "Guided Learning Initiative" → "Documented rule clarification").
 - **Adopt = snapshot copy.** "Start this plan" copies the curated notes (with their linked Study Packs) into the user's library and creates a personal Study Plan (collection) in the curated order. After adoption it is fully the user's own — later edits to the curated source plan do **not** propagate (point-in-time snapshot). Reuse the existing public-note copy path `NoteService.copyNote(id, ownerUserId, includeStudyPack=true)`, which already copies the linked Study Pack and is idempotent (re-copy returns the existing copy). The adopt *output* is a normal `NoteCollection` (Study Plan) using `getCollectionLabels` for profile-aware naming.
 - **Quota: adopt is free, like copy.** Adoption bills nothing — it is a copy, not a generation. Billing happens only later, on the existing paths: Study Pack **regenerate** (if the user chooses to), and per-mode quota on **Challenge Quiz** and **Exam** when they practice. Do not let adoption become an accidental paywall.
 - **Copy volume: light, isolated, no new infra.** Adopting copies N notes + N study packs (cheap DB copies, **no LLM** — a plan is adoptable only when all its notes already have Study Packs). Wrap the copy fan-out in **per-item isolation** (one bad note never sinks the adopt). Do **not** reuse or add async/bulk-generation job infrastructure — a curated plan is bounded, so a single request with per-item try/catch is sufficient.

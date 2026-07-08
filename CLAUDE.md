@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.40.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.40.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.40.0 — Weekly Study Plan (Exam Countdown) + Primary Review Set
+## Active release: v0.40.1 — Public Review Set Reachability
 
-Base branch for this release: `releases/v0.40.0`. Turns readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0, aimed at the exam-taker conversion/monetization segment. Full scope, phasing, and design rationale in `docs/product/ROADMAP.md` and `RELEASES.md`.
+Base branch for this release: `releases/v0.40.1`. A v0.39.1-style polish fast-follow: closes a narrow, verified discoverability gap (PUBLIC Official Review Sets outside the learner's own course/program are currently unreachable in the UI) and picks up weekly-scheduling Phase 2 deferred out of v0.40.0. Full scope and design rationale in `docs/product/ROADMAP.md` and `RELEASES.md`.
 
-- **Primary Review Set (backend + frontend, foundational).** New nullable user-level `primaryCollectionId`, explicitly set by the learner; label always resolves through `getCollectionLabels`. Auto-set when exactly one top-level Goal is owned.
-- **Per-Goal target completion date (backend).** New nullable `note_collections.target_completion_date`, top-level Goals only; decoupled from `UserEntity.examDate`. Never copied on adopt/self-copy.
-- **Study intensity (backend).** `studyDaysPerWeek` lives on the user, not the Goal.
-- **Weekly countdown derivation + scheduling algorithm (backend).** Derived fields on the Goal endpoint (weeks-remaining, concepts-remaining, today's budget); largest-remainder method for subject allocation; due concepts as a floor. No stored per-week schedule, no LLM.
-- **Three surfaces + Progress default-view change (frontend).** Dashboard primary CTA, Review Set "This Week" section, Review Sets list page; `/progress` defaults to the Primary Review Set's scoped view via the existing `PlanPicker` mechanism.
-- **Parked, not in scope:** cross-course note reusability, per-Subject (child-level) target dates, multi-Goal scheduler orchestration, nav rename / Exam Hub change / Explore page / Progress full-redesign.
+- **Browse All Official Review Sets (frontend, dedicated page only).** New section on `/collections/published` below the existing course/program-scoped Recommended row, calling the already-supported unfiltered `listPublicStudyPlans({})`. Dashboard gets only a "Browse all Review Sets" link, not the inline section. Deterministic default sort. Rewire the existing `browseWhenEmpty` empty-state card — don't build a new one.
+- **Empty-state copy fix (frontend).** The misleading "No curated Review Sets for X yet" card (means "no *official* set for your track," reads like "you have none") — single-string fix on the same card being rewired.
+- **Weekly scheduling Phase 2 (backend).** Weighted largest-remainder subject distribution + day-of-week interleaving over the v0.40.0 countdown; gated on Phase 1 proving useful in real usage.
+- **Parked, not in scope:** Public-Library search/filter reuse, Trending/Recently-Added/Popular, ranking/recommendation engine, Explore page, nav redesign, Dashboard redesign — all remain deferred (see the Review-Set-Centric Navigation section in ROADMAP).
+
+The next major initiative after this fast-follow is **Guided Learning** (v0.41.0 Learning Companion + v0.42.0 AI-assisted authoring) — see `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
