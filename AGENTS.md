@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.40.1 - Public Review Set Reachability` (in progress); previous: `v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set`
+- `v0.41.0 - Learning Companion (MVP)` (in progress); previous: `v0.40.1 - Public Review Set Reachability`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1538,7 +1538,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.40.1`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.41.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

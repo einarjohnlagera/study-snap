@@ -1,5 +1,27 @@
 # RELEASES.md - NoteLib
 
+## v0.41.0 - Learning Companion (MVP)
+
+**Status: In Progress**
+
+Theme: add a persisted, curator-authored guidance layer on top of Official Review Sets — the missing piece between "a collection of notes" and a premium guided learning experience. See `docs/product/ROADMAP.md`'s "Guided Learning Initiative (Companion)" section for the full design rationale.
+
+### Planned Scope
+
+- **Persisted Companion content model (backend).** A JSONB column on the top-level `note_collections` row (not a new table), mirroring the existing `sessionState` JSONB precedent. 1:1 with a top-level collection only — rejected on child Subject Plans with the same `400` pattern as the existing `targetCompletionDate`/primary hierarchy validation.
+- **Four sections only: Overview, Study Strategy, Common Mistakes, FAQ.** Study Timeline and Final Checklist are explicitly deferred to v0.42.0+ and must never be static prose when built — they link the already-shipped live weekly countdown/readiness features instead of re-authoring them.
+- **Manual authoring only, Official Companions only (frontend + backend).** No AI generation yet. Only the NoteLib official author can author a Companion in this version.
+- **Publish/adopt integration (backend).** Publishes with the Review Set via the existing `updateVisibility`/`publishChildCollections` cascade. Travels on adopt (added to `persistAdoptedGoal`'s copied set, the opposite of `targetCompletionDate`'s exclusion). Owner self-copy excludes the Companion, same category as the existing generated-content exclusion.
+- **FREE for all learners.** Zero paid uplift by design — an activation/retention bet.
+
+Anti-drift: no runtime LLM call to serve a Companion (authored once, served static); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels` (new `companionSingular` field, same pattern as `primarySingular`).
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.40.1 - Public Review Set Reachability
 
 **Status: Released**

@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.41.0 - Learning Companion (MVP)` is the next planned version (not yet kicked off).
+`v0.41.0 - Learning Companion (MVP)` is the in-progress version (on `releases/v0.41.0`, kicked off).
 
-`v0.40.1 - Public Review Set Reachability` is the previous released version (on `releases/v0.40.1`).
+`v0.40.1 - Public Review Set Reachability` is the previous released version.
 
 `v0.39.2 - Public Library Learning Experience` is the previous released version (on `releases/v0.39.2`).
 
@@ -453,7 +453,7 @@ Not a version — no release branch yet, planned to kick off after v0.40.1. Orig
 - **Runtime AI / personalization** — deferred premium tiers, gated on the Companion existing first (see Monetization below); does **not** violate the locked "no interactive AI / no mid-exam coaching" constraint in `EXAM_MODES.md` because the Companion MVP is authored static content, not a chatbot.
 - **Profile-aware terminology** — a constraint, not a feature: any "Companion" label resolves through `getCollectionLabels` (candidate new field, e.g. `companionSingular`), same as `primarySingular`.
 
-### v0.41.0 — Learning Companion (MVP), planned next after v0.40.1
+### v0.41.0 — Learning Companion (MVP), in progress (base branch `releases/v0.41.0`, kicked off)
 
 - **Persisted Companion content model.** A JSONB column on the top-level `note_collections` row (not a new table) — lowest-drift, mirrors the existing `sessionState` JSONB precedent, and copies naturally with the row on adopt. Promotable to its own table later if it grows. Companion is 1:1 with a top-level collection only (mirrors the `targetCompletionDate`/primary constraint — rejected on child Subject Plans, same `400` pattern as existing hierarchy validation).
 - **Four sections only, deliberately small:** Overview, Study Strategy, Common Mistakes, FAQ. **Study Timeline and Final Checklist are explicitly deferred and must NOT be static prose** — when built (v0.42.0+) they link the already-shipped, already-free **live** features (the v0.40.0 weekly countdown and readiness), never re-author them. Resources/Updates sections deferred to v0.42.0.
