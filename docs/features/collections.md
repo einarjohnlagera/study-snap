@@ -38,6 +38,7 @@ Fields:
 - `visibility` (`PRIVATE` by default, `PUBLIC` only for admin-published plans)
 - optional `courseProgram`
 - optional `estimatedStudyHours`, curator-entered study-time guidance shown by journey surfaces and copied on adopt
+- optional `companion`, a JSONB Learning Companion for top-level Official Review Sets only; see `docs/features/companion.md`
 - optional `sourcePlanId` on adopted personal plans
 - optional `parentCollectionId` for the v0.33.1 two-level Goal -> Subject hierarchy
 - optional `siblingPosition`, used only to order child Subject plans under the same Goal

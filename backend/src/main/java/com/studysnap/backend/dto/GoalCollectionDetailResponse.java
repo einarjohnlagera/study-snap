@@ -12,6 +12,7 @@ public record GoalCollectionDetailResponse(
         String visibility,
         String courseProgram,
         LocalDate targetCompletionDate,
+        CompanionContent companion,
         UUID sourcePlanId,
         UUID parentCollectionId,
         int itemCount,

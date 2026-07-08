@@ -3,6 +3,8 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionFaqItem;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
@@ -83,6 +85,12 @@ class NoteCollectionControllerTest {
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("clearPrimary", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("setCompanion", String.class, CompanionContent.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("clearCompanion", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("clearTargetDate", String.class, AuthenticatedUser.class)
@@ -241,6 +249,33 @@ class NoteCollectionControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(service).clearPrimary(user.userId());
+    }
+
+    @Test
+    void setCompanion_delegatesToServiceAndReturnsUpdatedCollection() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        CompanionContent content = companionContent();
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.setCompanion(UUID.fromString(COLLECTION_ID), user.userId(), content)).thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.setCompanion(COLLECTION_ID, content, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).setCompanion(UUID.fromString(COLLECTION_ID), user.userId(), content);
+    }
+
+    @Test
+    void clearCompanion_delegatesToServiceAndReturnsUpdatedCollection() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        NoteCollectionDetailResponse response = detailResponse();
+        when(service.clearCompanion(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
+
+        NoteCollectionDetailResponse result = controller.clearCompanion(COLLECTION_ID, user);
+
+        assertThat(result).isEqualTo(response);
+        verify(service).clearCompanion(UUID.fromString(COLLECTION_ID), user.userId());
     }
 
     @Test
@@ -470,6 +505,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 now,
                 now,
@@ -489,6 +525,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 0,
                 0,
@@ -503,6 +540,15 @@ class NoteCollectionControllerTest {
                 now,
                 now,
                 List.of()
+        );
+    }
+
+    private CompanionContent companionContent() {
+        return new CompanionContent(
+                "Overview",
+                "Study strategy",
+                "Common mistakes",
+                List.of(new CompanionFaqItem("Question?", "Answer."))
         );
     }
 }

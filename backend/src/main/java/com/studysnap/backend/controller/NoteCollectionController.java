@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
+import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
@@ -160,6 +161,27 @@ public class NoteCollectionController {
         UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         service.clearPrimary(user.userId());
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}/companion")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteCollectionDetailResponse setCompanion(
+            @PathVariable String id,
+            @RequestBody CompanionContent content,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.setCompanion(collectionId, user.userId(), content);
+    }
+
+    @DeleteMapping("/{id}/companion")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteCollectionDetailResponse clearCompanion(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.clearCompanion(collectionId, user.userId());
     }
 
     @DeleteMapping("/{id}/target-date")

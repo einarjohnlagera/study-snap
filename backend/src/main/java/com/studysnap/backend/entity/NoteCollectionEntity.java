@@ -1,5 +1,6 @@
 package com.studysnap.backend.entity;
 
+import com.studysnap.backend.dto.CompanionContent;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,6 +10,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,6 +48,10 @@ public class NoteCollectionEntity {
 
     @Column(name = "target_completion_date")
     private LocalDate targetCompletionDate;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "companion", columnDefinition = "jsonb")
+    private CompanionContent companion;
 
     @Column(name = "source_plan_id")
     private UUID sourcePlanId;
