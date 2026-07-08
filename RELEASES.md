@@ -17,6 +17,7 @@ Anti-drift: no new backend endpoint or data model for the discovery slice (the u
 ### Shipped
 
 - **Browse All Official Review Sets (frontend).** `/collections/published` now keeps the course/program-scoped Recommended section and adds a `#browse-all` "Browse All Official ..." section beneath it that calls the existing unfiltered public collections endpoint, sorts alphabetically by title, and reuses `PublicStudyPlanCard` with the same adopted/continue state. The Browse All section has independent loading/error/empty states and still renders when the learner has no course/program set. The shared Dashboard/Collections empty-state card now clarifies that no official set exists for the learner's track yet and links to `/collections/published#browse-all`.
+- **Weekly scheduling Phase 2 (backend).** `GET /collections/{id}/goal` now adds per-child `todaysConceptBudget` values using Hamilton largest-remainder allocation over each child Subject plan's not-started concepts, with due concepts as each subject's floor and exact sum parity with the Goal-level budget. The response also includes `weeklyFocusByDay`, a deterministic weekday-to-child-id focus template derived from `studyDaysPerWeek` and child display order. Still pure derivation: no stored schedule, no new endpoint, no AI call.
 
 ---
 

@@ -56,6 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.lang.reflect.Method;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -994,6 +995,7 @@ class NoteCollectionServiceTest {
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
         assertThat(result.targetCompletionDate()).isEqualTo(LocalDate.parse("2026-12-01"));
+        assertThat(result.weeklyFocusByDay()).isEmpty();
     }
 
     @Test
@@ -1117,6 +1119,176 @@ class NoteCollectionServiceTest {
 
         assertThat(result.weeksRemaining()).isZero();
         assertThat(result.todaysConceptBudget()).isEqualTo(12);
+    }
+
+    @Test
+    void getGoal_allocatesTodaysConceptBudgetAcrossChildrenWithLargestRemainder() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness first = new ChildReadiness(UUID.randomUUID(), "Professional Education", 10, 1, 4, 15);
+        ChildReadiness second = new ChildReadiness(UUID.randomUUID(), "General Education", 20, 2, 8, 30);
+        ChildReadiness third = new ChildReadiness(UUID.randomUUID(), "Specialization", 5, 0, 2, 7);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(7);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(7), List.of(first, second, third));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.todaysConceptBudget()).isEqualTo(5);
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::todaysConceptBudget)
+                .containsExactly(2, 3, 0);
+        assertThat(result.children().stream()
+                .map(GoalCollectionChildResponse::todaysConceptBudget)
+                .mapToInt(Integer::intValue)
+                .sum()).isEqualTo(result.todaysConceptBudget());
+    }
+
+    @Test
+    void getGoal_breaksLargestRemainderTiesByExistingChildOrder() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness first = new ChildReadiness(UUID.randomUUID(), "First", 0, 0, 1, 1);
+        ChildReadiness second = new ChildReadiness(UUID.randomUUID(), "Second", 0, 0, 1, 1);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(7);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(14), List.of(first, second));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.todaysConceptBudget()).isEqualTo(1);
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::todaysConceptBudget)
+                .containsExactly(1, 0);
+    }
+
+    @Test
+    void getGoal_setsChildBudgetToDueOnlyWhenNoNewConceptPoolExists() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness first = new ChildReadiness(UUID.randomUUID(), "First", 2, 3, 0, 5);
+        ChildReadiness second = new ChildReadiness(UUID.randomUUID(), "Second", 4, 1, 0, 5);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(7), List.of(first, second));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.todaysConceptBudget()).isEqualTo(4);
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::todaysConceptBudget)
+                .containsExactly(3, 1);
+    }
+
+    @Test
+    void getGoal_nullGatesChildBudgetsAndWeeklyFocusWhenNoTargetDateIsSet() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness child = new ChildReadiness(UUID.randomUUID(), "Professional Education", 0, 1, 4, 5);
+        stubGoalReadiness(userId, goalId, null, List.of(child));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.todaysConceptBudget()).isNull();
+        assertThat(result.children()).extracting(GoalCollectionChildResponse::todaysConceptBudget)
+                .containsExactly((Integer) null);
+        assertThat(result.weeklyFocusByDay()).isEmpty();
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void getGoal_buildsWeeklyFocusDaysForFiveStudyDaysPerWeek() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness first = new ChildReadiness(UUID.randomUUID(), "First", 0, 0, 4, 4);
+        ChildReadiness second = new ChildReadiness(UUID.randomUUID(), "Second", 0, 0, 4, 4);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(5);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(14), List.of(first, second));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeklyFocusByDay()).extracting("dayOfWeek")
+                .containsExactly(DayOfWeek.MONDAY, DayOfWeek.TUESDAY);
+        assertThat(result.weeklyFocusByDay()).extracting("collectionIds")
+                .containsExactly(List.of(first.collectionId()), List.of(second.collectionId()));
+    }
+
+    @Test
+    void getGoal_groupsMoreChildrenThanStudyDaysOnTheSameWeekday() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness first = new ChildReadiness(UUID.randomUUID(), "First", 0, 0, 1, 1);
+        ChildReadiness second = new ChildReadiness(UUID.randomUUID(), "Second", 0, 0, 1, 1);
+        ChildReadiness third = new ChildReadiness(UUID.randomUUID(), "Third", 0, 0, 1, 1);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(2);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(7), List.of(first, second, third));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeklyFocusByDay()).extracting("dayOfWeek")
+                .containsExactly(DayOfWeek.MONDAY, DayOfWeek.THURSDAY);
+        assertThat(result.weeklyFocusByDay()).extracting("collectionIds")
+                .containsExactly(
+                        List.of(first.collectionId(), third.collectionId()),
+                        List.of(second.collectionId())
+                );
+    }
+
+    @Test
+    void getGoal_returnsOnlyAssignedWeeklyFocusDaysWhenChildrenAreFewerThanStudyDays() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness child = new ChildReadiness(UUID.randomUUID(), "Only Child", 0, 0, 3, 3);
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(7);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(7), List.of(child));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.weeklyFocusByDay()).hasSize(1);
+        assertThat(result.weeklyFocusByDay().getFirst().dayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
+        assertThat(result.weeklyFocusByDay().getFirst().collectionIds()).containsExactly(child.collectionId());
+    }
+
+    @Test
+    void getGoal_usesDefaultSevenDaysForWeeklyFocusWhenStudyIntensityIsUnset() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        ChildReadiness child = new ChildReadiness(UUID.randomUUID(), "Only Child", 0, 0, 7, 7);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(7), List.of(child));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.todaysConceptBudget()).isEqualTo(1);
+        assertThat(result.weeklyFocusByDay()).hasSize(1);
+        assertThat(result.weeklyFocusByDay().getFirst().dayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
+        assertThat(result.weeklyFocusByDay().getFirst().collectionIds()).containsExactly(child.collectionId());
+    }
+
+    @Test
+    void getGoal_usesExpectedStudyWeekdayFormulaForOneThreeFiveAndSevenDays() {
+        UUID userId = UUID.randomUUID();
+
+        assertThat(studyDaysForGoal(userId, 1)).containsExactly(DayOfWeek.MONDAY);
+        assertThat(studyDaysForGoal(userId, 3)).containsExactly(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY);
+        assertThat(studyDaysForGoal(userId, 5)).containsExactly(
+                DayOfWeek.MONDAY,
+                DayOfWeek.TUESDAY,
+                DayOfWeek.WEDNESDAY,
+                DayOfWeek.FRIDAY,
+                DayOfWeek.SATURDAY
+        );
+        assertThat(studyDaysForGoal(userId, 7)).containsExactly(
+                DayOfWeek.MONDAY,
+                DayOfWeek.TUESDAY,
+                DayOfWeek.WEDNESDAY,
+                DayOfWeek.THURSDAY,
+                DayOfWeek.FRIDAY,
+                DayOfWeek.SATURDAY,
+                DayOfWeek.SUNDAY
+        );
     }
 
     @Test
@@ -2581,6 +2753,81 @@ class NoteCollectionServiceTest {
         when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(List.of());
         when(generatedQuizRepository.findNoteIdsByOwnerUserIdAndNoteIdIn(userId, noteIds)).thenReturn(List.of());
         when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(userId, noteIds)).thenReturn(Map.of());
+    }
+
+    private record ChildReadiness(
+            UUID collectionId,
+            String title,
+            int masteredConcepts,
+            int dueConcepts,
+            int notPracticedConcepts,
+            int totalConcepts
+    ) {
+    }
+
+    private void stubGoalReadiness(
+            UUID userId,
+            UUID goalId,
+            LocalDate targetCompletionDate,
+            List<ChildReadiness> childReadiness
+    ) {
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setTargetCompletionDate(targetCompletionDate);
+        List<NoteCollectionEntity> children = new java.util.ArrayList<>();
+        Map<UUID, ProgressReportService.SubjectProgressBatchResult> progressByChildId = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < childReadiness.size(); index++) {
+            ChildReadiness readiness = childReadiness.get(index);
+            NoteCollectionEntity child = buildCollection(readiness.collectionId(), userId, readiness.title(), Instant.now());
+            child.setParentCollectionId(goalId);
+            child.setSiblingPosition(index);
+            children.add(child);
+            progressByChildId.put(
+                    readiness.collectionId(),
+                    new ProgressReportService.SubjectProgressBatchResult(
+                            List.of(new SubjectProgressEntry(
+                                    readiness.title(),
+                                    readiness.totalConcepts(),
+                                    readiness.masteredConcepts(),
+                                    readiness.dueConcepts(),
+                                    readiness.notPracticedConcepts(),
+                                    masteryPercentage(readiness.masteredConcepts(), readiness.totalConcepts())
+                            )),
+                            null
+                    )
+            );
+        }
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(children);
+        when(itemRepository.countItemsByCollectionIds(children.stream().map(NoteCollectionEntity::getId).toList()))
+                .thenReturn(List.of());
+        when(itemRepository.findNoteIdsByCollectionIds(children.stream().map(NoteCollectionEntity::getId).toList()))
+                .thenReturn(List.of());
+        when(progressReportService.buildSubjectProgressEntriesByGroup(anyMap(), eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(progressByChildId);
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
+    }
+
+    private List<DayOfWeek> studyDaysForGoal(UUID userId, int studyDaysPerWeek) {
+        UUID goalId = UUID.randomUUID();
+        List<ChildReadiness> childReadiness = new java.util.ArrayList<>();
+        for (int index = 0; index < studyDaysPerWeek; index++) {
+            childReadiness.add(new ChildReadiness(UUID.randomUUID(), "Child " + index, 0, 0, 1, 1));
+        }
+        UserEntity user = buildUser(userId);
+        user.setStudyDaysPerWeek(studyDaysPerWeek);
+        stubGoalReadiness(userId, goalId, LocalDate.now().plusDays(7), childReadiness);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        return service.getGoal(goalId, userId).weeklyFocusByDay().stream()
+                .map(com.studysnap.backend.dto.WeeklyFocusDayEntry::dayOfWeek)
+                .toList();
+    }
+
+    private int masteryPercentage(int masteredConcepts, int totalConcepts) {
+        if (totalConcepts == 0) {
+            return 0;
+        }
+        return (int) Math.round(masteredConcepts * 100.0 / totalConcepts);
     }
 
     private NoteCollectionEntity buildCollection(UUID id, UUID userId, String title, Instant updatedAt) {

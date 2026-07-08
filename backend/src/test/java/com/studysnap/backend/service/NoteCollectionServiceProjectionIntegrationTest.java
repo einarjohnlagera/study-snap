@@ -435,7 +435,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 readiness.masteredConcepts(),
                 readiness.dueConcepts(),
                 readiness.notPracticedConcepts(),
-                readiness.totalConcepts()
+                readiness.totalConcepts(),
+                null
         );
     }
 
@@ -466,6 +467,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 null,
                 null,
                 null,
+                List.of(),
                 goal.getCreatedAt(),
                 goal.getUpdatedAt(),
                 children
