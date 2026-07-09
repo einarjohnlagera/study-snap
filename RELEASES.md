@@ -15,7 +15,9 @@ Anti-drift: no backend change, no new endpoint, no new persisted state; course/p
 
 ### Shipped
 
-_(nothing yet)_
+- **Merged Readiness card and "View full progress" row (frontend).** `ReadinessSummary` gains an optional `footer` slot rendered inside its existing card; the Review Set detail page passes "View full progress"/"Review due concepts" through it instead of a separate stacked box.
+- **Fixed `/progress?collectionId={id}` backlink (frontend).** Now returns to the originating collection (profile-aware label) when reached via that collection's "View full progress" link, instead of always showing "Dashboard" — keyed off the URL's `collectionId` param, not live selection state, so a plain nav-in defaulting to the Primary Review Set still shows "Dashboard".
+- **Considered and declined:** course/program as a badge on collection cards/detail — stays plain text per the existing badge-classification rule (metadata is never a badge).
 
 ---
 
