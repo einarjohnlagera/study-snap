@@ -20,6 +20,7 @@ Anti-drift: learner-facing behavior is unchanged — curation over generation, a
 
 - **AI-assisted Companion draft generation.** Added ADMIN-only per-section and all-section Companion draft generation in the existing authoring modal, backed by a stateless `POST /collections/{id}/companion/generate` endpoint and the existing OpenAI service's PREMIUM model tier. Drafts populate local form state only; curators must still review/edit and click Save before anything persists. The same action generating an already-authored section is the granular per-section regeneration the "Planned Scope" bullet above called for — no separate regenerate endpoint was needed.
 - **Companion staleness signal.** Added an ADMIN-only "Companion may be outdated" authoring signal on Review Set detail, backed by a nullable `note_collections.companion_structure_snapshot` captured only when Companion is saved and compared inline on the existing Goal detail read. Known limitations: v1 compares only member count plus sorted child/note ids; it does not compare note body edits or concept counts because the existing concept-count pipeline is per-user progress work, not a cheap structural signal.
+- **Companion Resources section.** Added a fifth manual-only Resources field to Companion content so curators can author markdown links and references without mixing them into strategy prose. Resources saves through the existing Companion Save path, renders after FAQ with the shared markdown renderer, and is deliberately excluded from Companion generation and staleness comparisons.
 
 ---
 

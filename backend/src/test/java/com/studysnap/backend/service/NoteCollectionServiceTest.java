@@ -823,6 +823,7 @@ class NoteCollectionServiceTest {
         assertThat(collection.getCompanion()).isEqualTo(content);
         assertThat(collection.getCompanionStructureSnapshot()).isEqualTo(new CompanionStructureSnapshot(0, List.of()));
         assertThat(result.companion()).isEqualTo(content);
+        assertThat(result.companion().resources()).isEqualTo("- [Official guide](https://example.com/guide)");
     }
 
     @Test
@@ -887,7 +888,7 @@ class NoteCollectionServiceTest {
         UUID collectionId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
         user.setRole(UserRole.ADMIN);
-        CompanionContent content = new CompanionContent(null, null, null, List.of());
+        CompanionContent content = new CompanionContent(null, null, null, null, List.of());
         NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
@@ -987,7 +988,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setDescription("Teaching principles and assessment.");
-        CompanionContent draft = new CompanionContent("Draft overview", null, null, List.of());
+        CompanionContent draft = new CompanionContent("Draft overview", null, null, null, List.of());
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
@@ -3391,6 +3392,7 @@ class NoteCollectionServiceTest {
                 "Overview",
                 "Study strategy",
                 "Common mistakes",
+                "- [Official guide](https://example.com/guide)",
                 List.of(new CompanionFaqItem("Question?", "Answer."))
         );
     }

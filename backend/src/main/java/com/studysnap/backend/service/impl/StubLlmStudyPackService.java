@@ -106,6 +106,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 overview ? "Use " + title + " as the learner's home base for the major concepts and practice expectations." : null,
                 studyStrategy ? "Work through one subject area at a time, then return to mixed review before the final check." : null,
                 commonMistakes ? "Do not skip practice after reading summaries; learners should confirm each topic with retrieval." : null,
+                null,
                 faq ? List.of(
                         new CompanionFaqItem("Where should learners start?", "Start with the first subject plan, then continue in order."),
                         new CompanionFaqItem("How often should learners review?", "Use short daily review blocks and revisit missed concepts."),

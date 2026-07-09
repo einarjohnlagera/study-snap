@@ -25,6 +25,7 @@ class StubLlmStudyPackServiceTest {
         assertThat(content.overview()).isNull();
         assertThat(content.studyStrategy()).isNull();
         assertThat(content.commonMistakes()).isNull();
+        assertThat(content.resources()).isNull();
         assertThat(content.faq()).hasSize(3);
     }
 

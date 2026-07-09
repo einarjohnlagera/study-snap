@@ -658,6 +658,7 @@ describe("CollectionDetailPageClient", () => {
         overview: "Start with the foundations.",
         studyStrategy: "Review one section per day.",
         commonMistakes: "Skipping practice questions.",
+        resources: "- [Curriculum guide](https://example.com/curriculum)",
         faq: [{ question: "How long should I study?", answer: "Use the target date." }],
       },
     }));
@@ -674,7 +675,9 @@ describe("CollectionDetailPageClient", () => {
     expect(dialog.getByLabelText("Common Mistakes")).toHaveValue("Skipping practice questions.");
     expect(dialog.getByLabelText("Question 1")).toHaveValue("How long should I study?");
     expect(dialog.getByLabelText("Answer 1")).toHaveValue("Use the target date.");
+    expect(dialog.getByLabelText("Resources")).toHaveValue("- [Curriculum guide](https://example.com/curriculum)");
     expect(dialog.getByRole("button", { name: "Remove Companion" })).toBeInTheDocument();
+    expect(dialog.queryByRole("button", { name: "Generate Resources" })).not.toBeInTheDocument();
   });
 
   it("opens an empty companion editor when no companion exists", async () => {
@@ -689,6 +692,8 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByLabelText("Overview")).toHaveValue("");
     expect(screen.getByLabelText("Study Strategy")).toHaveValue("");
     expect(screen.getByLabelText("Common Mistakes")).toHaveValue("");
+    expect(screen.getByLabelText("Resources")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Generate Resources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove Companion" })).not.toBeInTheDocument();
   });
 
@@ -852,6 +857,7 @@ describe("CollectionDetailPageClient", () => {
         overview: "Overview draft",
         studyStrategy: null,
         commonMistakes: null,
+        resources: "- [Reviewer archive](https://example.com/reviewer)",
         faq: [{ question: "What now?", answer: "Practice." }],
       },
     }));
@@ -865,6 +871,7 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add question" }));
     fireEvent.change(screen.getByLabelText("Question 1"), { target: { value: "What now?" } });
     fireEvent.change(screen.getByLabelText("Answer 1"), { target: { value: "Practice." } });
+    fireEvent.change(screen.getByLabelText("Resources"), { target: { value: "- [Reviewer archive](https://example.com/reviewer)" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -872,6 +879,7 @@ describe("CollectionDetailPageClient", () => {
         overview: "Overview draft",
         studyStrategy: null,
         commonMistakes: null,
+        resources: "- [Reviewer archive](https://example.com/reviewer)",
         faq: [{ question: "What now?", answer: "Practice." }],
       });
     });
@@ -881,6 +889,8 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
     expect(screen.getByText("What now?")).toBeInTheDocument();
     expect(screen.getByText("Practice.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByText("- [Reviewer archive](https://example.com/reviewer)")).toBeInTheDocument();
     expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
   });
 
@@ -963,6 +973,7 @@ describe("CollectionDetailPageClient", () => {
         overview: " ",
         studyStrategy: null,
         commonMistakes: "",
+        resources: " ",
         faq: [],
       },
     }));
@@ -990,6 +1001,26 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
     expect(screen.queryByRole("heading", { name: "Study Strategy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Common Mistakes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+  });
+
+  it("renders a companion with only resources populated", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: "- [Curriculum guide](https://example.com/curriculum)",
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByTestId("summary-markdown")).toHaveTextContent("- [Curriculum guide](https://example.com/curriculum)");
+    expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
   });
 
