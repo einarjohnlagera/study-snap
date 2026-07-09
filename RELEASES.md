@@ -1,5 +1,27 @@
 # RELEASES.md - NoteLib
 
+## v0.42.0 - AI-assisted Companion authoring + regeneration
+
+**Status: In Progress**
+
+Theme: give curators an LLM-assisted first draft for Learning Companion content, with mandatory human review before publish — proving out the "Curation, never generation" rule's curator-facing clarification from v0.41.0's design work, while keeping the learner-facing guarantee (no auto-generated plans) unchanged.
+
+### Planned Scope
+
+- **Curator workflow (backend + frontend).** `Generate Companion` action (per section or all four) → LLM draft → mandatory human review and edit in the existing authoring modal → `Publish`. Publishing is never autonomous. Reuses the existing OpenAI service and PREMIUM/CRITIQUE model tiers — no new LLM infrastructure.
+- **Granular per-section regeneration (backend + frontend).** Overview / Study Strategy / Common Mistakes / FAQ regenerate independently, not an all-or-nothing action.
+- **Staleness signal (backend + frontend).** A "Companion may be outdated" indicator when the set's structure changes since authoring — a lightweight stored structure snapshot (child count / note ids / concept count) compared on read, no new job infrastructure.
+- **Resources section (backend + frontend).** Adds the Resources section deferred from v0.41.0's four-section MVP.
+- **Timeline/Checklist live-feature embeds (frontend).** Deferred from v0.41.0; when built here, these must link the already-shipped live weekly countdown (v0.40.0) and readiness features — never re-authored as static prose.
+
+Anti-drift: learner-facing behavior is unchanged — curation over generation, a learner never receives an auto-generated plan; the curator-facing AI-assist is new but scoped to Official Review Set Companions only, per the documented rule clarification in `docs/product/ROADMAP.md`'s "Guided Learning Initiative" section; publishing stays non-autonomous in every path; no new LLM infrastructure (reuse the existing OpenAI service); no new job infrastructure for the staleness signal; Timeline/Checklist must link live features, never re-author them.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.41.1 - Review Set Detail Page: This-Set Study Dashboard
 
 **Status: Released**
