@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionSection;
+import com.studysnap.backend.dto.CompanionStructureSnapshot;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
 import com.studysnap.backend.dto.GenerateCompanionRequest;
 import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
@@ -315,6 +316,7 @@ public class NoteCollectionService {
         int dueConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum();
         int notPracticedConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
         int itemCount = Math.toIntExact(itemRepository.countByCollectionId(collectionId));
+        boolean companionMayBeOutdated = companionMayBeOutdated(collection, children, userId);
         WeeklyCountdown countdown = computeWeeklyCountdown(
                 userId,
                 collection.getTargetCompletionDate(),
@@ -340,6 +342,7 @@ public class NoteCollectionService {
                 collection.getCourseProgram(),
                 collection.getTargetCompletionDate(),
                 collection.getCompanion(),
+                companionMayBeOutdated,
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 itemCount,
@@ -599,6 +602,7 @@ public class NoteCollectionService {
             // resurfaces if it is later detached back to top-level via updateParent(null).
             child.setTargetCompletionDate(null);
             child.setCompanion(null);
+            child.setCompanionStructureSnapshot(null);
             touch(child);
             child = collectionRepository.save(child);
         }
@@ -638,7 +642,10 @@ public class NoteCollectionService {
         assertAdmin(user);
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         validateCompanionTarget(collection);
+        List<NoteCollectionEntity> children = collectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
         collection.setCompanion(content);
+        collection.setCompanionStructureSnapshot(computeCompanionStructureSnapshot(collection, children));
         touch(collection);
         NoteCollectionEntity saved = collectionRepository.save(collection);
         List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
@@ -653,6 +660,7 @@ public class NoteCollectionService {
         validateCompanionTarget(collection);
         if (collection.getCompanion() != null) {
             collection.setCompanion(null);
+            collection.setCompanionStructureSnapshot(null);
             touch(collection);
             collection = collectionRepository.save(collection);
         }
@@ -802,6 +810,7 @@ public class NoteCollectionService {
                 // keep carrying targetCompletionDate or Companion, both top-level-Goal-only fields.
                 child.setTargetCompletionDate(null);
                 child.setCompanion(null);
+                child.setCompanionStructureSnapshot(null);
                 touch(child);
                 collectionRepository.save(child);
                 adoptedSubjectCount++;
@@ -937,6 +946,38 @@ public class NoteCollectionService {
         if (collection.getParentCollectionId() != null) {
             throw new InvalidCollectionRequestException(COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
         }
+    }
+
+    private boolean companionMayBeOutdated(
+            NoteCollectionEntity collection,
+            List<NoteCollectionEntity> children,
+            UUID userId
+    ) {
+        if (collection.getCompanion() == null || collection.getCompanionStructureSnapshot() == null) {
+            return false;
+        }
+        UserEntity user = getUserOrThrow(userId);
+        if (user.getRole() != UserRole.ADMIN) {
+            return false;
+        }
+        CompanionStructureSnapshot currentSnapshot = computeCompanionStructureSnapshot(collection, children);
+        return !currentSnapshot.equals(collection.getCompanionStructureSnapshot());
+    }
+
+    private CompanionStructureSnapshot computeCompanionStructureSnapshot(
+            NoteCollectionEntity collection,
+            List<NoteCollectionEntity> children
+    ) {
+        List<UUID> memberIds = children.isEmpty()
+                ? itemRepository.findByCollectionIdOrderByPositionAsc(collection.getId()).stream()
+                        .map(NoteCollectionItemEntity::getNoteId)
+                        .sorted()
+                        .toList()
+                : children.stream()
+                        .map(NoteCollectionEntity::getId)
+                        .sorted()
+                        .toList();
+        return new CompanionStructureSnapshot(memberIds.size(), memberIds);
     }
 
     private Set<CompanionSection> extractCompanionSections(GenerateCompanionRequest request) {

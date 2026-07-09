@@ -1153,12 +1153,14 @@ function EditCollectionModal({
 function CompanionEditorModal({
   collection,
   labels,
+  companionMayBeOutdated,
   isOpen,
   onClose,
   onSaved,
 }: Readonly<{
   collection: NoteCollectionDetail;
   labels: ReturnType<typeof getCollectionLabels>;
+  companionMayBeOutdated: boolean;
   isOpen: boolean;
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
@@ -1334,6 +1336,11 @@ function CompanionEditorModal({
       )}
     >
       <form id="companion-editor-form" className="space-y-5" onSubmit={handleSubmit} noValidate>
+        {companionMayBeOutdated ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            This {labels.companionSingular} may be outdated because this {labels.singular.toLowerCase()} structure changed since it was last saved.
+          </p>
+        ) : null}
         <div className="block space-y-1.5">
           <span className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-foreground">Overview</span>
@@ -2770,6 +2777,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         <CompanionEditorModal
           collection={collection}
           labels={labels}
+          companionMayBeOutdated={goalDetail.companionMayBeOutdated}
           isOpen={companionOpen}
           onClose={() => setCompanionOpen(false)}
           onSaved={(saved) => {
@@ -2782,6 +2790,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               courseProgram: saved.courseProgram,
               targetCompletionDate: saved.targetCompletionDate,
               companion: saved.companion,
+              companionMayBeOutdated: false,
               updatedAt: saved.updatedAt,
             } : previous);
             setItems(sortCollectionItemsByPosition(saved.items));
@@ -3101,6 +3110,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       <CompanionEditorModal
         collection={collection}
         labels={labels}
+        companionMayBeOutdated={goalDetail?.companionMayBeOutdated ?? false}
         isOpen={companionOpen}
         onClose={() => setCompanionOpen(false)}
         onSaved={(saved) => {
@@ -3113,6 +3123,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             courseProgram: saved.courseProgram,
             targetCompletionDate: saved.targetCompletionDate,
             companion: saved.companion,
+            companionMayBeOutdated: false,
             updatedAt: saved.updatedAt,
           } : previous);
           setItems(sortCollectionItemsByPosition(saved.items));

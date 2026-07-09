@@ -96,6 +96,7 @@ function collection(overrides: Record<string, unknown> = {}) {
     estimatedStudyHours: null,
     targetCompletionDate: null,
     companion: null,
+    companionMayBeOutdated: false,
     sourcePlanId: null,
     parentCollectionId: null,
     childCount: 0,
@@ -689,6 +690,30 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByLabelText("Study Strategy")).toHaveValue("");
     expect(screen.getByLabelText("Common Mistakes")).toHaveValue("");
     expect(screen.queryByRole("button", { name: "Remove Companion" })).not.toBeInTheDocument();
+  });
+
+  it("shows the outdated companion signal only inside the admin editor", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ companionMayBeOutdated: true }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
+    expect(screen.queryByText(/may be outdated/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+
+    const dialog = within(screen.getByRole("dialog", { name: "Manage Companion" }));
+    expect(dialog.getByText(/may be outdated/i)).toBeInTheDocument();
   });
 
   it("generates one companion section into local modal state without saving", async () => {

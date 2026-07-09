@@ -124,6 +124,7 @@ function goalReadiness(overrides: Partial<GoalCollectionDetailResponse> = {}): G
     courseProgram: null,
     targetCompletionDate: null,
     companion: null,
+    companionMayBeOutdated: false,
     sourcePlanId: null,
     parentCollectionId: null,
     itemCount: 0,

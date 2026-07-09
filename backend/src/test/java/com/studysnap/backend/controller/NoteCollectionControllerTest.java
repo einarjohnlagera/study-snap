@@ -524,6 +524,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                false,
                 null,
                 null,
                 0,

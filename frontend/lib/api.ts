@@ -328,6 +328,7 @@ export type GoalCollectionDetailResponse = {
   courseProgram: string | null;
   targetCompletionDate: string | null;
   companion: CompanionContent | null;
+  companionMayBeOutdated: boolean;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
