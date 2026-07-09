@@ -15,6 +15,7 @@ import { getCollectionActionNotice } from "@/lib/collection-action-notice";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { createCollection, getMe, listCollections, type NoteCollectionSummary } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { cn } from "@/lib/utils";
 import { DashboardStudyPlanSection } from "@/app/dashboard/dashboard-study-plan-section";
 
 type LoadState = "loading" | "ready" | "error";
@@ -61,10 +62,12 @@ function AdoptedBadge() {
   );
 }
 
-// Filled (not outline) so it doesn't blend with the other neutral/tinted outline pills in the same row.
-function PrimaryBadge() {
+// Primary is a card-level accent treatment (left border, see the Card className below), not a pill —
+// only one collection can be Primary at a time, so it reads as a property of the card rather than
+// another status chip. Matches the same text+Star treatment used on the detail-page hero.
+function PrimaryIndicator() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-indigo-500">
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
       <Star className="h-3 w-3 fill-current" aria-hidden="true" />
       Primary
     </span>
@@ -326,7 +329,12 @@ export function CollectionsPageClient() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {orderedCollections.map((collection) => (
             <Link key={collection.id} href={`/collections/${collection.id}`} className="group block h-full">
-              <Card className="flex h-full min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
+              <Card
+                className={cn(
+                  "flex h-full min-h-44 flex-col justify-between gap-4 p-5 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20",
+                  collection.id === primaryCollectionId && "border-l-4 border-l-indigo-500 bg-indigo-500/[0.03] dark:border-l-indigo-400",
+                )}
+              >
                 <div className="space-y-2">
                   <CardTitle className="line-clamp-2">{collection.title}</CardTitle>
                   {collection.courseProgram ? (
@@ -334,7 +342,7 @@ export function CollectionsPageClient() {
                   ) : null}
                   {collection.id === primaryCollectionId || collection.sourcePlanId ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      {collection.id === primaryCollectionId ? <PrimaryBadge /> : null}
+                      {collection.id === primaryCollectionId ? <PrimaryIndicator /> : null}
                       {collection.sourcePlanId ? <AdoptedBadge /> : null}
                     </div>
                   ) : null}

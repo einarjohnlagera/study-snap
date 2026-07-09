@@ -8,6 +8,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.42.0 - AI-assisted Companion authoring + regeneration` is the next planned version (not yet kicked off).
 
+`v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
+
 `v0.41.0 - Learning Companion (MVP)` is the previous released version (on `releases/v0.41.0`).
 
 `v0.40.1 - Public Review Set Reachability` is the previous released version.
@@ -467,6 +469,24 @@ Not a version — no release branch yet, planned to kick off after v0.40.1. Orig
 
 Anti-drift: no runtime LLM call to serve a Companion (authored once, served static — zero per-view cost); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels`.
 
+## v0.41.1 - Review Set Detail Page: This-Set Study Dashboard (released)
+
+Base branch for this release: `releases/v0.41.1` (released). Origin: a product proposal arguing the Review Set detail page still behaves like a collection details screen even though, after Primary Review Set, Weekly Study Plan, Readiness, and Companion, Review Sets have become the learner's primary study surface. Advances a narrow, frontend-only slice of the deferred "Review-Set-Centric Navigation" direction below — specifically the detail-page hierarchy, not the nav/Dashboard reorg, which stays gated on Primary proving out in real usage.
+
+**Scope decision (deliberate, not the proposal's original framing):** this page answers *"what should I do next, in this Review Set?"* — it stays 100% collection-scoped. It does **not** become the learner's cross-journey home; that job stays with `/dashboard`. This is why the built-but-unwired `TodayFocusCard`/`MasterySnapshotCard` (both user-scoped) are explicitly out of scope here — wiring them in would blur this page's job with Dashboard's.
+
+**Core finding: re-composition, not new capability.** Every building block the proposal asked for already exists — `ReadinessSummary`, `GoalWeeklyCountdownCard`, `NextInPlanCard`, `ContinuePlanBanner`, "Next mastery steps", the Primary badge, and `CompanionDisplayCard` (shipped v0.41.0, live on the page today — not a future card, contrary to how the originating proposal framed it). The work is reordering, restyling, and consolidating, in one file (`collection-detail-page-client.tsx`, both the Goal view and Leaf view branches).
+
+- **Information hierarchy reorder.** Identity → Current Journey (weekly countdown) → Primary Action → Readiness → Guidance (Companion) → Subject Plans/Notes → Supporting info, replacing today's metadata-forward hero. Goal view (the true learner-home branch, with Subject Plans + countdown) gets full treatment; Leaf view (note-holding sets) mirrors it at lower ambition.
+- **Single resolved primary CTA.** Consolidates three competing next-action surfaces (`NextInPlanCard`, `ContinuePlanBanner`, "Next mastery steps") into one "Continue" action. Resolved **free-tier-first** via the existing `getNextPlanAction`/`continueAction` logic — the retention thesis is about the FREE cohort returning, so the primary path cannot be PLUS/PRO-only. Due-concept review (PLUS/PRO, gated by `canViewConceptHealth`) becomes enrichment inside the Readiness card, not a competing hero button. The terminal exam CTA (e.g. "Take the Board Exam") is a periodic learner checkpoint, distinct from both the primary action and from authoring — demoted in visual weight, not hidden in the admin zone.
+- **Badge philosophy.** Identity/status may be badges (Adopted vs Created-by-you; Primary becomes a card-level accent treatment instead of a pill). Metadata (notes-ready count, hours, course/program, Subject Plan count) becomes supporting text, never a badge.
+- **Author/Admin zone separation.** Publish, Build, Edit, Manage Companion, Set/Remove primary, Delete consolidated into one visually distinct zone, out of the learner CTA row (today the admin Publish pill sits in the same badge row as learner status badges, and Edit/Primary/Delete/Manage-Companion share a `⋯` menu with learner actions).
+- **Companion placement.** The already-shipped `CompanionDisplayCard` gets a durable home in the new Guidance tier — positioned so v0.42.0's Resources section and later Ask Companion slot in without another redesign.
+
+Anti-drift: no backend change, no new endpoint, no new persisted state; does not wire the unwired, user-scoped `TodayFocusCard`/`MasterySnapshotCard`; no day-level scheduler (weekly plan stays a `todaysConceptBudget` number + countdown — Phase 2 weighted-distribution/interleaving work remains separately deferred, see v0.40.0/v0.40.1 above); no nav/Dashboard change, no Ask Companion, no Resources, no Achievements, no new chart library; publish validation and feature-gate/billing mechanics unchanged; all labels continue to resolve through `getCollectionLabels` (no hardcoded "Review" strings).
+
+**Follow-up shipped in the same version:** a second UX review, once the detail-page reorder was live, found the `/collections` list card was the one remaining surface using the old Primary pill badge. Migrated it to the same card-level accent treatment as the detail hero (`frontend/app/collections/collections-page-client.tsx`), confirmed the card's existing identity/state/metadata tiering (from two prior "badge hierarchy" polish passes) already matched the requested hierarchy, and documented the badge-classification rule (identity vs. state vs. metadata; metadata is never a badge) in `docs/features/collections.md` for future Guided Learning additions to check against.
+
 ## Post-v0.41.0 Polish Backlog (candidate, not yet scoped)
 
 Not a version — no release branch, no implementation scope yet. Surfaced by the user while using their own v0.41.0 release.
@@ -514,6 +534,8 @@ Codifies what is already the de facto model in this codebase (readiness was unga
 ## Review-Set-Centric Navigation (deferred future direction — not scoped to any release)
 
 Not a version — no release branch, no implementation scope yet. Captured here so we stop designing around abstractions (chiefly Exam Hub) that may no longer be the right shape, per the user's explicit request to lock the long-term architecture without building it all now. **Gate on the Primary Review Set concept (shipping in v0.40.0) proving useful in real usage before committing any of this.**
+
+**Partial exception (v0.41.1, released):** the Review Set detail-page hierarchy (Identity → Current Journey → Primary Action → Readiness → Guidance → Subject Plans/Notes) and the matching `/collections` list-card Primary treatment shipped as a narrow, frontend-only re-composition — see the "v0.41.1" section above. This did **not** advance the nav-shape/Dashboard/Explore parts of this direction, which remain gated exactly as stated below.
 
 Origin: structural realization that Review Sets have become NoteLib's primary study experience, not a secondary feature alongside Public Library/subjects. When the product was designed, users mostly discovered notes through the Public Library, so Dashboard, Progress, and Exam Hub were all built subject-first. That assumption no longer holds now that Official Review Sets, Subject Plans, smart progression, readiness, and (v0.40.0) weekly plans exist.
 

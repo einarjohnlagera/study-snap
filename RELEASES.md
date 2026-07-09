@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.41.1 - Review Set Detail Page: This-Set Study Dashboard
+
+**Status: Released**
+
+Theme: re-compose the Review Set detail page so it orients the learner ("what should I do next, in this Review Set?") instead of introducing the set as a collection screen — a frontend-only re-composition of already-shipped pieces (Readiness, Weekly Countdown, Companion, next-action surfaces), scoped to this Review Set only (the cross-set "which set" job stays with `/dashboard`). See `docs/product/ROADMAP.md`'s "Review-Set-Centric Navigation" section for the design rationale this release advances (detail-page slice only).
+
+### Planned Scope
+
+_(shipped below)_
+
+Anti-drift: no backend change, no new endpoint, no new persisted state; does not wire the unwired, user-scoped `TodayFocusCard`/`MasterySnapshotCard` (wrong scope for a this-set page); no day-level scheduler ("today's schedule" stays a `todaysConceptBudget` number + countdown, Phase 2 weekly work stays deferred); no nav/Dashboard change; no Ask Companion, Resources, or Achievements; no feature-gate/billing change; publish validation unchanged.
+
+### Shipped
+
+- **Information hierarchy reorder.** Goal and Leaf detail now render as Identity → Current Journey → Primary Action → Readiness → Guidance → Subject Plans/Notes → Progress. There is no separate "Supporting info" page section — the hero itself carries both the metadata line and authoring chrome (see below), so nothing about managing the collection occupies its own tier in the learner's scroll path.
+- **Single primary action.** The previous next-card, continue banner, and mastery-step competition now resolve into one free-tier-safe `Continue` action. The terminal exam CTA (e.g. `Take the Board Exam`) renders stacked below `Continue`, using the muted `ghost` button style, so it reads as a periodic checkpoint rather than a same-weight peer action.
+- **Badge cleanup.** Primary is now a hero accent (border + indicator), Adopted remains an identity badge, and course/program, estimated hours, and notes-ready/Subject-Plan-count collapse into one muted metadata line beneath the title (e.g. `Nursing · 4/6 notes ready · ~3 hrs`).
+- **Authoring controls as compact hero chrome.** Publish, Build, Edit, Manage Companion, Set/Remove primary, and Delete are grouped into a small `⋯` menu + Build button in the hero's top-right corner, next to the title — not a dedicated body card. This was refined once post-implementation: the first pass built a full "Manage this Review Set" card at the bottom of the page, which a follow-up UX review flagged as having over-corrected from "admin controls interleaved in the hero" to "admin controls interrupting the learner's scroll." The fix keeps controls present but visually minimal wherever they sit — the design rule going forward is "helps the learner study today → learning flow; changes the collection itself → compact chrome," now recorded in `docs/features/collections.md`.
+- **Companion placement.** Existing Companion display renders directly after Readiness in the Guidance tier, without changing Companion content or authoring behavior.
+- **Test coverage closed.** Added a dedicated test for the Goal view's Primary Action fallback (resolves to the first child Subject Plan when there's no continue/next-note action) and a BOARD_EXAM-profile assertion on the hero eyebrow/back-link, closing two gaps the original Codex prompt asked for but didn't fully cover.
+- **`/collections` list card Primary treatment.** Follow-up UX review found the list card's Primary badge was the one surface left on the old filled-pill treatment after the detail hero moved to a card-level accent (this morning's reorder). Mirrored the same treatment here: Primary now renders as a left-accent border + tinted background on the card, with plain caption text (Star icon, no pill), matching `PlanHeroCard` exactly. Confirmed the card's existing identity/state/metadata tiering (from the two prior "badge hierarchy" polish passes) already matched the requested hierarchy — no reorder needed, only Primary's visual form changed. Documented the badge-classification rule (identity vs. state vs. metadata; metadata is never a badge) in `docs/features/collections.md` so future Guided Learning additions (Companion indicator, Weekly Plan glance, Readiness) get checked against it before reaching for a pill, without pre-building placeholders for identity/state data (Official, Community, Archived) that doesn't exist in the backend yet.
+
+---
+
 ## v0.41.0 - Learning Companion (MVP)
 
 **Status: Released**
