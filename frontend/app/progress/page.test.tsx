@@ -469,6 +469,7 @@ describe("ProgressPage", () => {
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
     expect(getPlanReadiness).not.toHaveBeenCalled();
     expect(getProgressReport).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
   });
 
   it("falls back to all subjects when no primary goal is set", async () => {
@@ -599,6 +600,16 @@ describe("ProgressPage", () => {
 
     expect(routerMock.push).toHaveBeenCalledWith("/progress");
     expect(await screen.findByRole("heading", { name: "Chemistry" })).toBeInTheDocument();
+  });
+
+  it("shows a backlink to the originating collection when reached via a specific plan", async () => {
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness());
+
+    render(<ProgressReportClient initialCollectionId="collection-1" />);
+
+    await screen.findByRole("progressbar", { name: "Biology readiness" });
+    expect(screen.getByRole("link", { name: "Study Plan" })).toHaveAttribute("href", "/collections/collection-1");
+    expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
   });
 
   it("hides the missing Study Pack caveat when every note has a Study Pack", async () => {

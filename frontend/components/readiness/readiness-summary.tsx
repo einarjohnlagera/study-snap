@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import type { SubjectProgressEntry } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -133,6 +134,7 @@ type ReadinessSummaryProps = {
   unavailableDescription?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  footer?: ReactNode;
 };
 
 export function ReadinessSummary({
@@ -150,6 +152,7 @@ export function ReadinessSummary({
   unavailableDescription = "Readiness is unavailable right now.",
   emptyTitle = "No readiness yet",
   emptyDescription = "Generate Study Packs and practice to see readiness.",
+  footer,
 }: Readonly<ReadinessSummaryProps>) {
   if (variant === "compact") {
     return (
@@ -180,6 +183,7 @@ export function ReadinessSummary({
           </div>
           <ReadinessRing percentage={unavailable ? 0 : overallReadinessPercentage} />
         </div>
+        {footer ? <div className="mt-4 border-t border-border pt-4">{footer}</div> : null}
       </Card>
     );
   }

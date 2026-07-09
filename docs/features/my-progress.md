@@ -141,7 +141,7 @@ The page renders:
 - No-goal actionable state: when `goalSummary` is null but subject progress exists, show `Set your study focus`, up to 5 weakest subject chips linking to `/profile#study-focus`, and an `Or set from Profile →` link.
 - Inline load failure state: `Could not load your progress report. Try refreshing.`
 - Plan-scoped failure state: `Could not load readiness` with retry; missing, deleted, or not-owned plans render the collection not-found state with a link back to `/collections`.
-- Back link to `/dashboard`.
+- Back link: when the page is reached via a specific collection's `?collectionId={id}` URL param (e.g. its "View full progress" link), the back link returns to that collection (`/collections/{id}`, profile-aware label via `labels.singular`) instead of `/dashboard`. Keyed off the URL param, not live selection state, so a plain nav-in that defaults to the user's Primary Review Set still shows the `/dashboard` back link.
 
 The dashboard Focus Areas card links to `/progress` when it has concept rows. The card's existing weak-concept logic and action CTA remain unchanged.
 

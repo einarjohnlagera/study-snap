@@ -6,26 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.42.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.42.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.42.0 — AI-assisted Companion authoring + regeneration
+## Active release: v0.42.1 — Companion & Progress Polish
 
-Base branch for this release: `releases/v0.42.0`. Gives curators an LLM-assisted first draft for Learning Companion content, with mandatory human review before publish. Reuses the existing OpenAI service and PREMIUM/CRITIQUE model tiers — no new LLM infrastructure. Full scope and design rationale in `docs/product/ROADMAP.md` ("Guided Learning Initiative (Companion)") and `RELEASES.md`.
+Base branch for this release: `releases/v0.42.1`. Small UX fixes surfaced from using v0.42.0 in practice — frontend-only, no new features. Full scope in `RELEASES.md`.
+
+- **Merge the Review Set detail page's readiness card and its "View full progress"/"Review due concepts" row into one card.** Already documented as the same Readiness tier (`docs/features/collections.md`) — this makes the layout match, not new scope.
+- **Fix the `/progress?collectionId={id}` backlink** to return to the originating collection when reached via that collection's "View full progress" link, instead of always showing "Dashboard".
+- **Course/program stays plain text, not a badge**, per the existing badge-classification rule (identity/state get badges, metadata does not) — considered and explicitly declined.
+- **No backend change, no new persisted state.**
+
+## Prior release: v0.42.0 — AI-assisted Companion authoring + regeneration, released
 
 - **Curator-facing AI-assist only; learner-facing rule unchanged.** A learner never receives an auto-generated plan — "Curation, never generation" stays locked. The AI-assist is scoped to Official Review Set Companion authoring only, per the documented rule clarification in ROADMAP.
 - **Publishing is never autonomous, in every path.** `Generate Companion` produces a draft; a human must review and edit in the existing authoring modal before `Publish`.
 - **Granular per-section regeneration.** Overview / Study Strategy / Common Mistakes / FAQ regenerate independently, not all-or-nothing.
-- **Staleness signal, no new job infra.** "Companion may be outdated" compares a lightweight stored structure snapshot (child count / note ids / concept count) on read — not a background job.
-- **Adds Resources section and Timeline/Checklist live-feature embeds** deferred from v0.41.0's four-section MVP — Timeline/Checklist must link the already-shipped live weekly countdown/readiness features, never re-author them as static prose.
+- **Staleness signal, no new job infra.** "Companion may be outdated" compares a lightweight stored structure snapshot (member count / sorted child-or-note ids) on read — not a background job.
+- **Adds Resources section** deferred from v0.41.0's four-section MVP — manual-authoring-only, excluded from generation. Timeline/Checklist resolved as satisfied by v0.41.1's existing Companion placement; no separate embed was built.
 - **No new LLM infrastructure** — reuse the existing OpenAI service.
-
-## Prior release: v0.41.1 — Review Set Detail Page: This-Set Study Dashboard, released
-
-- **This-set study dashboard.** Goal/Leaf detail reordered to Identity → Current Journey → Primary Action → Readiness → Guidance → Subject Plans/Notes → Progress; scoped to this Review Set only, not the learner's cross-journey home (that stays `/dashboard`'s job).
-- **Single resolved primary CTA, free-tier-first**, replacing three competing next-action surfaces; terminal exam CTA demoted to a stacked secondary action.
-- **Primary is a card-level accent treatment, not a badge** — on both the detail hero and the `/collections` list card. Metadata (course, hours, notes-ready) collapsed into one muted text line.
-- **Authoring controls as compact hero chrome** (Build/Edit/Publish/Manage Companion/Primary-toggle/Delete), not a dedicated body card.
-- **No backend change, no new persisted state, no nav/Dashboard change.**
 
 ## Source-of-truth docs (read before implementing anything)
 

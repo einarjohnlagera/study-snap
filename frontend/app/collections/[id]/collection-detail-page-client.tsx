@@ -436,36 +436,33 @@ function PrimaryActionCard({
   );
 }
 
-function ReadinessDashboardSection({
-  children,
+// Rendered as ReadinessSummary's `footer` slot so the readiness stats and the "View
+// full progress"/"Review due concepts" actions read as one card, not two stacked elements.
+function ReadinessCardFooter({
   collectionId,
   dueConceptReviewHref,
 }: Readonly<{
-  children: ReactNode;
   collectionId: string;
   dueConceptReviewHref: string | null;
 }>) {
   return (
-    <section className="space-y-3">
-      {children}
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href={`/progress?collectionId=${collectionId}`}
-          className="text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
-        >
-          View full progress
-        </Link>
-        {dueConceptReviewHref ? (
-          <ResponsiveActionLink
-            href={dueConceptReviewHref}
-            action="quickReview"
-            label="Review due concepts"
-            variant="outline"
-            size="sm"
-          />
-        ) : null}
-      </div>
-    </section>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <Link
+        href={`/progress?collectionId=${collectionId}`}
+        className="text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+      >
+        View full progress
+      </Link>
+      {dueConceptReviewHref ? (
+        <ResponsiveActionLink
+          href={dueConceptReviewHref}
+          action="quickReview"
+          label="Review due concepts"
+          variant="outline"
+          size="sm"
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -2729,21 +2726,20 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
 
         <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
 
-        <ReadinessDashboardSection collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref}>
-          <ReadinessSummary
-            variant="compact"
-            title={`${goalDetail.title} readiness`}
-            eyebrow={`${labels.goalSingular} readiness`}
-            overallReadinessPercentage={goalDetail.overallReadinessPercentage}
-            totalConcepts={goalDetail.totalConcepts}
-            masteredConcepts={goalDetail.masteredConcepts}
-            dueConcepts={goalDetail.dueConcepts}
-            notPracticedConcepts={goalDetail.notPracticedConcepts}
-            subjects={[]}
-            emptyTitle="No readiness yet"
-            emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
-          />
-        </ReadinessDashboardSection>
+        <ReadinessSummary
+          variant="compact"
+          title={`${goalDetail.title} readiness`}
+          eyebrow={`${labels.goalSingular} readiness`}
+          overallReadinessPercentage={goalDetail.overallReadinessPercentage}
+          totalConcepts={goalDetail.totalConcepts}
+          masteredConcepts={goalDetail.masteredConcepts}
+          dueConcepts={goalDetail.dueConcepts}
+          notPracticedConcepts={goalDetail.notPracticedConcepts}
+          subjects={[]}
+          emptyTitle="No readiness yet"
+          emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
+          footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
+        />
 
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
@@ -2909,23 +2905,22 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         </Card>
       ) : null}
 
-      <ReadinessDashboardSection collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref}>
-        <ReadinessSummary
-          variant="compact"
-          title={`${collection.title} readiness`}
-          eyebrow={`${labels.singular} readiness`}
-          overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
-          totalConcepts={planReadiness?.totalConcepts ?? 0}
-          masteredConcepts={planReadiness?.masteredConcepts ?? 0}
-          dueConcepts={planReadiness?.dueConcepts ?? 0}
-          notPracticedConcepts={planReadiness?.notPracticedConcepts ?? 0}
-          subjects={planReadiness?.subjects ?? []}
-          unavailable={planReadinessLoadState === "error"}
-          unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
-          emptyTitle="No readiness yet"
-          emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
-        />
-      </ReadinessDashboardSection>
+      <ReadinessSummary
+        variant="compact"
+        title={`${collection.title} readiness`}
+        eyebrow={`${labels.singular} readiness`}
+        overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
+        totalConcepts={planReadiness?.totalConcepts ?? 0}
+        masteredConcepts={planReadiness?.masteredConcepts ?? 0}
+        dueConcepts={planReadiness?.dueConcepts ?? 0}
+        notPracticedConcepts={planReadiness?.notPracticedConcepts ?? 0}
+        subjects={planReadiness?.subjects ?? []}
+        unavailable={planReadinessLoadState === "error"}
+        unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
+        emptyTitle="No readiness yet"
+        emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
+        footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
+      />
 
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
