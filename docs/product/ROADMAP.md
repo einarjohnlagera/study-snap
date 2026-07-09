@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.42.0 - AI-assisted Companion authoring + regeneration` is the current released version (on `releases/v0.42.0`). No next version has been kicked off yet.
+`v0.42.1 - Companion & Progress Polish` is the current in-progress version (on `releases/v0.42.1`).
+
+`v0.42.0 - AI-assisted Companion authoring + regeneration` is the previous released version (on `releases/v0.42.0`).
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
@@ -498,6 +500,14 @@ Not a version — no release branch, no implementation scope yet. Surfaced by th
 - **Curator workflow:** `Generate Companion` (per section or all) → LLM draft → **mandatory human review and edit** → `Publish`. Publishing is never autonomous. Reuses the existing OpenAI service + PREMIUM/CRITIQUE model tiers — no new LLM infra.
 - **Granular per-section regeneration** (Overview / Strategy / FAQ / Checklist independently, not an all-or-nothing regenerate) plus a **"Companion may be outdated"** staleness signal when the set's structure changes — a lightweight stored structure snapshot (child count / note ids / concept count) compared on read, no new job infra.
 - Adds the Resources section and the Timeline/Checklist live-feature embeds deferred from v0.41.0.
+
+### v0.42.1 — Companion & Progress Polish, in progress (base branch `releases/v0.42.1`)
+
+Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new features:
+
+- Merge the Review Set detail page's readiness card and its "View full progress"/"Review due concepts" row into one card — they're already documented as the same Readiness tier (see `docs/features/collections.md`), this just makes the layout match.
+- Fix `/progress?collectionId={id}`'s backlink: it always showed "Dashboard" regardless of entry point; now returns to the originating collection when reached via that collection's "View full progress" link.
+- Considered and declined: turning collection cards' course/program metadata into a badge — stays plain text per the existing badge-classification rule (identity/state get badges, metadata does not).
 
 ### Documented rule clarification (not a reversal) — enables AI-assisted authoring
 

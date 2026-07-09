@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.42.1 - Companion & Progress Polish
+
+**Status: In Progress**
+
+Theme: small UX fixes surfaced from using v0.42.0 in practice — no new features, no backend changes.
+
+### Planned Scope
+
+- **Merge Readiness card and "View full progress" row (frontend).** On the Review Set detail page, the readiness card and the "View full progress"/"Review due concepts" row currently render as two visually separate elements even though they're the same Readiness tier (already documented as such in `docs/features/collections.md`). Add an optional `footer` slot to the shared `ReadinessSummary` component so both actions render inside the same card.
+- **Fix Progress page backlink for scoped views (frontend).** `/progress?collectionId={id}` always shows a "Dashboard" backlink regardless of how the page was reached. When reached via a specific collection's "View full progress" link, the backlink should return to that collection instead.
+
+Anti-drift: no backend change, no new endpoint, no new persisted state; course/program stays plain text on collection cards/detail (metadata, not identity/state, per `docs/features/collections.md`'s badge-classification rule) — considered and declined, not silently skipped; unscoped `/progress` (reached from nav, no `collectionId`) keeps its existing "Dashboard" backlink, unchanged.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.42.0 - AI-assisted Companion authoring + regeneration
 
 **Status: Released**
