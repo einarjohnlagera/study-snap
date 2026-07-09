@@ -287,7 +287,7 @@ describe("CollectionsPage", () => {
     });
   });
 
-  it("shows a Primary badge only on the card matching primaryCollectionId", async () => {
+  it("shows a Primary indicator only on the card matching primaryCollectionId, as a card accent not a pill", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       buildCollectionSummary({ id: "collection-1", title: "Own Plan" }),
       buildCollectionSummary({ id: "collection-2", title: "Primary Plan" }),
@@ -298,6 +298,13 @@ describe("CollectionsPage", () => {
 
     await screen.findByText("Primary Plan");
     expect(screen.getAllByText("Primary")).toHaveLength(1);
+
+    const primaryIndicator = screen.getByText("Primary");
+    expect(primaryIndicator.className).not.toMatch(/rounded-full/);
+    const primaryCard = screen.getByText("Primary Plan").closest("div.flex.h-full");
+    expect(primaryCard).toHaveClass("border-l-indigo-500");
+    const otherCard = screen.getByText("Own Plan").closest("div.flex.h-full");
+    expect(otherCard).not.toHaveClass("border-l-indigo-500");
   });
 
   it("sorts the primary collection to the front of the grid regardless of API order", async () => {
