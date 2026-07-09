@@ -2,7 +2,7 @@
 
 ## v0.42.0 - AI-assisted Companion authoring + regeneration
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: give curators an LLM-assisted first draft for Learning Companion content, with mandatory human review before publish — proving out the "Curation, never generation" rule's curator-facing clarification from v0.41.0's design work, while keeping the learner-facing guarantee (no auto-generated plans) unchanged.
 
@@ -22,6 +22,7 @@ Anti-drift: learner-facing behavior is unchanged — curation over generation, a
 - **Companion staleness signal.** Added an ADMIN-only "Companion may be outdated" authoring signal on Review Set detail, backed by a nullable `note_collections.companion_structure_snapshot` captured only when Companion is saved and compared inline on the existing Goal detail read. Known limitations: v1 compares only member count plus sorted child/note ids; it does not compare note body edits or concept counts because the existing concept-count pipeline is per-user progress work, not a cheap structural signal.
 - **Companion Resources section.** Added a fifth manual-only Resources field to Companion content so curators can author markdown links and references without mixing them into strategy prose. Resources saves through the existing Companion Save path, renders after FAQ with the shared markdown renderer, and is deliberately excluded from Companion generation and staleness comparisons.
 - **Timeline/Checklist live-feature embeds — satisfied by placement, no code change.** v0.41.1's information-hierarchy reorder already positions `CompanionDisplayCard` immediately below the live weekly countdown (`GoalWeeklyCountdownCard`) and readiness (`ReadinessSummary`) cards, in that order, on both the Goal and Leaf view branches. A jump-link from inside Companion would point at a card one scroll away, and a duplicate live-data recap would re-render the same numbers a card apart on the same screen — neither adds value beyond what the existing adjacency already provides. The "link the live features, never re-author them as static prose" intent is satisfied by that placement; no separate embed was built.
+- **Fix: `setCompanion` null-content guard.** Surfaced by this release's pre-signoff pressure test (three-PR cross-cutting audit, since the curator-generation, staleness-signal, and Resources-section PRs all touched the same shared Companion save path). A `PUT /collections/{id}/companion` call with a null body previously still computed and persisted a non-null `companionStructureSnapshot` while leaving `companion` null — inconsistent with the file's own "clear both together" convention used everywhere else. `setCompanion` now rejects a null body before touching the collection, matching every other request-DTO mutator in `NoteCollectionService`.
 
 ---
 
