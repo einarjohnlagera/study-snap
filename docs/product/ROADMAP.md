@@ -509,6 +509,23 @@ Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new fe
 - Fix `/progress?collectionId={id}`'s backlink: it always showed "Dashboard" regardless of entry point; now returns to the originating collection when reached via that collection's "View full progress" link.
 - Considered and declined: turning collection cards' course/program metadata into a badge — stays plain text per the existing badge-classification rule (identity/state get badges, metadata does not).
 
+### Candidate — Companion "Coach Experience" (presentation/voice layer, not yet scoped to a version)
+
+Origin: a product proposal to make the Review Set detail page *feel* like a coach talking to the learner rather than a set of labeled CMS fields ("Overview", "Study Strategy", "Common Mistakes", "FAQ"). Pressure-tested via architecture review before scoping.
+
+**Finding: the proposal's own mockup conflates three different operations — only one is genuinely "same content, new presentation":**
+- **(a) Relabel/re-voice authored sections** (e.g. "Overview" → "👋 Welcome back") — same curator text, friendlier frame, order preserved. Not generation (no per-learner synthesis, same author, same review-before-publish gate); "Curation, never generation" is not implicated.
+- **(b) Reorder/prioritize authored sections by learner context** (e.g. surface Common Mistakes first when readiness is low) — **explicitly deferred**, not part of the near-term slice. Two problems: it collides with the monetization line below (adaptive prioritization is named PRO value), and it breaks curator-authored narrative flow — Overview → Strategy → Mistakes → FAQ assumes that reading order, and later sections can reference earlier ones.
+- **(c) Coach-voice composition of already-shipped live signals** — the weekly countdown (`GoalWeeklyCountdownCard`), the resolved next action (`getNextPlanAction`), readiness/due-concepts (`ReadinessSummary`/ConceptHealth). None of this is Companion content; it's v0.41.1's dashboard signals, already FREE, just not yet wearing a coach voice.
+
+**Near-term buildable slice = (a) + (c).** A static coach-label mapping (same shape as `getCollectionLabels`) over `CompanionDisplayCard`, order-preserving, plus a conversational frame composed from already-loaded countdown/next-action/readiness data, positioned above the authored Companion (which stays a stable, unreordered narrative). Frontend-only, no new backend call, no new persisted state — same architectural class as `pickActiveGuidance` (`frontend/lib/guidance-engine.ts`) and `getNextPlanAction`, both deterministic and frontend-only already.
+
+**(b) stays deferred, reserved for future PRO personalization** (see "Future, gated — Runtime Companion" below). If ever picked up, the FREE-deterministic/PRO-adaptive line already drawn there applies: rule-based deterministic reordering could ship FREE like the weekly countdown did, but genuinely adaptive/learning-pattern/LLM-driven selection is the PRO differentiator — not a re-paywalled version of deterministic logic.
+
+Not yet sequenced to a version — v0.42.1 is scoped to small polish only; this is new-feature-shaped and sized for its own release after v0.42.1 closes.
+
+Anti-drift: no reordering of authored Companion sections; no generation; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); labels continue through `getCollectionLabels`.
+
 ### Documented rule clarification (not a reversal) — enables AI-assisted authoring
 
 The standing "Curation, never generation" rule (see v0.31.0 below, "the forbidden version is *auto-generate a personalized plan* — do not build that here") is **clarified, not reversed**, to make v0.42.0 possible:
@@ -535,7 +552,7 @@ Codifies what is already the de facto model in this codebase (readiness was unga
 
 - **FREE — static guidance.** The Companion itself. Near-zero marginal cost (authored once, served static), high perceived value — the activation/retention driver and the conversion hook for paid interaction/personalization. Not a giveaway; a funnel.
 - **PLUS — interaction.** Ask Companion. Gives PLUS its first genuinely distinct capability (today PLUS is quota-only) — strengthens PLUS's reason to exist.
-- **PRO — personalization.** Genuinely adaptive guidance, not a re-paywalled version of something already free. Much of PRO's value (readiness-based prioritization) is derivable from existing ConceptHealth with no per-query LLM — high margin; only conversational/adaptive pieces carry recurring cost, controlled via the Interview Practice template.
+- **PRO — personalization.** Genuinely adaptive guidance, not a re-paywalled version of something already free. **Not any prioritization** — deterministic, rule-based reordering (e.g. "surface Common Mistakes first when readiness is low," see Companion "Coach Experience" candidate above) follows the same FREE precedent as the v0.40.0 weekly countdown. PRO's prioritization must specifically be adaptive/learning-pattern/LLM-informed selection. Much of that adaptive value is derivable from existing ConceptHealth with no per-query LLM for the underlying signal — high margin; only the conversational/adaptive selection logic itself carries recurring cost, controlled via the Interview Practice template.
 - Applies consistently across profiles (Student/Exam-taker/Teacher/Professional) because it gates capabilities, not content, and all labels route through `getCollectionLabels`.
 - No price/quota/checkout change from this principle alone — it governs how *future* features (Ask Companion, Personalization) get tiered when they're built, not a repricing of today's plans.
 
