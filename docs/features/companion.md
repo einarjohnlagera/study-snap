@@ -13,6 +13,9 @@ Companion content lives on the existing `note_collections` row:
 - column: `note_collections.companion`
 - type: nullable `JSONB`
 - Java shape: `CompanionContent`
+- column: `note_collections.companion_structure_snapshot`
+- type: nullable `JSONB`
+- Java shape: `CompanionStructureSnapshot`
 
 The JSON shape has exactly four sections:
 
@@ -61,6 +64,8 @@ The collection detail page now exposes ADMIN-only authoring for eligible top-lev
 
 AI-assisted generation exists for curator drafts only: ADMIN users can generate one Companion section or all four sections using the PREMIUM LLM tier. Generation never persists on its own and never writes `note_collections.companion`; the existing Save action remains the only write path. There is still no feature gate or quota check on either the manual or generated path. Learner-facing display is documented under "Reads" below.
 
+Saving Companion content through `PUT /collections/{id}/companion` also captures a lightweight structure snapshot on the same collection row. The snapshot stores `memberCount` plus sorted member ids only: child Subject Plan ids for Goals with children, or attached note ids for childless top-level collections. Draft generation does not capture or clear the snapshot because it never persists content.
+
 All "Companion" copy on this page (menu action, modal title/description, remove button, error messages, display eyebrow/heading) resolves through `getCollectionLabels`'s `companionSingular` field, matching the `primarySingular` pattern — currently `"Companion"` identically across every profile, since (unlike "Study Plan"/"Review Set"/"Lesson Plan") Companion is a fixed feature name, not a synonym for the collection noun.
 
 ## Reads
@@ -74,6 +79,8 @@ There is no separate read endpoint.
 
 The collection detail page renders Companion content in both top-level view branches when renderable content exists. Overview, Study Strategy, Common Mistakes, and FAQ answers use the shared `SummaryMarkdown` renderer. Empty individual sections are skipped, and the whole card is hidden when the Companion is null or only contains empty draft fields.
 
+`GoalCollectionDetailResponse` also carries `companionMayBeOutdated`, an ADMIN-only authoring signal for eligible top-level collections. It is `true` only when the requester is ADMIN, Companion content exists, a saved structure snapshot exists, and the current structure no longer matches that snapshot. The comparison is intentionally structural and lightweight: child/note membership count and sorted ids only. It does not compare note body edits, generated content, concept counts, mastery, or per-user progress.
+
 ## Publish And Adopt
 
 Publishing a top-level collection does not need special Companion cascade logic. Companion lives on the same parent row as `visibility`, so publishing the parent preserves and exposes that row's authored content. Child publish cascade does not copy Companion to children.
@@ -84,3 +91,5 @@ Adoption intentionally differs from target completion date:
 - same-owner self-copy/re-adopt (`source.ownerUserId == newOwnerId`): leave Companion null on the fresh row
 
 This rule applies to both standalone top-level leaf Review Sets and Goal adoption.
+
+The structure snapshot is never copied on either adopt path, even when Companion itself is copied on a genuine cross-owner adopt — the new row's children/notes have freshly-generated ids, so a copied snapshot would never match and would flag the adopted copy as outdated immediately. `companionStructureSnapshot` stays null on every freshly-adopted row (cross-owner or self-copy) until the new owner's first `PUT /collections/{id}/companion` save captures a real one; until then `companionMayBeOutdated` reads `false` (unknown snapshot, not a mismatch).

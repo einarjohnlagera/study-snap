@@ -1,6 +1,7 @@
 package com.studysnap.backend.entity;
 
 import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionStructureSnapshot;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -52,6 +53,10 @@ public class NoteCollectionEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "companion", columnDefinition = "jsonb")
     private CompanionContent companion;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "companion_structure_snapshot", columnDefinition = "jsonb")
+    private CompanionStructureSnapshot companionStructureSnapshot;
 
     @Column(name = "source_plan_id")
     private UUID sourcePlanId;
