@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.42.1 - Companion & Progress Polish` is the current in-progress version (on `releases/v0.42.1`).
+`v0.42.1 - Companion & Progress Polish` is released. No version is currently in progress — `v0.43.0` (Companion "Coach Experience", see the Guided Learning Initiative section below) is the top candidate for the next kickoff.
 
-`v0.42.0 - AI-assisted Companion authoring + regeneration` is the previous released version (on `releases/v0.42.0`).
+`v0.42.0 - AI-assisted Companion authoring + regeneration` is the previous released version before that (on `releases/v0.42.0`).
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
@@ -501,7 +501,7 @@ Not a version — no release branch, no implementation scope yet. Surfaced by th
 - **Granular per-section regeneration** (Overview / Strategy / FAQ / Checklist independently, not an all-or-nothing regenerate) plus a **"Companion may be outdated"** staleness signal when the set's structure changes — a lightweight stored structure snapshot (child count / note ids / concept count) compared on read, no new job infra.
 - Adds the Resources section and the Timeline/Checklist live-feature embeds deferred from v0.41.0.
 
-### v0.42.1 — Companion & Progress Polish, in progress (base branch `releases/v0.42.1`)
+### v0.42.1 — Companion & Progress Polish, released (base branch `releases/v0.42.1`)
 
 Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new features:
 

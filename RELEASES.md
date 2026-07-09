@@ -2,7 +2,7 @@
 
 ## v0.42.1 - Companion & Progress Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: small UX fixes surfaced from using v0.42.0 in practice — no new features, no backend changes.
 
