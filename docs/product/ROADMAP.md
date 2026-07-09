@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.42.1 - Companion & Progress Polish` is released. No version is currently in progress — `v0.43.0` (Companion "Coach Experience", see the Guided Learning Initiative section below) is the top candidate for the next kickoff.
+`v0.43.0 - Companion Coach Experience` is the current in-progress version (on `releases/v0.43.0`).
 
-`v0.42.0 - AI-assisted Companion authoring + regeneration` is the previous released version before that (on `releases/v0.42.0`).
+`v0.42.1 - Companion & Progress Polish` is the previous released version (on `releases/v0.42.1`); `v0.42.0 - AI-assisted Companion authoring + regeneration` before that.
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
@@ -509,7 +509,7 @@ Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new fe
 - Fix `/progress?collectionId={id}`'s backlink: it always showed "Dashboard" regardless of entry point; now returns to the originating collection when reached via that collection's "View full progress" link.
 - Considered and declined: turning collection cards' course/program metadata into a badge — stays plain text per the existing badge-classification rule (identity/state get badges, metadata does not).
 
-### Candidate — Companion "Coach Experience" (presentation/voice layer, not yet scoped to a version)
+### v0.43.0 — Companion "Coach Experience", in progress (base branch `releases/v0.43.0`)
 
 Origin: a product proposal to make the Review Set detail page *feel* like a coach talking to the learner rather than a set of labeled CMS fields ("Overview", "Study Strategy", "Common Mistakes", "FAQ"). Pressure-tested via architecture review before scoping.
 
@@ -522,7 +522,10 @@ Origin: a product proposal to make the Review Set detail page *feel* like a coac
 
 **(b) stays deferred, reserved for future PRO personalization** (see "Future, gated — Runtime Companion" below). If ever picked up, the FREE-deterministic/PRO-adaptive line already drawn there applies: rule-based deterministic reordering could ship FREE like the weekly countdown did, but genuinely adaptive/learning-pattern/LLM-driven selection is the PRO differentiator — not a re-paywalled version of deterministic logic.
 
-Not yet sequenced to a version — v0.42.1 is scoped to small polish only; this is new-feature-shaped and sized for its own release after v0.42.1 closes.
+**Planned Scope:**
+- Coach-voice terminology mapping over `CompanionDisplayCard` (order-preserving, no reordering).
+- Coach-voice composition of already-shipped live signals (weekly countdown, `getNextPlanAction`, readiness) in the Guidance tier, above the authored Companion.
+- Short curator-authoring guidance note in `docs/features/companion.md`.
 
 Anti-drift: no reordering of authored Companion sections; no generation; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); labels continue through `getCollectionLabels`.
 

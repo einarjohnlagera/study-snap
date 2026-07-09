@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.43.0 - Companion Coach Experience
+
+**Status: In Progress**
+
+Theme: give the Review Set detail page a coach-voice presentation layer over the Companion and already-shipped live signals (weekly countdown, next action, readiness) — frontend-only, no new engine, no new backend.
+
+### Planned Scope
+
+- **Coach-voice terminology mapping (frontend).** A static section-key → coach label/icon map (e.g. `overview` → "👋 Welcome back"), same shape as `getCollectionLabels`. Applied in `CompanionDisplayCard`; strictly order-preserving — renders sections in the curator's authored sequence, no reordering.
+- **Coach-voice composition of existing live signals (frontend).** A conversational frame over the already-shipped weekly countdown (`GoalWeeklyCountdownCard`), resolved next action (`getNextPlanAction`), and readiness/due-concepts (`ReadinessSummary`/ConceptHealth), positioned in the Guidance tier above the authored Companion. No new data fetch — reuses fields already loaded on the collection detail page.
+- **Curator-authoring guidance note (docs).** Short addition to `docs/features/companion.md` so authored prose and the new coach framing don't visually fight each other.
+
+Anti-drift: no context-based reordering/prioritization of authored Companion sections (deferred — collides with the PRO "adaptive prioritization" monetization line and breaks curator-authored narrative flow; see `docs/product/ROADMAP.md`'s Coach Experience section); no generation — relabeling is not synthesis, "Curation, never generation" stays locked; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); no Ask Companion, no Personalization, no nav/Dashboard change; labels continue through `getCollectionLabels`.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.42.1 - Companion & Progress Polish
 
 **Status: Released**
