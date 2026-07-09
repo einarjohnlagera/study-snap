@@ -2,7 +2,7 @@
 
 ## v0.41.1 - Review Set Detail Page: This-Set Study Dashboard
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: re-compose the Review Set detail page so it orients the learner ("what should I do next, in this Review Set?") instead of introducing the set as a collection screen — a frontend-only re-composition of already-shipped pieces (Readiness, Weekly Countdown, Companion, next-action surfaces), scoped to this Review Set only (the cross-set "which set" job stays with `/dashboard`). See `docs/product/ROADMAP.md`'s "Review-Set-Centric Navigation" section for the design rationale this release advances (detail-page slice only).
 
