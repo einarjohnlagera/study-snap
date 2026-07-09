@@ -68,10 +68,20 @@ export const MILESTONES: GoalMilestone[] = [
   },
 ];
 
-function ProgressHeader() {
+function ProgressHeader({
+  scopedCollectionId,
+  scopedCollectionLabel,
+}: Readonly<{
+  scopedCollectionId: string | null;
+  scopedCollectionLabel: string;
+}>) {
   return (
     <div className="space-y-4">
-      <BackLink href="/dashboard" label="Dashboard" />
+      {scopedCollectionId ? (
+        <BackLink href={`/collections/${scopedCollectionId}`} label={scopedCollectionLabel} />
+      ) : (
+        <BackLink href="/dashboard" label="Dashboard" />
+      )}
       <PageHeader
         eyebrow="MY PROGRESS"
         title="My Progress"
@@ -757,7 +767,7 @@ export function ProgressReportClient({
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <ProgressHeader />
+      <ProgressHeader scopedCollectionId={initialCollectionId} scopedCollectionLabel={labels.singular} />
       <PlanPicker
         collections={collections}
         selectedCollectionId={selectedCollectionId}
