@@ -42,6 +42,8 @@ public class OpenAiLlmConfig {
         String developerPromptTemplate = readResourceAsString(promptDir + "/developer.txt");
         String noteGenerationSystemPrompt = readResourceAsString(promptDir + "/note-generation-system.txt");
         String noteGenerationDeveloperPromptTemplate = readResourceAsString(promptDir + "/note-generation-developer.txt");
+        String companionSystemPrompt = readResourceAsString(promptDir + "/companion-system.txt");
+        String companionDeveloperPromptTemplate = readResourceAsString(promptDir + "/companion-developer.txt");
         String challengeQuizSystemPrompt = readResourceAsString(promptDir + "/challenge-quiz-system.txt");
         String challengeQuizDeveloperPromptTemplate = readResourceAsString(promptDir + "/challenge-quiz-developer.txt");
         String boardExamSystemPrompt = readResourceAsString(promptDir + "/board-exam-system.txt");
@@ -63,6 +65,8 @@ public class OpenAiLlmConfig {
                 responseSchema,
                 noteGenerationSystemPrompt,
                 noteGenerationDeveloperPromptTemplate,
+                companionSystemPrompt,
+                companionDeveloperPromptTemplate,
                 challengeQuizSystemPrompt,
                 challengeQuizDeveloperPromptTemplate,
                 boardExamSystemPrompt,

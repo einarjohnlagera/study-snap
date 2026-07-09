@@ -4,7 +4,10 @@ import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
+import com.studysnap.backend.dto.GenerateCompanionRequest;
+import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
@@ -46,6 +49,7 @@ import com.studysnap.backend.repository.NoteCollectionNoteProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +67,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -106,6 +111,7 @@ public class NoteCollectionService {
     private static final String PRIMARY_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can be primary.";
     private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
     private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
+    private static final String COMPANION_SECTION_REQUIRED_MESSAGE = "Select at least one Companion section to generate.";
     private static final String ADMIN_REQUIRED_MESSAGE = "You do not have permission to access this endpoint.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
@@ -127,6 +133,7 @@ public class NoteCollectionService {
     private final ProgressReportService progressReportService;
     private final AnalyticsService analyticsService;
     private final NoteService noteService;
+    private final LlmStudyPackService llmStudyPackService;
     private final UserRepository userRepository;
     private final TransactionOperations collectionTransactionOperations;
 
@@ -653,6 +660,23 @@ public class NoteCollectionService {
         return toDetailResponse(collection, items);
     }
 
+    public GeneratedCompanionContentResponse generateCompanion(
+            UUID collectionId,
+            UUID userId,
+            GenerateCompanionRequest request
+    ) {
+        Set<CompanionSection> sections = extractCompanionSections(request);
+        UserEntity user = getUserOrThrow(userId);
+        assertAdmin(user);
+        NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
+        validateCompanionTarget(collection);
+        CompanionContent draft = llmStudyPackService.generateCompanion(
+                buildCompanionGenerationContext(collection),
+                sections
+        );
+        return GeneratedCompanionContentResponse.from(draft);
+    }
+
     @Transactional
     public GoalCollectionDetailResponse setChildrenOrder(
             UUID collectionId,
@@ -913,6 +937,71 @@ public class NoteCollectionService {
         if (collection.getParentCollectionId() != null) {
             throw new InvalidCollectionRequestException(COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
         }
+    }
+
+    private Set<CompanionSection> extractCompanionSections(GenerateCompanionRequest request) {
+        if (request == null || request.sections() == null || request.sections().isEmpty()) {
+            throw new InvalidCollectionRequestException(COMPANION_SECTION_REQUIRED_MESSAGE);
+        }
+        Set<CompanionSection> sections = EnumSet.noneOf(CompanionSection.class);
+        request.sections().stream()
+                .filter(Objects::nonNull)
+                .forEach(sections::add);
+        if (sections.isEmpty()) {
+            throw new InvalidCollectionRequestException(COMPANION_SECTION_REQUIRED_MESSAGE);
+        }
+        return sections;
+    }
+
+    private CompanionGenerationContext buildCompanionGenerationContext(NoteCollectionEntity collection) {
+        List<NoteCollectionEntity> children = collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(
+                collection.getId(),
+                collection.getOwnerUserId()
+        );
+        if (!children.isEmpty()) {
+            return new CompanionGenerationContext(
+                    collection.getTitle(),
+                    collection.getDescription(),
+                    collection.getCourseProgram(),
+                    children.stream()
+                            .map(child -> new CompanionGenerationContext.CompanionContextItem(
+                                    child.getTitle(),
+                                    child.getDescription()
+                            ))
+                            .toList(),
+                    List.of()
+            );
+        }
+
+        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collection.getId());
+        List<UUID> noteIds = items.stream().map(NoteCollectionItemEntity::getNoteId).toList();
+        if (noteIds.isEmpty()) {
+            return new CompanionGenerationContext(
+                    collection.getTitle(),
+                    collection.getDescription(),
+                    collection.getCourseProgram(),
+                    List.of(),
+                    List.of()
+            );
+        }
+        Map<UUID, NoteCollectionNoteProjection> notesById = noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)
+                .stream()
+                .collect(Collectors.toMap(NoteCollectionNoteProjection::noteId, Function.identity()));
+        return new CompanionGenerationContext(
+                collection.getTitle(),
+                collection.getDescription(),
+                collection.getCourseProgram(),
+                List.of(),
+                items.stream()
+                        .map(NoteCollectionItemEntity::getNoteId)
+                        .map(notesById::get)
+                        .filter(Objects::nonNull)
+                        .map(note -> new CompanionGenerationContext.CompanionContextItem(
+                                note.title(),
+                                note.subject()
+                        ))
+                        .toList()
+        );
     }
 
     private boolean shouldCopyCompanion(NoteCollectionEntity source, UUID userId) {

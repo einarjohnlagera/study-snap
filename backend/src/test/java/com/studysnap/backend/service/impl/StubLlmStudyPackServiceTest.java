@@ -1,15 +1,32 @@
 package com.studysnap.backend.service.impl;
 
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.service.model.CompanionGenerationContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StubLlmStudyPackServiceTest {
 
     private final StubLlmStudyPackService service = new StubLlmStudyPackService();
+
+    @Test
+    void generateCompanion_returnsOnlyRequestedSections() {
+        CompanionContent content = service.generateCompanion(
+                new CompanionGenerationContext("Board Prep", null, null, List.of(), List.of()),
+                Set.of(CompanionSection.FAQ)
+        );
+
+        assertThat(content.overview()).isNull();
+        assertThat(content.studyStrategy()).isNull();
+        assertThat(content.commonMistakes()).isNull();
+        assertThat(content.faq()).hasSize(3);
+    }
 
     @Test
     void generateChallengeQuiz_includesWellFormedIdentificationAndEnumerationItems() {

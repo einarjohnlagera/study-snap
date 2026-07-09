@@ -49,16 +49,17 @@ If a top-level collection carrying Companion is later nested under a Goal, the C
 
 ## Writes
 
-Only ADMIN users may write or clear Companion content in v0.41.0:
+Only ADMIN users may write or clear Companion content:
 
 - `PUT /collections/{id}/companion`
 - `DELETE /collections/{id}/companion`
+- `POST /collections/{id}/companion/generate`
 
 The write gate is role-based (`UserRole.ADMIN`). It does not reuse public-profile official-email display checks.
 
 The collection detail page now exposes ADMIN-only authoring for eligible top-level collections through the overflow menu's `Manage Companion` action. The modal edits all four sections as one full replacement request and can clear the Companion back to null. The menu item is hidden for non-admin users and for child Subject plans; backend enforcement remains the security boundary.
 
-There is no AI generation, no feature gate, and no quota check. Learner-facing display is documented under "Reads" below.
+AI-assisted generation exists for curator drafts only: ADMIN users can generate one Companion section or all four sections using the PREMIUM LLM tier. Generation never persists on its own and never writes `note_collections.companion`; the existing Save action remains the only write path. There is still no feature gate or quota check on either the manual or generated path. Learner-facing display is documented under "Reads" below.
 
 All "Companion" copy on this page (menu action, modal title/description, remove button, error messages, display eyebrow/heading) resolves through `getCollectionLabels`'s `companionSingular` field, matching the `primarySingular` pattern — currently `"Companion"` identically across every profile, since (unlike "Study Plan"/"Review Set"/"Lesson Plan") Companion is a fixed feature name, not a synonym for the collection noun.
 

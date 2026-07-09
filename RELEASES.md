@@ -18,7 +18,7 @@ Anti-drift: learner-facing behavior is unchanged — curation over generation, a
 
 ### Shipped
 
-_(nothing yet)_
+- **AI-assisted Companion draft generation.** Added ADMIN-only per-section and all-section Companion draft generation in the existing authoring modal, backed by a stateless `POST /collections/{id}/companion/generate` endpoint and the existing OpenAI service's PREMIUM model tier. Drafts populate local form state only; curators must still review/edit and click Save before anything persists.
 
 ---
 
