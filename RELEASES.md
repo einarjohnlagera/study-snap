@@ -1,5 +1,27 @@
 # RELEASES.md - NoteLib
 
+## v0.41.1 - Review Set Detail Page: This-Set Study Dashboard
+
+**Status: In Progress**
+
+Theme: re-compose the Review Set detail page so it orients the learner ("what should I do next, in this Review Set?") instead of introducing the set as a collection screen — a frontend-only re-composition of already-shipped pieces (Readiness, Weekly Countdown, Companion, next-action surfaces), scoped to this Review Set only (the cross-set "which set" job stays with `/dashboard`). See `docs/product/ROADMAP.md`'s "Review-Set-Centric Navigation" section for the design rationale this release advances (detail-page slice only).
+
+### Planned Scope
+
+- **Information hierarchy reorder (frontend).** Both Goal view and Leaf view of `collection-detail-page-client.tsx` reordered to: Identity → Current Journey (weekly countdown) → Primary Action → Readiness → Guidance (Companion) → Subject Plans/Notes → Supporting info. Goal view gets full treatment; Leaf view mirrors it at lower ambition.
+- **Single resolved primary CTA (frontend).** Consolidates the three competing next-action surfaces (`NextInPlanCard`, `ContinuePlanBanner`, "Next mastery steps") into one primary "Continue" action, resolved free-tier-first via the existing `getNextPlanAction`/`continueAction` logic. Due-concept review becomes PLUS/PRO enrichment inside the Readiness card, not a competing hero button. Terminal exam CTA (e.g. "Take the Board Exam") demoted to secondary, not hidden.
+- **Badge philosophy cleanup (frontend).** Metadata (notes-ready, hours, course, Subject Plan count) becomes supporting text, not pills. Primary becomes a visual/accent treatment instead of a pill badge. Identity badges (Adopted/Created-by-you) retained.
+- **Author/Admin zone separation (frontend).** Publish pill, Build, Edit, Manage Companion, Set/Remove primary, Delete consolidated into one visually distinct admin/author zone, out of the learner CTA row.
+- **Companion placement (frontend).** Existing `CompanionDisplayCard` (shipped v0.41.0, no changes to its content model) placed in the new Guidance tier as its durable home for future growth (Resources, Ask Companion) without another redesign.
+
+Anti-drift: no backend change, no new endpoint, no new persisted state; does not wire the unwired, user-scoped `TodayFocusCard`/`MasterySnapshotCard` (wrong scope for a this-set page); no day-level scheduler ("today's schedule" stays a `todaysConceptBudget` number + countdown, Phase 2 weekly work stays deferred); no nav/Dashboard change; no Ask Companion, Resources, or Achievements; no feature-gate/billing change; publish validation unchanged.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.41.0 - Learning Companion (MVP)
 
 **Status: Released**

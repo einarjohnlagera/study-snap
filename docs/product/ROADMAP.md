@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the current in-progress version (on `releases/v0.41.1`).
+
 `v0.42.0 - AI-assisted Companion authoring + regeneration` is the next planned version (not yet kicked off).
 
 `v0.41.0 - Learning Companion (MVP)` is the previous released version (on `releases/v0.41.0`).
@@ -466,6 +468,22 @@ Not a version — no release branch yet, planned to kick off after v0.40.1. Orig
 - **FREE for all learners.** Zero paid uplift by design in v0.41.0 — this is an activation/retention bet, consistent with the success criterion being about experience quality, not revenue.
 
 Anti-drift: no runtime LLM call to serve a Companion (authored once, served static — zero per-view cost); no new top-level entity; no change to the 5-mode quiz contract; no change to `UserEntity`; Companion label resolves through `getCollectionLabels`.
+
+## v0.41.1 - Review Set Detail Page: This-Set Study Dashboard (in progress)
+
+Base branch for this release: `releases/v0.41.1` (kicked off). Origin: a product proposal arguing the Review Set detail page still behaves like a collection details screen even though, after Primary Review Set, Weekly Study Plan, Readiness, and Companion, Review Sets have become the learner's primary study surface. Advances a narrow, frontend-only slice of the deferred "Review-Set-Centric Navigation" direction below — specifically the detail-page hierarchy, not the nav/Dashboard reorg, which stays gated on Primary proving out in real usage.
+
+**Scope decision (deliberate, not the proposal's original framing):** this page answers *"what should I do next, in this Review Set?"* — it stays 100% collection-scoped. It does **not** become the learner's cross-journey home; that job stays with `/dashboard`. This is why the built-but-unwired `TodayFocusCard`/`MasterySnapshotCard` (both user-scoped) are explicitly out of scope here — wiring them in would blur this page's job with Dashboard's.
+
+**Core finding: re-composition, not new capability.** Every building block the proposal asked for already exists — `ReadinessSummary`, `GoalWeeklyCountdownCard`, `NextInPlanCard`, `ContinuePlanBanner`, "Next mastery steps", the Primary badge, and `CompanionDisplayCard` (shipped v0.41.0, live on the page today — not a future card, contrary to how the originating proposal framed it). The work is reordering, restyling, and consolidating, in one file (`collection-detail-page-client.tsx`, both the Goal view and Leaf view branches).
+
+- **Information hierarchy reorder.** Identity → Current Journey (weekly countdown) → Primary Action → Readiness → Guidance (Companion) → Subject Plans/Notes → Supporting info, replacing today's metadata-forward hero. Goal view (the true learner-home branch, with Subject Plans + countdown) gets full treatment; Leaf view (note-holding sets) mirrors it at lower ambition.
+- **Single resolved primary CTA.** Consolidates three competing next-action surfaces (`NextInPlanCard`, `ContinuePlanBanner`, "Next mastery steps") into one "Continue" action. Resolved **free-tier-first** via the existing `getNextPlanAction`/`continueAction` logic — the retention thesis is about the FREE cohort returning, so the primary path cannot be PLUS/PRO-only. Due-concept review (PLUS/PRO, gated by `canViewConceptHealth`) becomes enrichment inside the Readiness card, not a competing hero button. The terminal exam CTA (e.g. "Take the Board Exam") is a periodic learner checkpoint, distinct from both the primary action and from authoring — demoted in visual weight, not hidden in the admin zone.
+- **Badge philosophy.** Identity/status may be badges (Adopted vs Created-by-you; Primary becomes a card-level accent treatment instead of a pill). Metadata (notes-ready count, hours, course/program, Subject Plan count) becomes supporting text, never a badge.
+- **Author/Admin zone separation.** Publish, Build, Edit, Manage Companion, Set/Remove primary, Delete consolidated into one visually distinct zone, out of the learner CTA row (today the admin Publish pill sits in the same badge row as learner status badges, and Edit/Primary/Delete/Manage-Companion share a `⋯` menu with learner actions).
+- **Companion placement.** The already-shipped `CompanionDisplayCard` gets a durable home in the new Guidance tier — positioned so v0.42.0's Resources section and later Ask Companion slot in without another redesign.
+
+Anti-drift: no backend change, no new endpoint, no new persisted state; does not wire the unwired, user-scoped `TodayFocusCard`/`MasterySnapshotCard`; no day-level scheduler (weekly plan stays a `todaysConceptBudget` number + countdown — Phase 2 weighted-distribution/interleaving work remains separately deferred, see v0.40.0/v0.40.1 above); no nav/Dashboard change, no Ask Companion, no Resources, no Achievements, no new chart library; publish validation and feature-gate/billing mechanics unchanged; all labels continue to resolve through `getCollectionLabels` (no hardcoded "Review" strings).
 
 ## Post-v0.41.0 Polish Backlog (candidate, not yet scoped)
 
