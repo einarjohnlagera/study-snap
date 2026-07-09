@@ -7,10 +7,13 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +35,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,6 +66,7 @@ class OpenAiLlmStudyPackServiceTest {
         properties = new StudySnapProperties();
         properties.getLlm().getApi().setApiKey("test-api-key");
         properties.getSettings().setModelFree("gpt-4.1-mini");
+        properties.getSettings().setModelPremium("gpt-4.1");
 
         objectMapper = new ObjectMapper();
         service = new OpenAiLlmStudyPackService(
@@ -74,6 +79,8 @@ class OpenAiLlmStudyPackServiceTest {
                 objectMapper.createObjectNode(),
                 "Note generation system prompt",
                 "Note generation developer prompt. Match depth and terminology to Course / Program. Built for studying, not just exploring information. Max {MAX_WORDS} words.",
+                "Companion system prompt",
+                "Companion developer prompt {REQUESTED_SECTIONS} {COLLECTION_TITLE} {COLLECTION_DESCRIPTION} {COURSE_PROGRAM} {STRUCTURE_CONTEXT}",
                 "Challenge quiz system prompt",
                 "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Board exam system prompt",
@@ -210,6 +217,22 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void buildCompanionSchema_boundsFaqAndAllowsUnrequestedSectionsToBeNull() throws Exception {
+        JsonNode schema = invokeBuildCompanionSchema();
+
+        JsonNode properties = schema.path("properties");
+        assertThat(jsonArrayValues(properties.path("overview").path("type")))
+                .containsExactly("string", "null");
+        assertThat(jsonArrayValues(properties.path("faq").path("type")))
+                .containsExactly("array", "null");
+        assertThat(properties.path("faq").path("minItems").asInt()).isEqualTo(3);
+        assertThat(properties.path("faq").path("maxItems").asInt()).isEqualTo(6);
+        JsonNode faqItem = properties.path("faq").path("items");
+        assertThat(jsonArrayValues(faqItem.path("required")))
+                .containsExactly("question", "answer");
+    }
+
+    @Test
     void contentPromptTemplates_useCourseProgramWithoutLearnerLevelPlaceholders() throws IOException {
         for (String resourcePath : List.of(
                 "prompts/study-pack-v1/note-generation-developer.txt",
@@ -290,6 +313,12 @@ class OpenAiLlmStudyPackServiceTest {
         );
         method.setAccessible(true);
         return (JsonNode) method.invoke(service, questionCount, allowTrueFalse, keyConceptEnum, allowIdentification, allowEnumeration);
+    }
+
+    private JsonNode invokeBuildCompanionSchema() throws Exception {
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod("buildCompanionSchema");
+        method.setAccessible(true);
+        return (JsonNode) method.invoke(service);
     }
 
     private List<String> jsonArrayValues(JsonNode node) {
@@ -594,6 +623,53 @@ class OpenAiLlmStudyPackServiceTest {
                 .doesNotContain("{LEARNER_LEVEL}")
                 .doesNotContain("{LEARNER_LEVEL_GUIDANCE}")
                 .contains("Built for studying, not just exploring information.");
+    }
+
+    @Test
+    void generateCompanion_usesPremiumModelAndReturnsOnlyRequestedSections() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildCompanionPayload()));
+
+        CompanionContent content = service.generateCompanion(
+                companionContext(),
+                Set.of(CompanionSection.OVERVIEW)
+        );
+
+        assertThat(content.overview()).isEqualTo("This plan covers cell biology foundations.");
+        assertThat(content.studyStrategy()).isNull();
+        assertThat(content.commonMistakes()).isNull();
+        assertThat(content.resources()).isNull();
+        assertThat(content.faq()).isEmpty();
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        JsonNode request = objectMapper.readTree(requestCaptor.getValue());
+        assertThat(request.path("model").asText()).isEqualTo("gpt-4.1");
+        assertThat(request.path("text").path("format").path("name").asText()).isEqualTo("note_lib_companion_draft");
+        assertThat(request.path("input").toString())
+                .contains("OVERVIEW")
+                .contains("Cell Biology Plan")
+                .contains("Subject Plans");
+    }
+
+    @Test
+    void generateCompanion_retriesOnceWhenRequestedFaqIsOutOfBounds() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode invalidPayload = buildCompanionPayload();
+        ArrayNode invalidFaq = invalidPayload.putArray("faq");
+        invalidFaq.addObject().put("question", "One?").put("answer", "One.");
+        invalidFaq.addObject().put("question", "Two?").put("answer", "Two.");
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(invalidPayload),
+                generatedQuizResponseJson(buildCompanionPayload())
+        );
+
+        CompanionContent content = service.generateCompanion(
+                companionContext(),
+                Set.of(CompanionSection.FAQ)
+        );
+
+        assertThat(content.faq()).hasSize(3);
+        verify(responseSpec, times(2)).body(String.class);
     }
 
     @Test
@@ -1502,6 +1578,31 @@ class OpenAiLlmStudyPackServiceTest {
             "Oxygen"
         ));
         return payload;
+    }
+
+    private ObjectNode buildCompanionPayload() {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("overview", "This plan covers cell biology foundations.");
+        payload.put("studyStrategy", "Study one subject plan at a time, then use mixed review.");
+        payload.put("commonMistakes", "Learners often read passively without retrieval practice.");
+        ArrayNode faq = payload.putArray("faq");
+        faq.addObject().put("question", "Where should I start?").put("answer", "Start with cell structure.");
+        faq.addObject().put("question", "How should I review?").put("answer", "Use short recall blocks.");
+        faq.addObject().put("question", "When am I ready?").put("answer", "When you can explain each concept.");
+        return payload;
+    }
+
+    private CompanionGenerationContext companionContext() {
+        return new CompanionGenerationContext(
+                "Cell Biology Plan",
+                "Foundations for the unit exam",
+                "Nursing",
+                List.of(new CompanionGenerationContext.CompanionContextItem(
+                        "Cell Structure",
+                        "Organelles and membranes"
+                )),
+                List.of()
+        );
     }
 
     private ObjectNode buildGeneratedQuizPayload() {

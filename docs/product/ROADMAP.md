@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.42.0 - AI-assisted Companion authoring + regeneration` is the next planned version (not yet kicked off).
+`v0.42.0 - AI-assisted Companion authoring + regeneration` is the current released version (on `releases/v0.42.0`). No next version has been kicked off yet.
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
@@ -493,7 +493,7 @@ Not a version — no release branch, no implementation scope yet. Surfaced by th
 
 - **App-wide CRUD success-toast feedback.** Currently a Review Set-scoped pass (edit details, set/clear primary, Companion save/clear, create, delete) reuses the existing `ToastMessage` component (`frontend/components/ui/toast-message.tsx`) with local-state + `setTimeout` auto-dismiss, matching the pattern already used in 10 other files (profile, study, admin, etc.). Extending this to every mutating action across the whole app is a separate, larger initiative — the current pattern is per-page local state with no shared queue, so app-wide rollout needs a `useToast()` provider/hook first (concurrent toasts aren't handled today). Gate: scope and design the shared provider before starting; don't replicate local-state toasts file-by-file at app-wide scale.
 
-### v0.42.0 — AI-assisted Companion authoring + regeneration (candidate, after v0.41.0 proves the content model)
+### v0.42.0 — AI-assisted Companion authoring + regeneration, released (base branch `releases/v0.42.0`)
 
 - **Curator workflow:** `Generate Companion` (per section or all) → LLM draft → **mandatory human review and edit** → `Publish`. Publishing is never autonomous. Reuses the existing OpenAI service + PREMIUM/CRITIQUE model tiers — no new LLM infra.
 - **Granular per-section regeneration** (Overview / Strategy / FAQ / Checklist independently, not an all-or-nothing regenerate) plus a **"Companion may be outdated"** staleness signal when the set's structure changes — a lightweight stored structure snapshot (child count / note ids / concept count) compared on read, no new job infra.

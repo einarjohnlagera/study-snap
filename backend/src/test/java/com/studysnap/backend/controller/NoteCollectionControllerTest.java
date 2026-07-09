@@ -524,6 +524,7 @@ class NoteCollectionControllerTest {
                 null,
                 null,
                 null,
+                false,
                 null,
                 null,
                 0,
@@ -548,6 +549,7 @@ class NoteCollectionControllerTest {
                 "Overview",
                 "Study strategy",
                 "Common mistakes",
+                null,
                 List.of(new CompanionFaqItem("Question?", "Answer."))
         );
     }

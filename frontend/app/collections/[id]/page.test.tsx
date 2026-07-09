@@ -10,6 +10,7 @@ import {
   clearCollectionTargetDate,
   clearCompanion,
   clearPrimaryCollection,
+  generateCompanion,
   getCollection,
   getCollectionGoal,
   getMe,
@@ -66,6 +67,7 @@ jest.mock("@/lib/api", () => {
     clearCollectionTargetDate: jest.fn(),
     clearCompanion: jest.fn(),
     clearPrimaryCollection: jest.fn(),
+    generateCompanion: jest.fn(),
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
@@ -94,6 +96,7 @@ function collection(overrides: Record<string, unknown> = {}) {
     estimatedStudyHours: null,
     targetCompletionDate: null,
     companion: null,
+    companionMayBeOutdated: false,
     sourcePlanId: null,
     parentCollectionId: null,
     childCount: 0,
@@ -280,6 +283,7 @@ describe("CollectionDetailPageClient", () => {
     (clearCollectionTargetDate as jest.Mock).mockReset();
     (clearCompanion as jest.Mock).mockReset();
     (clearPrimaryCollection as jest.Mock).mockReset();
+    (generateCompanion as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
@@ -301,7 +305,18 @@ describe("CollectionDetailPageClient", () => {
     (clearCompanion as jest.Mock).mockResolvedValue(collection({ companion: null }));
     (setPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
     (clearPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
+    (generateCompanion as jest.Mock).mockResolvedValue({
+      overview: "Generated overview",
+      studyStrategy: "Generated strategy",
+      commonMistakes: "Generated mistakes",
+      faq: [
+        { question: "Generated question 1?", answer: "Generated answer 1." },
+        { question: "Generated question 2?", answer: "Generated answer 2." },
+        { question: "Generated question 3?", answer: "Generated answer 3." },
+      ],
+    });
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
+    (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
     (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: null });
@@ -643,6 +658,7 @@ describe("CollectionDetailPageClient", () => {
         overview: "Start with the foundations.",
         studyStrategy: "Review one section per day.",
         commonMistakes: "Skipping practice questions.",
+        resources: "- [Curriculum guide](https://example.com/curriculum)",
         faq: [{ question: "How long should I study?", answer: "Use the target date." }],
       },
     }));
@@ -659,7 +675,9 @@ describe("CollectionDetailPageClient", () => {
     expect(dialog.getByLabelText("Common Mistakes")).toHaveValue("Skipping practice questions.");
     expect(dialog.getByLabelText("Question 1")).toHaveValue("How long should I study?");
     expect(dialog.getByLabelText("Answer 1")).toHaveValue("Use the target date.");
+    expect(dialog.getByLabelText("Resources")).toHaveValue("- [Curriculum guide](https://example.com/curriculum)");
     expect(dialog.getByRole("button", { name: "Remove Companion" })).toBeInTheDocument();
+    expect(dialog.queryByRole("button", { name: "Generate Resources" })).not.toBeInTheDocument();
   });
 
   it("opens an empty companion editor when no companion exists", async () => {
@@ -674,7 +692,143 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByLabelText("Overview")).toHaveValue("");
     expect(screen.getByLabelText("Study Strategy")).toHaveValue("");
     expect(screen.getByLabelText("Common Mistakes")).toHaveValue("");
+    expect(screen.getByLabelText("Resources")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Generate Resources" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove Companion" })).not.toBeInTheDocument();
+  });
+
+  it("shows the outdated companion signal only inside the admin editor", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ companionMayBeOutdated: true }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
+    expect(screen.queryByText(/may be outdated/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+
+    const dialog = within(screen.getByRole("dialog", { name: "Manage Companion" }));
+    expect(dialog.getByText(/may be outdated/i)).toBeInTheDocument();
+  });
+
+  it("generates one companion section into local modal state without saving", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    const confirmSpy = jest.spyOn(globalThis, "confirm");
+    (generateCompanion as jest.Mock).mockResolvedValue({
+      overview: "Generated overview only",
+      studyStrategy: null,
+      commonMistakes: null,
+      faq: [],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Overview" }));
+
+    await waitFor(() => {
+      expect(generateCompanion).toHaveBeenCalledWith("collection-1", ["OVERVIEW"]);
+    });
+    expect(screen.getByLabelText("Overview")).toHaveValue("Generated overview only");
+    expect(screen.getByLabelText("Study Strategy")).toHaveValue("");
+    expect(setCompanion).not.toHaveBeenCalled();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "COMPANION_GENERATED",
+      entityId: "collection-1",
+      metadata: { sections: ["OVERVIEW"] },
+    });
+    expect(await screen.findByText("Draft generated. Review and edit it before saving.")).toBeInTheDocument();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("generates all companion sections into local modal state", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate all sections" }));
+
+    await waitFor(() => {
+      expect(generateCompanion).toHaveBeenCalledWith("collection-1", [
+        "OVERVIEW",
+        "STUDY_STRATEGY",
+        "COMMON_MISTAKES",
+        "FAQ",
+      ]);
+    });
+    expect(screen.getByLabelText("Overview")).toHaveValue("Generated overview");
+    expect(screen.getByLabelText("Study Strategy")).toHaveValue("Generated strategy");
+    expect(screen.getByLabelText("Common Mistakes")).toHaveValue("Generated mistakes");
+    expect(screen.getByLabelText("Question 1")).toHaveValue("Generated question 1?");
+    expect(screen.getByLabelText("Answer 1")).toHaveValue("Generated answer 1.");
+    expect(setCompanion).not.toHaveBeenCalled();
+  });
+
+  it("preserves companion fields when generation fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Existing overview",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (generateCompanion as jest.Mock).mockRejectedValue(new Error("Could not generate Companion draft content."));
+    const confirmSpy = jest.spyOn(globalThis, "confirm").mockReturnValue(true);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Overview" }));
+
+    expect(await screen.findByText("Could not generate Companion draft content.")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog", { name: "Manage Companion" })).getByLabelText("Overview")).toHaveValue("Existing overview");
+    expect(setCompanion).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("asks before overwriting non-empty companion fields and leaves them untouched when declined", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Existing overview",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    const confirmSpy = jest.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Overview" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(generateCompanion).not.toHaveBeenCalled();
+    expect(within(screen.getByRole("dialog", { name: "Manage Companion" })).getByLabelText("Overview")).toHaveValue("Existing overview");
+    confirmSpy.mockRestore();
   });
 
   it("adds and removes companion FAQ rows by index", async () => {
@@ -703,6 +857,7 @@ describe("CollectionDetailPageClient", () => {
         overview: "Overview draft",
         studyStrategy: null,
         commonMistakes: null,
+        resources: "- [Reviewer archive](https://example.com/reviewer)",
         faq: [{ question: "What now?", answer: "Practice." }],
       },
     }));
@@ -716,6 +871,7 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add question" }));
     fireEvent.change(screen.getByLabelText("Question 1"), { target: { value: "What now?" } });
     fireEvent.change(screen.getByLabelText("Answer 1"), { target: { value: "Practice." } });
+    fireEvent.change(screen.getByLabelText("Resources"), { target: { value: "- [Reviewer archive](https://example.com/reviewer)" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -723,6 +879,7 @@ describe("CollectionDetailPageClient", () => {
         overview: "Overview draft",
         studyStrategy: null,
         commonMistakes: null,
+        resources: "- [Reviewer archive](https://example.com/reviewer)",
         faq: [{ question: "What now?", answer: "Practice." }],
       });
     });
@@ -732,6 +889,8 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
     expect(screen.getByText("What now?")).toBeInTheDocument();
     expect(screen.getByText("Practice.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByText("- [Reviewer archive](https://example.com/reviewer)")).toBeInTheDocument();
     expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
   });
 
@@ -814,6 +973,7 @@ describe("CollectionDetailPageClient", () => {
         overview: " ",
         studyStrategy: null,
         commonMistakes: "",
+        resources: " ",
         faq: [],
       },
     }));
@@ -841,6 +1001,26 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
     expect(screen.queryByRole("heading", { name: "Study Strategy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Common Mistakes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+  });
+
+  it("renders a companion with only resources populated", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: "- [Curriculum guide](https://example.com/curriculum)",
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByTestId("summary-markdown")).toHaveTextContent("- [Curriculum guide](https://example.com/curriculum)");
+    expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
   });
 

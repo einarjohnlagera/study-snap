@@ -6,27 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.41.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.42.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.41.1 — Review Set Detail Page: This-Set Study Dashboard
+## Active release: v0.42.0 — AI-assisted Companion authoring + regeneration
 
-Base branch for this release: `releases/v0.41.1`. A frontend-only re-composition of the Review Set detail page (`collection-detail-page-client.tsx`, both Goal view and Leaf view) so it orients the learner ("what should I do next, in this Review Set?") instead of introducing the set as a collection screen. Advances a narrow, detail-page-only slice of the deferred "Review-Set-Centric Navigation" direction. Full scope and design rationale in `docs/product/ROADMAP.md` and `RELEASES.md`.
+Base branch for this release: `releases/v0.42.0`. Gives curators an LLM-assisted first draft for Learning Companion content, with mandatory human review before publish. Reuses the existing OpenAI service and PREMIUM/CRITIQUE model tiers — no new LLM infrastructure. Full scope and design rationale in `docs/product/ROADMAP.md` ("Guided Learning Initiative (Companion)") and `RELEASES.md`.
 
-- **Scope is this-set only.** This page answers "what's next in THIS Review Set" — it does not become the learner's cross-journey home; that stays `/dashboard`'s job. Do not wire the unwired, user-scoped `TodayFocusCard`/`MasterySnapshotCard` here.
-- **Re-composition, not new capability.** Every building block already exists and already ships: `ReadinessSummary`, `GoalWeeklyCountdownCard`, `NextInPlanCard`, `ContinuePlanBanner`, `CompanionDisplayCard` (v0.41.0). The work is reordering/consolidating, not building new components.
-- **Single resolved primary CTA, free-tier-first.** Consolidate `NextInPlanCard`/`ContinuePlanBanner`/"Next mastery steps" into one primary action via the existing `getNextPlanAction`/`continueAction` logic. Due-concept review (PLUS/PRO) is Readiness-card enrichment, not a competing hero button.
-- **Badge philosophy.** Identity/status may be badges (Primary becomes a card-level accent treatment, not a pill); metadata (notes-ready, hours, course, plan count) becomes supporting text.
-- **Author/Admin zone separated from learner CTAs.** Publish/Build/Edit/Manage Companion/Primary-toggle/Delete consolidated into one zone, out of the learner action row.
+- **Curator-facing AI-assist only; learner-facing rule unchanged.** A learner never receives an auto-generated plan — "Curation, never generation" stays locked. The AI-assist is scoped to Official Review Set Companion authoring only, per the documented rule clarification in ROADMAP.
+- **Publishing is never autonomous, in every path.** `Generate Companion` produces a draft; a human must review and edit in the existing authoring modal before `Publish`.
+- **Granular per-section regeneration.** Overview / Study Strategy / Common Mistakes / FAQ regenerate independently, not all-or-nothing.
+- **Staleness signal, no new job infra.** "Companion may be outdated" compares a lightweight stored structure snapshot (child count / note ids / concept count) on read — not a background job.
+- **Adds Resources section and Timeline/Checklist live-feature embeds** deferred from v0.41.0's four-section MVP — Timeline/Checklist must link the already-shipped live weekly countdown/readiness features, never re-author them as static prose.
+- **No new LLM infrastructure** — reuse the existing OpenAI service.
+
+## Prior release: v0.41.1 — Review Set Detail Page: This-Set Study Dashboard, released
+
+- **This-set study dashboard.** Goal/Leaf detail reordered to Identity → Current Journey → Primary Action → Readiness → Guidance → Subject Plans/Notes → Progress; scoped to this Review Set only, not the learner's cross-journey home (that stays `/dashboard`'s job).
+- **Single resolved primary CTA, free-tier-first**, replacing three competing next-action surfaces; terminal exam CTA demoted to a stacked secondary action.
+- **Primary is a card-level accent treatment, not a badge** — on both the detail hero and the `/collections` list card. Metadata (course, hours, notes-ready) collapsed into one muted text line.
+- **Authoring controls as compact hero chrome** (Build/Edit/Publish/Manage Companion/Primary-toggle/Delete), not a dedicated body card.
 - **No backend change, no new persisted state, no nav/Dashboard change.**
-
-## Prior release: v0.41.0 — Learning Companion (MVP), released
-
-- **Persisted Companion content model (backend).** A JSONB column on the top-level `note_collections` row (not a new table), mirroring the existing `sessionState` JSONB precedent. 1:1 with a top-level collection only.
-- **Four sections only: Overview, Study Strategy, Common Mistakes, FAQ.** Study Timeline and Final Checklist are deferred to v0.42.0+ and must link the live weekly countdown/readiness features when built, never re-author them as static prose.
-- **Manual authoring only, Official Companions only.** No AI generation yet.
-- **Publish/adopt integration.** Publishes with the Review Set; travels on adopt; excluded from owner self-copy (same category as other generated content).
-- **FREE for all learners.**
-- **Parked, not in scope:** AI-assisted authoring/regeneration (v0.42.0), Resources section, Ask Companion, Personalized/Adaptive guidance — all remain deferred (see "Guided Learning Initiative" in ROADMAP).
 
 ## Source-of-truth docs (read before implementing anything)
 

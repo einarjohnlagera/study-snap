@@ -1,7 +1,11 @@
 package com.studysnap.backend.service.impl;
 
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionFaqItem;
+import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -11,6 +15,7 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 @Service
@@ -86,6 +91,28 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
     public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
         String normalizedTopic = topic == null || topic.isBlank() ? "this topic" : topic.trim();
         return GENERATED_NOTE_TEMPLATE.formatted(normalizedTopic, normalizedTopic, normalizedTopic, normalizedTopic);
+    }
+
+    @Override
+    public CompanionContent generateCompanion(CompanionGenerationContext context, Set<CompanionSection> sections) {
+        String title = context == null || context.title() == null || context.title().isBlank()
+                ? "this study plan"
+                : context.title().trim();
+        boolean overview = sections != null && sections.contains(CompanionSection.OVERVIEW);
+        boolean studyStrategy = sections != null && sections.contains(CompanionSection.STUDY_STRATEGY);
+        boolean commonMistakes = sections != null && sections.contains(CompanionSection.COMMON_MISTAKES);
+        boolean faq = sections != null && sections.contains(CompanionSection.FAQ);
+        return new CompanionContent(
+                overview ? "Use " + title + " as the learner's home base for the major concepts and practice expectations." : null,
+                studyStrategy ? "Work through one subject area at a time, then return to mixed review before the final check." : null,
+                commonMistakes ? "Do not skip practice after reading summaries; learners should confirm each topic with retrieval." : null,
+                null,
+                faq ? List.of(
+                        new CompanionFaqItem("Where should learners start?", "Start with the first subject plan, then continue in order."),
+                        new CompanionFaqItem("How often should learners review?", "Use short daily review blocks and revisit missed concepts."),
+                        new CompanionFaqItem("What should learners do before the exam?", "Finish mixed practice and revisit the weakest topics.")
+                ) : List.of()
+        );
     }
 
     @Override

@@ -315,8 +315,11 @@ export type CompanionContent = {
   overview: string | null;
   studyStrategy: string | null;
   commonMistakes: string | null;
+  resources?: string | null;
   faq: CompanionFaqItem[];
 };
+
+export type CompanionSection = "OVERVIEW" | "STUDY_STRATEGY" | "COMMON_MISTAKES" | "FAQ";
 
 export type GoalCollectionDetailResponse = {
   collectionId: string;
@@ -326,6 +329,7 @@ export type GoalCollectionDetailResponse = {
   courseProgram: string | null;
   targetCompletionDate: string | null;
   companion: CompanionContent | null;
+  companionMayBeOutdated: boolean;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
@@ -436,6 +440,7 @@ export type AnalyticsEventType =
   | "STUDY_PLAN_ADOPTED"
   | "STUDY_GOAL_ADOPTED"
   | "PLAN_READINESS_VIEWED"
+  | "COMPANION_GENERATED"
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"
@@ -3936,6 +3941,19 @@ export async function setCompanion(id: string, content: CompanionContent): Promi
     true,
   );
   return parseApiResponse<NoteCollectionDetail>(response, "Could not save this Companion.");
+}
+
+export async function generateCompanion(id: string, sections: CompanionSection[]): Promise<CompanionContent> {
+  const response = await fetchWithAuth(
+    `/collections/${id}/companion/generate`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ sections }),
+    },
+    true,
+  );
+  return parseApiResponse<CompanionContent>(response, "Could not generate Companion draft content.");
 }
 
 export async function clearCompanion(id: string): Promise<NoteCollectionDetail> {

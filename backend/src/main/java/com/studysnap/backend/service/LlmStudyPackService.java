@@ -1,5 +1,8 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionSection;
+import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -7,6 +10,7 @@ import com.studysnap.backend.dto.QuizItem;
 import org.springframework.core.task.AsyncTaskExecutor;
 
 import java.util.List;
+import java.util.Set;
 
 public interface LlmStudyPackService {
 	GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context);
@@ -14,6 +18,8 @@ public interface LlmStudyPackService {
 	String regenerateSummary(String normalizedNoteContent, StudyPackGenerationContext context);
 
 	String generateNoteFromTopic(String topic, StudyPackGenerationContext context);
+
+	CompanionContent generateCompanion(CompanionGenerationContext context, Set<CompanionSection> sections);
 
 	String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries);
 

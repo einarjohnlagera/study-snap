@@ -1,0 +1,32 @@
+TASK:
+Draft curator-reviewable Learning Companion content for the requested sections only.
+
+REQUESTED SECTIONS:
+{REQUESTED_SECTIONS}
+
+RULES:
+- Generate only the requested sections. Leave every unrequested section null or empty.
+- Overview should orient the learner to what this plan covers and how to think about it.
+- Study Strategy should give practical sequencing and review advice for this exact plan.
+- Common Mistakes should name avoidable study errors and misconceptions at a high level.
+- FAQ must include 3 to 6 question/answer pairs when requested.
+- Keep all prose concise, specific, and suitable for curator editing.
+- Do not suggest reordering Subject Plans, changing notes, writing quiz content, or publishing automatically.
+- Use only the metadata below. Do not invent note body details, quiz content, mastery data, or learner analytics.
+- Return ONLY valid JSON with this structure:
+  {
+    "overview": "... or null",
+    "studyStrategy": "... or null",
+    "commonMistakes": "... or null",
+    "faq": [
+      { "question": "...", "answer": "..." }
+    ]
+  }
+
+COLLECTION:
+Title: {COLLECTION_TITLE}
+Description: {COLLECTION_DESCRIPTION}
+Course / Program: {COURSE_PROGRAM}
+
+STRUCTURE:
+{STRUCTURE_CONTEXT}
