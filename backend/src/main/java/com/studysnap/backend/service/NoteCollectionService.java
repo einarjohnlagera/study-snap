@@ -113,6 +113,7 @@ public class NoteCollectionService {
     private static final String TARGET_DATE_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a target completion date.";
     private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
     private static final String COMPANION_SECTION_REQUIRED_MESSAGE = "Select at least one Companion section to generate.";
+    private static final String COMPANION_CONTENT_REQUIRED_MESSAGE = "Companion content is required.";
     private static final String ADMIN_REQUIRED_MESSAGE = "You do not have permission to access this endpoint.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
@@ -640,6 +641,9 @@ public class NoteCollectionService {
     public NoteCollectionDetailResponse setCompanion(UUID collectionId, UUID userId, CompanionContent content) {
         UserEntity user = getUserOrThrow(userId);
         assertAdmin(user);
+        if (content == null) {
+            throw new InvalidCollectionRequestException(COMPANION_CONTENT_REQUIRED_MESSAGE);
+        }
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         validateCompanionTarget(collection);
         List<NoteCollectionEntity> children = collectionRepository

@@ -917,6 +917,20 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void setCompanion_rejectsNullContent() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.setCompanion(collectionId, userId, null))
+                .isInstanceOf(InvalidCollectionRequestException.class);
+
+        verify(collectionRepository, never()).findByIdAndOwnerUserId(any(), any());
+    }
+
+    @Test
     void setCompanion_rejectsCollectionOwnedByAnotherUserAsNotFoundForAdmin() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
