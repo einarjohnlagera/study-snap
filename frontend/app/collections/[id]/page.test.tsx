@@ -332,7 +332,7 @@ describe("CollectionDetailPageClient", () => {
     expect(Boolean(dosageHeading.compareDocumentPosition(cellHeading) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByRole("link", { name: "Study Plans" })).toHaveAttribute("href", "/collections");
     expect(screen.getByRole("link", { name: "Build" })).toHaveAttribute("href", "/collections/collection-1/builder");
-    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/progress?collectionId=collection-1");
+    expect(screen.getByRole("link", { name: "View full progress" })).toHaveAttribute("href", "/progress?collectionId=collection-1");
   });
 
   it("renders plan readiness inline for leaf plans after the hero", async () => {
@@ -372,11 +372,30 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.getByText("45% ready · 9/20 mastered · 4 due")).toBeInTheDocument();
-    expect(screen.getByText("Professional Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-1");
+    const professionalEducationLink = screen.getAllByText("Professional Education Mastery")
+      .map((element) => element.closest("a"))
+      .find((link) => link?.getAttribute("href") === "/collections/child-1");
+    expect(professionalEducationLink).toHaveAttribute("href", "/collections/child-1");
     expect(screen.getByText("General Education Mastery").closest("a")).toHaveAttribute("href", "/collections/child-2");
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
     expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
     expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("resolves the Goal view's Primary Action CTA to the first child when there is no continue or next-note action", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      progress: { totalNotes: 0, notesWithStudyPack: 0, notesPracticed: 0 },
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("link", { name: /Continue/ })).toHaveAttribute("href", "/collections/child-1");
+    expect(screen.getByText("Open the next subject plan in this goal.")).toBeInTheDocument();
+    expect(screen.getAllByText("Professional Education Mastery").length).toBeGreaterThan(0);
   });
 
   it("shows an Adopted badge on the leaf view only when sourcePlanId is set", async () => {
@@ -412,21 +431,19 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("Adopted")).toBeInTheDocument();
   });
 
-  it("places the Adopted and Primary badges next to the title, not in the top eyebrow chip row", async () => {
+  it("keeps Adopted near the title and renders Primary as a hero accent", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({ sourcePlanId: "source-1", courseProgram: "Nursing" }));
     (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: "collection-1" });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const title = await screen.findByRole("heading", { name: "Midterm Study Plan" });
-    const courseProgramBadge = screen.getByText("Nursing");
     const adoptedBadge = screen.getByText("Adopted");
-    const primaryBadge = screen.getByText("Primary");
+    const primaryIndicator = screen.getByText("Primary");
 
-    // The courseProgram chip stays in the eyebrow row, above the title; Adopted/Primary sit after it.
-    expect(courseProgramBadge.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(title.compareDocumentPosition(adoptedBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(title.compareDocumentPosition(primaryBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.compareDocumentPosition(primaryIndicator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Nursing")).toBeInTheDocument();
   });
 
   it("sets a top-level collection as primary from the detail menu", async () => {
@@ -874,7 +891,7 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByText(/^ $/)).not.toBeInTheDocument();
   });
 
-  it("renders the companion before Goal-view readiness content", async () => {
+  it("renders the companion after Goal-view readiness content", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       title: "LET Mastery",
       childCount: 2,
@@ -895,13 +912,13 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const companionHeading = await screen.findByRole("heading", { name: "Learning Companion" });
-    const thisWeekLabel = screen.getByText("This Week");
+    const readinessHeading = await screen.findByRole("heading", { name: "LET Mastery readiness" });
+    const companionHeading = screen.getByRole("heading", { name: "Learning Companion" });
 
-    expect(companionHeading.compareDocumentPosition(thisWeekLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(readinessHeading.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("renders the companion before leaf-view countdown content", async () => {
+  it("renders the companion after leaf-view readiness content", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       companion: {
         overview: "Leaf guidance first.",
@@ -921,10 +938,10 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const companionHeading = await screen.findByRole("heading", { name: "Learning Companion" });
-    const thisWeekLabel = screen.getByText("This Week");
+    const readinessHeading = await screen.findByRole("heading", { name: "Midterm Study Plan readiness" });
+    const companionHeading = screen.getByRole("heading", { name: "Learning Companion" });
 
-    expect(companionHeading.compareDocumentPosition(thisWeekLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(readinessHeading.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
@@ -1178,7 +1195,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const notesCard = await screen.findByText("3 notes in saved order.");
+    const notesCard = await screen.findByText(/3 notes in saved order/);
     const notesRegion = notesCard.closest("div")?.parentElement;
     expect(notesRegion).not.toBeNull();
     const regionText = notesRegion?.textContent ?? "";
@@ -1374,14 +1391,18 @@ describe("CollectionDetailPageClient", () => {
   });
 
   it("chooses the first note without a Study Pack in saved order", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: collection().items.map((item) => ({ ...item, lastSessionCompletedAt: null })),
+    }));
+
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const nextLink = await screen.findByRole("link", { name: "Generate Study Pack" });
-    expect(screen.getByText("Next in this plan")).toBeInTheDocument();
+    const nextLink = await screen.findByRole("link", { name: "Continue" });
+    expect(screen.getByText("Turn this note into a Study Pack before moving to the next step.")).toBeInTheDocument();
     expect(nextLink).toHaveAttribute("href", "/notes/note-1?ref=%2Fcollections%2Fcollection-1");
   });
 
-  it("chooses the first unpracticed note after every Study Pack is ready", async () => {
+  it("continues from the latest practiced note before falling back to the next plan action", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [
         {
@@ -1398,10 +1419,9 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    await screen.findByText("Next in this plan");
-    const nextLink = screen.getAllByRole("link", { name: "Study this note" })
-      .find((link) => link.getAttribute("href") === "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
-    expect(nextLink).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
+    const nextLink = await screen.findByRole("link", { name: "Continue" });
+    expect(screen.getByText("Continue from this note. Next step: Study this note.")).toBeInTheDocument();
+    expect(nextLink).toHaveAttribute("href", "/notes/note-1?ref=%2Fcollections%2Fcollection-1");
   });
 
   it("chooses the first due-concept note for entitled users after all notes are practiced", async () => {
@@ -1432,7 +1452,7 @@ describe("CollectionDetailPageClient", () => {
     expect(nextLink).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
   });
 
-  it("shows the dedicated due-concepts CTA even when the next-plan card prioritizes generation", async () => {
+  it("shows the readiness due-concepts CTA even when the primary action prioritizes generation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
     (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({ dueConcepts: 3 }));
     (getCollection as jest.Mock).mockResolvedValue(collection({
@@ -1446,6 +1466,7 @@ describe("CollectionDetailPageClient", () => {
         {
           ...collection().items[1],
           studyPackStatus: "STUDY_PACK_READY",
+          lastSessionCompletedAt: null,
           dueConceptCount: 0,
           dueConcepts: [],
         },
@@ -1458,7 +1479,7 @@ describe("CollectionDetailPageClient", () => {
       "href",
       "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
     );
-    expect(screen.getByRole("link", { name: "Generate Study Pack" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
       "href",
       "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
     );
@@ -1478,26 +1499,28 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Continue" })).toHaveAttribute(
+      "href",
+      "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
+    );
     expect(screen.queryByRole("link", { name: "Review due concepts" })).not.toBeInTheDocument();
   });
 
   it("shows caught up when no action remains", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
     (getCollection as jest.Mock).mockResolvedValue(collection({
-      items: collection().items.map((item) => ({
-        ...item,
-        studyPackStatus: "STUDY_PACK_READY",
-        lastSessionCompletedAt: "2026-06-03T00:00:00Z",
-        dueConceptCount: 0,
-        dueConcepts: [],
-      })),
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
     }));
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
-    expect(screen.getByText(/Continue from/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Continue" })).not.toBeInTheDocument();
   });
 
   it("never uses due concepts as the next action for Free users", async () => {
@@ -1513,7 +1536,10 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Continue" })).toHaveAttribute(
+      "href",
+      "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
+    );
     expect(screen.queryByRole("link", { name: "Review due concepts" })).not.toBeInTheDocument();
   });
 
@@ -1567,13 +1593,13 @@ describe("CollectionDetailPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
   });
 
-  it("renders the readiness premium CTA and reuses the existing premium exam handler", async () => {
+  it("renders the terminal exam as the secondary primary-action CTA", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const readinessExamButton = await screen.findByRole("button", { name: "Prove it - Take the Long Exam" });
-    expect(readinessExamButton).toBeEnabled();
+    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
+    expect(examButton).toBeEnabled();
 
-    fireEvent.click(readinessExamButton);
+    fireEvent.click(examButton);
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
   });
@@ -1671,6 +1697,16 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(examButton);
 
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("resolves the hero eyebrow and back link through getCollectionLabels for the BOARD_EXAM profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "FREE" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    expect(screen.getByText("Review Set")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review Sets" })).toHaveAttribute("href", "/collections");
   });
 
   it("disables the premium exam CTA when no collection notes are Study Pack-ready", async () => {

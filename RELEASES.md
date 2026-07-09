@@ -8,17 +8,18 @@ Theme: re-compose the Review Set detail page so it orients the learner ("what sh
 
 ### Planned Scope
 
-- **Information hierarchy reorder (frontend).** Both Goal view and Leaf view of `collection-detail-page-client.tsx` reordered to: Identity → Current Journey (weekly countdown) → Primary Action → Readiness → Guidance (Companion) → Subject Plans/Notes → Supporting info. Goal view gets full treatment; Leaf view mirrors it at lower ambition.
-- **Single resolved primary CTA (frontend).** Consolidates the three competing next-action surfaces (`NextInPlanCard`, `ContinuePlanBanner`, "Next mastery steps") into one primary "Continue" action, resolved free-tier-first via the existing `getNextPlanAction`/`continueAction` logic. Due-concept review becomes PLUS/PRO enrichment inside the Readiness card, not a competing hero button. Terminal exam CTA (e.g. "Take the Board Exam") demoted to secondary, not hidden.
-- **Badge philosophy cleanup (frontend).** Metadata (notes-ready, hours, course, Subject Plan count) becomes supporting text, not pills. Primary becomes a visual/accent treatment instead of a pill badge. Identity badges (Adopted/Created-by-you) retained.
-- **Author/Admin zone separation (frontend).** Publish pill, Build, Edit, Manage Companion, Set/Remove primary, Delete consolidated into one visually distinct admin/author zone, out of the learner CTA row.
-- **Companion placement (frontend).** Existing `CompanionDisplayCard` (shipped v0.41.0, no changes to its content model) placed in the new Guidance tier as its durable home for future growth (Resources, Ask Companion) without another redesign.
+_(shipped below)_
 
 Anti-drift: no backend change, no new endpoint, no new persisted state; does not wire the unwired, user-scoped `TodayFocusCard`/`MasterySnapshotCard` (wrong scope for a this-set page); no day-level scheduler ("today's schedule" stays a `todaysConceptBudget` number + countdown, Phase 2 weekly work stays deferred); no nav/Dashboard change; no Ask Companion, Resources, or Achievements; no feature-gate/billing change; publish validation unchanged.
 
 ### Shipped
 
-_(nothing yet)_
+- **Information hierarchy reorder.** Goal and Leaf detail now render as Identity → Current Journey → Primary Action → Readiness → Guidance → Subject Plans/Notes → Progress. There is no separate "Supporting info" page section — the hero itself carries both the metadata line and authoring chrome (see below), so nothing about managing the collection occupies its own tier in the learner's scroll path.
+- **Single primary action.** The previous next-card, continue banner, and mastery-step competition now resolve into one free-tier-safe `Continue` action. The terminal exam CTA (e.g. `Take the Board Exam`) renders stacked below `Continue`, using the muted `ghost` button style, so it reads as a periodic checkpoint rather than a same-weight peer action.
+- **Badge cleanup.** Primary is now a hero accent (border + indicator), Adopted remains an identity badge, and course/program, estimated hours, and notes-ready/Subject-Plan-count collapse into one muted metadata line beneath the title (e.g. `Nursing · 4/6 notes ready · ~3 hrs`).
+- **Authoring controls as compact hero chrome.** Publish, Build, Edit, Manage Companion, Set/Remove primary, and Delete are grouped into a small `⋯` menu + Build button in the hero's top-right corner, next to the title — not a dedicated body card. This was refined once post-implementation: the first pass built a full "Manage this Review Set" card at the bottom of the page, which a follow-up UX review flagged as having over-corrected from "admin controls interleaved in the hero" to "admin controls interrupting the learner's scroll." The fix keeps controls present but visually minimal wherever they sit — the design rule going forward is "helps the learner study today → learning flow; changes the collection itself → compact chrome," now recorded in `docs/features/collections.md`.
+- **Companion placement.** Existing Companion display renders directly after Readiness in the Guidance tier, without changing Companion content or authoring behavior.
+- **Test coverage closed.** Added a dedicated test for the Goal view's Primary Action fallback (resolves to the first child Subject Plan when there's no continue/next-note action) and a BOARD_EXAM-profile assertion on the hero eyebrow/back-link, closing two gaps the original Codex prompt asked for but didn't fully cover.
 
 ---
 
