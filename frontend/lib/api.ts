@@ -315,6 +315,7 @@ export type CompanionContent = {
   overview: string | null;
   studyStrategy: string | null;
   commonMistakes: string | null;
+  resources?: string | null;
   faq: CompanionFaqItem[];
 };
 

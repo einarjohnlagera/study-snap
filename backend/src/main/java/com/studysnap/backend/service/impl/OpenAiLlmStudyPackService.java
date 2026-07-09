@@ -2242,6 +2242,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 requestedSections.contains(CompanionSection.OVERVIEW) ? content.overview() : null,
                 requestedSections.contains(CompanionSection.STUDY_STRATEGY) ? content.studyStrategy() : null,
                 requestedSections.contains(CompanionSection.COMMON_MISTAKES) ? content.commonMistakes() : null,
+                null,
                 faq
         );
     }

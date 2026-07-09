@@ -638,6 +638,7 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(content.overview()).isEqualTo("This plan covers cell biology foundations.");
         assertThat(content.studyStrategy()).isNull();
         assertThat(content.commonMistakes()).isNull();
+        assertThat(content.resources()).isNull();
         assertThat(content.faq()).isEmpty();
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());

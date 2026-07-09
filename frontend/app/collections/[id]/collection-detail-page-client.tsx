@@ -743,6 +743,7 @@ function CompanionDisplayCard({
   const overview = renderableCompanionText(companion.overview);
   const studyStrategy = renderableCompanionText(companion.studyStrategy);
   const commonMistakes = renderableCompanionText(companion.commonMistakes);
+  const resources = renderableCompanionText(companion.resources);
   const faqItems = companion.faq
     .map((item) => ({
       question: renderableCompanionText(item.question),
@@ -750,7 +751,7 @@ function CompanionDisplayCard({
     }))
     .filter((item) => item.question || item.answer);
 
-  if (!overview && !studyStrategy && !commonMistakes && faqItems.length === 0) {
+  if (!overview && !studyStrategy && !commonMistakes && faqItems.length === 0 && !resources) {
     return null;
   }
 
@@ -793,6 +794,13 @@ function CompanionDisplayCard({
               </div>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {resources ? (
+        <section className="space-y-2" aria-labelledby="companion-resources-heading">
+          <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">Resources</h3>
+          <SummaryMarkdown content={resources} />
         </section>
       ) : null}
     </Card>
@@ -952,12 +960,14 @@ function buildCompanionContent(
   overview: string,
   studyStrategy: string,
   commonMistakes: string,
+  resources: string,
   faq: CompanionFaqDraft[],
 ): CompanionContent {
   return {
     overview: companionPayloadValue(overview),
     studyStrategy: companionPayloadValue(studyStrategy),
     commonMistakes: companionPayloadValue(commonMistakes),
+    resources: companionPayloadValue(resources),
     faq: faq.map((item) => ({
       question: companionPayloadValue(item.question),
       answer: companionPayloadValue(item.answer),
@@ -1168,6 +1178,7 @@ function CompanionEditorModal({
   const [overview, setOverview] = useState(companionInputValue(collection.companion?.overview));
   const [studyStrategy, setStudyStrategy] = useState(companionInputValue(collection.companion?.studyStrategy));
   const [commonMistakes, setCommonMistakes] = useState(companionInputValue(collection.companion?.commonMistakes));
+  const [resources, setResources] = useState(companionInputValue(collection.companion?.resources));
   const [faq, setFaq] = useState<CompanionFaqDraft[]>(toCompanionFaqDrafts(collection.companion));
   const [submitting, setSubmitting] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -1182,6 +1193,7 @@ function CompanionEditorModal({
       setOverview(companionInputValue(collection.companion?.overview));
       setStudyStrategy(companionInputValue(collection.companion?.studyStrategy));
       setCommonMistakes(companionInputValue(collection.companion?.commonMistakes));
+      setResources(companionInputValue(collection.companion?.resources));
       setFaq(toCompanionFaqDrafts(collection.companion));
       setSubmitting(false);
       setClearing(false);
@@ -1270,7 +1282,7 @@ function CompanionEditorModal({
     setError(null);
     setGenerationNotice(null);
     try {
-      const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, faq));
+      const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, resources, faq));
       onSaved(saved);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : `Could not save this ${labels.companionSingular}.`);
@@ -1457,6 +1469,16 @@ function CompanionEditorModal({
             </div>
           ) : null}
         </section>
+
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Resources</span>
+          <textarea
+            aria-label="Resources"
+            value={resources}
+            onChange={(event) => setResources(event.target.value)}
+            className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          />
+        </label>
 
         {generationNotice ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">{generationNotice}</p> : null}
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
