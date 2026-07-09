@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, ChevronDown, Clock, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
+import { ArrowRight, ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,6 @@ const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
 const UNGROUPED_SECTION_NAME = "Ungrouped";
 const LARGE_VIEWPORT_MIN_WIDTH = 1024;
-const CONTINUE_DISMISS_STORAGE_PREFIX = "dismissed-continue-";
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -336,97 +335,27 @@ function SectionCardHeader({
   );
 }
 
-function ContinuePlanBanner({
-  action,
-  onDismiss,
-}: Readonly<{
-  action: ContinuePlanAction;
-  onDismiss: () => void;
-}>) {
-  return (
-    <Card className="flex flex-col gap-3 border-blue-500/25 bg-blue-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Continue where you left off</p>
-        <p className="mt-1 truncate text-sm text-foreground/75">
-          Continue from <span className="font-semibold text-foreground">{getNoteTitle(action.item)}</span>
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href={action.href}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
-        >
-          {action.actionLabel}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-        <Button type="button" variant="ghost" size="sm" className="h-10 px-2" onClick={onDismiss}>
-          Dismiss
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
 function PlanHeroCard({
   collection,
   eyebrowLabel,
-  statusBadge,
   isPrimary,
-  isAdmin,
+  metadataLine,
   actions,
-  terminalFooter,
-  onPublishClick,
 }: Readonly<{
   collection: NoteCollectionDetail;
   eyebrowLabel: string;
-  statusBadge: ReactNode;
   isPrimary: boolean;
-  isAdmin: boolean;
-  actions: ReactNode;
-  terminalFooter?: ReactNode;
-  onPublishClick: () => void;
+  metadataLine?: ReactNode;
+  actions?: ReactNode;
 }>) {
   // Shown only when sourcePlanId != null (adopted from a public source) — nothing renders for
   // self-created collections; unlabeled implies "yours," matching the /collections list treatment.
   const adopted = Boolean(collection.sourcePlanId);
-  const estimatedStudyHours = collection.estimatedStudyHours && collection.estimatedStudyHours > 0
-    ? collection.estimatedStudyHours
-    : null;
 
   return (
-    <Card className="space-y-5 p-5 sm:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <Card className={cn("space-y-4 p-5 sm:p-6", isPrimary && "border-l-4 border-l-indigo-500 bg-indigo-500/[0.03] dark:border-l-indigo-400")}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {collection.courseProgram ? (
-              <span className="inline-flex w-fit items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-foreground/65">
-                {collection.courseProgram}
-              </span>
-            ) : null}
-            {estimatedStudyHours ? (
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-200">
-                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                ~{estimatedStudyHours} hrs
-              </span>
-            ) : null}
-            {statusBadge}
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={onPublishClick}
-                aria-label="Publish settings"
-                title="Publish settings"
-                className="motion-lift inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
-              >
-                {collection.visibility === "PUBLIC" ? (
-                  <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
-                ) : (
-                  <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
-                )}
-                <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
-              </button>
-            ) : null}
-          </div>
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{eyebrowLabel}</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -436,24 +365,244 @@ function PlanHeroCard({
                   Adopted
                 </span>
               ) : null}
-              {isPrimary ? (
-                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white dark:bg-indigo-500">
-                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                  Primary
-                </span>
-              ) : null}
             </div>
+            {isPrimary ? (
+              <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                Primary
+              </p>
+            ) : null}
             {collection.description ? (
               <CardDescription className="line-clamp-3 text-sm sm:text-base">{collection.description}</CardDescription>
             ) : null}
+            {metadataLine ? (
+              <p className="text-sm text-foreground/60">{metadataLine}</p>
+            ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-3">
-          {actions}
-          {terminalFooter}
-        </div>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
     </Card>
+  );
+}
+
+type ResolvedPrimaryAction = {
+  title: string;
+  description: string;
+  href: string;
+};
+
+function PrimaryActionCard({
+  action,
+  terminalAction,
+}: Readonly<{
+  action: ResolvedPrimaryAction | null;
+  terminalAction?: ReactNode;
+}>) {
+  return (
+    <Card className="space-y-4 border-blue-500/25 bg-blue-500/5 p-4 sm:p-5">
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Continue</p>
+        {action ? (
+          <>
+            <CardTitle>{action.title}</CardTitle>
+            <CardDescription>{action.description}</CardDescription>
+          </>
+        ) : (
+          <>
+            <CardTitle>All caught up in this plan</CardTitle>
+            <CardDescription>Every note has a Study Pack and has been practiced.</CardDescription>
+          </>
+        )}
+      </div>
+      <div className="flex flex-col items-start gap-2">
+        {action ? (
+          <Link
+            href={action.href}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+          >
+            Continue
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : null}
+        {terminalAction ? (
+          <div className="pt-1">{terminalAction}</div>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+function ReadinessDashboardSection({
+  children,
+  collectionId,
+  dueConceptReviewHref,
+}: Readonly<{
+  children: ReactNode;
+  collectionId: string;
+  dueConceptReviewHref: string | null;
+}>) {
+  return (
+    <section className="space-y-3">
+      {children}
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <Link
+          href={`/progress?collectionId=${collectionId}`}
+          className="text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+        >
+          View full progress
+        </Link>
+        {dueConceptReviewHref ? (
+          <ResponsiveActionLink
+            href={dueConceptReviewHref}
+            action="quickReview"
+            label="Review due concepts"
+            variant="outline"
+            size="sm"
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+// Compact chrome: authoring/curation controls mounted in the hero's top-right corner, not a
+// dedicated page section — these change the {label} itself, they are not a study action, so they
+// stay visually minimal wherever they sit (see docs/features/collections.md).
+function CollectionActionsMenu({
+  collection,
+  labels,
+  isAdmin,
+  canManageCompanion,
+  primaryActionLabel,
+  onEditClick,
+  onPrimaryClick,
+  onCompanionClick,
+  onDeleteClick,
+  onPublishClick,
+}: Readonly<{
+  collection: NoteCollectionDetail;
+  labels: ReturnType<typeof getCollectionLabels>;
+  isAdmin: boolean;
+  canManageCompanion: boolean;
+  primaryActionLabel: string;
+  onEditClick: () => void;
+  onPrimaryClick: () => void;
+  onCompanionClick: () => void;
+  onDeleteClick: () => void;
+  onPublishClick: () => void;
+}>) {
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(target)) {
+        setActionsMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActionsMenuOpen(false);
+      }
+    };
+    globalThis.addEventListener("mousedown", handleOutsideClick);
+    globalThis.addEventListener("keydown", handleEscape);
+    return () => {
+      globalThis.removeEventListener("mousedown", handleOutsideClick);
+      globalThis.removeEventListener("keydown", handleEscape);
+    };
+  }, [actionsMenuOpen]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {isAdmin ? (
+        <button
+          type="button"
+          onClick={onPublishClick}
+          aria-label="Publish settings"
+          title="Publish settings"
+          className="motion-lift inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground/70 transition-colors hover:bg-highlight"
+        >
+          {collection.visibility === "PUBLIC" ? (
+            <><Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />Published</>
+          ) : (
+            <><Lock className="h-3.5 w-3.5" aria-hidden="true" />Private</>
+          )}
+          <Settings2 className="h-3 w-3 opacity-60" aria-hidden="true" />
+        </button>
+      ) : null}
+      <ResponsiveActionLink
+        href={`/collections/${collection.id}/builder`}
+        action="build"
+        label="Build"
+        variant="outline"
+        size="sm"
+        showTextOnMobile={false}
+      />
+      <div className="relative shrink-0" ref={actionsMenuRef}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 rounded-full px-0"
+          aria-label="Open study plan actions"
+          aria-haspopup="menu"
+          aria-expanded={actionsMenuOpen}
+          onClick={() => setActionsMenuOpen((open) => !open)}
+        >
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        {actionsMenuOpen ? (
+          <div
+            role="menu"
+            aria-label="Study plan actions"
+            className="motion-dropdown-panel absolute right-0 top-11 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+              onClick={() => { setActionsMenuOpen(false); onEditClick(); }}
+            >
+              <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
+            </button>
+            {collection.parentCollectionId === null ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                onClick={() => { setActionsMenuOpen(false); onPrimaryClick(); }}
+              >
+                <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
+              </button>
+            ) : null}
+            {isAdmin && canManageCompanion ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                onClick={() => { setActionsMenuOpen(false); onCompanionClick(); }}
+              >
+                <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              role="menuitem"
+              className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
+              onClick={() => { setActionsMenuOpen(false); onDeleteClick(); }}
+            >
+              <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -686,125 +835,60 @@ function GoalDetailView({
   labels: ReturnType<typeof getCollectionLabels>;
 }>) {
   return (
-    <div className="space-y-6">
-      <GoalWeeklyCountdownCard
-        targetCompletionDate={goal.targetCompletionDate}
-        weeksRemaining={goal.weeksRemaining}
-        conceptsRemaining={goal.conceptsRemaining}
-        todaysConceptBudget={goal.todaysConceptBudget}
-      />
-
-      <ReadinessSummary
-        variant="compact"
-        title={`${goal.title} readiness`}
-        eyebrow={`${labels.goalSingular} readiness`}
-        overallReadinessPercentage={goal.overallReadinessPercentage}
-        totalConcepts={goal.totalConcepts}
-        masteredConcepts={goal.masteredConcepts}
-        dueConcepts={goal.dueConcepts}
-        notPracticedConcepts={goal.notPracticedConcepts}
-        subjects={[]}
-        emptyTitle="No readiness yet"
-        emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
-      />
-
-      <Card className="space-y-4 p-4 sm:p-6">
-        <div>
-          <CardTitle>{labels.subjectSingular}s</CardTitle>
-          <CardDescription>{formatPlanCount(goal.children.length)} in this {labels.goalSingular.toLowerCase()}.</CardDescription>
-        </div>
-
-        {goal.children.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center">
-            <p className="text-sm text-foreground/70">
-              Nest {labels.singular.toLowerCase()}s under this {labels.goalSingular.toLowerCase()} to build the curriculum.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {goal.children.map((child) => (
-              <Link key={child.collectionId} href={`/collections/${child.collectionId}`} className="group block">
-                <Card className="h-full space-y-4 p-4 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
-                  <div className="space-y-1">
-                    <CardTitle className="line-clamp-2 text-base">{child.title}</CardTitle>
-                    {child.description ? (
-                      <CardDescription className="line-clamp-2 text-sm">{child.description}</CardDescription>
-                    ) : (
-                      <p className="text-sm text-foreground/55">No description yet.</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-foreground/60">{child.itemCount} {child.itemCount === 1 ? "note" : "notes"}</span>
-                      <span className="font-semibold text-blue-700 dark:text-blue-300">
-                        {child.overallReadinessPercentage}% ready
-                      </span>
-                    </div>
-                    <div
-                      role="progressbar"
-                      aria-label={`${child.title} readiness`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={child.overallReadinessPercentage}
-                      className="h-2 overflow-hidden rounded-full bg-muted"
-                    >
-                      <div
-                        className="h-full rounded-full bg-blue-600 transition-[width] dark:bg-blue-400"
-                        style={{ width: `${clampPercentage(child.overallReadinessPercentage)}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-foreground/60">
-                      {child.masteredConcepts}/{child.totalConcepts} mastered · {child.dueConcepts} due · {child.notPracticedConcepts} not started
-                    </p>
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function NextInPlanCard({
-  items,
-  collectionId,
-  canReviewDueConcepts,
-}: Readonly<{
-  items: NoteCollectionItem[];
-  collectionId: string;
-  canReviewDueConcepts: boolean;
-}>) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  const nextAction = getNextPlanAction(items, canReviewDueConcepts);
-  if (!nextAction) {
-    return (
-      <Card className="space-y-2 border-emerald-500/25 bg-emerald-500/5 p-4 sm:p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Next in this plan</p>
-        <CardTitle>All caught up in this plan</CardTitle>
-        <CardDescription>Every note has a Study Pack and has been practiced.</CardDescription>
-      </Card>
-    );
-  }
-
-  const noteHref = `/notes/${nextAction.item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`;
-  return (
-    <Card className="space-y-3 border-blue-500/25 bg-blue-500/5 p-4 sm:p-5">
-      <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Next in this plan</p>
-        <CardTitle>{getNoteTitle(nextAction.item)}</CardTitle>
-        <CardDescription>{nextAction.description}</CardDescription>
+    <Card className="space-y-4 p-4 sm:p-6">
+      <div>
+        <CardTitle>{labels.subjectSingular}s</CardTitle>
+        <CardDescription>{formatPlanCount(goal.children.length)} in this {labels.goalSingular.toLowerCase()}.</CardDescription>
       </div>
-      <Link
-        href={noteHref}
-        className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
-      >
-        {nextAction.actionLabel}
-      </Link>
+
+      {goal.children.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-6 text-center">
+          <p className="text-sm text-foreground/70">
+            Nest {labels.singular.toLowerCase()}s under this {labels.goalSingular.toLowerCase()} to build the curriculum.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {goal.children.map((child) => (
+            <Link key={child.collectionId} href={`/collections/${child.collectionId}`} className="group block">
+              <Card className="h-full space-y-4 p-4 transition-colors group-hover:border-blue-300 group-hover:bg-blue-50/50 dark:group-hover:border-blue-800 dark:group-hover:bg-blue-950/20">
+                <div className="space-y-1">
+                  <CardTitle className="line-clamp-2 text-base">{child.title}</CardTitle>
+                  {child.description ? (
+                    <CardDescription className="line-clamp-2 text-sm">{child.description}</CardDescription>
+                  ) : (
+                    <p className="text-sm text-foreground/55">No description yet.</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-foreground/60">{child.itemCount} {child.itemCount === 1 ? "note" : "notes"}</span>
+                    <span className="font-semibold text-blue-700 dark:text-blue-300">
+                      {child.overallReadinessPercentage}% ready
+                    </span>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-label={`${child.title} readiness`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={child.overallReadinessPercentage}
+                    className="h-2 overflow-hidden rounded-full bg-muted"
+                  >
+                    <div
+                      className="h-full rounded-full bg-blue-600 transition-[width] dark:bg-blue-400"
+                      style={{ width: `${clampPercentage(child.overallReadinessPercentage)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-foreground/60">
+                    {child.masteredConcepts}/{child.totalConcepts} mastered · {child.dueConcepts} due · {child.notPracticedConcepts} not started
+                  </p>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
@@ -1806,7 +1890,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   // target date, so `goalDetail` is fetched for it too (see loadCollection below), but it renders as
   // the leaf view, not the Goal view — this flag is the single source of truth for that branch choice.
   const isGoalView = Boolean(goalDetail) && (collection?.childCount ?? 0) > 0;
-  const [continueDismissed, setContinueDismissed] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
@@ -1837,8 +1920,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const [addOpen, setAddOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [companionOpen, setCompanionOpen] = useState(false);
-  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
-  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const [organizeMode] = useState(false);
   const [defaultSectionExpanded, setDefaultSectionExpanded] = useState<boolean | null>(null);
   const [sectionExpandedById, setSectionExpandedById] = useState<Record<string, boolean>>({});
@@ -1948,15 +2029,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   }, [collectionId]);
 
   useEffect(() => {
-    setContinueDismissed(false);
-    try {
-      setContinueDismissed(globalThis.sessionStorage?.getItem(`${CONTINUE_DISMISS_STORAGE_PREFIX}${collectionId}`) === "true");
-    } catch {
-      setContinueDismissed(false);
-    }
-  }, [collectionId]);
-
-  useEffect(() => {
     if (loadState !== "ready" || isGoalView || items.length === 0) {
       setSectionCounts(null);
       return;
@@ -2019,29 +2091,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     void loadNoteVisibility();
   }, [isAdmin, loadNoteVisibility]);
-
-  useEffect(() => {
-    if (!actionsMenuOpen) {
-      return;
-    }
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (actionsMenuRef.current && !actionsMenuRef.current.contains(target)) {
-        setActionsMenuOpen(false);
-      }
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActionsMenuOpen(false);
-      }
-    };
-    globalThis.addEventListener("mousedown", handleOutsideClick);
-    globalThis.addEventListener("keydown", handleEscape);
-    return () => {
-      globalThis.removeEventListener("mousedown", handleOutsideClick);
-      globalThis.removeEventListener("keydown", handleEscape);
-    };
-  }, [actionsMenuOpen]);
 
   const refetchAfterFailure = async (message: string) => {
     setMutationError(message);
@@ -2170,7 +2219,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     if (!collection) {
       return;
     }
-    setActionsMenuOpen(false);
     setMutationError(null);
     const isCurrentlyPrimary = collection.id === primaryCollectionId;
     try {
@@ -2297,7 +2345,44 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const dueConceptReviewHref = dueConceptReviewItem
     ? `/notes/${dueConceptReviewItem.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`
     : null;
-  const hasReadinessActions = dueConceptReviewHref !== null || terminalAction?.kind === "premium-exam";
+  const primaryStudyAction = useMemo<ResolvedPrimaryAction | null>(() => {
+    if (continueAction) {
+      return {
+        title: getNoteTitle(continueAction.item),
+        description: `Continue from this note. Next step: ${continueAction.actionLabel}.`,
+        href: continueAction.href,
+      };
+    }
+
+    const nextAction = getNextPlanAction(items, showWeakAreas);
+    if (nextAction) {
+      return {
+        title: getNoteTitle(nextAction.item),
+        description: nextAction.description,
+        href: `/notes/${nextAction.item.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`,
+      };
+    }
+
+    const firstChild = isGoalView ? goalDetail?.children[0] : null;
+    if (firstChild) {
+      return {
+        title: firstChild.title,
+        description: `Open the next ${labels.subjectSingular.toLowerCase()} in this ${labels.goalSingular.toLowerCase()}.`,
+        href: `/collections/${firstChild.collectionId}`,
+      };
+    }
+
+    return null;
+  }, [
+    collectionId,
+    continueAction,
+    goalDetail?.children,
+    isGoalView,
+    items,
+    labels.goalSingular,
+    labels.subjectSingular,
+    showWeakAreas,
+  ]);
   const postAdoptGuidanceRules: GuidanceRule[] = [
     {
       id: "post-adopt-target-date",
@@ -2310,15 +2395,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     },
   ];
   const activePostAdoptTip = pickActiveGuidance(postAdoptGuidanceRules);
-
-  const dismissContinueBanner = () => {
-    setContinueDismissed(true);
-    try {
-      globalThis.sessionStorage?.setItem(`${CONTINUE_DISMISS_STORAGE_PREFIX}${collectionId}`, "true");
-    } catch {
-      // Session dismissal is progressive enhancement.
-    }
-  };
 
   const openCollectionExamBuilder = useCallback(() => {
     if (quizReadyNoteIds.length === 0) {
@@ -2361,6 +2437,37 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     openCollectionPremiumExam();
   }, [openCollectionPremiumExam, premiumExamDisabled, primaryExamItem, unpracticedExamNoteCount]);
+  const terminalSecondaryAction = terminalAction ? (
+    <div className="flex flex-col gap-1">
+      <ResponsiveActionButton
+        action="open"
+        label={terminalAction.label}
+        variant="ghost"
+        size="sm"
+        disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
+        onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : handlePremiumExamCta}
+      />
+      {terminalAction.kind === "exam-builder" ? (
+        quizReadyNoteIds.length === 0 ? (
+          <p className="text-xs text-foreground/60">
+            Generate a quiz for at least one note to build an exam.
+          </p>
+        ) : hasNonQuizReadyItems ? (
+          <p className="text-xs text-foreground/60">
+            Only quiz-ready notes will be included.
+          </p>
+        ) : null
+      ) : premiumExamReadyNoteIds.length === 0 ? (
+        <p className="text-xs text-foreground/60">
+          Generate a Study Pack for at least one note to start an exam.
+        </p>
+      ) : hasNonPremiumReadyItems ? (
+        <p className="text-xs text-foreground/60">
+          Only Study Pack-ready notes will be included.
+        </p>
+      ) : null}
+    </div>
+  ) : null;
 
   if (loadState === "loading") {
     return (
@@ -2410,84 +2517,56 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         <PlanHeroCard
           collection={collection}
           eyebrowLabel={labels.goalSingular}
-          statusBadge={(
-            <span className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground/70">
-              {goalDetail.childCount} {labels.subjectSingular}{goalDetail.childCount === 1 ? "" : "s"}
-            </span>
-          )}
           isPrimary={isPrimaryCollection}
-          isAdmin={isAdmin}
-          onPublishClick={() => setPublishOpen(true)}
+          metadataLine={(
+            <>
+              {collection.courseProgram ? <span>{collection.courseProgram}</span> : null}
+              {collection.courseProgram ? <span aria-hidden="true"> · </span> : null}
+              <span>{goalDetail.childCount} {labels.subjectSingular}{goalDetail.childCount === 1 ? "" : "s"}</span>
+              <span aria-hidden="true"> · </span>
+              <span>{collection.estimatedStudyHours && collection.estimatedStudyHours > 0 ? `~${collection.estimatedStudyHours} hrs` : "No study estimate"}</span>
+            </>
+          )}
           actions={(
-            <div className="flex items-center justify-end gap-2">
-              <ResponsiveActionLink
-                href={`/collections/${collectionId}/builder`}
-                action="build"
-                label="Build"
-                variant="outline"
-                size="sm"
-              />
-              <div className="relative shrink-0" ref={actionsMenuRef}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-10 w-10 rounded-full px-0"
-                  aria-label="Open study plan actions"
-                  aria-haspopup="menu"
-                  aria-expanded={actionsMenuOpen}
-                  onClick={() => setActionsMenuOpen((open) => !open)}
-                >
-                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                </Button>
-                {actionsMenuOpen ? (
-                  <div
-                    role="menu"
-                    aria-label="Study plan actions"
-                    className="motion-dropdown-panel absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => { setActionsMenuOpen(false); setEditOpen(true); }}
-                    >
-                      <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                    {collection.parentCollectionId === null ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                        onClick={() => void handlePrimaryToggle()}
-                      >
-                        <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
-                      </button>
-                    ) : null}
-                    {isAdmin && collection.parentCollectionId === null ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                        onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
-                      >
-                        <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
-                      onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
-                    >
-                      <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <CollectionActionsMenu
+              collection={collection}
+              labels={labels}
+              isAdmin={isAdmin}
+              canManageCompanion={collection.parentCollectionId === null}
+              primaryActionLabel={primaryActionLabel}
+              onEditClick={() => setEditOpen(true)}
+              onPrimaryClick={() => void handlePrimaryToggle()}
+              onCompanionClick={() => setCompanionOpen(true)}
+              onDeleteClick={() => setDeleteOpen(true)}
+              onPublishClick={() => setPublishOpen(true)}
+            />
           )}
         />
+
+        <GoalWeeklyCountdownCard
+          targetCompletionDate={goalDetail.targetCompletionDate}
+          weeksRemaining={goalDetail.weeksRemaining}
+          conceptsRemaining={goalDetail.conceptsRemaining}
+          todaysConceptBudget={goalDetail.todaysConceptBudget}
+        />
+
+        <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
+
+        <ReadinessDashboardSection collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref}>
+          <ReadinessSummary
+            variant="compact"
+            title={`${goalDetail.title} readiness`}
+            eyebrow={`${labels.goalSingular} readiness`}
+            overallReadinessPercentage={goalDetail.overallReadinessPercentage}
+            totalConcepts={goalDetail.totalConcepts}
+            masteredConcepts={goalDetail.masteredConcepts}
+            dueConcepts={goalDetail.dueConcepts}
+            notPracticedConcepts={goalDetail.notPracticedConcepts}
+            subjects={[]}
+            emptyTitle="No readiness yet"
+            emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
+          />
+        </ReadinessDashboardSection>
 
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
@@ -2599,122 +2678,31 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       <PlanHeroCard
         collection={collection}
         eyebrowLabel={labels.singular}
-        statusBadge={(
-          <span className="inline-flex w-fit items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground/70">
-            {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready
-          </span>
-        )}
         isPrimary={isPrimaryCollection}
-        isAdmin={isAdmin}
-        onPublishClick={() => setPublishOpen(true)}
-        actions={(
-          <div className="flex items-center justify-end gap-2">
-            <ResponsiveActionLink
-              href={`/collections/${collectionId}/builder`}
-              action="build"
-              label="Build"
-              variant="outline"
-              size="sm"
-            />
-            <ResponsiveActionLink
-              href={`/progress?collectionId=${collectionId}`}
-              action="progress"
-              label="Check readiness"
-              variant="outline"
-              size="sm"
-            />
-            <div className="relative shrink-0" ref={actionsMenuRef}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 w-10 rounded-full px-0"
-                aria-label="Open study plan actions"
-                aria-haspopup="menu"
-                aria-expanded={actionsMenuOpen}
-                onClick={() => setActionsMenuOpen((open) => !open)}
-              >
-                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-              </Button>
-              {actionsMenuOpen ? (
-                <div
-                  role="menu"
-                  aria-label="Study plan actions"
-                  className="motion-dropdown-panel absolute right-0 top-12 z-20 w-44 rounded-xl border border-border bg-background p-1.5 shadow-sm"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                    onClick={() => { setActionsMenuOpen(false); setEditOpen(true); }}
-                  >
-                    <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
-                  </button>
-                  {collection.parentCollectionId === null ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => void handlePrimaryToggle()}
-                    >
-                      <ResponsiveActionContent action="primary" label={primaryActionLabel} showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                  ) : null}
-                  {isAdmin && collection.parentCollectionId === null ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => { setActionsMenuOpen(false); setCompanionOpen(true); }}
-                    >
-                      <ResponsiveActionContent action="companion" label={`Manage ${labels.companionSingular}`} showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
-                    onClick={() => { setActionsMenuOpen(false); setDeleteOpen(true); }}
-                  >
-                    <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
+        metadataLine={(
+          <>
+            {collection.courseProgram ? <span>{collection.courseProgram}</span> : null}
+            {collection.courseProgram ? <span aria-hidden="true"> · </span> : null}
+            <span>{collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready</span>
+            <span aria-hidden="true"> · </span>
+            <span>{collection.estimatedStudyHours && collection.estimatedStudyHours > 0 ? `~${collection.estimatedStudyHours} hrs` : "No study estimate"}</span>
+          </>
         )}
-        terminalFooter={terminalAction ? (
-          <div className="flex flex-col items-end gap-1">
-            <ResponsiveActionButton
-              action="open"
-              label={terminalAction.label}
-              disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
-              onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : handlePremiumExamCta}
-            />
-            {terminalAction.kind === "exam-builder" ? (
-              quizReadyNoteIds.length === 0 ? (
-                <p className="text-xs text-foreground/60">
-                  Generate a quiz for at least one note to build an exam.
-                </p>
-              ) : hasNonQuizReadyItems ? (
-                <p className="text-xs text-foreground/60">
-                  Only quiz-ready notes will be included.
-                </p>
-              ) : null
-            ) : premiumExamReadyNoteIds.length === 0 ? (
-              <p className="text-xs text-foreground/60">
-                Generate a Study Pack for at least one note to start an exam.
-              </p>
-            ) : hasNonPremiumReadyItems ? (
-              <p className="text-xs text-foreground/60">
-                Only Study Pack-ready notes will be included.
-              </p>
-            ) : null}
-          </div>
-        ) : undefined}
+        actions={(
+          <CollectionActionsMenu
+            collection={collection}
+            labels={labels}
+            isAdmin={isAdmin}
+            canManageCompanion={collection.parentCollectionId === null}
+            primaryActionLabel={primaryActionLabel}
+            onEditClick={() => setEditOpen(true)}
+            onPrimaryClick={() => void handlePrimaryToggle()}
+            onCompanionClick={() => setCompanionOpen(true)}
+            onDeleteClick={() => setDeleteOpen(true)}
+            onPublishClick={() => setPublishOpen(true)}
+          />
+        )}
       />
-
-      <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
       {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
           is fetched for it above, and this card self-guards to null when no target date is set. */}
@@ -2725,58 +2713,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         todaysConceptBudget={goalDetail?.todaysConceptBudget ?? null}
       />
 
-      <section className={cn("grid gap-4", hasReadinessActions ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "")}>
-        <ReadinessSummary
-          variant="compact"
-          title={`${collection.title} readiness`}
-          eyebrow={`${labels.singular} readiness`}
-          overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
-          totalConcepts={planReadiness?.totalConcepts ?? 0}
-          masteredConcepts={planReadiness?.masteredConcepts ?? 0}
-          dueConcepts={planReadiness?.dueConcepts ?? 0}
-          notPracticedConcepts={planReadiness?.notPracticedConcepts ?? 0}
-          subjects={planReadiness?.subjects ?? []}
-          unavailable={planReadinessLoadState === "error"}
-          unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
-          emptyTitle="No readiness yet"
-          emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
-        />
-
-        {hasReadinessActions ? (
-          <Card className="flex flex-col justify-center gap-3 p-4 sm:p-5">
-            <div className="space-y-1">
-              <CardTitle className="text-base">Next mastery steps</CardTitle>
-              <CardDescription>Act on what the readiness check found.</CardDescription>
-            </div>
-            <div className="flex flex-col gap-2">
-              {dueConceptReviewHref ? (
-                <ResponsiveActionLink
-                  href={dueConceptReviewHref}
-                  action="quickReview"
-                  label="Review due concepts"
-                  variant="outline"
-                />
-              ) : null}
-              {terminalAction?.kind === "premium-exam" ? (
-                <ResponsiveActionButton
-                  action="open"
-                  label={`Prove it - ${terminalAction.label}`}
-                  disabled={premiumExamDisabled}
-                  onClick={handlePremiumExamCta}
-                />
-              ) : null}
-            </div>
-          </Card>
-        ) : null}
-      </section>
-
-      <CollectionProgressSummary collection={collection} />
-
-      <NextInPlanCard
-        items={items}
-        collectionId={collectionId}
-        canReviewDueConcepts={showWeakAreas}
-      />
+      <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
 
       {skippedNoticeCount ? (
         <Card className="border-amber-500/25 bg-amber-500/10 p-4 text-sm text-foreground/75">
@@ -2793,14 +2730,32 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         </Card>
       ) : null}
 
-      {continueAction && !continueDismissed ? (
-        <ContinuePlanBanner action={continueAction} onDismiss={dismissContinueBanner} />
-      ) : null}
+      <ReadinessDashboardSection collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref}>
+        <ReadinessSummary
+          variant="compact"
+          title={`${collection.title} readiness`}
+          eyebrow={`${labels.singular} readiness`}
+          overallReadinessPercentage={planReadiness?.overallReadinessPercentage ?? 0}
+          totalConcepts={planReadiness?.totalConcepts ?? 0}
+          masteredConcepts={planReadiness?.masteredConcepts ?? 0}
+          dueConcepts={planReadiness?.dueConcepts ?? 0}
+          notPracticedConcepts={planReadiness?.notPracticedConcepts ?? 0}
+          subjects={planReadiness?.subjects ?? []}
+          unavailable={planReadinessLoadState === "error"}
+          unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
+          emptyTitle="No readiness yet"
+          emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
+        />
+      </ReadinessDashboardSection>
+
+      <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
       <Card className="space-y-4 p-4 sm:p-6">
         <div>
           <CardTitle>Notes</CardTitle>
-          <CardDescription>{items.length} {items.length === 1 ? "note" : "notes"} in saved order.</CardDescription>
+          <CardDescription>
+            {items.length} {items.length === 1 ? "note" : "notes"} in saved order · {collection.progress.notesWithStudyPack}/{collection.progress.totalNotes} notes ready.
+          </CardDescription>
         </div>
 
         {!showWeakAreas && items.length > 0 && upgradeCtas.primary ? (
@@ -2962,6 +2917,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           </>
         )}
       </Card>
+
+      <CollectionProgressSummary collection={collection} />
 
       <EditCollectionModal
         collection={collection}
