@@ -40,17 +40,20 @@ import {
   getMe,
   getNoteConceptCounts,
   getPlanReadiness,
+  generateCompanion,
   listCoursePrograms,
   listNotes,
   removeCollectionItem,
   setCollectionItemOrder,
   setCompanion,
   setPrimaryCollection,
+  trackAnalyticsEvent,
   updateCollection,
   updateCollectionVisibility,
   updateNoteVisibility,
   updateStudyDaysPerWeek,
   type CompanionContent,
+  type CompanionSection,
   type GoalCollectionDetailResponse,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
@@ -915,6 +918,15 @@ type CompanionFaqDraft = {
   question: string;
   answer: string;
 };
+type CompanionGenerationTarget = CompanionSection | "ALL";
+
+const COMPANION_SECTIONS: CompanionSection[] = ["OVERVIEW", "STUDY_STRATEGY", "COMMON_MISTAKES", "FAQ"];
+const COMPANION_SECTION_LABELS: Record<CompanionSection, string> = {
+  OVERVIEW: "Overview",
+  STUDY_STRATEGY: "Study Strategy",
+  COMMON_MISTAKES: "Common Mistakes",
+  FAQ: "FAQ",
+};
 
 function companionInputValue(value: string | null | undefined): string {
   return value ?? "";
@@ -930,6 +942,10 @@ function toCompanionFaqDrafts(content: CompanionContent | null): CompanionFaqDra
     question: companionInputValue(item.question),
     answer: companionInputValue(item.answer),
   }));
+}
+
+function companionFaqHasContent(faq: CompanionFaqDraft[]): boolean {
+  return faq.some((item) => item.question.trim().length > 0 || item.answer.trim().length > 0);
 }
 
 function buildCompanionContent(
@@ -1153,8 +1169,11 @@ function CompanionEditorModal({
   const [faq, setFaq] = useState<CompanionFaqDraft[]>(toCompanionFaqDrafts(collection.companion));
   const [submitting, setSubmitting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [generating, setGenerating] = useState<CompanionGenerationTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [generationNotice, setGenerationNotice] = useState<string | null>(null);
   const hasCompanion = collection.companion !== null;
+  const busy = submitting || clearing || generating !== null;
 
   useEffect(() => {
     if (isOpen) {
@@ -1164,9 +1183,70 @@ function CompanionEditorModal({
       setFaq(toCompanionFaqDrafts(collection.companion));
       setSubmitting(false);
       setClearing(false);
+      setGenerating(null);
       setError(null);
+      setGenerationNotice(null);
     }
   }, [collection.companion, isOpen]);
+
+  const sectionHasContent = (section: CompanionSection): boolean => {
+    if (section === "OVERVIEW") {
+      return overview.trim().length > 0;
+    }
+    if (section === "STUDY_STRATEGY") {
+      return studyStrategy.trim().length > 0;
+    }
+    if (section === "COMMON_MISTAKES") {
+      return commonMistakes.trim().length > 0;
+    }
+    return companionFaqHasContent(faq);
+  };
+
+  const confirmOverwriteIfNeeded = (sections: CompanionSection[]): boolean => {
+    if (!sections.some(sectionHasContent)) {
+      return true;
+    }
+    const sectionText = sections.length === 1 ? COMPANION_SECTION_LABELS[sections[0]!] : "these sections";
+    return globalThis.confirm(`Generate draft content for ${sectionText}? This will replace the current unsaved text.`);
+  };
+
+  const applyCompanionDraft = (draft: CompanionContent, sections: CompanionSection[]) => {
+    if (sections.includes("OVERVIEW")) {
+      setOverview(companionInputValue(draft.overview));
+    }
+    if (sections.includes("STUDY_STRATEGY")) {
+      setStudyStrategy(companionInputValue(draft.studyStrategy));
+    }
+    if (sections.includes("COMMON_MISTAKES")) {
+      setCommonMistakes(companionInputValue(draft.commonMistakes));
+    }
+    if (sections.includes("FAQ")) {
+      setFaq(toCompanionFaqDrafts(draft));
+    }
+  };
+
+  const handleGenerate = async (sections: CompanionSection[], target: CompanionGenerationTarget) => {
+    if (busy || !confirmOverwriteIfNeeded(sections)) {
+      return;
+    }
+    setGenerating(target);
+    setError(null);
+    setGenerationNotice(null);
+    try {
+      const draft = await generateCompanion(collection.id, sections);
+      applyCompanionDraft(draft, sections);
+      setGenerationNotice("Draft generated. Review and edit it before saving.");
+      void trackAnalyticsEvent({
+        eventType: "COMPANION_GENERATED",
+        entityId: collection.id,
+        metadata: { sections },
+      }).catch(() => undefined);
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : `Could not generate this ${labels.companionSingular}.`);
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   const updateFaqItem = (index: number, field: keyof CompanionFaqDraft, value: string) => {
     setFaq((current) => current.map((item, itemIndex) => (
@@ -1186,6 +1266,7 @@ function CompanionEditorModal({
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    setGenerationNotice(null);
     try {
       const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, faq));
       onSaved(saved);
@@ -1199,6 +1280,7 @@ function CompanionEditorModal({
   const handleClear = async () => {
     setClearing(true);
     setError(null);
+    setGenerationNotice(null);
     try {
       const saved = await clearCompanion(collection.id);
       onSaved(saved);
@@ -1225,7 +1307,7 @@ function CompanionEditorModal({
                 variant="destructiveOutline"
                 loading={clearing}
                 loadingText="Removing..."
-                disabled={submitting}
+                disabled={submitting || generating !== null}
                 onClick={() => void handleClear()}
               >
                 Remove {labels.companionSingular}
@@ -1233,8 +1315,18 @@ function CompanionEditorModal({
             ) : null}
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" disabled={submitting || clearing} onClick={onClose}>Cancel</Button>
-            <Button type="submit" form="companion-editor-form" loading={submitting} loadingText="Saving..." disabled={clearing}>
+            <Button
+              type="button"
+              variant="outline"
+              loading={generating === "ALL"}
+              loadingText="Generating..."
+              disabled={submitting || clearing || generating !== null}
+              onClick={() => void handleGenerate(COMPANION_SECTIONS, "ALL")}
+            >
+              Generate all sections
+            </Button>
+            <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
+            <Button type="submit" form="companion-editor-form" loading={submitting} loadingText="Saving..." disabled={clearing || generating !== null}>
               Save
             </Button>
           </div>
@@ -1242,38 +1334,93 @@ function CompanionEditorModal({
       )}
     >
       <form id="companion-editor-form" className="space-y-5" onSubmit={handleSubmit} noValidate>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-foreground">Overview</span>
+        <div className="block space-y-1.5">
+          <span className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-foreground">Overview</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={generating === "OVERVIEW"}
+              loadingText="Generating..."
+              disabled={busy}
+              onClick={() => void handleGenerate(["OVERVIEW"], "OVERVIEW")}
+            >
+              Generate Overview
+            </Button>
+          </span>
           <textarea
+            aria-label="Overview"
             data-autofocus="true"
             value={overview}
             onChange={(event) => setOverview(event.target.value)}
             className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-foreground">Study Strategy</span>
+        </div>
+        <div className="block space-y-1.5">
+          <span className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-foreground">Study Strategy</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={generating === "STUDY_STRATEGY"}
+              loadingText="Generating..."
+              disabled={busy}
+              onClick={() => void handleGenerate(["STUDY_STRATEGY"], "STUDY_STRATEGY")}
+            >
+              Generate Study Strategy
+            </Button>
+          </span>
           <textarea
+            aria-label="Study Strategy"
             value={studyStrategy}
             onChange={(event) => setStudyStrategy(event.target.value)}
             className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-foreground">Common Mistakes</span>
+        </div>
+        <div className="block space-y-1.5">
+          <span className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-foreground">Common Mistakes</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={generating === "COMMON_MISTAKES"}
+              loadingText="Generating..."
+              disabled={busy}
+              onClick={() => void handleGenerate(["COMMON_MISTAKES"], "COMMON_MISTAKES")}
+            >
+              Generate Common Mistakes
+            </Button>
+          </span>
           <textarea
+            aria-label="Common Mistakes"
             value={commonMistakes}
             onChange={(event) => setCommonMistakes(event.target.value)}
             className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
-        </label>
+        </div>
 
         <section className="space-y-3" aria-labelledby="companion-faq-heading">
           <div className="flex items-center justify-between gap-3">
             <h3 id="companion-faq-heading" className="text-sm font-medium text-foreground">FAQ</h3>
-            <Button type="button" variant="outline" size="sm" onClick={addFaqItem}>
-              Add question
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={generating === "FAQ"}
+                loadingText="Generating..."
+                disabled={busy}
+                onClick={() => void handleGenerate(["FAQ"], "FAQ")}
+              >
+                Generate FAQ
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={addFaqItem}>
+                Add question
+              </Button>
+            </div>
           </div>
           {faq.length > 0 ? (
             <div className="space-y-3">
@@ -1295,7 +1442,7 @@ function CompanionEditorModal({
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </label>
-                  <Button type="button" variant="outline" size="sm" onClick={() => removeFaqItem(index)}>
+                  <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => removeFaqItem(index)}>
                     Remove
                   </Button>
                 </div>
@@ -1304,6 +1451,7 @@ function CompanionEditorModal({
           ) : null}
         </section>
 
+        {generationNotice ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">{generationNotice}</p> : null}
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
       </form>
     </AppModal>

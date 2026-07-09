@@ -5,6 +5,8 @@ import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
+import com.studysnap.backend.dto.GenerateCompanionRequest;
+import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
@@ -172,6 +174,17 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.setCompanion(collectionId, user.userId(), content);
+    }
+
+    @PostMapping("/{id}/companion/generate")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public GeneratedCompanionContentResponse generateCompanion(
+            @PathVariable String id,
+            @RequestBody GenerateCompanionRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
+        return service.generateCompanion(collectionId, user.userId(), request);
     }
 
     @DeleteMapping("/{id}/companion")

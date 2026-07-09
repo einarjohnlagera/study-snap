@@ -5,7 +5,10 @@ import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionFaqItem;
+import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
+import com.studysnap.backend.dto.GenerateCompanionRequest;
+import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
@@ -67,6 +70,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -142,6 +146,9 @@ class NoteCollectionServiceTest {
     private NoteService noteService;
 
     @Mock
+    private LlmStudyPackService llmStudyPackService;
+
+    @Mock
     private UserRepository userRepository;
 
     private NoteCollectionService service;
@@ -163,6 +170,7 @@ class NoteCollectionServiceTest {
                 progressReportService,
                 analyticsService,
                 noteService,
+                llmStudyPackService,
                 userRepository,
                 TransactionOperations.withoutTransaction()
         );
@@ -901,6 +909,136 @@ class NoteCollectionServiceTest {
 
         assertThatThrownBy(() -> service.clearCompanion(collectionId, userId))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void generateCompanion_returnsOnlyRequestedSectionDraftForAdminGoalWithChildren() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID childId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
+        child.setDescription("Teaching principles and assessment.");
+        CompanionContent draft = new CompanionContent("Draft overview", null, null, List.of());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of(child));
+        when(llmStudyPackService.generateCompanion(any(), eq(Set.of(CompanionSection.OVERVIEW))))
+                .thenReturn(draft);
+
+        GeneratedCompanionContentResponse result = service.generateCompanion(
+                collectionId,
+                userId,
+                new GenerateCompanionRequest(List.of(CompanionSection.OVERVIEW))
+        );
+
+        assertThat(result.overview()).isEqualTo("Draft overview");
+        assertThat(result.studyStrategy()).isNull();
+        assertThat(result.commonMistakes()).isNull();
+        assertThat(result.faq()).isEmpty();
+        ArgumentCaptor<com.studysnap.backend.service.model.CompanionGenerationContext> contextCaptor =
+                ArgumentCaptor.forClass(com.studysnap.backend.service.model.CompanionGenerationContext.class);
+        verify(llmStudyPackService).generateCompanion(contextCaptor.capture(), eq(Set.of(CompanionSection.OVERVIEW)));
+        assertThat(contextCaptor.getValue().subjectPlans())
+                .extracting(com.studysnap.backend.service.model.CompanionGenerationContext.CompanionContextItem::title)
+                .containsExactly("Professional Education");
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void generateCompanion_usesOwnNoteTitlesAndSubjectsForChildlessTopLevelCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity firstNote = buildNote(firstNoteId, userId, NOTE_TITLE_ONE);
+        NoteEntity secondNote = buildNote(secondNoteId, userId, NOTE_TITLE_TWO);
+        CompanionContent draft = companionContent();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(
+                buildItem(collectionId, firstNoteId, 0, null),
+                buildItem(collectionId, secondNoteId, 1, null)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(List.of(firstNoteId, secondNoteId)))
+                .thenReturn(asNoteProjections(List.of(secondNote, firstNote)));
+        when(llmStudyPackService.generateCompanion(any(), eq(Set.of(
+                CompanionSection.OVERVIEW,
+                CompanionSection.STUDY_STRATEGY,
+                CompanionSection.COMMON_MISTAKES,
+                CompanionSection.FAQ
+        )))).thenReturn(draft);
+
+        GeneratedCompanionContentResponse result = service.generateCompanion(
+                collectionId,
+                userId,
+                new GenerateCompanionRequest(List.of(
+                        CompanionSection.OVERVIEW,
+                        CompanionSection.STUDY_STRATEGY,
+                        CompanionSection.COMMON_MISTAKES,
+                        CompanionSection.FAQ
+                ))
+        );
+
+        assertThat(result.overview()).isEqualTo("Overview");
+        assertThat(result.faq()).hasSize(1);
+        ArgumentCaptor<com.studysnap.backend.service.model.CompanionGenerationContext> contextCaptor =
+                ArgumentCaptor.forClass(com.studysnap.backend.service.model.CompanionGenerationContext.class);
+        verify(llmStudyPackService).generateCompanion(contextCaptor.capture(), any());
+        assertThat(contextCaptor.getValue().notes())
+                .extracting(com.studysnap.backend.service.model.CompanionGenerationContext.CompanionContextItem::title)
+                .containsExactly(NOTE_TITLE_ONE, NOTE_TITLE_TWO);
+        assertThat(contextCaptor.getValue().notes())
+                .extracting(com.studysnap.backend.service.model.CompanionGenerationContext.CompanionContextItem::description)
+                .containsExactly(BIOLOGY_SUBJECT, BIOLOGY_SUBJECT);
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void generateCompanion_rejectsNonAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.USER);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.generateCompanion(
+                collectionId,
+                userId,
+                new GenerateCompanionRequest(List.of(CompanionSection.OVERVIEW))
+        )).isInstanceOf(AccessDeniedException.class);
+
+        verify(collectionRepository, never()).findByIdAndOwnerUserId(any(), any());
+    }
+
+    @Test
+    void generateCompanion_rejectsChildCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "Professional Education", Instant.now());
+        collection.setParentCollectionId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+
+        assertThatThrownBy(() -> service.generateCompanion(
+                collectionId,
+                userId,
+                new GenerateCompanionRequest(List.of(CompanionSection.OVERVIEW))
+        ))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("Only a top-level Goal can have a Companion.");
+
+        verify(llmStudyPackService, never()).generateCompanion(any(), any());
     }
 
     @Test
@@ -2910,6 +3048,12 @@ class NoteCollectionServiceTest {
                 CompanionContent.class
         );
         Method clearCompanionMethod = NoteCollectionService.class.getMethod("clearCompanion", UUID.class, UUID.class);
+        Method generateCompanionMethod = NoteCollectionService.class.getMethod(
+                "generateCompanion",
+                UUID.class,
+                UUID.class,
+                GenerateCompanionRequest.class
+        );
         Method clearTargetDateMethod = NoteCollectionService.class.getMethod("clearTargetDate", UUID.class, UUID.class);
         Method addMethod = NoteCollectionService.class.getMethod("addItems", UUID.class, UUID.class, AddNoteCollectionItemsRequest.class);
         Method removeMethod = NoteCollectionService.class.getMethod("removeItem", UUID.class, UUID.class, UUID.class);
@@ -2928,6 +3072,7 @@ class NoteCollectionServiceTest {
         assertThat(clearPrimaryMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(setCompanionMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(clearCompanionMethod.getAnnotation(Transactional.class)).isNotNull();
+        assertThat(generateCompanionMethod.getAnnotation(Transactional.class)).isNull();
         assertThat(clearTargetDateMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(addMethod.getAnnotation(Transactional.class)).isNotNull();
         assertThat(removeMethod.getAnnotation(Transactional.class)).isNotNull();

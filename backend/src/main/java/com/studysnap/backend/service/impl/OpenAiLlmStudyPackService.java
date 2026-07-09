@@ -7,10 +7,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionFaqItem;
+import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -36,6 +40,7 @@ import org.springframework.web.client.RestClientResponseException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +65,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
+    private static final int COMPANION_FAQ_MIN_ITEMS = 3;
+    private static final int COMPANION_FAQ_MAX_ITEMS = 6;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final int PARALLEL_BUFFER = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
@@ -78,6 +85,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     private static final String ENUMERATION_FORMAT = "ENUMERATION";
     private static final String CHALLENGE_QUIZ_SCHEMA_NAME = "note_lib_challenge_quiz";
+    private static final String COMPANION_SCHEMA_NAME = "note_lib_companion_draft";
+    private static final String COMPANION_INVALID_OUTPUT_MESSAGE =
+            "The Companion generation service returned an invalid format. Please try again.";
     private static final String TRUE_FALSE_GUIDANCE = """
             Mix in True/False questions where appropriate. Use TRUE_FALSE ONLY for a single declarative statement that the learner judges true or false (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, best-answer judgment, or choosing among statement combinations.
 
@@ -136,6 +146,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return retryOnceOnInvalidOutput(() -> generateNoteFromTopicOnce(topic, context));
     }
 
+    @Override
+    public CompanionContent generateCompanion(CompanionGenerationContext context, Set<CompanionSection> sections) {
+        Objects.requireNonNull(context, "context");
+        Set<CompanionSection> requestedSections = normalizeCompanionSections(sections);
+        return retryOnceOnInvalidOutput(() -> generateCompanionOnce(context, requestedSections));
+    }
+
     private String regenerateSummaryOnce(String normalizedNoteContent, StudyPackGenerationContext context) {
         String model = requireConfiguredModel();
         JsonSchemaResponse<PromptRegeneratedSummary> response = executeJsonSchemaOperation(
@@ -171,6 +188,23 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             throw invalidOutput("The note generation service returned invalid content. Please try again.");
         }
         return generatedContent;
+    }
+
+    private CompanionContent generateCompanionOnce(
+            CompanionGenerationContext context,
+            Set<CompanionSection> requestedSections
+    ) {
+        // Companion drafts are curated, human-reviewed prose shown to every learner on a plan,
+        // so they use the premium generation tier rather than the lower-latency critique tier.
+        String model = requireConfiguredPremiumModel();
+        JsonSchemaResponse<PromptCompanionContent> response = executeJsonSchemaOperation(
+                model,
+                buildCompanionInputMessages(context, requestedSections),
+                companionOperation(),
+                buildCompanionSchema(),
+                PromptCompanionContent.class
+        );
+        return toCompanionContent(response.payload(), requestedSections);
     }
 
     private GeneratedStudyPackContent generateStudyPackOnce(
@@ -565,6 +599,69 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         + "Create a study note draft for this topic."
         ));
         return input;
+    }
+
+    private ArrayNode buildCompanionInputMessages(
+            CompanionGenerationContext context,
+            Set<CompanionSection> requestedSections
+    ) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.companionSystemPrompt()));
+        input.add(buildTextMessage(
+                "developer",
+                buildCompanionDeveloperPrompt(context, requestedSections)
+        ));
+        return input;
+    }
+
+    private String buildCompanionDeveloperPrompt(
+            CompanionGenerationContext context,
+            Set<CompanionSection> requestedSections
+    ) {
+        return promptResources.companionDeveloperPromptTemplate()
+                .replace("{REQUESTED_SECTIONS}", buildCompanionSectionList(requestedSections))
+                .replace("{COLLECTION_TITLE}", promptValue(context.title()))
+                .replace("{COLLECTION_DESCRIPTION}", promptValue(context.description()))
+                .replace("{COURSE_PROGRAM}", promptValue(context.courseProgram()))
+                .replace("{STRUCTURE_CONTEXT}", buildCompanionStructureContext(context));
+    }
+
+    private String buildCompanionSectionList(Set<CompanionSection> requestedSections) {
+        return requestedSections.stream()
+                .map(CompanionSection::name)
+                .toList()
+                .toString();
+    }
+
+    private String buildCompanionStructureContext(CompanionGenerationContext context) {
+        if (!context.subjectPlans().isEmpty()) {
+            return buildCompanionContextItems("Subject Plans", context.subjectPlans());
+        }
+        if (!context.notes().isEmpty()) {
+            return buildCompanionContextItems("Notes", context.notes());
+        }
+        return "No subject plans or notes are attached yet.";
+    }
+
+    private String buildCompanionContextItems(
+            String label,
+            List<CompanionGenerationContext.CompanionContextItem> items
+    ) {
+        StringBuilder builder = new StringBuilder(label).append(":\n");
+        for (CompanionGenerationContext.CompanionContextItem item : items) {
+            builder.append("- ").append(promptValue(item.title()));
+            String description = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(item.description());
+            if (description != null) {
+                builder.append(": ").append(description);
+            }
+            builder.append('\n');
+        }
+        return builder.toString().trim();
+    }
+
+    private String promptValue(String value) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(value);
+        return normalized == null ? "Not provided" : normalized;
     }
 
     private String buildNoteGenerationDeveloperPrompt() {
@@ -1008,6 +1105,46 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .put("minLength", 1)
                 .put("maxLength", 240);
         return arraySchema;
+    }
+
+    private JsonNode buildCompanionSchema() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("type", "object");
+        root.put("additionalProperties", false);
+        root.putArray("required")
+                .add("overview")
+                .add("studyStrategy")
+                .add("commonMistakes")
+                .add("faq");
+
+        ObjectNode properties = root.putObject("properties");
+        properties.set("overview", buildNullableStringSchema());
+        properties.set("studyStrategy", buildNullableStringSchema());
+        properties.set("commonMistakes", buildNullableStringSchema());
+
+        ObjectNode faq = properties.putObject("faq");
+        ArrayNode faqTypes = faq.putArray("type");
+        faqTypes.add("array");
+        faqTypes.add("null");
+        faq.put("minItems", COMPANION_FAQ_MIN_ITEMS);
+        faq.put("maxItems", COMPANION_FAQ_MAX_ITEMS);
+
+        ObjectNode faqItem = faq.putObject("items");
+        faqItem.put("type", "object");
+        faqItem.put("additionalProperties", false);
+        faqItem.putArray("required").add("question").add("answer");
+        ObjectNode faqItemProperties = faqItem.putObject("properties");
+        faqItemProperties.putObject("question").put("type", "string");
+        faqItemProperties.putObject("answer").put("type", "string");
+        return root;
+    }
+
+    private ObjectNode buildNullableStringSchema() {
+        ObjectNode schema = objectMapper.createObjectNode();
+        ArrayNode types = schema.putArray("type");
+        types.add("string");
+        types.add("null");
+        return schema;
     }
 
     private ObjectNode buildTextMessage(String role, String text) {
@@ -2079,6 +2216,45 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return content;
     }
 
+    private Set<CompanionSection> normalizeCompanionSections(Set<CompanionSection> sections) {
+        if (sections == null || sections.isEmpty()) {
+            throw invalidOutput(COMPANION_INVALID_OUTPUT_MESSAGE);
+        }
+        Set<CompanionSection> normalized = EnumSet.noneOf(CompanionSection.class);
+        sections.stream()
+                .filter(Objects::nonNull)
+                .forEach(normalized::add);
+        if (normalized.isEmpty()) {
+            throw invalidOutput(COMPANION_INVALID_OUTPUT_MESSAGE);
+        }
+        return normalized;
+    }
+
+    private CompanionContent toCompanionContent(
+            PromptCompanionContent content,
+            Set<CompanionSection> requestedSections
+    ) {
+        List<CompanionFaqItem> faq = List.of();
+        if (requestedSections.contains(CompanionSection.FAQ)) {
+            faq = normalizeCompanionFaq(content.faq());
+        }
+        return new CompanionContent(
+                requestedSections.contains(CompanionSection.OVERVIEW) ? content.overview() : null,
+                requestedSections.contains(CompanionSection.STUDY_STRATEGY) ? content.studyStrategy() : null,
+                requestedSections.contains(CompanionSection.COMMON_MISTAKES) ? content.commonMistakes() : null,
+                faq
+        );
+    }
+
+    private List<CompanionFaqItem> normalizeCompanionFaq(List<PromptCompanionFaqItem> faq) {
+        if (faq == null || faq.size() < COMPANION_FAQ_MIN_ITEMS || faq.size() > COMPANION_FAQ_MAX_ITEMS) {
+            throw invalidOutput(COMPANION_INVALID_OUTPUT_MESSAGE);
+        }
+        return faq.stream()
+                .map(item -> new CompanionFaqItem(item.question(), item.answer()))
+                .toList();
+    }
+
     private void appendGeneratedNoteSection(StringBuilder builder, String heading, List<String> items) {
         builder.append(heading).append(":\n");
         for (String item : items) {
@@ -2209,6 +2385,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         );
     }
 
+    private JsonSchemaOperation companionOperation() {
+        return new JsonSchemaOperation(
+                COMPANION_SCHEMA_NAME,
+                "openai_companion_request_failed",
+                "openai_companion_unavailable",
+                "The Companion generation service returned an empty response. Please try again.",
+                COMPANION_INVALID_OUTPUT_MESSAGE,
+                "Companion generation failed. Please try again in a moment.",
+                "Companion generation is temporarily unavailable. Please try again."
+        );
+    }
+
     private JsonSchemaOperation quizOperation(String schemaName, String operationLabel) {
         return new JsonSchemaOperation(
                 schemaName,
@@ -2306,6 +2494,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String verdict,
             String rationale,
             String followUp
+    ) {
+    }
+
+    private record PromptCompanionContent(
+            String overview,
+            String studyStrategy,
+            String commonMistakes,
+            List<PromptCompanionFaqItem> faq
+    ) {
+    }
+
+    private record PromptCompanionFaqItem(
+            String question,
+            String answer
     ) {
     }
 
