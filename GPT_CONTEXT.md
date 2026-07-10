@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.40.0 (in progress) - 2026-07-07
+> Last updated: v0.43.1 (released) - 2026-07-10
 
 ---
 
@@ -20,7 +20,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** `v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set` is in progress. Previous released baseline is `v0.39.2 - Public Library Learning Experience`.
+**Current baseline:** `v0.43.1 - Companion Mentor Tips` is the most recently released version. No version is currently in progress — the "AI-generated Review Sets" candidate is still under product/UX discussion and has not been scoped or kicked off (see `docs/product/ROADMAP.md`).
 
 ---
 
@@ -42,6 +42,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 - **Note** is the primary entity. State: `DRAFT`, `GENERATING`, `FAILED`, `STUDY_PACK_READY`. Visibility: `PRIVATE`, `PUBLIC`.
 - **Study Pack** is generated content attached to a Note: summary, key concepts, quiz, metadata suggestions, and downstream quiz/exam entry points.
 - **Note Collections (Study Plans / Review Sets)** organize owned notes into an ordered, curated unit, with an optional one-level Goal -> Subject hierarchy. This is the product's primary retention lever — see the dedicated vision section below.
+- **Learning Companion** is a persisted, curator-authored guidance layer (JSONB) on top-level Review Sets — the "premium guided learning experience" layer riding on top of the Study Plan journey. See the dedicated vision section below.
 - **ConceptHealth** is the recency spine for readiness and Progress: `lastCorrectAt`, `lastIncorrectAt`, due/not-due classification, and struggling state. This is the *only* mastery-integrity signal in the app, and it's locked (since v0.37.0) to move only from genuine assessment — see Quiz / Practice Mode Contract.
 - **Quiz sessions** share `quick_review_sessions` with mode stored as enum and session state in JSONB. Question **format** (MCQ, True/False, Multi-Select, Matching, and — new in v0.39.0 — Identification, Enumeration) is a separate axis from mode.
 - **Flashcards and Memorization** (new in v0.39.0) are non-scored review surfaces that sit entirely outside the quiz-session engine — no session row, no `ConceptHealth` write, ever.
@@ -80,6 +81,50 @@ Profile-aware terminology — "Study Plan" (Student / Board Taker), "Lesson Plan
 - **Cold-start adoption discoverability audit.** Found the adoption mechanism worked fine end-to-end once found, but nothing in the actual cold-start path (the zero-notes empty state, the Dashboard's recommended-plan card) told a new learner it existed. Fixed both, without touching the locked `/onboarding` flow — the fix lives entirely on Dashboard surfaces every cold-start learner reaches regardless of how they got there.
 
 **What's intentionally still parked:** standalone adoption of a single child Subject plan (there's an unresolved re-parenting interaction with `adoptGoal`'s idempotency check) — not worth solving until there's a real discovery need for it.
+
+**Primary Review Set + Weekly Countdown (v0.40.0, extended v0.40.1) — readiness became an ongoing cadence, not just a static number.** A nullable user-level `primaryCollectionId` (only an owned top-level Goal can be primary; auto-sets when exactly one is owned; self-heals to null on delete) plus a nullable `note_collections.target_completion_date` (top-level Goals only, never copied on adopt/self-copy) and a nullable user-level `studyDaysPerWeek` (1-7) together drive a derived — never stored — weekly countdown: `weeksRemaining` / `conceptsRemaining` / `todaysConceptBudget` on `GET /collections/{id}/goal`, with due concepts as a floor. v0.40.1 added Phase 2: Hamilton largest-remainder allocation across child Subjects plus a deterministic `weeklyFocusByDay` template. Surfaces: Dashboard/`/collections` primary CTA, the Goal detail countdown (now folded into the Progress card's `countdown` slot per v0.43.0, see Learning Companion vision below), and `/progress`'s default view. **No adaptive/AI scheduling, streaks, or calendar integration** — pure read-time derivation from existing readiness + date math.
+
+**Public Review Set Reachability (v0.40.1).** A PUBLIC Official Review Set outside a learner's own course/program was technically public but unreachable through any UI path. Fixed narrowly: `/collections/published` gained a "Browse All Official Review Sets" section below the course/program-scoped Recommended row, calling the already-existing unfiltered `listPublicStudyPlans({})` — no new backend endpoint. The broader Explore/nav redesign (see Review-Set-Centric Navigation, deferred) was explicitly rejected as overkill for this narrow gap.
+
+**Review Set Detail as a study dashboard (v0.41.1).** The detail page was re-composed (frontend-only, no new capability) into Identity → Current Journey → Primary Action → Readiness → Guidance (Companion) → Subject Plans/Notes, replacing a metadata-forward "collection details" layout with one that answers "what should I do next, in this Review Set?" — while staying 100% collection-scoped (cross-journey "which set" stays `/dashboard`'s job). Authoring controls (Publish/Build/Edit/Manage Companion/Set-primary/Delete) collapsed into compact hero chrome so they don't compete with the learner's scroll path.
+
+---
+
+## Learning Companion: Vision & Evolution (v0.41.0 → v0.43.1)
+
+**The organizing insight:** Review Centers aren't valuable because they provide PDFs or quizzes — they're valuable because they provide **guidance** (structure, direction, pacing, coaching, confidence). NoteLib had the knowledge layer (Notes), the learning engine (Study Packs), and the journey (Review Sets), but no guidance layer riding on top. The Companion is that layer — a persisted, curator-authored, profile-aware, statically-served guidance layer on a top-level Review Set.
+
+**Success criterion (the north star every phase is judged against):** *"Every Official Review Set should feel like a premium guided learning experience rather than a collection of notes."* Not feature count, not revenue.
+
+**Content model (v0.41.0, extended v0.42.0/v0.43.1).** A single nullable JSONB column, `note_collections.companion` — not a new table, mirrors the existing `sessionState` JSONB precedent. 1:1 with a top-level collection only (rejected on child Subject Plans with the same `400` pattern as `targetCompletionDate`/primary). Five long-form sections — Overview, Study Strategy, Common Mistakes, FAQ, Resources (Resources added v0.42.0) — plus, since v0.43.1, an atomic `mentorTips` array living in the same JSONB payload (no new table/migration/endpoint). **No runtime LLM call to serve a Companion** — authored once, served static, zero per-view cost.
+
+**Curation, never generation (locked rule, clarified — not reversed — in v0.42.0).** Learner-facing behavior is unchanged: a learner never receives an auto-generated plan or tip. What changed in v0.42.0 is curator-facing: ADMIN-only `Generate Companion` (per-section or all) calls the existing OpenAI service (PREMIUM tier, no new LLM infra) to produce a **draft only** — the curator must still review, edit, and click Save/Publish. Publishing is never autonomous, in every path, including Mentor Tips (v0.43.1).
+
+**Official-author-only, FREE for all learners.** Only the NoteLib official author can author a Companion (architecture stays open to any top-level-Goal owner later). Zero paid uplift on the Companion itself by design — see Monetization philosophy below.
+
+**Staleness signal (v0.42.0).** A nullable `note_collections.companion_structure_snapshot` (child count + sorted child/note ids) captured on Companion save and compared inline on read — surfaces an ADMIN-only "Companion may be outdated" flag when the set's structure changes. Known v1 limitation: does not compare note body edits or concept counts (concept-count pipeline is per-user progress work, not a cheap structural signal). Mentor Tip text/config changes deliberately do **not** mark structure stale — staleness stays child/note-membership-only.
+
+**Coach vs. Companion, formalized (v0.43.0 mid-release philosophy refinement).** Relabeling section headings to coach-voice copy ("Overview" → "🗺️ What this covers") didn't fix the real complaint — five long-form paragraphs under friendlier labels still reads as an article, not an app. The real split:
+- **Coach (dynamic).** Reacts to the learner: continue-where-you-left-off, target-date pacing, readiness, due concepts, resolved next action, terminal actions. Not a new concept — it's naming what already existed (`TodaysFocusCard` + `ReadinessSummary`). Zero new cost.
+- **Companion (timeless).** Authored, does not react to daily progress. Teaches how to approach the curriculum — mindset, expectations, common mistakes, practical advice. Should read like mentor advice, not reference material.
+- **Curriculum.** Subject Plans → Notes → Practice. Unchanged, not part of this discussion.
+
+Shipped as `TodaysFocusCard` (merges former countdown/primary-action/coach-intro surfaces into one top-of-page Coach card: primary action, `Continue Studying`, pacing sentence, Quick Actions) sitting above Progress (owns the countdown summary) and the authored Companion (reference material). `CompanionDisplayCard` now **collapses by default on every viewport** behind a "View Full Guide" disclosure — sections only render once expanded.
+
+**Mentor Tips (v0.43.1) — the atomic, individually-surfaceable evolution.** Five long-form fields can't be "surfaced as a moment" without truncating curator intent, so this needed a real content-model change (not frontend-only, unlike v0.40.1/v0.41.1/v0.42.1's fast-follow pattern):
+- Each tip has its own identity, an optional **curator-tagged** (not inferred) linked action (`None`, `Continue Studying`, `Review Due Concepts`, terminal exam/builder action) — inferring it at render time would require a per-view LLM call, which v0.41.0 explicitly ruled out.
+- Optional **deterministic** surfacing condition (date/progress rules, e.g. "within 2 weeks of exam date," "after N subjects completed") — FREE-safe by the weekly-countdown precedent, not adaptive/LLM-driven selection (that tier is reserved for gated PRO Personalization).
+- The collection detail page selects at most one eligible tip in authored order near `TodaysFocusCard`; **all** authored tips still list in `CompanionDisplayCard`'s "View Full Guide" as a sixth section, regardless of current eligibility — a learner must never permanently miss a tip because its trigger never fired for them.
+- **Known low-volume caveat, checked explicitly at kickoff (2026-07-10), not assumed:** dev DB has only 1 PUBLIC/Official top-level Review Set with an authored Companion (2 companions total across 7 top-level collections). Decision: proceed anyway — dev volume isn't necessarily prod volume, and the content-model/authoring-UI work has standalone value even before curators build up tip inventory.
+- **Scope broadened mid-release:** a pre-signoff audit also fixed a real trust bug (Pro-only paywalls — Board Exam, Long Exam, Difficulty Selection, Interview Practice — let a user select/pay for Plus without unlocking the feature), added a dedicated review-timing upsell, and added Help Center coverage for Companion/Coach/Mentor Tips/Primary Review Set.
+
+**Monetization philosophy (long-term principle, established v0.43.1, not a repricing of today's plans):**
+- **FREE — static guidance.** The Companion itself (near-zero marginal cost, high perceived value — activation/retention driver and conversion hook).
+- **PLUS — interaction.** Ask Companion (future, gated) — grounded Q&A over authored content, reusing the Interview Practice cost-control template (feature gate + quota + rate limit + CRITIQUE model). Deliberately PLUS not PRO: grounded retrieval, not generation.
+- **PRO — personalization.** Genuinely adaptive/learning-pattern/LLM-informed guidance selection (future, gated) — explicitly **not** deterministic rule-based reordering, which follows the same FREE precedent as the weekly countdown (a common point of confusion recorded so it isn't re-derived wrong later).
+- Both future runtime tiers are gated on the persisted Companion existing; neither is scoped to a version yet.
+
+**Future, gated, not yet scoped:** AI-generated Review Sets (curator pipeline: public notes → suggest Subject Plans → generate Companion → human review → publish — gated on v0.42.0's authoring-assist pipeline proving out); Ask Companion (PLUS); Personalized/Adaptive guidance (PRO).
 
 ---
 
@@ -158,37 +203,40 @@ Upgrade CTA rule:
 
 ---
 
-## Current Release: v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set
+## Current Release: v0.43.1 - Companion Mentor Tips
 
-**Status: In Progress.** Turns readiness from a static number into an ongoing weekly cadence — the direct next chapter of the retention thesis validated since v0.33.0 (a number that only moves by returning), aimed at the exam-taker conversion/monetization segment. Full scope and phasing in `docs/product/ROADMAP.md`.
+**Status: Released.** No version is currently in progress. Let the *authored* Companion content participate in the Coach experience the way live signals already do — small, individually-surfaceable, action-linked Mentor Tips instead of an article to read start to finish. Full detail in the Learning Companion vision section above and in `RELEASES.md`.
 
-**Core idea:** the top-level **Goal** collection (see Note Collections vision above — the container in the locked Goal→Subject hierarchy) is being elevated from "just a folder of Subjects" to a first-class trackable object with its own countdown state. Nothing about the 2-level hierarchy itself changed — new fields were added *onto* the existing Goal object, not a new entity.
+- **Content model.** New `mentorTips` array inside the existing `note_collections.companion` JSONB — no new table/migration/endpoint/persisted learner state/progress signal.
+- **Authoring + AI draft extension.** ADMIN authoring modal add/edit/remove tips with a fixed linked action and optional deterministic surfacing condition; per-section Companion generation now supports `MENTOR_TIPS` (draft title/body only, curator still configures action/condition and saves).
+- **Deterministic Coach surfacing + permanent escape hatch.** Collection detail surfaces at most one eligible tip near `TodaysFocusCard`; `CompanionDisplayCard`'s "View Full Guide" lists all authored tips as a sixth section regardless of eligibility.
+- **Fixes shipped alongside:** Pro-only paywalls (Board Exam, Long Exam, Difficulty Selection, Interview Practice) no longer let a user select/pay for a dead-end Plus checkout; a dedicated Plus-primary upsell for the Free review-timing row; Help Center coverage for Companion/Coach/Mentor Tips/Primary Review Set; a stale "This Week" doc reference (removed by v0.43.0) corrected in Help copy and `docs/features/collections.md`.
 
-Shipped so far:
-
-- **Primary Review Set backend foundation.** Nullable `users.primary_collection_id`, only owned top-level Goals can be primary. Auto-sets when exactly one top-level Goal is owned (create/adopt/adopt-goal paths reassert this); clears safely on delete. **No manual "Set as primary" UI exists yet** — this only matters once a learner owns a *second* top-level Goal (auto-set deliberately doesn't touch an existing primary), and today there's no way to switch it. Known, scoped gap — not yet decided whether it gets its own small follow-up item.
-- **Target completion date + study intensity (backend).** Nullable `note_collections.target_completion_date` (top-level Goals only, decoupled from `UserEntity.examDate`), nullable `users.study_days_per_week` (1-7, user-level not per-Goal). Neither is ever copied on adopt/self-copy — a freshly adopted Goal always starts dateless.
-- **Weekly countdown derivation (backend).** `GET /collections/{id}/goal` now derives `weeksRemaining`/`conceptsRemaining`/`todaysConceptBudget` from target date + study intensity + the existing readiness rollup — no stored per-week schedule, no LLM, due concepts act as a floor. Phase 1 uses simple division; the weighted largest-remainder subject allocation is Phase 2 (may slip out of this release).
-- **Frontend surfaces:** Dashboard primary CTA (branches on `primaryCollectionId`), target-date + study-intensity inputs on `EditCollectionModal` (Goal-only), Goal detail "This Week" countdown card (hidden entirely with no target date), Review Sets list page primary CTA.
-- **In progress:** post-adopt guidance nudge (reusing `pickActiveGuidance()`/`GuidanceTip` to suggest setting a target date right after adopting a Goal — scoped to target-date only, dropping the original "optionally set as primary" half since that's redundant on first adopt and has no UI to point at yet) and the `/progress` default-view change (defaulting to the Primary Review Set's scoped view via the existing `PlanPicker` mechanism).
-
-Anti-drift: no new top-level entity; no change to `UserEntity.examDate` or the board-exam countdown; no adaptive/AI scheduling, streaks, or calendar integration; no nav rename, no Exam Hub change, no Explore page, no Progress full-redesign this release.
-
-**Explicitly separate, planned as its own release:** `v0.40.1 - Public Review Set Reachability` (not yet kicked off) fixes a different, narrower gap — a learner with no course/program set can't browse *all* PUBLIC top-level Review Sets today even though the backend already supports an unfiltered query. This is a discoverability/browse fix, unrelated to Primary Review Set's manual-designation gap above.
+**Next candidate under discussion (not scoped/kicked off):** "AI-generated Review Sets" — a curator pipeline (public notes → suggest Subject Plans → generate Companion → human review → publish), gated on the v0.42.0 authoring-assist pipeline proving out. See `docs/product/ROADMAP.md`.
 
 ---
 
-## Previous Release: v0.39.2 - Public Library Learning Experience
+## Previous Releases: v0.40.0 → v0.43.0 (condensed — see `RELEASES.md` for full detail)
 
-**Status: Released.** Connected the Public Library discovery layer to the signed-in workspace's richer review methods — surfaced Flashcards and Memorization on public note detail so anonymous visitors experience enough of the study system to want to continue. Shipped:
+**v0.43.0 - Companion Coach Experience.** Frontend-only: coach-voice heading map over `CompanionDisplayCard` (order-preserving, no reordering — "Curation, never generation" unaffected); `TodaysFocusCard` merges former countdown/primary-action/coach-intro surfaces into one top-of-page Coach card; `CompanionDisplayCard` collapses by default behind "View Full Guide" on every viewport. Mid-release philosophy refinement formalized the Coach (dynamic)/Companion (timeless) split — see Learning Companion vision above.
 
-- **Flashcards Preview (frontend).** `PublicFlashcardsPreview`, capped at 3 cards, tap-to-reveal, fully client-side, no backend change — reuses `keyConcepts` + `quiz[].explanation` already in the public note detail response.
-- **Memorization teaser (frontend).** Static educational section (copy + illustration) explaining spaced repetition — no per-note content, no scheduling logic, no state for anonymous users.
-- Existing CTA hierarchy (`Quiz yourself on this note` primary, `Create your own Study Pack` / `Copy to My Library` secondary) preserved unchanged; both new sections are additive.
+**v0.42.1 - Companion & Progress Polish.** Frontend-only UX fixes: merged the Readiness card and "View full progress"/"Review due concepts" row into one card via a `footer` slot; fixed `/progress?collectionId={id}`'s backlink to return to the originating collection instead of always "Dashboard".
+
+**v0.42.0 - AI-assisted Companion authoring + regeneration.** ADMIN `Generate Companion` (per-section or all) → LLM draft → mandatory human review/edit → Publish, reusing the existing OpenAI service (no new LLM infra); granular per-section regeneration; a structure-snapshot staleness signal ("Companion may be outdated"); added the Resources section. Clarified (not reversed) "Curation, never generation": learner-facing behavior unchanged, curator-facing AI-assist is new and scoped to Official Companions only.
+
+**v0.41.1 - Review Set Detail Page: This-Set Study Dashboard.** Frontend-only re-composition into Identity → Current Journey → Primary Action → Readiness → Guidance (Companion) → Subject Plans/Notes; single resolved primary CTA (free-tier-first); authoring controls consolidated into compact hero chrome. Also mirrored the Primary badge treatment onto `/collections` list cards and documented the badge-classification rule (identity/state get badges, metadata never does) in `docs/features/collections.md`.
+
+**v0.41.0 - Learning Companion (MVP).** Shipped the persisted Companion content model, Official-author-only manual authoring UI, and learner-facing display — see the dedicated Learning Companion vision section above for full detail.
+
+**v0.40.1 - Public Review Set Reachability.** `/collections/published` gained a "Browse All Official Review Sets" section using the already-existing unfiltered `listPublic` query (no new backend endpoint); weekly-scheduling Phase 2 (Hamilton largest-remainder allocation + `weeklyFocusByDay`) shipped backend-side; manual "Set/Remove as primary" UI added (closing v0.40.0's known gap); "Adopted" ownership badge added to collection cards/detail.
+
+**v0.40.0 - Weekly Study Plan (Exam Countdown) + Primary Review Set.** Turned readiness into an ongoing weekly cadence: user-level `primaryCollectionId` (Primary Review Set), Goal-only `targetCompletionDate`, user-level `studyDaysPerWeek`, and a derived (never stored) weekly countdown on `GET /collections/{id}/goal`. See Note Collections vision section above for full detail.
 
 ---
 
 ## Recent Release Context (condensed — see `RELEASES.md` for full detail)
+
+**v0.39.2 - Public Library Learning Experience.** Surfaced Flashcards Preview (capped at 3 cards, client-side) and a static Memorization teaser on public note detail so anonymous visitors experience enough of the study system to want to continue. No backend change.
 
 **v0.39.1 - Study Plan Builder Polish.** Fixed subject-metadata gaps and cold-start adoption discoverability in the Study Plan Builder, surfaced from real usage: description field on Add Subject Plan, a `courseProgram` cascade fix on `updateMetadata` (published child Subject plans could sit invisible to course/program-scoped discovery), and Dashboard-level adoption discoverability fixes (locked `/onboarding` flow untouched). Parked: standalone adoption of a single child Subject plan (unresolved re-parenting interaction with `adoptGoal`'s idempotency check).
 
@@ -244,6 +292,7 @@ See the dedicated vision section above for the full narrative. Quick reference:
 - The Builder (`/collections/{id}/builder`) is the single authoring canvas for both Goal and leaf plans.
 - Plan detail execution rows show action/status, not mastery. Dedicated readiness detail lives at `/progress?collectionId={id}`.
 - Plan premium exams launch with `collectionId` and use only quiz-ready notes from that plan.
+- Top-level Goal detail renders, in order: `TodaysFocusCard` (Coach — primary action, pacing, Quick Actions, and at most one eligible Mentor Tip), Progress (readiness + weekly countdown), then the collapsed `CompanionDisplayCard` ("View Full Guide" — Overview/Study Strategy/Common Mistakes/FAQ/Resources/Mentor Tips). See the dedicated Learning Companion vision section above.
 
 ### Progress and Readiness
 
@@ -290,6 +339,11 @@ See the dedicated vision section above for the full narrative. Quick reference:
 - Do not plan-gate question *formats* (Identification/Enumeration and any future format) — format variety is a learning-quality dimension, not a monetization lever. Gate modes/workflows/quotas instead.
 - Do not nest Note Collections beyond two levels (Goal -> Subject); no per-module mastery.
 - Do not redesign the locked `/onboarding` flow (Profile Type -> Study Goal -> Input Method -> Study Pack Generation -> Completion).
+- Do not let a learner receive an auto-generated Companion/Mentor Tip — "Curation, never generation" is curator-facing AI-assist only (draft, then mandatory human review before publish); publishing is never autonomous in any path.
+- Do not serve the Companion via a per-view/runtime LLM call — authored once, served static, zero per-view cost.
+- Do not reorder the five authored Companion sections (Overview/Study Strategy/Common Mistakes/FAQ/Resources) or infer a Mentor Tip's linked action at render time — action-linking is curator-tagged at authoring time only.
+- Do not make Mentor Tip/Companion surfacing adaptive or learning-pattern/LLM-driven — deterministic date/progress rules only; that tier is reserved for the gated, not-yet-scoped PRO Personalization candidate.
+- Do not let a surfacing condition permanently hide a Mentor Tip — "View Full Guide" must always list every authored tip regardless of current eligibility.
 - Use `globalThis`, not `window`, in frontend code.
 - Backend exceptions should be named `AppException` subclasses, not inline raw `new AppException(...)`.
 - Repeated logic-bearing strings should be constants.
@@ -387,6 +441,7 @@ Prompt rules:
 - `docs/product/SPEC.md` - canonical product behavior
 - `docs/product/EXAM_MODES.md` - locked quiz mode hierarchy, question formats, and non-engine review surfaces
 - `docs/product/PLANS.md` - plan tiers and quotas
+- `docs/features/companion.md` - Learning Companion / Coach / Mentor Tips behavior rules
 - `docs/features/` - per-feature behavior rules
 - `docs/codex-prompts/` - ready prompts for active work
 - `docs/releases/` - per-version release notes
