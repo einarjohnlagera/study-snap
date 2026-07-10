@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,12 @@ const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
 const UNGROUPED_SECTION_NAME = "Ungrouped";
 const LARGE_VIEWPORT_MIN_WIDTH = 1024;
+const TODAY_FOCUS_EYEBROW = "Today's Focus";
+const CONTINUE_STUDYING_LABEL = "Continue Studying";
+const QUICK_ACTIONS_LABEL = "Quick Actions";
+const REVIEW_DUE_CONCEPTS_LABEL = "Review Due Concepts";
+const FOCUS_DONE_MESSAGE = "You've worked through everything here. Nice work.";
+const FOCUS_NO_TARGET_MESSAGE = "Pick up where you left off — you've got this.";
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -399,27 +405,58 @@ type ResolvedPrimaryAction = {
   href: string;
 };
 
-function PrimaryActionCard({
+function formatConceptCount(count: number): string {
+  return `${count} ${count === 1 ? "concept" : "concepts"}`;
+}
+
+function buildCountdownLine(
+  targetCompletionDate: string | null | undefined,
+  weeksRemaining: number | null | undefined,
+  conceptsRemaining: number | null | undefined,
+): ReactNode {
+  if (!targetCompletionDate || weeksRemaining === null || weeksRemaining === undefined || conceptsRemaining === null || conceptsRemaining === undefined) {
+    return null;
+  }
+  const weekLabel = weeksRemaining === 1 ? "1 week" : `${weeksRemaining} weeks`;
+  return `${weekLabel} until ${formatLocalDate(targetCompletionDate)} · ${formatConceptCount(conceptsRemaining)} remaining`;
+}
+
+function TodaysFocusCard({
   action,
   terminalAction,
+  dueConceptReviewHref,
+  todaysConceptBudget,
+  hasTargetDate,
 }: Readonly<{
   action: ResolvedPrimaryAction | null;
   terminalAction?: ReactNode;
+  dueConceptReviewHref: string | null;
+  todaysConceptBudget: number | null;
+  hasTargetDate: boolean;
 }>) {
+  const coachingSentence = action
+    ? hasTargetDate
+      ? todaysConceptBudget === null
+        ? null
+        : todaysConceptBudget > 0
+          ? `Study about ${formatConceptCount(todaysConceptBudget)} today to stay on pace.`
+          : "You're on pace — no new concepts scheduled today."
+      : FOCUS_NO_TARGET_MESSAGE
+    : null;
+  const hasQuickActions = dueConceptReviewHref !== null || Boolean(terminalAction);
+
   return (
     <Card className="space-y-4 border-blue-500/25 bg-blue-500/5 p-4 sm:p-5">
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Continue</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{TODAY_FOCUS_EYEBROW}</p>
         {action ? (
           <>
             <CardTitle>{action.title}</CardTitle>
             <CardDescription>{action.description}</CardDescription>
+            {coachingSentence ? <p className="pt-1 text-sm text-foreground/75">{coachingSentence}</p> : null}
           </>
         ) : (
-          <>
-            <CardTitle>All caught up in this plan</CardTitle>
-            <CardDescription>Every note has a Study Pack and has been practiced.</CardDescription>
-          </>
+          <p className="text-sm font-medium text-foreground/80">{FOCUS_DONE_MESSAGE}</p>
         )}
       </div>
       <div className="flex flex-col items-start gap-2">
@@ -428,26 +465,44 @@ function PrimaryActionCard({
             href={action.href}
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
           >
-            Continue
+            {CONTINUE_STUDYING_LABEL}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         ) : null}
-        {terminalAction ? (
-          <div className="pt-1">{terminalAction}</div>
+        {hasQuickActions ? (
+          <div className="w-full space-y-2 pt-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{QUICK_ACTIONS_LABEL}</p>
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+              {dueConceptReviewHref ? (
+                <ResponsiveActionLink
+                  href={dueConceptReviewHref}
+                  action="quickReview"
+                  label={REVIEW_DUE_CONCEPTS_LABEL}
+                  variant="outline"
+                  size="sm"
+                  className="border-0 bg-transparent px-0 text-blue-700 shadow-none hover:bg-transparent hover:underline dark:text-blue-300"
+                />
+              ) : null}
+              {terminalAction ? (
+                <div className="flex items-start gap-1">
+                  <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-foreground/45" aria-hidden="true" />
+                  {terminalAction}
+                </div>
+              ) : null}
+            </div>
+          </div>
         ) : null}
       </div>
     </Card>
   );
 }
 
-// Rendered as ReadinessSummary's `footer` slot so the readiness stats and the "View
-// full progress"/"Review due concepts" actions read as one card, not two stacked elements.
+// Rendered as ReadinessSummary's `footer` slot so the readiness stats and the
+// deep progress action read as one card, not two stacked elements.
 function ReadinessCardFooter({
   collectionId,
-  dueConceptReviewHref,
 }: Readonly<{
   collectionId: string;
-  dueConceptReviewHref: string | null;
 }>) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -457,15 +512,6 @@ function ReadinessCardFooter({
       >
         View full progress
       </Link>
-      {dueConceptReviewHref ? (
-        <ResponsiveActionLink
-          href={dueConceptReviewHref}
-          action="quickReview"
-          label="Review due concepts"
-          variant="outline"
-          size="sm"
-        />
-      ) : null}
     </div>
   );
 }
@@ -733,9 +779,6 @@ function renderableCompanionText(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
 
-// Shared by CompanionDisplayCard and CompanionCoachIntro so they agree on when a Companion is
-// "there" — otherwise a non-null Companion with only whitespace/empty fields shows the coach
-// intro ("there's more to do here...") with no guide card beneath it to back it up.
 function hasRenderableCompanionContent(companion: CompanionContent | null): boolean {
   if (!companion) {
     return false;
@@ -756,12 +799,51 @@ function hasRenderableCompanionContent(companion: CompanionContent | null): bool
 // same text, same author, same order; this only swaps the heading copy, it does not
 // reorder or select which sections render (see docs/product/ROADMAP.md's Coach Experience section).
 const COMPANION_COACH_HEADINGS = {
-  overview: "🗺️ What this covers",
-  studyStrategy: "🧭 How to study this",
-  commonMistakes: "⚠️ Avoid these traps",
-  faq: "💬 Common questions",
-  resources: "📎 Extra resources",
+  overview: { icon: "🗺️", label: "What this covers" },
+  studyStrategy: { icon: "🧭", label: "How to study this" },
+  commonMistakes: { icon: "⚠️", label: "Avoid these traps" },
+  faq: { icon: "💬", label: "Common questions" },
+  resources: { icon: "📎", label: "Extra resources" },
 } as const;
+
+type CompanionHeadingKey = keyof typeof COMPANION_COACH_HEADINGS;
+
+function CompanionGuideSection({
+  headingKey,
+  headingId,
+  children,
+}: Readonly<{
+  headingKey: CompanionHeadingKey;
+  headingId: string;
+  children: ReactNode;
+}>) {
+  const heading = COMPANION_COACH_HEADINGS[headingKey];
+  const isWarning = headingKey === "commonMistakes";
+
+  return (
+    <section
+      className={cn(
+        "space-y-3 rounded-lg border border-border bg-muted/30 p-4",
+        isWarning && "border-amber-500/25 bg-amber-500/10",
+      )}
+      aria-labelledby={headingId}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-base shadow-sm",
+            isWarning && "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
+          )}
+          aria-hidden="true"
+        >
+          {heading.icon}
+        </span>
+        <h3 id={headingId} className="text-sm font-semibold text-foreground">{heading.label}</h3>
+      </div>
+      <div className="space-y-3 pl-0 sm:pl-11">{children}</div>
+    </section>
+  );
+}
 
 function CompanionDisplayCard({
   companion,
@@ -810,31 +892,27 @@ function CompanionDisplayCard({
       </div>
 
       {isGuideExpanded ? (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {overview ? (
-            <section className="space-y-2" aria-labelledby="companion-overview-heading">
-              <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.overview}</h3>
+            <CompanionGuideSection headingKey="overview" headingId="companion-overview-heading">
               <SummaryMarkdown content={overview} />
-            </section>
+            </CompanionGuideSection>
           ) : null}
 
           {studyStrategy ? (
-            <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
-              <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.studyStrategy}</h3>
+            <CompanionGuideSection headingKey="studyStrategy" headingId="companion-study-strategy-heading">
               <SummaryMarkdown content={studyStrategy} />
-            </section>
+            </CompanionGuideSection>
           ) : null}
 
           {commonMistakes ? (
-            <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
-              <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.commonMistakes}</h3>
+            <CompanionGuideSection headingKey="commonMistakes" headingId="companion-common-mistakes-heading">
               <SummaryMarkdown content={commonMistakes} />
-            </section>
+            </CompanionGuideSection>
           ) : null}
 
           {faqItems.length > 0 ? (
-            <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
-              <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.faq}</h3>
+            <CompanionGuideSection headingKey="faq" headingId="companion-faq-display-heading">
               <div className="space-y-3">
                 {faqItems.map((item, index) => (
                   <div key={`${item.question}:${index}`} className="space-y-1.5">
@@ -843,70 +921,16 @@ function CompanionDisplayCard({
                   </div>
                 ))}
               </div>
-            </section>
+            </CompanionGuideSection>
           ) : null}
 
           {resources ? (
-            <section className="space-y-2" aria-labelledby="companion-resources-heading">
-              <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.resources}</h3>
+            <CompanionGuideSection headingKey="resources" headingId="companion-resources-heading">
               <SummaryMarkdown content={resources} />
-            </section>
+            </CompanionGuideSection>
           ) : null}
         </div>
       ) : null}
-    </Card>
-  );
-}
-
-// Coach-voice composition over an already-loaded live signal (whether a primary action remains).
-// No new data fetch, no new persisted state, no reordering of the authored Companion below it.
-// Deliberately does not restate the action's title or the weeks-remaining count — those are
-// already shown verbatim by PrimaryActionCard / GoalWeeklyCountdownCard higher on the page.
-// Deliberately says nothing about the Companion/guide either — per the Coach vs. Companion split
-// (docs/product/ROADMAP.md), this card is Coach voice only ("what to do today"); pointing at the
-// Companion is CompanionDisplayCard's own "View Full Guide" affordance's job, not this one's —
-// two cards both angling toward the same hidden content read as redundant.
-function CompanionCoachIntro({
-  primaryAction,
-}: Readonly<{ primaryAction: ResolvedPrimaryAction | null }>) {
-  return (
-    <Card className="space-y-1 p-4 sm:p-5">
-      <p className="text-sm text-foreground/80">
-        {primaryAction
-          ? "👋 There's more to do here — you've got this."
-          : "👋 You've worked through everything here. Nice work."}
-      </p>
-    </Card>
-  );
-}
-
-function GoalWeeklyCountdownCard({
-  targetCompletionDate,
-  weeksRemaining,
-  conceptsRemaining,
-  todaysConceptBudget,
-}: Readonly<{
-  targetCompletionDate: string | null;
-  weeksRemaining: number | null;
-  conceptsRemaining: number | null;
-  todaysConceptBudget: number | null;
-}>) {
-  if (!targetCompletionDate || weeksRemaining === null || conceptsRemaining === null || todaysConceptBudget === null) {
-    return null;
-  }
-  const weekLabel = weeksRemaining === 1 ? "1 week" : `${weeksRemaining} weeks`;
-  const conceptLabel = conceptsRemaining === 1 ? "1 concept" : `${conceptsRemaining} concepts`;
-  const budgetLabel = todaysConceptBudget === 1 ? "1 concept" : `${todaysConceptBudget} concepts`;
-
-  return (
-    <Card className="space-y-2 p-4 sm:p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">This Week</p>
-      <h2 className="text-lg font-semibold tracking-tight">
-        {weekLabel} until {formatLocalDate(targetCompletionDate)}
-      </h2>
-      <p className="text-sm font-medium text-foreground/80">
-        {conceptLabel} remaining · {budgetLabel} today
-      </p>
     </Card>
   );
 }
@@ -2718,6 +2742,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       ) : null}
     </div>
   ) : null;
+  const currentTargetCompletionDate = goalDetail?.targetCompletionDate ?? null;
+  const hasTargetDate = currentTargetCompletionDate !== null;
+  const countdownLine = hasTargetDate
+    ? buildCountdownLine(currentTargetCompletionDate, goalDetail?.weeksRemaining, goalDetail?.conceptsRemaining)
+    : null;
+  const todaysConceptBudget = hasTargetDate ? goalDetail?.todaysConceptBudget ?? null : null;
 
   if (loadState === "loading") {
     return (
@@ -2793,14 +2823,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           )}
         />
 
-        <GoalWeeklyCountdownCard
-          targetCompletionDate={goalDetail.targetCompletionDate}
-          weeksRemaining={goalDetail.weeksRemaining}
-          conceptsRemaining={goalDetail.conceptsRemaining}
-          todaysConceptBudget={goalDetail.todaysConceptBudget}
+        <TodaysFocusCard
+          action={primaryStudyAction}
+          terminalAction={terminalSecondaryAction}
+          dueConceptReviewHref={dueConceptReviewHref}
+          todaysConceptBudget={todaysConceptBudget}
+          hasTargetDate={hasTargetDate}
         />
-
-        <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
 
         <ReadinessSummary
           variant="compact"
@@ -2814,11 +2843,17 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           subjects={[]}
           emptyTitle="No readiness yet"
           emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
-          footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
+          countdown={countdownLine}
+          footer={<ReadinessCardFooter collectionId={collectionId} />}
         />
 
-        {hasRenderableCompanionContent(collection.companion) ? (
-          <CompanionCoachIntro primaryAction={primaryStudyAction} />
+        {activePostAdoptTip ? (
+          <GuidanceTip
+            tipId={activePostAdoptTip.id}
+            message={activePostAdoptTip.message}
+            trackAnalytics
+            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
+          />
         ) : null}
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
@@ -2829,15 +2864,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </Card>
-        ) : null}
-
-        {activePostAdoptTip ? (
-          <GuidanceTip
-            tipId={activePostAdoptTip.id}
-            message={activePostAdoptTip.message}
-            trackAnalytics
-            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
-          />
         ) : null}
 
         <GoalDetailView goal={goalDetail} labels={labels} />
@@ -2958,16 +2984,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         )}
       />
 
-      {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
-          is fetched for it above, and this card self-guards to null when no target date is set. */}
-      <GoalWeeklyCountdownCard
-        targetCompletionDate={goalDetail?.targetCompletionDate ?? null}
-        weeksRemaining={goalDetail?.weeksRemaining ?? null}
-        conceptsRemaining={goalDetail?.conceptsRemaining ?? null}
-        todaysConceptBudget={goalDetail?.todaysConceptBudget ?? null}
+      <TodaysFocusCard
+        action={primaryStudyAction}
+        terminalAction={terminalSecondaryAction}
+        dueConceptReviewHref={dueConceptReviewHref}
+        todaysConceptBudget={todaysConceptBudget}
+        hasTargetDate={hasTargetDate}
       />
-
-      <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
 
       {skippedNoticeCount ? (
         <Card className="border-amber-500/25 bg-amber-500/10 p-4 text-sm text-foreground/75">
@@ -2998,12 +3021,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
         emptyTitle="No readiness yet"
         emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
-        footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
+        countdown={countdownLine}
+        footer={<ReadinessCardFooter collectionId={collectionId} />}
       />
 
-      {hasRenderableCompanionContent(collection.companion) ? (
-        <CompanionCoachIntro primaryAction={primaryStudyAction} />
-      ) : null}
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
       <Card className="space-y-4 p-4 sm:p-6">

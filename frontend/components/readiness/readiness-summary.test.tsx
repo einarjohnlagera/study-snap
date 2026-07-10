@@ -77,4 +77,38 @@ describe("ReadinessSummary", () => {
     ))).toBeInTheDocument();
     expect(screen.getByText("1 not started")).toBeInTheDocument();
   });
+
+  it("renders the compact countdown slot only when provided", () => {
+    const { rerender } = render(
+      <ReadinessSummary
+        variant="compact"
+        title="Goal readiness"
+        overallReadinessPercentage={50}
+        totalConcepts={4}
+        masteredConcepts={2}
+        dueConcepts={1}
+        notPracticedConcepts={1}
+        subjects={[]}
+        countdown="3 weeks until Dec 1, 2026 · 11 concepts remaining"
+      />,
+    );
+
+    expect(screen.getByText("3 weeks until Dec 1, 2026 · 11 concepts remaining")).toBeInTheDocument();
+
+    rerender(
+      <ReadinessSummary
+        variant="compact"
+        title="Goal readiness"
+        overallReadinessPercentage={50}
+        totalConcepts={4}
+        masteredConcepts={2}
+        dueConcepts={1}
+        notPracticedConcepts={1}
+        subjects={[]}
+      />,
+    );
+
+    expect(screen.queryByText("3 weeks until Dec 1, 2026 · 11 concepts remaining")).not.toBeInTheDocument();
+    expect(screen.getByText("1 not started")).toBeInTheDocument();
+  });
 });
