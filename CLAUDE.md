@@ -6,25 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.43.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
-
-## Active release: v0.43.1 — Companion Mentor Tips
-
-Base branch for this release: `releases/v0.43.1`. Atomic, individually-surfaceable, action-linked "Mentor Tips" authored on top of a Companion — a real content-model change (`CompanionContent`'s long-form fields can't be surfaced as individual moments), so it needs its own backend/authoring-UI scope, unlike v0.43.0's frontend-only fast-follows. Full scope in `RELEASES.md`.
-
-- **Content model.** New tip shape (own identity, optional linked action, optional surfacing condition) — not a frontend read of the existing five long-form fields.
-- **Authoring.** Extend the authoring modal, v0.42.0's per-section AI-assist, and the structure-staleness snapshot to the new shape. Mandatory human review before publish still applies — no change to "Curation, never generation" or "publishing is never autonomous."
-- **Action-linking is curator-tagged, not inferred** — a field the curator sets when authoring the tip, not resolved at render time (no per-view LLM call).
-- **Surfacing stays deterministic** (date/progress rules) — FREE-safe by the weekly-countdown precedent, not a PRO feature.
-- **"View Full Guide" stays a permanent escape hatch** regardless of which surfacing triggers have fired.
-- **Known low-volume caveat (explicit go/no-go done at kickoff):** dev data shows only ~1 Official/PUBLIC top-level Review Set with an authored Companion today. Proceeding anyway — content-model/authoring value exists even at low volume, and prod volume may differ from dev. Full scope in `docs/product/ROADMAP.md`.
-
-## Prior release: v0.43.0 — Companion Coach Experience, released
-
-- **`TodaysFocusCard` Coach hierarchy** merges the former countdown/primary-action/coach-intro surfaces into one top-of-page card (primary action, `Continue Studying`, pacing sentence, Quick Actions) — no longer gated on an authored Companion existing.
-- **Coach-voice terminology mapping** over the five Companion sections, order-preserving, same authored text.
-- **"View Full Guide" collapse** — `CompanionDisplayCard` collapses by default on every viewport; sections render only once expanded.
-- **No backend change, no new persisted state, no reordering of authored Companion sections.**
+Current version: **v0.43.1 — Companion Mentor Tips** (released, base branch `releases/v0.43.1`). No version is currently in progress. Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
