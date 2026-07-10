@@ -6,28 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.43.0** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
+Current version: **v0.43.1** — see `RELEASES.md` for in-progress scope, `docs/product/ROADMAP.md` for sequencing.
 
-## Active release: v0.43.0 — Companion Coach Experience
+## Active release: v0.43.1 — Companion Mentor Tips
 
-Base branch for this release: `releases/v0.43.0`. A coach-voice presentation layer over the Companion and an already-loaded live signal (whether a primary action remains) — frontend-only, no new engine, no new backend. Full scope in `RELEASES.md`.
+Base branch for this release: `releases/v0.43.1`. Atomic, individually-surfaceable, action-linked "Mentor Tips" authored on top of a Companion — a real content-model change (`CompanionContent`'s long-form fields can't be surfaced as individual moments), so it needs its own backend/authoring-UI scope, unlike v0.43.0's frontend-only fast-follows. Full scope in `RELEASES.md`.
 
-- **Coach-voice terminology mapping.** Static section-key → coach label/icon map (same shape as `getCollectionLabels`) applied in `CompanionDisplayCard`, strictly order-preserving — no reordering of authored sections.
-- **Coach-voice intro (`CompanionCoachIntro`).** A short tone-setting line above the authored Companion, driven by `primaryStudyAction`/`getNextPlanAction` — deliberately does not restate the action's title, weekly countdown, or readiness numbers, since those already render a few cards up.
-- **Curator-authoring guidance note** added to `docs/features/companion.md` so authored prose and coach framing don't visually fight each other.
-- **"View Full Guide" collapse (added mid-release).** The authored Companion stops rendering inline; it moves behind a "View Full Guide" disclosure so the live-signal cluster (countdown/primary-action/readiness/coach intro) is what a learner sees first — the actual fix for "feels like documentation," per the "Coach vs. Companion" refinement in `ROADMAP.md`.
-- **No context-based reordering/prioritization** of authored sections — the narrative-flow reason holds for today's long-form content shape (see `ROADMAP.md`'s v0.43.1 candidate section for why that could change). **No new backend, endpoint, or persisted state.**
+- **Content model.** New tip shape (own identity, optional linked action, optional surfacing condition) — not a frontend read of the existing five long-form fields.
+- **Authoring.** Extend the authoring modal, v0.42.0's per-section AI-assist, and the structure-staleness snapshot to the new shape. Mandatory human review before publish still applies — no change to "Curation, never generation" or "publishing is never autonomous."
+- **Action-linking is curator-tagged, not inferred** — a field the curator sets when authoring the tip, not resolved at render time (no per-view LLM call).
+- **Surfacing stays deterministic** (date/progress rules) — FREE-safe by the weekly-countdown precedent, not a PRO feature.
+- **"View Full Guide" stays a permanent escape hatch** regardless of which surfacing triggers have fired.
+- **Known low-volume caveat (explicit go/no-go done at kickoff):** dev data shows only ~1 Official/PUBLIC top-level Review Set with an authored Companion today. Proceeding anyway — content-model/authoring value exists even at low volume, and prod volume may differ from dev. Full scope in `docs/product/ROADMAP.md`.
 
-## Next release (candidate): v0.43.1 — Companion Mentor Tips
+## Prior release: v0.43.0 — Companion Coach Experience, released
 
-Not yet kicked off. Atomic, individually-surfaceable, action-linked "Mentor Tips" — a real content-model change (`CompanionContent`'s long-form fields can't be surfaced as individual moments), so it needs its own backend/authoring-UI scope, unlike v0.43.0's frontend-only fast-follows. Full scope in `docs/product/ROADMAP.md`.
-
-## Prior release: v0.42.1 — Companion & Progress Polish, released
-
-- **Merged the Review Set detail page's readiness card and its "View full progress"/"Review due concepts" row into one card**, via an optional `footer` slot on `ReadinessSummary`.
-- **Fixed the `/progress?collectionId={id}` backlink** to return to the originating collection (profile-aware label) when reached via that collection's "View full progress" link, instead of always showing "Dashboard".
-- **Course/program stays plain text, not a badge**, per the existing badge-classification rule — considered and explicitly declined.
-- **No backend change, no new persisted state.**
+- **`TodaysFocusCard` Coach hierarchy** merges the former countdown/primary-action/coach-intro surfaces into one top-of-page card (primary action, `Continue Studying`, pacing sentence, Quick Actions) — no longer gated on an authored Companion existing.
+- **Coach-voice terminology mapping** over the five Companion sections, order-preserving, same authored text.
+- **"View Full Guide" collapse** — `CompanionDisplayCard` collapses by default on every viewport; sections render only once expanded.
+- **No backend change, no new persisted state, no reordering of authored Companion sections.**
 
 ## Source-of-truth docs (read before implementing anything)
 

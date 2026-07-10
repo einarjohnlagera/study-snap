@@ -311,15 +311,39 @@ export type CompanionFaqItem = {
   answer: string | null;
 };
 
+export type CompanionMentorTipAction =
+  | "NONE"
+  | "CONTINUE_STUDYING"
+  | "REVIEW_DUE_CONCEPTS"
+  | "TERMINAL_ACTION";
+
+export type CompanionMentorTipSurfacingConditionType =
+  | "DAYS_BEFORE_TARGET_DATE"
+  | "AFTER_SUBJECTS_COMPLETED";
+
+export type CompanionMentorTipSurfacingCondition = {
+  type: CompanionMentorTipSurfacingConditionType;
+  threshold: number;
+};
+
+export type CompanionMentorTip = {
+  id: string | null;
+  title: string | null;
+  body: string | null;
+  linkedAction: CompanionMentorTipAction | null;
+  surfacingCondition: CompanionMentorTipSurfacingCondition | null;
+};
+
 export type CompanionContent = {
   overview: string | null;
   studyStrategy: string | null;
   commonMistakes: string | null;
   resources?: string | null;
   faq: CompanionFaqItem[];
+  mentorTips: CompanionMentorTip[];
 };
 
-export type CompanionSection = "OVERVIEW" | "STUDY_STRATEGY" | "COMMON_MISTAKES" | "FAQ";
+export type CompanionSection = "OVERVIEW" | "STUDY_STRATEGY" | "COMMON_MISTAKES" | "FAQ" | "MENTOR_TIPS";
 
 export type GoalCollectionDetailResponse = {
   collectionId: string;

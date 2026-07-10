@@ -79,6 +79,13 @@ const billingPricingFixture = {
   },
 };
 
+const proOnlyPaywallContexts = [
+  { type: "BOARD_EXAM_MODE_LOCKED" as const, ctaLabel: "Unlock Board Exam Mode" },
+  { type: "LONG_EXAM_MODE_LOCKED" as const, ctaLabel: "Unlock the Long Exam" },
+  { type: "DIFFICULTY_SELECTION_LOCKED" as const, ctaLabel: "Unlock Difficulty Selection" },
+  { type: "INTERVIEW_PRACTICE_LOCKED" as const, ctaLabel: "Unlock Interview Practice" },
+];
+
 describe("PaywallModal", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/notes/note-1");
@@ -146,6 +153,94 @@ describe("PaywallModal", () => {
       returnPath: "/notes/note-1",
       source: "test_source",
     });
+  });
+
+  it.each(proOnlyPaywallContexts)(
+    "keeps Plus visible but non-selectable for %s",
+    async ({ type, ctaLabel }) => {
+      render(
+        <PaywallModal
+          isOpen
+          context={{ type }}
+          source="test_source"
+          onClose={jest.fn()}
+        />,
+      );
+
+      expect(await screen.findByRole("button", { name: ctaLabel })).toBeInTheDocument();
+      expect(screen.getByText("Plus").closest("[role='button']")).toBeNull();
+      expect(screen.getByText("Pro").closest("[role='button']")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("Plus"));
+
+      expect(screen.getByRole("button", { name: ctaLabel })).toBeInTheDocument();
+      expect(createPremiumCheckoutSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it("starts Pro checkout from a Pro-only paywall context", async () => {
+    render(
+      <PaywallModal
+        isOpen
+        context={{ type: "BOARD_EXAM_MODE_LOCKED" }}
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Unlock Board Exam Mode" }));
+
+    await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", returnUrl: "/notes/note-1" });
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
+  });
+
+  it("keeps Plus selectable and checkoutable for Plus-eligible adaptive practice paywalls", async () => {
+    render(
+      <PaywallModal
+        isOpen
+        context={{ type: "ADAPTIVE_PRACTICE_LOCKED" }}
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "Get More Adaptive Practice" })).toBeInTheDocument();
+    expect(screen.getByText("Plus").closest("[role='button']")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Pro"));
+    expect(await screen.findByRole("button", { name: "Go Pro" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Plus"));
+    fireEvent.click(await screen.findByRole("button", { name: "Get More Adaptive Practice" }));
+
+    await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PLUS", returnUrl: "/notes/note-1" });
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
+  });
+
+  it("uses concept review timing copy while keeping both paid plan cards selectable", async () => {
+    render(
+      <PaywallModal
+        isOpen
+        context={{ type: "CONCEPT_REVIEW_TIMING_LOCKED" }}
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "See your review timing" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See review timing — get Plus" })).toBeInTheDocument();
+    expect(screen.getByText("Plus").closest("[role='button']")).toBeInTheDocument();
+    expect(screen.getByText("Pro").closest("[role='button']")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Pro"));
+    expect(await screen.findByRole("button", { name: "Go Pro" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Plus"));
+    expect(await screen.findByRole("button", { name: "See review timing — get Plus" })).toBeInTheDocument();
   });
 
   it("disables the Plus CTA when the current plan is already Plus", async () => {

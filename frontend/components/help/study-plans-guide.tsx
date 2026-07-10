@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Layers, ListOrdered, Copy, GraduationCap } from "lucide-react";
+import { ArrowRight, CalendarClock, Layers, ListOrdered, Copy, GraduationCap, Star, Target } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import type { ProfileType } from "@/lib/api";
@@ -82,6 +82,54 @@ export function StudyPlansGuide({ profileType }: Readonly<{ profileType: Profile
             <span>
               Or open <span className="font-medium text-foreground/80">{labels.navLabel}</span> from the navigation to
               create one and add notes from there.
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      {/* Primary collection */}
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Your {labels.primarySingular}
+        </p>
+        <ul className="space-y-2">
+          <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
+            <Star className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
+            <span>
+              Mark one top-level {labels.singular.toLowerCase()} as your default so it appears first on Dashboard,
+              {labels.navLabel}, and Progress.
+            </span>
+          </li>
+          <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
+            <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
+            <span>
+              Set or remove it from the {labels.singular.toLowerCase()} detail page&apos;s overflow menu. If you have
+              exactly one top-level goal and no primary set yet, NoteLib can set it as primary automatically.
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      {/* Target date pacing */}
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Pacing to a target date
+        </p>
+        <ul className="space-y-2">
+          <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
+            <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
+            <span>
+              On a top-level {labels.singular.toLowerCase()}, use Edit to set an optional target completion date and
+              your study intensity in days per week. Child {labels.plural.toLowerCase()} do not have their own target
+              dates.
+            </span>
+          </li>
+          <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
+            <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
+            <span>
+              Once a target date is set, Progress shows weeks remaining and concepts remaining, and Today&apos;s
+              Focus includes a daily concept budget in its coaching sentence. Due concepts are always included; new
+              concepts are paced across your remaining study days.
             </span>
           </li>
         </ul>

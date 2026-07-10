@@ -4,5 +4,6 @@ public enum CompanionSection {
     OVERVIEW,
     STUDY_STRATEGY,
     COMMON_MISTAKES,
-    FAQ
+    FAQ,
+    MENTOR_TIPS
 }

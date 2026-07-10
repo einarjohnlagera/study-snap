@@ -1,5 +1,38 @@
 # RELEASES.md - NoteLib
 
+## v0.43.1 - Companion Mentor Tips
+
+**Status: Released**
+
+Theme: let the *authored* Companion content participate in the Coach experience the way live signals already do — small, individually-surfaceable, action-linked "Mentor Tips" instead of an article to read start to finish. A real content-model change (backend + authoring-UI), unlike v0.43.0's frontend-only fast-follows.
+
+### Planned Scope
+
+- **Content model (backend).** New Mentor Tip shape with its own identity, optional linked action, and optional deterministic surfacing condition — `CompanionContent`'s existing five long-form markdown fields cannot be individually surfaced without a new entity/DTO shape.
+- **Authoring (backend + frontend).** Extend the authoring modal, v0.42.0's per-section AI-assist, and the structure-staleness snapshot to cover Mentor Tips. Mandatory human review before publish, same as every other Companion write path.
+- **Action-linking (backend + frontend).** Curator-tagged, not inferred — the curator sets the linked action (e.g. "Review due concepts") when authoring the tip. No per-view LLM call.
+- **Deterministic surfacing (backend + frontend).** Date/progress-rule triggers only (e.g. "within 2 weeks of exam date," "after N subjects completed") — no learning-pattern/LLM-driven selection.
+- **"View Full Guide" stays reachable regardless of trigger state (frontend).** A learner must never permanently miss a tip because its surfacing condition never fired for them.
+
+Anti-drift: "Curation, never generation" unchanged — learner never receives an auto-generated tip; publishing stays non-autonomous; surfacing logic must stay deterministic/rule-based, not adaptive/LLM-driven (that tier is reserved for the gated PRO Personalization candidate in `docs/product/ROADMAP.md`); no change to the existing five Companion sections' content or order.
+
+**Known low-volume caveat, checked at kickoff, not assumed:** dev DB shows only 1 PUBLIC/Official top-level Review Set currently carrying an authored Companion (2 companions total across 7 top-level collections; the other sits on a PRIVATE collection). `docs/product/ROADMAP.md`'s v0.43.1 candidate section flagged this explicitly as a go/no-go check. Decision: proceed — this is dev/local data that may not reflect prod authored volume, and the content-model/authoring-UI work has standalone value even before curators have built up tip inventory.
+
+### Shipped
+
+- **Mentor Tips content model.** `CompanionContent` now carries `mentorTips` inside the existing `note_collections.companion` JSONB payload. No new table, migration, endpoint, persisted learner state, progress signal, or Companion eligibility rule was added.
+- **Curator authoring and validation.** ADMIN Companion authoring can add, edit, remove, and save Mentor Tips with a fixed linked action (`None`, `Continue Studying`, `Review Due Concepts`, terminal exam/builder action) plus an optional deterministic surfacing condition. Invalid negative thresholds are rejected through the existing inline modal error path.
+- **AI draft extension, not auto-publish.** Per-section Companion generation now supports `MENTOR_TIPS`; the LLM returns draft tip title/body only, with `linkedAction=NONE` and `surfacingCondition=null`. Curators still review, configure, and save through the existing full-replacement Companion write path.
+- **Deterministic Coach surfacing.** The collection detail page selects at most one eligible Mentor Tip in authored order and renders it near `TodaysFocusCard`, resolving its linked action against the already-computed primary action, due-concept review link, or terminal action. No per-view LLM call or extra fetch.
+- **Full guide escape hatch.** `CompanionDisplayCard` now lists all authored Mentor Tips as a sixth expanded guide section after Resources, regardless of whether each tip is currently eligible to surface near Today's Focus. Existing five-section order is unchanged.
+- **Staleness/adopt parity.** Companion structure staleness remains child/note-membership-only, so Mentor Tip text/config changes do not mark content outdated. Cross-owner adopt/copy carries Mentor Tips the same way it carries the rest of Companion content.
+- **Fix: Pro-only paywalls no longer offer dead-end Plus checkout.** Board Exam Mode, Long Exam, Difficulty Selection, and Interview Practice paywalls now map to Pro-specific CTA labels and also gate the Plus plan card's selectability plus `startCheckout` itself. This closes the trust bug where fixing only the label/context layer still left the visible Plus card clickable for features Plus does not unlock.
+- **Fix: review-timing upsell no longer opens the Adaptive Practice paywall.** Free users tapping the Note Detail review-timing upgrade row now see dedicated "See your review timing" copy with Plus as the primary path and Pro still selectable, matching the actual Plus/Pro entitlement split.
+- **Help Center coverage for current review-set guidance.** Added a Learning Companion guide covering Companion, Today's Focus, Mentor Tips, the collapsed Full Guide, and official-author workflow. The Study Plans & Collections guide now also explains Primary Review Sets and target-date / Weekly Countdown pacing.
+- **Fix: stale "This Week" references caught at pre-signoff audit.** The new Study Plans & Collections Help copy and `docs/features/collections.md` still described the standalone weekly-countdown card that v0.43.0 removed. Both now describe the actual current behavior (countdown line inside the Progress card, daily budget inside `TodaysFocusCard`'s coaching sentence); `docs/features/collections.md`'s page-hierarchy description was also updated to match the v0.43.0 Coach/Progress/Companion order. No behavior changed — documentation only.
+
+---
+
 ## v0.43.0 - Companion Coach Experience
 
 **Status: Released**

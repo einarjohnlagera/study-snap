@@ -2,6 +2,8 @@ package com.studysnap.backend.service.impl;
 
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionFaqItem;
+import com.studysnap.backend.dto.CompanionMentorTip;
+import com.studysnap.backend.dto.CompanionMentorTipAction;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.LlmStudyPackService;
@@ -102,6 +104,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         boolean studyStrategy = sections != null && sections.contains(CompanionSection.STUDY_STRATEGY);
         boolean commonMistakes = sections != null && sections.contains(CompanionSection.COMMON_MISTAKES);
         boolean faq = sections != null && sections.contains(CompanionSection.FAQ);
+        boolean mentorTips = sections != null && sections.contains(CompanionSection.MENTOR_TIPS);
         return new CompanionContent(
                 overview ? "Use " + title + " as the learner's home base for the major concepts and practice expectations." : null,
                 studyStrategy ? "Work through one subject area at a time, then return to mixed review before the final check." : null,
@@ -111,6 +114,15 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                         new CompanionFaqItem("Where should learners start?", "Start with the first subject plan, then continue in order."),
                         new CompanionFaqItem("How often should learners review?", "Use short daily review blocks and revisit missed concepts."),
                         new CompanionFaqItem("What should learners do before the exam?", "Finish mixed practice and revisit the weakest topics.")
+                ) : List.of(),
+                mentorTips ? List.of(
+                        new CompanionMentorTip(
+                                null,
+                                "Make this plan your daily checkpoint",
+                                "Open the next subject plan, practice one ready Study Pack, and leave a short note on what still feels shaky.",
+                                CompanionMentorTipAction.NONE,
+                                null
+                        )
                 ) : List.of()
         );
     }

@@ -550,7 +550,8 @@ class NoteCollectionControllerTest {
                 "Study strategy",
                 "Common mistakes",
                 null,
-                List.of(new CompanionFaqItem("Question?", "Answer."))
+                List.of(new CompanionFaqItem("Question?", "Answer.")),
+                List.of()
         );
     }
 }
