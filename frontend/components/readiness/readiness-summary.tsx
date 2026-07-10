@@ -134,6 +134,7 @@ type ReadinessSummaryProps = {
   unavailableDescription?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  countdown?: ReactNode;
   footer?: ReactNode;
 };
 
@@ -152,6 +153,7 @@ export function ReadinessSummary({
   unavailableDescription = "Readiness is unavailable right now.",
   emptyTitle = "No readiness yet",
   emptyDescription = "Generate Study Packs and practice to see readiness.",
+  countdown,
   footer,
 }: Readonly<ReadinessSummaryProps>) {
   if (variant === "compact") {
@@ -175,6 +177,7 @@ export function ReadinessSummary({
                     {notPracticedConcepts} not started
                     {description ? <> &middot; {description}</> : null}
                   </p>
+                  {countdown ? <p className="text-sm text-foreground/65">{countdown}</p> : null}
                 </>
               ) : (
                 <p className="text-sm text-foreground/70">{emptyDescription}</p>

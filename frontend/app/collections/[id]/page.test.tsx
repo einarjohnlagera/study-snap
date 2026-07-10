@@ -408,7 +408,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByRole("link", { name: /Continue/ })).toHaveAttribute("href", "/collections/child-1");
+    expect(await screen.findByRole("link", { name: /Continue Studying/ })).toHaveAttribute("href", "/collections/child-1");
     expect(screen.getByText("Open the next subject plan in this goal.")).toBeInTheDocument();
     expect(screen.getAllByText("Professional Education Mastery").length).toBeGreaterThan(0);
   });
@@ -888,10 +888,10 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByText("Overview draft")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "💬 Common questions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Common questions" })).toBeInTheDocument();
     expect(screen.getByText("What now?")).toBeInTheDocument();
     expect(screen.getByText("Practice.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "📎 Extra resources" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Extra resources" })).toBeInTheDocument();
     expect(screen.getByText("- [Reviewer archive](https://example.com/reviewer)")).toBeInTheDocument();
     expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
   });
@@ -961,17 +961,17 @@ describe("CollectionDetailPageClient", () => {
     expect(within(screen.getByRole("dialog", { name: "Manage Companion" })).getByLabelText("Overview")).toHaveValue("Existing overview");
   });
 
-  it("does not render a companion display card when companion is null", async () => {
+  it("shows the Coach encouragement even when companion is null", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
     expect(screen.queryByText("Companion")).not.toBeInTheDocument();
-    expect(screen.queryByText(/There's more to do here/)).not.toBeInTheDocument();
+    expect(screen.getByText("Pick up where you left off — you've got this.")).toBeInTheDocument();
     expect(screen.queryByText(/worked through everything here/)).not.toBeInTheDocument();
   });
 
-  it("shows the coach intro's more-to-do message above the companion when a primary action remains", async () => {
+  it("shows the Coach encouragement above the companion when a primary action remains", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       companion: {
         overview: "Start with the foundations.",
@@ -983,14 +983,14 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const introText = await screen.findByText(/There's more to do here/);
+    const introText = await screen.findByText("Pick up where you left off — you've got this.");
     const companionHeading = screen.getByRole("heading", { name: "Learning Companion" });
     expect(introText).toBeInTheDocument();
     expect(screen.queryByText(/worked through everything here/)).not.toBeInTheDocument();
     expect(introText.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("shows the coach intro's caught-up message when no primary action remains", async () => {
+  it("shows the Coach caught-up message when no primary action remains", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [],
       companion: {
@@ -1004,7 +1004,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText(/worked through everything here/)).toBeInTheDocument();
-    expect(screen.queryByText(/There's more to do here/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pick up where you left off/)).not.toBeInTheDocument();
   });
 
   it("does not render a companion display card for an empty draft", async () => {
@@ -1022,7 +1022,7 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/There's more to do here/)).not.toBeInTheDocument();
+    expect(screen.getByText("Pick up where you left off — you've got this.")).toBeInTheDocument();
   });
 
   it("renders only populated companion prose sections", async () => {
@@ -1039,11 +1039,11 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
-    expect(screen.getByRole("heading", { name: "🗺️ What this covers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What this covers" })).toBeInTheDocument();
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
-    expect(screen.queryByRole("heading", { name: "🧭 How to study this" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "⚠️ Avoid these traps" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "💬 Common questions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "How to study this" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Avoid these traps" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Common questions" })).not.toBeInTheDocument();
   });
 
   it("renders a companion with only resources populated", async () => {
@@ -1061,10 +1061,10 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
-    expect(screen.getByRole("heading", { name: "📎 Extra resources" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Extra resources" })).toBeInTheDocument();
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("- [Curriculum guide](https://example.com/curriculum)");
-    expect(screen.queryByRole("heading", { name: "🗺️ What this covers" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "💬 Common questions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "What this covers" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Common questions" })).not.toBeInTheDocument();
   });
 
   it("skips the companion FAQ section when every entry is blank", async () => {
@@ -1084,7 +1084,7 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "💬 Common questions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Common questions" })).not.toBeInTheDocument();
   });
 
   it("renders populated companion FAQ entries and skips blank entries", async () => {
@@ -1105,7 +1105,7 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
-    expect(screen.getByRole("heading", { name: "💬 Common questions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Common questions" })).toBeInTheDocument();
     expect(screen.getByText("How should I start?")).toBeInTheDocument();
     expect(screen.getAllByTestId("summary-markdown").map((element) => element.textContent)).toEqual([
       "Read the **overview** first.",
@@ -1145,6 +1145,7 @@ describe("CollectionDetailPageClient", () => {
   });
 
   it("renders the companion after Goal-view readiness content", async () => {
+    setJustAdoptedNotice("collection-1");
     (getCollection as jest.Mock).mockResolvedValue(collection({
       title: "LET Mastery",
       childCount: 2,
@@ -1156,19 +1157,16 @@ describe("CollectionDetailPageClient", () => {
         faq: [],
       },
     }));
-    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
-      targetCompletionDate: "2026-12-01",
-      weeksRemaining: 3,
-      conceptsRemaining: 11,
-      todaysConceptBudget: 4,
-    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const readinessHeading = await screen.findByRole("heading", { name: "LET Mastery readiness" });
+    const guidanceTip = screen.getByText("Set a target completion date to see your weekly countdown and daily study budget.");
     const companionHeading = screen.getByRole("heading", { name: "Learning Companion" });
 
-    expect(readinessHeading.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(readinessHeading.compareDocumentPosition(guidanceTip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(guidanceTip.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("renders the companion after leaf-view readiness content", async () => {
@@ -1197,7 +1195,7 @@ describe("CollectionDetailPageClient", () => {
     expect(readinessHeading.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("shows the This Week countdown card when a target date and countdown fields are set", async () => {
+  it("shows target-date pacing in Today's Focus and Progress when countdown fields are set", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
       targetCompletionDate: "2026-12-01",
@@ -1209,12 +1207,29 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
-    expect(screen.getByText("This Week")).toBeInTheDocument();
-    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
-    expect(screen.getByText("11 concepts remaining · 4 concepts today")).toBeInTheDocument();
+    expect(screen.getByText("Study about 4 concepts today to stay on pace.")).toBeInTheDocument();
+    expect(await screen.findByText("3 weeks until Dec 1, 2026 · 11 concepts remaining")).toBeInTheDocument();
+    expect(screen.queryByText("This Week")).not.toBeInTheDocument();
   });
 
-  it("hides the This Week countdown card when no target date is set", async () => {
+  it("uses the on-pace Coach sentence instead of a literal zero when today's concept budget is 0", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      targetCompletionDate: "2026-12-01",
+      weeksRemaining: 3,
+      conceptsRemaining: 0,
+      todaysConceptBudget: 0,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByText("You're on pace — no new concepts scheduled today.")).toBeInTheDocument();
+    expect(screen.queryByText(/Study about 0/)).not.toBeInTheDocument();
+    expect(await screen.findByText("3 weeks until Dec 1, 2026 · 0 concepts remaining")).toBeInTheDocument();
+  });
+
+  it("hides Progress countdown and uses the no-target Coach sentence when no target date is set", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({ title: "LET Mastery", childCount: 2, items: [] }));
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
 
@@ -1222,9 +1237,11 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+    expect(screen.queryByText(/weeks until/)).not.toBeInTheDocument();
+    expect(screen.getByText("Pick up where you left off — you've got this.")).toBeInTheDocument();
   });
 
-  it("shows the This Week countdown card on a childless top-level plan while still rendering the leaf view", async () => {
+  it("shows target-date pacing on a childless top-level plan while still rendering the leaf view", async () => {
     // Regression test: a top-level collection with zero children (a flat "leaf" Study Plan, not a
     // Goal with Subject plans) can still carry a target date — the countdown must appear even though
     // this collection renders the leaf view (Build/notes list), not the Goal view (children list).
@@ -1240,15 +1257,14 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("This Week")).toBeInTheDocument();
-    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
-    expect(screen.getByText("11 concepts remaining · 4 concepts today")).toBeInTheDocument();
+    expect(await screen.findByText("Study about 4 concepts today to stay on pace.")).toBeInTheDocument();
     // Still the leaf view — not switched to the Goal view's children list.
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026 · 11 concepts remaining")).toBeInTheDocument();
     expect(screen.queryByText(/Subject Plans?$/)).not.toBeInTheDocument();
   });
 
-  it("does not show the This Week countdown card on a childless top-level plan with no target date", async () => {
+  it("does not show the Progress countdown on a childless top-level plan with no target date", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({ title: "Midterm Study Plan", childCount: 0 }));
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({ childCount: 0, children: [] }));
 
@@ -1256,6 +1272,7 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan readiness" })).toBeInTheDocument();
     expect(screen.queryByText("This Week")).not.toBeInTheDocument();
+    expect(screen.queryByText(/weeks until/)).not.toBeInTheDocument();
   });
 
   it("does not show the post-adopt target-date tip on a freshly-adopted childless leaf plan", async () => {
@@ -1296,8 +1313,8 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
     fireEvent.click(await screen.findByRole("button", { name: "Save" }));
 
-    expect(await screen.findByText("This Week")).toBeInTheDocument();
-    expect(screen.getByText("3 weeks until Dec 1, 2026")).toBeInTheDocument();
+    expect(await screen.findByText("Study about 4 concepts today to stay on pace.")).toBeInTheDocument();
+    expect(screen.getByText("3 weeks until Dec 1, 2026 · 11 concepts remaining")).toBeInTheDocument();
   });
 
   it("shows a post-adopt target-date tip for a dateless Goal", async () => {
@@ -1373,7 +1390,7 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.change(await screen.findByLabelText("Target completion date"), { target: { value: "2026-12-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByText("2 weeks until Dec 1, 2026")).toBeInTheDocument();
+    expect(await screen.findByText("2 weeks until Dec 1, 2026 · 6 concepts remaining")).toBeInTheDocument();
   });
 
   it("shows the readiness unavailable state without hiding the leaf plan", async () => {
@@ -1650,7 +1667,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const nextLink = await screen.findByRole("link", { name: "Continue" });
+    const nextLink = await screen.findByRole("link", { name: "Continue Studying" });
     expect(screen.getByText("Turn this note into a Study Pack before moving to the next step.")).toBeInTheDocument();
     expect(nextLink).toHaveAttribute("href", "/notes/note-1?ref=%2Fcollections%2Fcollection-1");
   });
@@ -1672,7 +1689,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const nextLink = await screen.findByRole("link", { name: "Continue" });
+    const nextLink = await screen.findByRole("link", { name: "Continue Studying" });
     expect(screen.getByText("Continue from this note. Next step: Study this note.")).toBeInTheDocument();
     expect(nextLink).toHaveAttribute("href", "/notes/note-1?ref=%2Fcollections%2Fcollection-1");
   });
@@ -1697,7 +1714,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const nextLinks = await screen.findAllByRole("link", { name: "Review due concepts" });
+    const nextLinks = await screen.findAllByRole("link", { name: "Review Due Concepts" });
     const nextLink = nextLinks.find((link) => link.getAttribute("href") === "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
     if (!nextLink) {
       throw new Error("Expected Review due concepts link for note-2");
@@ -1728,11 +1745,11 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByRole("link", { name: "Review due concepts" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Review Due Concepts" })).toHaveAttribute(
       "href",
       "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
     );
-    expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Continue Studying" })).toHaveAttribute(
       "href",
       "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
     );
@@ -1752,11 +1769,11 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByRole("link", { name: "Continue" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Continue Studying" })).toHaveAttribute(
       "href",
       "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
     );
-    expect(screen.queryByRole("link", { name: "Review due concepts" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review Due Concepts" })).not.toBeInTheDocument();
   });
 
   it("shows caught up when no action remains", async () => {
@@ -1772,8 +1789,28 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByText("All caught up in this plan")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Continue" })).not.toBeInTheDocument();
+    expect(await screen.findByText("You've worked through everything here. Nice work.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Continue Studying" })).not.toBeInTheDocument();
+  });
+
+  it("keeps terminal quick actions visible when no primary action remains", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "TEACHER", planType: "FREE" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      progress: {
+        totalNotes: 0,
+        notesWithStudyPack: 0,
+        notesPracticed: 0,
+      },
+      items: [],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("You've worked through everything here. Nice work.")).toBeInTheDocument();
+    expect(screen.getByText("Quick Actions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build Exam" })).toBeDisabled();
+    expect(screen.getByText("Generate a quiz for at least one note to build an exam.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Continue Studying" })).not.toBeInTheDocument();
   });
 
   it("never uses due concepts as the next action for Free users", async () => {
@@ -1789,11 +1826,11 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    expect(await screen.findByRole("link", { name: "Continue" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Continue Studying" })).toHaveAttribute(
       "href",
       "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
     );
-    expect(screen.queryByRole("link", { name: "Review due concepts" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review Due Concepts" })).not.toBeInTheDocument();
   });
 
   it("routes teacher collections to Exam Builder with the collection id and quiz-ready note ids", async () => {
@@ -1993,6 +2030,9 @@ describe("CollectionDetailPageClient", () => {
     expect(
       screen.queryByRole("button", { name: /Take the Long Exam|Take the Board Exam|Start Interview Practice/ }),
     ).not.toBeInTheDocument();
+    // No terminal action and no due concepts for this profile/data combination — the "Quick
+    // Actions" label itself must not render with nothing underneath it.
+    expect(screen.queryByText("Quick Actions")).not.toBeInTheDocument();
   });
 
   it("hides admin publish action for non-admins", async () => {
