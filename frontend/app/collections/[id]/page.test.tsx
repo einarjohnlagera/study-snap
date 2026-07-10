@@ -1022,6 +1022,7 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/There's more to do here/)).not.toBeInTheDocument();
   });
 
   it("renders only populated companion prose sections", async () => {

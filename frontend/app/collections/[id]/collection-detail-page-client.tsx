@@ -733,6 +733,25 @@ function renderableCompanionText(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
 
+// Shared by CompanionDisplayCard and CompanionCoachIntro so they agree on when a Companion is
+// "there" — otherwise a non-null Companion with only whitespace/empty fields shows the coach
+// intro ("there's more to do here...") with no guide card beneath it to back it up.
+function hasRenderableCompanionContent(companion: CompanionContent | null): boolean {
+  if (!companion) {
+    return false;
+  }
+  const hasFaqContent = companion.faq.some(
+    (item) => renderableCompanionText(item.question) || renderableCompanionText(item.answer),
+  );
+  return Boolean(
+    renderableCompanionText(companion.overview)
+    || renderableCompanionText(companion.studyStrategy)
+    || renderableCompanionText(companion.commonMistakes)
+    || renderableCompanionText(companion.resources)
+    || hasFaqContent,
+  );
+}
+
 // Coach-voice framing over the curator-authored Companion sections. Purely presentational —
 // same text, same author, same order; this only swaps the heading copy, it does not
 // reorder or select which sections render (see docs/product/ROADMAP.md's Coach Experience section).
@@ -754,7 +773,7 @@ function CompanionDisplayCard({
   // learner sees first, and the full guide is opt-in, not the page's default reading experience.
   const [isGuideExpanded, setIsGuideExpanded] = useState(false);
 
-  if (!companion) {
+  if (!companion || !hasRenderableCompanionContent(companion)) {
     return null;
   }
 
@@ -768,10 +787,6 @@ function CompanionDisplayCard({
       answer: renderableCompanionText(item.answer),
     }))
     .filter((item) => item.question || item.answer);
-
-  if (!overview && !studyStrategy && !commonMistakes && faqItems.length === 0 && !resources) {
-    return null;
-  }
 
   return (
     <Card className="space-y-4 p-4 sm:p-5">
@@ -2802,7 +2817,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
         />
 
-        {collection.companion ? (
+        {hasRenderableCompanionContent(collection.companion) ? (
           <CompanionCoachIntro primaryAction={primaryStudyAction} />
         ) : null}
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
@@ -2986,7 +3001,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
       />
 
-      {collection.companion ? (
+      {hasRenderableCompanionContent(collection.companion) ? (
         <CompanionCoachIntro primaryAction={primaryStudyAction} />
       ) : null}
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
