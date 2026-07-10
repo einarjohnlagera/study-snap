@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRight, ChevronDown, ChevronRight, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
+import { ArrowRight, ChevronDown, GripVertical, Globe, Lock, MoreHorizontal, Search, Settings2, Star, X } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -463,7 +463,7 @@ function TodaysFocusCard({
         {action ? (
           <Link
             href={action.href}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+            className="inline-flex w-full min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 sm:w-auto"
           >
             {CONTINUE_STUDYING_LABEL}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -472,7 +472,7 @@ function TodaysFocusCard({
         {hasQuickActions ? (
           <div className="w-full space-y-2 pt-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{QUICK_ACTIONS_LABEL}</p>
-            <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
               {dueConceptReviewHref ? (
                 <ResponsiveActionLink
                   href={dueConceptReviewHref}
@@ -480,15 +480,10 @@ function TodaysFocusCard({
                   label={REVIEW_DUE_CONCEPTS_LABEL}
                   variant="outline"
                   size="sm"
-                  className="border-0 bg-transparent px-0 text-blue-700 shadow-none hover:bg-transparent hover:underline dark:text-blue-300"
+                  className="w-full sm:w-auto"
                 />
               ) : null}
-              {terminalAction ? (
-                <div className="flex items-start gap-1">
-                  <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-foreground/45" aria-hidden="true" />
-                  {terminalAction}
-                </div>
-              ) : null}
+              {terminalAction}
             </div>
           </div>
         ) : null}
@@ -2712,12 +2707,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     openCollectionPremiumExam();
   }, [openCollectionPremiumExam, premiumExamDisabled, primaryExamItem, unpracticedExamNoteCount]);
   const terminalSecondaryAction = terminalAction ? (
-    <div className="flex flex-col gap-1">
+    <div className="flex w-full flex-col gap-1 sm:w-auto">
       <ResponsiveActionButton
         action="open"
         label={terminalAction.label}
-        variant="ghost"
+        variant="outline"
         size="sm"
+        className="w-full sm:w-auto"
         disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
         onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : handlePremiumExamCta}
       />
