@@ -15,7 +15,12 @@ Base branch for this release: `releases/v0.43.0`. A coach-voice presentation lay
 - **Coach-voice terminology mapping.** Static section-key → coach label/icon map (same shape as `getCollectionLabels`) applied in `CompanionDisplayCard`, strictly order-preserving — no reordering of authored sections.
 - **Coach-voice intro (`CompanionCoachIntro`).** A short tone-setting line above the authored Companion, driven by `primaryStudyAction`/`getNextPlanAction` — deliberately does not restate the action's title, weekly countdown, or readiness numbers, since those already render a few cards up.
 - **Curator-authoring guidance note** added to `docs/features/companion.md` so authored prose and coach framing don't visually fight each other.
-- **No context-based reordering/prioritization** of authored sections — deferred to future PRO personalization (collides with the monetization line and breaks curator-authored narrative flow). **No new backend, endpoint, or persisted state.**
+- **"View Full Guide" collapse (added mid-release).** The authored Companion stops rendering inline; it moves behind a "View Full Guide" disclosure so the live-signal cluster (countdown/primary-action/readiness/coach intro) is what a learner sees first — the actual fix for "feels like documentation," per the "Coach vs. Companion" refinement in `ROADMAP.md`.
+- **No context-based reordering/prioritization** of authored sections — the narrative-flow reason holds for today's long-form content shape (see `ROADMAP.md`'s v0.43.1 candidate section for why that could change). **No new backend, endpoint, or persisted state.**
+
+## Next release (candidate): v0.43.1 — Companion Mentor Tips
+
+Not yet kicked off. Atomic, individually-surfaceable, action-linked "Mentor Tips" — a real content-model change (`CompanionContent`'s long-form fields can't be surfaced as individual moments), so it needs its own backend/authoring-UI scope, unlike v0.43.0's frontend-only fast-follows. Full scope in `docs/product/ROADMAP.md`.
 
 ## Prior release: v0.42.1 — Companion & Progress Polish, released
 
