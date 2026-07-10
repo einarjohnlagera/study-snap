@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.43.1 - Companion Mentor Tips
+
+**Status: In Progress**
+
+Theme: let the *authored* Companion content participate in the Coach experience the way live signals already do — small, individually-surfaceable, action-linked "Mentor Tips" instead of an article to read start to finish. A real content-model change (backend + authoring-UI), unlike v0.43.0's frontend-only fast-follows.
+
+### Planned Scope
+
+- **Content model (backend).** New Mentor Tip shape with its own identity, optional linked action, and optional deterministic surfacing condition — `CompanionContent`'s existing five long-form markdown fields cannot be individually surfaced without a new entity/DTO shape.
+- **Authoring (backend + frontend).** Extend the authoring modal, v0.42.0's per-section AI-assist, and the structure-staleness snapshot to cover Mentor Tips. Mandatory human review before publish, same as every other Companion write path.
+- **Action-linking (backend + frontend).** Curator-tagged, not inferred — the curator sets the linked action (e.g. "Review due concepts") when authoring the tip. No per-view LLM call.
+- **Deterministic surfacing (backend + frontend).** Date/progress-rule triggers only (e.g. "within 2 weeks of exam date," "after N subjects completed") — no learning-pattern/LLM-driven selection.
+- **"View Full Guide" stays reachable regardless of trigger state (frontend).** A learner must never permanently miss a tip because its surfacing condition never fired for them.
+
+Anti-drift: "Curation, never generation" unchanged — learner never receives an auto-generated tip; publishing stays non-autonomous; surfacing logic must stay deterministic/rule-based, not adaptive/LLM-driven (that tier is reserved for the gated PRO Personalization candidate in `docs/product/ROADMAP.md`); no change to the existing five Companion sections' content or order.
+
+**Known low-volume caveat, checked at kickoff, not assumed:** dev DB shows only 1 PUBLIC/Official top-level Review Set currently carrying an authored Companion (2 companions total across 7 top-level collections; the other sits on a PRIVATE collection). `docs/product/ROADMAP.md`'s v0.43.1 candidate section flagged this explicitly as a go/no-go check. Decision: proceed — this is dev/local data that may not reflect prod authored volume, and the content-model/authoring-UI work has standalone value even before curators have built up tip inventory.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.43.0 - Companion Coach Experience
 
 **Status: Released**
