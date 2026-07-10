@@ -86,6 +86,15 @@ The collection detail page renders Companion content in both top-level view bran
 
 `GoalCollectionDetailResponse` also carries `companionMayBeOutdated`, an ADMIN-only authoring signal for eligible top-level collections. It is `true` only when the requester is ADMIN, Companion content exists, a saved structure snapshot exists, and the current structure no longer matches that snapshot. The comparison is intentionally structural and lightweight: child/note membership count and sorted ids only. It does not compare note body edits, generated content, concept counts, mastery, or per-user progress.
 
+## Coach Experience (presentation layer, v0.43.0)
+
+The detail page presents Companion in a coach voice. This is presentation only — it does not change what is stored, authored, or generated, and it does not reorder sections.
+
+- **Coach-voice headings.** `COMPANION_COACH_HEADINGS` (in `collection-detail-page-client.tsx`) maps each section to a friendlier heading — e.g. Overview → "🗺️ What this covers", Common Mistakes → "⚠️ Avoid these traps". Each heading stays descriptive of its section's content rather than becoming a generic greeting, so it still orients a first-time reader of a public Review Set. The curator-authored text underneath is unchanged; only the `<h3>` label differs. Section order stays exactly as authored (Overview → Study Strategy → Common Mistakes → FAQ → Resources) — this mapping never reorders or selects which sections render, and never varies by learner context (readiness, time remaining, etc.). That kind of context-based selection is a distinct, deferred idea — see `docs/product/ROADMAP.md`'s Coach Experience section for why.
+- **Coach intro.** `CompanionCoachIntro` renders directly above the Companion card, only when an authored Companion exists. It picks one of two coach-voice lines based on whether `primaryStudyAction` (already resolved on the page) is set — a "there's more to do" tone vs. a "you've worked through everything" tone. It deliberately does **not** restate the action's title, the weekly countdown, or readiness numbers, since `PrimaryActionCard` / `GoalWeeklyCountdownCard` / `ReadinessSummary` already show those verbatim a few cards up — restating them here would read as a duplicate, not a coach. No new data fetch, no new persisted state.
+
+**Curator-authoring guidance:** because the section headings now read as a friendly coach voice ("🗺️ What this covers", "⚠️ Avoid these traps"), write the section body to match that tone — direct, second-person, encouraging — rather than third-person reference material. A body written like a textbook excerpt under a coach-voice heading will read as mismatched. This applies to Overview and Common Mistakes especially, since their coach headings carry the most tonal shift from the original label.
+
 ## Publish And Adopt
 
 Publishing a top-level collection does not need special Companion cascade logic. Companion lives on the same parent row as `visibility`, so publishing the parent preserves and exposes that row's authored content. Child publish cascade does not copy Companion to children.

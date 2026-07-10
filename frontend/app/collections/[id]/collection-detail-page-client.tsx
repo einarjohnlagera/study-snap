@@ -729,6 +729,17 @@ function renderableCompanionText(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
 
+// Coach-voice framing over the curator-authored Companion sections. Purely presentational —
+// same text, same author, same order; this only swaps the heading copy, it does not
+// reorder or select which sections render (see docs/product/ROADMAP.md's Coach Experience section).
+const COMPANION_COACH_HEADINGS = {
+  overview: "🗺️ What this covers",
+  studyStrategy: "🧭 How to study this",
+  commonMistakes: "⚠️ Avoid these traps",
+  faq: "💬 Common questions",
+  resources: "📎 Extra resources",
+} as const;
+
 function CompanionDisplayCard({
   companion,
   labels,
@@ -761,28 +772,28 @@ function CompanionDisplayCard({
 
       {overview ? (
         <section className="space-y-2" aria-labelledby="companion-overview-heading">
-          <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">Overview</h3>
+          <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.overview}</h3>
           <SummaryMarkdown content={overview} />
         </section>
       ) : null}
 
       {studyStrategy ? (
         <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
-          <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">Study Strategy</h3>
+          <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.studyStrategy}</h3>
           <SummaryMarkdown content={studyStrategy} />
         </section>
       ) : null}
 
       {commonMistakes ? (
         <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
-          <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">Common Mistakes</h3>
+          <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.commonMistakes}</h3>
           <SummaryMarkdown content={commonMistakes} />
         </section>
       ) : null}
 
       {faqItems.length > 0 ? (
         <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
-          <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">FAQ</h3>
+          <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.faq}</h3>
           <div className="space-y-3">
             {faqItems.map((item, index) => (
               <div key={`${item.question}:${index}`} className="space-y-1.5">
@@ -796,10 +807,29 @@ function CompanionDisplayCard({
 
       {resources ? (
         <section className="space-y-2" aria-labelledby="companion-resources-heading">
-          <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">Resources</h3>
+          <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.resources}</h3>
           <SummaryMarkdown content={resources} />
         </section>
       ) : null}
+    </Card>
+  );
+}
+
+// Coach-voice composition over an already-loaded live signal (whether a primary action remains).
+// No new data fetch, no new persisted state, no reordering of the authored Companion below it.
+// Deliberately does not restate the action's title or the weeks-remaining count — those are
+// already shown verbatim by PrimaryActionCard / GoalWeeklyCountdownCard higher on the page;
+// this is a tone-setting entry point into the Guidance tier, not a second rendering of those facts.
+function CompanionCoachIntro({
+  primaryAction,
+}: Readonly<{ primaryAction: ResolvedPrimaryAction | null }>) {
+  return (
+    <Card className="space-y-1 p-4 sm:p-5">
+      <p className="text-sm text-foreground/80">
+        {primaryAction
+          ? "👋 There's more to do here — use this guide to help you get there."
+          : "👋 You've worked through everything here. Use this guide to keep your understanding sharp."}
+      </p>
     </Card>
   );
 }
@@ -2741,6 +2771,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
         />
 
+        {collection.companion ? (
+          <CompanionCoachIntro primaryAction={primaryStudyAction} />
+        ) : null}
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
         {mutationError ? (
@@ -2922,6 +2955,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
       />
 
+      {collection.companion ? (
+        <CompanionCoachIntro primaryAction={primaryStudyAction} />
+      ) : null}
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
       <Card className="space-y-4 p-4 sm:p-6">

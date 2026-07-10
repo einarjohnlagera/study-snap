@@ -886,10 +886,10 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Updated Companion Plan" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     expect(screen.getByText("Overview draft")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "💬 Common questions" })).toBeInTheDocument();
     expect(screen.getByText("What now?")).toBeInTheDocument();
     expect(screen.getByText("Practice.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "📎 Extra resources" })).toBeInTheDocument();
     expect(screen.getByText("- [Reviewer archive](https://example.com/reviewer)")).toBeInTheDocument();
     expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
   });
@@ -965,6 +965,44 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
     expect(screen.queryByText("Companion")).not.toBeInTheDocument();
+    expect(screen.queryByText(/There's more to do here/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/worked through everything here/)).not.toBeInTheDocument();
+  });
+
+  it("shows the coach intro's more-to-do message above the companion when a primary action remains", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    const introText = await screen.findByText(/There's more to do here/);
+    const companionHeading = screen.getByRole("heading", { name: "Learning Companion" });
+    expect(introText).toBeInTheDocument();
+    expect(screen.queryByText(/worked through everything here/)).not.toBeInTheDocument();
+    expect(introText.compareDocumentPosition(companionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows the coach intro's caught-up message when no primary action remains", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [],
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText(/worked through everything here/)).toBeInTheDocument();
+    expect(screen.queryByText(/There's more to do here/)).not.toBeInTheDocument();
   });
 
   it("does not render a companion display card for an empty draft", async () => {
@@ -997,11 +1035,11 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "🗺️ What this covers" })).toBeInTheDocument();
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
-    expect(screen.queryByRole("heading", { name: "Study Strategy" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Common Mistakes" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "🧭 How to study this" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "⚠️ Avoid these traps" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "💬 Common questions" })).not.toBeInTheDocument();
   });
 
   it("renders a companion with only resources populated", async () => {
@@ -1018,10 +1056,10 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "📎 Extra resources" })).toBeInTheDocument();
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("- [Curriculum guide](https://example.com/curriculum)");
-    expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "🗺️ What this covers" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "💬 Common questions" })).not.toBeInTheDocument();
   });
 
   it("skips the companion FAQ section when every entry is blank", async () => {
@@ -1041,7 +1079,7 @@ describe("CollectionDetailPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "FAQ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "💬 Common questions" })).not.toBeInTheDocument();
   });
 
   it("renders populated companion FAQ entries and skips blank entries", async () => {
@@ -1061,7 +1099,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "FAQ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "💬 Common questions" })).toBeInTheDocument();
     expect(screen.getByText("How should I start?")).toBeInTheDocument();
     expect(screen.getAllByTestId("summary-markdown").map((element) => element.textContent)).toEqual([
       "Read the **overview** first.",
