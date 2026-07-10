@@ -48,6 +48,12 @@ const PLAN_CARD_SUBTEXT = {
 } as const;
 const PAYWALL_REASSURANCE = "Access activates immediately after payment";
 const PAYWALL_RENEWAL_NOTE = "No automatic charges. You control renewals.";
+const PRO_ONLY_PAYWALL_CONTEXT_TYPES = new Set<PaywallContext["type"]>([
+  "BOARD_EXAM_MODE_LOCKED",
+  "LONG_EXAM_MODE_LOCKED",
+  "DIFFICULTY_SELECTION_LOCKED",
+  "INTERVIEW_PRACTICE_LOCKED",
+]);
 
 function buildFallbackMonthlyLabel(planType: "PLUS" | "PRO", region: ReturnType<typeof resolvePricingDisplayRegion>) {
   const regionPricing = pricingConfig.price[region];
@@ -107,6 +113,15 @@ function resolveUpgradeCtaContext(
   }
   if (contextType === "INTERVIEW_PRACTICE_LOCKED") {
     return "interview-practice";
+  }
+  if (contextType === "BOARD_EXAM_MODE_LOCKED") {
+    return "board-exam-mode";
+  }
+  if (contextType === "LONG_EXAM_MODE_LOCKED") {
+    return "long-exam-mode";
+  }
+  if (contextType === "DIFFICULTY_SELECTION_LOCKED") {
+    return "difficulty-selection";
   }
   if (contextType === "GENERATE_STUDY_PACK_LIMIT") {
     return "study-pack-limit";
@@ -207,6 +222,7 @@ export function PaywallModal({
     () => resolvePaywallContext(context, variant),
     [context, variant],
   );
+  const isProOnlyContext = PRO_ONLY_PAYWALL_CONTEXT_TYPES.has(normalizedContext.type);
   const presentation = useMemo(
     () => resolvePaywallPresentation(normalizedContext.type, currentPlan, authUser?.profileType),
     [authUser?.profileType, currentPlan, normalizedContext.type],
@@ -277,6 +293,9 @@ export function PaywallModal({
   };
 
   const startCheckout = async (planType: "PLUS" | "PRO") => {
+    if (isProOnlyContext && planType === "PLUS") {
+      return;
+    }
     if (authUser && !authUser.emailVerifiedAt) {
       setVerifyEmailModalOpen(true);
       return;
@@ -399,16 +418,19 @@ export function PaywallModal({
             </div>
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
-              {PLAN_CARD_ORDER.map((planType) => (
-                <PlanCard
-                  key={planType}
-                  planType={planType}
-                  currentPlan={currentPlan}
-                  monthlyLabel={planType === "PLUS" ? plusMonthlyLabel : proMonthlyLabel}
-                  selected={selectedPlan === planType}
-                  onClick={currentPlan !== planType ? () => setSelectedPlan(planType) : undefined}
-                />
-              ))}
+              {PLAN_CARD_ORDER.map((planType) => {
+                const blocksProOnlyFeature = isProOnlyContext && planType === "PLUS";
+                return (
+                  <PlanCard
+                    key={planType}
+                    planType={planType}
+                    currentPlan={currentPlan}
+                    monthlyLabel={planType === "PLUS" ? plusMonthlyLabel : proMonthlyLabel}
+                    selected={selectedPlan === planType}
+                    onClick={currentPlan !== planType && !blocksProOnlyFeature ? () => setSelectedPlan(planType) : undefined}
+                  />
+                );
+              })}
             </div>
           )}
           {checkoutError ? (

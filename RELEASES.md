@@ -26,6 +26,7 @@ Anti-drift: "Curation, never generation" unchanged — learner never receives an
 - **Deterministic Coach surfacing.** The collection detail page selects at most one eligible Mentor Tip in authored order and renders it near `TodaysFocusCard`, resolving its linked action against the already-computed primary action, due-concept review link, or terminal action. No per-view LLM call or extra fetch.
 - **Full guide escape hatch.** `CompanionDisplayCard` now lists all authored Mentor Tips as a sixth expanded guide section after Resources, regardless of whether each tip is currently eligible to surface near Today's Focus. Existing five-section order is unchanged.
 - **Staleness/adopt parity.** Companion structure staleness remains child/note-membership-only, so Mentor Tip text/config changes do not mark content outdated. Cross-owner adopt/copy carries Mentor Tips the same way it carries the rest of Companion content.
+- **Fix: Pro-only paywalls no longer offer dead-end Plus checkout.** Board Exam Mode, Long Exam, Difficulty Selection, and Interview Practice paywalls now map to Pro-specific CTA labels and also gate the Plus plan card's selectability plus `startCheckout` itself. This closes the trust bug where fixing only the label/context layer still left the visible Plus card clickable for features Plus does not unlock.
 
 ---
 
