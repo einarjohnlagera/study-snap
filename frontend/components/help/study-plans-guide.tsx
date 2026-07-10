@@ -127,8 +127,9 @@ export function StudyPlansGuide({ profileType }: Readonly<{ profileType: Profile
           <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
             <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
             <span>
-              Once a target date is set, This Week shows weeks remaining, concepts remaining, and a daily concept
-              budget. Due concepts are always included; new concepts are paced across your remaining study days.
+              Once a target date is set, Progress shows weeks remaining and concepts remaining, and Today&apos;s
+              Focus includes a daily concept budget in its coaching sentence. Due concepts are always included; new
+              concepts are paced across your remaining study days.
             </span>
           </li>
         </ul>
