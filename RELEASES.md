@@ -2,7 +2,7 @@
 
 ## v0.43.1 - Companion Mentor Tips
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: let the *authored* Companion content participate in the Coach experience the way live signals already do — small, individually-surfaceable, action-linked "Mentor Tips" instead of an article to read start to finish. A real content-model change (backend + authoring-UI), unlike v0.43.0's frontend-only fast-follows.
 

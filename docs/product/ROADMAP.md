@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.43.1 - Companion Mentor Tips` is the current in-progress version (on `releases/v0.43.1`).
+`v0.43.1 - Companion Mentor Tips` is the most recently released version (on `releases/v0.43.1`). No version is currently in progress — the "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) is still under product/UX discussion and has not been scoped or kicked off.
 
 `v0.43.0 - Companion Coach Experience` is the previous released version (on `releases/v0.43.0`).
 
@@ -547,7 +547,7 @@ Surfaced from using the shipped relabel + intro in practice: swapping section he
 - **Cheap (this release, frontend-only):** the Coach/Companion naming above (free, just clarity), the `TodaysFocusCard` → Progress → Companion hierarchy, and the "View Full Guide" collapse (Planned Scope, above). Together these are the actual fix for "feels like documentation" — leading with what already exists and demoting the long-form article to reference material, reachable but not the first thing shown.
 - **Expensive (a distinct initiative, not polish):** atomic, individually-surfaceable "Mentor Tips" with rotation and action-linking. This needs a new content shape — `CompanionContent`'s five long-form fields can't be "surfaced as a moment" without truncating curator intent. Scoped separately below as v0.43.1, since it is not frontend-only and does not fit this release's guardrails.
 
-### v0.43.1 — Companion Mentor Tips, in progress (base branch `releases/v0.43.1`)
+### v0.43.1 — Companion Mentor Tips, Released (base branch `releases/v0.43.1`)
 
 Origin: continuation of the philosophy refinement above. Once the Companion is reachable via "View Full Guide" rather than rendered inline, the next question is whether the *authored* content itself can participate in the experience the way the Coach cluster already does — small, individually-surfaced, action-linked moments instead of an article to read start to finish.
 
@@ -561,6 +561,8 @@ Origin: continuation of the philosophy refinement above. Once the Companion is r
 - **Volume caveat.** Per the original Companion MVP scoping, there are still few Official Review Sets today. A "show another tip" affordance over a two-tip guide will feel hollow — this feature's perceived value scales with authored tip volume, which curators have not yet been asked to produce at this grain. Worth an explicit go/no-go check against actual authored-content volume before or during kickoff, not an assumption.
 
 **Go/no-go check, done at kickoff (2026-07-10):** dev DB query found only 1 PUBLIC/Official top-level Review Set carrying an authored Companion (2 companions total across 7 top-level collections; the other sits on a PRIVATE collection). Decision: proceed anyway — dev/local volume is not necessarily representative of prod, and the content-model/authoring-UI work has standalone value independent of how many tips exist on day one. Recorded here so this isn't re-litigated as a fresh concern mid-release. Full scope in `RELEASES.md`.
+
+**Scope broadened mid-release (2026-07-10):** a pre-signoff "tighten these new features" audit surfaced a real trust bug — Pro-only paywalls (Board Exam Mode, Long Exam, Difficulty Selection, Interview Practice) let a Free/Plus user select and pay for Plus without unlocking the feature — plus two lower-stakes gaps: no paywall upsell existed for the Plus/Pro-gated per-concept review-timing detail, and the Help Center had no coverage for this cycle's Companion/Coach/Mentor Tips or Primary Review Set/target-date pacing features. All three landed as additional `v0.43.1` Shipped bullets rather than a separate version, per the same mid-release-fix precedent as v0.42.0's `setCompanion` null-content guard. Full detail in `RELEASES.md`.
 
 ### Documented rule clarification (not a reversal) — enables AI-assisted authoring
 
