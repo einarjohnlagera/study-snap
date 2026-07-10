@@ -524,7 +524,7 @@ Origin: a product proposal to make the Review Set detail page *feel* like a coac
 
 **Planned Scope:**
 - Coach-voice terminology mapping over `CompanionDisplayCard` (order-preserving, no reordering).
-- Coach-voice composition of already-shipped live signals (weekly countdown, `getNextPlanAction`, readiness) in the Guidance tier, above the authored Companion.
+- Coach-voice intro in the Guidance tier, above the authored Companion, driven by the already-resolved primary action (`getNextPlanAction`) — deliberately does not restate the weekly countdown or readiness numbers verbatim, since those already render a few cards up.
 - Short curator-authoring guidance note in `docs/features/companion.md`.
 
 Anti-drift: no reordering of authored Companion sections; no generation; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); labels continue through `getCollectionLabels`.

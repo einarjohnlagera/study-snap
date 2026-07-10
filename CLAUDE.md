@@ -10,10 +10,10 @@ Current version: **v0.43.0** — see `RELEASES.md` for in-progress scope, `docs/
 
 ## Active release: v0.43.0 — Companion Coach Experience
 
-Base branch for this release: `releases/v0.43.0`. A coach-voice presentation layer over the Companion and already-shipped live signals (weekly countdown, next action, readiness) — frontend-only, no new engine, no new backend. Full scope in `RELEASES.md`.
+Base branch for this release: `releases/v0.43.0`. A coach-voice presentation layer over the Companion and an already-loaded live signal (whether a primary action remains) — frontend-only, no new engine, no new backend. Full scope in `RELEASES.md`.
 
 - **Coach-voice terminology mapping.** Static section-key → coach label/icon map (same shape as `getCollectionLabels`) applied in `CompanionDisplayCard`, strictly order-preserving — no reordering of authored sections.
-- **Coach-voice composition of existing live signals.** Conversational frame over the weekly countdown, `getNextPlanAction`, and readiness/due-concepts, positioned in the Guidance tier above the authored Companion — no new data fetch.
+- **Coach-voice intro (`CompanionCoachIntro`).** A short tone-setting line above the authored Companion, driven by `primaryStudyAction`/`getNextPlanAction` — deliberately does not restate the action's title, weekly countdown, or readiness numbers, since those already render a few cards up.
 - **Curator-authoring guidance note** added to `docs/features/companion.md` so authored prose and coach framing don't visually fight each other.
 - **No context-based reordering/prioritization** of authored sections — deferred to future PRO personalization (collides with the monetization line and breaks curator-authored narrative flow). **No new backend, endpoint, or persisted state.**
 
