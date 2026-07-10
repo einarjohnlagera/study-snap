@@ -712,6 +712,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
     expect(screen.queryByText(/may be outdated/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
@@ -885,6 +886,7 @@ describe("CollectionDetailPageClient", () => {
     });
     expect(await screen.findByRole("heading", { name: "Updated Companion Plan" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByText("Overview draft")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "💬 Common questions" })).toBeInTheDocument();
     expect(screen.getByText("What now?")).toBeInTheDocument();
@@ -1035,6 +1037,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByRole("heading", { name: "🗺️ What this covers" })).toBeInTheDocument();
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
     expect(screen.queryByRole("heading", { name: "🧭 How to study this" })).not.toBeInTheDocument();
@@ -1056,6 +1059,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByRole("heading", { name: "📎 Extra resources" })).toBeInTheDocument();
     expect(screen.getByTestId("summary-markdown")).toHaveTextContent("- [Curriculum guide](https://example.com/curriculum)");
     expect(screen.queryByRole("heading", { name: "🗺️ What this covers" })).not.toBeInTheDocument();
@@ -1099,6 +1103,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByRole("heading", { name: "💬 Common questions" })).toBeInTheDocument();
     expect(screen.getByText("How should I start?")).toBeInTheDocument();
     expect(screen.getAllByTestId("summary-markdown").map((element) => element.textContent)).toEqual([
@@ -1107,6 +1112,35 @@ describe("CollectionDetailPageClient", () => {
     ]);
     expect(screen.getByText("Then practice the weakest concepts.")).toBeInTheDocument();
     expect(screen.queryByText(/^ $/)).not.toBeInTheDocument();
+  });
+
+  it("collapses the full companion guide by default and toggles it via View Full Guide", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "View Full Guide" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Start with the foundations.")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    const hideButton = screen.getByRole("button", { name: "Hide Full Guide" });
+    expect(hideButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
+
+    fireEvent.click(hideButton);
+
+    expect(screen.getByRole("button", { name: "View Full Guide" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Start with the foundations.")).not.toBeInTheDocument();
   });
 
   it("renders the companion after Goal-view readiness content", async () => {

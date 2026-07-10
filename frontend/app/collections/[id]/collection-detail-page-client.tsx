@@ -357,8 +357,12 @@ function PlanHeroCard({
 
   return (
     <Card className={cn("space-y-4 p-5 sm:p-6", isPrimary && "border-l-4 border-l-indigo-500 bg-indigo-500/[0.03] dark:border-l-indigo-400")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-3">
+      {/* flex-col on mobile, row from sm: up. min-w-0 + flex-1 on the title column lets the browser
+          shrink it toward zero width instead of wrapping the (shrink-0) actions column below it once
+          both no longer fit on one row — that's what produced the word-per-line "crumpled" title on
+          narrow screens. Stacking removes the row-fit constraint below sm: entirely. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-3 sm:flex-1">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{eyebrowLabel}</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -744,6 +748,12 @@ function CompanionDisplayCard({
   companion,
   labels,
 }: Readonly<{ companion: CompanionContent | null; labels: ReturnType<typeof getCollectionLabels> }>) {
+  // Collapsed by default, regardless of viewport — unlike the note-list sections above, which
+  // default to expanded on large screens. The authored Companion is reference material now (see
+  // docs/product/ROADMAP.md's "Coach vs. Companion" refinement): the live-signal cluster is what a
+  // learner sees first, and the full guide is opt-in, not the page's default reading experience.
+  const [isGuideExpanded, setIsGuideExpanded] = useState(false);
+
   if (!companion) {
     return null;
   }
@@ -764,52 +774,70 @@ function CompanionDisplayCard({
   }
 
   return (
-    <Card className="space-y-5 p-4 sm:p-5">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
-        <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+    <Card className="space-y-4 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
+          <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+        </div>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+          aria-expanded={isGuideExpanded}
+          onClick={() => setIsGuideExpanded((previous) => !previous)}
+        >
+          {isGuideExpanded ? "Hide Full Guide" : "View Full Guide"}
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 transition-transform", !isGuideExpanded && "-rotate-90")}
+            aria-hidden="true"
+          />
+        </button>
       </div>
 
-      {overview ? (
-        <section className="space-y-2" aria-labelledby="companion-overview-heading">
-          <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.overview}</h3>
-          <SummaryMarkdown content={overview} />
-        </section>
-      ) : null}
+      {isGuideExpanded ? (
+        <div className="space-y-5">
+          {overview ? (
+            <section className="space-y-2" aria-labelledby="companion-overview-heading">
+              <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.overview}</h3>
+              <SummaryMarkdown content={overview} />
+            </section>
+          ) : null}
 
-      {studyStrategy ? (
-        <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
-          <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.studyStrategy}</h3>
-          <SummaryMarkdown content={studyStrategy} />
-        </section>
-      ) : null}
+          {studyStrategy ? (
+            <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
+              <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.studyStrategy}</h3>
+              <SummaryMarkdown content={studyStrategy} />
+            </section>
+          ) : null}
 
-      {commonMistakes ? (
-        <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
-          <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.commonMistakes}</h3>
-          <SummaryMarkdown content={commonMistakes} />
-        </section>
-      ) : null}
+          {commonMistakes ? (
+            <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
+              <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.commonMistakes}</h3>
+              <SummaryMarkdown content={commonMistakes} />
+            </section>
+          ) : null}
 
-      {faqItems.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
-          <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.faq}</h3>
-          <div className="space-y-3">
-            {faqItems.map((item, index) => (
-              <div key={`${item.question}:${index}`} className="space-y-1.5">
-                {item.question ? <p className="text-sm font-semibold text-foreground">{item.question}</p> : null}
-                {item.answer ? <SummaryMarkdown content={item.answer} /> : null}
+          {faqItems.length > 0 ? (
+            <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
+              <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.faq}</h3>
+              <div className="space-y-3">
+                {faqItems.map((item, index) => (
+                  <div key={`${item.question}:${index}`} className="space-y-1.5">
+                    {item.question ? <p className="text-sm font-semibold text-foreground">{item.question}</p> : null}
+                    {item.answer ? <SummaryMarkdown content={item.answer} /> : null}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+            </section>
+          ) : null}
 
-      {resources ? (
-        <section className="space-y-2" aria-labelledby="companion-resources-heading">
-          <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.resources}</h3>
-          <SummaryMarkdown content={resources} />
-        </section>
+          {resources ? (
+            <section className="space-y-2" aria-labelledby="companion-resources-heading">
+              <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">{COMPANION_COACH_HEADINGS.resources}</h3>
+              <SummaryMarkdown content={resources} />
+            </section>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   );
@@ -818,8 +846,11 @@ function CompanionDisplayCard({
 // Coach-voice composition over an already-loaded live signal (whether a primary action remains).
 // No new data fetch, no new persisted state, no reordering of the authored Companion below it.
 // Deliberately does not restate the action's title or the weeks-remaining count — those are
-// already shown verbatim by PrimaryActionCard / GoalWeeklyCountdownCard higher on the page;
-// this is a tone-setting entry point into the Guidance tier, not a second rendering of those facts.
+// already shown verbatim by PrimaryActionCard / GoalWeeklyCountdownCard higher on the page.
+// Deliberately says nothing about the Companion/guide either — per the Coach vs. Companion split
+// (docs/product/ROADMAP.md), this card is Coach voice only ("what to do today"); pointing at the
+// Companion is CompanionDisplayCard's own "View Full Guide" affordance's job, not this one's —
+// two cards both angling toward the same hidden content read as redundant.
 function CompanionCoachIntro({
   primaryAction,
 }: Readonly<{ primaryAction: ResolvedPrimaryAction | null }>) {
@@ -827,8 +858,8 @@ function CompanionCoachIntro({
     <Card className="space-y-1 p-4 sm:p-5">
       <p className="text-sm text-foreground/80">
         {primaryAction
-          ? "👋 There's more to do here — use this guide to help you get there."
-          : "👋 You've worked through everything here. Use this guide to keep your understanding sharp."}
+          ? "👋 There's more to do here — you've got this."
+          : "👋 You've worked through everything here. Nice work."}
       </p>
     </Card>
   );
