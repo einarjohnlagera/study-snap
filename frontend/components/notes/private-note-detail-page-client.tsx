@@ -173,6 +173,7 @@ function resolvePaywallFeature(variant: PaywallModalVariant): string {
     case "study-pack-limit": return "study_pack_limit";
     case "board-exam-mode": return "board_exam";
     case "difficulty-selection": return "difficulty";
+    case "concept-timing-locked": return "concept_review_timing";
     case "ocr-limit": return "ocr_limit";
     default: return "study_pack_limit";
   }
@@ -601,13 +602,35 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     return () => globalThis.clearTimeout(timeout);
   }, [toast]);
 
+  const handleCopyShareLinkFromModal = useCallback(async (options: { showFailureToast?: boolean } = {}) => {
+    if (!shareModalUrl) {
+      return;
+    }
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard access is unavailable.");
+      }
+      await navigator.clipboard.writeText(shareModalUrl);
+      setShareModalCopied(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not copy share link.";
+      setShareModalCopied(false);
+      if (options.showFailureToast) {
+        setToastTone("warning");
+        setToast("Could not auto-copy the link. Use Copy Link or copy the field manually.");
+      } else {
+        setError(message);
+      }
+    }
+  }, [shareModalUrl]);
+
   useEffect(() => {
     if (!showShareLinkModal || !shareModalUrl) {
       return;
     }
     shareModalInputRef.current?.select();
     void handleCopyShareLinkFromModal({ showFailureToast: true });
-  }, [showShareLinkModal, shareModalUrl]);
+  }, [handleCopyShareLinkFromModal, showShareLinkModal, shareModalUrl]);
 
   useEffect(() => {
     if (!note) {
@@ -700,7 +723,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     next.delete("saved");
     next.delete("generating");
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname);
-  }, [pathname, router, searchParams]);
+  }, [normalizedRouteId, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!note || isInlineMetadataEditMode) {
@@ -806,7 +829,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const reviewTimingUpgradeCopy = dueConceptCount > 0
     ? `Review timing for ${dueConceptCount} due concept${dueConceptCount === 1 ? "" : "s"} is available on Plus and Pro.`
     : "Review timing is available on Plus and Pro.";
-  const reviewTimingUpgradeCta = getUpgradeCtas(currentPlan as AppPlanType, "adaptive-practice").primary?.label ?? "Upgrade";
+  const reviewTimingUpgradeCta = getUpgradeCtas(currentPlan as AppPlanType, "concept-review-timing").primary?.label ?? "Upgrade";
   useEffect(() => {
     if (
       !note?.studyPackId
@@ -1527,28 +1550,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   };
 
-  const handleCopyShareLinkFromModal = async (options: { showFailureToast?: boolean } = {}) => {
-    if (!shareModalUrl) {
-      return;
-    }
-    try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard access is unavailable.");
-      }
-      await navigator.clipboard.writeText(shareModalUrl);
-      setShareModalCopied(true);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not copy share link.";
-      setShareModalCopied(false);
-      if (options.showFailureToast) {
-        setToastTone("warning");
-        setToast("Could not auto-copy the link. Use Copy Link or copy the field manually.");
-      } else {
-        setError(message);
-      }
-    }
-  };
-
   const handleDeleteNote = async () => {
     if (!note || deleting) {
       return;
@@ -2175,7 +2176,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         <button
                           type="button"
                           className="font-medium text-blue-700 underline underline-offset-4 dark:text-blue-300"
-                          onClick={() => openPaywallModal("adaptive-practice", "private_note_detail_review_timing")}
+                          onClick={() => openPaywallModal("concept-timing-locked", "private_note_detail_review_timing")}
                         >
                           {reviewTimingUpgradeCta}
                         </button>

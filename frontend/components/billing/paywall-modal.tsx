@@ -123,6 +123,9 @@ function resolveUpgradeCtaContext(
   if (contextType === "DIFFICULTY_SELECTION_LOCKED") {
     return "difficulty-selection";
   }
+  if (contextType === "CONCEPT_REVIEW_TIMING_LOCKED") {
+    return "concept-review-timing";
+  }
   if (contextType === "GENERATE_STUDY_PACK_LIMIT") {
     return "study-pack-limit";
   }

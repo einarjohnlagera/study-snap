@@ -10,6 +10,7 @@ export type PaywallContextType =
   | "BOARD_EXAM_MODE_LOCKED"
   | "LONG_EXAM_MODE_LOCKED"
   | "DIFFICULTY_SELECTION_LOCKED"
+  | "CONCEPT_REVIEW_TIMING_LOCKED"
   | "OCR_LIMIT"
   | "TEACHER_QUIZ_QUESTION_COUNT_LOCKED"
   | "TEACHER_EXAM_VERSIONS_LOCKED"
@@ -38,6 +39,7 @@ export type PaywallModalVariant =
   | "board-exam-limit"
   | "long-exam-mode"
   | "difficulty-selection"
+  | "concept-timing-locked"
   | "challenge-quiz-limit"
   | "quiz-generation-limit"
   | "study-pack-limit"
@@ -91,6 +93,8 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "LONG_EXAM_MODE_LOCKED";
     case "difficulty-selection":
       return "DIFFICULTY_SELECTION_LOCKED";
+    case "concept-timing-locked":
+      return "CONCEPT_REVIEW_TIMING_LOCKED";
     case "ocr-limit":
       return "OCR_LIMIT";
     case "quiz-generation-limit":
@@ -222,6 +226,17 @@ export function resolvePaywallPresentation(
         primaryCtaLabel: PRIMARY_CTA_LABEL,
         secondaryCtaLabel: SECONDARY_CTA_LABEL,
         lastAction: "QUIZ",
+      };
+    case "CONCEPT_REVIEW_TIMING_LOCKED":
+      return {
+        headline: "See your review timing",
+        body: "Unlock per-concept last-correct and last-incorrect dates, struggling flags, and days-since-review details.",
+        feature: "concept_review_timing",
+        primaryPlanType: "PLUS",
+        secondaryPlanType: "PLUS",
+        primaryCtaLabel: PRIMARY_CTA_LABEL,
+        secondaryCtaLabel: SECONDARY_CTA_LABEL,
+        lastAction: "ADAPTIVE_PRACTICE",
       };
     case "OCR_LIMIT":
       return {

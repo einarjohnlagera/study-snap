@@ -221,6 +221,28 @@ describe("PaywallModal", () => {
     });
   });
 
+  it("uses concept review timing copy while keeping both paid plan cards selectable", async () => {
+    render(
+      <PaywallModal
+        isOpen
+        context={{ type: "CONCEPT_REVIEW_TIMING_LOCKED" }}
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "See your review timing" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See review timing — get Plus" })).toBeInTheDocument();
+    expect(screen.getByText("Plus").closest("[role='button']")).toBeInTheDocument();
+    expect(screen.getByText("Pro").closest("[role='button']")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Pro"));
+    expect(await screen.findByRole("button", { name: "Go Pro" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Plus"));
+    expect(await screen.findByRole("button", { name: "See review timing — get Plus" })).toBeInTheDocument();
+  });
+
   it("disables the Plus CTA when the current plan is already Plus", async () => {
     getAuthUserMock.mockReturnValue({
       id: "user-1",

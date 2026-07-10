@@ -211,6 +211,7 @@ export type UpgradeCtaContext =
   | "difficulty-selection"
   | "board-exam-mode"
   | "long-exam-mode"
+  | "concept-review-timing"
   | "teacher-quiz-limit"
   | "teacher-export-limit"
   | "teacher-quiz-question-count"
@@ -264,6 +265,12 @@ export function getUpgradeCtas(
     if (context === "adaptive-practice") {
       return {
         primary: { label: "Get More Adaptive Practice", targetPlan: "PLUS" },
+        secondary: { label: "Go Pro", targetPlan: "PRO" },
+      };
+    }
+    if (context === "concept-review-timing") {
+      return {
+        primary: { label: "See review timing — get Plus", targetPlan: "PLUS" },
         secondary: { label: "Go Pro", targetPlan: "PRO" },
       };
     }
