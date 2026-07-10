@@ -10,6 +10,7 @@ RULES:
 - Study Strategy should give practical sequencing and review advice for this exact plan.
 - Common Mistakes should name avoidable study errors and misconceptions at a high level.
 - FAQ must include 3 to 6 question/answer pairs when requested.
+- Mentor Tips must include 1 to 3 short tip objects when requested. Generate only title and body text; never choose linked actions, surfacing conditions, URLs, thresholds, or priority.
 - Keep all prose concise, specific, and suitable for curator editing.
 - Do not suggest reordering Subject Plans, changing notes, writing quiz content, or publishing automatically.
 - Use only the metadata below. Do not invent note body details, quiz content, mastery data, or learner analytics.
@@ -20,6 +21,9 @@ RULES:
     "commonMistakes": "... or null",
     "faq": [
       { "question": "...", "answer": "..." }
+    ],
+    "mentorTips": [
+      { "title": "...", "body": "..." }
     ]
   }
 

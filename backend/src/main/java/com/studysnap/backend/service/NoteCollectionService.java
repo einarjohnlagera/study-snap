@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionMentorTip;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.CompanionStructureSnapshot;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
@@ -114,6 +115,10 @@ public class NoteCollectionService {
     private static final String COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE = "Only a top-level Goal can have a Companion.";
     private static final String COMPANION_SECTION_REQUIRED_MESSAGE = "Select at least one Companion section to generate.";
     private static final String COMPANION_CONTENT_REQUIRED_MESSAGE = "Companion content is required.";
+    private static final String COMPANION_MENTOR_TIP_CONDITION_TYPE_REQUIRED_MESSAGE =
+            "Mentor tip surfacing condition type is required.";
+    private static final String COMPANION_MENTOR_TIP_THRESHOLD_INVALID_MESSAGE =
+            "Mentor tip surfacing threshold must be zero or greater.";
     private static final String ADMIN_REQUIRED_MESSAGE = "You do not have permission to access this endpoint.";
     private static final String ITEM_COUNT_METADATA_KEY = "itemCount";
     private static final String SOURCE_PLAN_ID_METADATA_KEY = "sourcePlanId";
@@ -644,6 +649,7 @@ public class NoteCollectionService {
         if (content == null) {
             throw new InvalidCollectionRequestException(COMPANION_CONTENT_REQUIRED_MESSAGE);
         }
+        validateCompanionContent(content);
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         validateCompanionTarget(collection);
         List<NoteCollectionEntity> children = collectionRepository
@@ -949,6 +955,27 @@ public class NoteCollectionService {
     private void validateCompanionTarget(NoteCollectionEntity collection) {
         if (collection.getParentCollectionId() != null) {
             throw new InvalidCollectionRequestException(COMPANION_REQUIRES_TOP_LEVEL_GOAL_MESSAGE);
+        }
+    }
+
+    private void validateCompanionContent(CompanionContent content) {
+        if (content.mentorTips() == null) {
+            return;
+        }
+        content.mentorTips().stream()
+                .filter(Objects::nonNull)
+                .forEach(this::validateCompanionMentorTip);
+    }
+
+    private void validateCompanionMentorTip(CompanionMentorTip tip) {
+        if (tip.surfacingCondition() == null) {
+            return;
+        }
+        if (tip.surfacingCondition().type() == null) {
+            throw new InvalidCollectionRequestException(COMPANION_MENTOR_TIP_CONDITION_TYPE_REQUIRED_MESSAGE);
+        }
+        if (tip.surfacingCondition().threshold() < 0) {
+            throw new InvalidCollectionRequestException(COMPANION_MENTOR_TIP_THRESHOLD_INVALID_MESSAGE);
         }
     }
 

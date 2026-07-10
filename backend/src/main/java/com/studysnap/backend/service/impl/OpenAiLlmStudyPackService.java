@@ -9,6 +9,8 @@ import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionFaqItem;
+import com.studysnap.backend.dto.CompanionMentorTip;
+import com.studysnap.backend.dto.CompanionMentorTipAction;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -67,6 +69,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
     private static final int COMPANION_FAQ_MIN_ITEMS = 3;
     private static final int COMPANION_FAQ_MAX_ITEMS = 6;
+    private static final int COMPANION_MENTOR_TIP_MIN_ITEMS = 1;
+    private static final int COMPANION_MENTOR_TIP_MAX_ITEMS = 3;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final int PARALLEL_BUFFER = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
@@ -1115,7 +1119,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .add("overview")
                 .add("studyStrategy")
                 .add("commonMistakes")
-                .add("faq");
+                .add("faq")
+                .add("mentorTips");
 
         ObjectNode properties = root.putObject("properties");
         properties.set("overview", buildNullableStringSchema());
@@ -1136,6 +1141,21 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ObjectNode faqItemProperties = faqItem.putObject("properties");
         faqItemProperties.putObject("question").put("type", "string");
         faqItemProperties.putObject("answer").put("type", "string");
+
+        ObjectNode mentorTips = properties.putObject("mentorTips");
+        ArrayNode mentorTipTypes = mentorTips.putArray("type");
+        mentorTipTypes.add("array");
+        mentorTipTypes.add("null");
+        mentorTips.put("minItems", COMPANION_MENTOR_TIP_MIN_ITEMS);
+        mentorTips.put("maxItems", COMPANION_MENTOR_TIP_MAX_ITEMS);
+
+        ObjectNode mentorTip = mentorTips.putObject("items");
+        mentorTip.put("type", "object");
+        mentorTip.put("additionalProperties", false);
+        mentorTip.putArray("required").add("title").add("body");
+        ObjectNode mentorTipProperties = mentorTip.putObject("properties");
+        mentorTipProperties.putObject("title").put("type", "string");
+        mentorTipProperties.putObject("body").put("type", "string");
         return root;
     }
 
@@ -2238,12 +2258,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (requestedSections.contains(CompanionSection.FAQ)) {
             faq = normalizeCompanionFaq(content.faq());
         }
+        List<CompanionMentorTip> mentorTips = List.of();
+        if (requestedSections.contains(CompanionSection.MENTOR_TIPS)) {
+            mentorTips = normalizeCompanionMentorTips(content.mentorTips());
+        }
         return new CompanionContent(
                 requestedSections.contains(CompanionSection.OVERVIEW) ? content.overview() : null,
                 requestedSections.contains(CompanionSection.STUDY_STRATEGY) ? content.studyStrategy() : null,
                 requestedSections.contains(CompanionSection.COMMON_MISTAKES) ? content.commonMistakes() : null,
                 null,
-                faq
+                faq,
+                mentorTips
         );
     }
 
@@ -2253,6 +2278,23 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
         return faq.stream()
                 .map(item -> new CompanionFaqItem(item.question(), item.answer()))
+                .toList();
+    }
+
+    private List<CompanionMentorTip> normalizeCompanionMentorTips(List<PromptCompanionMentorTip> mentorTips) {
+        if (mentorTips == null
+                || mentorTips.size() < COMPANION_MENTOR_TIP_MIN_ITEMS
+                || mentorTips.size() > COMPANION_MENTOR_TIP_MAX_ITEMS) {
+            throw invalidOutput(COMPANION_INVALID_OUTPUT_MESSAGE);
+        }
+        return mentorTips.stream()
+                .map(item -> new CompanionMentorTip(
+                        null,
+                        item.title(),
+                        item.body(),
+                        CompanionMentorTipAction.NONE,
+                        null
+                ))
                 .toList();
     }
 
@@ -2502,13 +2544,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String overview,
             String studyStrategy,
             String commonMistakes,
-            List<PromptCompanionFaqItem> faq
+            List<PromptCompanionFaqItem> faq,
+            List<PromptCompanionMentorTip> mentorTips
     ) {
     }
 
     private record PromptCompanionFaqItem(
             String question,
             String answer
+    ) {
+    }
+
+    private record PromptCompanionMentorTip(
+            String title,
+            String body
     ) {
     }
 

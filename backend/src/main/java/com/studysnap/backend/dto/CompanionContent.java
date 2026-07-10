@@ -7,6 +7,7 @@ public record CompanionContent(
         String studyStrategy,
         String commonMistakes,
         String resources,
-        List<CompanionFaqItem> faq
+        List<CompanionFaqItem> faq,
+        List<CompanionMentorTip> mentorTips
 ) {
 }

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CompanionContent;
+import com.studysnap.backend.dto.CompanionMentorTipAction;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -230,6 +231,13 @@ class OpenAiLlmStudyPackServiceTest {
         JsonNode faqItem = properties.path("faq").path("items");
         assertThat(jsonArrayValues(faqItem.path("required")))
                 .containsExactly("question", "answer");
+        assertThat(jsonArrayValues(properties.path("mentorTips").path("type")))
+                .containsExactly("array", "null");
+        assertThat(properties.path("mentorTips").path("minItems").asInt()).isEqualTo(1);
+        assertThat(properties.path("mentorTips").path("maxItems").asInt()).isEqualTo(3);
+        JsonNode mentorTipItem = properties.path("mentorTips").path("items");
+        assertThat(jsonArrayValues(mentorTipItem.path("required")))
+                .containsExactly("title", "body");
     }
 
     @Test
@@ -640,6 +648,7 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(content.commonMistakes()).isNull();
         assertThat(content.resources()).isNull();
         assertThat(content.faq()).isEmpty();
+        assertThat(content.mentorTips()).isEmpty();
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());
         JsonNode request = objectMapper.readTree(requestCaptor.getValue());
@@ -670,6 +679,24 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(content.faq()).hasSize(3);
         verify(responseSpec, times(2)).body(String.class);
+    }
+
+    @Test
+    void generateCompanion_returnsMentorTipsWithoutActionOrSurfacingCondition() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildCompanionPayload()));
+
+        CompanionContent content = service.generateCompanion(
+                companionContext(),
+                Set.of(CompanionSection.MENTOR_TIPS)
+        );
+
+        assertThat(content.mentorTips()).hasSize(1);
+        assertThat(content.mentorTips().getFirst().title()).isEqualTo("Use the next action as your anchor");
+        assertThat(content.mentorTips().getFirst().linkedAction()).isEqualTo(CompanionMentorTipAction.NONE);
+        assertThat(content.mentorTips().getFirst().surfacingCondition()).isNull();
+        assertThat(content.overview()).isNull();
+        assertThat(content.faq()).isEmpty();
     }
 
     @Test
@@ -1589,6 +1616,10 @@ class OpenAiLlmStudyPackServiceTest {
         faq.addObject().put("question", "Where should I start?").put("answer", "Start with cell structure.");
         faq.addObject().put("question", "How should I review?").put("answer", "Use short recall blocks.");
         faq.addObject().put("question", "When am I ready?").put("answer", "When you can explain each concept.");
+        ArrayNode mentorTips = payload.putArray("mentorTips");
+        mentorTips.addObject()
+                .put("title", "Use the next action as your anchor")
+                .put("body", "Start with the top action, then write down one concept that still needs practice.");
         return payload;
     }
 

@@ -53,6 +53,10 @@ import {
   updateNoteVisibility,
   updateStudyDaysPerWeek,
   type CompanionContent,
+  type CompanionMentorTip,
+  type CompanionMentorTipAction,
+  type CompanionMentorTipSurfacingCondition,
+  type CompanionMentorTipSurfacingConditionType,
   type CompanionSection,
   type GoalCollectionDetailResponse,
   type NoteConceptCountsResponse,
@@ -104,6 +108,19 @@ const QUICK_ACTIONS_LABEL = "Quick Actions";
 const REVIEW_DUE_CONCEPTS_LABEL = "Review Due Concepts";
 const FOCUS_DONE_MESSAGE = "You've worked through everything here. Nice work.";
 const FOCUS_NO_TARGET_MESSAGE = "Pick up where you left off — you've got this.";
+const MENTOR_TIP_GUIDE_HEADING_ID = "companion-mentor-tips-heading";
+const MENTOR_TIP_GUIDE_HEADING = "Quick tips";
+const MENTOR_TIP_GUIDE_ICON = "💡";
+const MENTOR_TIP_ACTION_LABELS: Record<CompanionMentorTipAction, string> = {
+  NONE: "None",
+  CONTINUE_STUDYING: CONTINUE_STUDYING_LABEL,
+  REVIEW_DUE_CONCEPTS: REVIEW_DUE_CONCEPTS_LABEL,
+  TERMINAL_ACTION: "Terminal Action",
+};
+const MENTOR_TIP_SURFACING_LABELS: Record<CompanionMentorTipSurfacingConditionType, string> = {
+  DAYS_BEFORE_TARGET_DATE: "Days before target date",
+  AFTER_SUBJECTS_COMPLETED: "After subjects completed",
+};
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -405,8 +422,88 @@ type ResolvedPrimaryAction = {
   href: string;
 };
 
+type ResolvedMentorTip = {
+  tip: CompanionMentorTip;
+  actionLabel: string | null;
+};
+
 function formatConceptCount(count: number): string {
   return `${count} ${count === 1 ? "concept" : "concepts"}`;
+}
+
+function normalizeMentorTipText(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function hasRenderableMentorTip(tip: CompanionMentorTip | null | undefined): boolean {
+  return Boolean(normalizeMentorTipText(tip?.title) || normalizeMentorTipText(tip?.body));
+}
+
+function localDateToStartOfDay(isoDate: string): Date {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function daysUntilLocalDate(targetCompletionDate: string): number {
+  const target = localDateToStartOfDay(targetCompletionDate);
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((target.getTime() - todayStart.getTime()) / 86_400_000);
+}
+
+function isMentorTipEligible(
+  tip: CompanionMentorTip,
+  targetCompletionDate: string | null,
+  completedSubjectCount: number | null,
+): boolean {
+  if (!hasRenderableMentorTip(tip)) {
+    return false;
+  }
+  const condition = tip.surfacingCondition;
+  if (!condition) {
+    return true;
+  }
+  if (condition.threshold < 0) {
+    return false;
+  }
+  if (condition.type === "DAYS_BEFORE_TARGET_DATE") {
+    return targetCompletionDate !== null && daysUntilLocalDate(targetCompletionDate) <= condition.threshold;
+  }
+  if (condition.type === "AFTER_SUBJECTS_COMPLETED") {
+    return completedSubjectCount !== null && completedSubjectCount >= condition.threshold;
+  }
+  return false;
+}
+
+// Labels only — never a second href/node. The action a tip points to (Continue Studying,
+// Review Due Concepts, the terminal action) already renders as its own clickable CTA elsewhere
+// in TodaysFocusCard; resolving a duplicate clickable target here would just repeat it.
+function resolveMentorTipAction(tip: CompanionMentorTip, terminalActionLabel: string | null): ResolvedMentorTip {
+  const linkedAction = tip.linkedAction ?? "NONE";
+  if (linkedAction === "CONTINUE_STUDYING") {
+    return { tip, actionLabel: CONTINUE_STUDYING_LABEL };
+  }
+  if (linkedAction === "REVIEW_DUE_CONCEPTS") {
+    return { tip, actionLabel: REVIEW_DUE_CONCEPTS_LABEL };
+  }
+  if (linkedAction === "TERMINAL_ACTION") {
+    return { tip, actionLabel: terminalActionLabel ?? MENTOR_TIP_ACTION_LABELS.TERMINAL_ACTION };
+  }
+  return { tip, actionLabel: null };
+}
+
+function getFirstEligibleMentorTip(
+  companion: CompanionContent | null,
+  targetCompletionDate: string | null,
+  completedSubjectCount: number | null,
+  terminalActionLabel: string | null,
+): ResolvedMentorTip | null {
+  const eligibleTip = (companion?.mentorTips ?? []).find((tip) => (
+    isMentorTipEligible(tip, targetCompletionDate, completedSubjectCount)
+  ));
+  return eligibleTip
+    ? resolveMentorTipAction(eligibleTip, terminalActionLabel)
+    : null;
 }
 
 function buildCountdownLine(
@@ -427,12 +524,14 @@ function TodaysFocusCard({
   dueConceptReviewHref,
   todaysConceptBudget,
   hasTargetDate,
+  mentorTip,
 }: Readonly<{
   action: ResolvedPrimaryAction | null;
   terminalAction?: ReactNode;
   dueConceptReviewHref: string | null;
   todaysConceptBudget: number | null;
   hasTargetDate: boolean;
+  mentorTip?: ResolvedMentorTip | null;
 }>) {
   const coachingSentence = action
     ? hasTargetDate
@@ -459,6 +558,25 @@ function TodaysFocusCard({
           <p className="text-sm font-medium text-foreground/80">{FOCUS_DONE_MESSAGE}</p>
         )}
       </div>
+      {mentorTip ? (
+        <div className="space-y-3 rounded-lg border border-blue-500/20 bg-background/70 p-3">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Mentor Tip</p>
+            {normalizeMentorTipText(mentorTip.tip.title) ? (
+              <h3 className="text-sm font-semibold text-foreground">{normalizeMentorTipText(mentorTip.tip.title)}</h3>
+            ) : null}
+            {normalizeMentorTipText(mentorTip.tip.body) ? (
+              <p className="text-sm text-foreground/75">{normalizeMentorTipText(mentorTip.tip.body)}</p>
+            ) : null}
+          </div>
+          {mentorTip.actionLabel ? (
+            // Informational only, not a link/button: the same action already renders as its own
+            // clickable CTA below (Continue Studying) or in Quick Actions (Review Due Concepts,
+            // terminal action) — a second clickable element here would just duplicate it.
+            <p className="text-sm font-semibold text-foreground/55">{mentorTip.actionLabel}</p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex flex-col items-start gap-2">
         {action ? (
           <Link
@@ -778,15 +896,17 @@ function hasRenderableCompanionContent(companion: CompanionContent | null): bool
   if (!companion) {
     return false;
   }
-  const hasFaqContent = companion.faq.some(
+  const hasFaqContent = (companion.faq ?? []).some(
     (item) => renderableCompanionText(item.question) || renderableCompanionText(item.answer),
   );
+  const hasMentorTips = (companion.mentorTips ?? []).some(hasRenderableMentorTip);
   return Boolean(
     renderableCompanionText(companion.overview)
     || renderableCompanionText(companion.studyStrategy)
     || renderableCompanionText(companion.commonMistakes)
     || renderableCompanionText(companion.resources)
-    || hasFaqContent,
+    || hasFaqContent
+    || hasMentorTips,
   );
 }
 
@@ -840,6 +960,46 @@ function CompanionGuideSection({
   );
 }
 
+function MentorTipsGuideSection({
+  mentorTips,
+}: Readonly<{
+  mentorTips: CompanionMentorTip[];
+}>) {
+  const renderableTips = mentorTips.filter(hasRenderableMentorTip);
+  if (renderableTips.length === 0) {
+    return null;
+  }
+
+  return (
+    <section
+      className="space-y-3 rounded-lg border border-border bg-muted/30 p-4"
+      aria-labelledby={MENTOR_TIP_GUIDE_HEADING_ID}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-base shadow-sm"
+          aria-hidden="true"
+        >
+          {MENTOR_TIP_GUIDE_ICON}
+        </span>
+        <h3 id={MENTOR_TIP_GUIDE_HEADING_ID} className="text-sm font-semibold text-foreground">{MENTOR_TIP_GUIDE_HEADING}</h3>
+      </div>
+      <div className="space-y-3 pl-0 sm:pl-11">
+        {renderableTips.map((tip, index) => (
+          <div key={tip.id ?? `${normalizeMentorTipText(tip.title)}:${index}`} className="space-y-1.5 rounded-md border border-border/60 bg-background/70 p-3">
+            {normalizeMentorTipText(tip.title) ? (
+              <p className="text-sm font-semibold text-foreground">{normalizeMentorTipText(tip.title)}</p>
+            ) : null}
+            {normalizeMentorTipText(tip.body) ? (
+              <p className="text-sm text-foreground/75">{normalizeMentorTipText(tip.body)}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function CompanionDisplayCard({
   companion,
   labels,
@@ -858,7 +1018,8 @@ function CompanionDisplayCard({
   const studyStrategy = renderableCompanionText(companion.studyStrategy);
   const commonMistakes = renderableCompanionText(companion.commonMistakes);
   const resources = renderableCompanionText(companion.resources);
-  const faqItems = companion.faq
+  const mentorTips = companion.mentorTips ?? [];
+  const faqItems = (companion.faq ?? [])
     .map((item) => ({
       question: renderableCompanionText(item.question),
       answer: renderableCompanionText(item.answer),
@@ -924,6 +1085,8 @@ function CompanionDisplayCard({
               <SummaryMarkdown content={resources} />
             </CompanionGuideSection>
           ) : null}
+
+          <MentorTipsGuideSection mentorTips={mentorTips} />
         </div>
       ) : null}
     </Card>
@@ -1018,14 +1181,22 @@ type CompanionFaqDraft = {
   question: string;
   answer: string;
 };
+type CompanionMentorTipDraft = {
+  id: string;
+  title: string;
+  body: string;
+  linkedAction: CompanionMentorTipAction;
+  surfacingCondition: CompanionMentorTipSurfacingCondition | null;
+};
 type CompanionGenerationTarget = CompanionSection | "ALL";
 
-const COMPANION_SECTIONS: CompanionSection[] = ["OVERVIEW", "STUDY_STRATEGY", "COMMON_MISTAKES", "FAQ"];
+const COMPANION_SECTIONS: CompanionSection[] = ["OVERVIEW", "STUDY_STRATEGY", "COMMON_MISTAKES", "FAQ", "MENTOR_TIPS"];
 const COMPANION_SECTION_LABELS: Record<CompanionSection, string> = {
   OVERVIEW: "Overview",
   STUDY_STRATEGY: "Study Strategy",
   COMMON_MISTAKES: "Common Mistakes",
   FAQ: "FAQ",
+  MENTOR_TIPS: "Mentor Tips",
 };
 
 function companionInputValue(value: string | null | undefined): string {
@@ -1044,8 +1215,30 @@ function toCompanionFaqDrafts(content: CompanionContent | null): CompanionFaqDra
   }));
 }
 
+function createCompanionDraftId(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+function normalizeMentorTipAction(value: CompanionMentorTipAction | null | undefined): CompanionMentorTipAction {
+  return value ?? "NONE";
+}
+
+function toCompanionMentorTipDrafts(content: CompanionContent | null): CompanionMentorTipDraft[] {
+  return (content?.mentorTips ?? []).map((tip) => ({
+    id: tip.id ?? createCompanionDraftId(),
+    title: companionInputValue(tip.title),
+    body: companionInputValue(tip.body),
+    linkedAction: normalizeMentorTipAction(tip.linkedAction),
+    surfacingCondition: tip.surfacingCondition ?? null,
+  }));
+}
+
 function companionFaqHasContent(faq: CompanionFaqDraft[]): boolean {
   return faq.some((item) => item.question.trim().length > 0 || item.answer.trim().length > 0);
+}
+
+function companionMentorTipsHaveContent(mentorTips: CompanionMentorTipDraft[]): boolean {
+  return mentorTips.some((tip) => tip.title.trim().length > 0 || tip.body.trim().length > 0);
 }
 
 function buildCompanionContent(
@@ -1054,6 +1247,7 @@ function buildCompanionContent(
   commonMistakes: string,
   resources: string,
   faq: CompanionFaqDraft[],
+  mentorTips: CompanionMentorTipDraft[],
 ): CompanionContent {
   return {
     overview: companionPayloadValue(overview),
@@ -1063,6 +1257,13 @@ function buildCompanionContent(
     faq: faq.map((item) => ({
       question: companionPayloadValue(item.question),
       answer: companionPayloadValue(item.answer),
+    })),
+    mentorTips: mentorTips.map((tip) => ({
+      id: tip.id,
+      title: companionPayloadValue(tip.title),
+      body: companionPayloadValue(tip.body),
+      linkedAction: tip.linkedAction,
+      surfacingCondition: tip.surfacingCondition,
     })),
   };
 }
@@ -1256,6 +1457,7 @@ function CompanionEditorModal({
   collection,
   labels,
   companionMayBeOutdated,
+  terminalActionLabel,
   isOpen,
   onClose,
   onSaved,
@@ -1263,6 +1465,7 @@ function CompanionEditorModal({
   collection: NoteCollectionDetail;
   labels: ReturnType<typeof getCollectionLabels>;
   companionMayBeOutdated: boolean;
+  terminalActionLabel: string | null;
   isOpen: boolean;
   onClose: () => void;
   onSaved: (collection: NoteCollectionDetail) => void;
@@ -1272,6 +1475,7 @@ function CompanionEditorModal({
   const [commonMistakes, setCommonMistakes] = useState(companionInputValue(collection.companion?.commonMistakes));
   const [resources, setResources] = useState(companionInputValue(collection.companion?.resources));
   const [faq, setFaq] = useState<CompanionFaqDraft[]>(toCompanionFaqDrafts(collection.companion));
+  const [mentorTips, setMentorTips] = useState<CompanionMentorTipDraft[]>(toCompanionMentorTipDrafts(collection.companion));
   const [submitting, setSubmitting] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [generating, setGenerating] = useState<CompanionGenerationTarget | null>(null);
@@ -1287,6 +1491,7 @@ function CompanionEditorModal({
       setCommonMistakes(companionInputValue(collection.companion?.commonMistakes));
       setResources(companionInputValue(collection.companion?.resources));
       setFaq(toCompanionFaqDrafts(collection.companion));
+      setMentorTips(toCompanionMentorTipDrafts(collection.companion));
       setSubmitting(false);
       setClearing(false);
       setGenerating(null);
@@ -1305,6 +1510,9 @@ function CompanionEditorModal({
     if (section === "COMMON_MISTAKES") {
       return commonMistakes.trim().length > 0;
     }
+    if (section === "MENTOR_TIPS") {
+      return companionMentorTipsHaveContent(mentorTips);
+    }
     return companionFaqHasContent(faq);
   };
 
@@ -1313,7 +1521,8 @@ function CompanionEditorModal({
       return true;
     }
     const sectionText = sections.length === 1 ? COMPANION_SECTION_LABELS[sections[0]!] : "these sections";
-    return globalThis.confirm(`Generate draft content for ${sectionText}? This will replace the current unsaved text.`);
+    const mentorTipNote = sections.includes("MENTOR_TIPS") ? " Mentor Tip drafts will be appended." : "";
+    return globalThis.confirm(`Generate draft content for ${sectionText}? This will replace current unsaved section text.${mentorTipNote}`);
   };
 
   const applyCompanionDraft = (draft: CompanionContent, sections: CompanionSection[]) => {
@@ -1328,6 +1537,9 @@ function CompanionEditorModal({
     }
     if (sections.includes("FAQ")) {
       setFaq(toCompanionFaqDrafts(draft));
+    }
+    if (sections.includes("MENTOR_TIPS")) {
+      setMentorTips((current) => [...current, ...toCompanionMentorTipDrafts(draft)]);
     }
   };
 
@@ -1368,13 +1580,59 @@ function CompanionEditorModal({
     setFaq((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
+  const updateMentorTip = <K extends keyof CompanionMentorTipDraft>(
+    index: number,
+    field: K,
+    value: CompanionMentorTipDraft[K],
+  ) => {
+    setMentorTips((current) => current.map((tip, tipIndex) => (
+      tipIndex === index ? { ...tip, [field]: value } : tip
+    )));
+  };
+
+  const addMentorTip = () => {
+    setMentorTips((current) => [
+      ...current,
+      {
+        id: createCompanionDraftId(),
+        title: "",
+        body: "",
+        linkedAction: "NONE",
+        surfacingCondition: null,
+      },
+    ]);
+  };
+
+  const removeMentorTip = (index: number) => {
+    setMentorTips((current) => current.filter((_, tipIndex) => tipIndex !== index));
+  };
+
+  const updateMentorTipSurfacingType = (index: number, value: "ALWAYS" | CompanionMentorTipSurfacingConditionType) => {
+    updateMentorTip(
+      index,
+      "surfacingCondition",
+      value === "ALWAYS" ? null : { type: value, threshold: 0 },
+    );
+  };
+
+  const updateMentorTipThreshold = (index: number, value: string) => {
+    const currentCondition = mentorTips[index]?.surfacingCondition;
+    if (!currentCondition) {
+      return;
+    }
+    updateMentorTip(index, "surfacingCondition", {
+      ...currentCondition,
+      threshold: Number(value),
+    });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     setGenerationNotice(null);
     try {
-      const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, resources, faq));
+      const saved = await setCompanion(collection.id, buildCompanionContent(overview, studyStrategy, commonMistakes, resources, faq, mentorTips));
       onSaved(saved);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : `Could not save this ${labels.companionSingular}.`);
@@ -1571,6 +1829,100 @@ function CompanionEditorModal({
             className="min-h-28 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </label>
+
+        <section className="space-y-3" aria-labelledby="companion-mentor-tips-editor-heading">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="companion-mentor-tips-editor-heading" className="text-sm font-medium text-foreground">Mentor Tips</h3>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={generating === "MENTOR_TIPS"}
+                loadingText="Generating..."
+                disabled={busy}
+                onClick={() => void handleGenerate(["MENTOR_TIPS"], "MENTOR_TIPS")}
+              >
+                Generate tips
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={addMentorTip}>
+                Add tip
+              </Button>
+            </div>
+          </div>
+          {mentorTips.length > 0 ? (
+            <div className="space-y-3">
+              {mentorTips.map((tip, index) => (
+                <div key={tip.id} className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-foreground">Tip title {index + 1}</span>
+                    <input
+                      aria-label={`Tip title ${index + 1}`}
+                      value={tip.title}
+                      onChange={(event) => updateMentorTip(index, "title", event.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-sm font-medium text-foreground">Tip body {index + 1}</span>
+                    <textarea
+                      aria-label={`Tip body ${index + 1}`}
+                      value={tip.body}
+                      onChange={(event) => updateMentorTip(index, "body", event.target.value)}
+                      className="min-h-20 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-medium text-foreground">Linked action</span>
+                      <select
+                        aria-label={`Linked action ${index + 1}`}
+                        value={tip.linkedAction}
+                        onChange={(event) => updateMentorTip(index, "linkedAction", event.target.value as CompanionMentorTipAction)}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="NONE">{MENTOR_TIP_ACTION_LABELS.NONE}</option>
+                        <option value="CONTINUE_STUDYING">{MENTOR_TIP_ACTION_LABELS.CONTINUE_STUDYING}</option>
+                        <option value="REVIEW_DUE_CONCEPTS">{MENTOR_TIP_ACTION_LABELS.REVIEW_DUE_CONCEPTS}</option>
+                        <option value="TERMINAL_ACTION">{terminalActionLabel ?? MENTOR_TIP_ACTION_LABELS.TERMINAL_ACTION}</option>
+                      </select>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-medium text-foreground">Surfacing condition</span>
+                      <select
+                        aria-label={`Surfacing condition ${index + 1}`}
+                        value={tip.surfacingCondition?.type ?? "ALWAYS"}
+                        onChange={(event) => updateMentorTipSurfacingType(index, event.target.value as "ALWAYS" | CompanionMentorTipSurfacingConditionType)}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="ALWAYS">Always show</option>
+                        <option value="DAYS_BEFORE_TARGET_DATE">{MENTOR_TIP_SURFACING_LABELS.DAYS_BEFORE_TARGET_DATE}</option>
+                        <option value="AFTER_SUBJECTS_COMPLETED">{MENTOR_TIP_SURFACING_LABELS.AFTER_SUBJECTS_COMPLETED}</option>
+                      </select>
+                    </label>
+                  </div>
+                  {tip.surfacingCondition ? (
+                    <label className="block space-y-1.5">
+                      <span className="text-sm font-medium text-foreground">Threshold</span>
+                      <input
+                        aria-label={`Surfacing threshold ${index + 1}`}
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={String(tip.surfacingCondition.threshold)}
+                        onChange={(event) => updateMentorTipThreshold(index, event.target.value)}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </label>
+                  ) : null}
+                  <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => removeMentorTip(index)}>
+                    Remove tip
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         {generationNotice ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">{generationNotice}</p> : null}
         {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
@@ -2744,6 +3096,17 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     ? buildCountdownLine(currentTargetCompletionDate, goalDetail?.weeksRemaining, goalDetail?.conceptsRemaining)
     : null;
   const todaysConceptBudget = hasTargetDate ? goalDetail?.todaysConceptBudget ?? null : null;
+  const completedSubjectCount = isGoalView && goalDetail
+    ? goalDetail.children.filter((child) => child.totalConcepts > 0 && child.masteredConcepts === child.totalConcepts).length
+    : planReadiness
+      ? planReadiness.subjects.filter((subject) => subject.totalConcepts > 0 && subject.masteredConcepts === subject.totalConcepts).length
+      : null;
+  const surfacedMentorTip = getFirstEligibleMentorTip(
+    collection?.companion ?? null,
+    currentTargetCompletionDate,
+    completedSubjectCount,
+    terminalAction?.label ?? null,
+  );
 
   if (loadState === "loading") {
     return (
@@ -2825,6 +3188,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           dueConceptReviewHref={dueConceptReviewHref}
           todaysConceptBudget={todaysConceptBudget}
           hasTargetDate={hasTargetDate}
+          mentorTip={surfacedMentorTip}
         />
 
         <ReadinessSummary
@@ -2897,6 +3261,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           collection={collection}
           labels={labels}
           companionMayBeOutdated={goalDetail.companionMayBeOutdated}
+          terminalActionLabel={terminalAction?.label ?? null}
           isOpen={companionOpen}
           onClose={() => setCompanionOpen(false)}
           onSaved={(saved) => {
@@ -2986,6 +3351,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         dueConceptReviewHref={dueConceptReviewHref}
         todaysConceptBudget={todaysConceptBudget}
         hasTargetDate={hasTargetDate}
+        mentorTip={surfacedMentorTip}
       />
 
       {skippedNoticeCount ? (
@@ -3227,6 +3593,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         collection={collection}
         labels={labels}
         companionMayBeOutdated={goalDetail?.companionMayBeOutdated ?? false}
+        terminalActionLabel={terminalAction?.label ?? null}
         isOpen={companionOpen}
         onClose={() => setCompanionOpen(false)}
         onSaved={(saved) => {
