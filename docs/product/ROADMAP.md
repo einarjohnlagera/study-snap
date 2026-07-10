@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.42.1 - Companion & Progress Polish` is released. No version is currently in progress — `v0.43.0` (Companion "Coach Experience", see the Guided Learning Initiative section below) is the top candidate for the next kickoff.
+`v0.43.1 - Companion Mentor Tips` is the next candidate version (not yet kicked off).
 
-`v0.42.0 - AI-assisted Companion authoring + regeneration` is the previous released version before that (on `releases/v0.42.0`).
+`v0.43.0 - Companion Coach Experience` is the previous released version (on `releases/v0.43.0`).
+
+`v0.42.1 - Companion & Progress Polish` is the previous released version (on `releases/v0.42.1`); `v0.42.0 - AI-assisted Companion authoring + regeneration` before that.
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
@@ -509,22 +511,56 @@ Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new fe
 - Fix `/progress?collectionId={id}`'s backlink: it always showed "Dashboard" regardless of entry point; now returns to the originating collection when reached via that collection's "View full progress" link.
 - Considered and declined: turning collection cards' course/program metadata into a badge — stays plain text per the existing badge-classification rule (identity/state get badges, metadata does not).
 
-### Candidate — Companion "Coach Experience" (presentation/voice layer, not yet scoped to a version)
+### v0.43.0 — Companion "Coach Experience", Released (base branch `releases/v0.43.0`)
 
 Origin: a product proposal to make the Review Set detail page *feel* like a coach talking to the learner rather than a set of labeled CMS fields ("Overview", "Study Strategy", "Common Mistakes", "FAQ"). Pressure-tested via architecture review before scoping.
 
 **Finding: the proposal's own mockup conflates three different operations — only one is genuinely "same content, new presentation":**
-- **(a) Relabel/re-voice authored sections** (e.g. "Overview" → "👋 Welcome back") — same curator text, friendlier frame, order preserved. Not generation (no per-learner synthesis, same author, same review-before-publish gate); "Curation, never generation" is not implicated.
+- **(a) Relabel/re-voice authored sections** (e.g. "Overview" → "🗺️ What this covers") — same curator text, friendlier frame, order preserved. Not generation (no per-learner synthesis, same author, same review-before-publish gate); "Curation, never generation" is not implicated. (Shipped headings stay descriptive of the section's content rather than becoming a generic greeting — an earlier "👋 Welcome back" draft for Overview was rejected mid-build for exactly that reason; see the "Coach vs. Companion" refinement below.)
 - **(b) Reorder/prioritize authored sections by learner context** (e.g. surface Common Mistakes first when readiness is low) — **explicitly deferred**, not part of the near-term slice. Two problems: it collides with the monetization line below (adaptive prioritization is named PRO value), and it breaks curator-authored narrative flow — Overview → Strategy → Mistakes → FAQ assumes that reading order, and later sections can reference earlier ones.
-- **(c) Coach-voice composition of already-shipped live signals** — the weekly countdown (`GoalWeeklyCountdownCard`), the resolved next action (`getNextPlanAction`), readiness/due-concepts (`ReadinessSummary`/ConceptHealth). None of this is Companion content; it's v0.41.1's dashboard signals, already FREE, just not yet wearing a coach voice.
+- **(c) Coach-voice composition of already-shipped live signals** — target-date pacing, the resolved next action (`getNextPlanAction`), readiness/due-concepts (`ReadinessSummary`/ConceptHealth), and terminal exam/builder actions. None of this is Companion content; it's v0.41.1's dashboard signals, already FREE, just not yet wearing a coach voice.
 
-**Near-term buildable slice = (a) + (c).** A static coach-label mapping (same shape as `getCollectionLabels`) over `CompanionDisplayCard`, order-preserving, plus a conversational frame composed from already-loaded countdown/next-action/readiness data, positioned above the authored Companion (which stays a stable, unreordered narrative). Frontend-only, no new backend call, no new persisted state — same architectural class as `pickActiveGuidance` (`frontend/lib/guidance-engine.ts`) and `getNextPlanAction`, both deterministic and frontend-only already.
+**Near-term buildable slice = (a) + (c).** A static coach-label mapping (same shape as `getCollectionLabels`) over `CompanionDisplayCard`, order-preserving, plus a conversational frame composed from already-loaded live signals, positioned above Progress and the authored Companion (which stays a stable, unreordered narrative). Frontend-only, no new backend call, no new persisted state — same architectural class as `pickActiveGuidance` (`frontend/lib/guidance-engine.ts`) and `getNextPlanAction`, both deterministic and frontend-only already. Shipped as `TodaysFocusCard`, which merges the former countdown/primary-action/coach-intro surfaces into one Coach card, while Progress owns the countdown summary and Companion remains reference material.
 
 **(b) stays deferred, reserved for future PRO personalization** (see "Future, gated — Runtime Companion" below). If ever picked up, the FREE-deterministic/PRO-adaptive line already drawn there applies: rule-based deterministic reordering could ship FREE like the weekly countdown did, but genuinely adaptive/learning-pattern/LLM-driven selection is the PRO differentiator — not a re-paywalled version of deterministic logic.
 
-Not yet sequenced to a version — v0.42.1 is scoped to small polish only; this is new-feature-shaped and sized for its own release after v0.42.1 closes.
+**Planned Scope:**
+- Coach-voice terminology mapping over `CompanionDisplayCard` (order-preserving, no reordering).
+- `TodaysFocusCard` in the Coach tier, above Progress and the authored Companion, driven by the already-resolved primary action (`getNextPlanAction`) plus target-date pacing and existing quick/terminal actions.
+- Short curator-authoring guidance note in `docs/features/companion.md`.
+- **"View Full Guide" collapse (added mid-release, see philosophy refinement below).** `CompanionDisplayCard`'s five sections stop rendering inline; they move behind a "View Full Guide" disclosure, below Today's Focus and Progress. Frontend-only, no new data, no new persisted state — same guardrails as the rest of this release.
 
-Anti-drift: no reordering of authored Companion sections; no generation; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); labels continue through `getCollectionLabels`.
+Anti-drift: no reordering of authored Companion sections (the narrative-flow reason for this holds for today's long-form-paragraph content model — see the "Coach vs. Companion" refinement below for why that reasoning changes if content ever becomes atomic tips); no generation; no new backend, endpoint, or persisted state; does not reopen Timeline/Checklist as authored prose (stays live-feature embeds per v0.42.0); labels continue through `getCollectionLabels`.
+
+### Coach vs. Companion, formalized (mid-release philosophy refinement)
+
+Surfaced from using the shipped relabel + intro in practice: swapping section headings for coach-voice copy didn't fix the actual complaint. Five long-form paragraphs stacked under friendlier labels still reads as an article, not an app. The heading-copy lever is exhausted; the real lever is disclosure and interaction, not vocabulary.
+
+**The organizing split, going forward:**
+- **Coach (dynamic).** Reacts to the learner: continue-where-you-left-off, target-date pacing, readiness, due concepts, resolved next action, and existing terminal actions. This is not a new concept — it's naming what already exists (`TodaysFocusCard` plus `ReadinessSummary`). Zero new cost.
+- **Companion (timeless).** Authored, does not react to daily progress. Teaches how to approach the curriculum — mindset, expectations, common mistakes, practical advice. Should read like mentor advice, not reference material.
+- **Curriculum.** Subject Plans → Notes → Practice. Unchanged, not part of this discussion.
+
+**A correction to this release's own anti-drift reasoning, recorded so it isn't re-derived wrong later:** the (b) reordering objection above cites two reasons — a PRO-monetization collision and a narrative-flow break. The monetization citation is imprecise in isolation: only *learning-pattern/LLM-informed* selection is the PRO differentiator (see Monetization philosophy, below); deterministic, rule-based selection (a date threshold, a progress count) is FREE-safe by the same precedent as the weekly countdown. The narrative-flow reason is the one that actually holds — and only because today's Companion is five long-form paragraphs where later sections can presume earlier ones were read. That reasoning is specific to *this* content shape, not a permanent rule; see v0.43.1 below for why it changes if sections become atomic tips.
+
+**The verdict, split by cost:**
+- **Cheap (this release, frontend-only):** the Coach/Companion naming above (free, just clarity), the `TodaysFocusCard` → Progress → Companion hierarchy, and the "View Full Guide" collapse (Planned Scope, above). Together these are the actual fix for "feels like documentation" — leading with what already exists and demoting the long-form article to reference material, reachable but not the first thing shown.
+- **Expensive (a distinct initiative, not polish):** atomic, individually-surfaceable "Mentor Tips" with rotation and action-linking. This needs a new content shape — `CompanionContent`'s five long-form fields can't be "surfaced as a moment" without truncating curator intent. Scoped separately below as v0.43.1, since it is not frontend-only and does not fit this release's guardrails.
+
+### v0.43.1 — Companion Mentor Tips (candidate, not yet kicked off)
+
+Origin: continuation of the philosophy refinement above. Once the Companion is reachable via "View Full Guide" rather than rendered inline, the next question is whether the *authored* content itself can participate in the experience the way the Coach cluster already does — small, individually-surfaced, action-linked moments instead of an article to read start to finish.
+
+**Why this is a distinct version, not a v0.43.0 fast-follow in the polish sense** (unlike v0.40.1, v0.41.1, v0.42.1, which were frontend-only fast-follows on their preceding `.0`): this needs a real content-model change, not a presentation change.
+
+- **Content model.** `CompanionContent`'s five long-form markdown fields (`overview`, `studyStrategy`, `commonMistakes`, `resources`, `faq[]`) do not support an individually-rotatable, individually-linkable tip. A tip needs its own identity, optional linked action, and optional surfacing condition — a new entity/DTO shape, not a frontend read of existing fields. This is the fulcrum: everything past this point is backend + authoring-UI scope, which is why it cannot fold into v0.43.0.
+- **Authoring.** The authoring modal, v0.42.0's per-section AI-assist, and the structure-staleness snapshot all need to extend to the new shape. Mandatory human review before publish still applies — no change to "Curation, never generation" or "publishing is never autonomous."
+- **Action-linking is curator-tagged, not inferred.** `TodaysFocusCard` already links *Coach* signals to actions — that part exists. Linking a curator's *authored* tip to an action (e.g. "you still have due concepts" → Review due concepts) must be a field the curator sets when authoring the tip, not something inferred at render time — inferring it would require a per-view LLM call, which v0.41.0 explicitly ruled out ("authored once, served static — zero per-view cost"). This constraint and the cheap/compliant path are the same path: deterministic, curator-tagged linking.
+- **Surfacing stays deterministic.** "Show this tip within 2 weeks of the exam date" or "after N subjects completed" are date/progress rules, not learning-pattern inference — FREE-safe by the weekly-countdown precedent, not a PRO feature. Nothing here requires the adaptive/LLM-driven selection that Monetization philosophy (below) reserves for PRO.
+- **"View Full Guide" stays a permanent escape hatch.** Whatever rotation/surfacing logic ships, the full authored Companion must remain reachable regardless of which triggers have fired — a learner should never permanently miss a curator's warning because its surfacing condition never happened to trigger for them.
+- **Volume caveat.** Per the original Companion MVP scoping, there are still few Official Review Sets today. A "show another tip" affordance over a two-tip guide will feel hollow — this feature's perceived value scales with authored tip volume, which curators have not yet been asked to produce at this grain. Worth an explicit go/no-go check against actual authored-content volume before or during kickoff, not an assumption.
+
+Not yet kicked off — sequencing and exact scope to be finalized at `/kickoff` time.
 
 ### Documented rule clarification (not a reversal) — enables AI-assisted authoring
 

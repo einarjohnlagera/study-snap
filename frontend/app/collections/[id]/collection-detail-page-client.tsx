@@ -98,6 +98,12 @@ const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
 const UNGROUPED_SECTION_NAME = "Ungrouped";
 const LARGE_VIEWPORT_MIN_WIDTH = 1024;
+const TODAY_FOCUS_EYEBROW = "Today's Focus";
+const CONTINUE_STUDYING_LABEL = "Continue Studying";
+const QUICK_ACTIONS_LABEL = "Quick Actions";
+const REVIEW_DUE_CONCEPTS_LABEL = "Review Due Concepts";
+const FOCUS_DONE_MESSAGE = "You've worked through everything here. Nice work.";
+const FOCUS_NO_TARGET_MESSAGE = "Pick up where you left off — you've got this.";
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
@@ -357,8 +363,12 @@ function PlanHeroCard({
 
   return (
     <Card className={cn("space-y-4 p-5 sm:p-6", isPrimary && "border-l-4 border-l-indigo-500 bg-indigo-500/[0.03] dark:border-l-indigo-400")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-3">
+      {/* flex-col on mobile, row from sm: up. min-w-0 + flex-1 on the title column lets the browser
+          shrink it toward zero width instead of wrapping the (shrink-0) actions column below it once
+          both no longer fit on one row — that's what produced the word-per-line "crumpled" title on
+          narrow screens. Stacking removes the row-fit constraint below sm: entirely. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-3 sm:flex-1">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{eyebrowLabel}</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -395,55 +405,99 @@ type ResolvedPrimaryAction = {
   href: string;
 };
 
-function PrimaryActionCard({
+function formatConceptCount(count: number): string {
+  return `${count} ${count === 1 ? "concept" : "concepts"}`;
+}
+
+function buildCountdownLine(
+  targetCompletionDate: string | null | undefined,
+  weeksRemaining: number | null | undefined,
+  conceptsRemaining: number | null | undefined,
+): ReactNode {
+  if (!targetCompletionDate || weeksRemaining === null || weeksRemaining === undefined || conceptsRemaining === null || conceptsRemaining === undefined) {
+    return null;
+  }
+  const weekLabel = weeksRemaining === 1 ? "1 week" : `${weeksRemaining} weeks`;
+  return `${weekLabel} until ${formatLocalDate(targetCompletionDate)} · ${formatConceptCount(conceptsRemaining)} remaining`;
+}
+
+function TodaysFocusCard({
   action,
   terminalAction,
+  dueConceptReviewHref,
+  todaysConceptBudget,
+  hasTargetDate,
 }: Readonly<{
   action: ResolvedPrimaryAction | null;
   terminalAction?: ReactNode;
+  dueConceptReviewHref: string | null;
+  todaysConceptBudget: number | null;
+  hasTargetDate: boolean;
 }>) {
+  const coachingSentence = action
+    ? hasTargetDate
+      ? todaysConceptBudget === null
+        ? null
+        : todaysConceptBudget > 0
+          ? `Study about ${formatConceptCount(todaysConceptBudget)} today to stay on pace.`
+          : "You're on pace — no new concepts scheduled today."
+      : FOCUS_NO_TARGET_MESSAGE
+    : null;
+  const hasQuickActions = dueConceptReviewHref !== null || Boolean(terminalAction);
+
   return (
     <Card className="space-y-4 border-blue-500/25 bg-blue-500/5 p-4 sm:p-5">
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Continue</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{TODAY_FOCUS_EYEBROW}</p>
         {action ? (
           <>
             <CardTitle>{action.title}</CardTitle>
             <CardDescription>{action.description}</CardDescription>
+            {coachingSentence ? <p className="pt-1 text-sm text-foreground/75">{coachingSentence}</p> : null}
           </>
         ) : (
-          <>
-            <CardTitle>All caught up in this plan</CardTitle>
-            <CardDescription>Every note has a Study Pack and has been practiced.</CardDescription>
-          </>
+          <p className="text-sm font-medium text-foreground/80">{FOCUS_DONE_MESSAGE}</p>
         )}
       </div>
       <div className="flex flex-col items-start gap-2">
         {action ? (
           <Link
             href={action.href}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+            className="inline-flex w-full min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 sm:w-auto"
           >
-            Continue
+            {CONTINUE_STUDYING_LABEL}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         ) : null}
-        {terminalAction ? (
-          <div className="pt-1">{terminalAction}</div>
+        {hasQuickActions ? (
+          <div className="w-full space-y-2 pt-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{QUICK_ACTIONS_LABEL}</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+              {dueConceptReviewHref ? (
+                <ResponsiveActionLink
+                  href={dueConceptReviewHref}
+                  action="quickReview"
+                  label={REVIEW_DUE_CONCEPTS_LABEL}
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                />
+              ) : null}
+              {terminalAction}
+            </div>
+          </div>
         ) : null}
       </div>
     </Card>
   );
 }
 
-// Rendered as ReadinessSummary's `footer` slot so the readiness stats and the "View
-// full progress"/"Review due concepts" actions read as one card, not two stacked elements.
+// Rendered as ReadinessSummary's `footer` slot so the readiness stats and the
+// deep progress action read as one card, not two stacked elements.
 function ReadinessCardFooter({
   collectionId,
-  dueConceptReviewHref,
 }: Readonly<{
   collectionId: string;
-  dueConceptReviewHref: string | null;
 }>) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -453,15 +507,6 @@ function ReadinessCardFooter({
       >
         View full progress
       </Link>
-      {dueConceptReviewHref ? (
-        <ResponsiveActionLink
-          href={dueConceptReviewHref}
-          action="quickReview"
-          label="Review due concepts"
-          variant="outline"
-          size="sm"
-        />
-      ) : null}
     </div>
   );
 }
@@ -729,11 +774,83 @@ function renderableCompanionText(value: string | null | undefined): string {
   return value?.trim() ?? "";
 }
 
+function hasRenderableCompanionContent(companion: CompanionContent | null): boolean {
+  if (!companion) {
+    return false;
+  }
+  const hasFaqContent = companion.faq.some(
+    (item) => renderableCompanionText(item.question) || renderableCompanionText(item.answer),
+  );
+  return Boolean(
+    renderableCompanionText(companion.overview)
+    || renderableCompanionText(companion.studyStrategy)
+    || renderableCompanionText(companion.commonMistakes)
+    || renderableCompanionText(companion.resources)
+    || hasFaqContent,
+  );
+}
+
+// Coach-voice framing over the curator-authored Companion sections. Purely presentational —
+// same text, same author, same order; this only swaps the heading copy, it does not
+// reorder or select which sections render (see docs/product/ROADMAP.md's Coach Experience section).
+const COMPANION_COACH_HEADINGS = {
+  overview: { icon: "🗺️", label: "What this covers" },
+  studyStrategy: { icon: "🧭", label: "How to study this" },
+  commonMistakes: { icon: "⚠️", label: "Avoid these traps" },
+  faq: { icon: "💬", label: "Common questions" },
+  resources: { icon: "📎", label: "Extra resources" },
+} as const;
+
+type CompanionHeadingKey = keyof typeof COMPANION_COACH_HEADINGS;
+
+function CompanionGuideSection({
+  headingKey,
+  headingId,
+  children,
+}: Readonly<{
+  headingKey: CompanionHeadingKey;
+  headingId: string;
+  children: ReactNode;
+}>) {
+  const heading = COMPANION_COACH_HEADINGS[headingKey];
+  const isWarning = headingKey === "commonMistakes";
+
+  return (
+    <section
+      className={cn(
+        "space-y-3 rounded-lg border border-border bg-muted/30 p-4",
+        isWarning && "border-amber-500/25 bg-amber-500/10",
+      )}
+      aria-labelledby={headingId}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-base shadow-sm",
+            isWarning && "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
+          )}
+          aria-hidden="true"
+        >
+          {heading.icon}
+        </span>
+        <h3 id={headingId} className="text-sm font-semibold text-foreground">{heading.label}</h3>
+      </div>
+      <div className="space-y-3 pl-0 sm:pl-11">{children}</div>
+    </section>
+  );
+}
+
 function CompanionDisplayCard({
   companion,
   labels,
 }: Readonly<{ companion: CompanionContent | null; labels: ReturnType<typeof getCollectionLabels> }>) {
-  if (!companion) {
+  // Collapsed by default, regardless of viewport — unlike the note-list sections above, which
+  // default to expanded on large screens. The authored Companion is reference material now (see
+  // docs/product/ROADMAP.md's "Coach vs. Companion" refinement): the live-signal cluster is what a
+  // learner sees first, and the full guide is opt-in, not the page's default reading experience.
+  const [isGuideExpanded, setIsGuideExpanded] = useState(false);
+
+  if (!companion || !hasRenderableCompanionContent(companion)) {
     return null;
   }
 
@@ -748,89 +865,67 @@ function CompanionDisplayCard({
     }))
     .filter((item) => item.question || item.answer);
 
-  if (!overview && !studyStrategy && !commonMistakes && faqItems.length === 0 && !resources) {
-    return null;
-  }
-
   return (
-    <Card className="space-y-5 p-4 sm:p-5">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
-        <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+    <Card className="space-y-4 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{labels.companionSingular}</p>
+          <h2 className="text-lg font-semibold tracking-tight">Learning {labels.companionSingular}</h2>
+        </div>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+          aria-expanded={isGuideExpanded}
+          onClick={() => setIsGuideExpanded((previous) => !previous)}
+        >
+          {isGuideExpanded ? "Hide Full Guide" : "View Full Guide"}
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 transition-transform", !isGuideExpanded && "-rotate-90")}
+            aria-hidden="true"
+          />
+        </button>
       </div>
 
-      {overview ? (
-        <section className="space-y-2" aria-labelledby="companion-overview-heading">
-          <h3 id="companion-overview-heading" className="text-sm font-semibold text-foreground">Overview</h3>
-          <SummaryMarkdown content={overview} />
-        </section>
-      ) : null}
+      {isGuideExpanded ? (
+        <div className="space-y-4">
+          {overview ? (
+            <CompanionGuideSection headingKey="overview" headingId="companion-overview-heading">
+              <SummaryMarkdown content={overview} />
+            </CompanionGuideSection>
+          ) : null}
 
-      {studyStrategy ? (
-        <section className="space-y-2" aria-labelledby="companion-study-strategy-heading">
-          <h3 id="companion-study-strategy-heading" className="text-sm font-semibold text-foreground">Study Strategy</h3>
-          <SummaryMarkdown content={studyStrategy} />
-        </section>
-      ) : null}
+          {studyStrategy ? (
+            <CompanionGuideSection headingKey="studyStrategy" headingId="companion-study-strategy-heading">
+              <SummaryMarkdown content={studyStrategy} />
+            </CompanionGuideSection>
+          ) : null}
 
-      {commonMistakes ? (
-        <section className="space-y-2" aria-labelledby="companion-common-mistakes-heading">
-          <h3 id="companion-common-mistakes-heading" className="text-sm font-semibold text-foreground">Common Mistakes</h3>
-          <SummaryMarkdown content={commonMistakes} />
-        </section>
-      ) : null}
+          {commonMistakes ? (
+            <CompanionGuideSection headingKey="commonMistakes" headingId="companion-common-mistakes-heading">
+              <SummaryMarkdown content={commonMistakes} />
+            </CompanionGuideSection>
+          ) : null}
 
-      {faqItems.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="companion-faq-display-heading">
-          <h3 id="companion-faq-display-heading" className="text-sm font-semibold text-foreground">FAQ</h3>
-          <div className="space-y-3">
-            {faqItems.map((item, index) => (
-              <div key={`${item.question}:${index}`} className="space-y-1.5">
-                {item.question ? <p className="text-sm font-semibold text-foreground">{item.question}</p> : null}
-                {item.answer ? <SummaryMarkdown content={item.answer} /> : null}
+          {faqItems.length > 0 ? (
+            <CompanionGuideSection headingKey="faq" headingId="companion-faq-display-heading">
+              <div className="space-y-3">
+                {faqItems.map((item, index) => (
+                  <div key={`${item.question}:${index}`} className="space-y-1.5">
+                    {item.question ? <p className="text-sm font-semibold text-foreground">{item.question}</p> : null}
+                    {item.answer ? <SummaryMarkdown content={item.answer} /> : null}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </CompanionGuideSection>
+          ) : null}
+
+          {resources ? (
+            <CompanionGuideSection headingKey="resources" headingId="companion-resources-heading">
+              <SummaryMarkdown content={resources} />
+            </CompanionGuideSection>
+          ) : null}
+        </div>
       ) : null}
-
-      {resources ? (
-        <section className="space-y-2" aria-labelledby="companion-resources-heading">
-          <h3 id="companion-resources-heading" className="text-sm font-semibold text-foreground">Resources</h3>
-          <SummaryMarkdown content={resources} />
-        </section>
-      ) : null}
-    </Card>
-  );
-}
-
-function GoalWeeklyCountdownCard({
-  targetCompletionDate,
-  weeksRemaining,
-  conceptsRemaining,
-  todaysConceptBudget,
-}: Readonly<{
-  targetCompletionDate: string | null;
-  weeksRemaining: number | null;
-  conceptsRemaining: number | null;
-  todaysConceptBudget: number | null;
-}>) {
-  if (!targetCompletionDate || weeksRemaining === null || conceptsRemaining === null || todaysConceptBudget === null) {
-    return null;
-  }
-  const weekLabel = weeksRemaining === 1 ? "1 week" : `${weeksRemaining} weeks`;
-  const conceptLabel = conceptsRemaining === 1 ? "1 concept" : `${conceptsRemaining} concepts`;
-  const budgetLabel = todaysConceptBudget === 1 ? "1 concept" : `${todaysConceptBudget} concepts`;
-
-  return (
-    <Card className="space-y-2 p-4 sm:p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">This Week</p>
-      <h2 className="text-lg font-semibold tracking-tight">
-        {weekLabel} until {formatLocalDate(targetCompletionDate)}
-      </h2>
-      <p className="text-sm font-medium text-foreground/80">
-        {conceptLabel} remaining · {budgetLabel} today
-      </p>
     </Card>
   );
 }
@@ -2612,12 +2707,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     openCollectionPremiumExam();
   }, [openCollectionPremiumExam, premiumExamDisabled, primaryExamItem, unpracticedExamNoteCount]);
   const terminalSecondaryAction = terminalAction ? (
-    <div className="flex flex-col gap-1">
+    <div className="flex w-full flex-col gap-1 sm:w-auto">
       <ResponsiveActionButton
         action="open"
         label={terminalAction.label}
-        variant="ghost"
+        variant="outline"
         size="sm"
+        className="w-full sm:w-auto"
         disabled={terminalAction.kind === "exam-builder" ? quizReadyNoteIds.length === 0 : premiumExamDisabled}
         onClick={terminalAction.kind === "exam-builder" ? openCollectionExamBuilder : handlePremiumExamCta}
       />
@@ -2642,6 +2738,12 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       ) : null}
     </div>
   ) : null;
+  const currentTargetCompletionDate = goalDetail?.targetCompletionDate ?? null;
+  const hasTargetDate = currentTargetCompletionDate !== null;
+  const countdownLine = hasTargetDate
+    ? buildCountdownLine(currentTargetCompletionDate, goalDetail?.weeksRemaining, goalDetail?.conceptsRemaining)
+    : null;
+  const todaysConceptBudget = hasTargetDate ? goalDetail?.todaysConceptBudget ?? null : null;
 
   if (loadState === "loading") {
     return (
@@ -2717,14 +2819,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           )}
         />
 
-        <GoalWeeklyCountdownCard
-          targetCompletionDate={goalDetail.targetCompletionDate}
-          weeksRemaining={goalDetail.weeksRemaining}
-          conceptsRemaining={goalDetail.conceptsRemaining}
-          todaysConceptBudget={goalDetail.todaysConceptBudget}
+        <TodaysFocusCard
+          action={primaryStudyAction}
+          terminalAction={terminalSecondaryAction}
+          dueConceptReviewHref={dueConceptReviewHref}
+          todaysConceptBudget={todaysConceptBudget}
+          hasTargetDate={hasTargetDate}
         />
-
-        <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
 
         <ReadinessSummary
           variant="compact"
@@ -2738,9 +2839,18 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           subjects={[]}
           emptyTitle="No readiness yet"
           emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
-          footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
+          countdown={countdownLine}
+          footer={<ReadinessCardFooter collectionId={collectionId} />}
         />
 
+        {activePostAdoptTip ? (
+          <GuidanceTip
+            tipId={activePostAdoptTip.id}
+            message={activePostAdoptTip.message}
+            trackAnalytics
+            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
+          />
+        ) : null}
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
 
         {mutationError ? (
@@ -2750,15 +2860,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </Card>
-        ) : null}
-
-        {activePostAdoptTip ? (
-          <GuidanceTip
-            tipId={activePostAdoptTip.id}
-            message={activePostAdoptTip.message}
-            trackAnalytics
-            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
-          />
         ) : null}
 
         <GoalDetailView goal={goalDetail} labels={labels} />
@@ -2879,16 +2980,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         )}
       />
 
-      {/* A childless top-level ("leaf") collection can still carry a target completion date — goalDetail
-          is fetched for it above, and this card self-guards to null when no target date is set. */}
-      <GoalWeeklyCountdownCard
-        targetCompletionDate={goalDetail?.targetCompletionDate ?? null}
-        weeksRemaining={goalDetail?.weeksRemaining ?? null}
-        conceptsRemaining={goalDetail?.conceptsRemaining ?? null}
-        todaysConceptBudget={goalDetail?.todaysConceptBudget ?? null}
+      <TodaysFocusCard
+        action={primaryStudyAction}
+        terminalAction={terminalSecondaryAction}
+        dueConceptReviewHref={dueConceptReviewHref}
+        todaysConceptBudget={todaysConceptBudget}
+        hasTargetDate={hasTargetDate}
       />
-
-      <PrimaryActionCard action={primaryStudyAction} terminalAction={terminalSecondaryAction} />
 
       {skippedNoticeCount ? (
         <Card className="border-amber-500/25 bg-amber-500/10 p-4 text-sm text-foreground/75">
@@ -2919,7 +3017,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         unavailableDescription="Readiness is unavailable right now. Try refreshing this plan."
         emptyTitle="No readiness yet"
         emptyDescription={planReadinessLoadState === "loading" ? "Loading readiness..." : "Generate Study Packs and practice to see readiness."}
-        footer={<ReadinessCardFooter collectionId={collectionId} dueConceptReviewHref={dueConceptReviewHref} />}
+        countdown={countdownLine}
+        footer={<ReadinessCardFooter collectionId={collectionId} />}
       />
 
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
