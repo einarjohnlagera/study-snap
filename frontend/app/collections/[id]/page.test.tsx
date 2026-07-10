@@ -314,6 +314,15 @@ describe("CollectionDetailPageClient", () => {
         { question: "Generated question 2?", answer: "Generated answer 2." },
         { question: "Generated question 3?", answer: "Generated answer 3." },
       ],
+      mentorTips: [
+        {
+          id: "tip-generated-1",
+          title: "Generated tip",
+          body: "Generated mentor tip body.",
+          linkedAction: "NONE",
+          surfacingCondition: null,
+        },
+      ],
     });
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
@@ -326,6 +335,17 @@ describe("CollectionDetailPageClient", () => {
     Object.defineProperty(globalThis.window, "innerWidth", {
       configurable: true,
       value: 1024,
+    });
+    let uuidCounter = 0;
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {
+        ...globalThis.crypto,
+        randomUUID: jest.fn(() => {
+          uuidCounter += 1;
+          return `draft-tip-${uuidCounter}`;
+        }),
+      },
     });
     globalThis.localStorage.clear();
     globalThis.sessionStorage.clear();
@@ -730,6 +750,7 @@ describe("CollectionDetailPageClient", () => {
       studyStrategy: null,
       commonMistakes: null,
       faq: [],
+      mentorTips: [],
     });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
@@ -771,6 +792,7 @@ describe("CollectionDetailPageClient", () => {
         "STUDY_STRATEGY",
         "COMMON_MISTAKES",
         "FAQ",
+        "MENTOR_TIPS",
       ]);
     });
     expect(screen.getByLabelText("Overview")).toHaveValue("Generated overview");
@@ -778,6 +800,8 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByLabelText("Common Mistakes")).toHaveValue("Generated mistakes");
     expect(screen.getByLabelText("Question 1")).toHaveValue("Generated question 1?");
     expect(screen.getByLabelText("Answer 1")).toHaveValue("Generated answer 1.");
+    expect(screen.getByLabelText("Tip title 1")).toHaveValue("Generated tip");
+    expect(screen.getByLabelText("Tip body 1")).toHaveValue("Generated mentor tip body.");
     expect(setCompanion).not.toHaveBeenCalled();
   });
 
@@ -789,6 +813,7 @@ describe("CollectionDetailPageClient", () => {
         studyStrategy: null,
         commonMistakes: null,
         faq: [],
+        mentorTips: [],
       },
     }));
     (generateCompanion as jest.Mock).mockRejectedValue(new Error("Could not generate Companion draft content."));
@@ -815,6 +840,7 @@ describe("CollectionDetailPageClient", () => {
         studyStrategy: null,
         commonMistakes: null,
         faq: [],
+        mentorTips: [],
       },
     }));
     const confirmSpy = jest.spyOn(globalThis, "confirm").mockReturnValue(false);
@@ -850,6 +876,70 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByLabelText("Question 1")).toHaveValue("Second question");
   });
 
+  it("adds, edits, and removes Mentor Tip rows by index", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add tip" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add tip" }));
+    fireEvent.change(screen.getByLabelText("Tip title 1"), { target: { value: "First tip" } });
+    fireEvent.change(screen.getByLabelText("Tip title 2"), { target: { value: "Second tip" } });
+    fireEvent.change(screen.getByLabelText("Linked action 2"), { target: { value: "REVIEW_DUE_CONCEPTS" } });
+    fireEvent.change(screen.getByLabelText("Surfacing condition 2"), { target: { value: "DAYS_BEFORE_TARGET_DATE" } });
+    fireEvent.change(screen.getByLabelText("Surfacing threshold 2"), { target: { value: "5" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove tip" })[0]!);
+
+    expect(screen.getByLabelText("Tip title 1")).toHaveValue("Second tip");
+    expect(screen.getByLabelText("Linked action 1")).toHaveValue("REVIEW_DUE_CONCEPTS");
+    expect(screen.getByLabelText("Surfacing condition 1")).toHaveValue("DAYS_BEFORE_TARGET_DATE");
+    expect(screen.getByLabelText("Surfacing threshold 1")).toHaveValue(5);
+  });
+
+  it("generates Mentor Tip drafts and appends them to the local editor state", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
+    const confirmSpy = jest.spyOn(globalThis, "confirm").mockReturnValue(true);
+    (generateCompanion as jest.Mock).mockResolvedValue({
+      overview: null,
+      studyStrategy: null,
+      commonMistakes: null,
+      faq: [],
+      mentorTips: [
+        {
+          id: null,
+          title: "Generated first pass",
+          body: "Start with one short action.",
+          linkedAction: "NONE",
+          surfacingCondition: null,
+        },
+      ],
+    });
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Manage Companion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add tip" }));
+    fireEvent.change(screen.getByLabelText("Tip title 1"), { target: { value: "Manual tip" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate tips" }));
+
+    await waitFor(() => {
+      expect(generateCompanion).toHaveBeenCalledWith("collection-1", ["MENTOR_TIPS"]);
+    });
+    expect(screen.getByLabelText("Tip title 1")).toHaveValue("Manual tip");
+    expect(screen.getByLabelText("Tip title 2")).toHaveValue("Generated first pass");
+    expect(screen.getByLabelText("Tip body 2")).toHaveValue("Start with one short action.");
+    expect(screen.getByLabelText("Linked action 2")).toHaveValue("NONE");
+    expect(screen.getByLabelText("Surfacing condition 2")).toHaveValue("ALWAYS");
+    expect(setCompanion).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
   it("saves companion content and applies the returned collection locally", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
     (setCompanion as jest.Mock).mockResolvedValue(collection({
@@ -860,6 +950,15 @@ describe("CollectionDetailPageClient", () => {
         commonMistakes: null,
         resources: "- [Reviewer archive](https://example.com/reviewer)",
         faq: [{ question: "What now?", answer: "Practice." }],
+        mentorTips: [
+          {
+            id: "tip-saved-1",
+            title: "Start timed practice",
+            body: "Use one timed pass after reviewing basics.",
+            linkedAction: "TERMINAL_ACTION",
+            surfacingCondition: { type: "AFTER_SUBJECTS_COMPLETED", threshold: 1 },
+          },
+        ],
       },
     }));
 
@@ -873,15 +972,30 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.change(screen.getByLabelText("Question 1"), { target: { value: "What now?" } });
     fireEvent.change(screen.getByLabelText("Answer 1"), { target: { value: "Practice." } });
     fireEvent.change(screen.getByLabelText("Resources"), { target: { value: "- [Reviewer archive](https://example.com/reviewer)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add tip" }));
+    fireEvent.change(screen.getByLabelText("Tip title 1"), { target: { value: "Start timed practice" } });
+    fireEvent.change(screen.getByLabelText("Tip body 1"), { target: { value: "Use one timed pass after reviewing basics." } });
+    fireEvent.change(screen.getByLabelText("Linked action 1"), { target: { value: "TERMINAL_ACTION" } });
+    fireEvent.change(screen.getByLabelText("Surfacing condition 1"), { target: { value: "AFTER_SUBJECTS_COMPLETED" } });
+    fireEvent.change(screen.getByLabelText("Surfacing threshold 1"), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(setCompanion).toHaveBeenCalledWith("collection-1", {
+      const savedPayload = (setCompanion as jest.Mock).mock.calls[0]?.[1];
+      expect(savedPayload).toEqual({
         overview: "Overview draft",
         studyStrategy: null,
         commonMistakes: null,
         resources: "- [Reviewer archive](https://example.com/reviewer)",
         faq: [{ question: "What now?", answer: "Practice." }],
+        mentorTips: [
+          expect.objectContaining({
+            title: "Start timed practice",
+            body: "Use one timed pass after reviewing basics.",
+            linkedAction: "TERMINAL_ACTION",
+            surfacingCondition: { type: "AFTER_SUBJECTS_COMPLETED", threshold: 1 },
+          }),
+        ],
       });
     });
     expect(await screen.findByRole("heading", { name: "Updated Companion Plan" })).toBeInTheDocument();
@@ -893,6 +1007,8 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("Practice.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Extra resources" })).toBeInTheDocument();
     expect(screen.getByText("- [Reviewer archive](https://example.com/reviewer)")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Quick tips" })).toBeInTheDocument();
+    expect(screen.getByText("Start timed practice")).toBeInTheDocument();
     expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
   });
 
@@ -1015,6 +1131,7 @@ describe("CollectionDetailPageClient", () => {
         commonMistakes: "",
         resources: " ",
         faq: [],
+        mentorTips: [],
       },
     }));
 
@@ -1023,6 +1140,276 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Learning Companion" })).not.toBeInTheDocument();
     expect(screen.getByText("Pick up where you left off — you've got this.")).toBeInTheDocument();
+  });
+
+  it("surfaces an always-eligible Mentor Tip near Today's Focus without requiring long-form Companion prose", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-1",
+            title: "Make one clean pass",
+            body: "Start with the next note, then review mistakes after.",
+            linkedAction: "CONTINUE_STUDYING",
+            surfacingCondition: null,
+          },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Mentor Tip")).toBeInTheDocument();
+    expect(screen.getByText("Make one clean pass")).toBeInTheDocument();
+    expect(screen.getByText("Start with the next note, then review mistakes after.")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Continue Studying" })[0]).toHaveAttribute("href", "/notes/note-2?ref=%2Fcollections%2Fcollection-1");
+    expect(screen.getByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+  });
+
+  it("selects the first eligible Mentor Tip in authored order", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-not-yet",
+            title: "Not yet",
+            body: "This should wait.",
+            linkedAction: "NONE",
+            surfacingCondition: { type: "DAYS_BEFORE_TARGET_DATE", threshold: 1 },
+          },
+          {
+            id: "tip-now",
+            title: "Use the next doable step",
+            body: "This one is always available.",
+            linkedAction: "NONE",
+            surfacingCondition: null,
+          },
+        ],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2999-01-01",
+      weeksRemaining: 999,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Use the next doable step")).toBeInTheDocument();
+    expect(screen.queryByText("Not yet")).not.toBeInTheDocument();
+  });
+
+  it("uses target-date Mentor Tip eligibility only when the threshold is met", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-date",
+            title: "Switch to review mode",
+            body: "Use tighter review blocks near the target date.",
+            linkedAction: "NONE",
+            surfacingCondition: { type: "DAYS_BEFORE_TARGET_DATE", threshold: 999999 },
+          },
+        ],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+      childCount: 0,
+      children: [],
+      targetCompletionDate: "2999-01-01",
+      weeksRemaining: 999,
+      conceptsRemaining: 11,
+      todaysConceptBudget: 4,
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Switch to review mode")).toBeInTheDocument();
+  });
+
+  it("uses completed-subject Mentor Tip eligibility from existing readiness subjects", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-subject",
+            title: "Celebrate and connect",
+            body: "Use the completed subject as a base for the next one.",
+            linkedAction: "NONE",
+            surfacingCondition: { type: "AFTER_SUBJECTS_COMPLETED", threshold: 1 },
+          },
+        ],
+      },
+    }));
+    (getPlanReadiness as jest.Mock).mockResolvedValue(planReadiness({
+      subjects: [
+        {
+          subject: "Biology",
+          totalConcepts: 10,
+          masteredConcepts: 10,
+          dueConcepts: 0,
+          notPracticedConcepts: 0,
+          masteryPercentage: 100,
+        },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Celebrate and connect")).toBeInTheDocument();
+  });
+
+  it("does not surface Mentor Tips whose required data is unavailable, but lists them in the full guide", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-date",
+            title: "Target-date only tip",
+            body: "This should stay in the guide until a date exists.",
+            linkedAction: "NONE",
+            surfacingCondition: { type: "DAYS_BEFORE_TARGET_DATE", threshold: 7 },
+          },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.queryByText("Mentor Tip")).not.toBeInTheDocument();
+    expect(screen.queryByText("Target-date only tip")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
+
+    expect(screen.getByRole("heading", { name: "Quick tips" })).toBeInTheDocument();
+    expect(screen.getByText("Target-date only tip")).toBeInTheDocument();
+  });
+
+  it("renders a Mentor Tip action as plain text when its linked target is unavailable", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [],
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-dangling",
+            title: "Use this later",
+            body: "The primary action is unavailable in a caught-up state.",
+            linkedAction: "CONTINUE_STUDYING",
+            surfacingCondition: null,
+          },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Use this later")).toBeInTheDocument();
+    expect(screen.getByText("Continue Studying")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Continue Studying" })).not.toBeInTheDocument();
+  });
+
+  it("resolves Mentor Tip links to the due-concept quick action when available", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        { ...collection().items[0], dueConceptCount: 2, dueConcepts: ["Concept 1"] },
+        collection().items[1],
+      ],
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-due",
+            title: "Clear due concepts",
+            body: "Refresh the concepts that need attention.",
+            linkedAction: "REVIEW_DUE_CONCEPTS",
+            surfacingCondition: null,
+          },
+          {
+            id: "tip-terminal",
+            title: "Terminal fallback",
+            body: "Not selected because the due tip is first.",
+            linkedAction: "TERMINAL_ACTION",
+            surfacingCondition: null,
+          },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Clear due concepts")).toBeInTheDocument();
+    const dueLinks = await screen.findAllByRole("link", { name: "Review Due Concepts" });
+    expect(dueLinks[0]).toHaveAttribute(
+      "href",
+      "/notes/note-1?ref=%2Fcollections%2Fcollection-1",
+    );
+    expect(screen.queryByText("Terminal fallback")).not.toBeInTheDocument();
+  });
+
+  it("resolves Mentor Tip links to the terminal quick action when available", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "PLUS" });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: null,
+        commonMistakes: null,
+        resources: null,
+        faq: [],
+        mentorTips: [
+          {
+            id: "tip-terminal",
+            title: "Try the exam mode",
+            body: "Use the terminal practice action when your Study Pack is ready.",
+            linkedAction: "TERMINAL_ACTION",
+            surfacingCondition: null,
+          },
+        ],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByText("Try the exam mode")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Take the Long Exam" }).length).toBeGreaterThan(0);
   });
 
   it("renders only populated companion prose sections", async () => {

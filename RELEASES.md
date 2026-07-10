@@ -20,7 +20,12 @@ Anti-drift: "Curation, never generation" unchanged — learner never receives an
 
 ### Shipped
 
-_(nothing yet)_
+- **Mentor Tips content model.** `CompanionContent` now carries `mentorTips` inside the existing `note_collections.companion` JSONB payload. No new table, migration, endpoint, persisted learner state, progress signal, or Companion eligibility rule was added.
+- **Curator authoring and validation.** ADMIN Companion authoring can add, edit, remove, and save Mentor Tips with a fixed linked action (`None`, `Continue Studying`, `Review Due Concepts`, terminal exam/builder action) plus an optional deterministic surfacing condition. Invalid negative thresholds are rejected through the existing inline modal error path.
+- **AI draft extension, not auto-publish.** Per-section Companion generation now supports `MENTOR_TIPS`; the LLM returns draft tip title/body only, with `linkedAction=NONE` and `surfacingCondition=null`. Curators still review, configure, and save through the existing full-replacement Companion write path.
+- **Deterministic Coach surfacing.** The collection detail page selects at most one eligible Mentor Tip in authored order and renders it near `TodaysFocusCard`, resolving its linked action against the already-computed primary action, due-concept review link, or terminal action. No per-view LLM call or extra fetch.
+- **Full guide escape hatch.** `CompanionDisplayCard` now lists all authored Mentor Tips as a sixth expanded guide section after Resources, regardless of whether each tip is currently eligible to surface near Today's Focus. Existing five-section order is unchanged.
+- **Staleness/adopt parity.** Companion structure staleness remains child/note-membership-only, so Mentor Tip text/config changes do not mark content outdated. Cross-owner adopt/copy carries Mentor Tips the same way it carries the rest of Companion content.
 
 ---
 

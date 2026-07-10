@@ -5,6 +5,10 @@ import com.studysnap.backend.dto.AdoptGoalResponse;
 import com.studysnap.backend.dto.AdoptStudyPlanResponse;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionFaqItem;
+import com.studysnap.backend.dto.CompanionMentorTip;
+import com.studysnap.backend.dto.CompanionMentorTipAction;
+import com.studysnap.backend.dto.CompanionMentorTipSurfacingCondition;
+import com.studysnap.backend.dto.CompanionMentorTipSurfacingConditionType;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.CompanionStructureSnapshot;
 import com.studysnap.backend.dto.CreateNoteCollectionRequest;
@@ -888,7 +892,7 @@ class NoteCollectionServiceTest {
         UUID collectionId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
         user.setRole(UserRole.ADMIN);
-        CompanionContent content = new CompanionContent(null, null, null, null, List.of());
+        CompanionContent content = new CompanionContent(null, null, null, null, List.of(), List.of());
         NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
@@ -926,6 +930,38 @@ class NoteCollectionServiceTest {
 
         assertThatThrownBy(() -> service.setCompanion(collectionId, userId, null))
                 .isInstanceOf(InvalidCollectionRequestException.class);
+
+        verify(collectionRepository, never()).findByIdAndOwnerUserId(any(), any());
+    }
+
+    @Test
+    void setCompanion_rejectsMentorTipNegativeThresholdBeforeLoadingCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        CompanionContent content = new CompanionContent(
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(new CompanionMentorTip(
+                        UUID.randomUUID(),
+                        "Review your weak spots",
+                        "Spend one block on concepts that still feel uncertain.",
+                        CompanionMentorTipAction.REVIEW_DUE_CONCEPTS,
+                        new CompanionMentorTipSurfacingCondition(
+                                CompanionMentorTipSurfacingConditionType.DAYS_BEFORE_TARGET_DATE,
+                                -1
+                        )
+                ))
+        );
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.setCompanion(collectionId, userId, content))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("Mentor tip surfacing threshold must be zero or greater.");
 
         verify(collectionRepository, never()).findByIdAndOwnerUserId(any(), any());
     }
@@ -1002,7 +1038,7 @@ class NoteCollectionServiceTest {
         NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
         NoteCollectionEntity child = buildCollection(childId, userId, "Professional Education", Instant.now());
         child.setDescription("Teaching principles and assessment.");
-        CompanionContent draft = new CompanionContent("Draft overview", null, null, null, List.of());
+        CompanionContent draft = new CompanionContent("Draft overview", null, null, null, List.of(), List.of());
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
@@ -1026,6 +1062,47 @@ class NoteCollectionServiceTest {
         assertThat(contextCaptor.getValue().subjectPlans())
                 .extracting(com.studysnap.backend.service.model.CompanionGenerationContext.CompanionContextItem::title)
                 .containsExactly("Professional Education");
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void generateCompanion_returnsMentorTipDraftsWithCuratorControlledFieldsUnset() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, "LET Mastery", Instant.now());
+        CompanionContent draft = new CompanionContent(
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(new CompanionMentorTip(
+                        null,
+                        "Do one focused check-in",
+                        "Open the next ready item and name the concept you most need to revisit.",
+                        CompanionMentorTipAction.NONE,
+                        null
+                ))
+        );
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(llmStudyPackService.generateCompanion(any(), eq(Set.of(CompanionSection.MENTOR_TIPS))))
+                .thenReturn(draft);
+
+        GeneratedCompanionContentResponse result = service.generateCompanion(
+                collectionId,
+                userId,
+                new GenerateCompanionRequest(List.of(CompanionSection.MENTOR_TIPS))
+        );
+
+        assertThat(result.mentorTips()).hasSize(1);
+        assertThat(result.mentorTips().getFirst().linkedAction()).isEqualTo(CompanionMentorTipAction.NONE);
+        assertThat(result.mentorTips().getFirst().surfacingCondition()).isNull();
         verify(collectionRepository, never()).save(any());
     }
 
@@ -1331,6 +1408,42 @@ class NoteCollectionServiceTest {
         user.setRole(UserRole.ADMIN);
         NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
         goal.setCompanion(companionContent());
+        goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(noteId)));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.countByCollectionId(goalId)).thenReturn(1L);
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId))
+                .thenReturn(List.of(buildItem(goalId, noteId, 0, null)));
+
+        GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
+
+        assertThat(result.companionMayBeOutdated()).isFalse();
+    }
+
+    @Test
+    void getGoal_keepsCompanionOutdatedFalseWhenOnlyMentorTipsChange() {
+        UUID userId = UUID.randomUUID();
+        UUID goalId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setRole(UserRole.ADMIN);
+        NoteCollectionEntity goal = buildCollection(goalId, userId, "LET Mastery", Instant.now());
+        goal.setCompanion(new CompanionContent(
+                "Overview",
+                "Study strategy",
+                "Common mistakes",
+                null,
+                List.of(),
+                List.of(new CompanionMentorTip(
+                        UUID.randomUUID(),
+                        "Updated tip",
+                        "Use this updated tip text without changing the structure snapshot.",
+                        CompanionMentorTipAction.TERMINAL_ACTION,
+                        null
+                ))
+        ));
         goal.setCompanionStructureSnapshot(new CompanionStructureSnapshot(1, List.of(noteId)));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
@@ -3407,7 +3520,17 @@ class NoteCollectionServiceTest {
                 "Study strategy",
                 "Common mistakes",
                 "- [Official guide](https://example.com/guide)",
-                List.of(new CompanionFaqItem("Question?", "Answer."))
+                List.of(new CompanionFaqItem("Question?", "Answer.")),
+                List.of(new CompanionMentorTip(
+                        UUID.fromString("00000000-0000-0000-0000-000000000043"),
+                        "Start with one subject",
+                        "Open the next subject plan and make one concrete pass today.",
+                        CompanionMentorTipAction.CONTINUE_STUDYING,
+                        new CompanionMentorTipSurfacingCondition(
+                                CompanionMentorTipSurfacingConditionType.AFTER_SUBJECTS_COMPLETED,
+                                1
+                        )
+                ))
         );
     }
 
