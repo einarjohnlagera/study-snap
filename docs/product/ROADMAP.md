@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.43.0 - Companion Coach Experience` is the current in-progress version (on `releases/v0.43.0`).
+`v0.43.1 - Companion Mentor Tips` is the next candidate version (not yet kicked off).
+
+`v0.43.0 - Companion Coach Experience` is the previous released version (on `releases/v0.43.0`).
 
 `v0.42.1 - Companion & Progress Polish` is the previous released version (on `releases/v0.42.1`); `v0.42.0 - AI-assisted Companion authoring + regeneration` before that.
 
@@ -509,7 +511,7 @@ Small UX fixes surfaced from using v0.42.0 in practice, frontend-only, no new fe
 - Fix `/progress?collectionId={id}`'s backlink: it always showed "Dashboard" regardless of entry point; now returns to the originating collection when reached via that collection's "View full progress" link.
 - Considered and declined: turning collection cards' course/program metadata into a badge — stays plain text per the existing badge-classification rule (identity/state get badges, metadata does not).
 
-### v0.43.0 — Companion "Coach Experience", in progress (base branch `releases/v0.43.0`)
+### v0.43.0 — Companion "Coach Experience", Released (base branch `releases/v0.43.0`)
 
 Origin: a product proposal to make the Review Set detail page *feel* like a coach talking to the learner rather than a set of labeled CMS fields ("Overview", "Study Strategy", "Common Mistakes", "FAQ"). Pressure-tested via architecture review before scoping.
 

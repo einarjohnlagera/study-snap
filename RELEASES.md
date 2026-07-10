@@ -2,7 +2,7 @@
 
 ## v0.43.0 - Companion Coach Experience
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: give the Review Set detail page a coach-voice presentation layer over the Companion and an already-loaded live signal (whether a primary action remains) — frontend-only, no new engine, no new backend.
 
