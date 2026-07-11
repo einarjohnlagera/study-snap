@@ -9,9 +9,9 @@ Routes:
 - canonical list route for signed-in and signed-out users: `/public/library`
 - canonical public note detail route: `/public/library/{subject}/{slug}`
 - canonical public creator/profile route: `/public/creator/{username}`
+  - canonical subject landing page: `/public/library/{subject}` — server-rendered, not a redirect (see item J below)
 - legacy compatibility redirects:
   - `/library/public` -> `/public/library`
-  - `/public/library/{subject}` -> `/public/library?subject={subject}`
   - `/public/profile/{userId}` remains compatible for existing public-profile links
 
 Shareable filter URLs:
