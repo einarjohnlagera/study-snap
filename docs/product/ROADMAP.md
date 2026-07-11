@@ -26,6 +26,10 @@ Two things surfaced by the same audit are explicitly **not** in this release's s
 - **The `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence.** `pricing.md`/`PLANS.md` market Adaptive Practice at 3/10/30 sessions across Free/Plus/Pro; `subscriptions-and-usage-limits.md` documents Free as unavailable and Plus as "currently unavailable in runtime." Verified against `StudySnapProperties.resolveMonthlyAdaptivePracticeLimit` — a real `adaptivePracticeProOnly` toggle exists and, when true, zeroes Free/Plus regardless of their configured limits. The live production value of `ADAPTIVE_PRACTICE_PRO_ONLY` isn't visible from the repo. Needs the owner to confirm the live value and then either fix the marketing copy or the gate — tracked here as a known open item, not scoped to this release.
 - **"Smart Review Planning."** A much larger, separate initiative (curriculum-driven Review Set auto-assembly) exists as paused planning material in `docs/claude-prompt/fable-out/` — architecture, matching/coverage, admin workflow, student UX, monetization recommendation, terminology audit, and a phased technical roadmap are all drafted but nothing is scoped or kicked off. Unrelated to this release; mentioned here only so it isn't confused with the conversion-audit work.
 
+## Post-v0.44.0 Conversion Audit Backlog (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Tier 2 (7 items), Tier 3 (18 items), and Tier 4 (19 items) from the same 7-session conversion/retention UX audit that produced v0.44.0's Tier 1 scope — full detail, impact/effort ratings, and Claude Code/Codex routing per item in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`. Also includes two explicitly deferred items (adoption-count social proof on Public Library plan cards; "Trending this week," blocked on windowed backend counts that don't exist yet). Pull from here when scoping what comes after v0.44.0 — do not re-run the audit or re-derive this list from scratch.
+
 ## Archived releases
 
 Full scope for the following shipped versions moved to `docs/archive/ROADMAP_ARCHIVE.md` (see `RELEASES.md` for each changelog entry):
