@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
-import { copyNote, listNotes, listPublicNotes, listSubjects, togglePublicNoteLike } from "@/lib/api";
+import { copyNote, listNotes, listPublicNotes, listPublicStudyPlans, listSubjects, togglePublicNoteLike } from "@/lib/api";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -26,6 +26,7 @@ jest.mock("@/lib/api", () => ({
   copyNote: jest.fn(),
   listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
+  listPublicStudyPlans: jest.fn(),
   listSubjects: jest.fn(),
   togglePublicNoteLike: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -95,6 +96,7 @@ describe("PublicLibraryPageClient", () => {
     (copyNote as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
+    (listPublicStudyPlans as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (togglePublicNoteLike as jest.Mock).mockReset();
     currentAuthUser = { id: "user-1" };
@@ -102,6 +104,7 @@ describe("PublicLibraryPageClient", () => {
     mobileSheetMatches = false;
     window.history.replaceState({}, "", "/public/library");
     (listNotes as jest.Mock).mockResolvedValue([]);
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
   });
 
@@ -535,6 +538,96 @@ describe("PublicLibraryPageClient", () => {
     expect(replaceMock).toHaveBeenCalledWith("/public/library?sort=views", { scroll: false });
     const titles = screen.getAllByRole("heading", { level: 3 }).map((element) => element.textContent);
     expect(titles.slice(0, 2)).toEqual(["Most Viewed", "Most Copied"]);
+  });
+
+  it("defaults filtered results to Recommended discovery-score ordering without a sort query", async () => {
+    currentSearch = "?search=note";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({
+        id: "note-newest",
+        title: "Newest Note",
+        viewCount: 0,
+        copyCount: 0,
+        likeCount: 0,
+        createdAt: "2026-03-31T08:00:00Z",
+      }),
+      createPublicNote({
+        id: "note-recommended",
+        title: "Recommended Note",
+        viewCount: 6,
+        copyCount: 5,
+        likeCount: 2,
+        createdAt: "2026-03-01T08:00:00Z",
+      }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Recommended Note");
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ search: "note", sort: undefined }));
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((element) => element.textContent);
+    expect(titles.slice(0, 2)).toEqual(["Recommended Note", "Newest Note"]);
+    fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
+    expect(screen.getByRole("button", { name: "Recommended" })).toHaveClass("border-blue-600");
+  });
+
+  it("keeps explicit sort alternatives selectable in filter mode", async () => {
+    currentSearch = "?search=note";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "note-a", title: "Alpha Note", viewCount: 3, copyCount: 1 }),
+      createPublicNote({ id: "note-b", title: "Beta Note", viewCount: 1, copyCount: 5 }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Alpha Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
+    fireEvent.click(screen.getByRole("button", { name: "Newest" }));
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?search=note&sort=recent", { scroll: false });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
+    fireEvent.click(screen.getByRole("button", { name: "Most Copied" }));
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?search=note&sort=copied", { scroll: false });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
+    fireEvent.click(screen.getByRole("button", { name: "Title A-Z" }));
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?search=note&sort=title", { scroll: false });
+  });
+
+  it("shows one official-plan bridge for an active course/program filter", async () => {
+    currentSearch = "?courseProgram=engineering";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "engineering-note", title: "Engineering Note", courseProgram: "Engineering" }),
+    ]));
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      { id: "plan-1", title: "Engineering Review Set" },
+      { id: "plan-2", title: "Engineering Practice Plan" },
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText(/Looking for a full Study Plan for Engineering\?/i)).toBeInTheDocument();
+    expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "Engineering" });
+    expect(screen.getByRole("link", { name: "Browse official plans →" })).toHaveAttribute("href", "/collections/published");
+  });
+
+  it("hides the official-plan bridge when the lookup has no match or fails", async () => {
+    currentSearch = "?courseProgram=engineering";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "engineering-note", title: "Engineering Note", courseProgram: "Engineering" }),
+    ]));
+    (listPublicStudyPlans as jest.Mock).mockRejectedValue(new Error("Network unavailable"));
+
+    render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Engineering Note");
+    await waitFor(() => {
+      expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "Engineering" });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("link", { name: "Browse official plans →" })).not.toBeInTheDocument();
   });
 
   it("filters public notes from the advanced filter sheet", async () => {

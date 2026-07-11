@@ -8,6 +8,7 @@ import {
   getBrowseSubjects,
   getFeaturedNotes,
   getPopularNotes,
+  getRecommendedNotes,
   getRecentNotes,
   isFeaturedEligible,
   isPopularNote,
@@ -244,6 +245,32 @@ describe("getFeaturedNotes", () => {
 
   it("returns an empty array for an empty input", () => {
     expect(getFeaturedNotes([], DISCOVERY_SECTION_LIMIT, NOW)).toEqual([]);
+  });
+});
+
+describe("getRecommendedNotes", () => {
+  it("ranks all notes by discovery score without applying Featured eligibility", () => {
+    const highestScore = makeNote({
+      id: "highest-score",
+      studyPackStatus: "DRAFT",
+      viewCount: 8,
+      copyCount: 4,
+    });
+    const newestWithoutEngagement = makeNote({
+      id: "newest",
+      createdAt: NOW.toISOString(),
+    });
+
+    expect(getRecommendedNotes([newestWithoutEngagement, highestScore], NOW).map((note) => note.id))
+      .toEqual(["highest-score", "newest"]);
+  });
+
+  it("uses a stable fallback for malformed creation dates", () => {
+    const malformedDate = makeNote({ id: "malformed-date", createdAt: "not-a-date" });
+    const validDate = makeNote({ id: "valid-date", createdAt: NOW.toISOString() });
+
+    expect(getRecommendedNotes([malformedDate, validDate], NOW).map((note) => note.id))
+      .toEqual(["valid-date", "malformed-date"]);
   });
 });
 

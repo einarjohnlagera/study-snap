@@ -80,6 +80,9 @@ Public Library has two display modes:
 
 **Filter mode** (when any search, filter, or sort is active):
 - Standard sorted/filtered list of all matching public notes
+- When no explicit sort is selected, `Recommended` is the default: it reuses the existing decay-adjusted discovery score across all matching notes, with engagement and freshness tiebreaks. It does not apply Featured-only eligibility.
+- Explicit `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` choices continue to override the default. `?sort=recent` remains the canonical explicit Newest URL; no `sort` parameter means Recommended only in filter mode and keeps Discovery mode unchanged.
+- With an active Course / Program filter, a matching Official Study Plan adds one contextual `Browse official plans` pointer above results. The existing `listPublicStudyPlans({ courseProgram })` lookup selects its first result like the Dashboard recommendation; lookup failure or no result renders nothing and never affects note results.
 
 Switching from discovery to filter mode:
 - Typing in search → filter mode
@@ -313,6 +316,7 @@ If the selected audience category has no matching notes and no other filters are
 
 Public Library sort options:
 
+- `Recommended` (filter-mode default when no explicit sort is set)
 - `Newest`
 - `Most Copied`
 - `Most Viewed`
