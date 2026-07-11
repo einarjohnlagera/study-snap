@@ -115,6 +115,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
   const isDraft = note.studyPackStatus !== "STUDY_PACK_READY";
   const normalizedSummary = normalizePublicNoteText(note.summary);
   const keyConcepts = note.keyConcepts.map((concept) => normalizePublicNoteText(concept)).filter((concept) => concept.length > 0);
+  const hasVisibleStudyPackPreviews = !isDraft && normalizedSummary.length > 0 && keyConcepts.length > 0 && note.quiz.length > 0;
   const fullContentBlocks = splitPublicNoteBlocks(note.content);
   const fullContent = fullContentBlocks.length > 0 ? fullContentBlocks : ["No content yet."];
   const tags = note.tags.map((tag) => normalizePublicNoteText(tag)).filter((tag) => tag.length > 0);
@@ -179,6 +180,12 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             </div>
           </div>
         </header>
+
+        {hasVisibleStudyPackPreviews ? (
+          <aside className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-relaxed text-foreground/75">
+            This summary, these key concepts, and this Quick Check were built from the note below. Your notes can get the same study tools.
+          </aside>
+        ) : null}
 
         {/* Summary — always visible */}
         <Card className="space-y-3 p-4 sm:p-6">

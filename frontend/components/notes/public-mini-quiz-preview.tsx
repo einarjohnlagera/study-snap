@@ -114,13 +114,13 @@ export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMini
         <div className="space-y-1">
           <h2 className="text-base font-semibold sm:text-lg">🎉 Quick Check Complete</h2>
           <p className="text-sm text-foreground/65">
-            You completed all {total} preview question{total !== 1 ? "s" : ""}. Want more practice like this?
+            You completed all {total} preview question{total !== 1 ? "s" : ""}. Want the full quiz and your results saved?
           </p>
         </div>
 
         <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Keep the momentum going.</p>
+            <p className="text-sm font-medium text-foreground">Quiz yourself on this note.</p>
             <p className="text-sm text-foreground/70">
               {isAuthenticated
                 ? "Copy this note to your library and continue studying with the full quiz experience."

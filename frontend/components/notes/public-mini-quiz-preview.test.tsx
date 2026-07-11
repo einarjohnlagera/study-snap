@@ -110,6 +110,20 @@ describe("PublicMiniQuizPreview", () => {
     expect(screen.queryByText("Question 1")).not.toBeInTheDocument();
   });
 
+  it("shows the outcome prompt after a mix of correct and incorrect answers", () => {
+    render(<PublicMiniQuizPreview quiz={multiQuiz.slice(0, 2)} noteId="note-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Choice A/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Check Answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Question →" }));
+    fireEvent.click(screen.getByRole("button", { name: /Choice B/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Check Answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "See Results" }));
+
+    expect(screen.getByText(/Want the full quiz and your results saved\?/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quiz yourself on this note" })).toBeInTheDocument();
+  });
+
   it("passes the correct CTAs in completion state", () => {
     render(<PublicMiniQuizPreview quiz={singleQuiz} noteId="note-1" />);
 

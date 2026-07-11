@@ -114,18 +114,19 @@ The note and Study Pack are normal saved library entities, not temporary onboard
 
 Headline:
 
-- `You just started your study loop.`
+- Uses the learner's onboarding topic when available: `Your {topic} Study Pack is ready. Come back tomorrow to keep building on it.`
+- Falls back to the same return-framed message without the topic when the topic is unavailable.
 
 Actions:
 
-- `Continue Studying`
-- `Go to Dashboard`
+- `Open your Study Pack` is the single visually-primary action and keeps the existing fresh-Study-Pack destination.
+- `Go to Dashboard` remains functional as a quiet secondary action.
 
 The completion call persists onboarding completion through the existing backend flow and sets `onboardingCompletedAt`.
 
 #### Recommended plan adopt card
 
-Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Continue Studying` action.
+Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Open your Study Pack` action.
 
 - The card self-hides when the learner's course/program has no published plan, so most tracks see Step 5 unchanged.
 - For tracks with a published plan, it offers one-tap adopt via the existing `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan` (no new endpoint).
