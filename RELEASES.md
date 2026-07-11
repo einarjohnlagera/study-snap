@@ -8,7 +8,6 @@ Theme: ship the highest-confidence findings from a 7-session conversion/retentio
 
 ### Planned Scope
 
-- **ConceptHealth tracking for Quick Review (backend).** Plain Quick Review session completion currently writes zero `concept_health` data, unlike Challenge Quiz and Adaptive Practice — verified directly against code. Since Quick Review is the default "Quiz yourself on this note" mode across public notes and onboarding, and is plausibly Free-tier's primary quiz mode, this closes a concrete gap in the product's ability to track and surface return-worthy progress for exactly the retention-constrained segment. Prompt drafted at `docs/codex-prompts/unscoped-concept-health-quick-review.md` (Long mode).
 - **Landing hero + cross-linking pass (frontend).** Fix the hero headline/SEO-title mismatch and the Board Exam Mode badge/screenshot mismatch; add cross-links between Target Users cards, Learn categories, and Exam Hub pages.
 - **Pricing trust-copy placement + event instrumentation (frontend).** Move the no-auto-charge reassurance CTA-adjacent instead of footer-only; instrument every upgrade surface with source-tagged view/click events.
 - **Public note conversion hooks (frontend).** Quick Check completion prompt at peak engagement; a value-attribution line connecting the visible Summary/Key Concepts/Quiz to "your notes get the same."
@@ -20,7 +19,7 @@ Anti-drift: no new quota/gating logic for any quiz mode or plan tier; the separa
 
 ### Shipped
 
-_(nothing yet)_
+- **ConceptHealth tracking for Quick Review (backend).** Completed Quick Review sessions now derive fully-correct and missed concepts from the base Study Pack quiz plus persisted selections, then write the same per-user, per-Study-Pack `concept_health` records used by Challenge Quiz and Adaptive Practice. Completion remains state-guarded and transactional, so a duplicate completion does not write twice and a ConceptHealth failure rolls back the completed session.
 
 ---
 
@@ -256,4 +255,3 @@ Full detail for every version below moved to `docs/archive/RELEASES_ARCHIVE.md` 
 - `v0.6.0` - Landing Revamp & Positioning
 - `v0.5.0` - Public Profiles & Public Notes
 - `v0.4.0` - Profile-Based Experience & UX
-

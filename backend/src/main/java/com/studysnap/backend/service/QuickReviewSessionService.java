@@ -60,6 +60,7 @@ public class QuickReviewSessionService {
     private final AnalyticsService analyticsService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
+    private final ConceptHealthService conceptHealthService;
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
@@ -193,6 +194,23 @@ public class QuickReviewSessionService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+
+        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(saved.getStudyPackId(), userId)
+                .orElse(null);
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = studyPack == null
+                ? List.of()
+                : QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(
+                        studyPack.getQuiz(),
+                        saved.getSessionState()
+                );
+        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown);
+        List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
+        if (!correctConcepts.isEmpty()) {
+            conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
+        }
+        if (!missedConcepts.isEmpty()) {
+            conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
+        }
 
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 

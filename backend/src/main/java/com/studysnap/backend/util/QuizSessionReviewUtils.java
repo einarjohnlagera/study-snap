@@ -33,6 +33,35 @@ public final class QuizSessionReviewUtils {
         return computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices, Map.of());
     }
 
+    /**
+     * Derives concept results only when both the quiz and at least one persisted answer selection exist.
+     */
+    public static List<ChallengeQuizConceptStatResponse> computeConceptBreakdownForStoredSelections(
+            List<QuizItem> quiz,
+            Map<String, Object> sessionState
+    ) {
+        if (quiz == null || quiz.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(sessionState, quiz);
+        Map<Integer, List<Integer>> selectedMultiChoices =
+                QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(sessionState, quiz);
+        if (selectedChoices.isEmpty() && selectedMultiChoices.isEmpty()) {
+            return List.of();
+        }
+        return computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices);
+    }
+
+    /**
+     * Derives concept results from a quiz snapshot and its persisted selections.
+     */
+    public static List<ChallengeQuizConceptStatResponse> computeConceptBreakdownForStoredSelections(
+            Map<String, Object> sessionState
+    ) {
+        return computeConceptBreakdownForStoredSelections(QuizSessionStateUtils.extractQuiz(sessionState), sessionState);
+    }
+
     public static List<ChallengeQuizConceptStatResponse> computeConceptBreakdown(
             List<QuizItem> quiz,
             Map<Integer, Integer> selectedChoices,
