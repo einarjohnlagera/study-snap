@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.44.0 - Conversion & Retention Polish
+
+**Status: In Progress**
+
+Theme: ship the highest-confidence findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`, consolidated in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`) — closing a verified backend gap in return-visit progress tracking, plus the audit's Tier 1 (high-impact, low-effort) UI/UX items across landing, pricing, public notes, onboarding, and Public Library.
+
+### Planned Scope
+
+- **ConceptHealth tracking for Quick Review (backend).** Plain Quick Review session completion currently writes zero `concept_health` data, unlike Challenge Quiz and Adaptive Practice — verified directly against code. Since Quick Review is the default "Quiz yourself on this note" mode across public notes and onboarding, and is plausibly Free-tier's primary quiz mode, this closes a concrete gap in the product's ability to track and surface return-worthy progress for exactly the retention-constrained segment. Prompt drafted at `docs/codex-prompts/unscoped-concept-health-quick-review.md` (Long mode).
+- **Landing hero + cross-linking pass (frontend).** Fix the hero headline/SEO-title mismatch and the Board Exam Mode badge/screenshot mismatch; add cross-links between Target Users cards, Learn categories, and Exam Hub pages.
+- **Pricing trust-copy placement + event instrumentation (frontend).** Move the no-auto-charge reassurance CTA-adjacent instead of footer-only; instrument every upgrade surface with source-tagged view/click events.
+- **Public note conversion hooks (frontend).** Quick Check completion prompt at peak engagement; a value-attribution line connecting the visible Summary/Key Concepts/Quiz to "your notes get the same."
+- **Onboarding Step 5 rewrite (frontend).** Replace the closing "You just started your study loop" headline with a return-expectation framing; establish clear visual hierarchy between the two Step 5 actions.
+- **Public Library default sort (frontend).** Default filter-mode results to the existing discovery-score "Recommended" sort instead of pure `createdAt DESC`, so ranking survives the moment a visitor expresses intent.
+- **Public Library → Official plan bridge (frontend).** One contextual pointer from a courseProgram-filtered Public Library view to the matching Official Study Plan, where one exists.
+
+Anti-drift: no new quota/gating logic for any quiz mode or plan tier; the separate `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence (flagged by the same audit) is tracked separately and not addressed in this release; no reordering of Companion sections or other locked v0.41–v0.43 Coach/Companion decisions; "sell outcomes, not AI" copy rule applies to every rewritten string in this release; taxonomy fields stay combobox-only.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.43.1 - Companion Mentor Tips
 
 **Status: Released**

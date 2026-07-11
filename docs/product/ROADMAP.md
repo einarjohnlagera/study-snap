@@ -6,15 +6,25 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.43.1 - Companion Mentor Tips` is the most recently released version (on `releases/v0.43.1`). No version is currently in progress — the "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) is still under product/UX discussion and has not been scoped or kicked off.
+`v0.44.0 - Conversion & Retention Polish` is in progress (on `releases/v0.44.0`) — Tier 1 findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`), plus a verified backend fix for Quick Review's missing ConceptHealth tracking. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
 
-`v0.43.0 - Companion Coach Experience` is the previous released version (on `releases/v0.43.0`).
+`v0.43.1 - Companion Mentor Tips` is the previous released version (on `releases/v0.43.1`).
+
+`v0.43.0 - Companion Coach Experience` is the previous released version before that (on `releases/v0.43.0`).
 
 `v0.42.1 - Companion & Progress Polish` is the previous released version (on `releases/v0.42.1`); `v0.42.0 - AI-assisted Companion authoring + regeneration` before that.
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## v0.44.0 - Conversion & Retention Polish (in progress, base branch `releases/v0.44.0`)
+
+Origin: a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`, consolidated and tiered in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`), run against a real prior data-driven finding (`docs/archive/conversion-funnel-finding.md`, v0.32.2) that identified retention — not top-of-funnel or onboarding — as the proven constraint. This release ships the audit's Tier 1 (high-impact, low-effort) items plus one verified backend gap. Full scope in `RELEASES.md`.
+
+Two things surfaced by the same audit are explicitly **not** in this release's scope:
+- **The `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence.** `pricing.md`/`PLANS.md` market Adaptive Practice at 3/10/30 sessions across Free/Plus/Pro; `subscriptions-and-usage-limits.md` documents Free as unavailable and Plus as "currently unavailable in runtime." Verified against `StudySnapProperties.resolveMonthlyAdaptivePracticeLimit` — a real `adaptivePracticeProOnly` toggle exists and, when true, zeroes Free/Plus regardless of their configured limits. The live production value of `ADAPTIVE_PRACTICE_PRO_ONLY` isn't visible from the repo. Needs the owner to confirm the live value and then either fix the marketing copy or the gate — tracked here as a known open item, not scoped to this release.
+- **"Smart Review Planning."** A much larger, separate initiative (curriculum-driven Review Set auto-assembly) exists as paused planning material in `docs/claude-prompt/fable-out/` — architecture, matching/coverage, admin workflow, student UX, monetization recommendation, terminology audit, and a phased technical roadmap are all drafted but nothing is scoped or kicked off. Unrelated to this release; mentioned here only so it isn't confused with the conversion-audit work.
 
 ## Archived releases
 
