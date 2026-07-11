@@ -300,6 +300,10 @@ export default function OnboardingPage() {
   const studyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const studyPackGenerating = studyPackStatus === "GENERATING";
   const completionCopy = profileType ? COMPLETION_COPY[profileType] : COMPLETION_COPY.STUDENT;
+  const completionTopic = draft.topic.trim();
+  const completionHeadline = completionTopic
+    ? `Your ${completionTopic} Study Pack is ready. Come back tomorrow to keep building on it.`
+    : "Your Study Pack is ready. Come back tomorrow to keep building on it.";
   const conceptPreview = note?.keyConcepts.slice(0, MAX_CONCEPT_PREVIEW_COUNT) ?? [];
   const extraConceptCount = Math.max((note?.keyConcepts.length ?? 0) - conceptPreview.length, 0);
   const quizPreview = note?.quiz[0] ?? null;
@@ -1332,7 +1336,7 @@ export default function OnboardingPage() {
       <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
         <div className="space-y-2 text-center sm:text-left">
           <CardTitle className="text-2xl leading-tight sm:text-3xl">
-            You just started your study loop.
+            {completionHeadline}
           </CardTitle>
           <CardDescription className="text-sm">
             Create ✓ → Understand ● → Practice → Challenge → Improve
@@ -1343,9 +1347,9 @@ export default function OnboardingPage() {
 
         <div className="flex flex-col gap-2.5">
           <Button type="button" className="min-h-12 text-base" onClick={handleContinueToStudyPack}>
-            Continue Studying
+            Open your Study Pack
           </Button>
-          <Button type="button" variant="outline" className="min-h-12 text-base" onClick={handleGoToDashboard}>
+          <Button type="button" variant="ghost" className="min-h-10 self-center text-sm" onClick={handleGoToDashboard}>
             Go to Dashboard
           </Button>
         </div>

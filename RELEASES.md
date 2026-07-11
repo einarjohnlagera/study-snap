@@ -10,8 +10,6 @@ Theme: ship the highest-confidence findings from a 7-session conversion/retentio
 
 - **Landing hero + cross-linking pass (frontend).** Fix the hero headline/SEO-title mismatch and the Board Exam Mode badge/screenshot mismatch; add cross-links between Target Users cards, Learn categories, and Exam Hub pages.
 - **Pricing trust-copy placement + event instrumentation (frontend).** Move the no-auto-charge reassurance CTA-adjacent instead of footer-only; instrument every upgrade surface with source-tagged view/click events.
-- **Public note conversion hooks (frontend).** Quick Check completion prompt at peak engagement; a value-attribution line connecting the visible Summary/Key Concepts/Quiz to "your notes get the same."
-- **Onboarding Step 5 rewrite (frontend).** Replace the closing "You just started your study loop" headline with a return-expectation framing; establish clear visual hierarchy between the two Step 5 actions.
 - **Public Library default sort (frontend).** Default filter-mode results to the existing discovery-score "Recommended" sort instead of pure `createdAt DESC`, so ranking survives the moment a visitor expresses intent.
 - **Public Library → Official plan bridge (frontend).** One contextual pointer from a courseProgram-filtered Public Library view to the matching Official Study Plan, where one exists.
 
@@ -20,6 +18,7 @@ Anti-drift: no new quota/gating logic for any quiz mode or plan tier; the separa
 ### Shipped
 
 - **ConceptHealth tracking for Quick Review (backend).** Completed Quick Review sessions now derive fully-correct and missed concepts from the base Study Pack quiz plus persisted selections, then write the same per-user, per-Study-Pack `concept_health` records used by Challenge Quiz and Adaptive Practice. Completion remains state-guarded and transactional, so a duplicate completion does not write twice and a ConceptHealth failure rolls back the completed session.
+- **Public note and onboarding conversion hooks (frontend).** Quick Check completion now uses an outcome-framed prompt that reuses the established copy-intent flow without creating anonymous progress; ready public notes explain that their visible study tools came from the source note. Onboarding Step 5 now names the learner's topic when available, sets a return expectation, makes `Open your Study Pack` the clear primary action, and keeps Dashboard as a quiet secondary path.
 
 ---
 
