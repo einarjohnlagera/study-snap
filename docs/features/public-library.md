@@ -298,7 +298,7 @@ Behavior:
 - `Share this list` must copy the same canonical `/public/library?...` URL the page is currently using
 - direct opens of a filtered URL must restore the same selected filters in the UI
 - backend filtering is combinable and returns only `PUBLIC` notes
-- search is case-insensitive
+- search is case-insensitive and already matches Course / Program and tags alongside the existing note text fields; a query such as `PNLE` finds notes whose canonical program is PNLE without a duplicate search predicate
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
 - Public Library shows the response count near the filter bar: `{total} notes` with no active URL filters, or `{items.length} of {total} notes` when `search`, `subject`, `tag`, `courseProgram`, non-ALL `audience`, or `creator` is present
@@ -310,7 +310,8 @@ Behavior:
 A dismissible discovery hint shown above the note list when no `courseProgram` filter is active and no creator filter is set:
 
 - Text: `Studying for a specific exam or program? Browse notes by Course or Program.`
-- Action: `Browse by Course/Program` — opens the filter sheet
+- Top six Course / Program chips are ranked by the real public-note counts already loaded for the current browse result and apply the same canonical `?courseProgram=` slug filter as the sheet; no program list is hardcoded
+- Action: `Browse by Course/Program` — opens the filter sheet as the full taxonomy path
 - Dismiss button (X) hides the card and stores dismissal in `sessionStorage` (key: `notelib_public_library_cp_cta_dismissed`); it reappears on a new browsing session
 - Hidden when `?courseProgram=` or `?creator=` is already present in the URL
 - Do not show while the note list is loading

@@ -67,6 +67,7 @@ const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
 const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
+const COURSE_PROGRAM_CHIP_LIMIT = 6;
 const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
@@ -687,6 +688,11 @@ export function PublicLibraryPageClient() {
     });
   }, [courseProgramCounts]);
 
+  const topCoursePrograms = useMemo(
+    () => availableCoursePrograms.slice(0, COURSE_PROGRAM_CHIP_LIMIT),
+    [availableCoursePrograms],
+  );
+
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const item of items) {
@@ -970,6 +976,17 @@ export function PublicLibraryPageClient() {
     }
     setCtaDismissed(true);
   }, []);
+
+  const applyCourseProgramChip = useCallback((courseProgram: string) => {
+    setSelectedCourseProgram(courseProgram);
+    setCourseProgramDraft(courseProgram);
+    setRecentCoursePrograms((previous) => updateRecentValues(previous, [courseProgram]));
+    replacePublicLibraryFilters({
+      ...parsedUrlFilters,
+      courseProgram: slugifyPublicLibraryFilterValue(courseProgram),
+      view: null,
+    });
+  }, [parsedUrlFilters, replacePublicLibraryFilters]);
 
   const applyModalFilters = useCallback(() => {
     const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : null;
@@ -1507,9 +1524,25 @@ export function PublicLibraryPageClient() {
 
           {!ctaDismissed && !parsedUrlFilters.courseProgram && !parsedUrlFilters.creator ? (
             <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-              <p className="text-sm text-foreground/75">
-                Studying for a specific exam or program? Browse notes by Course or Program.
-              </p>
+              <div className="min-w-0 space-y-2">
+                <p className="text-sm text-foreground/75">
+                  Studying for a specific exam or program? Browse notes by Course or Program.
+                </p>
+                {topCoursePrograms.length > 0 ? (
+                  <div className="flex flex-wrap gap-2" aria-label="Popular course and program filters">
+                    {topCoursePrograms.map((courseProgram) => (
+                      <button
+                        key={courseProgram}
+                        type="button"
+                        onClick={() => applyCourseProgramChip(courseProgram)}
+                        className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-highlight"
+                      >
+                        {courseProgram}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
