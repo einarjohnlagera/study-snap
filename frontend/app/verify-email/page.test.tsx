@@ -1,6 +1,10 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import VerifyEmailPage from "./page";
 import { copyNoteOnSignup, getMe, getMyPlan, verifyEmailToken } from "@/lib/api";
+import {
+  clearPendingLightweightProfileCompletion,
+  hasPendingLightweightProfileCompletion,
+} from "@/lib/onboarding-v2";
 
 const routerMock = {
   replace: jest.fn(),
@@ -41,6 +45,7 @@ describe("VerifyEmailPage", () => {
     routerMock.replace.mockReset();
     setAuthUserMock.mockClear();
     document.cookie = "notelib-copy-intent=; path=/; max-age=0; SameSite=Strict";
+    clearPendingLightweightProfileCompletion("user-1");
     currentToken = "verify-token";
     currentAuthUser = {
       id: "user-1",
@@ -126,6 +131,7 @@ describe("VerifyEmailPage", () => {
       expect(copyNoteOnSignup).toHaveBeenCalledWith("public-note-1");
       expect(routerMock.replace).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
     });
+    expect(hasPendingLightweightProfileCompletion("user-1")).toBe(true);
     expect(document.cookie).not.toContain("notelib-copy-intent=");
   });
 });

@@ -29,6 +29,7 @@ import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
   clearDeferredOnboardingCompletion,
   clearOnboardingDraft,
+  ONBOARDING_PROFILE_OPTIONS,
   createEmptyOnboardingDraft,
   loadOnboardingDraft,
   saveOnboardingDraft,
@@ -67,38 +68,6 @@ const STEP_FIVE_SAVE_ERROR_MESSAGE =
   "We couldn't save your profile. Your Study Pack is still available.";
 const STEP_FOUR_BACK_NOTICE =
   "Going back will start a new Study Pack. Your current one will be saved.";
-
-const PROFILE_OPTIONS: Array<{
-  value: OnboardingProfileType;
-  icon: string;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "STUDENT",
-    icon: "🎓",
-    label: "Student",
-    description: "Reviewing notes and preparing for quizzes",
-  },
-  {
-    value: "BOARD_EXAM",
-    icon: "📋",
-    label: "Exam Reviewer",
-    description: "Preparing for a board, licensure, or civil service exam",
-  },
-  {
-    value: "TEACHER",
-    icon: "🏫",
-    label: "Teacher",
-    description: "Creating study materials for students",
-  },
-  {
-    value: "PROFESSIONAL",
-    icon: "💼",
-    label: "Professional",
-    description: "Preparing for certifications or growing professionally",
-  },
-];
 
 const STEP_NAMES: Record<number, StepName> = {
   1: "profile",
@@ -914,7 +883,7 @@ export default function OnboardingPage() {
           </div>
 
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {PROFILE_OPTIONS.map((option) => (
+            {ONBOARDING_PROFILE_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"

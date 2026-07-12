@@ -1,7 +1,10 @@
 import {
+  clearPendingLightweightProfileCompletion,
   createEmptyOnboardingDraft,
+  hasPendingLightweightProfileCompletion,
   loadOnboardingDraft,
   saveOnboardingDraft,
+  setPendingLightweightProfileCompletion,
 } from "./onboarding-v2";
 
 describe("onboarding-v2 draft storage", () => {
@@ -53,5 +56,26 @@ describe("onboarding-v2 draft storage", () => {
       learnerLevel: "PROFESSIONAL",
       courseProgram: "AWS Certification",
     }));
+  });
+
+  it("stores lightweight profile completion separately from deferred onboarding completion", () => {
+    setPendingLightweightProfileCompletion("user-1");
+
+    expect(hasPendingLightweightProfileCompletion("user-1")).toBe(true);
+    expect(window.localStorage.getItem("notelib.lightweight-profile-completion-pending:user-1")).toBe("1");
+
+    clearPendingLightweightProfileCompletion("user-1");
+    expect(hasPendingLightweightProfileCompletion("user-1")).toBe(false);
+  });
+
+  it("fails open when lightweight completion storage is unavailable", () => {
+    const setItemSpy = jest.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new Error("Storage unavailable");
+    });
+
+    setPendingLightweightProfileCompletion("user-1");
+
+    expect(hasPendingLightweightProfileCompletion("user-1")).toBe(false);
+    setItemSpy.mockRestore();
   });
 });

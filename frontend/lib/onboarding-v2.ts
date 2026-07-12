@@ -3,6 +3,40 @@ import type { LearnerLevel, ProfileType } from "@/lib/api";
 export type OnboardingProfileType = Extract<ProfileType, "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL">;
 export type OnboardingInputMethod = "generate" | "own_note";
 
+export type OnboardingProfileOption = {
+  value: OnboardingProfileType;
+  icon: string;
+  label: string;
+  description: string;
+};
+
+export const ONBOARDING_PROFILE_OPTIONS: OnboardingProfileOption[] = [
+  {
+    value: "STUDENT",
+    icon: "🎓",
+    label: "Student",
+    description: "Reviewing notes and preparing for quizzes",
+  },
+  {
+    value: "BOARD_EXAM",
+    icon: "📋",
+    label: "Exam Reviewer",
+    description: "Preparing for a board, licensure, or civil service exam",
+  },
+  {
+    value: "TEACHER",
+    icon: "🏫",
+    label: "Teacher",
+    description: "Creating study materials for students",
+  },
+  {
+    value: "PROFESSIONAL",
+    icon: "💼",
+    label: "Professional",
+    description: "Preparing for certifications or growing professionally",
+  },
+];
+
 export type OnboardingDraft = {
   startedAtMs: number;
   currentStep: number;
@@ -20,6 +54,7 @@ export type OnboardingDraft = {
 
 const ONBOARDING_DRAFT_PREFIX = "notelib.onboarding-v2";
 const ONBOARDING_COMPLETION_DEFERRED_PREFIX = "notelib.onboarding-completion-deferred";
+const LIGHTWEIGHT_PROFILE_COMPLETION_PENDING_PREFIX = "notelib.lightweight-profile-completion-pending";
 
 function resolveKey(prefix: string, userId: string): string {
   return `${prefix}:${userId}`;
@@ -96,4 +131,37 @@ export function hasDeferredOnboardingCompletion(userId: string | null | undefine
     return false;
   }
   return globalThis.localStorage.getItem(resolveKey(ONBOARDING_COMPLETION_DEFERRED_PREFIX, userId)) === "1";
+}
+
+export function setPendingLightweightProfileCompletion(userId: string): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  try {
+    globalThis.localStorage.setItem(resolveKey(LIGHTWEIGHT_PROFILE_COMPLETION_PENDING_PREFIX, userId), "1");
+  } catch {
+    // Fail open to the existing onboarding redirect when storage is unavailable.
+  }
+}
+
+export function clearPendingLightweightProfileCompletion(userId: string): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  try {
+    globalThis.localStorage.removeItem(resolveKey(LIGHTWEIGHT_PROFILE_COMPLETION_PENDING_PREFIX, userId));
+  } catch {
+    // The backend completion state still ends onboarding routing on a future load.
+  }
+}
+
+export function hasPendingLightweightProfileCompletion(userId: string | null | undefined): boolean {
+  if (globalThis.window === undefined || !userId) {
+    return false;
+  }
+  try {
+    return globalThis.localStorage.getItem(resolveKey(LIGHTWEIGHT_PROFILE_COMPLETION_PENDING_PREFIX, userId)) === "1";
+  } catch {
+    return false;
+  }
 }

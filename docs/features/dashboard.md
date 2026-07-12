@@ -43,6 +43,16 @@ Behavior:
 
 This prompt is for learner level only. It does not move learning style or reminder preferences back into onboarding.
 
+### Copy-on-signup profile completion prompt
+
+Successful public-note copy-on-signup users may arrive on Dashboard with a pending lightweight profile-completion marker instead of a completed onboarding timestamp. When their Profile Type, Learner Level, or Course / Program remains incomplete, Dashboard shows a separate inline card near the first-run guidance area.
+
+- The card is non-blocking and dismissible; Dashboard actions remain usable.
+- It reuses onboarding's profile choices, learner-level options, course/program combobox (`allowCustom=false`), and optional Board Exam date.
+- A dismissal lasts for the current day but never clears the pending completion marker, so the card can return on a later visit until saved.
+- Submission saves Learning Profile first, then completes onboarding profile metadata. A partial failure retries only the latter.
+- This card is only for the copy-on-signup marker cohort; it does not change the normal onboarding wizard or the existing learner-level personalization prompt.
+
 ## Profile-specific priorities
 
 ### Student

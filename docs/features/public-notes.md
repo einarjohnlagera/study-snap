@@ -128,7 +128,7 @@ New-user signup behavior:
 - Consuming the cookie calls `POST /api/notes/copy-on-signup`, which copies the public note into the new user's private Library and starts Study Pack generation on the copied note.
 - After the copy starts, the user is sent to `/notes/{copiedNoteId}?copied=1&generate=1&startQuickReview=1`.
 
-This path intentionally bypasses onboarding so public-note visitors land directly in the note-to-summary-to-quiz review loop they came for. If the copy-on-signup API fails, the cookie is cleared and the user falls back to the normal authenticated home/onboarding destination.
+This path exempts successful copies from the immediate onboarding redirect so public-note visitors first land in the note-to-summary-to-quiz review loop they came for. A per-user lightweight-profile-completion marker carries that exemption until the user later completes Profile Type, Learner Level, Course / Program, and optional Board Exam date through the non-blocking Dashboard prompt. If the copy-on-signup API fails, the cookie is cleared and the user falls back to the normal authenticated home/onboarding destination.
 
 ## Share Cards & SEO Metadata
 
