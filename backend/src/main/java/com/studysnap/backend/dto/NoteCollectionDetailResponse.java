@@ -17,6 +17,7 @@ public record NoteCollectionDetailResponse(
         UUID sourcePlanId,
         UUID parentCollectionId,
         int childCount,
+        int readyCount,
         Instant createdAt,
         Instant updatedAt,
         NoteCollectionProgressResponse progress,

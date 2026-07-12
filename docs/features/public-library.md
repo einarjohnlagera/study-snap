@@ -84,6 +84,10 @@ Public Library has two display modes:
 - Explicit `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` choices continue to override the default. `?sort=recent` remains the canonical explicit Newest URL; no `sort` parameter means Recommended only in filter mode and keeps Discovery mode unchanged.
 - With an active Course / Program filter, a matching Official Study Plan adds one contextual `Browse official plans` pointer above results. The existing `listPublicStudyPlans({ courseProgram })` lookup selects its first result like the Dashboard recommendation; lookup failure or no result renders nothing and never affects note results.
 
+### Official Study Plan readiness metadata
+
+Public Study Plan list and detail responses expose a live `readyCount` alongside their existing note totals. `PublicStudyPlanCard` renders this as plain metadata — `{readyCount} of {itemCount} notes practice-ready` — on the published-plan and Dashboard recommendation surfaces. A note is practice-ready only when the existing `STUDY_PACK_READY` resolver says it is ready; zero, partial, and fully ready plans all show their real ratio. If an older cached list response does not include the aggregate, the card keeps its existing item-count metadata without rendering an incomplete ratio.
+
 Switching from discovery to filter mode:
 - Typing in search → filter mode
 - Selecting any filter (Course, Learner Level, Subject, Tags, Source) → filter mode

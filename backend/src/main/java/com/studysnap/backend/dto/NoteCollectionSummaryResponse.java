@@ -12,6 +12,7 @@ public record NoteCollectionSummaryResponse(
         UUID sourcePlanId,
         UUID parentCollectionId,
         int itemCount,
+        int readyCount,
         int childCount,
         int notesPracticed,
         Instant createdAt,

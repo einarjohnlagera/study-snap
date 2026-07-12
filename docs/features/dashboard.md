@@ -163,7 +163,7 @@ v0.31.0 adds a learner-facing plan surface for STUDENT, BOARD_EXAM, and PROFESSI
 
 Behavior by state:
 
-- `courseProgram` is set and a matching published plan exists → show the first matching plan card with item count and Start/Continue CTA
+- `courseProgram` is set and a matching published plan exists → show the first matching plan card with its item count, `{readyCount} of {itemCount} notes practice-ready` metadata, and Start/Continue CTA. The readiness fraction is always plain metadata (not a badge), including `0 of N` and `N of N`; an older cached response without `readyCount` keeps the item count without a partial string.
 - no matching plan exists, and the learner already has notes (`items.length > 0`) → render nothing; do not show an empty shell. Preserved from the original v0.33.0 decision — an established, already-active dashboard should not carry a "no curated plan yet" filler card just because their track has no curated content.
 - no matching plan exists, and the learner has zero notes (`items.length === 0`, the cold-start case) → **pass `browseWhenEmpty` (v0.39.1)** so the same guidance-nudge card `/collections` already shows ("No curated {plural} for {program} yet... Check back soon, or build your own above") renders here too, instead of silently disappearing. Cold-start discoverability audit (v0.39.1) found the Dashboard's blanket "render nothing" rule meant a zero-notes learner with no curated plan for their track got no signal that adoption exists at all, in the exact moment it matters most. Gating on `items.length` keeps the original anti-clutter intent for everyone else.
 - Start calls `POST /collections/{id}/adopt`, then routes to `/collections/{personalId}`
