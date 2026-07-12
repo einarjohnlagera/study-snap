@@ -6,14 +6,11 @@
 
 Theme: ship the highest-confidence findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`, consolidated in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`) — closing a verified backend gap in return-visit progress tracking, plus the audit's Tier 1 (high-impact, low-effort) UI/UX items across landing, pricing, public notes, onboarding, and Public Library.
 
-### Planned Scope
-
-- **Pricing trust-copy placement + event instrumentation (frontend).** Move the no-auto-charge reassurance CTA-adjacent instead of footer-only; instrument every upgrade surface with source-tagged view/click events.
-
 Anti-drift: no new quota/gating logic for any quiz mode or plan tier; the separate `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence (flagged by the same audit) is tracked separately and not addressed in this release; no reordering of Companion sections or other locked v0.41–v0.43 Coach/Companion decisions; "sell outcomes, not AI" copy rule applies to every rewritten string in this release; taxonomy fields stay combobox-only.
 
 ### Shipped
 
+- **Pricing trust-copy and quota-surface analytics (frontend).** Added the shared no-auto-charge reassurance directly below paid pricing-card, paywall, and Settings CTAs while retaining the broader footer trust context. Near-limit quota banners and the shared Study Pack-limit modal now emit one-shot, source-tagged view events plus source-tagged upgrade clicks, including distinct Study Pack, note-generation, and OCR entry surfaces; existing Pricing, Settings, and paywall tracking sources remain unchanged.
 - **Landing hero, audience links, and Exam Hub conversion path (frontend).** Aligned the hero and canonical metadata with NoteLib's notes-library-to-quizzes promise; clarified the nearby Board Exam Mode callout as a timed full-exam simulation without misrepresenting the Study Pack screenshot. Target User panels now link to their matching Learn categories (with Board Exam also linking to Exam Hubs), and zero-note Exam Hubs preserve their established signup intent path beside the Public Library fallback.
 - **ConceptHealth tracking for Quick Review (backend).** Completed Quick Review sessions now derive fully-correct and missed concepts from the base Study Pack quiz plus persisted selections, then write the same per-user, per-Study-Pack `concept_health` records used by Challenge Quiz and Adaptive Practice. Completion remains state-guarded and transactional, so a duplicate completion does not write twice and a ConceptHealth failure rolls back the completed session.
 - **Public note and onboarding conversion hooks (frontend).** Quick Check completion now uses an outcome-framed prompt that reuses the established copy-intent flow without creating anonymous progress; ready public notes explain that their visible study tools came from the source note. Onboarding Step 5 now names the learner's topic when available, sets a return expectation, makes `Open your Study Pack` the clear primary action, and keeps Dashboard as a quiet secondary path.

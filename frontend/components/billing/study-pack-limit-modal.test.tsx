@@ -1,17 +1,24 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { StudyPackLimitModal } from "./study-pack-limit-modal";
+import { trackAnalyticsEvent } from "@/lib/api";
 
 const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
+  usePathname: () => "/notes/note-1",
   useRouter: () => ({
     push: pushMock,
   }),
 }));
 
+jest.mock("@/lib/api", () => ({
+  trackAnalyticsEvent: jest.fn(),
+}));
+
 describe("StudyPackLimitModal", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
   });
 
   it("renders the free-plan limit copy and dynamic upgrade CTAs", () => {
@@ -21,6 +28,7 @@ describe("StudyPackLimitModal", () => {
         planType="FREE"
         resetDateLabel="April 15"
         onClose={jest.fn()}
+        analyticsSource="test_study_pack_limit_modal"
       />,
     );
 
@@ -39,6 +47,7 @@ describe("StudyPackLimitModal", () => {
         planType="FREE"
         resetDateLabel="April 15"
         onClose={onClose}
+        analyticsSource="test_study_pack_limit_modal"
       />,
     );
 
@@ -53,6 +62,7 @@ describe("StudyPackLimitModal", () => {
         planType="PLUS"
         resetDateLabel="April 18"
         onClose={jest.fn()}
+        analyticsSource="test_study_pack_limit_modal"
       />,
     );
 
@@ -68,6 +78,7 @@ describe("StudyPackLimitModal", () => {
         planType="PRO"
         resetDateLabel="April 20"
         onClose={jest.fn()}
+        analyticsSource="test_study_pack_limit_modal"
       />,
     );
 
@@ -77,5 +88,64 @@ describe("StudyPackLimitModal", () => {
     expect(screen.queryByRole("button", { name: "Upgrade to Pro" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Go Pro" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Got It" })).toBeInTheDocument();
+  });
+
+  it("tracks one source-tagged view when opened and the upgrade CTA click", () => {
+    const onClose = jest.fn();
+    const { rerender } = render(
+      <StudyPackLimitModal
+        isOpen={false}
+        planType="FREE"
+        resetDateLabel="April 15"
+        onClose={onClose}
+        analyticsSource="test_study_pack_limit_modal"
+      />,
+    );
+
+    expect(trackAnalyticsEvent).not.toHaveBeenCalled();
+
+    rerender(
+      <StudyPackLimitModal
+        isOpen
+        planType="FREE"
+        resetDateLabel="April 15"
+        onClose={onClose}
+        analyticsSource="test_study_pack_limit_modal"
+      />,
+    );
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "PAYWALL_VIEWED",
+      metadata: {
+        source: "test_study_pack_limit_modal",
+        feature: "study_pack_limit",
+        path: "/notes/note-1",
+        currentPlan: "FREE",
+      },
+    });
+
+    rerender(
+      <StudyPackLimitModal
+        isOpen
+        planType="FREE"
+        resetDateLabel="April 16"
+        onClose={onClose}
+        analyticsSource="test_study_pack_limit_modal"
+      />,
+    );
+    expect(trackAnalyticsEvent).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Get More Study Packs" }));
+
+    expect(trackAnalyticsEvent).toHaveBeenLastCalledWith({
+      eventType: "UPGRADE_CLICKED",
+      metadata: {
+        source: "test_study_pack_limit_modal",
+        feature: "study_pack_limit",
+        path: "/notes/note-1",
+        currentPlan: "FREE",
+        target: "settings_plan_billing",
+      },
+    });
   });
 });

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
-import type { PlanType } from "@/lib/api";
+import { trackAnalyticsEvent, type PlanType } from "@/lib/api";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type StudyPackLimitModalProps = {
@@ -11,9 +12,12 @@ type StudyPackLimitModalProps = {
   planType: PlanType;
   resetDateLabel: string;
   onClose: () => void;
+  analyticsSource: string;
 };
 
 const UPGRADE_PATH = "/settings?section=plans";
+const STUDY_PACK_LIMIT_FEATURE = "study_pack_limit";
+const SETTINGS_PLAN_BILLING_TARGET = "settings_plan_billing";
 
 function resolveAppPlan(planType: PlanType): AppPlanType {
   if (planType === "PLUS" || planType === "PRO") {
@@ -27,10 +31,47 @@ export function StudyPackLimitModal({
   planType,
   resetDateLabel,
   onClose,
+  analyticsSource,
 }: Readonly<StudyPackLimitModalProps>) {
   const router = useRouter();
+  const pathname = usePathname();
+  const hasTrackedOpenRef = useRef(false);
+  const appPlan = resolveAppPlan(planType);
+  const ctas = getUpgradeCtas(appPlan, "study-pack-limit");
+  const isFreePlan = appPlan === "FREE";
+  const isPlusPlan = appPlan === "PLUS";
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasTrackedOpenRef.current = false;
+      return;
+    }
+    if (hasTrackedOpenRef.current) {
+      return;
+    }
+    hasTrackedOpenRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "PAYWALL_VIEWED",
+      metadata: {
+        source: analyticsSource,
+        feature: STUDY_PACK_LIMIT_FEATURE,
+        path: pathname,
+        currentPlan: planType,
+      },
+    });
+  }, [analyticsSource, isOpen, pathname, planType]);
 
   const handleNavigate = (href: string) => {
+    void trackAnalyticsEvent({
+      eventType: "UPGRADE_CLICKED",
+      metadata: {
+        source: analyticsSource,
+        feature: STUDY_PACK_LIMIT_FEATURE,
+        path: pathname,
+        currentPlan: planType,
+        target: SETTINGS_PLAN_BILLING_TARGET,
+      },
+    });
     onClose();
     router.push(href);
   };
@@ -39,10 +80,6 @@ export function StudyPackLimitModal({
     return null;
   }
 
-  const appPlan = resolveAppPlan(planType);
-  const ctas = getUpgradeCtas(appPlan, "study-pack-limit");
-  const isFreePlan = appPlan === "FREE";
-  const isPlusPlan = appPlan === "PLUS";
   const title = isFreePlan
     ? "You’ve reached your study pack limit"
     : isPlusPlan

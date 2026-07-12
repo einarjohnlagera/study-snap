@@ -62,6 +62,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 - **Quota stays monthly, with a clarifier.** Per-month limits remain accurate; cards carry `Usage limits refresh each month during your pass.` so "one-time pass" and "monthly limits" do not read as contradictory.
 - **Intro pricing is a first-pass discount, not a recurrence.** Render as `₱149 for your first 1-month pass · ₱179 after` — never `first month, then ₱179/month`.
 - **Reassurances** live in shared constants in `plans.ts` (`PASS_MODEL_TAGLINE`, `PASS_QUOTA_REFRESH_NOTE`, `PASS_DATA_PERMANENCE_NOTE`, `PASS_ALL_ACCESS_NOTE`, `PASS_NO_AUTO_CHARGE_FOOTER`): one-time payment · never auto-charged; notes, Study Packs, and progress stay in the library after a pass ends; full access on desktop and mobile web (responsive web — there is no native app).
+- **CTA-adjacent reassurance.** `PASS_NO_AUTO_CHARGE_FOOTER` renders directly below every paid primary CTA on the Pricing plan cards, paywall modal, and Settings plan cards. The broader footer trust blocks remain because they also explain data permanence, access, hosted checkout, and usage refresh.
 - **Settings billing-status copy stays accurate** for an active pass (e.g. `Valid until …`, `Won't auto-renew`); only pre-purchase/marketing strings were reframed. No billing, quota, pass-duration, price, or checkout mechanics changed.
 - **Settings pass-length selector.** The Settings plans cards use one 3-segment selector (`1 month · 3 months · 1 year`, segments rendered by availability) instead of a `Monthly / Annual` toggle plus a separate exam-pass button. The selected length drives `effectiveProCycle`, a single Pro price line, and one CTA — `Get Pro` for the 1-month pass (the long monthly-intro string stays out of the button) and `Get Pro — <price>` for the 3-month / 1-year passes. The 3-month and 1-year segments carry a state-aware `Save N%` badge (`passSavingsPct`, regular-monthly baseline, cycles from `durationDays`); savings live only in the badge to avoid duplicate copy. Plus remains a 1-month pass only.
 
@@ -123,3 +124,21 @@ Visible reviewer-safe display values currently come from the shared pricing conf
 - Pro should feel like the strongest exam-prep and mastery tier
 - pricing surfaces should stay student-friendly and avoid aggressive billing language
 - trust copy should reinforce one-time passes (never auto-charged), monthly usage refresh during a pass, library data permanence, and hosted checkout
+
+## Upgrade-surface analytics
+
+Upgrade analytics use existing `PAYWALL_VIEWED` and `UPGRADE_CLICKED` event types. Tracking is fire-and-forget and must never block an upgrade path.
+
+The following surfaces were already instrumented before v0.44.0's quota-surface pass and retain their existing source values unchanged:
+
+- Pricing hero: `pricing_hero`.
+- Pricing plan cards: `pricing_plans_section_{plan}_{cycle}` and `pricing_plans_section_pro_exam_cycle`.
+- Settings billing: `settings_plan_billing`.
+- Shared paywall modal: its caller-provided `source` value for view, dismiss, and checkout events.
+
+The quota-surface pass adds the only previously untracked sources:
+
+- `NearLimitBanner` fires one `PAYWALL_VIEWED` event per mounted banner and an `UPGRADE_CLICKED` event when it exposes and receives an upgrade CTA. Current caller sources are `onboarding_study_pack_near_limit`, `dashboard_study_pack_near_limit`, `note_editor_study_pack_near_limit`, `private_note_detail_study_pack_near_limit`, `bulk_generation_note_generation_near_limit`, and `bulk_import_ocr_near_limit`.
+- `StudyPackLimitModal` fires one `PAYWALL_VIEWED` event each time it opens and an `UPGRADE_CLICKED` event when its plan CTA routes to Settings billing. Its caller sources are `note_editor_study_pack_limit_modal` and `private_note_detail_study_pack_limit_modal`.
+
+Do not replace these source tags with generic pricing or Settings values: funnel reporting depends on identifying the original upgrade surface.

@@ -1591,6 +1591,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               planType={currentPlan}
               remainingCredits={studyPacksRemaining}
               resetDateLabel={usageResetDateLabel}
+              analyticsSource="private_note_detail_study_pack_near_limit"
               onUpgrade={() => openStudyPackLimitModal("private_note_detail_study_pack_limit")}
             />
           ) : null}
@@ -2639,6 +2640,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         isOpen={!isTeacherMode && currentPlan === "PRO" && showLimitReachedModal}
         planType={currentPlan}
         resetDateLabel={usageResetDateLabel}
+        analyticsSource="private_note_detail_study_pack_limit_modal"
         onClose={() => setShowLimitReachedModal(false)}
       />
     </main>

@@ -1077,6 +1077,7 @@ export function NoteEditorPageClient({
             planType={currentPlan}
             remainingCredits={studyPacksRemaining}
             resetDateLabel={usageResetDateLabel}
+            analyticsSource="note_editor_study_pack_near_limit"
             onUpgrade={() => openLockedFeaturePaywall("study-pack-limit", "note_editor_study_pack_limit")}
           />
         </div>
@@ -1186,6 +1187,7 @@ export function NoteEditorPageClient({
           isOpen={showLimitReachedModal}
           planType={currentPlan}
           resetDateLabel={usageResetDateLabel}
+          analyticsSource="note_editor_study_pack_limit_modal"
           onClose={() => setShowLimitReachedModal(false)}
         />
       ) : (

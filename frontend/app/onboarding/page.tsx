@@ -1308,6 +1308,7 @@ export default function OnboardingPage() {
             planType={currentPlan}
             remainingCredits={0}
             resetDateLabel={usageResetDateLabel}
+            analyticsSource="onboarding_study_pack_near_limit"
           />
 
           <p className="text-[0.95rem] text-foreground/80 sm:text-base">

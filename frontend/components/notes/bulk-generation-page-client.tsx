@@ -305,6 +305,7 @@ export function BulkGenerationPageClient() {
             resetDateLabel={quota.resetLabel}
             creditLabel="note generation"
             ctaContext="note-generation-limit"
+            analyticsSource="bulk_generation_note_generation_near_limit"
             onUpgrade={() => router.push("/settings?section=plans")}
           />
         ) : null}
