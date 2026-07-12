@@ -352,7 +352,7 @@ class ConceptHealthServiceTest {
     }
 
     @Test
-    void getConceptHealthForOwnedStudyPack_returnsReadinessSignalWithoutTimingForFreePlan() {
+    void getConceptHealthForOwnedStudyPack_returnsDueSignalWithLastCorrectAtForFreePlan() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
@@ -374,7 +374,7 @@ class ConceptHealthServiceTest {
             assertThat(entry.concept()).isEqualTo(CAPACITANCE_CONCEPT);
             assertThat(entry.readinessStatus()).isEqualTo(ConceptReadinessStatus.DUE);
             assertThat(entry.isDue()).isTrue();
-            assertThat(entry.lastCorrectAt()).isNull();
+            assertThat(entry.lastCorrectAt()).isEqualTo(now.minusDays(4));
             assertThat(entry.lastIncorrectAt()).isNull();
             assertThat(entry.daysSinceReview()).isNull();
         });

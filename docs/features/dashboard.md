@@ -14,6 +14,7 @@ Dashboard is a guidance surface, not a management screen. It should help users d
 - `frontend/app/dashboard/page.tsx` — main dashboard client; `SupportedDashboardProfileType` branching (STUDENT / BOARD_EXAM / TEACHER / PROFESSIONAL); all section composition per profile type
 - `frontend/app/dashboard/continue-spotlight.tsx` — Continue Studying card
 - `frontend/app/dashboard/dashboard-focus-areas-card.tsx` — Focus Areas / weak concepts section
+- `frontend/app/dashboard/today-focus-card.tsx` — top-priority Today Focus card for resumable reviews and due concepts
 - `frontend/app/dashboard/study-pack-grid.tsx` — Recent Notes grid
 - `frontend/lib/api.ts` — `getDashboardOverview()`, `getContinueStudyingRecommendation()`, `getTodayFocus()`
 
@@ -118,6 +119,32 @@ Rules:
 - use the backend `resumeType` label directly
 - do not make extra frontend fetches just to label the card
 - keep the card note-first so the user knows which note they are returning to
+
+## Today Focus
+
+Endpoint:
+
+- `GET /dashboard/today-focus`
+
+Backend priority order (`DashboardService.getTodayFocus()`):
+
+1. resumable Quick Review (`RESUME_REVIEW` / `RETRY_REVIEW`)
+2. due concepts (`DUE_CONCEPTS_REVIEW`)
+3. weak concepts from the latest Quick Review (`PRACTICE_WEAK_CONCEPT`)
+4. a previously opened, newly created, or recently reviewed Study Pack (`REVIEW_PACK`)
+5. the first-Study-Pack suggestion (`STUDY_SUGGESTION`)
+
+**The Dashboard only renders the `TodayFocusCard` component for the `DUE_CONCEPTS_REVIEW` type.** The other four types exist in the resolver (some predate this card's Dashboard integration) but are intentionally not surfaced here — `RESUME_REVIEW`/`RETRY_REVIEW` would duplicate the existing Continue Studying section (`getContinueStudyingRecommendation()`, a separate, independently-computed resolver over the same in-progress-session signal), and `PRACTICE_WEAK_CONCEPT` would duplicate Focus Areas. Do not widen the render condition without first reconciling those two independent "resume" implementations and the two "weak concepts" sources — see the dead-code note below.
+
+The due-concepts branch uses the existing deterministic `concept_health` threshold across the learner's owned Study Packs. It returns the real due-concept count and each concept's source-note reference. It is available to every plan, including Free; it is a retention signal, not an Adaptive Practice entitlement.
+
+Due-concepts actions reuse the Focus Areas three-way behavior:
+
+- Adaptive Practice available and source note present → `Practice Due Concepts`
+- source note present but Adaptive Practice unavailable → `Revisit Note`
+- no source note → `Unlock Adaptive Practice` shared paywall action
+
+The card is loaded as a non-critical Dashboard request, so a focus-resolution failure never blocks the rest of Dashboard.
 
 ## Focus Areas
 

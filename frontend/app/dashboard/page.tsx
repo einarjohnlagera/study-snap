@@ -20,6 +20,7 @@ import {
   getMe,
   getNote,
   getQuickReviewPerformanceSummary,
+  getTodayFocus,
   listNotes,
   type ContinueStudyingResponse,
   type DashboardOverviewResponse,
@@ -27,6 +28,7 @@ import {
   type MeResponse,
   type NoteListItemResponse,
   type ProfileType,
+  type TodayFocusResponse,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -36,6 +38,7 @@ import { LightweightProfileCompletionPrompt } from "@/components/dashboard/light
 import { DashboardHero } from "./dashboard-hero";
 import { DashboardMonthlyUsageCard } from "./dashboard-monthly-usage-card";
 import { DashboardFocusAreasCard } from "./dashboard-focus-areas-card";
+import { TodayFocusCard } from "./today-focus-card";
 import { DashboardWeeklyActivityCard } from "./dashboard-weekly-activity-card";
 import { StudyPackGrid } from "./study-pack-grid";
 import { DashboardLoading } from "./dashboard-loading";
@@ -310,6 +313,7 @@ export default function DashboardPage() {
   const [goalSummary, setGoalSummary] = useState<GoalNudgeResponse | null>(null);
   const [goalSummaryLoading, setGoalSummaryLoading] = useState(false);
   const [continueStudying, setContinueStudying] = useState<ContinueStudyingResponse | null>(null);
+  const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -329,10 +333,11 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [notesResult, meResult, continueStudyingResult, overviewResult] = await Promise.allSettled([
+      const [notesResult, meResult, continueStudyingResult, todayFocusResult, overviewResult] = await Promise.allSettled([
         listNotes(),
         getMe(),
         getContinueStudyingRecommendation(),
+        getTodayFocus(),
         getDashboardOverview(),
       ]);
 
@@ -430,6 +435,7 @@ export default function DashboardPage() {
         setRecentNoteMetaById({});
       }
       setContinueStudying(continueStudyingResult.status === "fulfilled" ? continueStudyingResult.value : null);
+      setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your notes.";
@@ -685,6 +691,12 @@ export default function DashboardPage() {
               initialExamDate={profile.examDate}
               onDismiss={dismissLightweightProfilePrompt}
               onComplete={completeLightweightProfilePrompt}
+            />
+          ) : null}
+          {dashboardProfileType !== "TEACHER" && todayFocus?.type === "DUE_CONCEPTS_REVIEW" ? (
+            <TodayFocusCard
+              focus={todayFocus}
+              onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
             />
           ) : null}
           {dashboardProfileType === "STUDENT" || dashboardProfileType === "PROFESSIONAL" ? (

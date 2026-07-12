@@ -186,6 +186,7 @@ export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIV
 export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"
+  | "DUE_CONCEPTS_REVIEW"
   | "PRACTICE_WEAK_CONCEPT"
   | "REVIEW_PACK"
   | "STUDY_SUGGESTION";
@@ -217,6 +218,12 @@ export type TodayFocusResponse = {
   title: string;
   message: string;
   actionLabel: string;
+  concepts: Array<{
+    concept: string;
+    noteId: string | null;
+    noteTitle: string | null;
+  }>;
+  adaptivePracticeAvailable: boolean;
 };
 
 export type PostSessionNextStepResponse = {

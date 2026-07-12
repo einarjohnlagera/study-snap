@@ -67,6 +67,12 @@ For actual behavior and gating decisions:
 - use backend plan limits and feature flags
 - treat `GET /api/me/plan` as the frontend contract
 
+## Concept due and mastery signals
+
+Due and mastery status is visible to every plan tier, including Free. The concept-health response exposes the minimum `lastCorrectAt` value needed for the client to distinguish `Due`, `Mastered`, and `Not started`; it must not turn a due concept into a misleading not-started state for Free users.
+
+This is signal visibility only. It does not grant Adaptive Practice, consume or change any quota, or alter `Feature.ADAPTIVE_QUIZ` / weak-concept action checks. Detailed elapsed-time review copy, incorrect-answer history, and struggling-concept details remain available only on the existing paid timing path.
+
 ## Study Pack limit UX
 
 - remaining Study Packs come from backend usage calculations

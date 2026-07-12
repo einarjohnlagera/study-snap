@@ -9,6 +9,7 @@ import {
   getMe,
   getNote,
   getQuickReviewPerformanceSummary,
+  getTodayFocus,
   listNotes,
   listCollections,
   listPublicNotes,
@@ -53,6 +54,7 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   getQuickReviewPerformanceSummary: jest.fn(),
+  getTodayFocus: jest.fn(),
   listCollections: jest.fn(),
   listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
@@ -155,6 +157,7 @@ describe("DashboardPage profile variants", () => {
     (getDashboardOverview as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (getTodayFocus as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
@@ -179,6 +182,16 @@ describe("DashboardPage profile variants", () => {
       resumeState: "QUESTION_IN_PROGRESS",
     });
     (getDashboardOverview as jest.Mock).mockResolvedValue(overview);
+    (getTodayFocus as jest.Mock).mockResolvedValue({
+      type: "REVIEW_PACK",
+      studyPackId: "pack-1",
+      noteId: "note-1",
+      title: "Reinforce Biology Review",
+      message: "A quick review today can strengthen your understanding.",
+      actionLabel: "Start Quick Review",
+      concepts: [],
+      adaptivePracticeAvailable: false,
+    });
     (getGoalSummary as jest.Mock).mockResolvedValue(null);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });

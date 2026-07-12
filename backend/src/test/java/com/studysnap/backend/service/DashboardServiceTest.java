@@ -69,6 +69,8 @@ class DashboardServiceTest {
     @Mock
     private SubscriptionService subscriptionService;
     @Mock
+    private ConceptHealthService conceptHealthService;
+    @Mock
     private UserUsageService userUsageService;
     @Mock
     private BillingUsagePeriodService billingUsagePeriodService;
@@ -86,6 +88,7 @@ class DashboardServiceTest {
                 activityEventRepository,
                 subscriptionService,
                 featureGateService,
+                conceptHealthService,
                 userUsageService,
                 billingUsagePeriodService
         );
@@ -1005,6 +1008,44 @@ class DashboardServiceTest {
 
         assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
         assertThat(response.studyPackId()).isEqualTo(reviewedPackId.toString());
+    }
+
+    @Test
+    void getTodayFocus_prioritizesDueConceptsForFreePlanBeforeWeakConceptPractice() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Pharmacology Review");
+        studyPack.setNoteId(noteId);
+        studyPack.setKeyConcepts(List.of("Antibiotics", "Dosage"));
+        QuickReviewSessionEntity reviewedSession = buildCompletedSession(
+                userId,
+                studyPackId,
+                bigDecimal(65),
+                OffsetDateTime.now().minusMinutes(5)
+        );
+        reviewedSession.setSessionMetadata(Map.of("weakConcepts", List.of("Dosage")));
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(reviewedSession));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), any(), any()))
+                .thenReturn(Map.of(studyPackId, List.of("Antibiotics")));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.DUE_CONCEPTS_REVIEW);
+        assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
+        assertThat(response.noteId()).isEqualTo(noteId.toString());
+        assertThat(response.title()).isEqualTo("1 concept is due for review");
+        assertThat(response.adaptivePracticeAvailable()).isTrue();
+        assertThat(response.concepts()).singleElement().satisfies(concept -> {
+            assertThat(concept.concept()).isEqualTo("Antibiotics");
+            assertThat(concept.noteId()).isEqualTo(noteId.toString());
+            assertThat(concept.noteTitle()).isEqualTo("Pharmacology Review");
+        });
     }
 
     @Test
