@@ -216,6 +216,7 @@ export type UpgradeCtaContext =
   | "teacher-export-limit"
   | "teacher-quiz-question-count"
   | "teacher-exam-versions"
+  | "pass-renewal"
   | "general";
 
 export type UpgradeCtaOptions = {
@@ -310,6 +311,12 @@ export function getUpgradeCtas(
     };
   }
   if (currentPlan === "PLUS") {
+    if (context === "pass-renewal") {
+      return {
+        primary: { label: "Get another Plus pass", targetPlan: "PLUS" },
+        secondary: null,
+      };
+    }
     if (isTeacherUpgrade) {
       return {
         primary: { label: "Get more Study Packs & quiz generations with Pro", targetPlan: "PRO" },
@@ -354,6 +361,12 @@ export function getUpgradeCtas(
     }
     return {
       primary: { label: "Upgrade to Pro", targetPlan: "PRO" },
+      secondary: null,
+    };
+  }
+  if (context === "pass-renewal") {
+    return {
+      primary: { label: "Get another Pro pass", targetPlan: "PRO" },
       secondary: null,
     };
   }

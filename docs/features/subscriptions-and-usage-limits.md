@@ -113,6 +113,12 @@ Backend enforcement is mandatory even if the frontend disables or hides actions.
 - Xendit webhook confirmation is the only path that activates or extends paid access
 - success and failure pages are informational only
 
+## Pass expiry reminders
+
+The existing daily expiry email cadence uses a 7-day stage (6–8 days remaining) and a 1-day stage (24 hours remaining). Settings mirrors those same stages in-app using the already-loaded `premiumEndsAt` value; it does not introduce a backend trigger or client-side plan inference.
+
+Only active Plus and Pro passes with a future end time qualify. The renewal CTA starts the existing checkout flow for the current plan and preserves the one-time-pass model. Each stage is separately dismissible for that pass end time, so a dismissed 7-day notice does not hide the 1-day reminder.
+
 ## Pending checkout reuse
 
 Pending checkout reuse is allowed only when all of these still match:
