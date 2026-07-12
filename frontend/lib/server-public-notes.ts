@@ -28,6 +28,11 @@ async function fetchPublicNote(path: string): Promise<PublicNoteDetailResponse |
 }
 
 async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
+  const payload = await fetchPublicNoteList(path);
+  return payload?.items ?? [];
+}
+
+async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListResponse | null> {
   let response: Response;
   try {
     response = await fetch(buildApiUrl(path), {
@@ -36,14 +41,17 @@ async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
     });
   } catch {
     // Backend unreachable at build time — ISR will populate on first live request
-    return [];
+    return null;
   }
 
   if (!response.ok) {
-    return [];
+    return null;
   }
-  const payload = (await response.json()) as ServerPublicNoteListResponse;
-  return payload.items ?? [];
+  try {
+    return (await response.json()) as ServerPublicNoteListResponse;
+  } catch {
+    return null;
+  }
 }
 
 export async function getServerPublicNoteById(noteId: string) {
@@ -56,6 +64,12 @@ export async function getServerPublicNoteBySeoPath(subject: string, slug: string
 
 export async function getServerPublicNotes() {
   return fetchPublicNotes("/notes/public");
+}
+
+export async function getServerPublicNoteCount(): Promise<number | null> {
+  const payload = await fetchPublicNoteList("/notes/public?size=1");
+  const total = payload?.total;
+  return typeof total === "number" && Number.isInteger(total) && total >= 0 ? total : null;
 }
 
 export type PublicSubjectEntry = {

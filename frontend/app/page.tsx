@@ -21,6 +21,7 @@ import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SITE_NAME } from "@/lib/site-metadata";
+import { getServerPublicNoteCount } from "@/lib/server-public-notes";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
@@ -197,6 +198,25 @@ function HeroSection() {
           priority
         />
       </div>
+    </section>
+  );
+}
+
+function SocialProofStrip({ publicNoteCount }: Readonly<{ publicNoteCount: number | null }>) {
+  if (publicNoteCount === null) {
+    return null;
+  }
+
+  const formattedCount = new Intl.NumberFormat("en-US").format(publicNoteCount);
+  return (
+    <section
+      aria-label="Public library activity"
+      className="rounded-2xl border border-sky-500/15 bg-sky-500/6 px-4 py-3 text-center dark:bg-sky-500/10 sm:px-6"
+    >
+      <p className="text-sm font-medium text-foreground/80">
+        <span className="font-semibold text-sky-700 dark:text-sky-300">{formattedCount} public notes</span>{" "}
+        ready to explore for focused review.
+      </p>
     </section>
   );
 }
@@ -427,7 +447,9 @@ function FinalCtaSection() {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const publicNoteCount = await getServerPublicNoteCount();
+
   return (
     <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 pb-28 sm:px-6 sm:py-12 sm:pb-12">
       <StructuredDataScript
@@ -436,6 +458,7 @@ export default function Home() {
       />
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
+      <SocialProofStrip publicNoteCount={publicNoteCount} />
       <ModeShowcaseSection />
       <ProfileLearningSection />
       <ValueSummarySection />

@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import Home, { metadata } from "./page";
+import { getServerPublicNoteCount } from "@/lib/server-public-notes";
+
+jest.mock("@/lib/server-public-notes", () => ({
+  getServerPublicNoteCount: jest.fn(),
+}));
 
 jest.mock("@/components/billing/pricing-plans-section", () => ({
   SimplePricingSection: () => (
@@ -32,8 +37,12 @@ jest.mock("@/components/analytics/tracked-link", () => ({
 }));
 
 describe("LandingPage", () => {
-  it("renders the redesigned conversion-focused landing flow", () => {
-    const { container } = render(<Home />);
+  beforeEach(() => {
+    (getServerPublicNoteCount as jest.Mock).mockResolvedValue(128);
+  });
+
+  it("renders the redesigned conversion-focused landing flow", async () => {
+    const { container } = render(await Home());
 
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
@@ -52,6 +61,8 @@ describe("LandingPage", () => {
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
+    expect(screen.getByText("128 public notes")).toBeInTheDocument();
+    expect(screen.getByText("ready to explore for focused review.")).toBeInTheDocument();
 
     expect(screen.getByText("Who It's For")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Built for your study workflow" })).toBeInTheDocument();
@@ -163,5 +174,13 @@ describe("LandingPage", () => {
         images: ["https://www.notelib.app/og-image.png"],
       }),
     });
+  });
+
+  it("omits social proof when the live public-note total is unavailable", async () => {
+    (getServerPublicNoteCount as jest.Mock).mockResolvedValue(null);
+
+    render(await Home());
+
+    expect(screen.queryByLabelText("Public library activity")).not.toBeInTheDocument();
   });
 });
