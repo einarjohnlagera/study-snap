@@ -604,6 +604,7 @@ export default function DashboardPage() {
               planType={usageSummary?.plan ?? "FREE"}
               remainingCredits={studyPacksRemaining}
               resetDateLabel={usageResetDateLabel}
+              analyticsSource="dashboard_study_pack_near_limit"
             />
           ) : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}

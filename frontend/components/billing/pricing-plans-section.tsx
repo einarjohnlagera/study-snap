@@ -149,6 +149,7 @@ function PlanCard({
           billingCycle={examCycleLabel ? "EXAM_CYCLE" : "MONTHLY"}
           className="w-full"
         />
+        <p className="text-center text-xs text-foreground/60">{PASS_NO_AUTO_CHARGE_FOOTER}</p>
         {examCycleLabel || yearlyLabel ? (
           <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-foreground/60">
             <span>Also available:</span>

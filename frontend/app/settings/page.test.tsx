@@ -10,12 +10,14 @@ import {
   getMyPlan,
   getMe,
   requestEmailVerification,
+  trackAnalyticsEvent,
   updateEngagementMode,
   updateEmailPreferences,
 } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { clearAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_SECTION_ID } from "@/lib/plans";
+import { PASS_NO_AUTO_CHARGE_FOOTER } from "@/src/config/plans";
 
 const routerMock = {
   push: jest.fn(),
@@ -221,6 +223,7 @@ describe("Settings page cancellation flow", () => {
     (clearAuthUser as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
     (updateEmailPreferences as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(proProfile);
     (getMyPlan as jest.Mock).mockResolvedValue(proUsageSummary);
@@ -277,6 +280,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
+    expect(await screen.findAllByText(PASS_NO_AUTO_CHARGE_FOOTER)).toHaveLength(2);
     fireEvent.click(await screen.findByRole("button", { name: "Get Plus" }));
 
     await waitFor(() => {
@@ -286,6 +290,15 @@ describe("Settings page cancellation flow", () => {
         returnUrl: "/settings",
       });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "UPGRADE_CLICKED",
+        metadata: {
+          source: "settings_plan_billing",
+          feature: "plus_checkout_monthly",
+          path: "/settings",
+          target: "xendit_checkout",
+        },
+      });
     });
   });
 

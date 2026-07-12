@@ -1,13 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { PricingPlansSection } from "./pricing-plans-section";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
+import { PASS_NO_AUTO_CHARGE_FOOTER } from "@/src/config/plans";
 
 jest.mock("@/hooks/use-billing-pricing", () => ({
   useBillingPricing: jest.fn(),
 }));
 
 jest.mock("@/components/billing/premium-upgrade-button", () => ({
-  PremiumUpgradeButton: ({ label }: { label: string }) => <button type="button">{label}</button>,
+  PremiumUpgradeButton: ({ label, source }: { label: string; source: string }) => (
+    <button type="button" data-source={source}>{label}</button>
+  ),
 }));
 
 const useBillingPricingMock = useBillingPricing as jest.Mock;
@@ -41,6 +44,11 @@ describe("PricingPlansSection", () => {
 
     expect(screen.getByText("₱599 / 3 months")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get Pro — ₱599 / 3 months" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get Plus" })).toHaveAttribute("data-source", "pricing_plans_section_plus_monthly");
+    expect(screen.getByRole("button", { name: "Get Pro — ₱599 / 3 months" })).toHaveAttribute("data-source", "pricing_plans_section_pro_exam_cycle");
+    expect(screen.getByRole("button", { name: /^1 month/ })).toHaveAttribute("data-source", "pricing_plans_section_pro_monthly");
+    expect(screen.getByRole("button", { name: /^1 year/ })).toHaveAttribute("data-source", "pricing_plans_section_pro_yearly");
+    expect(screen.getAllByText(PASS_NO_AUTO_CHARGE_FOOTER)).toHaveLength(2);
   });
 
   it("does not render the exam-cycle checkout option for Plus or unavailable Pro pricing", () => {

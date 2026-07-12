@@ -28,7 +28,7 @@ import {
 } from "@/lib/paywall-upgrade-context";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
-import { getUpgradeCtas, PLANS, type AppPlanType, type UpgradeCtaContext } from "@/src/config/plans";
+import { getUpgradeCtas, PASS_NO_AUTO_CHARGE_FOOTER, PLANS, type AppPlanType, type UpgradeCtaContext } from "@/src/config/plans";
 
 type PaywallModalProps = {
   isOpen: boolean;
@@ -47,7 +47,6 @@ const PLAN_CARD_SUBTEXT = {
   PRO: "Train on weak areas until you master them",
 } as const;
 const PAYWALL_REASSURANCE = "Access activates immediately after payment";
-const PAYWALL_RENEWAL_NOTE = "No automatic charges. You control renewals.";
 const PRO_ONLY_PAYWALL_CONTEXT_TYPES = new Set<PaywallContext["type"]>([
   "BOARD_EXAM_MODE_LOCKED",
   "LONG_EXAM_MODE_LOCKED",
@@ -408,7 +407,7 @@ export function PaywallModal({
             {!isProUser ? (
               <div className="space-y-1 text-center text-xs text-foreground/60 sm:text-right">
                 <p>{PAYWALL_REASSURANCE}</p>
-                <p>{PAYWALL_RENEWAL_NOTE}</p>
+                <p>{PASS_NO_AUTO_CHARGE_FOOTER}</p>
               </div>
             ) : null}
           </div>

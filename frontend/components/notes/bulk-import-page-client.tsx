@@ -318,6 +318,7 @@ export function BulkImportPageClient() {
             resetDateLabel={ocrQuota.resetLabel}
             creditLabel="image scan"
             ctaContext="general"
+            analyticsSource="bulk_import_ocr_near_limit"
             onUpgrade={() => router.push("/settings?section=plans")}
           />
         ) : (

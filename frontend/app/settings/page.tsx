@@ -50,7 +50,7 @@ import {
   getUsageProgressPercent,
   isPaidPlanType,
 } from "@/lib/plans";
-import { PLANS, TEACHER_PLUS_EXPORT_CALLOUT, getPaidPlanCtaLabel } from "@/src/config/plans";
+import { PASS_NO_AUTO_CHARGE_FOOTER, PLANS, TEACHER_PLUS_EXPORT_CALLOUT, getPaidPlanCtaLabel } from "@/src/config/plans";
 
 function SettingsLoading() {
   return (
@@ -1074,15 +1074,18 @@ export default function SettingsPage() {
                   <p className="mb-5 text-xs text-foreground/55">{plusPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan === "FREE" ? (
-                      <ResponsiveActionButton
-                        type="button"
-                        className="w-full"
-                        onClick={() => void handleStartCheckout("PLUS", effectivePlusCycle)}
-                        loading={startingCheckoutKey === `PLUS-${effectivePlusCycle}`}
-                        loadingText="Redirecting..."
-                        action="studyPack"
-                        label={getPaidPlanCtaLabel("PLUS")}
-                      />
+                      <>
+                        <ResponsiveActionButton
+                          type="button"
+                          className="w-full"
+                          onClick={() => void handleStartCheckout("PLUS", effectivePlusCycle)}
+                          loading={startingCheckoutKey === `PLUS-${effectivePlusCycle}`}
+                          loadingText="Redirecting..."
+                          action="studyPack"
+                          label={getPaidPlanCtaLabel("PLUS")}
+                        />
+                        <p className="text-center text-xs text-foreground/60">{PASS_NO_AUTO_CHARGE_FOOTER}</p>
+                      </>
                     ) : currentPlan === "PLUS" ? (
                       <>
                         <Button variant="outline" className="w-full" disabled>Current Plan</Button>
@@ -1124,15 +1127,18 @@ export default function SettingsPage() {
                   <p className="mb-5 text-xs text-foreground/55">{proPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan !== "PRO" ? (
-                      <ResponsiveActionButton
-                        type="button"
-                        className="w-full"
-                        onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
-                        loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
-                        loadingText="Redirecting..."
-                        action="studyPack"
-                        label={proCtaLabel}
-                      />
+                      <>
+                        <ResponsiveActionButton
+                          type="button"
+                          className="w-full"
+                          onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
+                          loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
+                          loadingText="Redirecting..."
+                          action="studyPack"
+                          label={proCtaLabel}
+                        />
+                        <p className="text-center text-xs text-foreground/60">{PASS_NO_AUTO_CHARGE_FOOTER}</p>
+                      </>
                     ) : (
                       <>
                         <Button variant="outline" className="w-full" disabled>Current Plan</Button>
