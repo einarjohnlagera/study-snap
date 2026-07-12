@@ -236,6 +236,30 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 1 notes");
   });
 
+  it("shows top course/program chips from real note counts and applies the canonical filter URL", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "pnle-1", courseProgram: "PNLE" }),
+      createPublicNote({ id: "pnle-2", courseProgram: "PNLE" }),
+      createPublicNote({ id: "pnle-3", courseProgram: "PNLE" }),
+      createPublicNote({ id: "let-1", courseProgram: "Licensure Examination for Teachers" }),
+      createPublicNote({ id: "let-2", courseProgram: "Licensure Examination for Teachers" }),
+      createPublicNote({ id: "engineering-1", courseProgram: "Engineering" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByRole("button", { name: "PNLE" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Licensure Examination for Teachers" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Engineering" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Licensure Examination for Teachers" }));
+
+    expect(replaceMock).toHaveBeenCalledWith(
+      "/public/library?courseProgram=licensure-examination-for-teachers",
+      { scroll: false },
+    );
+  });
+
   it("copies the current filtered public library URL from the share action", async () => {
     const writeTextMock = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(globalThis.navigator, "clipboard", {
