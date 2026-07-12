@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
@@ -12,7 +11,6 @@ import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { getMe, listCollections, listPublicStudyPlans, type NoteCollectionSummary } from "@/lib/api";
-import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
 
 type LoadState = "loading" | "ready" | "error";
@@ -37,8 +35,9 @@ function PlanSkeletonGrid() {
 }
 
 export function PublishedPlansPageClient() {
-  const router = useRouter();
-  const profileType = useMemo(() => getAuthUser()?.profileType ?? null, []);
+  const authUser = useMemo(() => getAuthUser(), []);
+  const profileType = authUser?.profileType ?? null;
+  const canAdopt = authUser !== null;
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
   const [recommendedState, setRecommendedState] = useState<LoadState>("loading");
   const [browseAllState, setBrowseAllState] = useState<LoadState>("loading");
@@ -67,9 +66,14 @@ export function PublishedPlansPageClient() {
     setRecommendedError(null);
     setBrowseAllError(null);
 
-    const personalCollectionsPromise = listCollections().catch(() => []);
+    const personalCollectionsPromise = canAdopt ? listCollections().catch(() => []) : Promise.resolve([]);
 
     const loadRecommended = async () => {
+      if (!canAdopt) {
+        setPlans([]);
+        setRecommendedState("ready");
+        return;
+      }
       try {
         const me = await getMe();
         const normalized = normalizeCourseProgram(me.courseProgram);
@@ -106,18 +110,15 @@ export function PublishedPlansPageClient() {
     };
 
     await Promise.allSettled([loadRecommended(), loadBrowseAll()]);
-  }, [joinAdoptedCollections, sortPlansByTitle]);
+  }, [canAdopt, joinAdoptedCollections, sortPlansByTitle]);
 
   useEffect(() => {
-    if (!requireAuthenticatedOnboardedUser(router)) {
-      return;
-    }
     void Promise.resolve().then(loadPlans);
-  }, [loadPlans, router]);
+  }, [loadPlans]);
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <BackLink href="/dashboard" label="Dashboard" />
+      <BackLink href={canAdopt ? "/dashboard" : "/public/library"} label={canAdopt ? "Dashboard" : "Public Library"} />
 
       <PageHeader
         eyebrow="DISCOVER"
@@ -125,7 +126,9 @@ export function PublishedPlansPageClient() {
         description={
           courseProgram
             ? `Published ${labels.plural.toLowerCase()} for ${courseProgram}. Adopt any of them to start studying with a curated set of notes.`
-            : `Published ${labels.plural.toLowerCase()} matched to your course or program.`
+            : canAdopt
+              ? `Published ${labels.plural.toLowerCase()} matched to your course or program.`
+              : `Browse official ${labels.plural.toLowerCase()} before you add one to your library.`
         }
       />
 
@@ -141,7 +144,7 @@ export function PublishedPlansPageClient() {
         </Card>
       ) : null}
 
-      {recommendedState === "ready" && !courseProgram ? (
+      {canAdopt && recommendedState === "ready" && !courseProgram ? (
         <Card className="space-y-4 p-6 text-center">
           <CardTitle>Set your course or program first</CardTitle>
           <CardDescription>
@@ -180,7 +183,13 @@ export function PublishedPlansPageClient() {
       {recommendedState === "ready" && courseProgram && plans.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {plans.map(({ plan, adoptedCollection }) => (
-            <PublicStudyPlanCard key={plan.id} plan={plan} adoptedCollection={adoptedCollection} profileType={profileType} />
+            <PublicStudyPlanCard
+              key={plan.id}
+              plan={plan}
+              adoptedCollection={adoptedCollection}
+              profileType={profileType}
+              canAdopt={canAdopt}
+            />
           ))}
         </div>
       ) : null}
@@ -212,7 +221,13 @@ export function PublishedPlansPageClient() {
         {browseAllState === "ready" && browseAllPlans.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {browseAllPlans.map(({ plan, adoptedCollection }) => (
-              <PublicStudyPlanCard key={plan.id} plan={plan} adoptedCollection={adoptedCollection} profileType={profileType} />
+              <PublicStudyPlanCard
+                key={plan.id}
+                plan={plan}
+                adoptedCollection={adoptedCollection}
+                profileType={profileType}
+                canAdopt={canAdopt}
+              />
             ))}
           </div>
         ) : null}

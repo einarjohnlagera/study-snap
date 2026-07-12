@@ -168,6 +168,23 @@ describe("AppShell", () => {
     });
   });
 
+  it("keeps published-plan browsing public for visitors without an account", async () => {
+    currentPathname = "/collections/published";
+    currentAuthUser = null;
+
+    render(
+      <AppShell>
+        <div>Published plans</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByText("Published plans")).toBeInTheDocument();
+    expect(screen.getByText("Public Navbar")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(routerMock.replace).not.toHaveBeenCalled();
+    });
+  });
+
   it("keeps copied-note routes available for pending lightweight profile completion", async () => {
     currentPathname = "/notes/copied-note-1/quick-review";
     currentAuthUser = {
