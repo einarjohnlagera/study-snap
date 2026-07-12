@@ -8,13 +8,13 @@ Theme: ship the highest-confidence findings from a 7-session conversion/retentio
 
 ### Planned Scope
 
-- **Landing hero + cross-linking pass (frontend).** Fix the hero headline/SEO-title mismatch and the Board Exam Mode badge/screenshot mismatch; add cross-links between Target Users cards, Learn categories, and Exam Hub pages.
 - **Pricing trust-copy placement + event instrumentation (frontend).** Move the no-auto-charge reassurance CTA-adjacent instead of footer-only; instrument every upgrade surface with source-tagged view/click events.
 
 Anti-drift: no new quota/gating logic for any quiz mode or plan tier; the separate `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence (flagged by the same audit) is tracked separately and not addressed in this release; no reordering of Companion sections or other locked v0.41–v0.43 Coach/Companion decisions; "sell outcomes, not AI" copy rule applies to every rewritten string in this release; taxonomy fields stay combobox-only.
 
 ### Shipped
 
+- **Landing hero, audience links, and Exam Hub conversion path (frontend).** Aligned the hero and canonical metadata with NoteLib's notes-library-to-quizzes promise; clarified the nearby Board Exam Mode callout as a timed full-exam simulation without misrepresenting the Study Pack screenshot. Target User panels now link to their matching Learn categories (with Board Exam also linking to Exam Hubs), and zero-note Exam Hubs preserve their established signup intent path beside the Public Library fallback.
 - **ConceptHealth tracking for Quick Review (backend).** Completed Quick Review sessions now derive fully-correct and missed concepts from the base Study Pack quiz plus persisted selections, then write the same per-user, per-Study-Pack `concept_health` records used by Challenge Quiz and Adaptive Practice. Completion remains state-guarded and transactional, so a duplicate completion does not write twice and a ConceptHealth failure rolls back the completed session.
 - **Public note and onboarding conversion hooks (frontend).** Quick Check completion now uses an outcome-framed prompt that reuses the established copy-intent flow without creating anonymous progress; ready public notes explain that their visible study tools came from the source note. Onboarding Step 5 now names the learner's topic when available, sets a return expectation, makes `Open your Study Pack` the clear primary action, and keeps Dashboard as a quiet secondary path.
 - **Public Library Recommended ranking and Official-plan bridge (frontend).** Filter mode now defaults to the existing decay-adjusted discovery score when no sort is specified, while explicit Newest, copies, views, and title sorts retain canonical URLs. A Course / Program filter now silently checks the existing public-plan list and links to Official Study Plans only when a matching plan exists.

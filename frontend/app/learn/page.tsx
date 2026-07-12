@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
+import { HashScrollListener } from "@/components/navigation/hash-scroll-listener";
 import { PublicFooter } from "@/components/public/public-footer";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { buildPageMetadata } from "@/lib/site-metadata";
 import {
   getLearnGuidesByCategory,
+  LEARN_CATEGORY_ANCHORS,
   learnGuideCategories,
 } from "@/lib/learn-guides";
 
@@ -19,6 +21,7 @@ export const metadata: Metadata = buildPageMetadata({
 export default function LearnPage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 sm:py-12">
+      <HashScrollListener allowedIds={Object.values(LEARN_CATEGORY_ANCHORS)} />
       <section className="space-y-4 rounded-[2rem] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_35%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.92))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.2),_transparent_35%),linear-gradient(135deg,_rgba(2,6,23,0.94),_rgba(15,23,42,0.94))] sm:p-8">
         <BrandFullLogo width={208} height={44} priority />
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
@@ -36,7 +39,7 @@ export default function LearnPage() {
         const guides = getLearnGuidesByCategory(category.key);
 
         return (
-          <section key={category.key} className="space-y-5">
+          <section id={LEARN_CATEGORY_ANCHORS[category.key]} key={category.key} className="space-y-5">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
                 {category.title}
