@@ -20,6 +20,7 @@ import {
   clearCopyIntentCookie,
   getCopyIntentCookie,
 } from "@/lib/public-note-copy";
+import { setPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { ToastMessage } from "@/components/ui/toast-message";
 
 function VerifyEmailPageContent() {
@@ -61,6 +62,7 @@ function VerifyEmailPageContent() {
     try {
       const copied = await copyNoteOnSignup(copyIntentNoteId);
       clearCopyIntentCookie();
+      setPendingLightweightProfileCompletion(verifiedAuthUser.id);
       void trackAnalyticsEvent({
         eventType: "COPY_ON_SIGNUP_COMPLETED",
         entityId: copied.noteId,

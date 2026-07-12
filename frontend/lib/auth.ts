@@ -4,6 +4,7 @@ import type { MePlanResponse } from "./me-plan";
 import {
   clearDeferredOnboardingCompletion,
   hasDeferredOnboardingCompletion,
+  hasPendingLightweightProfileCompletion,
 } from "./onboarding-v2";
 import type { ThemePreference } from "./theme-preferences";
 
@@ -179,14 +180,16 @@ export function needsOnboarding(authUser: AuthUser | null): boolean {
   if (authUser.onboardingCompletedAt === undefined) {
     return false;
   }
-  if (hasDeferredOnboardingCompletion(authUser.id)) {
+  if (hasDeferredOnboardingCompletion(authUser.id) || hasPendingLightweightProfileCompletion(authUser.id)) {
     return false;
   }
   return authUser.onboardingCompletedAt === null;
 }
 
 export function needsProfileType(authUser: AuthUser | null): boolean {
-  return authUser !== null && authUser.profileType == null;
+  return authUser !== null
+    && authUser.profileType == null
+    && !hasPendingLightweightProfileCompletion(authUser.id);
 }
 
 export function resolveAuthenticatedHome(authUser: AuthUser | null): string {

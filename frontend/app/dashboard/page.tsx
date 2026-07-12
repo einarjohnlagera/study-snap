@@ -32,6 +32,7 @@ import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { ContinueSpotlight } from "./continue-spotlight";
 import { DashboardPersonalizationPrompt } from "./dashboard-personalization-prompt";
+import { LightweightProfileCompletionPrompt } from "@/components/dashboard/lightweight-profile-completion-prompt";
 import { DashboardHero } from "./dashboard-hero";
 import { DashboardMonthlyUsageCard } from "./dashboard-monthly-usage-card";
 import { DashboardFocusAreasCard } from "./dashboard-focus-areas-card";
@@ -60,6 +61,14 @@ import {
 } from "@/lib/dashboard-personalization-prompt";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import {
+  clearPendingLightweightProfileCompletion,
+  hasPendingLightweightProfileCompletion,
+} from "@/lib/onboarding-v2";
+import {
+  dismissLightweightProfileCompletionPrompt,
+  hasDismissedLightweightProfileCompletionPrompt,
+} from "@/lib/lightweight-profile-completion-prompt";
 
 type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL";
 type TeacherGeneratedQuizSummary = {
@@ -309,6 +318,7 @@ export default function DashboardPage() {
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
   const [showFirstStudyWelcomeModal, setShowFirstStudyWelcomeModal] = useState(false);
   const [showPersonalizationPrompt, setShowPersonalizationPrompt] = useState(false);
+  const [showLightweightProfileCompletionPrompt, setShowLightweightProfileCompletionPrompt] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
 
   const loadDashboard = useCallback(async () => {
@@ -463,6 +473,16 @@ export default function DashboardPage() {
     setShowPersonalizationPrompt(!hasDismissedDashboardPersonalizationPrompt(authUser.id));
   }, [profile?.onboardingCompletedAt, profile?.learnerLevel]);
 
+  useEffect(() => {
+    const authUser = getAuthUser();
+    const profileIsIncomplete = !profile?.profileType || !profile.learnerLevel || !profile.courseProgram?.trim();
+    if (!authUser?.id || !profileIsIncomplete || !hasPendingLightweightProfileCompletion(authUser.id)) {
+      setShowLightweightProfileCompletionPrompt(false);
+      return;
+    }
+    setShowLightweightProfileCompletionPrompt(!hasDismissedLightweightProfileCompletionPrompt(authUser.id));
+  }, [profile?.courseProgram, profile?.learnerLevel, profile?.profileType]);
+
   const dismissWelcomeMessage = useCallback(() => {
     const authUser = getAuthUser();
     if (authUser) {
@@ -478,6 +498,31 @@ export default function DashboardPage() {
       dismissDashboardPersonalizationPrompt(authUser.id);
     }
     setShowPersonalizationPrompt(false);
+  }, []);
+
+  const dismissLightweightProfilePrompt = useCallback(() => {
+    const authUser = getAuthUser();
+    if (authUser?.id) {
+      dismissLightweightProfileCompletionPrompt(authUser.id);
+    }
+    setShowLightweightProfileCompletionPrompt(false);
+  }, []);
+
+  const completeLightweightProfilePrompt = useCallback((me: MeResponse) => {
+    const authUser = getAuthUser();
+    if (authUser) {
+      clearPendingLightweightProfileCompletion(authUser.id);
+      setAuthUser({
+        ...authUser,
+        displayName: me.displayName,
+        profileType: me.profileType,
+        emailVerifiedAt: me.emailVerifiedAt,
+        onboardingCompletedAt: me.onboardingCompletedAt,
+        productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+      });
+    }
+    setProfile(me);
+    setShowLightweightProfileCompletionPrompt(false);
   }, []);
 
   const handleOpenPreferences = useCallback(() => {
@@ -631,6 +676,16 @@ export default function DashboardPage() {
                 <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={dismissWelcomeMessage} action="back" label="Dismiss" />
               </div>
             </Card>
+          ) : null}
+          {showLightweightProfileCompletionPrompt && profile ? (
+            <LightweightProfileCompletionPrompt
+              initialProfileType={profile.profileType}
+              initialLearnerLevel={profile.learnerLevel}
+              initialCourseProgram={profile.courseProgram}
+              initialExamDate={profile.examDate}
+              onDismiss={dismissLightweightProfilePrompt}
+              onComplete={completeLightweightProfilePrompt}
+            />
           ) : null}
           {dashboardProfileType === "STUDENT" || dashboardProfileType === "PROFESSIONAL" ? (
             <>

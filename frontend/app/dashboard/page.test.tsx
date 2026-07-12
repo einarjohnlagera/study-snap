@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import DashboardPage from "./page";
 import {
   completeProductOnboarding,
+  completeOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getGoalSummary,
@@ -12,9 +13,15 @@ import {
   listCollections,
   listPublicNotes,
   listPublicStudyPlans,
+  updateLearningProfileContext,
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { setAuthUser } from "@/lib/auth";
+import {
+  clearPendingLightweightProfileCompletion,
+  hasPendingLightweightProfileCompletion,
+  setPendingLightweightProfileCompletion,
+} from "@/lib/onboarding-v2";
 
 const routerMock = {
   push: jest.fn(),
@@ -37,6 +44,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
+  completeOnboarding: jest.fn(),
   createPremiumCheckoutSession: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
@@ -51,6 +59,7 @@ jest.mock("@/lib/api", () => ({
   listPublicStudyPlans: jest.fn(),
   setStudyGoal: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
+  updateLearningProfileContext: jest.fn(),
 }));
 
 jest.mock("@/hooks/use-billing-usage-summary", () => ({
@@ -150,8 +159,11 @@ describe("DashboardPage profile variants", () => {
     (listPublicStudyPlans as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
+    (completeOnboarding as jest.Mock).mockReset();
+    (updateLearningProfileContext as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
+    clearPendingLightweightProfileCompletion("user-1");
 
     (listNotes as jest.Mock).mockResolvedValue(notes);
     (getContinueStudyingRecommendation as jest.Mock).mockResolvedValue({
@@ -233,6 +245,57 @@ describe("DashboardPage profile variants", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adjust level" }));
 
     expect(routerMock.push).toHaveBeenCalledWith("/profile?from=dashboard#learning-profile");
+  });
+
+  it("shows a non-blocking profile completion prompt for pending copy-on-signup users", async () => {
+    setPendingLightweightProfileCompletion("user-1");
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: null,
+      studyPackCount: 1,
+      profileType: null,
+      learnerLevel: null,
+      courseProgram: null,
+      examDate: null,
+      onboardingCompletedAt: null,
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Finish setting up your study profile")).toBeInTheDocument();
+    expect(screen.getByText("Continue Studying")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss profile completion prompt" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Finish setting up your study profile")).not.toBeInTheDocument();
+    });
+    expect(hasPendingLightweightProfileCompletion("user-1")).toBe(true);
+  });
+
+  it("does not show the lightweight prompt once copy-on-signup profile fields are complete", async () => {
+    setPendingLightweightProfileCompletion("user-1");
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: null,
+      studyPackCount: 1,
+      profileType: "STUDENT",
+      learnerLevel: "COLLEGE",
+      courseProgram: "Nursing",
+      examDate: null,
+      onboardingCompletedAt: "2026-03-20T00:05:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+
+    render(<DashboardPage />);
+
+    await screen.findByText("Continue Studying");
+    expect(screen.queryByText("Finish setting up your study profile")).not.toBeInTheDocument();
   });
 
   it("persists dismissal of the personalization prompt per user", async () => {
