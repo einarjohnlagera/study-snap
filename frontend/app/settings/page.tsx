@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
+import { PassExpiryNotice } from "@/components/billing/pass-expiry-notice";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
@@ -898,6 +899,18 @@ export default function SettingsPage() {
             }`}
           >
             <h2 className="text-lg font-semibold sm:text-xl">Plan &amp; Billing</h2>
+            {profile ? (
+              <PassExpiryNotice
+                userId={profile.id}
+                planType={currentPlan}
+                premiumEndsAt={profile.subscription.premiumEndsAt}
+                onRenew={(planType) => void handleStartCheckout(
+                  planType,
+                  planType === "PRO" ? effectiveProCycle : effectivePlusCycle,
+                )}
+                renewalLoading={startingCheckoutKey !== null}
+              />
+            ) : null}
 
             {/* Monthly Usage */}
             <div className="space-y-2 rounded-md border border-border bg-background p-4">

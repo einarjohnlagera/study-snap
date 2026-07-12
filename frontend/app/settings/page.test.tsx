@@ -444,6 +444,25 @@ describe("Settings page cancellation flow", () => {
     expect(cycleCells.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("starts the existing current-plan checkout flow from the expiry notice", async () => {
+    const premiumEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    (getMe as jest.Mock).mockResolvedValue({
+      ...proProfile,
+      subscription: { ...proProfile.subscription, premiumEndsAt },
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Get another Pro pass" }));
+    await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
+        planType: "PRO",
+        billingCycle: "MONTHLY",
+        returnUrl: "/settings",
+      });
+    });
+  });
+
   it("shows exam-pass billing cycle wording for active exam-cycle access", async () => {
     (getBillingHistory as jest.Mock).mockResolvedValue({
       currentPlan: "PRO",
