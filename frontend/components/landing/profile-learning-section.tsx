@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   ArrowRight,
   BarChart3,
@@ -19,6 +20,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { ProductScreenshotFrame } from "@/components/public/product-screenshot-frame";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { buildLearnCategoryPath, type LearnGuideCategory } from "@/lib/learn-guides";
 import { cn } from "@/lib/utils";
 
 type ProfileKey = "students" | "exam-reviewers" | "teachers" | "professionals";
@@ -41,6 +43,9 @@ type ProfileLearningLoop = {
   tagline: string;
   description: string;
   icon: LucideIcon;
+  learnCategory: LearnGuideCategory;
+  learnLinkLabel: string;
+  examHubLinkLabel?: string;
   steps: LearningStep[];
   modeChips: ModeChip[];
   screenshot: {
@@ -57,6 +62,8 @@ const profileLearningLoops: ProfileLearningLoop[] = [
     tagline: "Create · Understand · Practice · Challenge · Improve",
     description: "Build a reusable notes library, then turn each note into summaries, quizzes, and review sessions that keep improving with you.",
     icon: GraduationCap,
+    learnCategory: "students",
+    learnLinkLabel: "See guides for students",
     steps: [
       { title: "Create", description: "write or paste notes", icon: FileText },
       { title: "Understand", description: "summaries + key concepts", icon: BookOpen },
@@ -82,6 +89,9 @@ const profileLearningLoops: ProfileLearningLoop[] = [
     tagline: "Create · Understand · Practice · Simulate · Improve",
     description: "Turn reviewer notes into structured practice for board, licensure, certification, and other high-stakes exam prep.",
     icon: ClipboardList,
+    learnCategory: "board-exams",
+    learnLinkLabel: "See guides for board exams",
+    examHubLinkLabel: "Explore Exam Hubs",
     steps: [
       { title: "Create", description: "reviewer notes", icon: FileText },
       { title: "Understand", description: "summaries + key concepts", icon: BookOpen },
@@ -107,6 +117,8 @@ const profileLearningLoops: ProfileLearningLoop[] = [
     tagline: "Create · Generate · Preview · Export · Share",
     description: "Move from lesson notes to classroom-ready quiz drafts, with the sharing flow previewed for this release.",
     icon: Library,
+    learnCategory: "teachers",
+    learnLinkLabel: "See guides for teachers",
     steps: [
       { title: "Create", description: "lesson note", icon: FileText },
       { title: "Generate", description: "quiz from notes", icon: Sparkles },
@@ -132,6 +144,8 @@ const profileLearningLoops: ProfileLearningLoop[] = [
     tagline: "Create · Understand · Practice · Critique · Report",
     description: "Practice domain and interview scenarios from your own notes, then use critique and reporting to sharpen readiness.",
     icon: Briefcase,
+    learnCategory: "professionals",
+    learnLinkLabel: "See guides for professionals",
     steps: [
       { title: "Create", description: "domain notes", icon: FileText },
       { title: "Understand", description: "summaries", icon: BookOpen },
@@ -227,6 +241,24 @@ export function ProfileLearningSection() {
                     <span className="text-[10px] font-bold uppercase tracking-wide">{chip.tierLabel}</span>
                   </span>
                 ))}
+              </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium">
+                <Link
+                  href={buildLearnCategoryPath(selectedProfile.learnCategory)}
+                  className="inline-flex items-center gap-1.5 text-sky-700 transition hover:text-sky-800 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
+                >
+                  {selectedProfile.learnLinkLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                {selectedProfile.examHubLinkLabel ? (
+                  <Link
+                    href="/exam"
+                    className="inline-flex items-center gap-1.5 text-sky-700 transition hover:text-sky-800 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
+                  >
+                    {selectedProfile.examHubLinkLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ) : null}
               </div>
             </div>
 

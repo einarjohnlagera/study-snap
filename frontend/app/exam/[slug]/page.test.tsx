@@ -113,13 +113,20 @@ describe("ExamHubPage", () => {
     expect(getServerPublicNotesByCoursePrograms).not.toHaveBeenCalled();
   });
 
-  it("renders the empty state when no public notes match", async () => {
+  it("renders the empty state with an intent-preserving signup CTA when no public notes match", async () => {
     (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue([]);
 
     render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
 
-    expect(screen.getByText("No Architect Licensure Examination (ALE) notes have been shared yet. Check back soon.")).toBeInTheDocument();
+    expect(screen.getByText("No Architect Licensure Examination (ALE) notes have been shared yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse the Public Library" })).toHaveAttribute("href", "/public/library");
+    const emptyStateCta = screen.getAllByRole("link", { name: "Start preparing for the ALE" })[1];
+    expect(emptyStateCta).toHaveAttribute("href", "/auth?mode=signup&intent=exam&exam=ale");
+
+    emptyStateCta.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(emptyStateCta);
+
+    expect(document.cookie).toContain("notelib-exam-intent=ale");
   });
 
   it("suppresses empty discovery section headers for small note sets", async () => {

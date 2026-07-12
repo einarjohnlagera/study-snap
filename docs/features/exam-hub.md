@@ -49,6 +49,7 @@ Anonymous CTA:
 - Label: `Start preparing for the {short exam name}`.
 - Destination: `/auth?mode=signup&intent=exam&exam={slug}`.
 - The auth page persists the exam slug in the short-lived `notelib-exam-intent` cookie so Track 2 can consume it later.
+- The same CTA appears in a zero-note hub state beside the Public Library link. It remains a normal signup link if browser cookie persistence is unavailable.
 
 Authenticated CTA:
 
@@ -172,7 +173,7 @@ Each exam hub is server-rendered with:
 - CollectionPage structured data.
 - Featured, popular, and recent discovery sections that suppress empty headers.
 
-Zero-note exam states should show: `No {Exam Name} notes have been shared yet. Check back soon.` with a link to the main Public Library.
+Zero-note exam states should honestly say: `No {Exam Name} notes have been shared yet.` They must offer the existing intent-preserving `Start preparing for the {short exam name}` signup CTA as the primary path, alongside a secondary link to the main Public Library.
 
 ## Wave 2 Candidates
 

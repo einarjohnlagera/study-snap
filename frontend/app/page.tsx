@@ -24,8 +24,8 @@ import { SITE_NAME } from "@/lib/site-metadata";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
-  "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.";
-const landingPageTitle = "NoteLib - Turn anything into a complete study flow";
+  "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.";
+const landingPageTitle = "NoteLib — Build your notes library and turn notes into quizzes";
 const landingPageUrl = "https://www.notelib.app";
 const landingPageOgImage = "https://www.notelib.app/og-image.png";
 
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
         url: landingPageOgImage,
         width: 1200,
         height: 630,
-        alt: "Turn anything into a complete study flow with NoteLib.",
+        alt: "Build your notes library. Turn your notes into summaries and quizzes.",
       },
     ],
   },
@@ -153,16 +153,17 @@ function HeroSection() {
             <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-background/85 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
               5 study modes
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Pro: Long Exam · Board Exam · Interview Practice
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              <span>Board Exam Mode · Pro</span>
+              <span className="normal-case tracking-normal">— timed full-exam simulation.</span>
             </span>
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Your notes become your study system.
+              Build your notes library and turn notes into quizzes.
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Quizzes, exams, and interview practice — generated from notes you write, paste, or copy. Built around how you actually study.
+              Write, paste, or generate notes — then turn them into summaries, key concepts, quizzes, and exam-ready practice.
             </p>
           </div>
           <div className="space-y-2">
@@ -176,12 +177,12 @@ function HeroSection() {
                 Start for Free
               </TrackedLink>
               <TrackedLink
-                href="/demo"
+                href="/how-it-works"
                 className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
                 eventType="LANDING_CTA_CLICKED"
-                eventMetadata={{ placement: "hero_secondary", destination: "/demo" }}
+                eventMetadata={{ placement: "hero_secondary", destination: "/how-it-works" }}
               >
-                Try Demo
+                See how it works
               </TrackedLink>
             </div>
             <p className="text-sm text-foreground/65">

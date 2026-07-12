@@ -14,7 +14,12 @@ describe("LearnPage", () => {
     expect(screen.getByText("For Students")).toBeInTheDocument();
     expect(screen.getByText("For Board Exams")).toBeInTheDocument();
     expect(screen.getByText("For Teachers")).toBeInTheDocument();
+    expect(screen.getByText("For Professionals")).toBeInTheDocument();
     expect(screen.getByText("Study Tips")).toBeInTheDocument();
+    expect(screen.getByText("For Students").closest("section")).toHaveAttribute("id", "students");
+    expect(screen.getByText("For Board Exams").closest("section")).toHaveAttribute("id", "board-exams");
+    expect(screen.getByText("For Teachers").closest("section")).toHaveAttribute("id", "teachers");
+    expect(screen.getByText("For Professionals").closest("section")).toHaveAttribute("id", "professionals");
 
     expect(screen.getByText("How to Turn Notes Into Reviewers")).toBeInTheDocument();
     expect(screen.getByText("How to Use NoteLib for Board Exam Review")).toBeInTheDocument();
