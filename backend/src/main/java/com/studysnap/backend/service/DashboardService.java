@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.NotePerformanceSummaryResponse;
 import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
+import com.studysnap.backend.dto.TodayFocusConceptResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
@@ -76,6 +77,7 @@ public class DashboardService {
     private final ActivityEventRepository activityEventRepository;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
+    private final ConceptHealthService conceptHealthService;
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
 
@@ -157,6 +159,11 @@ public class DashboardService {
             return inProgressFocus.get();
         }
 
+        Optional<TodayFocusResponse> dueConceptFocus = resolveTodayFocusDueConcepts(userId, planType);
+        if (dueConceptFocus.isPresent()) {
+            return dueConceptFocus.get();
+        }
+
         Optional<TodayFocusResponse> weakConceptFocus = resolveTodayFocusWeakConcepts(userId, planType);
         if (weakConceptFocus.isPresent()) {
             return weakConceptFocus.get();
@@ -169,7 +176,9 @@ public class DashboardService {
                 null,
                 "Start your first review",
                 "Create your first Study Pack to begin your daily focus.",
-                "Create Study Pack"
+                "Create Study Pack",
+                List.of(),
+                false
         ));
 
     }
@@ -294,7 +303,9 @@ public class DashboardService {
                     "Resume Quick Review",
                     "You left off on Question " + normalizedQuestion + " of " + normalizedTotal + " in \""
                             + studyPack.get().getTitle() + "\".",
-                    "Resume Review"
+                    "Resume Review",
+                    List.of(),
+                    false
             ));
         }
 
@@ -315,7 +326,52 @@ public class DashboardService {
                     studyPack.get().getNoteId() == null ? null : studyPack.get().getNoteId().toString(),
                     "Retry Incorrect Questions",
                     message,
-                    "Retry Questions"
+                    "Retry Questions",
+                    List.of(),
+                    false
+            ));
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<TodayFocusResponse> resolveTodayFocusDueConcepts(UUID userId, PlanType planType) {
+        List<StudyPackEntity> studyPacks = studyPackRepository
+                .findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged());
+        Map<UUID, List<String>> conceptsByStudyPackId = new LinkedHashMap<>();
+        for (StudyPackEntity studyPack : studyPacks) {
+            if (studyPack.getId() != null && studyPack.getKeyConcepts() != null && !studyPack.getKeyConcepts().isEmpty()) {
+                conceptsByStudyPackId.put(studyPack.getId(), studyPack.getKeyConcepts());
+            }
+        }
+
+        Map<UUID, List<String>> dueConceptsByStudyPackId = conceptHealthService.getDueConceptsByStudyPackIds(
+                userId,
+                conceptsByStudyPackId,
+                OffsetDateTime.now(ZoneOffset.UTC)
+        );
+        for (StudyPackEntity studyPack : studyPacks) {
+            List<String> dueConcepts = dueConceptsByStudyPackId.getOrDefault(studyPack.getId(), List.of());
+            if (dueConcepts.isEmpty()) {
+                continue;
+            }
+
+            String noteId = studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString();
+            List<TodayFocusConceptResponse> concepts = dueConcepts.stream()
+                    .map(concept -> new TodayFocusConceptResponse(concept, noteId, studyPack.getTitle()))
+                    .toList();
+            int dueConceptCount = dueConcepts.size();
+            String conceptLabel = dueConceptCount == 1 ? "concept is" : "concepts are";
+            String title = dueConceptCount + " " + conceptLabel + " due for review";
+            return Optional.of(new TodayFocusResponse(
+                    TodayFocusType.DUE_CONCEPTS_REVIEW,
+                    studyPack.getId().toString(),
+                    noteId,
+                    title,
+                    "Review the due concepts from \"" + studyPack.getTitle() + "\".",
+                    "Practice Due Concepts",
+                    concepts,
+                    featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ)
             ));
         }
 
@@ -362,7 +418,9 @@ public class DashboardService {
                 "Practice Weak Concepts",
                 "Your latest Quick Review in \"" + studyPack.get().getTitle() + "\" showed " + weakConceptCount + " weak "
                         + conceptLabel + ". Practice them now.",
-                "Practice Weak Areas"
+                "Practice Weak Areas",
+                List.of(),
+                false
         ));
     }
 
@@ -382,7 +440,9 @@ public class DashboardService {
                 studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString(),
                 "Reinforce \"" + studyPack.getTitle() + "\"",
                 "A quick review today can strengthen your understanding.",
-                "Start Quick Review"
+                "Start Quick Review",
+                List.of(),
+                false
         ));
     }
 

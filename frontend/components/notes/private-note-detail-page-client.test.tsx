@@ -1034,10 +1034,8 @@ describe("PrivateNoteDetailPageClient", () => {
       keyConcepts: ["Cells", "Genetics", "Evolution"],
       generatedQuiz: null,
     });
-    // readinessStatus omitted — the fallback must key off the never-redacted isDue
-    // flag. A not-due concept is reliably MASTERED even when lastCorrectAt is redacted
-    // to null (Free); timing present disambiguates DUE; the doubly-degenerate
-    // due+redacted case conservatively falls back to NOT_STARTED.
+    // readinessStatus omitted — the fallback uses the visible lastCorrectAt signal
+    // to distinguish genuinely due concepts from concepts that have not been started.
     (getConceptHealth as jest.Mock).mockResolvedValue([
       {
         concept: "Cells",
@@ -1057,7 +1055,7 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       {
         concept: "Evolution",
-        lastCorrectAt: null,
+        lastCorrectAt: "2026-05-01T09:00:00Z",
         lastIncorrectAt: null,
         isStruggling: false,
         isDue: true,
@@ -1068,10 +1066,9 @@ describe("PrivateNoteDetailPageClient", () => {
     const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Note readiness")).toBeInTheDocument();
-    // Cells (not due) → mastered rather than collapsing to not started; Genetics
-    // (due + timing present) → due; Evolution (due + redacted) → not started.
+    // Cells (not due) → mastered; Genetics and Evolution (due + lastCorrectAt) → due.
     expect(screen.getByText((content) => (
-      content.includes("33% ready") && content.includes("1/3 mastered") && content.includes("1 due")
+      content.includes("33% ready") && content.includes("1/3 mastered") && content.includes("2 due")
     ))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
@@ -1080,8 +1077,8 @@ describe("PrivateNoteDetailPageClient", () => {
     rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Mastered")).toBeInTheDocument();
-    expect(screen.getByText("Due")).toBeInTheDocument();
-    expect(screen.getByText("Not started")).toBeInTheDocument();
+    expect(screen.getAllByText("Due")).toHaveLength(2);
+    expect(screen.queryByText("Not started")).not.toBeInTheDocument();
   });
 
   it("keeps note content visible when note readiness cannot load", async () => {

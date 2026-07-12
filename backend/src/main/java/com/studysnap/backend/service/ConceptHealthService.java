@@ -240,7 +240,7 @@ public class ConceptHealthService {
         return new ConceptHealthEntryResponse(
             concept,
             readinessStatus,
-            includeReviewTiming ? lastCorrectAt : null,
+            lastCorrectAt,
             includeReviewTiming ? lastIncorrectAt : null,
             includeReviewTiming && isStruggling(lastCorrectAt, lastIncorrectAt),
             isDue(lastCorrectAt, now),

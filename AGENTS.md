@@ -157,8 +157,8 @@ Use these skills before writing prompts, before starting new features, and after
 - Private Note Detail may show a compact per-note readiness signal for owned notes with a ready Study Pack and key concepts.
 - The note signal must reuse the shared `ReadinessSummary` component and the same readiness vocabulary as Plan Readiness and My Progress.
 - The note readiness signal is available to Free users: `% ready`, `X/Y mastered`, due count, not-started count, and per-concept readiness status.
-- Per-concept review timing remains PLUS/PRO only: `daysSinceReview`, timestamp-backed timing fields, and `Due - Nd ago` style copy must not be exposed to Free.
-- This Free-gate split is a deliberate access/value-ladder change only. Do not change prices, quotas, pass durations, checkout behavior, generated content, AI calls, or persisted readiness fields.
+- Free users receive the minimum `lastCorrectAt` signal needed to render accurate `Due`, `Mastered`, and `Not started` statuses. Detailed review timing (`daysSinceReview`, `Due - Nd ago` copy), incorrect-answer history, and `Needs work` remain PLUS/PRO only.
+- This visibility split must not change prices, quotas, pass durations, checkout behavior, Adaptive Practice access, generated content, AI calls, or persisted readiness fields.
 - Concept-health load failures must not hide or wipe note content; show a neutral readiness-unavailable state instead.
 
 ### Note Target Audience Rule
