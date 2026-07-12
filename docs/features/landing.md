@@ -58,6 +58,14 @@ Board Exam Mode must be visible in the hero with:
 
 The Board Exam Mode badge renders in the same badge row as `5 study modes`, not as a caption beneath the hero screenshot — the screenshot shows the Study Pack view, and captioning it with a different feature's claim would misrepresent what the image depicts. Keeping the badge decoupled from the screenshot (a pill in the badge row, not image-adjacent caption text) is what keeps the claim honest.
 
+### Live social proof
+
+A lightweight strip sits directly below the Hero, before the deeper product sections. It displays the live `total` from unauthenticated `GET /notes/public?size=1` as:
+
+`N public notes ready to explore for focused review.`
+
+The count is fetched through the server-side public-notes helper with the existing five-minute revalidation. If the public endpoint is unavailable or returns an invalid count, the strip is omitted rather than showing an estimate, placeholder, or invented number. It is usage proof only: no testimonials or AI-capability claims.
+
 ## Required Landing Sections
 
 1. Hero
