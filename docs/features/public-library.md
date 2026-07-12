@@ -88,6 +88,12 @@ Public Library has two display modes:
 
 Public Study Plan list and detail responses expose a live `readyCount` alongside their existing note totals. `PublicStudyPlanCard` renders this as plain metadata — `{readyCount} of {itemCount} notes practice-ready` — on the published-plan and Dashboard recommendation surfaces. A note is practice-ready only when the existing `STUDY_PACK_READY` resolver says it is ready; zero, partial, and fully ready plans all show their real ratio. If an older cached list response does not include the aggregate, the card keeps its existing item-count metadata without rendering an incomplete ratio.
 
+### Public Study Plan pre-adopt preview
+
+Every `PublicStudyPlanCard` includes an optional `Preview this plan` disclosure, available without authentication before the learner adopts. `/collections/published` is browseable to anonymous visitors for this purpose: they see the same previews and a `Sign in to adopt` CTA, while authenticated learners retain Start/Continue actions and their adopted-plan context. The disclosure loads the existing public collection detail endpoint only when opened and shows the actual available note titles, subjects, section labels, Course / Program, estimated study time, and the detail response's practice-ready ratio.
+
+The preview is read-only and does not change the Start/Continue adopt action. A failed or unavailable public detail response shows a clear retryable error while that action remains usable. A public plan with no available items says so plainly instead of rendering an empty note list.
+
 Switching from discovery to filter mode:
 - Typing in search → filter mode
 - Selecting any filter (Course, Learner Level, Subject, Tags, Source) → filter mode

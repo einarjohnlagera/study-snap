@@ -3861,6 +3861,13 @@ export async function listPublicStudyPlans(params?: {
   return parseApiResponse<NoteCollectionSummary[]>(response, "Could not load public study plans.");
 }
 
+export async function getPublicStudyPlanDetail(id: string): Promise<NoteCollectionDetail> {
+  const response = await fetch(buildUrl(`/collections/public/${id}`), {
+    method: "GET",
+  });
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not load this public study plan.");
+}
+
 export async function createCollection(request: {
   title: string;
   description?: string | null;

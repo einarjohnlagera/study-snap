@@ -158,6 +158,7 @@ v0.31.0 adds a learner-facing plan surface for STUDENT, BOARD_EXAM, and PROFESSI
 **Data source**: `GET /collections/public?courseProgram=<value>` plus the user's `GET /collections` list to detect an already adopted `sourcePlanId`
 **CTA**:
 
+- `Preview this plan` opens the shared, read-only public-detail disclosure before adoption; it is available on the Dashboard card as well as `/collections/published` and does not change the Start/Continue flow
 - `Start this plan` when the learner has not adopted the source plan
 - `Continue this plan` when a private collection with `sourcePlanId == sourcePlan.id` already exists
 

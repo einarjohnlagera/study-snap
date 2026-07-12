@@ -65,7 +65,7 @@ function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): bo
 function isProtectedAppRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
-    || pathname.startsWith("/collections")
+    || (pathname.startsWith("/collections") && pathname !== "/collections/published")
     || pathname.startsWith("/library")
     || pathname.startsWith("/notes")
     || pathname.startsWith("/profile")

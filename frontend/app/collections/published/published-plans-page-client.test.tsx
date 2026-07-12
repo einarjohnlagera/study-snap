@@ -1,26 +1,31 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import PublishedPlansPage, { metadata } from "./page";
-import { adoptGoal, adoptStudyPlan, getMe, listCollections, listPublicStudyPlans } from "@/lib/api";
+import {
+  adoptGoal,
+  adoptStudyPlan,
+  getMe,
+  getPublicStudyPlanDetail,
+  listCollections,
+  listPublicStudyPlans,
+} from "@/lib/api";
 
 const pushMock = jest.fn();
 const routerMock = { push: pushMock };
+let currentAuthUser: { profileType: "STUDENT" } | null = { profileType: "STUDENT" };
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
 }));
 
-jest.mock("@/lib/route-guards", () => ({
-  requireAuthenticatedOnboardedUser: () => true,
-}));
-
 jest.mock("@/lib/auth", () => ({
-  getAuthUser: () => ({ profileType: "STUDENT" }),
+  getAuthUser: () => currentAuthUser,
 }));
 
 jest.mock("@/lib/api", () => ({
   adoptGoal: jest.fn(),
   adoptStudyPlan: jest.fn(),
   getMe: jest.fn(),
+  getPublicStudyPlanDetail: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
 }));
@@ -49,16 +54,24 @@ const planTwo = {
 
 describe("PublishedPlansPage", () => {
   beforeEach(() => {
+    currentAuthUser = { profileType: "STUDENT" };
     pushMock.mockReset();
     globalThis.sessionStorage.clear();
     (adoptGoal as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
+    (getPublicStudyPlanDetail as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "LET", profileType: "STUDENT" });
     (listCollections as jest.Mock).mockResolvedValue([]);
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([planOne, planTwo]);
+    (getPublicStudyPlanDetail as jest.Mock).mockResolvedValue({
+      ...planOne,
+      estimatedStudyHours: 4,
+      progress: { totalNotes: 1, notesWithStudyPack: 1, notesPracticed: 0 },
+      items: [{ noteId: "note-1", title: "Educational Psychology", subject: "Professional Education", label: "Foundations" }],
+    });
   });
 
   it("exports page metadata", () => {
@@ -232,5 +245,21 @@ describe("PublishedPlansPage", () => {
     expect(await screen.findAllByText("LET Reviewer Plan")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(4);
     expect(screen.queryByText("In your library")).not.toBeInTheDocument();
+  });
+
+  it("lets anonymous visitors browse and preview plans without loading private profile data", async () => {
+    currentAuthUser = null;
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findByRole("heading", { name: "Browse All Official Collections" })).toBeInTheDocument();
+    expect(await screen.findAllByRole("button", { name: "Sign in to adopt" })).toHaveLength(2);
+    expect(getMe).not.toHaveBeenCalled();
+    expect(listCollections).not.toHaveBeenCalled();
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Preview this plan" }))[0]);
+
+    expect(await screen.findByText("Educational Psychology")).toBeInTheDocument();
+    expect(getPublicStudyPlanDetail).toHaveBeenCalledWith("source-plan-2");
   });
 });
