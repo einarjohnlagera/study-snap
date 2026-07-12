@@ -27,6 +27,7 @@ const leafPlan: NoteCollectionSummary = {
   sourcePlanId: null,
   parentCollectionId: null,
   itemCount: 3,
+  readyCount: 1,
   childCount: 0,
   notesPracticed: 0,
   createdAt: "2026-06-01T00:00:00Z",
@@ -94,5 +95,17 @@ describe("PublicStudyPlanCard", () => {
     expect(screen.getByText(/3 Subject Plans/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start this Goal" })).toBeInTheDocument();
     expect(screen.queryByText(/3 Subject plans\b/)).not.toBeInTheDocument();
+  });
+
+  it("renders practice readiness as metadata and falls back when an older response omits it", () => {
+    const { rerender } = render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
+
+    expect(screen.getByText("1 of 3 notes practice-ready")).toHaveClass("text-foreground/70");
+    expect(screen.queryByText("1 of 3 notes practice-ready")).not.toHaveClass("rounded-full");
+
+    rerender(<PublicStudyPlanCard plan={{ ...leafPlan, readyCount: undefined }} adoptedCollection={null} />);
+
+    expect(screen.queryByText(/notes practice-ready/)).not.toBeInTheDocument();
+    expect(screen.getByText("3 notes curated for this track.")).toBeInTheDocument();
   });
 });

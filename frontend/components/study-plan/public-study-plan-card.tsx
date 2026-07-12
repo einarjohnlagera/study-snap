@@ -23,6 +23,9 @@ export function PublicStudyPlanCard({ plan, adoptedCollection, profileType = nul
   const isGoal = plan.childCount > 0;
   const subjectPlanLabel = `${plan.childCount} ${labels.subjectSingular}${plan.childCount === 1 ? "" : "s"}`;
   const noteLabel = `${plan.itemCount} ${plan.itemCount === 1 ? "note" : "notes"}`;
+  const practiceReadyLine = plan.readyCount == null
+    ? null
+    : `${plan.readyCount} of ${plan.itemCount} notes practice-ready`;
   const descriptionFallback = isGoal
     ? `${subjectPlanLabel} · ${noteLabel}`
     : `${noteLabel} in saved order.`;
@@ -68,6 +71,7 @@ export function PublicStudyPlanCard({ plan, adoptedCollection, profileType = nul
       </div>
       <div className="space-y-3">
         <p className="text-sm text-foreground/70">{detailLine}</p>
+        {practiceReadyLine ? <p className="text-sm text-foreground/70">{practiceReadyLine}</p> : null}
         <Button
           type="button"
           className="w-full"

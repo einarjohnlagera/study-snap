@@ -1450,6 +1450,7 @@ export type NoteCollectionSummary = {
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
+  readyCount?: number | null;
   childCount: number;
   notesPracticed: number;
   createdAt: string;
@@ -1489,6 +1490,7 @@ export type NoteCollectionDetail = {
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   childCount: number;
+  readyCount?: number | null;
   createdAt: string;
   updatedAt: string;
   progress: NoteCollectionProgress;

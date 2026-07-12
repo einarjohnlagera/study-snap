@@ -152,12 +152,14 @@ public class NoteCollectionService {
             return List.of();
         }
         Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
+        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collections);
         Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         Map<UUID, Integer> practicedCountsByCollectionId = loadPracticedCounts(userId, collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
                         itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         practicedCountsByCollectionId.getOrDefault(collection.getId(), 0)
                 ))
@@ -177,11 +179,13 @@ public class NoteCollectionService {
             return List.of();
         }
         Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
+        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collections);
         Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
                         itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         0
                 ))
@@ -1402,6 +1406,37 @@ public class NoteCollectionService {
         return countsByCollectionId;
     }
 
+    private Map<UUID, Integer> loadReadyCounts(List<NoteCollectionEntity> collections) {
+        Map<UUID, List<UUID>> noteIdsByCollectionId = loadNoteIdsByCollectionId(collections);
+        LinkedHashSet<UUID> allNoteIds = noteIdsByCollectionId.values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (allNoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, NoteCollectionNoteProjection> notesById = noteRepository
+                .findCollectionNoteProjectionsByIdIn(List.copyOf(allNoteIds)).stream()
+                .collect(Collectors.toMap(NoteCollectionNoteProjection::noteId, Function.identity()));
+        Set<UUID> noteIdsWithStudyPacks = studyPackRepository.findProgressViewsByNoteIdIn(List.copyOf(allNoteIds)).stream()
+                .map(StudyPackProgressView::getNoteId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<UUID, Integer> readyCountsByCollectionId = new HashMap<>();
+        for (Map.Entry<UUID, List<UUID>> entry : noteIdsByCollectionId.entrySet()) {
+            int readyCount = (int) entry.getValue().stream()
+                    .map(notesById::get)
+                    .filter(Objects::nonNull)
+                    .filter(note -> NoteStudyPackStatusResolver.STUDY_PACK_READY.equals(
+                            NoteStudyPackStatusResolver.resolve(note.status(), noteIdsWithStudyPacks.contains(note.noteId()))
+                    ))
+                    .count();
+            readyCountsByCollectionId.put(entry.getKey(), readyCount);
+        }
+        return readyCountsByCollectionId;
+    }
+
     private Map<UUID, Integer> loadChildCounts(List<NoteCollectionEntity> collections) {
         List<UUID> collectionIds = collections.stream().map(NoteCollectionEntity::getId).toList();
         Map<UUID, Integer> countsByCollectionId = new HashMap<>();
@@ -1662,6 +1697,7 @@ public class NoteCollectionService {
     private NoteCollectionSummaryResponse toSummaryResponse(
             NoteCollectionEntity collection,
             int itemCount,
+            int readyCount,
             int childCount,
             int notesPracticed
     ) {
@@ -1674,6 +1710,7 @@ public class NoteCollectionService {
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 itemCount,
+                readyCount,
                 childCount,
                 notesPracticed,
                 collection.getCreatedAt(),
@@ -1686,6 +1723,7 @@ public class NoteCollectionService {
             List<NoteCollectionItemEntity> items
     ) {
         List<NoteCollectionItemResponse> itemResponses = toItemResponses(collection.getOwnerUserId(), items);
+        NoteCollectionProgressResponse progress = toProgressResponse(itemResponses);
         return new NoteCollectionDetailResponse(
                 collection.getId(),
                 collection.getTitle(),
@@ -1698,9 +1736,10 @@ public class NoteCollectionService {
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
+                progress.notesWithStudyPack(),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
-                toProgressResponse(itemResponses),
+                progress,
                 itemResponses
         );
     }
@@ -1710,6 +1749,7 @@ public class NoteCollectionService {
             List<NoteCollectionItemEntity> items
     ) {
         List<NoteCollectionItemResponse> itemResponses = toPublicItemResponses(items);
+        NoteCollectionProgressResponse progress = toProgressResponse(itemResponses);
         return new NoteCollectionDetailResponse(
                 collection.getId(),
                 collection.getTitle(),
@@ -1722,9 +1762,10 @@ public class NoteCollectionService {
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 Math.toIntExact(collectionRepository.countByParentCollectionId(collection.getId())),
+                progress.notesWithStudyPack(),
                 collection.getCreatedAt(),
                 collection.getUpdatedAt(),
-                toProgressResponse(itemResponses),
+                progress,
                 itemResponses
         );
     }
