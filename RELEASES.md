@@ -14,12 +14,12 @@ Grouped into 6 thematic PRs by surface:
 - **Note detail (frontend, routing TBD).** Non-owner CTA consolidation + `public-notes.md`/`note-detail.md` doc-drift fix, related-notes module ("More in {Subject}" / "More from {Author}") — Codex if a new query is needed, Claude Code direct otherwise; confirm before starting this PR.
 - **Public plan card (frontend).** Outcome microcopy under the adopt CTA, official-identity badge (no backend field needed — publish is already admin-only).
 - **Onboarding/Dashboard guidance (frontend).** Course/Program helper-text examples for Professional/Board Taker profiles, post-completion Dashboard guidance tip via the existing `pickActiveGuidance` engine, returning-visit guidance tip on the decay/review rhythm, re-weighted returning-user dashboard emphasis (composition/ordering only).
-- **Public Library (frontend).** General no-results state for filter combinations, "Study Pack Ready" toggle filter.
 
 Anti-drift: no new backend entities, migrations, endpoints, pricing tiers, or quota changes. All items route to direct Claude Code implementation per `CLAUDE.md`'s task-routing table except the note-detail related-notes module, whose routing depends on whether a new query is required.
 
 ### Shipped
 
+- **Public Library filter polish (frontend).** Generic no-results recovery now offers `Remove last filter` alongside a full clear, and the More Filters sheet adds a reversible `Study Pack Ready` toggle. The toggle filters the complete already-loaded public result set client-side by the existing study-pack status, so no endpoint, pagination, or schema change was needed.
 - **Landing page conversion polish (frontend).** Exam hubs now show a one-paragraph product-value strip on every hub (not just empty ones), and the zero-note empty state adds a link to the matching Learn category alongside the existing intent-preserving signup CTA and Public Library link. The landing differentiation table was rewritten from four abstract contrasts to three concrete, felt ones (e.g. "gone when the chat resets" vs "saved in your library, reusable"). Demo access (`/demo`, previously unlinked from any public surface) is now a required hero CTA and a public nav item, not optional fine print. A new landing FAQ section (4 pre-signup objections) emits `FAQPage` JSON-LD built from the same data that renders the visible cards, and Learn articles — previously the only public SEO surface without structured data — now emit `Article` JSON-LD. No backend changes; corrected a pre-existing doc-drift in `landing.md`'s public-nav list along the way (it was missing `Exam Hubs`, already live since v0.44.0).
 
 ---

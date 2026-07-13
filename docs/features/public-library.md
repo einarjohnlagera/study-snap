@@ -27,6 +27,12 @@ Shareable filter URLs:
 - the Public Library list page exposes `Share this list`, which copies the current canonical filtered URL instead of a stale local-only filter state
 - the list-share action is most useful on smaller screens; desktop may keep the page itself shareable without giving the button primary visual weight
 
+### Filter recovery and study readiness
+
+The generic filtered no-results state offers both `Clear filters` and `Remove last filter`. The latter removes only the most recently changed filter when known, falling back to clearing filters when there is no recoverable target.
+
+The More Filters sheet includes a `Study Pack Ready` boolean toggle. It filters the already-loaded public-note result set by the existing `studyPackStatus === STUDY_PACK_READY` value and can be switched off to restore the full list. This stays client-side because the current public-library request loads the full matching result set rather than paginated slices.
+
 ## Key Files
 
 **Backend**

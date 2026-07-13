@@ -704,6 +704,26 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("Community Physics")).toBeInTheDocument();
   });
 
+  it("filters to Study Pack Ready notes and restores the full list when cleared", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "ready-note", title: "Ready note", studyPackStatus: "STUDY_PACK_READY" }),
+      createPublicNote({ id: "draft-note", title: "Draft note", studyPackStatus: "DRAFT" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Draft note")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Study Pack Ready" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("Ready note")).toBeInTheDocument();
+    expect(screen.queryByText("Draft note")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(screen.getByText("Draft note")).toBeInTheDocument();
+  });
+
   it("applies a subject filter from the filter sheet", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
