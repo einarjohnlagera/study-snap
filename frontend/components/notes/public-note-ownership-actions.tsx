@@ -189,19 +189,6 @@ export function PublicNoteOwnershipActions({
             />
             <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share this note" />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-foreground/55">Want to edit the content first?</span>
-            <PublicSeoCopyCta
-              noteId={noteId}
-              label="Copy as editable draft"
-              redirectTarget="library"
-              action="copy"
-              variant="outline"
-              includeStudyPack={false}
-              authModalTitle="Copy as editable draft"
-              authModalBody="Create a free account or log in to copy this note as an editable draft."
-            />
-          </div>
         </div>
       )}
 

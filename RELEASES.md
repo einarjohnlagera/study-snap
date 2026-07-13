@@ -10,6 +10,8 @@ Theme: ship Tier 3 of the same 7-session conversion/retention UX audit that drov
 
 Grouped into 6 thematic PRs by surface:
 
+- **Pricing (frontend).** Outcome-framed plan bullets + "Best for" row on the comparison table, hesitant-buyer FAQ entries (pass-end, renewal, payment methods, refunds), duration/CTA verb alignment across surfaces, near-limit usage banner reframed as a milestone rather than just a warning.
+- **Public plan card (frontend).** Outcome microcopy under the adopt CTA, official-identity badge (no backend field needed — publish is already admin-only).
 - **Note detail (frontend, routing TBD).** Non-owner CTA consolidation + `public-notes.md`/`note-detail.md` doc-drift fix, related-notes module ("More in {Subject}" / "More from {Author}") — Codex if a new query is needed, Claude Code direct otherwise; confirm before starting this PR.
 - **Onboarding/Dashboard guidance (frontend).** Course/Program helper-text examples for Professional/Board Taker profiles, post-completion Dashboard guidance tip via the existing `pickActiveGuidance` engine, returning-visit guidance tip on the decay/review rhythm, re-weighted returning-user dashboard emphasis (composition/ordering only).
 
@@ -17,6 +19,7 @@ Anti-drift: no new backend entities, migrations, endpoints, pricing tiers, or qu
 
 ### Shipped
 
+- **Public note detail polish (frontend).** The non-owner copy flow now presents one quiz-first primary action plus `Add to Library` and share secondaries, removing the competing editable-draft CTA. Existing subject discovery remains supplemental, and the detail page adds a canonical creator-filtered `More from {Display Name}` route without a backend endpoint.
 - **Public Library filter polish (frontend).** Generic no-results recovery now offers `Remove last filter` alongside a full clear, and the More Filters sheet adds a reversible `Study Pack Ready` toggle. The toggle filters the complete already-loaded public result set client-side by the existing study-pack status, so no endpoint, pagination, or schema change was needed.
 - **Pricing trust polish (frontend).** Plus and Pro bullets now lead with what regular study and exam-prep learners can accomplish, the comparison table adds a `Best for` choice row, and pricing answers documented pass-end, manual-renewal, and exceptional-refund questions (payment methods intentionally remain omitted because no policy is documented). The generic Free upgrade fallback now consistently uses `Upgrade to …`, while context-specific and renewal CTAs stay intentionally value-framed. Near-limit banners retain their quotas and exhausted states but frame remaining generic credits as continued monthly progress.
 - **Public plan card polish (frontend).** Public-plan cards now show an `Official` identity badge because the public list only contains admin-published plans, and their Start/Continue CTA now explains that adoption opens a private, editable library copy. No backend field or behavior changed.

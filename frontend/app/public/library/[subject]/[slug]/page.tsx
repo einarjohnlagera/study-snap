@@ -253,13 +253,6 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
               authModalTitle="Quiz yourself on this note"
               authModalBody="Create a free account or log in to quiz yourself on this note and keep practicing."
             />
-            <PublicSeoCopyCta
-              noteId={note.id}
-              label="Copy Study Pack"
-              redirectTarget="generate"
-              variant="outline"
-              includeStudyPack
-            />
           </div>
         </Card>
 
@@ -339,6 +332,18 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                 ))}
               </div>
             </div>
+          </section>
+        ) : null}
+
+        {note.authorDisplayName && note.authorUsername ? (
+          <section className="rounded-2xl border border-border bg-card px-4 py-4 sm:px-6" aria-labelledby="more-author-heading">
+            <h2 id="more-author-heading" className="text-lg font-semibold sm:text-xl">More from {note.authorDisplayName}</h2>
+            <Link
+              href={buildPublicLibraryUrl({ creator: note.authorUsername })}
+              className="mt-2 inline-flex text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+            >
+              Browse {note.authorDisplayName}&apos;s public notes →
+            </Link>
           </section>
         ) : null}
 

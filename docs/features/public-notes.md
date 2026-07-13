@@ -78,17 +78,18 @@ Owner actions:
 Non-owner actions:
 
 - `Quiz yourself on this note` (primary conversion CTA)
-- `Create your own Study Pack`
-- `Copy to My Library`
+- `Add to Library` (secondary; note plus its available Study Pack)
 - `Share this note`
 
 Public note detail must not expose edit, delete, generation, or run an inline full quiz on the public page itself.
 The note **content** stays primary — the page is note-first for reading and SEO, and the page hierarchy (summary, full notes) is not reordered behind a quiz.
-The *conversion CTA*, however, may be quiz-framed: `Quiz yourself on this note` is the primary CTA and routes through the copy → instant Quick Review flow (the actual quiz runs on the viewer's own copy, never on the public page). `Create your own Study Pack` and `Copy to My Library` remain as secondary actions.
+The *conversion CTA*, however, may be quiz-framed: `Quiz yourself on this note` is the primary CTA and routes through the copy → instant Quick Review flow (the actual quiz runs on the viewer's own copy, never on the public page). `Add to Library` and `Share this note` are the visitor-comprehensible secondary actions; editable-draft copying is not a peer public-detail CTA.
 
 When a visitor completes the visible Quick Check, the page shows an inline outcome prompt with the existing `Quiz yourself on this note` CTA. It reuses the normal copy-intent/signup path; completing the Quick Check itself creates no anonymous session, cookie, backend call, or durable result. A ready note with visible Summary, Key Concepts, and Quick Check sections also shows a short attribution line that connects those study tools to the source note and invites visitors to get the same tools for their own notes. The line stays hidden when those previews are unavailable.
 
-Post-copy landing must match the CTA's verb. `Quiz yourself on this note` (a quiz promise) auto-launches Quick Review on the copy (`redirectTarget="quick-review"` → `?copied=1&generate=1&startQuickReview=1`). Copy-promise CTAs (not quiz promises) land on the **copied note's detail page** so the viewer sees the full Study Pack and chooses their next action — including Challenge Quiz — rather than being dropped straight into a quiz. On the public note **detail** page these are `Add to Library` (note + Study Pack, `redirectTarget="generate"`: lands on detail; generates only if the copy lacks a ready Study Pack) and `Copy as editable draft` (`includeStudyPack=false`, `redirectTarget="library"`: arrives as an editable Draft so the viewer can edit content before generating their own Study Pack). Do not route copy-verb CTAs to `quick-review`.
+Post-copy landing must match the CTA's verb. `Quiz yourself on this note` (a quiz promise) auto-launches Quick Review on the copy (`redirectTarget="quick-review"` → `?copied=1&generate=1&startQuickReview=1`). `Add to Library` is the copy-promise secondary: it lands on the **copied note's detail page** with the available Study Pack rather than dropping the viewer straight into a quiz. Do not route copy-verb CTAs to `quick-review`.
+
+Related discovery stays supplementary: the public detail page shows subject-related notes when the existing subject query returns enough notes, links onward to the subject landing page, and offers a `More from {Display Name}` link using the existing creator-filtered Public Library URL. Missing subject or creator results are simply omitted.
 
 Copy-first generation rule:
 
