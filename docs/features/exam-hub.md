@@ -58,6 +58,12 @@ Authenticated CTA:
 
 The current feature only preserves exam context. It does not pre-fill goals or change onboarding logic.
 
+## Product Value Strip
+
+Every hub renders a one-paragraph "what NoteLib does for your {exam} review" strip below the header, regardless of note count — exam hubs previously sold the community's notes but never explained the product. It states plainly that NoteLib turns notes into summaries, key concepts, and quiz practice, and tracks weak areas before exam day. No new data source; it's static copy parameterized by `exam.shortName`.
+
+The zero-note empty state additionally links to the matching Learn category (`Read Board Exam study guides` → `/learn#board-exams`, via `buildLearnCategoryPath("board-exams")`) alongside the existing intent-preserving signup CTA and the Public Library link — closing the previously-unbuilt connection between the two purpose-built board-exam surfaces.
+
 ## Exam Goals
 
 Track 2 lets authenticated users confirm one study goal using the existing nullable `users.study_goal` field.
@@ -173,7 +179,7 @@ Each exam hub is server-rendered with:
 - CollectionPage structured data.
 - Featured, popular, and recent discovery sections that suppress empty headers.
 
-Zero-note exam states should honestly say: `No {Exam Name} notes have been shared yet.` They must offer the existing intent-preserving `Start preparing for the {short exam name}` signup CTA as the primary path, alongside a secondary link to the main Public Library.
+Zero-note exam states should honestly say: `No {Exam Name} notes have been shared yet.` They must offer the existing intent-preserving `Start preparing for the {short exam name}` signup CTA as the primary path, alongside a secondary link to the main Public Library and a tertiary link to the matching Learn category (see Product Value Strip above) — a dead end with no signup path is the worst outcome on an acquisition page, and Wave 2 exams will hit this state often, not rarely.
 
 ## Wave 2 Candidates
 

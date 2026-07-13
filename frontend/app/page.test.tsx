@@ -58,6 +58,7 @@ describe("LandingPage", () => {
     expect(screen.getByText("— timed full-exam simulation.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "/how-it-works");
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: /Try the demo/ })).toHaveAttribute("href", "/demo");
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
@@ -98,8 +99,9 @@ describe("LandingPage", () => {
     expect(screen.getByRole("heading", { name: "Built for study, not just answers" })).toBeInTheDocument();
     expect(screen.getByText("Generic AI tools")).toBeInTheDocument();
     expect(screen.getAllByText("NoteLib")).not.toHaveLength(0);
-    expect(screen.getByText("Built around your own notes")).toBeInTheDocument();
-    expect(screen.getByText("Designed for active recall")).toBeInTheDocument();
+    expect(screen.getByText("Your notes stay")).toBeInTheDocument();
+    expect(screen.getByText("Weak areas remembered")).toBeInTheDocument();
+    expect(screen.getByText("Exam-ready flow")).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Students" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Exam Reviewers" })).toBeInTheDocument();
@@ -128,6 +130,10 @@ describe("LandingPage", () => {
     expect(screen.getByText("Pricing section placeholder")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See full pricing" })).toHaveAttribute("href", "/pricing");
 
+    expect(screen.getByRole("heading", { name: "Frequently asked questions" })).toBeInTheDocument();
+    expect(screen.getByText("Is NoteLib free?")).toBeInTheDocument();
+    expect(screen.getByText("Which board exams does NoteLib support?")).toBeInTheDocument();
+
     expect(screen.getByRole("heading", { name: "Start building your study system today" })).toBeInTheDocument();
     expect(screen.getByText("Takes less than a minute.")).toBeInTheDocument();
 
@@ -142,6 +148,11 @@ describe("LandingPage", () => {
     expect(structuredData).not.toBeNull();
     expect(structuredData?.textContent).toContain('"@type":"WebSite"');
     expect(structuredData?.textContent).toContain('"name":"NoteLib"');
+
+    const faqStructuredData = container.querySelector("#landing-faq-structured-data");
+    expect(faqStructuredData).not.toBeNull();
+    expect(faqStructuredData?.textContent).toContain('"@type":"FAQPage"');
+    expect(faqStructuredData?.textContent).toContain("Is NoteLib free?");
   });
 
   it("exports landing page SEO metadata", () => {

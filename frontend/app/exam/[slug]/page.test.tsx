@@ -118,8 +118,10 @@ describe("ExamHubPage", () => {
 
     render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
 
+    expect(screen.getByText(/NoteLib turns ALE notes into summaries, key concepts, and quiz practice/)).toBeInTheDocument();
     expect(screen.getByText("No Architect Licensure Examination (ALE) notes have been shared yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse the Public Library" })).toHaveAttribute("href", "/public/library");
+    expect(screen.getByRole("link", { name: "Read Board Exam study guides" })).toHaveAttribute("href", "/learn#board-exams");
     const emptyStateCta = screen.getAllByRole("link", { name: "Start preparing for the ALE" })[1];
     expect(emptyStateCta).toHaveAttribute("href", "/auth?mode=signup&intent=exam&exam=ale");
 

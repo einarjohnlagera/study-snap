@@ -47,7 +47,7 @@ Hero CTA rules:
 
 - primary CTA: `Start for Free`
 - secondary CTA: `See how it works` -> `/how-it-works`
-- supporting links may include demo access and Public Library discovery
+- demo CTA: `Try the demo — no signup` -> `/demo`, rendered below the CTA row as a required hero slot (not optional fine print) — "show, don't tell" for a product whose proven strength is fast activation
 
 Board Exam Mode must be visible in the hero with:
 
@@ -74,7 +74,8 @@ The count is fetched through the server-side public-notes helper with the existi
 4. Differentiation
 5. Target Users
 6. Pricing Preview
-7. Final CTA
+7. FAQ
+8. Final CTA
 
 ## Learning Loop Section
 
@@ -138,14 +139,13 @@ It should include:
 
 ## Differentiation
 
-Landing should compare NoteLib against generic AI tools in practical terms:
+Landing should compare NoteLib against generic AI tools with concrete, felt contrasts rather than category-level abstractions — a claim with no example reads as marketing assertion, not proof:
 
-- one-off output vs reusable study workspace
-- generic prompt interaction vs note-based workflow
-- shallow answer generation vs structured quiz practice
-- no exam simulation vs Board Exam Mode
+- your notes stay: gone when the chat resets vs saved in your library, reusable for every future review
+- weak areas remembered: starts fresh every session vs tracked across quizzes over time
+- exam-ready flow: one answer then it stops vs note → study pack → quiz → exam, all from the same saved note
 
-The goal is not to attack generic AI tools, but to show why NoteLib fits repeated study better.
+The goal is not to attack generic AI tools, but to show why NoteLib fits repeated study better. Keep the 3-column `What matters / Generic AI tools / NoteLib` table layout; only the row copy is felt/concrete, not the structure.
 
 ## Target Users
 
@@ -178,6 +178,10 @@ Pricing preview rules:
 - include a clear link to `/pricing`
 - keep upgrade language student-friendly and non-aggressive
 
+## FAQ
+
+Landing includes a short FAQ section between Pricing Preview and Final CTA, answering pre-signup objections: is it free, do I need to paste vs upload, which exams are supported, what's the difference between Free/Plus/Pro. The FAQ also emits `FAQPage` JSON-LD (`buildFaqPageStructuredData` in `lib/structured-data.ts`) built from the same array the visible cards render, so copy and structured data never drift.
+
 ## Final CTA
 
 The bottom CTA should reinforce the core promise:
@@ -196,14 +200,17 @@ Recommended secondary action:
 
 ## Public Marketing Rules
 
-- Public navigation remains:
+- Public navigation is:
   - `Home`
   - `How it Works`
+  - `Demo`
   - `Public Library`
+  - `Exam Hubs`
   - `Learn`
   - `Pricing`
   - `Login`
   - `Get Started`
+  (this list previously omitted `Exam Hubs`, which already shipped in v0.44.0's cross-linking pass — corrected here alongside adding `Demo`)
 - Public Library must stay accessible without login
-- Demo access must remain available without signup
+- Demo access must remain available without signup, and is now a required nav item plus a hero CTA — not optional fine print
 - Landing metadata should remain aligned with NoteLib’s note-library-first SEO positioning even if the on-page hero becomes more conversion-forward
