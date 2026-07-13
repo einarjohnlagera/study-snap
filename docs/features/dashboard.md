@@ -1,5 +1,7 @@
 # dashboard.md - NoteLib Feature Context
 
+Dashboard one-time guidance uses `pickActiveGuidance()` as a single-slot picker. Post-completion topic reminders, the Teacher introduction, and the returning-user spaced-review rhythm rule compete by priority so they never stack on one visit.
+
 ## Goal
 
 Dashboard is a guidance surface, not a management screen. It should help users decide what to do next in the note -> Study Pack -> quiz loop.
