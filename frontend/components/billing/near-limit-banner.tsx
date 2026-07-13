@@ -122,7 +122,7 @@ export function NearLimitBanner({
   }
 
   const noun = normalizedRemaining === 1 ? singular : plural;
-  const message = `You have ${normalizedRemaining} ${noun} left this month${planSuffix(planType)}.`;
+  const message = `You’re making progress this month — ${normalizedRemaining} ${noun} still ready to use${planSuffix(planType)}.`;
 
   return (
     <div

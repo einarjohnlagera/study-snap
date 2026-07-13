@@ -45,6 +45,13 @@ describe("PublicStudyPlanCard", () => {
     (setJustAdoptedNotice as jest.Mock).mockReset();
   });
 
+  it("identifies published plans and explains the adopt outcome", () => {
+    render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
+
+    expect(screen.getByText("Official")).toBeInTheDocument();
+    expect(screen.getByText("Adds a private, editable copy to your library.")).toBeInTheDocument();
+  });
+
   it("records the just-adopted notice for recursive Goal adoption only", async () => {
     (adoptGoal as jest.Mock).mockResolvedValue({
       goalCollectionId: "personal-goal-1",
