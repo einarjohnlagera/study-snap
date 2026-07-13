@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.44.0 - Conversion & Retention Polish` is Released (on `releases/v0.44.0`) — Tier 1 findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`) shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
+`v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is in progress (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, grouped into 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library). No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
 
-`v0.43.1 - Companion Mentor Tips` is the previous released version (on `releases/v0.43.1`).
+`v0.44.0 - Conversion & Retention Polish` is the previous released version (on `releases/v0.44.0`) — Tier 1 findings from the same audit shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
+
+`v0.43.1 - Companion Mentor Tips` is the previous released version before that (on `releases/v0.43.1`).
 
 `v0.43.0 - Companion Coach Experience` is the previous released version before that (on `releases/v0.43.0`).
 
@@ -17,6 +19,10 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish (in progress, base branch `releases/v0.45.0`)
+
+Origin: the same 7-session conversion/retention UX audit that drove v0.44.0, Tier 3 of `docs/claude-prompt/conversion-audit-prioritized-backlog.md` (items #19–36, "medium impact, lower urgency"). Unlike v0.44.0's Tier 1/2, every item here routes to direct Claude Code implementation per `CLAUDE.md`'s task-routing table (copy/composition/UI polish, no new backend/infra) except the note-detail related-notes module, whose routing depends on whether a new query is needed. Full scope in `RELEASES.md`.
 
 ## v0.44.0 - Conversion & Retention Polish (Released, base branch `releases/v0.44.0`)
 
@@ -28,7 +34,7 @@ Two things surfaced by the same audit are explicitly **not** in this release's s
 
 ## Post-v0.44.0 Conversion Audit Backlog (candidate, not yet scoped)
 
-Not a version — no release branch, no implementation scope yet. Tier 2 (7 items) has been folded into `v0.44.0` (see above) and is no longer part of this backlog. Tier 3 (18 items) and Tier 4 (19 items) remain here from the same 7-session conversion/retention UX audit — full detail, impact/effort ratings, and Claude Code/Codex routing per item in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`. Also includes two explicitly deferred items (adoption-count social proof on Public Library plan cards; "Trending this week," blocked on windowed backend counts that don't exist yet). Pull from here when scoping what comes after v0.44.0 — do not re-run the audit or re-derive this list from scratch.
+Not a version — no release branch, no implementation scope yet. Tier 2 (7 items) folded into `v0.44.0`; Tier 3 (18 items) is now scoped as `v0.45.0` (see above). Tier 4 (19 items, "low impact, cheap cleanups") remains here from the same 7-session conversion/retention UX audit — full detail, impact/effort ratings, and Claude Code/Codex routing per item in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`. Also includes two explicitly deferred items (adoption-count social proof on Public Library plan cards; "Trending this week," blocked on windowed backend counts that don't exist yet). Pull from here when scoping what comes after v0.45.0 — do not re-run the audit or re-derive this list from scratch.
 
 ## App Shape, App-Like UI & Companion Authenticity (candidate, not yet scoped)
 

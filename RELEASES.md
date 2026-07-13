@@ -1,5 +1,30 @@
 # RELEASES.md - NoteLib
 
+## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish
+
+**Status: In Progress**
+
+Theme: ship Tier 3 of the same 7-session conversion/retention UX audit that drove v0.44.0 (`docs/claude-prompt/conversion-audit-out/`, consolidated in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`) — 18 medium-impact, lower-urgency items (#19–36), all copy/composition/UI polish with no new backend entities, migrations, or pricing/quota changes.
+
+### Planned Scope
+
+Grouped into 6 thematic PRs by surface:
+
+- **Landing page (frontend).** Exam-hub empty-state value strip, differentiation section rewrite, demo access promoted from optional to a required hero/nav slot, FAQ section + FAQPage/Article structured data.
+- **Pricing (frontend).** Outcome-framed plan bullets + "Best for" row on the comparison table, hesitant-buyer FAQ entries (pass-end, renewal, payment methods, refunds), duration/CTA verb alignment across surfaces, near-limit usage banner reframed as a milestone rather than just a warning.
+- **Note detail (frontend, routing TBD).** Non-owner CTA consolidation + `public-notes.md`/`note-detail.md` doc-drift fix, related-notes module ("More in {Subject}" / "More from {Author}") — Codex if a new query is needed, Claude Code direct otherwise; confirm before starting this PR.
+- **Public plan card (frontend).** Outcome microcopy under the adopt CTA, official-identity badge (no backend field needed — publish is already admin-only).
+- **Onboarding/Dashboard guidance (frontend).** Course/Program helper-text examples for Professional/Board Taker profiles, post-completion Dashboard guidance tip via the existing `pickActiveGuidance` engine, returning-visit guidance tip on the decay/review rhythm, re-weighted returning-user dashboard emphasis (composition/ordering only).
+- **Public Library (frontend).** General no-results state for filter combinations, "Study Pack Ready" toggle filter.
+
+Anti-drift: no new backend entities, migrations, endpoints, pricing tiers, or quota changes. All items route to direct Claude Code implementation per `CLAUDE.md`'s task-routing table except the note-detail related-notes module, whose routing depends on whether a new query is required.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.44.0 - Conversion & Retention Polish
 
 **Status: Released**
