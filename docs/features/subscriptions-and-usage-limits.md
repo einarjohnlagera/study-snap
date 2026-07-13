@@ -29,7 +29,7 @@ Do not derive plan access from:
 - Quick Review available
 - Challenge Quiz available
 - weak concepts visible after quiz completion
-- Adaptive Practice unavailable
+- Adaptive Practice available and quota-limited (`3` / month by default)
 - Difficulty selection unavailable
 - Board Exam Mode unavailable
 
@@ -41,7 +41,7 @@ Do not derive plan access from:
 - OCR: backend-configured Plus limit (`50` by default)
 - exports: `15` / month
 - higher usage limits than Free
-- Adaptive Practice currently unavailable in runtime
+- Adaptive Practice available and quota-limited (`10` / month by default)
 - Difficulty selection unavailable
 - Board Exam Mode unavailable
 
@@ -57,10 +57,6 @@ Do not derive plan access from:
 - Long Exam available and quota-limited (`12` source-note units / month by default; quota is deducted per source note)
 - Difficulty selection available
 - Board Exam Mode available
-
-## Pricing-surface note
-
-Some pricing surfaces currently position Plus with stronger “regular study” messaging than the backend feature gates provide.
 
 For actual behavior and gating decisions:
 
