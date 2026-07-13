@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.44.0 - Conversion & Retention Polish` is in progress (on `releases/v0.44.0`) — Tier 1 findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`) are fully shipped, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (pressure-tested and closed). Tier 2 of the same audit backlog (7 items) has now been folded in as this release's next slice rather than opening a new version — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
+`v0.44.0 - Conversion & Retention Polish` is Released (on `releases/v0.44.0`) — Tier 1 findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`) shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
 
 `v0.43.1 - Companion Mentor Tips` is the previous released version (on `releases/v0.43.1`).
 
@@ -18,7 +18,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
-## v0.44.0 - Conversion & Retention Polish (in progress, base branch `releases/v0.44.0`)
+## v0.44.0 - Conversion & Retention Polish (Released, base branch `releases/v0.44.0`)
 
 Origin: a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`, consolidated and tiered in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`), run against a real prior data-driven finding (`docs/archive/conversion-funnel-finding.md`, v0.32.2) that identified retention — not top-of-funnel or onboarding — as the proven constraint. This release shipped the audit's Tier 1 (high-impact, low-effort) items plus one verified backend gap, then folded in Tier 2 (items 12–18) as a second slice rather than closing and reopening a new version. Full scope in `RELEASES.md`.
 
