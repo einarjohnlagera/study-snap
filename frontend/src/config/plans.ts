@@ -65,12 +65,12 @@ export const PLANS: Record<AppPlanType, {
     ctaLabel: "Get Plus",
     adaptivePracticeMessage: "Train on weak areas (limited sessions)",
     features: [
-      { label: `${pricingConfig.plus.studyPacksPerMonth} Study Packs / month` },
-      { label: `${pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month` },
-      { label: `${pricingConfig.plus.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
-      { label: `${pricingConfig.plus.quizShareLinksPerMonth} shareable quiz links / month` },
-      { label: `Adaptive Practice (${pricingConfig.plus.adaptivePracticePerMonth} sessions / month)` },
-      { label: "Higher note generation limits" },
+      { label: `Keep building with ${pricingConfig.plus.studyPacksPerMonth} Study Packs each month` },
+      { label: `Practice more often with ${pricingConfig.plus.challengeQuizzesPerMonth} quizzes each month` },
+      { label: `Take ${pricingConfig.plus.docxExportsPerMonth} study resources offline each month`, helper: EXPORT_HELPER },
+      { label: `Share ${pricingConfig.plus.quizShareLinksPerMonth} quizzes with classmates each month` },
+      { label: `Target weak areas with ${pricingConfig.plus.adaptivePracticePerMonth} Adaptive Practice sessions each month` },
+      { label: "Create more notes when your study load grows" },
     ],
   },
   PRO: {
@@ -81,20 +81,28 @@ export const PLANS: Record<AppPlanType, {
     eyebrow: "Most popular",
     adaptivePracticeMessage: "Train on weak areas until you master them",
     features: [
-      { label: `${pricingConfig.pro.studyPacksPerMonth} Study Packs / month` },
-      { label: `${pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month` },
-      { label: "Unlimited exports", helper: EXPORT_HELPER },
-      { label: "Unlimited shareable quiz links" },
-      { label: `Adaptive Practice (${pricingConfig.pro.adaptivePracticePerMonth} sessions / month)` },
-      { label: `Interview Practice (${pricingConfig.pro.interviewPracticePerMonth} sessions / month)` },
-      { label: `Long Exam (${pricingConfig.pro.longExamPerMonth} sessions / month)` },
-      { label: `Board Exam Mode (${pricingConfig.pro.boardExamPerMonth} sessions / month)` },
-      { label: "Difficulty selection" },
+      { label: `Build a deep library with ${pricingConfig.pro.studyPacksPerMonth} Study Packs each month` },
+      { label: `Stay exam-ready with ${pricingConfig.pro.challengeQuizzesPerMonth} quizzes each month` },
+      { label: "Export every study resource you need", helper: EXPORT_HELPER },
+      { label: "Share unlimited quizzes with classmates" },
+      { label: `Keep improving weak areas with ${pricingConfig.pro.adaptivePracticePerMonth} Adaptive Practice sessions each month` },
+      { label: `Rehearse real answers with ${pricingConfig.pro.interviewPracticePerMonth} Interview Practice sessions each month` },
+      { label: `Build stamina with ${pricingConfig.pro.longExamPerMonth} Long Exam sessions each month` },
+      { label: `Prepare for boards with ${pricingConfig.pro.boardExamPerMonth} Board Exam sessions each month` },
+      { label: "Set the quiz difficulty that matches your exam" },
     ],
   },
 };
 
 export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
+  {
+    label: "Best for",
+    values: {
+      FREE: "Light review and trying the core study loop",
+      PLUS: "Regular study with more room to keep going",
+      PRO: "Focused exam preparation and mastery practice",
+    },
+  },
   {
     label: "Study Packs / month",
     values: {
@@ -307,7 +315,7 @@ export function getUpgradeCtas(
     }
     return {
       primary: { label: "Upgrade to Plus", targetPlan: "PLUS" },
-      secondary: { label: "Go Pro", targetPlan: "PRO" },
+      secondary: { label: "Upgrade to Pro", targetPlan: "PRO" },
     };
   }
   if (currentPlan === "PLUS") {

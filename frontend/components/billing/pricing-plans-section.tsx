@@ -360,6 +360,8 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             { q: "Who is Pro for?", a: "Pro is built for serious review and exam prep with Adaptive Practice, difficulty selection, Board Exam Mode, and the highest limits." },
             { q: "Will I be charged again?", a: "No. Plus and Pro are one-time, time-boxed passes — they never auto-renew. Buy another pass when your next exam is near. Your usage limits refresh each month while a pass is active." },
             { q: "What happens when my pass ends?", a: "Your notes, Study Packs, and progress stay in your library. You simply return to Free limits until you grab another pass." },
+            { q: "How do I renew a pass?", a: "NoteLib never auto-renews. When you are ready, choose another Plus or Pro pass from Settings and complete the hosted checkout." },
+            { q: "Can I get a refund?", a: "Refunds are handled for exceptional billing errors such as duplicate charges or technical payment failures. Contact support@mail.notelib.app to request help; refunds are not self-serve in the app." },
             { q: "Do prices vary by country?", a: "Yes. Backend pricing resolves your region and keeps PHP visibility clear for Xendit checkout." },
           ].map(({ q, a }) => (
             <div key={q} className="space-y-1">
