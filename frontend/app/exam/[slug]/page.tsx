@@ -7,6 +7,7 @@ import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import type { NoteListItemResponse } from "@/lib/api";
 import { EXAM_HUB_SLUGS, getExamHubConfig, type ExamHubConfig } from "@/lib/exam-hub-config";
+import { buildLearnCategoryPath } from "@/lib/learn-guides";
 import {
   DISCOVERY_SECTION_LIMIT,
   excludeById,
@@ -213,6 +214,11 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
         </div>
       </header>
 
+      <p className="text-sm leading-relaxed text-foreground/70">
+        NoteLib turns {exam.shortName} notes into summaries, key concepts, and quiz practice — so you can track the
+        weak areas that need review before exam day, not just read through material once.
+      </p>
+
       {hasAnyNotes ? (
         <div className="space-y-8">
           <ExamSection
@@ -241,6 +247,9 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
             <ExamHubCta exam={exam} />
             <Link href="/public/library" className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
               Browse the Public Library
+            </Link>
+            <Link href={buildLearnCategoryPath("board-exams")} className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
+              Read Board Exam study guides
             </Link>
           </div>
         </Card>

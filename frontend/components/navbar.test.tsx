@@ -46,6 +46,7 @@ describe("Navbar", () => {
     expect(screen.getByRole("img", { name: "NoteLib" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "How it Works" })).toHaveAttribute("href", "/how-it-works");
+    expect(screen.getByRole("link", { name: "Demo" })).toHaveAttribute("href", "/demo");
     expect(screen.getByRole("link", { name: "Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByRole("link", { name: "Learn" })).toHaveAttribute("href", "/learn");
     expect(screen.getByRole("link", { name: "Pricing" })).toHaveAttribute("href", "/pricing");
@@ -63,6 +64,7 @@ describe("Navbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
 
     expect(screen.getAllByRole("link", { name: "How it Works" })[1]).toHaveAttribute("href", "/how-it-works");
+    expect(screen.getAllByRole("link", { name: "Demo" })[1]).toHaveAttribute("href", "/demo");
     expect(screen.getAllByRole("link", { name: "Public Library" })[1]).toHaveAttribute("href", "/public/library");
     expect(screen.getAllByRole("link", { name: "Login" })[1]).toHaveAttribute("href", "/login");
     expect(screen.getAllByRole("link", { name: "Get Started" })[1]).toHaveAttribute("href", "/signup");
