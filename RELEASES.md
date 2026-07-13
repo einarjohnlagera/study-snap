@@ -10,7 +10,6 @@ Theme: ship Tier 3 of the same 7-session conversion/retention UX audit that drov
 
 Grouped into 6 thematic PRs by surface:
 
-- **Pricing (frontend).** Outcome-framed plan bullets + "Best for" row on the comparison table, hesitant-buyer FAQ entries (pass-end, renewal, payment methods, refunds), duration/CTA verb alignment across surfaces, near-limit usage banner reframed as a milestone rather than just a warning.
 - **Note detail (frontend, routing TBD).** Non-owner CTA consolidation + `public-notes.md`/`note-detail.md` doc-drift fix, related-notes module ("More in {Subject}" / "More from {Author}") — Codex if a new query is needed, Claude Code direct otherwise; confirm before starting this PR.
 - **Public plan card (frontend).** Outcome microcopy under the adopt CTA, official-identity badge (no backend field needed — publish is already admin-only).
 - **Onboarding/Dashboard guidance (frontend).** Course/Program helper-text examples for Professional/Board Taker profiles, post-completion Dashboard guidance tip via the existing `pickActiveGuidance` engine, returning-visit guidance tip on the decay/review rhythm, re-weighted returning-user dashboard emphasis (composition/ordering only).
@@ -20,6 +19,7 @@ Anti-drift: no new backend entities, migrations, endpoints, pricing tiers, or qu
 
 ### Shipped
 
+- **Pricing trust polish (frontend).** Plus and Pro bullets now lead with what regular study and exam-prep learners can accomplish, the comparison table adds a `Best for` choice row, and pricing answers documented pass-end, manual-renewal, and exceptional-refund questions (payment methods intentionally remain omitted because no policy is documented). The generic Free upgrade fallback now consistently uses `Upgrade to …`, while context-specific and renewal CTAs stay intentionally value-framed. Near-limit banners retain their quotas and exhausted states but frame remaining generic credits as continued monthly progress.
 - **Landing page conversion polish (frontend).** Exam hubs now show a one-paragraph product-value strip on every hub (not just empty ones), and the zero-note empty state adds a link to the matching Learn category alongside the existing intent-preserving signup CTA and Public Library link. The landing differentiation table was rewritten from four abstract contrasts to three concrete, felt ones (e.g. "gone when the chat resets" vs "saved in your library, reusable"). Demo access (`/demo`, previously unlinked from any public surface) is now a required hero CTA and a public nav item, not optional fine print. A new landing FAQ section (4 pre-signup objections) emits `FAQPage` JSON-LD built from the same data that renders the visible cards, and Learn articles — previously the only public SEO surface without structured data — now emit `Article` JSON-LD. No backend changes; corrected a pre-existing doc-drift in `landing.md`'s public-nav list along the way (it was missing `Exam Hubs`, already live since v0.44.0).
 
 ---
