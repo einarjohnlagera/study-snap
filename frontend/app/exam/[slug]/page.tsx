@@ -233,13 +233,16 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
         </div>
       ) : (
         <Card className="space-y-3 p-6 text-center sm:p-8">
-          <h2 className="text-lg font-semibold">No {exam.fullName} notes have been shared yet. Check back soon.</h2>
+          <h2 className="text-lg font-semibold">No {exam.fullName} notes have been shared yet.</h2>
           <p className="text-sm text-foreground/65">
-            Browse the full Public Library to find related study notes, summaries, and quizzes.
+            Start preparing with your own notes, or browse the full Public Library for related study notes, summaries, and quizzes.
           </p>
-          <Link href="/public/library" className="inline-flex text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
-            Browse the Public Library
-          </Link>
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <ExamHubCta exam={exam} />
+            <Link href="/public/library" className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
+              Browse the Public Library
+            </Link>
+          </div>
         </Card>
       )}
     </main>

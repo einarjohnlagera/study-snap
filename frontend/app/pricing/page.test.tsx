@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PricingPage, { metadata } from "./page";
-import { createPremiumCheckoutSession } from "@/lib/api";
+import { createPremiumCheckoutSession, trackAnalyticsEvent } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
@@ -52,6 +52,7 @@ describe("PricingPage", () => {
     window.history.replaceState(null, "", "/pricing");
     pushMock.mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockClear();
+    (trackAnalyticsEvent as jest.Mock).mockClear();
     (redirectToCheckoutUrl as jest.Mock).mockReset();
   });
 
@@ -122,6 +123,16 @@ describe("PricingPage", () => {
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", billingCycle: null, returnUrl: "/pricing" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "UPGRADE_CLICKED",
+        metadata: {
+          source: "pricing_hero",
+          feature: null,
+          path: "/pricing",
+          planType: "PRO",
+          target: "xendit_checkout",
+        },
+      });
     });
   });
 

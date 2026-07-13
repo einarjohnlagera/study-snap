@@ -2424,6 +2424,7 @@ class NoteCollectionServiceTest {
         assertThat(result.getFirst().visibility()).isEqualTo(CollectionVisibility.PUBLIC.name());
         assertThat(result.getFirst().courseProgram()).isEqualTo(UPDATED_COURSE_PROGRAM);
         assertThat(result.getFirst().itemCount()).isEqualTo(2);
+        assertThat(result.getFirst().readyCount()).isZero();
         assertThat(result.getFirst().childCount()).isEqualTo(1);
         assertThat(result.getFirst().notesPracticed()).isZero();
         verify(collectionRepository).findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
@@ -2431,6 +2432,77 @@ class NoteCollectionServiceTest {
                 UPDATED_COURSE_PROGRAM
         );
         verify(quizSessionHistoryService, never()).findLatestSessionCompletedAtByNoteIds(any(), any());
+    }
+
+    @Test
+    void listPublic_countsOnlyStudyPackReadyNotes() {
+        UUID collectionId = UUID.randomUUID();
+        UUID readyNoteId = UUID.randomUUID();
+        UUID generatingNoteId = UUID.randomUUID();
+        UUID failedNoteId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        List<UUID> noteIds = List.of(readyNoteId, generatingNoteId, failedNoteId, draftNoteId);
+        NoteEntity readyNote = buildNote(readyNoteId, collection.getOwnerUserId(), NOTE_TITLE_ONE);
+        readyNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity generatingNote = buildNote(generatingNoteId, collection.getOwnerUserId(), NOTE_TITLE_TWO);
+        generatingNote.setVisibility(NoteVisibility.PUBLIC);
+        generatingNote.setStatus(NoteStatus.GENERATING);
+        NoteEntity failedNote = buildNote(failedNoteId, collection.getOwnerUserId(), NOTE_TITLE_THREE);
+        failedNote.setVisibility(NoteVisibility.PUBLIC);
+        failedNote.setStatus(NoteStatus.FAILED);
+        NoteEntity draftNote = buildNote(draftNoteId, collection.getOwnerUserId(), "Draft note");
+        draftNote.setVisibility(NoteVisibility.PUBLIC);
+        when(collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC))
+                .thenReturn(List.of(collection));
+        when(itemRepository.countItemsByCollectionIds(List.of(collectionId)))
+                .thenReturn(List.of(countProjection(collectionId, noteIds.size())));
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(collectionId))).thenReturn(List.of(
+                noteProjection(collectionId, readyNoteId),
+                noteProjection(collectionId, generatingNoteId),
+                noteProjection(collectionId, failedNoteId),
+                noteProjection(collectionId, draftNoteId)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds))
+                .thenReturn(asNoteProjections(readyNote, generatingNote, failedNote, draftNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(
+                buildStudyPack(readyNoteId),
+                buildStudyPack(generatingNoteId),
+                buildStudyPack(failedNoteId)
+        ));
+        when(collectionRepository.countChildrenByCollectionIds(List.of(collectionId))).thenReturn(List.of());
+
+        List<NoteCollectionSummaryResponse> result = service.listPublic(null);
+
+        assertThat(result).singleElement().extracting(NoteCollectionSummaryResponse::readyCount).isEqualTo(1);
+    }
+
+    @Test
+    void getPublic_exposesReadyCountForItsPublicItems() {
+        UUID collectionId = UUID.randomUUID();
+        UUID readyNoteId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        NoteEntity readyNote = buildNote(readyNoteId, collection.getOwnerUserId(), NOTE_TITLE_ONE);
+        readyNote.setVisibility(NoteVisibility.PUBLIC);
+        NoteEntity draftNote = buildNote(draftNoteId, collection.getOwnerUserId(), NOTE_TITLE_TWO);
+        draftNote.setVisibility(NoteVisibility.PUBLIC);
+        List<UUID> noteIds = List.of(readyNoteId, draftNoteId);
+        when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(
+                buildItem(collectionId, readyNoteId, 0, null),
+                buildItem(collectionId, draftNoteId, 1, null)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote, draftNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+
+        NoteCollectionDetailResponse result = service.getPublic(collectionId);
+
+        assertThat(result.readyCount()).isEqualTo(1);
+        assertThat(result.progress().notesWithStudyPack()).isEqualTo(1);
     }
 
     @Test

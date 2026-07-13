@@ -14,6 +14,7 @@ Dashboard is a guidance surface, not a management screen. It should help users d
 - `frontend/app/dashboard/page.tsx` — main dashboard client; `SupportedDashboardProfileType` branching (STUDENT / BOARD_EXAM / TEACHER / PROFESSIONAL); all section composition per profile type
 - `frontend/app/dashboard/continue-spotlight.tsx` — Continue Studying card
 - `frontend/app/dashboard/dashboard-focus-areas-card.tsx` — Focus Areas / weak concepts section
+- `frontend/app/dashboard/today-focus-card.tsx` — top-priority Today Focus card for resumable reviews and due concepts
 - `frontend/app/dashboard/study-pack-grid.tsx` — Recent Notes grid
 - `frontend/lib/api.ts` — `getDashboardOverview()`, `getContinueStudyingRecommendation()`, `getTodayFocus()`
 
@@ -42,6 +43,16 @@ Behavior:
 - when opened from Dashboard, `/profile` shows a `Dashboard` back link instead of the public-profile back link
 
 This prompt is for learner level only. It does not move learning style or reminder preferences back into onboarding.
+
+### Copy-on-signup profile completion prompt
+
+Successful public-note copy-on-signup users may arrive on Dashboard with a pending lightweight profile-completion marker instead of a completed onboarding timestamp. When their Profile Type, Learner Level, or Course / Program remains incomplete, Dashboard shows a separate inline card near the first-run guidance area.
+
+- The card is non-blocking and dismissible; Dashboard actions remain usable.
+- It reuses onboarding's profile choices, learner-level options, course/program combobox (`allowCustom=false`), and optional Board Exam date.
+- A dismissal lasts for the current day but never clears the pending completion marker, so the card can return on a later visit until saved.
+- Submission saves Learning Profile first, then completes onboarding profile metadata. A partial failure retries only the latter.
+- This card is only for the copy-on-signup marker cohort; it does not change the normal onboarding wizard or the existing learner-level personalization prompt.
 
 ## Profile-specific priorities
 
@@ -109,6 +120,32 @@ Rules:
 - do not make extra frontend fetches just to label the card
 - keep the card note-first so the user knows which note they are returning to
 
+## Today Focus
+
+Endpoint:
+
+- `GET /dashboard/today-focus`
+
+Backend priority order (`DashboardService.getTodayFocus()`):
+
+1. resumable Quick Review (`RESUME_REVIEW` / `RETRY_REVIEW`)
+2. due concepts (`DUE_CONCEPTS_REVIEW`)
+3. weak concepts from the latest Quick Review (`PRACTICE_WEAK_CONCEPT`)
+4. a previously opened, newly created, or recently reviewed Study Pack (`REVIEW_PACK`)
+5. the first-Study-Pack suggestion (`STUDY_SUGGESTION`)
+
+**The Dashboard only renders the `TodayFocusCard` component for the `DUE_CONCEPTS_REVIEW` type.** The other four types exist in the resolver (some predate this card's Dashboard integration) but are intentionally not surfaced here — `RESUME_REVIEW`/`RETRY_REVIEW` would duplicate the existing Continue Studying section (`getContinueStudyingRecommendation()`, a separate, independently-computed resolver over the same in-progress-session signal), and `PRACTICE_WEAK_CONCEPT` would duplicate Focus Areas. Do not widen the render condition without first reconciling those two independent "resume" implementations and the two "weak concepts" sources — see the dead-code note below.
+
+The due-concepts branch uses the existing deterministic `concept_health` threshold across the learner's owned Study Packs. It returns the real due-concept count and each concept's source-note reference. It is available to every plan, including Free; it is a retention signal, not an Adaptive Practice entitlement.
+
+Due-concepts actions reuse the Focus Areas three-way behavior:
+
+- Adaptive Practice available and source note present → `Practice Due Concepts`
+- source note present but Adaptive Practice unavailable → `Revisit Note`
+- no source note → `Unlock Adaptive Practice` shared paywall action
+
+The card is loaded as a non-critical Dashboard request, so a focus-resolution failure never blocks the rest of Dashboard.
+
 ## Focus Areas
 
 Focus Areas should show weak concepts for all learners when data exists.
@@ -148,12 +185,13 @@ v0.31.0 adds a learner-facing plan surface for STUDENT, BOARD_EXAM, and PROFESSI
 **Data source**: `GET /collections/public?courseProgram=<value>` plus the user's `GET /collections` list to detect an already adopted `sourcePlanId`
 **CTA**:
 
+- `Preview this plan` opens the shared, read-only public-detail disclosure before adoption; it is available on the Dashboard card as well as `/collections/published` and does not change the Start/Continue flow
 - `Start this plan` when the learner has not adopted the source plan
 - `Continue this plan` when a private collection with `sourcePlanId == sourcePlan.id` already exists
 
 Behavior by state:
 
-- `courseProgram` is set and a matching published plan exists → show the first matching plan card with item count and Start/Continue CTA
+- `courseProgram` is set and a matching published plan exists → show the first matching plan card with its item count, `{readyCount} of {itemCount} notes practice-ready` metadata, and Start/Continue CTA. The readiness fraction is always plain metadata (not a badge), including `0 of N` and `N of N`; an older cached response without `readyCount` keeps the item count without a partial string.
 - no matching plan exists, and the learner already has notes (`items.length > 0`) → render nothing; do not show an empty shell. Preserved from the original v0.33.0 decision — an established, already-active dashboard should not carry a "no curated plan yet" filler card just because their track has no curated content.
 - no matching plan exists, and the learner has zero notes (`items.length === 0`, the cold-start case) → **pass `browseWhenEmpty` (v0.39.1)** so the same guidance-nudge card `/collections` already shows ("No curated {plural} for {program} yet... Check back soon, or build your own above") renders here too, instead of silently disappearing. Cold-start discoverability audit (v0.39.1) found the Dashboard's blanket "render nothing" rule meant a zero-notes learner with no curated plan for their track got no signal that adoption exists at all, in the exact moment it matters most. Gating on `items.length` keeps the original anti-clutter intent for everyone else.
 - Start calls `POST /collections/{id}/adopt`, then routes to `/collections/{personalId}`

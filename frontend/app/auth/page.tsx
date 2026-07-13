@@ -36,6 +36,7 @@ import {
   clearCopyIntentCookie,
   getCopyIntentCookie,
 } from "@/lib/public-note-copy";
+import { setPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
 import { suggestEmailCorrection } from "@/lib/email-typo-suggestion";
@@ -244,6 +245,7 @@ function AuthPageContent() {
         try {
           const copied = await copyNoteOnSignup(copyIntentNoteId);
           clearCopyIntentCookie();
+          setPendingLightweightProfileCompletion(nextAuthUser.id);
           void trackAnalyticsEvent({
             eventType: "COPY_ON_SIGNUP_COMPLETED",
             entityId: copied.noteId,

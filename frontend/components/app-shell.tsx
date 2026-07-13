@@ -22,6 +22,7 @@ import { Navbar } from "@/components/navbar";
 import { useAppShellTitleContext } from "@/components/app-shell-title-context";
 import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { hasPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 import { cn } from "@/lib/utils";
 import type { ProfileType } from "@/lib/api";
@@ -64,7 +65,7 @@ function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): bo
 function isProtectedAppRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
-    || pathname.startsWith("/collections")
+    || (pathname.startsWith("/collections") && pathname !== "/collections/published")
     || pathname.startsWith("/library")
     || pathname.startsWith("/notes")
     || pathname.startsWith("/profile")
@@ -308,7 +309,12 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     if (!authUser) {
       return;
     }
-    if (needsOnboarding(authUser) && isProtectedAppRoute(pathname) && pathname !== "/onboarding") {
+    if (
+      needsOnboarding(authUser)
+      && !hasPendingLightweightProfileCompletion(authUser.id)
+      && isProtectedAppRoute(pathname)
+      && pathname !== "/onboarding"
+    ) {
       router.replace("/onboarding");
       return;
     }

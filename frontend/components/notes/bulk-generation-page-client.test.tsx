@@ -36,6 +36,7 @@ jest.mock("@/lib/api", () => ({
   listCoursePrograms: jest.fn(),
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 async function fillAdminForm(topicValues: string[]) {

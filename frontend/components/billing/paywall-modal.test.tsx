@@ -3,9 +3,11 @@ import { PaywallModal } from "./paywall-modal";
 import {
   createPremiumCheckoutSession,
   getBillingPricing,
+  trackAnalyticsEvent,
 } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { loadPendingPaywallUpgradeContext } from "@/lib/paywall-upgrade-context";
+import { PASS_NO_AUTO_CHARGE_FOOTER } from "@/src/config/plans";
 
 const pushMock = jest.fn();
 const requestEmailVerificationMock = jest.fn();
@@ -95,6 +97,7 @@ describe("PaywallModal", () => {
     (redirectToCheckoutUrl as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
       checkoutUrl: "https://checkout.xendit.test/invoice_123",
     });
@@ -126,7 +129,13 @@ describe("PaywallModal", () => {
     expect(screen.getByText("Most popular")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toBeInTheDocument();
     expect(screen.getByText("Access activates immediately after payment")).toBeInTheDocument();
-    expect(screen.getByText("No automatic charges. You control renewals.")).toBeInTheDocument();
+    expect(screen.getByText(PASS_NO_AUTO_CHARGE_FOOTER)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: "PAYWALL_VIEWED",
+        metadata: expect.objectContaining({ source: "test_source" }),
+      }));
+    });
   });
 
   it("saves the paywall upgrade context and starts checkout for the plan-aware Study Pack upgrade", async () => {

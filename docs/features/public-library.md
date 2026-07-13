@@ -9,9 +9,9 @@ Routes:
 - canonical list route for signed-in and signed-out users: `/public/library`
 - canonical public note detail route: `/public/library/{subject}/{slug}`
 - canonical public creator/profile route: `/public/creator/{username}`
+  - canonical subject landing page: `/public/library/{subject}` — server-rendered, not a redirect (see item J below)
 - legacy compatibility redirects:
   - `/library/public` -> `/public/library`
-  - `/public/library/{subject}` -> `/public/library?subject={subject}`
   - `/public/profile/{userId}` remains compatible for existing public-profile links
 
 Shareable filter URLs:
@@ -80,6 +80,19 @@ Public Library has two display modes:
 
 **Filter mode** (when any search, filter, or sort is active):
 - Standard sorted/filtered list of all matching public notes
+- When no explicit sort is selected, `Recommended` is the default: it reuses the existing decay-adjusted discovery score across all matching notes, with engagement and freshness tiebreaks. It does not apply Featured-only eligibility.
+- Explicit `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` choices continue to override the default. `?sort=recent` remains the canonical explicit Newest URL; no `sort` parameter means Recommended only in filter mode and keeps Discovery mode unchanged.
+- With an active Course / Program filter, a matching Official Study Plan adds one contextual `Browse official plans` pointer above results. The existing `listPublicStudyPlans({ courseProgram })` lookup selects its first result like the Dashboard recommendation; lookup failure or no result renders nothing and never affects note results.
+
+### Official Study Plan readiness metadata
+
+Public Study Plan list and detail responses expose a live `readyCount` alongside their existing note totals. `PublicStudyPlanCard` renders this as plain metadata — `{readyCount} of {itemCount} notes practice-ready` — on the published-plan and Dashboard recommendation surfaces. A note is practice-ready only when the existing `STUDY_PACK_READY` resolver says it is ready; zero, partial, and fully ready plans all show their real ratio. If an older cached list response does not include the aggregate, the card keeps its existing item-count metadata without rendering an incomplete ratio.
+
+### Public Study Plan pre-adopt preview
+
+Every `PublicStudyPlanCard` includes an optional `Preview this plan` disclosure, available without authentication before the learner adopts. `/collections/published` is browseable to anonymous visitors for this purpose: they see the same previews and a `Sign in to adopt` CTA, while authenticated learners retain Start/Continue actions and their adopted-plan context. The disclosure loads the existing public collection detail endpoint only when opened and shows the actual available note titles, subjects, section labels, Course / Program, estimated study time, and the detail response's practice-ready ratio.
+
+The preview is read-only and does not change the Start/Continue adopt action. A failed or unavailable public detail response shows a clear retryable error while that action remains usable. A public plan with no available items says so plainly instead of rendering an empty note list.
 
 Switching from discovery to filter mode:
 - Typing in search → filter mode
@@ -285,7 +298,7 @@ Behavior:
 - `Share this list` must copy the same canonical `/public/library?...` URL the page is currently using
 - direct opens of a filtered URL must restore the same selected filters in the UI
 - backend filtering is combinable and returns only `PUBLIC` notes
-- search is case-insensitive
+- search is case-insensitive and already matches Course / Program and tags alongside the existing note text fields; a query such as `PNLE` finds notes whose canonical program is PNLE without a duplicate search predicate
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
 - Public Library shows the response count near the filter bar: `{total} notes` with no active URL filters, or `{items.length} of {total} notes` when `search`, `subject`, `tag`, `courseProgram`, non-ALL `audience`, or `creator` is present
@@ -297,7 +310,8 @@ Behavior:
 A dismissible discovery hint shown above the note list when no `courseProgram` filter is active and no creator filter is set:
 
 - Text: `Studying for a specific exam or program? Browse notes by Course or Program.`
-- Action: `Browse by Course/Program` — opens the filter sheet
+- Top six Course / Program chips are ranked by the real public-note counts already loaded for the current browse result and apply the same canonical `?courseProgram=` slug filter as the sheet; no program list is hardcoded
+- Action: `Browse by Course/Program` — opens the filter sheet as the full taxonomy path
 - Dismiss button (X) hides the card and stores dismissal in `sessionStorage` (key: `notelib_public_library_cp_cta_dismissed`); it reappears on a new browsing session
 - Hidden when `?courseProgram=` or `?creator=` is already present in the URL
 - Do not show while the note list is loading
@@ -313,6 +327,7 @@ If the selected audience category has no matching notes and no other filters are
 
 Public Library sort options:
 
+- `Recommended` (filter-mode default when no explicit sort is set)
 - `Newest`
 - `Most Copied`
 - `Most Viewed`

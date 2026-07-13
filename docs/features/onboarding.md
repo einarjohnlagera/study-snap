@@ -54,6 +54,19 @@ In that case `/onboarding` renders only Step 1:
 
 Do not backfill or silently default `profileType`. The user must choose the correct profile type.
 
+### Copy-on-signup lightweight profile completion
+
+Copy-on-signup is a distinct, narrow alternate path for a newly verified visitor whose public-note copy succeeded before normal onboarding.
+
+- Verification writes a per-user `notelib.lightweight-profile-completion-pending` marker before routing to the copied note's existing Quick Review destination.
+- The marker exempts only this cohort from the immediate onboarding redirect, so the copied note and its auto-launched Quick Review render before profile setup interrupts the session.
+- The first Dashboard visit shows a dismissible, non-blocking profile-completion card only while the marker is present and `profileType`, `learnerLevel`, or `courseProgram` is missing. It reuses the normal Profile Type choices, learner-level selector, course/program combobox with custom entry disabled, and the optional Board Exam date field.
+- Saving calls the existing Learning Profile update first, then `POST /auth/onboarding` for profile type and optional exam date. If the second call fails, the card keeps the saved learning context and retries only profile completion.
+- Dismissing the card does not clear the completion marker. Its per-user local dismissal lasts for the current day, so the card can reappear on a later Dashboard visit until completion succeeds.
+- On full success the marker is cleared and the local auth cache is refreshed. No new backend endpoint, DTO, or migration is involved.
+
+This does not alter the five-step `/onboarding` flow, its order, or the legacy profile-type-only re-prompt for any other cohort. If marker storage is unavailable, the app fails open to the existing `/onboarding` redirect behavior.
+
 ### Step 2 — Study Goal
 
 Goal options are filtered by the selected profile type.
@@ -114,18 +127,19 @@ The note and Study Pack are normal saved library entities, not temporary onboard
 
 Headline:
 
-- `You just started your study loop.`
+- Uses the learner's onboarding topic when available: `Your {topic} Study Pack is ready. Come back tomorrow to keep building on it.`
+- Falls back to the same return-framed message without the topic when the topic is unavailable.
 
 Actions:
 
-- `Continue Studying`
-- `Go to Dashboard`
+- `Open your Study Pack` is the single visually-primary action and keeps the existing fresh-Study-Pack destination.
+- `Go to Dashboard` remains functional as a quiet secondary action.
 
 The completion call persists onboarding completion through the existing backend flow and sets `onboardingCompletedAt`.
 
 #### Recommended plan adopt card
 
-Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Continue Studying` action.
+Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Open your Study Pack` action.
 
 - The card self-hides when the learner's course/program has no published plan, so most tracks see Step 5 unchanged.
 - For tracks with a published plan, it offers one-tap adopt via the existing `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan` (no new endpoint).

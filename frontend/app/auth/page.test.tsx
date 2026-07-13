@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
 import { ApiRequestError, copyNoteOnSignup, getMyPlan, login, loginWithGoogle, reactivateAccount } from "@/lib/api";
+import { hasPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 
 const routerMock = {
   push: jest.fn(),
@@ -22,6 +23,26 @@ jest.mock("next/navigation", () => ({
 jest.mock("next/image", () => ({
   __esModule: true,
   default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} />,
+}));
+
+jest.mock("@/components/auth/google-auth-button", () => ({
+  GoogleAuthButton: ({
+    label,
+    disabled,
+    onCredential,
+  }: {
+    label: string;
+    disabled?: boolean;
+    onCredential: (code: string) => void | Promise<void>;
+  }) => (
+    <button
+      type="button"
+      disabled={disabled || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      onClick={() => void onCredential("google-code-1")}
+    >
+      {label}
+    </button>
+  ),
 }));
 
 jest.mock("@/lib/auth", () => {
@@ -153,6 +174,33 @@ describe("AuthPage", () => {
     await waitFor(() => {
       expect(screen.queryByRole("heading", { name: "Log in to NoteLib" })).not.toBeInTheDocument();
     });
+  });
+
+  it("copies the intended public note after Google signup and marks lightweight profile completion as pending", async () => {
+    const originalClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = "test-google-client-id";
+    try {
+      document.cookie = "notelib-copy-intent=public-note-1; path=/; max-age=1800; SameSite=Strict";
+      (loginWithGoogle as jest.Mock).mockResolvedValue({
+        ...verifiedAuthUser,
+        id: "user-google-1",
+        onboardingCompletedAt: null,
+      });
+      (copyNoteOnSignup as jest.Mock).mockResolvedValue({ noteId: "copied-note-1" });
+
+      render(<AuthPage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+      await waitFor(() => {
+        expect(copyNoteOnSignup).toHaveBeenCalledWith("public-note-1");
+        expect(routerMock.replace).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
+      });
+      expect(hasPendingLightweightProfileCompletion("user-google-1")).toBe(true);
+      expect(document.cookie).not.toContain("notelib-copy-intent=");
+    } finally {
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = originalClientId;
+    }
   });
 
   it("offers account reactivation when login returns pending deletion", async () => {

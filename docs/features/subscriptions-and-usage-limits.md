@@ -67,6 +67,12 @@ For actual behavior and gating decisions:
 - use backend plan limits and feature flags
 - treat `GET /api/me/plan` as the frontend contract
 
+## Concept due and mastery signals
+
+Due and mastery status is visible to every plan tier, including Free. The concept-health response exposes the minimum `lastCorrectAt` value needed for the client to distinguish `Due`, `Mastered`, and `Not started`; it must not turn a due concept into a misleading not-started state for Free users.
+
+This is signal visibility only. It does not grant Adaptive Practice, consume or change any quota, or alter `Feature.ADAPTIVE_QUIZ` / weak-concept action checks. Detailed elapsed-time review copy, incorrect-answer history, and struggling-concept details remain available only on the existing paid timing path.
+
 ## Study Pack limit UX
 
 - remaining Study Packs come from backend usage calculations
@@ -106,6 +112,12 @@ Backend enforcement is mandatory even if the frontend disables or hides actions.
 - backend validates pricing, vouchers, return URL, and pending-checkout reuse
 - Xendit webhook confirmation is the only path that activates or extends paid access
 - success and failure pages are informational only
+
+## Pass expiry reminders
+
+The existing daily expiry email cadence uses a 7-day stage (6–8 days remaining) and a 1-day stage (24 hours remaining). Settings mirrors those same stages in-app using the already-loaded `premiumEndsAt` value; it does not introduce a backend trigger or client-side plan inference.
+
+Only active Plus and Pro passes with a future end time qualify. The renewal CTA starts the existing checkout flow for the current plan and preserves the one-time-pass model. Each stage is separately dismissible for that pass end time, so a dismissed 7-day notice does not hide the 1-day reminder.
 
 ## Pending checkout reuse
 

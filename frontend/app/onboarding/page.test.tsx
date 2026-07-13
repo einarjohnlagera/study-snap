@@ -368,7 +368,7 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByText("You just started your study loop.")).toBeInTheDocument();
+    expect(await screen.findByText("Your Newton's Laws of Motion Study Pack is ready. Come back tomorrow to keep building on it.")).toBeInTheDocument();
     await waitFor(() => {
       expect(completeOnboarding).toHaveBeenCalledWith({
         profileType: "STUDENT",
@@ -379,7 +379,10 @@ describe("OnboardingPage", () => {
       expect(updateLearningProfileContext).toHaveBeenCalledWith("COLLEGE", "AWS Certification");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue Studying" }));
+    const studyPackButton = screen.getByRole("button", { name: "Open your Study Pack" });
+    expect(studyPackButton).toHaveClass("bg-primary");
+    expect(screen.getByRole("button", { name: "Go to Dashboard" })).toHaveClass("bg-transparent");
+    fireEvent.click(studyPackButton);
 
     expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion");
     expect(createNote).toHaveBeenCalledWith({
@@ -389,6 +392,10 @@ describe("OnboardingPage", () => {
     });
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1", { autoApplyMetadata: true });
     expect(routerMock.push).toHaveBeenCalledWith("/study-packs/study-pack-1");
+
+    routerMock.push.mockReset();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Dashboard" }));
+    expect(routerMock.push).toHaveBeenCalledWith("/dashboard");
   });
 
   it("surfaces a recommended adopt card on completion when the track has a published plan", async () => {
@@ -452,7 +459,7 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("Your Study Pack is ready.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByText("You just started your study loop.")).toBeInTheDocument();
+    expect(await screen.findByText("Your Newton's Laws of Motion Study Pack is ready. Come back tomorrow to keep building on it.")).toBeInTheDocument();
     expect(await screen.findByText("AWS Certification Plan")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
@@ -580,6 +587,7 @@ describe("OnboardingPage", () => {
         examDate: null,
       });
     });
+    expect(await screen.findByText("Your Study Pack is ready. Come back tomorrow to keep building on it.")).toBeInTheDocument();
   });
 
   it("shows Professional profile option with learner context and no exam date field", async () => {

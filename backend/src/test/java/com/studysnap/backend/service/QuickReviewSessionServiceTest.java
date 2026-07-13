@@ -76,7 +76,8 @@ class QuickReviewSessionServiceTest {
                 activityTrackingService,
                 analyticsService,
                 subscriptionService,
-                featureGateService
+                featureGateService,
+                conceptHealthService
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -151,6 +152,101 @@ class QuickReviewSessionServiceTest {
         assertThat(response.scorePercentage()).isEqualByComparingTo("60.00");
         assertThat(response.retryCount()).isEqualTo(1);
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+    }
+
+    @Test
+    void completeSession_recordsCorrectAndMissedConceptsFromPersistedQuickReviewSelections() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", "A", "1", "C", "2", "D")));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Mastered", "Explanation"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), "B", "Needs Practice", "Explanation"),
+                new QuizItem("Q3", List.of("A", "B", "C", "D"), "D", "Mastered", "Explanation")
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(2, 3, 0, 120, null)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(userId), eq(studyPackId), eq(List.of("Mastered")), any(OffsetDateTime.class)
+        );
+        verify(conceptHealthService).recordIncorrectAnswers(
+                eq(userId), eq(studyPackId), eq(List.of("Needs Practice")), any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
+    void completeSession_skipsConceptHealthWritesWhenPersistedSelectionsAreUnavailable() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(List.of(new QuizItem(
+                "Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"
+        )));
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(0, 1, 0, 60, null)
+        );
+
+        verifyNoInteractions(conceptHealthService);
+    }
+
+    @Test
+    void completeSession_skipsConceptHealthWritesWhenTheStudyPackHasNoQuizConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", "A")));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(List.of());
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(0, 1, 0, 60, null)
+        );
+
+        verifyNoInteractions(conceptHealthService);
+    }
+
+    @Test
+    void completeSession_rejectsAlreadyCompletedSessionsBeforeConceptHealthWrites() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        String sessionIdRaw = sessionId.toString();
+        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null);
+
+        assertThatThrownBy(() -> quickReviewSessionService.completeSession(sessionIdRaw, userId, request))
+                .isInstanceOf(AppException.class)
+                .hasMessage("Quick Review session has already ended.");
+
+        verifyNoInteractions(conceptHealthService);
     }
 
     @Test
@@ -289,7 +385,7 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
-    void completeSession_neverRecordsToConceptHealth() {
+    void completeSession_skipsConceptHealthWritesWithoutPersistedSelections() {
         UUID userId = UUID.randomUUID();
         UUID fullyCorrectSessionId = UUID.randomUUID();
         UUID partiallyCorrectSessionId = UUID.randomUUID();
@@ -323,7 +419,7 @@ class QuickReviewSessionServiceTest {
         );
 
         verifyNoInteractions(conceptHealthService);
-        verify(studyPackRepository, never()).findByIdAndOwnerUserId(studyPackId, userId);
+        verify(studyPackRepository, times(3)).findByIdAndOwnerUserId(studyPackId, userId);
     }
 
     @Test

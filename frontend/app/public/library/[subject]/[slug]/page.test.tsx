@@ -150,6 +150,33 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText("Nucleus")).toBeInTheDocument();
   });
 
+  it("attributes visible Study Pack previews to the note content", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByText(/This summary, these key concepts, and this Quick Check were built from the note below/i)).toBeInTheDocument();
+  });
+
+  it("hides Study Pack attribution when the visible previews are unavailable", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByText(/This summary, these key concepts, and this Quick Check were built from the note below/i)).not.toBeInTheDocument();
+  });
+
   it("renders the mini quiz preview for a study-pack-ready note with quiz", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
 

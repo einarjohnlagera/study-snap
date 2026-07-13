@@ -3,6 +3,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AppShell } from "./app-shell";
 import { ExamFocusProvider, useExamFocusMode } from "./exam-mode/exam-focus-context";
 import { getMe, getMyPlan, logout } from "@/lib/api";
+import { needsOnboarding } from "@/lib/auth";
+import {
+  clearPendingLightweightProfileCompletion,
+  setPendingLightweightProfileCompletion,
+} from "@/lib/onboarding-v2";
 
 const routerMock = {
   push: jest.fn(),
@@ -12,7 +17,10 @@ const routerMock = {
 
 let currentPathname = "/dashboard";
 let currentAuthUser: Record<string, unknown> | null = null;
-const sendFeedbackWidgetMock = jest.fn((_props?: unknown) => null);
+const sendFeedbackWidgetMock = jest.fn((_props: unknown) => {
+  void _props;
+  return null;
+});
 
 jest.mock("next/navigation", () => ({
   usePathname: () => currentPathname,
@@ -132,6 +140,9 @@ describe("AppShell", () => {
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (logout as jest.Mock).mockReset();
+    (needsOnboarding as jest.Mock).mockReset();
+    (needsOnboarding as jest.Mock).mockReturnValue(false);
+    clearPendingLightweightProfileCompletion("user-1");
     (getMe as jest.Mock).mockResolvedValue(meResponse);
     (getMyPlan as jest.Mock).mockResolvedValue(null);
     (logout as jest.Mock).mockImplementation(async () => {
@@ -154,6 +165,76 @@ describe("AppShell", () => {
 
     await waitFor(() => {
       expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
+    });
+  });
+
+  it("keeps published-plan browsing public for visitors without an account", async () => {
+    currentPathname = "/collections/published";
+    currentAuthUser = null;
+
+    render(
+      <AppShell>
+        <div>Published plans</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByText("Published plans")).toBeInTheDocument();
+    expect(screen.getByText("Public Navbar")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(routerMock.replace).not.toHaveBeenCalled();
+    });
+  });
+
+  it("keeps copied-note routes available for pending lightweight profile completion", async () => {
+    currentPathname = "/notes/copied-note-1/quick-review";
+    currentAuthUser = {
+      id: "user-1",
+      email: "note@example.com",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-31T00:00:00Z",
+      onboardingCompletedAt: null,
+      role: "USER",
+      profileType: null,
+    };
+    (needsOnboarding as jest.Mock).mockReturnValue(true);
+    setPendingLightweightProfileCompletion("user-1");
+
+    render(
+      <AppShell>
+        <div>Copied Quick Review</div>
+      </AppShell>,
+    );
+
+    expect(await screen.findByText("Copied Quick Review")).toBeInTheDocument();
+    expect(routerMock.replace).not.toHaveBeenCalledWith("/onboarding");
+  });
+
+  it("falls back to the existing redirect when the copy-on-signup marker cannot be written", async () => {
+    currentPathname = "/notes/copied-note-1/quick-review";
+    currentAuthUser = {
+      id: "user-1",
+      email: "note@example.com",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-31T00:00:00Z",
+      onboardingCompletedAt: null,
+      role: "USER",
+      profileType: null,
+    };
+    (needsOnboarding as jest.Mock).mockReturnValue(true);
+    const setItemSpy = jest.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new Error("Storage unavailable");
+    });
+    setPendingLightweightProfileCompletion("user-1");
+    setItemSpy.mockRestore();
+
+    render(
+      <AppShell>
+        <div>Incomplete user</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/onboarding");
     });
   });
 

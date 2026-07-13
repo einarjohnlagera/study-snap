@@ -7,10 +7,15 @@ import {
   LOGIN_REASON_LOGGED_OUT,
   LOGIN_REASON_SESSION_EXPIRED,
   needsProfileType,
+  needsOnboarding,
   resolvePostLoginDestination,
   setAuthUser,
   type AuthUser,
 } from "./auth";
+import {
+  clearPendingLightweightProfileCompletion,
+  setPendingLightweightProfileCompletion,
+} from "./onboarding-v2";
 
 const SESSION_EXPIRED_STORAGE_KEY = "notelib-session-expired-user-id";
 
@@ -187,5 +192,23 @@ describe("auth redirect helpers", () => {
     };
 
     expect(resolvePostLoginDestination(legacyUser)).toBe("/onboarding");
+  });
+
+  it("defers onboarding routing only for a pending lightweight copy-on-signup profile", () => {
+    const incompleteUser: AuthUser = {
+      ...verifiedUser,
+      onboardingCompletedAt: null,
+      profileType: null,
+    };
+
+    expect(needsOnboarding(incompleteUser)).toBe(true);
+
+    setPendingLightweightProfileCompletion(incompleteUser.id);
+    expect(needsOnboarding(incompleteUser)).toBe(false);
+    expect(needsProfileType(incompleteUser)).toBe(false);
+
+    clearPendingLightweightProfileCompletion(incompleteUser.id);
+    expect(needsOnboarding(incompleteUser)).toBe(true);
+    expect(needsProfileType(incompleteUser)).toBe(true);
   });
 });

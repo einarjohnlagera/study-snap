@@ -30,7 +30,11 @@ The public homepage may lead with summaries, quizzes, and exam simulations, but 
 
 Primary landing headline:
 
-`Turn anything into a complete study flow`
+`Build your notes library and turn notes into quizzes.`
+
+The headline must match the landing title's concrete notes-to-quizzes promise:
+
+`NoteLib — Build your notes library and turn notes into quizzes`
 
 Supporting copy should explain the active-learning benefit:
 
@@ -49,7 +53,18 @@ Board Exam Mode must be visible in the hero with:
 
 - `Board Exam Mode`
 - `Pro`
+- `— timed full-exam simulation` as a short outcome explanation
 - hero screenshot: `/landing/feature-study-pack.jpg`
+
+The Board Exam Mode badge renders in the same badge row as `5 study modes`, not as a caption beneath the hero screenshot — the screenshot shows the Study Pack view, and captioning it with a different feature's claim would misrepresent what the image depicts. Keeping the badge decoupled from the screenshot (a pill in the badge row, not image-adjacent caption text) is what keeps the claim honest.
+
+### Live social proof
+
+A lightweight strip sits directly below the Hero, before the deeper product sections. It displays the live `total` from unauthenticated `GET /notes/public?size=1` as:
+
+`N public notes ready to explore for focused review.`
+
+The count is fetched through the server-side public-notes helper with the existing five-minute revalidation. If the public endpoint is unavailable or returns an invalid count, the strip is omitted rather than showing an estimate, placeholder, or invented number. It is usage proof only: no testimonials or AI-capability claims.
 
 ## Required Landing Sections
 
@@ -142,6 +157,15 @@ Landing should clearly call out ideal users such as:
 - professionals preparing for job interviews
 
 The copy should stay broad enough for the public homepage while still reflecting the strongest review use cases.
+
+Each audience panel includes a natural guide link into the corresponding Learn Hub category:
+
+- Students → `See guides for students` → `/learn#students`
+- Board exam reviewees → `See guides for board exams` → `/learn#board-exams`
+- Teachers or tutors → `See guides for teachers` → `/learn#teachers`
+- Professionals → `See guides for professionals` → `/learn#professionals`
+
+The board-exam panel also includes `Explore Exam Hubs` → `/exam`. Learn category sections use native anchor targets and the shared hash-scroll listener so direct category links work after the page mounts.
 
 ## Pricing Preview
 

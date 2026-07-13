@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import Home, { metadata } from "./page";
+import { getServerPublicNoteCount } from "@/lib/server-public-notes";
+
+jest.mock("@/lib/server-public-notes", () => ({
+  getServerPublicNoteCount: jest.fn(),
+}));
 
 jest.mock("@/components/billing/pricing-plans-section", () => ({
   SimplePricingSection: () => (
@@ -32,25 +37,32 @@ jest.mock("@/components/analytics/tracked-link", () => ({
 }));
 
 describe("LandingPage", () => {
-  it("renders the redesigned conversion-focused landing flow", () => {
-    const { container } = render(<Home />);
+  beforeEach(() => {
+    (getServerPublicNoteCount as jest.Mock).mockResolvedValue(128);
+  });
+
+  it("renders the redesigned conversion-focused landing flow", async () => {
+    const { container } = render(await Home());
 
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Your notes become your study system.",
+        name: "Build your notes library and turn notes into quizzes.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Quizzes, exams, and interview practice — generated from notes you write, paste, or copy. Built around how you actually study."),
+      screen.getByText("Write, paste, or generate notes — then turn them into summaries, key concepts, quizzes, and exam-ready practice."),
     ).toBeInTheDocument();
     expect(screen.getByText("5 study modes")).toBeInTheDocument();
-    expect(screen.getByText("Pro: Long Exam · Board Exam · Interview Practice")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Try Demo" })).toHaveAttribute("href", "/demo");
+    expect(screen.getByText("Board Exam Mode · Pro")).toBeInTheDocument();
+    expect(screen.getByText("— timed full-exam simulation.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "/how-it-works");
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
+    expect(screen.getByText("128 public notes")).toBeInTheDocument();
+    expect(screen.getByText("ready to explore for focused review.")).toBeInTheDocument();
 
     expect(screen.getByText("Who It's For")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Built for your study workflow" })).toBeInTheDocument();
@@ -93,6 +105,17 @@ describe("LandingPage", () => {
     expect(screen.getByRole("button", { name: "Exam Reviewers" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Teachers" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Professionals" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See guides for students" })).toHaveAttribute("href", "/learn#students");
+
+    fireEvent.click(screen.getByRole("button", { name: "Exam Reviewers" }));
+    expect(screen.getByRole("link", { name: "See guides for board exams" })).toHaveAttribute("href", "/learn#board-exams");
+    expect(screen.getByRole("link", { name: "Explore Exam Hubs" })).toHaveAttribute("href", "/exam");
+
+    fireEvent.click(screen.getByRole("button", { name: "Teachers" }));
+    expect(screen.getByRole("link", { name: "See guides for teachers" })).toHaveAttribute("href", "/learn#teachers");
+
+    fireEvent.click(screen.getByRole("button", { name: "Professionals" }));
+    expect(screen.getByRole("link", { name: "See guides for professionals" })).toHaveAttribute("href", "/learn#professionals");
 
     expect(screen.getByText("Study Modes")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Five study modes, one workspace" })).toBeInTheDocument();
@@ -123,33 +146,41 @@ describe("LandingPage", () => {
 
   it("exports landing page SEO metadata", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib - Turn anything into a complete study flow",
+      title: "NoteLib — Build your notes library and turn notes into quizzes",
       description:
-        "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.",
+        "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
       alternates: {
         canonical: "https://www.notelib.app",
       },
       openGraph: expect.objectContaining({
-        title: "NoteLib - Turn anything into a complete study flow",
+        title: "NoteLib — Build your notes library and turn notes into quizzes",
         description:
-          "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.",
+          "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
         type: "website",
         url: "https://www.notelib.app",
         siteName: "NoteLib",
         images: expect.arrayContaining([
           expect.objectContaining({
             url: "https://www.notelib.app/og-image.png",
-            alt: "Turn anything into a complete study flow with NoteLib.",
+            alt: "Build your notes library. Turn your notes into summaries and quizzes.",
           }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        title: "NoteLib - Turn anything into a complete study flow",
+        title: "NoteLib — Build your notes library and turn notes into quizzes",
         description:
-          "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.",
+          "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
         images: ["https://www.notelib.app/og-image.png"],
       }),
     });
+  });
+
+  it("omits social proof when the live public-note total is unavailable", async () => {
+    (getServerPublicNoteCount as jest.Mock).mockResolvedValue(null);
+
+    render(await Home());
+
+    expect(screen.queryByLabelText("Public library activity")).not.toBeInTheDocument();
   });
 });

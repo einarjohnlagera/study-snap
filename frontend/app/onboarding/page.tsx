@@ -29,6 +29,7 @@ import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
   clearDeferredOnboardingCompletion,
   clearOnboardingDraft,
+  ONBOARDING_PROFILE_OPTIONS,
   createEmptyOnboardingDraft,
   loadOnboardingDraft,
   saveOnboardingDraft,
@@ -67,38 +68,6 @@ const STEP_FIVE_SAVE_ERROR_MESSAGE =
   "We couldn't save your profile. Your Study Pack is still available.";
 const STEP_FOUR_BACK_NOTICE =
   "Going back will start a new Study Pack. Your current one will be saved.";
-
-const PROFILE_OPTIONS: Array<{
-  value: OnboardingProfileType;
-  icon: string;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "STUDENT",
-    icon: "🎓",
-    label: "Student",
-    description: "Reviewing notes and preparing for quizzes",
-  },
-  {
-    value: "BOARD_EXAM",
-    icon: "📋",
-    label: "Exam Reviewer",
-    description: "Preparing for a board, licensure, or civil service exam",
-  },
-  {
-    value: "TEACHER",
-    icon: "🏫",
-    label: "Teacher",
-    description: "Creating study materials for students",
-  },
-  {
-    value: "PROFESSIONAL",
-    icon: "💼",
-    label: "Professional",
-    description: "Preparing for certifications or growing professionally",
-  },
-];
 
 const STEP_NAMES: Record<number, StepName> = {
   1: "profile",
@@ -300,6 +269,10 @@ export default function OnboardingPage() {
   const studyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const studyPackGenerating = studyPackStatus === "GENERATING";
   const completionCopy = profileType ? COMPLETION_COPY[profileType] : COMPLETION_COPY.STUDENT;
+  const completionTopic = draft.topic.trim();
+  const completionHeadline = completionTopic
+    ? `Your ${completionTopic} Study Pack is ready. Come back tomorrow to keep building on it.`
+    : "Your Study Pack is ready. Come back tomorrow to keep building on it.";
   const conceptPreview = note?.keyConcepts.slice(0, MAX_CONCEPT_PREVIEW_COUNT) ?? [];
   const extraConceptCount = Math.max((note?.keyConcepts.length ?? 0) - conceptPreview.length, 0);
   const quizPreview = note?.quiz[0] ?? null;
@@ -910,7 +883,7 @@ export default function OnboardingPage() {
           </div>
 
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {PROFILE_OPTIONS.map((option) => (
+            {ONBOARDING_PROFILE_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -1304,6 +1277,7 @@ export default function OnboardingPage() {
             planType={currentPlan}
             remainingCredits={0}
             resetDateLabel={usageResetDateLabel}
+            analyticsSource="onboarding_study_pack_near_limit"
           />
 
           <p className="text-[0.95rem] text-foreground/80 sm:text-base">
@@ -1332,7 +1306,7 @@ export default function OnboardingPage() {
       <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
         <div className="space-y-2 text-center sm:text-left">
           <CardTitle className="text-2xl leading-tight sm:text-3xl">
-            You just started your study loop.
+            {completionHeadline}
           </CardTitle>
           <CardDescription className="text-sm">
             Create ✓ → Understand ● → Practice → Challenge → Improve
@@ -1343,9 +1317,9 @@ export default function OnboardingPage() {
 
         <div className="flex flex-col gap-2.5">
           <Button type="button" className="min-h-12 text-base" onClick={handleContinueToStudyPack}>
-            Continue Studying
+            Open your Study Pack
           </Button>
-          <Button type="button" variant="outline" className="min-h-12 text-base" onClick={handleGoToDashboard}>
+          <Button type="button" variant="ghost" className="min-h-10 self-center text-sm" onClick={handleGoToDashboard}>
             Go to Dashboard
           </Button>
         </div>

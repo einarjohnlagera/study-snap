@@ -47,7 +47,7 @@ Shared ownership rule:
 - targets weak concepts from the latest Quick Review or Challenge Quiz, plus due concepts from `concept_health`
 - due threshold is fixed at 3 days: `last_correct_at` missing or 3+ days old is due
 - due concepts are merged ahead of weak concepts at generation time; due-only sessions can generate even when the latest review has no weak concepts
-- Key Concepts tab shows due-status badges for Plus/Pro users only, using per-user per-study-pack concept health
+- Key Concepts tab shows due/mastery status badges for every plan using per-user, per-Study-Pack concept health; detailed elapsed-time timing and struggling-concept copy remain on the existing paid timing path
 
 ### Long Exam Mode
 
@@ -180,11 +180,11 @@ Rules:
 Concept-level review signals:
 
 - `concept_health` stores `user_id`, `study_pack_id`, `concept`, and `last_correct_at`
-- records are written when Adaptive Practice completion includes correctly answered concept names from `QuizItem.concept`
+- Quick Review, Challenge Quiz, and Adaptive Practice completion write correct and missed concepts from their persisted quiz selections; a concept is correct only when every question for that concept is answered correctly
 - data is scoped per user per study pack; never mix concept health across notes or Study Packs
 - v1 due logic is intentionally lightweight: never reviewed or last correct answer 3+ days ago means due
 - Adaptive Practice resolves due concepts from the source Study Pack key concepts and merges them before weak concepts
-- Key Concepts tab displays due badges only for users whose plan includes Adaptive Practice
+- Key Concepts tab displays due/mastery badges for every plan; this signal never grants Adaptive Practice access
 
 ## Generation lock and idempotency
 

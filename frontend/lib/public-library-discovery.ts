@@ -21,7 +21,11 @@ function compareCreatedAtDesc(
   left: Pick<NoteListItemResponse, "createdAt">,
   right: Pick<NoteListItemResponse, "createdAt">,
 ): number {
-  return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  const leftTimestamp = Date.parse(left.createdAt);
+  const rightTimestamp = Date.parse(right.createdAt);
+  const safeLeftTimestamp = Number.isFinite(leftTimestamp) ? leftTimestamp : 0;
+  const safeRightTimestamp = Number.isFinite(rightTimestamp) ? rightTimestamp : 0;
+  return safeRightTimestamp - safeLeftTimestamp;
 }
 
 export function isFeaturedEligible(
@@ -49,7 +53,11 @@ export function isPopularNote(
 }
 
 function computeDecayFactor(createdAt: string, now: Date): number {
-  const daysSince = (now.getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  const createdAtTimestamp = Date.parse(createdAt);
+  if (!Number.isFinite(createdAtTimestamp)) {
+    return 1;
+  }
+  const daysSince = (now.getTime() - createdAtTimestamp) / (1000 * 60 * 60 * 24);
   const factor = 1 / (1 + Math.max(0, daysSince) / PUBLIC_LIBRARY_RANKING.FEATURED_DECAY_HALF_LIFE_DAYS);
   return Math.max(factor, PUBLIC_LIBRARY_RANKING.FEATURED_DECAY_MIN_FACTOR);
 }
@@ -70,6 +78,34 @@ export function computeDiscoveryScore(
     + copies * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT
     + likes * PUBLIC_LIBRARY_RANKING.FEATURED_LIKE_WEIGHT;
   return baseScore * computeDecayFactor(note.createdAt, now);
+}
+
+/**
+ * Sort all public notes by the existing discovery score, with stable engagement and freshness tiebreaks.
+ */
+export function getRecommendedNotes(
+  notes: NoteListItemResponse[],
+  now: Date = new Date(),
+): NoteListItemResponse[] {
+  return [...notes].sort((left, right) => {
+    const scoreDiff = computeDiscoveryScore(right, now) - computeDiscoveryScore(left, now);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    const copyDiff = (right.copyCount ?? 0) - (left.copyCount ?? 0);
+    if (copyDiff !== 0) {
+      return copyDiff;
+    }
+    const viewDiff = (right.viewCount ?? 0) - (left.viewCount ?? 0);
+    if (viewDiff !== 0) {
+      return viewDiff;
+    }
+    const createdAtDiff = compareCreatedAtDesc(left, right);
+    if (createdAtDiff !== 0) {
+      return createdAtDiff;
+    }
+    return left.id.localeCompare(right.id);
+  });
 }
 
 /**

@@ -366,17 +366,7 @@ public class QuickReviewAdaptivePracticeService {
     }
 
     private List<ChallengeQuizConceptStatResponse> computeConceptBreakdownForCompletion(QuickReviewSessionEntity session) {
-        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        if (quiz.isEmpty()) {
-            return List.of();
-        }
-        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
-        Map<Integer, List<Integer>> selectedMultiChoices =
-            QuizSessionStateUtils.extractSelectedMultiChoiceIndexes(session.getSessionState(), quiz);
-        if (selectedChoices.isEmpty() && selectedMultiChoices.isEmpty()) {
-            return List.of();
-        }
-        return QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices, selectedMultiChoices);
+        return QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(session.getSessionState());
     }
 
     private StudyPackEntity findOwnedStudyPackOrThrow(UUID studyPackId, UUID userId) {

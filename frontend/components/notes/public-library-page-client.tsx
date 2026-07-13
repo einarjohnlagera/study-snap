@@ -23,7 +23,9 @@ import { getAuthUser } from "@/lib/auth";
 import {
   listNotes,
   listPublicNotes,
+  listPublicStudyPlans,
   listSubjects,
+  type NoteCollectionSummary,
   type NoteListItemResponse,
 } from "@/lib/api";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
@@ -36,6 +38,7 @@ import {
   getFeaturedNotes,
   getPopularNotes,
   getRecentNotes,
+  getRecommendedNotes,
 } from "@/lib/public-library-discovery";
 import { buildCopiedNotePath } from "@/lib/public-note-copy";
 import {
@@ -64,6 +67,7 @@ const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
 const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
+const COURSE_PROGRAM_CHIP_LIMIT = 6;
 const BROWSE_ALL_LABEL = "Browse all";
 const TAG_SELECTOR_TITLE = "Select tags";
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
@@ -75,10 +79,12 @@ const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
 const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 250;
 const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
+const PUBLISHED_STUDY_PLANS_PATH = "/collections/published";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
 
 type PublicLibrarySortOption =
+  | "RECOMMENDED"
   | "NEWEST"
   | "MOST_COPIED"
   | "MOST_VIEWED"
@@ -87,6 +93,7 @@ type PublicLibrarySortOption =
 type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
 
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
+  RECOMMENDED: "Recommended",
   NEWEST: "Newest",
   MOST_COPIED: "Most Copied",
   MOST_VIEWED: "Most Viewed",
@@ -127,7 +134,21 @@ function resolveDiscoveryView(value: string | null): PublicLibraryDiscoveryView 
   return null;
 }
 
-function resolveSortOption(sort: PublicLibrarySortQuery | null): PublicLibrarySortOption {
+function hasUrlFilterCriteria(filters: PublicLibraryUrlFilters): boolean {
+  return Boolean(
+    filters.audience
+    || filters.courseProgram
+    || filters.creator
+    || filters.search
+    || filters.subject
+    || (filters.tags?.length ?? 0) > 0,
+  );
+}
+
+function resolveSortOption(
+  sort: PublicLibrarySortQuery | null,
+  defaultsToRecommended: boolean,
+): PublicLibrarySortOption {
   switch (sort) {
     case "copied":
       return "MOST_COPIED";
@@ -138,13 +159,16 @@ function resolveSortOption(sort: PublicLibrarySortQuery | null): PublicLibrarySo
     case "popular":
       return "MOST_COPIED";
     case "recent":
-    default:
       return "NEWEST";
+    default:
+      return defaultsToRecommended ? "RECOMMENDED" : "NEWEST";
   }
 }
 
 function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery | null {
   switch (sort) {
+    case "RECOMMENDED":
+      return null;
     case "MOST_COPIED":
       return "copied";
     case "MOST_VIEWED":
@@ -153,7 +177,7 @@ function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery
       return "title";
     case "NEWEST":
     default:
-      return null;
+      return "recent";
   }
 }
 
@@ -464,6 +488,7 @@ export function PublicLibraryPageClient() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<PublicLibrarySourceFilter[]>([]);
+  const [officialPlan, setOfficialPlan] = useState<NoteCollectionSummary | null>(null);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
   const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
@@ -663,6 +688,11 @@ export function PublicLibraryPageClient() {
     });
   }, [courseProgramCounts]);
 
+  const topCoursePrograms = useMemo(
+    () => availableCoursePrograms.slice(0, COURSE_PROGRAM_CHIP_LIMIT),
+    [availableCoursePrograms],
+  );
+
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const item of items) {
@@ -701,7 +731,7 @@ export function PublicLibraryPageClient() {
 
   useEffect(() => {
     setSelectedTargetProfile(effectiveAudience);
-    setSelectedSort(resolveSortOption(parsedUrlFilters.sort));
+    setSelectedSort(resolveSortOption(parsedUrlFilters.sort, hasUrlFilterCriteria(parsedUrlFilters)));
 
     const resolvedCourseProgram = parsedUrlFilters.courseProgram
       ? resolvePublicLibraryValueBySlug(availableCoursePrograms, parsedUrlFilters.courseProgram)
@@ -724,11 +754,42 @@ export function PublicLibraryPageClient() {
     availableSubjects,
     availableTags,
     effectiveAudience,
+    parsedUrlFilters,
     parsedUrlFilters.courseProgram,
     parsedUrlFilters.sort,
     parsedUrlFilters.subject,
     parsedUrlFilters.tags,
   ]);
+
+  const activeCourseProgram = selectedCourseProgram === ALL_COURSE_PROGRAMS
+    ? null
+    : normalizeCourseProgram(selectedCourseProgram);
+
+  useEffect(() => {
+    if (!activeCourseProgram) {
+      setOfficialPlan(null);
+      return;
+    }
+
+    let cancelled = false;
+    setOfficialPlan(null);
+    void listPublicStudyPlans({ courseProgram: activeCourseProgram })
+      .then((plans) => {
+        if (!cancelled) {
+          // Match the Dashboard recommendation convention: use the API's first matching plan.
+          setOfficialPlan(plans[0] ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOfficialPlan(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCourseProgram]);
 
   // Hydrate the search input from the URL only on genuine external changes
   // (initial load, back/forward) — keyed on the search term alone so a refetch
@@ -890,6 +951,7 @@ export function PublicLibraryPageClient() {
     setTagDraft([]);
     setTagsFilterDraft([]);
     setSelectedSourceFilters([]);
+    setSelectedSort("NEWEST");
     setAudienceDraft(NOTE_TARGET_PROFILE_ALL);
     setCourseProgramSearchQuery("");
     setSubjectSearchQuery("");
@@ -914,6 +976,17 @@ export function PublicLibraryPageClient() {
     }
     setCtaDismissed(true);
   }, []);
+
+  const applyCourseProgramChip = useCallback((courseProgram: string) => {
+    setSelectedCourseProgram(courseProgram);
+    setCourseProgramDraft(courseProgram);
+    setRecentCoursePrograms((previous) => updateRecentValues(previous, [courseProgram]));
+    replacePublicLibraryFilters({
+      ...parsedUrlFilters,
+      courseProgram: slugifyPublicLibraryFilterValue(courseProgram),
+      view: null,
+    });
+  }, [parsedUrlFilters, replacePublicLibraryFilters]);
 
   const applyModalFilters = useCallback(() => {
     const nextAudience = audienceDraft !== NOTE_TARGET_PROFILE_ALL ? audienceDraft : null;
@@ -1024,9 +1097,12 @@ export function PublicLibraryPageClient() {
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0;
   const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
+  const effectiveSelectedSort = selectedSort === "NEWEST" && parsedUrlFilters.sort === null && hasActiveFilters
+    ? "RECOMMENDED"
+    : selectedSort;
 
   // Discovery mode: no active search/filter and default sort → show discovery sections
-  const isDiscoveryMode = !hasActiveFilters && selectedSort === "NEWEST";
+  const isDiscoveryMode = !hasActiveFilters && effectiveSelectedSort === "NEWEST";
   const isSectionView = isDiscoveryMode && activeDiscoveryView !== null;
 
   const featuredRankedNotes = useMemo(
@@ -1103,6 +1179,10 @@ export function PublicLibraryPageClient() {
   }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedSourceFilters, selectedSubject, selectedTags]);
 
   const sortedItems = useMemo(() => {
+    if (effectiveSelectedSort === "RECOMMENDED") {
+      return getRecommendedNotes(filteredItems);
+    }
+
     const byNewest = (left: NoteListItemResponse, right: NoteListItemResponse) => (
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
     );
@@ -1112,7 +1192,7 @@ export function PublicLibraryPageClient() {
     ) => item[key] ?? 0;
 
     return [...filteredItems].sort((left, right) => {
-      switch (selectedSort) {
+      switch (effectiveSelectedSort) {
         case "TITLE_ASC":
           return (left.title ?? "Untitled note").localeCompare(right.title ?? "Untitled note");
         case "MOST_COPIED": {
@@ -1134,7 +1214,7 @@ export function PublicLibraryPageClient() {
           return byNewest(left, right);
       }
     });
-  }, [filteredItems, selectedSort]);
+  }, [effectiveSelectedSort, filteredItems]);
 
   const clearCreatorFilter = useCallback(() => {
     replacePublicLibraryFilters({
@@ -1444,9 +1524,25 @@ export function PublicLibraryPageClient() {
 
           {!ctaDismissed && !parsedUrlFilters.courseProgram && !parsedUrlFilters.creator ? (
             <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-              <p className="text-sm text-foreground/75">
-                Studying for a specific exam or program? Browse notes by Course or Program.
-              </p>
+              <div className="min-w-0 space-y-2">
+                <p className="text-sm text-foreground/75">
+                  Studying for a specific exam or program? Browse notes by Course or Program.
+                </p>
+                {topCoursePrograms.length > 0 ? (
+                  <div className="flex flex-wrap gap-2" aria-label="Popular course and program filters">
+                    {topCoursePrograms.map((courseProgram) => (
+                      <button
+                        key={courseProgram}
+                        type="button"
+                        onClick={() => applyCourseProgramChip(courseProgram)}
+                        className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-highlight"
+                      >
+                        {courseProgram}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
@@ -1488,6 +1584,18 @@ export function PublicLibraryPageClient() {
                 View all notes
               </Button>
             </Card>
+          ) : null}
+
+          {!isDiscoveryMode && activeCourseProgram && officialPlan ? (
+            <p className="text-sm text-foreground/75">
+              Looking for a full Study Plan for {activeCourseProgram}?{" "}
+              <Link
+                href={PUBLISHED_STUDY_PLANS_PATH}
+                className="font-medium text-blue-700 transition-colors hover:underline dark:text-blue-300"
+              >
+                Browse official plans →
+              </Link>
+            </p>
           ) : null}
 
           {isSectionView && activeSectionCopy ? (
@@ -1968,8 +2076,10 @@ export function PublicLibraryPageClient() {
         onClose={() => setSortSheetOpen(false)}
       >
         <div className="space-y-2">
-          {(Object.entries(PUBLIC_SORT_LABELS) as Array<[PublicLibrarySortOption, string]>).map(([value, label]) => {
-            const isSelected = selectedSort === value;
+          {(Object.entries(PUBLIC_SORT_LABELS) as Array<[PublicLibrarySortOption, string]>)
+            .filter(([value]) => hasActiveFilters || value !== "RECOMMENDED")
+            .map(([value, label]) => {
+            const isSelected = effectiveSelectedSort === value;
             return (
               <button
                 key={value}
@@ -1991,7 +2101,7 @@ export function PublicLibraryPageClient() {
                 {label}
               </button>
             );
-          })}
+            })}
         </div>
       </LibrarySheetModal>
 

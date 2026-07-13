@@ -30,6 +30,18 @@ export type LearnGuideCategoryMeta = {
   description: string;
 };
 
+export const LEARN_CATEGORY_ANCHORS: Record<LearnGuideCategory, string> = {
+  students: "students",
+  "board-exams": "board-exams",
+  teachers: "teachers",
+  professionals: "professionals",
+  "study-tips": "study-tips",
+};
+
+export function buildLearnCategoryPath(category: LearnGuideCategory) {
+  return `/learn#${LEARN_CATEGORY_ANCHORS[category]}`;
+}
+
 export const learnGuideCategories: LearnGuideCategoryMeta[] = [
   {
     key: "students",

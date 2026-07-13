@@ -106,6 +106,17 @@ The Settings page (`/settings#plan-billing`) surfaces plan selection and billing
 - **Checkout footer** — single-line note with provider, confirmation model, detected region/currency, and a link to `/refund` for cancellation and refund eligibility.
 - **Billing History** — subscription summary grid (plan, status, valid-until, billing cycle) and payment transaction table, unchanged from v0.11.0.
 
+### In-app pass-expiry notice
+
+Settings `Plan & Billing` shows a dismissible renewal notice for active Plus or Pro passes when the already-loaded `profile.subscription.premiumEndsAt` falls into the same two lifecycle windows as expiry email:
+
+- 7-day stage: 6–8 days remaining
+- 1-day stage: 24 hours or less remaining
+
+The notice states the pass end date and offers the configured `getUpgradeCtas(currentPlan, "pass-renewal")` CTA for another pass of that same tier. It invokes the existing Settings hosted-checkout handler, including its verification and error behavior; no new endpoint or expiry trigger exists. Dismissal is stored per user, expiry timestamp, and stage, so dismissing the 7-day notice never suppresses the 1-day notice. Free, expired, missing, and invalid expiry states render no notice.
+
+Copy remains one-time-pass framing: no automatic renewal claim or recurring `/month` language is used.
+
 ### Refunds
 
 - Refunds are admin-initiated only for exceptional billing errors such as duplicate charges or technical payment failures.

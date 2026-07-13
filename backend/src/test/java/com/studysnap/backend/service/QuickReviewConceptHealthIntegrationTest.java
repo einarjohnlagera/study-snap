@@ -84,7 +84,8 @@ class QuickReviewConceptHealthIntegrationTest {
                 activityTrackingService,
                 analyticsService,
                 subscriptionService,
-                featureGateService
+                featureGateService,
+                conceptHealthService
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -92,7 +93,7 @@ class QuickReviewConceptHealthIntegrationTest {
     }
 
     @Test
-    void completeQuickReviewSession_doesNotRecordConceptHealth() {
+    void completeQuickReviewSession_recordsConceptHealthFromPersistedSelections() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -119,8 +120,10 @@ class QuickReviewConceptHealthIntegrationTest {
                 session.getCompletedAt()
         );
 
-        assertThat(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId)).isEmpty();
-        assertThat(dueConcepts).containsExactly(MASTERED_CONCEPT, WEAK_CONCEPT);
+        assertThat(conceptHealthRepository.findByUserIdAndStudyPackId(userId, studyPackId))
+                .extracting(entry -> entry.getConcept())
+                .containsExactlyInAnyOrder(MASTERED_CONCEPT, WEAK_CONCEPT);
+        assertThat(dueConcepts).containsExactly(WEAK_CONCEPT);
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId) {

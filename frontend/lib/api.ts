@@ -186,6 +186,7 @@ export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIV
 export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"
+  | "DUE_CONCEPTS_REVIEW"
   | "PRACTICE_WEAK_CONCEPT"
   | "REVIEW_PACK"
   | "STUDY_SUGGESTION";
@@ -217,6 +218,12 @@ export type TodayFocusResponse = {
   title: string;
   message: string;
   actionLabel: string;
+  concepts: Array<{
+    concept: string;
+    noteId: string | null;
+    noteTitle: string | null;
+  }>;
+  adaptivePracticeAvailable: boolean;
 };
 
 export type PostSessionNextStepResponse = {
@@ -1450,6 +1457,7 @@ export type NoteCollectionSummary = {
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
+  readyCount?: number | null;
   childCount: number;
   notesPracticed: number;
   createdAt: string;
@@ -1489,6 +1497,7 @@ export type NoteCollectionDetail = {
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   childCount: number;
+  readyCount?: number | null;
   createdAt: string;
   updatedAt: string;
   progress: NoteCollectionProgress;
@@ -3857,6 +3866,13 @@ export async function listPublicStudyPlans(params?: {
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<NoteCollectionSummary[]>(response, "Could not load public study plans.");
+}
+
+export async function getPublicStudyPlanDetail(id: string): Promise<NoteCollectionDetail> {
+  const response = await fetch(buildUrl(`/collections/public/${id}`), {
+    method: "GET",
+  });
+  return parseApiResponse<NoteCollectionDetail>(response, "Could not load this public study plan.");
 }
 
 export async function createCollection(request: {

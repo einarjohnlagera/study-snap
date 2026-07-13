@@ -6,15 +6,37 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.43.1 - Companion Mentor Tips` is the most recently released version (on `releases/v0.43.1`). No version is currently in progress — the "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) is still under product/UX discussion and has not been scoped or kicked off.
+`v0.44.0 - Conversion & Retention Polish` is Released (on `releases/v0.44.0`) — Tier 1 findings from a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`) shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
 
-`v0.43.0 - Companion Coach Experience` is the previous released version (on `releases/v0.43.0`).
+`v0.43.1 - Companion Mentor Tips` is the previous released version (on `releases/v0.43.1`).
+
+`v0.43.0 - Companion Coach Experience` is the previous released version before that (on `releases/v0.43.0`).
 
 `v0.42.1 - Companion & Progress Polish` is the previous released version (on `releases/v0.42.1`); `v0.42.0 - AI-assisted Companion authoring + regeneration` before that.
 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## v0.44.0 - Conversion & Retention Polish (Released, base branch `releases/v0.44.0`)
+
+Origin: a 7-session conversion/retention UX audit (`docs/claude-prompt/conversion-audit-out/`, consolidated and tiered in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`), run against a real prior data-driven finding (`docs/archive/conversion-funnel-finding.md`, v0.32.2) that identified retention — not top-of-funnel or onboarding — as the proven constraint. This release shipped the audit's Tier 1 (high-impact, low-effort) items plus one verified backend gap, then folded in Tier 2 (items 12–18) as a second slice rather than closing and reopening a new version. Full scope in `RELEASES.md`.
+
+Two things surfaced by the same audit are explicitly **not** in this release's scope:
+- **The `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence.** `pricing.md`/`PLANS.md` market Adaptive Practice at 3/10/30 sessions across Free/Plus/Pro; `subscriptions-and-usage-limits.md` documents Free as unavailable and Plus as "currently unavailable in runtime." Verified against `StudySnapProperties.resolveMonthlyAdaptivePracticeLimit` — a real `adaptivePracticeProOnly` toggle exists and, when true, zeroes Free/Plus regardless of their configured limits. The live production value of `ADAPTIVE_PRACTICE_PRO_ONLY` isn't visible from the repo. Needs the owner to confirm the live value and then either fix the marketing copy or the gate — tracked here as a known open item, not scoped to this release.
+- **"Smart Review Planning."** A much larger, separate initiative (curriculum-driven Review Set auto-assembly) exists as paused planning material in `docs/claude-prompt/fable-out/` — architecture, matching/coverage, admin workflow, student UX, monetization recommendation, terminology audit, and a phased technical roadmap are all drafted but nothing is scoped or kicked off. Unrelated to this release; mentioned here only so it isn't confused with the conversion-audit work.
+
+## Post-v0.44.0 Conversion Audit Backlog (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Tier 2 (7 items) has been folded into `v0.44.0` (see above) and is no longer part of this backlog. Tier 3 (18 items) and Tier 4 (19 items) remain here from the same 7-session conversion/retention UX audit — full detail, impact/effort ratings, and Claude Code/Codex routing per item in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`. Also includes two explicitly deferred items (adoption-count social proof on Public Library plan cards; "Trending this week," blocked on windowed backend counts that don't exist yet). Pull from here when scoping what comes after v0.44.0 — do not re-run the audit or re-derive this list from scratch.
+
+## App Shape, App-Like UI & Companion Authenticity (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Deliberately **not** conversion-related (unlike the two backlogs above) — three independent questions run through Fable about product shape and experience quality: (1) what features could deepen how Notes/Study Packs/Review Sets/Companion/Progress compose as one system, (2) how the five highest-traffic pages (Note Detail, Review Sets list, Review Set detail, Private Library, Public Library) could read as an app rather than a website, and (3) how Learning Companion content (both curator-written and the v0.42.0 AI-assist draft) could be grounded in real aggregate learner-experience data instead of reading as generic AI output. Full prompts, Fable's raw output, and a classified synthesis (Core Feature / Polish / Future Enhancement, plus explicit out-of-scope guardrails) are in `docs/claude-prompt/app-shape-session-plan.md`. Pull from here when scoping what comes after v0.44.0 — nothing in it is scoped or kicked off yet, and the Companion-authenticity work has a named prerequisite (an adoption-provenance link) that needs an explicit go/no-go before it's picked up.
+
+## New Capability Ideation (candidate, not yet scoped)
+
+Not a version — no release branch, no implementation scope yet. Distinct from the three backlogs above: not conversion polish, not the composition/app-shape work, not the curriculum-auto-assembly bet — a single open-ended Fable pass asking what capability areas NoteLib has **no version of at all today**. 11 ideas classified via `docs/skills/roadmap-feature-audit.md`'s tiers (5 Core Feature, 4 Future Enhancement, 2 Low-Priority), plus 9 explicit rejections (no 6th quiz mode, no learner-to-learner content exchange bypassing curation, no auto-regeneration, no leaderboards, no freetext taxonomy). Top-ranked candidates: a due-concepts email digest, an Exam Date Countdown/paced-review feature over owned content only (explicitly not Smart Review Planning), and photo capture of handwritten notes. Full detail, corrections, and reasoning in `docs/claude-prompt/new-capability-session-plan.md` and `docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`. **One correction already applied and load-bearing:** the original top idea assumed NoteLib has no out-of-app re-engagement channel — false, a real retention-email system already ships (`docs/features/retention-emails.md`); the idea survives as a much cheaper addition to that system, not new infrastructure. Read the correction notes in the output file before scoping, not just the original Fable text.
 
 ## Archived releases
 
