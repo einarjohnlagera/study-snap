@@ -43,6 +43,8 @@ Current structure:
 4. regional pricing block
 5. FAQ
 
+The comparison table begins with a `Best for` row to help a learner choose among light review (Free), regular study (Plus), and focused exam preparation (Pro). Paid-plan card bullets are outcome-framed: they describe the study result enabled by each allowance or feature rather than presenting an isolated feature-name list.
+
 Current CTA labels on the pricing page:
 
 - Free -> `Get Started Free`
@@ -124,6 +126,9 @@ Visible reviewer-safe display values currently come from the shared pricing conf
 - Pro should feel like the strongest exam-prep and mastery tier
 - pricing surfaces should stay student-friendly and avoid aggressive billing language
 - trust copy should reinforce one-time passes (never auto-charged), monthly usage refresh during a pass, library data permanence, and hosted checkout
+- the pricing FAQ may only state documented billing policy. It covers pass end, manual renewal, and exceptional-error refunds; payment-method claims remain omitted until documented.
+- the generic Free-plan fallback from `getUpgradeCtas` uses `Upgrade to Plus` and `Upgrade to Pro`; context-specific value-framed labels and same-tier renewal labels remain intentionally distinct.
+- near-limit banners retain their existing trigger and exhausted states, but frame available credits as continued monthly progress using their generic credit-label props.
 
 ## Upgrade-surface analytics
 

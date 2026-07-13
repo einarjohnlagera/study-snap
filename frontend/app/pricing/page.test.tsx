@@ -80,14 +80,14 @@ describe("PricingPage", () => {
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱149"))).not.toHaveLength(0);
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱199"))).not.toHaveLength(0);
     expect(screen.getAllByText("10 Study Packs / month")).not.toHaveLength(0);
-    expect(screen.getByText("50 Study Packs / month")).toBeInTheDocument();
-    expect(screen.getByText("100 Study Packs / month")).toBeInTheDocument();
+    expect(screen.getByText("Keep building with 50 Study Packs each month")).toBeInTheDocument();
+    expect(screen.getByText("Build a deep library with 100 Study Packs each month")).toBeInTheDocument();
     expect(screen.getAllByText("5 Quizzes / month")).not.toHaveLength(0);
-    expect(screen.getByText("25 Quizzes / month")).toBeInTheDocument();
-    expect(screen.getByText("50 Quizzes / month")).toBeInTheDocument();
+    expect(screen.getByText("Practice more often with 25 quizzes each month")).toBeInTheDocument();
+    expect(screen.getByText("Stay exam-ready with 50 quizzes each month")).toBeInTheDocument();
     expect(screen.getByText("2 exports / month")).toBeInTheDocument();
-    expect(screen.getByText("15 exports / month")).toBeInTheDocument();
-    expect(screen.getAllByText("Unlimited exports")).not.toHaveLength(0);
+    expect(screen.getByText("Take 15 study resources offline each month")).toBeInTheDocument();
+    expect(screen.getAllByText("Export every study resource you need")).not.toHaveLength(0);
     expect(screen.getByText("Teachers get unlimited quiz exports on Plus.")).toBeInTheDocument();
     expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
     expect(screen.getAllByText("Higher note generation limits")).not.toHaveLength(0);
@@ -107,6 +107,10 @@ describe("PricingPage", () => {
     expect(screen.getByText("Pro 1-year pass: $39.99")).toBeInTheDocument();
     expect(screen.getByText("Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.")).toBeInTheDocument();
     expect(screen.getByText("Plan comparison")).toBeInTheDocument();
+    expect(screen.getByText("Best for")).toBeInTheDocument();
+    expect(screen.getByText("Focused exam preparation and mastery practice")).toBeInTheDocument();
+    expect(screen.getByText("How do I renew a pass?")).toBeInTheDocument();
+    expect(screen.getByText("Can I get a refund?")).toBeInTheDocument();
     expect(
       screen.getByText("Free covers the core study loop. Plus expands your limits. Pro adds the full exam-prep toolkit."),
     ).toBeInTheDocument();

@@ -91,6 +91,7 @@ type PublicLibrarySortOption =
   | "TITLE_ASC";
 
 type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
+type PublicLibraryFilterKey = "audience" | "courseProgram" | "ready" | "search" | "source" | "subject" | "tags";
 
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   RECOMMENDED: "Recommended",
@@ -488,6 +489,9 @@ export function PublicLibraryPageClient() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<PublicLibrarySourceFilter[]>([]);
+  const [studyPackReadyOnly, setStudyPackReadyOnly] = useState(false);
+  const [studyPackReadyDraft, setStudyPackReadyDraft] = useState(false);
+  const [lastChangedFilter, setLastChangedFilter] = useState<PublicLibraryFilterKey | null>(null);
   const [officialPlan, setOfficialPlan] = useState<NoteCollectionSummary | null>(null);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
@@ -857,12 +861,13 @@ export function PublicLibraryPageClient() {
       setSubjectFilterDraft(selectedSubject);
       setTagsFilterDraft(selectedTags);
       setCourseProgramDraft(selectedCourseProgram);
+      setStudyPackReadyDraft(studyPackReadyOnly);
       setSubjectSearchQuery("");
       setCourseProgramSearchQuery("");
       setSubjectComboOpen(false);
       setCourseProgramComboOpen(false);
     }
-  }, [filterSheetOpen, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile]);
+  }, [filterSheetOpen, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile, studyPackReadyOnly]);
 
   useEffect(() => {
     if (courseProgramDraft === ALL_COURSE_PROGRAMS) return;
@@ -934,6 +939,7 @@ export function PublicLibraryPageClient() {
   }, []);
 
   const toggleSourceFilter = useCallback((filter: PublicLibrarySourceFilter) => {
+    setLastChangedFilter("source");
     setSelectedSourceFilters((previous) => (
       previous.includes(filter)
         ? previous.filter((selectedFilter) => selectedFilter !== filter)
@@ -951,6 +957,9 @@ export function PublicLibraryPageClient() {
     setTagDraft([]);
     setTagsFilterDraft([]);
     setSelectedSourceFilters([]);
+    setStudyPackReadyOnly(false);
+    setStudyPackReadyDraft(false);
+    setLastChangedFilter(null);
     setSelectedSort("NEWEST");
     setAudienceDraft(NOTE_TARGET_PROFILE_ALL);
     setCourseProgramSearchQuery("");
@@ -968,6 +977,41 @@ export function PublicLibraryPageClient() {
     });
   }, [replacePublicLibraryFilters]);
 
+  const dropMostRecentFilter = useCallback(() => {
+    switch (lastChangedFilter) {
+      case "audience":
+        setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+        replacePublicLibraryFilters({ ...parsedUrlFilters, audience: null, view: null });
+        break;
+      case "courseProgram":
+        setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+        replacePublicLibraryFilters({ ...parsedUrlFilters, courseProgram: null, view: null });
+        break;
+      case "ready":
+        setStudyPackReadyOnly(false);
+        break;
+      case "search":
+        setSearchQuery("");
+        replacePublicLibraryFilters({ ...parsedUrlFilters, search: null, view: null });
+        break;
+      case "source":
+        setSelectedSourceFilters([]);
+        break;
+      case "subject":
+        setSelectedSubject(ALL_SUBJECTS);
+        replacePublicLibraryFilters({ ...parsedUrlFilters, subject: null, view: null });
+        break;
+      case "tags":
+        setSelectedTags([]);
+        replacePublicLibraryFilters({ ...parsedUrlFilters, tags: [], view: null });
+        break;
+      default:
+        clearFilters();
+        return;
+    }
+    setLastChangedFilter(null);
+  }, [clearFilters, lastChangedFilter, parsedUrlFilters, replacePublicLibraryFilters]);
+
   const handleCtaDismiss = useCallback(() => {
     try {
       globalThis.sessionStorage?.setItem(PUBLIC_LIBRARY_COURSE_PROGRAM_CTA_KEY, "1");
@@ -978,6 +1022,7 @@ export function PublicLibraryPageClient() {
   }, []);
 
   const applyCourseProgramChip = useCallback((courseProgram: string) => {
+    setLastChangedFilter("courseProgram");
     setSelectedCourseProgram(courseProgram);
     setCourseProgramDraft(courseProgram);
     setRecentCoursePrograms((previous) => updateRecentValues(previous, [courseProgram]));
@@ -993,6 +1038,18 @@ export function PublicLibraryPageClient() {
     const nextSubject = subjectFilterDraft !== ALL_SUBJECTS ? slugifyPublicLibraryFilterValue(subjectFilterDraft) : null;
     const nextTags = tagsFilterDraft.map((tag) => slugifyPublicLibraryFilterValue(tag));
     const nextCourseProgram = courseProgramDraft !== ALL_COURSE_PROGRAMS ? slugifyPublicLibraryFilterValue(courseProgramDraft) : null;
+    const filterChanges: Array<[PublicLibraryFilterKey, boolean]> = [
+      ["audience", audienceDraft !== selectedTargetProfile],
+      ["courseProgram", courseProgramDraft !== selectedCourseProgram],
+      ["subject", subjectFilterDraft !== selectedSubject],
+      ["tags", tagsFilterDraft.join("\u0000") !== selectedTags.join("\u0000")],
+      ["ready", studyPackReadyDraft !== studyPackReadyOnly],
+    ];
+    const latestChange = filterChanges.find(([, changed]) => changed)?.[0];
+    if (latestChange) {
+      setLastChangedFilter(latestChange);
+    }
+    setStudyPackReadyOnly(studyPackReadyDraft);
 
     if (subjectFilterDraft !== ALL_SUBJECTS) {
       setRecentSubjects((previous) => updateRecentValues(previous, [subjectFilterDraft]));
@@ -1013,7 +1070,7 @@ export function PublicLibraryPageClient() {
       view: null,
     });
     setFilterSheetOpen(false);
-  }, [audienceDraft, courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, subjectFilterDraft, tagsFilterDraft]);
+  }, [audienceDraft, courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile, studyPackReadyDraft, studyPackReadyOnly, subjectFilterDraft, tagsFilterDraft]);
 
   const subjectPriorityComparator = useMemo(
     () => buildPriorityComparator(recentSubjects, subjectCounts),
@@ -1089,7 +1146,8 @@ export function PublicLibraryPageClient() {
     || parsedUrlFilters.creator !== null
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
-    || selectedSourceFilters.length > 0;
+    || selectedSourceFilters.length > 0
+    || studyPackReadyOnly;
   const hasActiveUrlFilters = (parsedUrlFilters.search?.trim().length ?? 0) > 0
     || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
@@ -1163,6 +1221,7 @@ export function PublicLibraryPageClient() {
         || courseProgramLookup === selectedCourseProgramLookup;
       const subjectMatch = selectedSubject === ALL_SUBJECTS
         || normalizedSubject === selectedSubject;
+      const studyPackReadyMatch = !studyPackReadyOnly || item.studyPackStatus === "STUDY_PACK_READY";
       const tagMatch = selectedTags.length === 0
         || selectedTags.some((selectedTag) => tags.includes(selectedTag));
       const sourceMatch = selectedSourceFilters.length === 0
@@ -1174,9 +1233,9 @@ export function PublicLibraryPageClient() {
               : !(isViewerAuthor(item, currentUserId, currentUsername) || item.isOfficialAuthor)
         ));
 
-      return titleMatch && courseProgramMatch && subjectMatch && tagMatch && sourceMatch;
+      return titleMatch && courseProgramMatch && subjectMatch && studyPackReadyMatch && tagMatch && sourceMatch;
     });
-  }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedSourceFilters, selectedSubject, selectedTags]);
+  }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedSourceFilters, selectedSubject, selectedTags, studyPackReadyOnly]);
 
   const sortedItems = useMemo(() => {
     if (effectiveSelectedSort === "RECOMMENDED") {
@@ -1441,7 +1500,7 @@ export function PublicLibraryPageClient() {
                     id="public-library-search"
                     type="search"
                     value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onChange={(event) => { setLastChangedFilter("search"); setSearchQuery(event.target.value); }}
                     placeholder="Search public notes..."
                     className={`h-10 w-full rounded-lg border border-border bg-background pl-3 ${
                       searchQuery ? "pr-10" : "pr-3"
@@ -1749,6 +1808,9 @@ export function PublicLibraryPageClient() {
                     <Button type="button" variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
                       Clear filters
                     </Button>
+                    <Button type="button" variant="outline" onClick={dropMostRecentFilter} className="w-full sm:w-auto">
+                      Remove last filter
+                    </Button>
                   </>
                 )}
             </Card>
@@ -1957,6 +2019,19 @@ export function PublicLibraryPageClient() {
               </div>
             </div>
           ) : null}
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Study readiness</p>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-3 text-sm transition-colors hover:bg-highlight active:bg-highlight-strong">
+              <input
+                type="checkbox"
+                checked={studyPackReadyDraft}
+                onChange={(event) => setStudyPackReadyDraft(event.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <span>Study Pack Ready</span>
+            </label>
+          </div>
 
           <div className="space-y-3">
             <p className="text-sm font-medium">Source</p>

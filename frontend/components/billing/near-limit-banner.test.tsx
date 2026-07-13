@@ -22,7 +22,7 @@ describe("NearLimitBanner", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("You have 2 Study Packs left this month on the Free plan.");
+    expect(screen.getByRole("status")).toHaveTextContent("You’re making progress this month — 2 Study Packs still ready to use on the Free plan.");
   });
 
   it("renders free-plan reached-limit messaging with reset date", () => {

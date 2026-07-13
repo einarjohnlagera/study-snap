@@ -114,7 +114,12 @@ export function PublicStudyPlanCard({
   return (
     <Card className="flex min-h-44 flex-col justify-between gap-4 border-blue-500/20 bg-blue-500/5 p-5">
       <div className="space-y-1.5">
-        <CardTitle className="line-clamp-2">{plan.title}</CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="line-clamp-2">{plan.title}</CardTitle>
+          <span className="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+            Official
+          </span>
+        </div>
         <CardDescription className="line-clamp-2 text-sm">
           {plan.description || descriptionFallback}
         </CardDescription>
@@ -174,6 +179,11 @@ export function PublicStudyPlanCard({
         >
           {buttonLabel}
         </Button>
+        <p className="text-center text-xs text-foreground/60">
+          {adoptedCollection
+            ? "Open your private, editable copy."
+            : "Adds a private, editable copy to your library."}
+        </p>
         {error ? (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
             {error}
