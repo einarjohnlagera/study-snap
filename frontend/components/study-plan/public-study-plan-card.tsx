@@ -16,6 +16,8 @@ import { getCollectionLabels } from "@/lib/collection-labels";
 import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
+const PREVIEW_NOTE_LIMIT = 5;
+
 type PublicStudyPlanCardProps = {
   plan: NoteCollectionSummary;
   adoptedCollection: NoteCollectionSummary | null;
@@ -81,6 +83,13 @@ export function PublicStudyPlanCard({
   const previewReadyLine = preview?.readyCount == null
     ? null
     : `${preview.readyCount} of ${preview.items.length} notes practice-ready`;
+  const showAllPreviewItems = (preview?.items.length ?? 0) <= PREVIEW_NOTE_LIMIT + 1;
+  const visiblePreviewItems = preview == null
+    ? []
+    : showAllPreviewItems
+      ? preview.items
+      : preview.items.slice(0, PREVIEW_NOTE_LIMIT);
+  const hiddenPreviewItemCount = (preview?.items.length ?? 0) - visiblePreviewItems.length;
 
   const handleStart = async () => {
     if (!canAdopt) {
@@ -128,7 +137,7 @@ export function PublicStudyPlanCard({
         <p className="text-sm text-foreground/70">{detailLine}</p>
         {practiceReadyLine ? <p className="text-sm text-foreground/70">{practiceReadyLine}</p> : null}
         <Button type="button" variant="outline" className="w-full" onClick={handlePreview} aria-expanded={previewOpen}>
-          {previewOpen ? "Hide plan preview" : "Preview this plan"}
+          {previewOpen ? "Hide plan preview" : `Preview this plan · ${noteLabel}`}
         </Button>
         {previewOpen ? (
           <section aria-label="Plan preview" className="space-y-3 rounded-xl border border-border bg-background/70 p-3">
@@ -155,16 +164,21 @@ export function PublicStudyPlanCard({
                 {preview.items.length === 0 ? (
                   <p className="text-sm text-foreground/70">This plan does not have any available notes yet.</p>
                 ) : (
-                  <ol className="space-y-2" aria-label="Notes in this plan">
-                    {preview.items.map((item) => (
-                      <li key={item.noteId} className="rounded-lg border border-border px-3 py-2 text-sm">
-                        <p className="font-medium text-foreground">{item.title || "Untitled note"}</p>
-                        <p className="text-foreground/70">
-                          {[item.subject, item.label ? `Section: ${item.label}` : null].filter(Boolean).join(" · ") || "No subject or section"}
-                        </p>
-                      </li>
-                    ))}
-                  </ol>
+                  <>
+                    <ol className="space-y-2" aria-label="Notes in this plan">
+                      {visiblePreviewItems.map((item) => (
+                        <li key={item.noteId} className="rounded-lg border border-border px-3 py-2 text-sm">
+                          <p className="font-medium text-foreground">{item.title || "Untitled note"}</p>
+                          <p className="text-foreground/70">
+                            {[item.subject, item.label ? `Section: ${item.label}` : null].filter(Boolean).join(" · ") || "No subject or section"}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                    {hiddenPreviewItemCount > 0 ? (
+                      <p className="text-sm text-foreground/60">+ {hiddenPreviewItemCount} more notes</p>
+                    ) : null}
+                  </>
                 )}
               </>
             ) : null}

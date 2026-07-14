@@ -8,13 +8,14 @@ Theme: fix the last remaining gap in v0.45.1's Goal-collection rollup fix — a 
 
 ### Planned Scope
 
-- **Public plan preview rollup fix (backend).** `NoteCollectionService.getPublic()` (backing `GET /collections/public/{id}`, the plan-preview panel on `PublicStudyPlanCard`) fetches items only directly on the requested collection via `itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)` — for a Goal, always empty, since only its children hold items directly. v0.45.1's rollup fix (`NoteCollectionRepository.findByParentCollectionIdIn`) only touched `list()`/`listPublic()` (the card-level summary counts); this endpoint is a separate code path that was missed. Fix: fetch and flatten items across the Goal and its children (reusing the same repository method from v0.45.1) into the existing `NoteCollectionDetailResponse.items` shape, so `progress`/`readyCount` (both already derived from `items`) compute correctly with no further changes needed downstream.
+All items have shipped — see Shipped below.
 
 Anti-drift: no new backend entity, migration, or endpoint — read-only aggregate fix reusing v0.45.1's existing `findByParentCollectionIdIn` repository method.
 
 ### Shipped
 
-_(nothing yet)_
+- **Public plan preview rollup fix (backend).** `NoteCollectionService.getPublic()` (backing `GET /collections/public/{id}`, the plan-preview panel on `PublicStudyPlanCard`) now flattens items across a Goal and its children — reusing v0.45.1's `findByParentCollectionIdIn` unfiltered (no child-visibility re-filter, avoiding the same pitfall v0.45.1 had to guard against) plus a new batched `NoteCollectionItemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc`. `progress`/`readyCount` are unchanged downstream, already correctly derived from `items`. Childless collections are unaffected.
+- **Plan preview note-list cap (frontend).** With the rollup fix now surfacing every note (some production plans have 40-52), the uncapped preview list made the expanded card unbounded and broke grid alignment with sibling cards. The preview note list now caps at 5, showing all notes when the total is 6 or fewer (never hiding just one item behind an affordance) and a muted "+ N more notes" line otherwise. The "Preview this plan" toggle also now shows the total note count ("Preview this plan · 42 notes") so the cap doesn't read as concealment.
 
 ---
 
