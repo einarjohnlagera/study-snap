@@ -801,7 +801,7 @@ export default function DashboardPage() {
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
-                viewAllHref="/collections/published"
+                viewAllHref="/collections/published?ref=/dashboard"
                 browseWhenEmpty={items.length === 0}
               />
               <DashboardCommunityNotesSection
@@ -883,7 +883,7 @@ export default function DashboardPage() {
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
-                viewAllHref="/collections/published"
+                viewAllHref="/collections/published?ref=/dashboard"
                 browseWhenEmpty={items.length === 0}
               />
               <DashboardCommunityNotesSection

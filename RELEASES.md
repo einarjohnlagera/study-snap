@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.45.1 - Study Plan Collection Fixes
+
+**Status: Released**
+
+Theme: fix three pre-existing collection/discovery defects surfaced during v0.45.0 pre-signoff review — a Goal-collection note-count rollup that always shows 0 when notes live only on child Subject Plans, a Published Plans backlink that ignores how the user actually arrived, and a dead end where users with a primary study plan have no path back to the full official-plan catalog.
+
+### Planned Scope
+
+All three items have shipped — see Shipped below.
+
+Anti-drift: no new backend entities, migrations, pricing tiers, or quota changes; the rollup fix added one new repository method and no new endpoint. All three items were routed to Codex per the user's explicit token-budget preference this release, superseding this release's original Claude-Code-direct routing call for items 2 and 3.
+
+### Shipped
+
+- **Goal-collection note-count/readyCount rollup fix (backend + frontend).** Added the anonymous-safe `NoteCollectionRepository.findByParentCollectionIdIn(List<UUID>)` lookup. `NoteCollectionService.list()` and `listPublic()` now fetch all direct children in one additional query, run their existing item/ready batch loaders once across the top-level-plus-child union, and sum each child's counts into its Goal without a child visibility filter. Dashboard now shows the returned Goal note total alongside its Subject Plan count instead of suppressing the formerly misleading zero.
+- **Published Plans backlink and persistent catalog-browse entry point (frontend).** `/collections/published`'s back link now reads an allowlisted `?ref=` query param (`/dashboard`, `/public/library`, `/collections` and their sub-paths) to return to wherever the user actually came from, falling back to today's Dashboard/Public Library default otherwise; the allowlist stays specific-prefix so it can't be used as an open redirect. The four existing links into that page (`dashboard/page.tsx` both call sites, `collections-page-client.tsx`, `dashboard-empty.tsx`) now send their own path as `ref`. Separately, `/collections` now shows an always-visible "Browse official plans" link in its header regardless of whether the user has a primary study plan set — the Dashboard recommendation card's existing primary-plan suppression (`docs/features/collections.md:124`) is unchanged.
+- **Official badge dark-mode contrast fix (frontend).** `PublicStudyPlanCard`'s `Official` badge used a solid `bg-blue-100`/`dark:bg-blue-950/50` fill that broke against dark theme's card background, reading as an ill-fitting dark navy blob. Switched to the same border + opacity-tinted background pattern (`border-blue-500/30 bg-blue-500/10`) already used by every other identity badge in the app (`Primary`, note-ownership, readiness-stat chips), which blends correctly in both themes.
+
+---
+
 ## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish
 
 **Status: Released**

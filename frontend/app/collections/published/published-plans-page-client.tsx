@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -36,9 +37,25 @@ function PlanSkeletonGrid() {
 
 export function PublishedPlansPageClient() {
   const authUser = useMemo(() => getAuthUser(), []);
+  const searchParams = useSearchParams();
   const profileType = authUser?.profileType ?? null;
   const canAdopt = authUser !== null;
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
+  const backLink = useMemo(() => {
+    const ref = searchParams.get("ref");
+    if (ref === "/dashboard" || ref?.startsWith("/dashboard/")) {
+      return { href: ref, label: "Dashboard" };
+    }
+    if (ref === "/public/library" || ref?.startsWith("/public/library/")) {
+      return { href: ref, label: "Public Library" };
+    }
+    if (ref === "/collections" || ref?.startsWith("/collections/")) {
+      return { href: ref, label: "Collections" };
+    }
+    return canAdopt
+      ? { href: "/dashboard", label: "Dashboard" }
+      : { href: "/public/library", label: "Public Library" };
+  }, [canAdopt, searchParams]);
   const [recommendedState, setRecommendedState] = useState<LoadState>("loading");
   const [browseAllState, setBrowseAllState] = useState<LoadState>("loading");
   const [courseProgram, setCourseProgram] = useState<string | null>(null);
@@ -118,7 +135,7 @@ export function PublishedPlansPageClient() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <BackLink href={canAdopt ? "/dashboard" : "/public/library"} label={canAdopt ? "Dashboard" : "Public Library"} />
+      <BackLink href={backLink.href} label={backLink.label} />
 
       <PageHeader
         eyebrow="DISCOVER"

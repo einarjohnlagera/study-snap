@@ -12,9 +12,11 @@ import {
 const pushMock = jest.fn();
 const routerMock = { push: pushMock };
 let currentAuthUser: { profileType: "STUDENT" } | null = { profileType: "STUDENT" };
+let searchParamsMock = new URLSearchParams();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  useSearchParams: () => searchParamsMock,
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -63,6 +65,7 @@ describe("PublishedPlansPage", () => {
     (getPublicStudyPlanDetail as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
+    searchParamsMock = new URLSearchParams();
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "LET", profileType: "STUDENT" });
     (listCollections as jest.Mock).mockResolvedValue([]);
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([planOne, planTwo]);
@@ -76,6 +79,27 @@ describe("PublishedPlansPage", () => {
 
   it("exports page metadata", () => {
     expect(metadata).toMatchObject({ title: "Recommended Plans | NoteLib" });
+  });
+
+  it.each([
+    ["/dashboard", "Dashboard"],
+    ["/public/library", "Public Library"],
+    ["/collections", "Collections"],
+    ["/collections/collection-1", "Collections"],
+  ])("uses an allowlisted ref for the %s back link", async (ref, label) => {
+    searchParamsMock = new URLSearchParams({ ref });
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findByRole("link", { name: label })).toHaveAttribute("href", ref);
+  });
+
+  it.each(["/", "//evil.com", "/unrelated"])("falls back to Dashboard for an invalid ref: %s", async (ref) => {
+    searchParamsMock = new URLSearchParams({ ref });
+
+    render(<PublishedPlansPage />);
+
+    expect(await screen.findByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
   });
 
   it("lists every published plan for the learner's course/program", async () => {

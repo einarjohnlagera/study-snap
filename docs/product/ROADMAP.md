@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is the current released version (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, shipped across 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library) plus two post-merge follow-ups and one regression-fix bundle. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
+`v0.45.1 - Study Plan Collection Fixes` is the current released version (on `releases/v0.45.1`) — three pre-existing collection/discovery defects surfaced during v0.45.0 pre-signoff review: a Goal-collection note-count rollup that always showed 0 when notes lived only on child Subject Plans, a Published Plans backlink that ignored how the user actually arrived, and no path back to the official-plan catalog once a primary study plan was set. Also fixed a dark-mode contrast bug on the `Official` plan badge, found post-merge. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
 
-`v0.44.0 - Conversion & Retention Polish` is the previous released version (on `releases/v0.44.0`) — Tier 1 findings from the same audit shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
+`v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is the previous released version (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, shipped across 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library) plus two post-merge follow-ups and one regression-fix bundle. See `RELEASES.md`.
+
+`v0.44.0 - Conversion & Retention Polish` is the previous released version before that (on `releases/v0.44.0`) — Tier 1 findings from the same audit shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
 
 `v0.43.1 - Companion Mentor Tips` is the previous released version before that (on `releases/v0.43.1`).
 
@@ -19,6 +21,10 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## v0.45.1 - Study Plan Collection Fixes (Released, base branch `releases/v0.45.1`)
+
+Origin: three pre-existing bugs surfaced by direct user report and confirmed via Explore-agent investigation plus independent Opus and Fable consultations during v0.45.0's pre-signoff review — deliberately deferred to their own release rather than folded into v0.45.0 late. Full scope in `RELEASES.md`.
 
 ## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish (Released, base branch `releases/v0.45.0`)
 
