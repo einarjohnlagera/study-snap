@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { getBrowsingCardClassName } from "@/lib/clickable-card";
+import { cn } from "@/lib/utils";
 import {
   type RecentQuizSessionHistoryItem,
   getQuizSessionModeLabel,
@@ -33,16 +36,20 @@ export function QuizSessionHistory({
   sessions,
   onSelectSession,
 }: Readonly<QuizSessionHistoryProps>) {
-  return (
-    <Card className="space-y-4 p-4 sm:p-6">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold sm:text-xl">Recent Sessions</h2>
-        <p className="text-sm text-foreground/75">
-          Revisit past quiz sessions to review answers, spot weak concepts, and track whether you&apos;re improving.
-        </p>
-      </div>
+  // Collapsed by default, matching CompanionDisplayCard's "View Full Guide" pattern —
+  // this is reference/review material, not something a returning learner needs above the fold.
+  // Only applies once there's a list to hide; the empty state has nothing to collapse.
+  const [isExpanded, setIsExpanded] = useState(false);
 
-      {sessions.length === 0 ? (
+  if (sessions.length === 0) {
+    return (
+      <Card className="space-y-4 p-4 sm:p-6">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold sm:text-xl">Recent Sessions</h2>
+          <p className="text-sm text-foreground/75">
+            Revisit past quiz sessions to review answers, spot weak concepts, and track whether you&apos;re improving.
+          </p>
+        </div>
         <div className="space-y-3">
           <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-5 text-sm text-foreground/70">
             <p className="font-medium text-foreground">No completed quiz sessions yet.</p>
@@ -53,7 +60,34 @@ export function QuizSessionHistory({
             message="Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing."
           />
         </div>
-      ) : (
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="space-y-4 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold sm:text-xl">Recent Sessions</h2>
+          <p className="text-sm text-foreground/75">
+            Revisit past quiz sessions to review answers, spot weak concepts, and track whether you&apos;re improving.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((previous) => !previous)}
+        >
+          {isExpanded ? "Hide Sessions" : "Show Sessions"}
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 transition-transform", !isExpanded && "-rotate-90")}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+
+      {isExpanded ? (
         <div className="space-y-2">
           {sessions.map((session) => (
             <button
@@ -101,7 +135,7 @@ export function QuizSessionHistory({
             </button>
           ))}
         </div>
-      )}
+      ) : null}
     </Card>
   );
 }

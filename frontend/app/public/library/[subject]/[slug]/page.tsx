@@ -361,7 +361,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                   href={buildPublicLibraryNotePath({ subject: relatedNote.subject, title: relatedNote.title })}
                   className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <Card className="h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5">
+                  <Card className="motion-pressable h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5">
                     <SharedNoteCard
                       title={relatedNote.title}
                       courseProgram={relatedNote.courseProgram}

@@ -16,6 +16,7 @@ import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
+import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -27,6 +28,7 @@ import {
   completeQuickReviewSession,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
+  getCollectionGoal,
   getMe,
   getMyStudyPack,
   getNote,
@@ -39,11 +41,13 @@ import {
   type LearnerLevel,
   type NoteResponse,
   type PostSessionNextStepResponse,
+  type ProfileType,
   type QuickReviewConfidenceLevel,
   type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
 } from "@/lib/api";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { getGroupedLearnerLevels } from "@/lib/learning-profile";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { PostSuccessUpgradeNudge } from "@/components/billing/post-success-upgrade-nudge";
@@ -195,6 +199,7 @@ export default function QuickReviewPage() {
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [multiSelectSubmitted, setMultiSelectSubmitted] = useState(false);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
+  const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const { usageSummary } = useBillingUsageSummary();
@@ -453,6 +458,11 @@ export default function QuickReviewPage() {
     void getMe().then((me) => {
       if (me.learnerLevel) {
         setCurrentLearnerLevel(me.learnerLevel);
+      }
+      if (me.primaryCollectionId) {
+        void getCollectionGoal(me.primaryCollectionId)
+          .then((goal) => setWeeklyPacingWeeksRemaining(goal.weeksRemaining))
+          .catch(() => undefined);
       }
     }).catch(() => undefined);
   }, [isComplete]);
@@ -1026,6 +1036,10 @@ export default function QuickReviewPage() {
           {nextStepResponse?.goalNudge ? (
             <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
           ) : null}
+          <WeeklyPacingEchoCard
+            weeksRemaining={weeklyPacingWeeksRemaining}
+            goalLabel={getCollectionLabels(viewerProfileType as ProfileType | null).goalSingular}
+          />
 
           {nextStepResponse === null ? (
             <>

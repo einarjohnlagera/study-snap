@@ -334,6 +334,24 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/edit");
   });
 
+  it("shows a skeleton card instead of plain text while the note is first loading", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    let resolveNote: (value: typeof baseNote) => void = () => {};
+    (getNote as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        resolveNote = resolve;
+      }),
+    );
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(screen.getByText("Loading your note...")).toBeInTheDocument();
+    expect(screen.queryByText("Loading note...")).not.toBeInTheDocument();
+
+    resolveNote({ ...baseNote, studyPackStatus: "DRAFT" });
+    await screen.findByText("Test Note");
+  });
+
   it("shows a compact note actions menu for long mobile note headers", async () => {
     const longTitle = "This is a very long note title that should wrap cleanly on mobile without pushing action buttons outside the header container";
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
@@ -493,6 +511,7 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Recent Sessions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show Sessions" }));
     const quickReviewSessionButton = screen.getAllByText("Quick Review")
       .map((element) => element.closest("button"))
       .find((button) => button !== null);
@@ -534,6 +553,7 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Recent Sessions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show Sessions" }));
     const quickReviewSessionButton = screen.getAllByText("Quick Review")
       .map((element) => element.closest("button"))
       .find((button) => button !== null);
@@ -1753,6 +1773,32 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(await screen.findByText("You've reached your Study Pack limit")).toBeInTheDocument();
     expect(screen.queryByText("You've reached your Study Pack limit for this month")).not.toBeInTheDocument();
+  });
+
+  it("collapses Performance Overview stats by default for a ready note and expands them on demand", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue({ attempts: 3, lastScorePercentage: 90 });
+    (getChallengeQuizPerformanceSummary as jest.Mock).mockResolvedValue({ attempts: 2, bestScorePercentage: 85 });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Performance Overview")).toBeInTheDocument();
+    expect(screen.queryByText(/Sessions: 3/)).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Show Performance" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByText(/Sessions: 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Sessions: 2/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide Performance" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("shows quiz view when tab=quiz is requested", async () => {
