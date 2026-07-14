@@ -1489,7 +1489,7 @@ export function PublicLibraryPageClient() {
         </Card>
       ) : (
         <div className="space-y-4">
-          <Card className="sticky top-16 z-20 space-y-4 border-b border-border bg-background/95 p-4 backdrop-blur sm:p-5">
+          <Card className="space-y-4 p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1 space-y-2">
                 <label htmlFor="public-library-search" className="text-sm font-medium">
