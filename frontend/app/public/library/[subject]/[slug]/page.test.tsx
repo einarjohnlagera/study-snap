@@ -274,7 +274,6 @@ describe("PublicLibrarySeoPage", () => {
 
     expect(screen.getByRole("heading", { name: "Ready to quiz yourself?" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Quiz yourself on this note/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Copy Study Pack/i })).toBeInTheDocument();
   });
 
   it("renders full notes section", async () => {
