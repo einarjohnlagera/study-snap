@@ -1,5 +1,31 @@
 # RELEASES.md - NoteLib
 
+## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch
+
+**Status: In Progress**
+
+Theme: close out the conversion/retention UX audit backlog (`docs/claude-prompt/conversion-audit-prioritized-backlog.md`) with its Tier 4 items — low-impact, cheap cleanups explicitly meant to be batched together rather than shipped as standalone releases. Item 52 from this tier already shipped in v0.46.0.
+
+Pre-scoping verification (2026-07-14) found the backlog's original routing needed two corrections: item 37 (carry Learn-article intent into signup) turned out to need new branching logic in `goal-prompt-banner.tsx` to consume a cookie shape that has no existing consumer — split out and dropped from this release rather than folded in as cheap; item 47 (Goal card sub-line label check) was already fixed in a prior release — dropped, nothing to ship. Full verification detail in the scoping conversation; source backlog unaffected.
+
+Unlike prior releases, this batch routes through Codex prompts per-item rather than direct Claude Code implementation, despite every item being individually small enough for direct implementation under `CLAUDE.md`'s routing table — a deliberate token-budget choice for this release, not a routing-rule change.
+
+### Planned Scope
+
+18 Tier 4 backlog items, minus items 37 and 52 (see above), grouped into 5 Codex-prompted PRs:
+
+- **Landing & Pricing polish (Codex).** Item 38 (mobile hero/pricing-preview density rules), item 39 (consolidate Learning-Loop/How-It-Works landing sections, retitle "AI Critique" guide), item 40 (single detected-currency display with region note).
+- **Public Note Detail polish (Codex).** Item 41 (author mini-card — via existing `getPublicProfile`/`getPublicCreatorProfile`, with a fallback for private profiles), item 42 (breadcrumb + `BreadcrumbList` JSON-LD, same pattern as existing `buildArticleStructuredData`), item 43 (auth-interstitial promise restatement on signup click-through), item 44 (non-owner profile polish — bio fallback, footer affordance).
+- **Discovery & Library polish (Codex).** Item 45 (unify "Adopted" vocabulary), item 46 (fix Dashboard's Matching Study Plan Section silently rendering nothing when courseProgram is unset), item 53 (document in-app subject filter vs. subject-landing-page divergence as intentional), item 54 (Course/Program badge→chip; document the existing "High Quality" badge threshold rather than change it).
+- **Onboarding copy polish (Codex).** Item 48 (reframe onboarding adopt card as explicitly supplementary), item 49 (fix Dashboard learner-level follow-up prompt copy), item 50 (teacher-conditional Learner Level label qualifier), item 51 (permanence framing line on onboarding Step 4 success).
+- **Doc hygiene (Codex).** Item 55 (seo.md subject-landing gap, Learner Level filter doc mismatch, pagination note).
+
+Anti-drift: no new backend entity, migration, or endpoint anywhere in this batch — every item confirmed frontend/doc-only during pre-scoping verification; no pricing/quota changes; item 37's consumption-logic half and item 54's "High Quality" threshold redefinition stay explicitly out of scope (documented, not changed).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing
 
 **Status: Released**
