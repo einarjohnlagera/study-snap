@@ -8,14 +8,14 @@ Theme: fix three pre-existing collection/discovery defects surfaced during v0.45
 
 ### Planned Scope
 
-- **Published Plans backlink entry-point fix (frontend).** `frontend/app/collections/published/published-plans-page-client.tsx:121` hardcodes its `BackLink` to Dashboard or Public Library regardless of how the user actually arrived. Fix: reuse the existing `?ref=` allowlist pattern from `private-note-detail-page-client.tsx:352-355`, kept specific-prefix (`/library`, `/collections/`) to avoid an open-redirect via a bare `/` prefix. Wire the 4 sender call sites to append `?ref=<path>`: `dashboard/page.tsx:804,886`, `collections-page-client.tsx:370`, `dashboard-empty.tsx:88`.
-- **Persistent catalog-browse entry point (frontend).** Once a user has a primary study plan, `usingPrimary` gating in `dashboard-study-plan-section.tsx` correctly suppresses the Dashboard recommendation card's catalog link (intentional, documented in `docs/features/collections.md:124`) — but there is then no path anywhere in the app to `/collections/published`. Fix: add a new, primary-independent, persistent "Browse official plans" link in the `/collections` page header. Do not un-suppress the Dashboard card's link — that would contradict the documented suppression design.
+All three items have shipped — see Shipped below.
 
-Anti-drift: no new backend entities, migrations, pricing tiers, or quota changes; item 1 adds one new repository method and no new endpoint. Items 2 and 3 route to direct Claude Code implementation; item 1 routes to a Codex prompt (backend service logic + anonymous endpoint change) per `CLAUDE.md`'s task-routing table.
+Anti-drift: no new backend entities, migrations, pricing tiers, or quota changes; the rollup fix added one new repository method and no new endpoint. All three items were routed to Codex per the user's explicit token-budget preference this release, superseding this release's original Claude-Code-direct routing call for items 2 and 3.
 
 ### Shipped
 
 - **Goal-collection note-count/readyCount rollup fix (backend + frontend).** Added the anonymous-safe `NoteCollectionRepository.findByParentCollectionIdIn(List<UUID>)` lookup. `NoteCollectionService.list()` and `listPublic()` now fetch all direct children in one additional query, run their existing item/ready batch loaders once across the top-level-plus-child union, and sum each child's counts into its Goal without a child visibility filter. Dashboard now shows the returned Goal note total alongside its Subject Plan count instead of suppressing the formerly misleading zero.
+- **Published Plans backlink and persistent catalog-browse entry point (frontend).** `/collections/published`'s back link now reads an allowlisted `?ref=` query param (`/dashboard`, `/public/library`, `/collections` and their sub-paths) to return to wherever the user actually came from, falling back to today's Dashboard/Public Library default otherwise; the allowlist stays specific-prefix so it can't be used as an open redirect. The four existing links into that page (`dashboard/page.tsx` both call sites, `collections-page-client.tsx`, `dashboard-empty.tsx`) now send their own path as `ref`. Separately, `/collections` now shows an always-visible "Browse official plans" link in its header regardless of whether the user has a primary study plan set — the Dashboard recommendation card's existing primary-plan suppression (`docs/features/collections.md:124`) is unchanged.
 
 ---
 
