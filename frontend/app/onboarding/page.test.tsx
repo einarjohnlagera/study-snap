@@ -363,6 +363,8 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack →" }));
 
     expect(await screen.findByText("Your Study Pack is ready.")).toBeInTheDocument();
+    expect(screen.getByText("Saved to your library — yours to quiz against anytime.")).toBeInTheDocument();
+    expect(screen.getByText("Going back will start a new Study Pack. Your current one will be saved.")).toBeInTheDocument();
     expect(screen.getByText("Inertia")).toBeInTheDocument();
     expect(screen.getByText("+1 more")).toBeInTheDocument();
 
@@ -461,6 +463,7 @@ describe("OnboardingPage", () => {
 
     expect(await screen.findByText("Your Newton's Laws of Motion Study Pack is ready. Come back tomorrow to keep building on it.")).toBeInTheDocument();
     expect(await screen.findByText("AWS Certification Plan")).toBeInTheDocument();
+    expect(screen.getByText("Optional: explore an official study plan alongside the Study Pack you just created.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
 

@@ -65,6 +65,7 @@ describe("DashboardStudyPlanSection", () => {
     render(<DashboardStudyPlanSection courseProgram=" let " profileType="STUDENT" />);
 
     expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+    expect(screen.queryByText(/Optional: explore an official study plan/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
 
     await waitFor(() => {
@@ -88,6 +89,13 @@ describe("DashboardStudyPlanSection", () => {
     expect(await screen.findByRole("heading", { name: "Recommended Review Set" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start this Review Set" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start this plan" })).not.toBeInTheDocument();
+  });
+
+  it("adds supplementary framing only for the onboarding context", async () => {
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" context="onboarding" />);
+
+    expect(await screen.findByText("Optional: explore an official study plan alongside the Study Pack you just created.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start this Study Plan" })).toBeInTheDocument();
   });
 
   it("continues an already adopted plan without adopting again", async () => {

@@ -116,6 +116,7 @@ Headline during generation:
 Headline after success:
 
 - `Your Study Pack is ready.`
+- `Saved to your library — yours to quiz against anytime.` appears beneath the success message; it complements, rather than replaces, the existing back-navigation notice.
 
 The page previews:
 
@@ -141,7 +142,7 @@ The completion call persists onboarding completion through the existing backend 
 
 #### Recommended plan adopt card
 
-Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Open your Study Pack` action.
+Below the two actions, the completion step reuses the Dashboard's `DashboardStudyPlanSection` adopt card (`courseProgram` and `profileType` passed from the onboarding draft, plus `context="onboarding"`). It is a supplementary discovery surface — the learner's own freshly-generated Study Pack stays the primary `Open your Study Pack` action. The `context="onboarding"` prop adds a visible "Optional: explore an official {plan} alongside the Study Pack you just created." line reinforcing this; Dashboard and Collections call sites omit the prop and keep their existing copy unchanged.
 
 - The card self-hides when the learner's course/program has no published plan, so most tracks see Step 5 unchanged.
 - For tracks with a published plan, it offers one-tap adopt via the existing `listPublicStudyPlans({ courseProgram })` + `adoptStudyPlan` (no new endpoint).
@@ -164,7 +165,7 @@ They are adjusted later through:
 The Dashboard learner-level follow-up prompt remains a refinement path after onboarding:
 
 - title: `Too easy or too hard?`
-- body: `Set your learner level so future quizzes match your study stage.`
+- body: `You can adjust your learner level anytime — quizzes will match your new study stage next time you practice.`
 - CTA: `Adjust level`
 - destination: `/profile?from=dashboard#learning-profile`
 
