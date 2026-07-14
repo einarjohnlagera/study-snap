@@ -614,6 +614,9 @@ export default function DashboardPage() {
     () => formatExamCountdown(profile?.examDate ?? null),
     [profile?.examDate],
   );
+  const examPacingLine = overview?.examPacingPlan
+    ? `${overview.examPacingPlan.dueConceptCount} concepts due — study ~${overview.examPacingPlan.dailyConceptTarget}/day to stay on track for your exam in ${overview.examPacingPlan.daysRemaining} days.`
+    : null;
   const studyPacksRemaining = usageSummary
     ? resolveRemainingUsageCredits(
       usageSummary.usage.studyPacksUsed,
@@ -828,7 +831,7 @@ export default function DashboardPage() {
               {dashboardProfileType === "BOARD_EXAM" && examCountdown ? (
                 <Card className="space-y-3 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Exam Countdown</h2>
-                  <p className="text-sm text-foreground/75">{examCountdown}</p>
+                  <p className="text-sm text-foreground/75">{examPacingLine ?? examCountdown}</p>
                 </Card>
               ) : null}
               <DashboardActionCard

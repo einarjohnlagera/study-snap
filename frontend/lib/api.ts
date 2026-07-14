@@ -405,10 +405,17 @@ export type DashboardWeeklyActivityResponse = {
   studyDays: number;
 };
 
+export type ExamPacingPlanResponse = {
+  dueConceptCount: number;
+  dailyConceptTarget: number;
+  daysRemaining: number;
+};
+
 export type DashboardOverviewResponse = {
   performanceSummary: DashboardPerformanceSummaryResponse;
   focusAreas: DashboardFocusAreasResponse;
   weeklyActivity: DashboardWeeklyActivityResponse;
+  examPacingPlan: ExamPacingPlanResponse | null;
 };
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";

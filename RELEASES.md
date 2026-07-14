@@ -8,13 +8,14 @@ Theme: deepen retention past v0.44.0's conversion-audit-driven fixes with two Fa
 
 ### Planned Scope
 
-- **Exam Date Countdown & Paced Review Plan (backend + frontend).** **Correction:** the exam-date field and a plain countdown sentence are pre-existing (`UserEntity.examDate`, `UpdateExamDateRequest`, BOARD_EXAM-only capture and display) — Fable's write-up wrongly claimed these as new infrastructure. What's actually new: a pacing-calculator service that spreads `ConceptHealthService`'s due concepts across the remaining days into a daily target, surfaced on the Dashboard (replacing/augmenting the plain sentence) and inside Review Set detail, scoped to BOARD_EXAM profile only this release. Schedules **owned content only** — no matching, no auto-assembly, no generation; if a subject has no owned content, the plan reports the gap rather than filling it (the line that keeps this out of Smart Review Planning's territory, which stays paused and unrelated).
+Both items have shipped — see Shipped below.
 
 Anti-drift: no 6th quiz mode; no auto-assembled or gap-filling review plan (owned content only, explicitly not Smart Review Planning); no freetext exam identity; no per-learner runtime personalization beyond the existing PRO tier design; no pricing, paywall, or quota numbers introduced by this release (tier *direction* only, per Fable's own guardrails). Full source material and rejected alternatives in `docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`.
 
 ### Shipped
 
 - **Weekly Due-Concepts Email Digest (backend + frontend).** Added `DUE_CONCEPTS_DIGEST` to the existing weekly retention pipeline. Opted-in users with due concepts across owned Study Packs receive a Dashboard Today Focus link, total due count, and up to three highest-count Study Pack titles; empty and cooldown-blocked candidates are skipped. The new preference defaults off, has a 7-day configurable cooldown, is editable in Settings, and uses the isolated `DUE_CONCEPTS_DIGEST` unsubscribe category.
+- **Board Exam Dashboard pacing (backend + frontend).** The profile exam-date field and basic countdown were already shipped; this adds only a nullable Dashboard overview pacing result for BOARD_EXAM users with a future exam date and owned due concepts. It sums due concepts across all owned Study Packs through `ConceptHealthService`, rounds them into a daily target, and renders that target in the existing Dashboard countdown card. Empty, past/today, and unavailable states retain the prior countdown fallback. Review Set/Goal detail remains deliberately untouched and keeps its separate collection target-date pacing.
 
 ---
 

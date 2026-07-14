@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.ContinueStudyingResumeType;
 import com.studysnap.backend.dto.DashboardConceptInsightResponse;
 import com.studysnap.backend.dto.DashboardFocusAreasResponse;
+import com.studysnap.backend.dto.ExamPacingPlanResponse;
 import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.DashboardPerformanceSummaryResponse;
 import com.studysnap.backend.dto.DashboardWeeklyActivityResponse;
@@ -51,6 +52,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -264,12 +266,51 @@ public class DashboardService {
         );
         DashboardFocusAreasResponse focusAreas = buildFocusAreas(completedChallengeSessions, planType);
         DashboardWeeklyActivityResponse weeklyActivity = buildWeeklyActivity(userId);
+        ExamPacingPlanResponse examPacingPlan = resolveExamPacingPlan(userId, OffsetDateTime.now(ZoneOffset.UTC));
 
         return new DashboardOverviewResponse(
                 performanceSummary,
                 focusAreas,
-                weeklyActivity
+                weeklyActivity,
+                examPacingPlan
         );
+    }
+
+    private ExamPacingPlanResponse resolveExamPacingPlan(UUID userId, OffsetDateTime now) {
+        try {
+            UserEntity user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getProfileType() != ProfileType.BOARD_EXAM || user.getExamDate() == null) {
+                return null;
+            }
+            int daysRemaining = Math.toIntExact(ChronoUnit.DAYS.between(now.toLocalDate(), user.getExamDate()));
+            if (daysRemaining <= 0) {
+                return null;
+            }
+
+            List<StudyPackEntity> studyPacks = studyPackRepository
+                    .findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged());
+            Map<UUID, List<String>> conceptsByStudyPackId = new LinkedHashMap<>();
+            for (StudyPackEntity studyPack : studyPacks) {
+                if (studyPack.getId() != null && studyPack.getKeyConcepts() != null && !studyPack.getKeyConcepts().isEmpty()) {
+                    conceptsByStudyPackId.put(studyPack.getId(), studyPack.getKeyConcepts());
+                }
+            }
+            int dueConceptCount = conceptHealthService.getDueConceptsByStudyPackIds(userId, conceptsByStudyPackId, now)
+                    .values().stream()
+                    .mapToInt(List::size)
+                    .sum();
+            if (dueConceptCount == 0) {
+                return null;
+            }
+            return new ExamPacingPlanResponse(
+                    dueConceptCount,
+                    Math.max(1, (int) Math.ceil((double) dueConceptCount / daysRemaining)),
+                    daysRemaining
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Could not resolve exam pacing plan for user {}", userId, exception);
+            return null;
+        }
     }
 
     private Optional<TodayFocusResponse> resolveTodayFocusInProgress(UUID userId) {
