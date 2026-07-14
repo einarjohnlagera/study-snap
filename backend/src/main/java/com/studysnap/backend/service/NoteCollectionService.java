@@ -535,7 +535,11 @@ public class NoteCollectionService {
     public NoteCollectionDetailResponse getPublic(UUID collectionId) {
         NoteCollectionEntity collection = collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)
                 .orElseThrow(CollectionNotFoundException::new);
-        List<NoteCollectionItemEntity> items = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId);
+        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(List.of(collectionId));
+        List<NoteCollectionEntity> collectionsWithChildren = new ArrayList<>(List.of(collection));
+        collectionsWithChildren.addAll(children);
+        List<NoteCollectionItemEntity> items = itemRepository
+                .findByCollectionIdInOrderByCollectionIdAscPositionAsc(collectionIds(collectionsWithChildren));
         return toPublicDetailResponse(collection, items);
     }
 

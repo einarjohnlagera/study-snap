@@ -281,7 +281,7 @@ describe("PublishedPlansPage", () => {
     expect(getMe).not.toHaveBeenCalled();
     expect(listCollections).not.toHaveBeenCalled();
 
-    fireEvent.click((await screen.findAllByRole("button", { name: "Preview this plan" }))[0]);
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Preview this plan/ }))[0]);
 
     expect(await screen.findByText("Educational Psychology")).toBeInTheDocument();
     expect(getPublicStudyPlanDetail).toHaveBeenCalledWith("source-plan-2");

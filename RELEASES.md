@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.45.2 - Public Plan Preview Rollup Fix
+
+**Status: Released**
+
+Theme: fix the last remaining gap in v0.45.1's Goal-collection rollup fix — a third code path (`getPublic()`, backing the "Preview this plan" panel on public plan cards) that v0.45.1's fix never touched, still showing "0 of 0 notes practice-ready" for a Goal even when its children hold real, ready notes.
+
+### Planned Scope
+
+All items have shipped — see Shipped below.
+
+Anti-drift: no new backend entity, migration, or endpoint — read-only aggregate fix reusing v0.45.1's existing `findByParentCollectionIdIn` repository method.
+
+### Shipped
+
+- **Public plan preview rollup fix (backend).** `NoteCollectionService.getPublic()` (backing `GET /collections/public/{id}`, the plan-preview panel on `PublicStudyPlanCard`) now flattens items across a Goal and its children — reusing v0.45.1's `findByParentCollectionIdIn` unfiltered (no child-visibility re-filter, avoiding the same pitfall v0.45.1 had to guard against) plus a new batched `NoteCollectionItemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc`. `progress`/`readyCount` are unchanged downstream, already correctly derived from `items`. Childless collections are unaffected.
+- **Plan preview note-list cap (frontend).** With the rollup fix now surfacing every note (some production plans have 40-52), the uncapped preview list made the expanded card unbounded and broke grid alignment with sibling cards. The preview note list now caps at 5, showing all notes when the total is 6 or fewer (never hiding just one item behind an affordance) and a muted "+ N more notes" line otherwise. The "Preview this plan" toggle also now shows the total note count ("Preview this plan · 42 notes") so the cap doesn't read as concealment.
+
+---
+
 ## v0.45.1 - Study Plan Collection Fixes
 
 **Status: Released**

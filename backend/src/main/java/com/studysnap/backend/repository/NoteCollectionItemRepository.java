@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface NoteCollectionItemRepository extends JpaRepository<NoteCollectionItemEntity, UUID> {
     List<NoteCollectionItemEntity> findByCollectionIdOrderByPositionAsc(UUID collectionId);
 
+    List<NoteCollectionItemEntity> findByCollectionIdInOrderByCollectionIdAscPositionAsc(List<UUID> collectionIds);
+
     long countByCollectionId(UUID collectionId);
 
     Optional<NoteCollectionItemEntity> findByCollectionIdAndNoteId(UUID collectionId, UUID noteId);
