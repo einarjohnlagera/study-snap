@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.45.2 - Public Plan Preview Rollup Fix
+
+**Status: In Progress**
+
+Theme: fix the last remaining gap in v0.45.1's Goal-collection rollup fix — a third code path (`getPublic()`, backing the "Preview this plan" panel on public plan cards) that v0.45.1's fix never touched, still showing "0 of 0 notes practice-ready" for a Goal even when its children hold real, ready notes.
+
+### Planned Scope
+
+- **Public plan preview rollup fix (backend).** `NoteCollectionService.getPublic()` (backing `GET /collections/public/{id}`, the plan-preview panel on `PublicStudyPlanCard`) fetches items only directly on the requested collection via `itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)` — for a Goal, always empty, since only its children hold items directly. v0.45.1's rollup fix (`NoteCollectionRepository.findByParentCollectionIdIn`) only touched `list()`/`listPublic()` (the card-level summary counts); this endpoint is a separate code path that was missed. Fix: fetch and flatten items across the Goal and its children (reusing the same repository method from v0.45.1) into the existing `NoteCollectionDetailResponse.items` shape, so `progress`/`readyCount` (both already derived from `items`) compute correctly with no further changes needed downstream.
+
+Anti-drift: no new backend entity, migration, or endpoint — read-only aggregate fix reusing v0.45.1's existing `findByParentCollectionIdIn` repository method.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.45.1 - Study Plan Collection Fixes
 
 **Status: Released**

@@ -6,7 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.45.1 - Study Plan Collection Fixes` is the current released version (on `releases/v0.45.1`) — three pre-existing collection/discovery defects surfaced during v0.45.0 pre-signoff review: a Goal-collection note-count rollup that always showed 0 when notes lived only on child Subject Plans, a Published Plans backlink that ignored how the user actually arrived, and no path back to the official-plan catalog once a primary study plan was set. Also fixed a dark-mode contrast bug on the `Official` plan badge, found post-merge. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
+`v0.45.2 - Public Plan Preview Rollup Fix` is in progress (on `releases/v0.45.2`, cut from `main` independently of `v0.46.0`, also in progress in parallel — see below) — a fix to the one remaining gap in v0.45.1's Goal-collection rollup fix: the plan-preview panel's `getPublic()` endpoint, a third code path v0.45.1 never touched. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
+
+`v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing` is also in progress in parallel (on `releases/v0.46.0`, cut from `main` before `v0.45.2`) — two Fable-sourced new-capability ideas (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`, Ideas 1 and 5): a weekly due-concepts email digest as a new type on the existing `RetentionEmailScheduler`, and an exam-date pacing plan scheduling the learner's owned content only (explicitly not Smart Review Planning). See `RELEASES.md`.
+
+`v0.45.1 - Study Plan Collection Fixes` is the previous released version (on `releases/v0.45.1`) — three pre-existing collection/discovery defects surfaced during v0.45.0 pre-signoff review: a Goal-collection note-count rollup that always showed 0 when notes lived only on child Subject Plans, a Published Plans backlink that ignored how the user actually arrived, and no path back to the official-plan catalog once a primary study plan was set. Also fixed a dark-mode contrast bug on the `Official` plan badge, found post-merge. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
 
 `v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is the previous released version (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, shipped across 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library) plus two post-merge follow-ups and one regression-fix bundle. See `RELEASES.md`.
 
@@ -21,6 +25,10 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## v0.45.2 - Public Plan Preview Rollup Fix (in progress, base branch `releases/v0.45.2`)
+
+Origin: the "Preview this plan" panel on public plan cards was found still showing "0 of 0 notes practice-ready" for Goal collections during v0.46.0 kickoff research — v0.45.1's rollup fix touched `list()`/`listPublic()` but never `getPublic()`, the third code path backing this panel. Cut from `main` as its own patch, independent of the concurrent `v0.46.0` branch. Full scope in `RELEASES.md`.
 
 ## v0.45.1 - Study Plan Collection Fixes (Released, base branch `releases/v0.45.1`)
 
