@@ -71,11 +71,11 @@ export function SharedNoteCard({
   return (
     <div className="flex h-full min-w-0 flex-col justify-between gap-4">
       <div className="space-y-4">
-        {/* TOP ROW: Subject badge + Course/Program badge — above title */}
+        {/* TOP ROW: Subject badge + Course/Program metadata — above title */}
         <div className="flex flex-wrap items-center gap-2">
           <SubjectBadge subject={subject} />
           {normalizedCourseProgram ? (
-            <span className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground/70">
+            <span className="text-xs font-medium text-foreground/65">
               {normalizedCourseProgram}
             </span>
           ) : null}

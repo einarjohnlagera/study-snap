@@ -169,14 +169,14 @@ describe("DashboardStudyPlanSection", () => {
     expect(pushMock).toHaveBeenCalledWith("/collections/personal-goal-1");
   });
 
-  it("opens an owned source plan without re-adopting and shows the in-library badge", async () => {
+  it("opens an owned source plan without re-adopting and shows the Adopted badge", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       { ...publicPlan, id: "source-plan-1", sourcePlanId: null }, // the user owns the published source itself
     ]);
 
     render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
 
-    expect(await screen.findByText("In your library")).toBeInTheDocument();
+    expect(await screen.findByText("Adopted")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open this plan" }));
 
     expect(adoptStudyPlan).not.toHaveBeenCalled();
@@ -192,6 +192,15 @@ describe("DashboardStudyPlanSection", () => {
       expect(listPublicStudyPlans).toHaveBeenCalled();
     });
     expect(screen.queryByText("Recommended Study Plan")).not.toBeInTheDocument();
+  });
+
+  it("guides learners to set their course or program when none is configured", () => {
+    render(<DashboardStudyPlanSection courseProgram={null} profileType="STUDENT" />);
+
+    expect(screen.getByText("Set your course or program to find official study plans")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Set course or program" }))
+      .toHaveAttribute("href", "/profile#learning-profile");
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
   });
 
   it("renders a browse empty state when browseWhenEmpty is set and no plan matches", async () => {

@@ -233,6 +233,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75">
             Choose the plan that fits your study pace. Free covers the core note-to-study loop, Plus raises your limits, and Pro unlocks the full exam-prep toolkit.
           </p>
+          <p className="text-xs text-foreground/55">
+            Prices shown for your detected region ({displayRegion === "PH" ? "Philippines" : "all other regions"}).
+          </p>
         </div>
       ) : null}
 

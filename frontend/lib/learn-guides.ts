@@ -384,7 +384,7 @@ const learnGuideSeeds: LearnGuideSeed[] = [
   {
     slug: "how-to-use-ai-critique-in-interview-practice",
     category: "professionals",
-    title: "How to Use AI Critique in Interview Practice",
+    title: "Getting the Most Out of Interview Practice's AI Feedback",
     description: "Read AI critique after each answer to improve how you explain and apply your knowledge.",
     intro:
       "AI critique after each question gives you more than a right or wrong signal. It shows you whether your reasoning was sound, where the explanation fell short, and what the stronger answer would have covered.",

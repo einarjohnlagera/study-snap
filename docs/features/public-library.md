@@ -227,18 +227,24 @@ Public Library More Filters modal order (canonical):
 2. Course / Program
 3. Subjects
 4. Popular Tags
-5. Source
+5. Study readiness (`Study Pack Ready`)
+6. Source
 
 Public Library filters:
 
 - `Audience` / note target profile
 - `Course / Program`
-- `Learner Level` when public note-owner metadata is available
 - `Subject`
 - `Tags`
 - `By You`
 - `Official`
 - `Community`
+
+Learner Level is not a current Public Library filter; it remains owner/profile metadata rather than a More Filters control.
+
+Filter mode renders all matching notes from its already-loaded result set in one page load; there is currently no pagination or load-more control. This is an intentional current limitation, not a separate discovery layout.
+
+The in-app `?subject=` filter and the canonical `/public/library/{subject}` landing page intentionally serve different purposes. Filter mode is a flat, query-driven browsing list; the subject landing page is a curated Featured / Popular / Recent discovery surface with its own `CollectionPage` SEO markup. They should not be merged into one component without a dedicated future refactor.
 
 Cascading Course / Program filter (v0.25.1):
 
@@ -345,7 +351,7 @@ Public Library sort options:
 
 Public Library note cards reuse the shared note-card layout:
 
-- TOP ROW: Subject badge (blue) + Course/Program badge (neutral/gray) — above title
+- TOP ROW: Subject badge (blue) + Course/Program metadata text — above title
 - Title
 - Study Pack Ready badge (green) — below title when applicable
 - Quality badges (High Quality, Well liked, Popular) — below title alongside state badge
@@ -354,6 +360,8 @@ Public Library note cards reuse the shared note-card layout:
 - limited Tags (`3-4` visible plus overflow count)
 - subtle metrics row for `views`, `copies`, and `likes`, with the heart control staying visually secondary
 - featured content should remain visually special through stronger section framing instead of being flattened into a plain list
+
+`High Quality` is defined as at least `5` copies and `10` views. The threshold is intentionally unchanged; it distinguishes sustained engagement from the lower-priority Popular and Well liked signals.
 
 Interaction rules:
 
