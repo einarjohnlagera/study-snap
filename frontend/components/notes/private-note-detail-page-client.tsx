@@ -5,6 +5,7 @@ import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Eye, MoreHorizontal, RotateCcw, Sparkles, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
@@ -282,18 +283,21 @@ type PendingSuggestion = {
 
 const TEACHER_QUIZ_QUESTION_COUNTS: TeacherQuizQuestionCount[] = [10, 20, 30];
 
-function StudyPackGeneratingCard({ message }: Readonly<{ message: string }>) {
+function StudyPackGeneratingCard({
+  eyebrow = "Study Pack generation",
+  heading = "Your Study Pack is being generated...",
+  message,
+  hint,
+}: Readonly<{ eyebrow?: string; heading?: string; message: string; hint?: string }>) {
   return (
     <Card className="space-y-4 border-blue-500/30 bg-blue-500/5 p-4 sm:p-6">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-          Study Pack generation
+          {eyebrow}
         </p>
-        <h2 className="text-lg font-semibold sm:text-xl">Your Study Pack is being generated...</h2>
+        <h2 className="text-lg font-semibold sm:text-xl">{heading}</h2>
         <p className="text-sm text-foreground/80">{message}</p>
-        <p className="text-sm text-foreground/70">
-          This may take a little while depending on note length. You can stay here while the page checks for updates.
-        </p>
+        {hint ? <p className="text-sm text-foreground/70">{hint}</p> : null}
       </div>
       <div className="space-y-2" aria-hidden="true">
         <div className="h-4 w-2/3 animate-pulse rounded bg-blue-500/15" />
@@ -364,6 +368,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"default" | "warning">("default");
+  const [isPerformanceOverviewExpanded, setIsPerformanceOverviewExpanded] = useState(false);
 
   const [generating, setGenerating] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -1577,7 +1582,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       {loading ? (
-        <Card className="p-6">Loading note...</Card>
+        <StudyPackGeneratingCard
+          eyebrow="Loading"
+          heading="Loading your note..."
+          message="Fetching the latest version of this note."
+        />
       ) : error ? (
         <Card className="space-y-3 p-6">
           <h1 className="text-xl font-semibold">Could not load note</h1>
@@ -2059,7 +2068,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
           <>
             {isGeneratingStudyPack ? (
-              <StudyPackGeneratingCard message={generationMessage} />
+              <StudyPackGeneratingCard
+                message={generationMessage}
+                hint="This may take a little while depending on note length. You can stay here while the page checks for updates."
+              />
             ) : null}
 
             {hasGenerationFailed ? (
@@ -2240,33 +2252,60 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
             {!isTeacherMode ? (
               <Card className="space-y-3 p-4 sm:p-6">
-                <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
                 {isGeneratingStudyPack ? (
-                  <p className="text-sm text-foreground/75">Performance will appear after the Study Pack is ready and you complete a quiz.</p>
+                  <>
+                    <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
+                    <p className="text-sm text-foreground/75">Performance will appear after the Study Pack is ready and you complete a quiz.</p>
+                  </>
                 ) : hasGenerationFailed ? (
-                  <p className="text-sm text-foreground/75">Performance is unavailable because generation did not complete.</p>
+                  <>
+                    <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
+                    <p className="text-sm text-foreground/75">Performance is unavailable because generation did not complete.</p>
+                  </>
                 ) : isDraft ? (
-                  <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
+                  <>
+                    <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
+                    <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
+                  </>
                 ) : (
                   <>
-                    {(quickSummary?.attempts ?? 0) === 0 && (challengeSummary?.attempts ?? 0) === 0 ? (
-                      <GuidanceTip
-                        tipId="note-detail-try-quiz"
-                        message="Try Quick Review or Challenge Quiz to start tracking your performance on this note."
-                      />
-                    ) : null}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-md border border-border bg-background p-3">
-                        <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
-                        <p className="mt-1 text-sm text-foreground/80">Sessions: {quickSummary?.attempts ?? 0}</p>
-                        <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
-                      </div>
-                      <div className="rounded-md border border-border bg-background p-3">
-                        <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
-                        <p className="mt-1 text-sm text-foreground/80">Sessions: {challengeSummary?.attempts ?? 0}</p>
-                        <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
-                      </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
+                      <button
+                        type="button"
+                        className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+                        aria-expanded={isPerformanceOverviewExpanded}
+                        onClick={() => setIsPerformanceOverviewExpanded((previous) => !previous)}
+                      >
+                        {isPerformanceOverviewExpanded ? "Hide Performance" : "Show Performance"}
+                        <ChevronDown
+                          className={cn("h-4 w-4 shrink-0 transition-transform", !isPerformanceOverviewExpanded && "-rotate-90")}
+                          aria-hidden="true"
+                        />
+                      </button>
                     </div>
+                    {isPerformanceOverviewExpanded ? (
+                      <>
+                        {(quickSummary?.attempts ?? 0) === 0 && (challengeSummary?.attempts ?? 0) === 0 ? (
+                          <GuidanceTip
+                            tipId="note-detail-try-quiz"
+                            message="Try Quick Review or Challenge Quiz to start tracking your performance on this note."
+                          />
+                        ) : null}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-md border border-border bg-background p-3">
+                            <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
+                            <p className="mt-1 text-sm text-foreground/80">Sessions: {quickSummary?.attempts ?? 0}</p>
+                            <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
+                          </div>
+                          <div className="rounded-md border border-border bg-background p-3">
+                            <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
+                            <p className="mt-1 text-sm text-foreground/80">Sessions: {challengeSummary?.attempts ?? 0}</p>
+                            <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </>
                 )}
               </Card>

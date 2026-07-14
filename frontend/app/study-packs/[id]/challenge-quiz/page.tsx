@@ -20,6 +20,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
+import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -40,6 +41,7 @@ import {
   forfeitChallengeQuizSession,
   generateMoreChallengeQuizQuestions,
   getCollection,
+  getCollectionGoal,
   getInProgressChallengeQuizSession,
   getMe,
   getMyStudyPack,
@@ -369,6 +371,7 @@ export default function ChallengeQuizPage() {
   const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
+  const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const [generateMoreToast, setGenerateMoreToast] = useState<string | null>(null);
@@ -495,6 +498,11 @@ export default function ChallengeQuizPage() {
     void getMe().then((me) => {
       if (me.learnerLevel) {
         setCurrentLearnerLevel(me.learnerLevel);
+      }
+      if (me.primaryCollectionId) {
+        void getCollectionGoal(me.primaryCollectionId)
+          .then((goal) => setWeeklyPacingWeeksRemaining(goal.weeksRemaining))
+          .catch(() => undefined);
       }
     }).catch(() => undefined);
   }, [phase]);
@@ -2221,6 +2229,10 @@ export default function ChallengeQuizPage() {
             {nextStepResponse?.goalNudge ? (
               <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
             ) : null}
+            <WeeklyPacingEchoCard
+              weeksRemaining={weeklyPacingWeeksRemaining}
+              goalLabel={getCollectionLabels(viewerProfileType).goalSingular}
+            />
             {nextStepResponse === null ? (
               <>
                 <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -2440,6 +2452,10 @@ export default function ChallengeQuizPage() {
             {nextStepResponse?.goalNudge ? (
               <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
             ) : null}
+            <WeeklyPacingEchoCard
+              weeksRemaining={weeklyPacingWeeksRemaining}
+              goalLabel={getCollectionLabels(viewerProfileType).goalSingular}
+            />
             {nextStepResponse === null ? (
               <>
                 <Card className="space-y-3 p-4">

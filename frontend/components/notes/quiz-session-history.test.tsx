@@ -44,6 +44,24 @@ describe("QuizSessionHistory", () => {
     expect(screen.getByText("Start a quiz to begin tracking your progress.")).toBeInTheDocument();
   });
 
+  it("collapses the session list by default and expands it on demand", () => {
+    render(
+      <QuizSessionHistory
+        sessions={historyItems}
+        onSelectSession={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Quick Review")).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Show Sessions" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByText("Quick Review")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide Sessions" })).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("renders recent sessions and lets the user select one for review", () => {
     const onSelectSession = jest.fn();
 
@@ -53,6 +71,8 @@ describe("QuizSessionHistory", () => {
         onSelectSession={onSelectSession}
       />,
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Sessions" }));
 
     expect(screen.getByText("Quick Review")).toBeInTheDocument();
     expect(screen.getByText("Challenge Quiz")).toBeInTheDocument();
@@ -69,6 +89,8 @@ describe("QuizSessionHistory", () => {
         onSelectSession={jest.fn()}
       />,
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Sessions" }));
 
     expect(screen.queryByText("Currently reviewing")).not.toBeInTheDocument();
     expect(screen.queryByText("Loading session review...")).not.toBeInTheDocument();
@@ -89,6 +111,8 @@ describe("QuizSessionHistory", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Show Sessions" }));
+
     expect(screen.getByText("Long Exam")).toBeInTheDocument();
     expect(screen.getByText("Multi-note Long Exam · spans 3 notes")).toBeInTheDocument();
   });
@@ -105,6 +129,8 @@ describe("QuizSessionHistory", () => {
         onSelectSession={jest.fn()}
       />,
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Sessions" }));
 
     expect(screen.getByText("Board Exam")).toBeInTheDocument();
     expect(screen.getByText("Multi-note Board Exam · spans 2 notes")).toBeInTheDocument();

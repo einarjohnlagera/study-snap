@@ -6,7 +6,9 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getCollectionGoal,
   getInProgressAdaptivePracticeSession,
+  getMe,
   getNote,
   getPostSessionNextStep,
 } from "@/lib/api";
@@ -42,7 +44,9 @@ jest.mock("@/lib/api", () => ({
   completeAdaptivePracticeSession: jest.fn(),
   forfeitAdaptivePracticeSession: jest.fn(),
   generateAdaptiveQuickReviewQuiz: jest.fn(),
+  getCollectionGoal: jest.fn(),
   getInProgressAdaptivePracticeSession: jest.fn(),
+  getMe: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   getPostSessionNextStep: jest.fn(),
@@ -96,6 +100,9 @@ describe("AdaptivePracticePage", () => {
     (completeAdaptivePracticeSession as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
+    (getMe as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockRejectedValue(new Error("me unavailable"));
+    (getCollectionGoal as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Adaptive Practice session forfeited." });
   });
