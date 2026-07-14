@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is in progress (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, grouped into 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library). No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
+`v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is the current released version (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, shipped across 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library) plus two post-merge follow-ups and one regression-fix bundle. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
 
 `v0.44.0 - Conversion & Retention Polish` is the previous released version (on `releases/v0.44.0`) — Tier 1 findings from the same audit shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
 
@@ -20,7 +20,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
-## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish (in progress, base branch `releases/v0.45.0`)
+## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish (Released, base branch `releases/v0.45.0`)
 
 Origin: the same 7-session conversion/retention UX audit that drove v0.44.0, Tier 3 of `docs/claude-prompt/conversion-audit-prioritized-backlog.md` (items #19–36, "medium impact, lower urgency"). Unlike v0.44.0's Tier 1/2, every item here routes to direct Claude Code implementation per `CLAUDE.md`'s task-routing table (copy/composition/UI polish, no new backend/infra) except the note-detail related-notes module, whose routing depends on whether a new query is needed. Full scope in `RELEASES.md`.
 

@@ -2,7 +2,7 @@
 
 ## v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: ship Tier 3 of the same 7-session conversion/retention UX audit that drove v0.44.0 (`docs/claude-prompt/conversion-audit-out/`, consolidated in `docs/claude-prompt/conversion-audit-prioritized-backlog.md`) — 18 medium-impact, lower-urgency items (#19–36), all copy/composition/UI polish with no new backend entities, migrations, or pricing/quota changes.
 
