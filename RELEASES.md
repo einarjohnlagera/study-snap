@@ -2,7 +2,7 @@
 
 ## v0.45.2 - Public Plan Preview Rollup Fix
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix the last remaining gap in v0.45.1's Goal-collection rollup fix — a third code path (`getPublic()`, backing the "Preview this plan" panel on public plan cards) that v0.45.1's fix never touched, still showing "0 of 0 notes practice-ready" for a Goal even when its children hold real, ready notes.
 
