@@ -58,7 +58,7 @@ class AuthControllerTest {
         AuthController controller = controller();
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateEmailPreferencesRequest request = new UpdateEmailPreferencesRequest(true, true, true, true);
+        UpdateEmailPreferencesRequest request = new UpdateEmailPreferencesRequest(true, true, true, true, true);
 
         controller.updateEmailPreferences(user, request);
 

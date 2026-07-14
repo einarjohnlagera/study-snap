@@ -19,6 +19,7 @@ import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +58,7 @@ public class RetentionService {
     private final EmailTemplateService emailTemplateService;
     private final EmailService emailService;
     private final EmailUnsubscribeLinkService emailUnsubscribeLinkService;
+    private final ConceptHealthService conceptHealthService;
 
     @Transactional(readOnly = true)
     public List<InactiveUserReminder> findInactiveUsers() {
@@ -70,6 +73,11 @@ public class RetentionService {
     @Transactional(readOnly = true)
     public List<WeeklySummaryReminder> findWeeklySummaryUsers() {
         return findWeeklySummaryUsers(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional(readOnly = true)
+    public List<DueConceptsDigestReminder> findDueConceptsDigestUsers() {
+        return findDueConceptsDigestUsers(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     @Transactional
@@ -90,6 +98,11 @@ public class RetentionService {
     @Transactional
     public WeeklyRetentionDispatchSummary sendWeeklySummaryEmails() {
         return sendWeeklySummaryEmails(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional
+    public int sendDueConceptsDigestEmails() {
+        return sendDueConceptsDigestEmails(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     List<InactiveUserReminder> findInactiveUsers(OffsetDateTime now) {
@@ -133,6 +146,13 @@ public class RetentionService {
                 .toList();
     }
 
+    List<DueConceptsDigestReminder> findDueConceptsDigestUsers(OffsetDateTime now) {
+        return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE).stream()
+                .map(user -> findDueConceptsDigestReminderForUser(user, now))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
     DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
         InactivityDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
         int weakConceptSent = dispatchWeakConceptEmails(findUsersWithWeakConcepts(now), now);
@@ -149,6 +169,10 @@ public class RetentionService {
     WeeklyRetentionDispatchSummary sendWeeklySummaryEmails(OffsetDateTime now) {
         int weeklySummarySent = dispatchWeeklySummaryEmails(findWeeklySummaryUsers(now), now);
         return new WeeklyRetentionDispatchSummary(weeklySummarySent);
+    }
+
+    int sendDueConceptsDigestEmails(OffsetDateTime now) {
+        return dispatchDueConceptsDigestEmails(findDueConceptsDigestUsers(now), now);
     }
 
     private Optional<WeakConceptReminder> findWeakConceptReminderForUser(UserEntity user, OffsetDateTime now) {
@@ -250,6 +274,50 @@ public class RetentionService {
         );
     }
 
+    private Optional<DueConceptsDigestReminder> findDueConceptsDigestReminderForUser(UserEntity user, OffsetDateTime now) {
+        if (!cooldownElapsed(
+                user.getId(),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                properties.getRetention().getDueConceptsDigestCooldownDays(),
+                now
+        )) {
+            return Optional.empty();
+        }
+
+        List<StudyPackEntity> studyPacks = studyPackRepository
+                .findByOwnerUserIdOrderByCreatedAtDescIdDesc(user.getId(), Pageable.unpaged());
+        Map<UUID, List<String>> conceptsByStudyPackId = new LinkedHashMap<>();
+        Map<UUID, String> titlesByStudyPackId = new LinkedHashMap<>();
+        for (StudyPackEntity studyPack : studyPacks) {
+            if (studyPack.getId() != null && studyPack.getKeyConcepts() != null && !studyPack.getKeyConcepts().isEmpty()) {
+                conceptsByStudyPackId.put(studyPack.getId(), studyPack.getKeyConcepts());
+                titlesByStudyPackId.put(studyPack.getId(), resolveStudyPackTitle(studyPack));
+            }
+        }
+        Map<UUID, List<String>> dueConceptsByStudyPackId = conceptHealthService.getDueConceptsByStudyPackIds(
+                user.getId(),
+                conceptsByStudyPackId,
+                now
+        );
+        int dueConceptCount = dueConceptsByStudyPackId.values().stream().mapToInt(List::size).sum();
+        if (dueConceptCount == 0) {
+            return Optional.empty();
+        }
+        List<String> studyPackTitles = dueConceptsByStudyPackId.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
+                .sorted((left, right) -> Integer.compare(right.getValue().size(), left.getValue().size()))
+                .map(entry -> titlesByStudyPackId.getOrDefault(entry.getKey(), "your study pack"))
+                .limit(3)
+                .toList();
+        return Optional.of(new DueConceptsDigestReminder(
+                user.getId(), user.getEmail(), resolveFirstName(user), dueConceptCount, studyPackTitles, buildAbsoluteUrl("/dashboard")
+        ));
+    }
+
+    private String resolveStudyPackTitle(StudyPackEntity studyPack) {
+        return studyPack.getTitle() == null || studyPack.getTitle().isBlank() ? "your study pack" : studyPack.getTitle();
+    }
+
     private int dispatchInactivityEmails(List<InactiveUserReminder> candidates, OffsetDateTime now) {
         int sent = 0;
         for (InactiveUserReminder candidate : candidates) {
@@ -348,6 +416,27 @@ public class RetentionService {
                             "dashboardUrl", candidate.dashboardUrl()
                     ),
                     UnsubscribeCategory.WEEKLY_SUMMARY,
+                    now
+            )) {
+                sent += 1;
+            }
+        }
+        return sent;
+    }
+
+    private int dispatchDueConceptsDigestEmails(List<DueConceptsDigestReminder> candidates, OffsetDateTime now) {
+        int sent = 0;
+        for (DueConceptsDigestReminder candidate : candidates) {
+            if (sendRetentionEmail(
+                    candidate.userId(), candidate.email(), RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                    "retention-due-concepts-digest",
+                    Map.of(
+                            "firstName", candidate.firstName(),
+                            "dueConceptCount", Integer.toString(candidate.dueConceptCount()),
+                            "studyPackList", formatStudyPackTitles(candidate.studyPackTitles()),
+                            "dashboardUrl", candidate.dashboardUrl()
+                    ),
+                    UnsubscribeCategory.DUE_CONCEPTS_DIGEST,
                     now
             )) {
                 sent += 1;
@@ -496,6 +585,10 @@ public class RetentionService {
                 .orElse("");
     }
 
+    private String formatStudyPackTitles(List<String> studyPackTitles) {
+        return studyPackTitles.stream().map(title -> "- " + title).reduce((left, right) -> left + "\n" + right).orElse("");
+    }
+
     private String resolveFirstName(UserEntity user) {
         if (user.getFirstName() != null && !user.getFirstName().isBlank()) {
             return user.getFirstName().trim();
@@ -539,6 +632,16 @@ public class RetentionService {
             int quizzesTaken,
             int adaptiveSessions,
             int averageQuizScore,
+            String dashboardUrl
+    ) {
+    }
+
+    public record DueConceptsDigestReminder(
+            UUID userId,
+            String email,
+            String firstName,
+            int dueConceptCount,
+            List<String> studyPackTitles,
             String dashboardUrl
     ) {
     }

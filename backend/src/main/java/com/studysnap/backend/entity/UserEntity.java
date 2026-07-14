@@ -93,6 +93,9 @@ public class UserEntity {
     @Column(name = "weekly_summary_reminders_enabled", nullable = false)
     private Boolean weeklySummaryRemindersEnabled;
 
+    @Column(name = "due_concepts_digest_reminders_enabled", nullable = false)
+    private Boolean dueConceptsDigestRemindersEnabled;
+
     @Column(name = "marketing_emails_enabled", nullable = false)
     private Boolean marketingEmailsEnabled;
 

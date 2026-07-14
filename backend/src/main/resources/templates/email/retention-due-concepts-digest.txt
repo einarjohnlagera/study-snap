@@ -1,0 +1,15 @@
+Hi {{firstName}},
+
+{{dueConceptCount}} concepts are due for review.
+
+They are waiting in these Study Packs:
+{{studyPackList}}
+
+Open Today Focus:
+{{dashboardUrl}}
+
+{{unsubscribeFooterText}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

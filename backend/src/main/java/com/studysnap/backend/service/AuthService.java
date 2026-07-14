@@ -150,6 +150,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
+        user.setDueConceptsDigestRemindersEnabled(false);
         user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
@@ -418,6 +419,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
         user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
         user.setWeeklySummaryRemindersEnabled(request.weeklySummaryRemindersEnabled());
+        user.setDueConceptsDigestRemindersEnabled(request.dueConceptsDigestRemindersEnabled());
         user.setMarketingEmailsEnabled(request.marketingEmailsEnabled());
         user.setUpdatedAt(OffsetDateTime.now());
 
@@ -540,6 +542,7 @@ public class AuthService {
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeeklySummaryRemindersEnabled()),
+                Boolean.TRUE.equals(user.getDueConceptsDigestRemindersEnabled()),
                 Boolean.TRUE.equals(user.getMarketingEmailsEnabled()),
                 resolveThemePreference(user),
                 user.getEmailVerifiedAt(),
@@ -882,6 +885,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
+        user.setDueConceptsDigestRemindersEnabled(false);
         user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
