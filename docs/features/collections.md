@@ -351,12 +351,13 @@ Response item:
 - `sourcePlanId`
 - `parentCollectionId`
 - `itemCount`
+- `readyCount`
 - `childCount`
 - `notesPracticed`
 - `createdAt`
 - `updatedAt`
 
-`childCount` is included so a top-level Goal card can show how many child Subject plans it contains. `notesPracticed` is included so the owned `/collections` list can show a lightweight execution-status badge for childless leaf plans without opening every plan. It is derived from the same practice definition as the detail rollup: a note counts as practiced when its latest completed quiz-session timestamp resolves to non-null (`lastSessionCompletedAt != null`). `itemCount` remains the total-note count; do not add a redundant `totalNotes` field to the summary DTO.
+`childCount` is included so a top-level Goal card can show how many child Subject plans it contains. For a top-level Goal with children, `itemCount` and `readyCount` roll up its direct count plus the counts from its child Subject plans; Goals normally have no direct items, so these values reflect the notes held by their children. Childless collections retain their direct counts. `notesPracticed` is included so the owned `/collections` list can show a lightweight execution-status badge for childless leaf plans without opening every plan. It is derived from the same practice definition as the detail rollup: a note counts as practiced when its latest completed quiz-session timestamp resolves to non-null (`lastSessionCompletedAt != null`). `itemCount` remains the total-note count; do not add a redundant `totalNotes` field to the summary DTO.
 
 Owned-list status labels are frontend-derived from `notesPracticed` and `itemCount`:
 
@@ -859,7 +860,7 @@ The Dashboard card surfaces only the top matching published root plan, so publis
 - The user's `GET /collections` fetch is shared across the Recommended and Browse All adoption joins. If that owned-collections join fails, public cards still render with no adopted state instead of blocking the page.
 - This is a surface for *plans*, not the Public Library (which is for *notes*).
 - Leaf plans render as a `PublicStudyPlanCard` with `Start this plan` (adopt → `POST /collections/{id}/adopt` → route to the new personal collection) or `Continue this plan` when already adopted.
-- Goal plans render with `Start this Goal` (adopt → `POST /collections/{id}/adopt-goal` → route to `goalCollectionId`) or `Continue this Goal` when already adopted. The card describes the Goal as `{childCount} Subject plans · {itemCount} notes`.
+- Goal plans render with `Start this Goal` (adopt → `POST /collections/{id}/adopt-goal` → route to `goalCollectionId`) or `Continue this Goal` when already adopted. The card describes the Goal as `{childCount} Subject plans · {itemCount} notes`, where `itemCount` and `readyCount` are rolled up from its child Subject plans rather than direct Goal items.
 - The skipped-note notice uses the shared `lib/study-plan-skipped-notice.ts` key. For Goal adopt, the skipped count reflects skipped child Subject plans; for leaf adopt, it reflects skipped notes.
 - `courseProgram` and `profileType` come from `getMe()`; labels resolve through `getCollectionLabels`. It is reached via the `See all N {plural}` link on the Dashboard card (shown only when 2+ plans match), and via the empty-state `Browse all {labels.plural}` link to `/collections/published#browse-all`.
 - Recommended states: loading skeleton, error + retry, a guidance state when no course/program is set (links to `/profile`), and an empty state when the track has no published plans. Browse All has its own loading skeleton, error + retry, and distinct empty state for the genuine system-wide case where no official public root collections exist. One section failing does not blank the other. `BackLink` returns to the Dashboard.

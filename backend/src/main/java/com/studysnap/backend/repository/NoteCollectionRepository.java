@@ -17,6 +17,8 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
 
     List<NoteCollectionEntity> findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(UUID ownerUserId);
 
+    List<NoteCollectionEntity> findByParentCollectionIdIn(List<UUID> parentCollectionIds);
+
     @Query("""
             select collection
             from NoteCollectionEntity collection
