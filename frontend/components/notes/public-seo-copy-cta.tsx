@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { copyNote, trackAnalyticsEvent, type AnalyticsEventType } from "@/lib/ap
 import {
   buildCopiedNotePath,
   buildPublicCopyIntentQuery,
+  PUBLIC_NOTE_COPY_AUTH_INTENT,
   setCopyIntentCookie,
   type PublicCopyRedirectTarget,
 } from "@/lib/public-note-copy";
@@ -53,13 +54,13 @@ export function PublicSeoCopyCta({
     [pathname, redirectTarget],
   );
 
-  const resolveRequestedRedirectTarget = (): PublicCopyRedirectTarget => {
+  const resolveRequestedRedirectTarget = useCallback((): PublicCopyRedirectTarget => {
     const intent = searchParams.get("intent");
     if (intent === "generate" || intent === "quick-review") {
       return intent;
     }
     return redirectTarget;
-  };
+  }, [redirectTarget, searchParams]);
 
   useEffect(() => {
     const shouldAutoCopy = searchParams.get("copy") === "1";
@@ -92,7 +93,7 @@ export function PublicSeoCopyCta({
     return () => {
       cancelled = true;
     };
-  }, [noteId, redirectTarget, router, searchParams]);
+  }, [includeStudyPack, noteId, redirectTarget, resolveRequestedRedirectTarget, router, searchParams]);
 
   const handleCopy = async () => {
     if (copying) {
@@ -159,7 +160,11 @@ export function PublicSeoCopyCta({
               onClick={() => {
                 setAuthModalOpen(false);
                 setCopyIntentCookie(noteId);
-                router.push(`/signup?redirect=${encodeURIComponent(authRedirectTarget)}`);
+                const signupSearchParams = new URLSearchParams({
+                  redirect: authRedirectTarget,
+                  intent: PUBLIC_NOTE_COPY_AUTH_INTENT,
+                });
+                router.push(`/signup?${signupSearchParams.toString()}`);
               }}
             >
               Sign Up

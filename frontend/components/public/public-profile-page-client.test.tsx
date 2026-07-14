@@ -233,6 +233,25 @@ describe("PublicProfilePageClient", () => {
     expect(screen.queryByRole("button", { name: "Private" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse more notes from Study Buddy →" }))
+      .toHaveAttribute("href", "/public/library?creator=studybuddy");
+  });
+
+  it("keeps the closing browse affordance out of the owner's profile view", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue({ ...baseProfile, isCurrentUser: true });
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: { ...baseProfile, isCurrentUser: true } }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getPublicProfile).toHaveBeenCalledWith("user-1");
+    });
+    expect(screen.queryByRole("link", { name: /Browse more notes from/ })).not.toBeInTheDocument();
   });
 
   it("lets the owner load a private profile and manage it from the public page", async () => {

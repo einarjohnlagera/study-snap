@@ -4,6 +4,8 @@ const COPY_INTENT_COOKIE_MAX_AGE_SECONDS = 1800;
 const GENERATE_QUERY_PARAM = "generate";
 const START_QUICK_REVIEW_QUERY_PARAM = "startQuickReview";
 
+export const PUBLIC_NOTE_COPY_AUTH_INTENT = "copy-note";
+
 export type PublicCopyRedirectTarget = "library" | "generate" | "quick-review";
 
 export function buildCopiedNotePath(

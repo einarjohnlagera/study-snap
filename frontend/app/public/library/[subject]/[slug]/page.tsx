@@ -6,6 +6,7 @@ import { PublicMiniQuizPreview } from "@/components/notes/public-mini-quiz-previ
 import { PublicFlashcardsPreview } from "@/components/notes/public-flashcards-preview";
 import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mode-teaser";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
+import { PublicNoteAuthorCard } from "@/components/notes/public-note-author-card";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
@@ -17,7 +18,7 @@ import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/pu
 import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
 import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
-import { buildArticleStructuredData } from "@/lib/structured-data";
+import { buildArticleStructuredData, buildBreadcrumbStructuredData } from "@/lib/structured-data";
 import { getExamSlugForCourseProgram, EXAM_HUBS } from "@/lib/exam-hub-config";
 
 type PublicLibrarySeoPageProps = {
@@ -109,9 +110,11 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     : [];
 
   const title = normalizePublicNoteText(note.title?.trim()) || "Untitled note";
+  const subjectLabel = note.subject?.trim() || subject;
   const description = buildDescription(title, note.summary);
   const publicNotePath = buildPublicLibraryNotePathFromDetail(note);
   const canonicalUrl = absoluteUrl(publicNotePath);
+  const subjectPath = buildPublicLibrarySubjectPath(subjectLabel);
   const fullNotesHref = `${publicNotePath}#full-notes`;
   const hook = buildPublicNoteHook({
     title,
@@ -141,6 +144,26 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           subject: note.subject,
         })}
       />
+      <StructuredDataScript
+        id="public-note-breadcrumb-structured-data"
+        data={buildBreadcrumbStructuredData([
+          { name: "Home", url: absoluteUrl("/") },
+          { name: "Public Library", url: absoluteUrl("/public/library") },
+          { name: subjectLabel, url: absoluteUrl(subjectPath) },
+          { name: title, url: canonicalUrl },
+        ])}
+      />
+      <nav aria-label="Breadcrumb" className="overflow-x-auto text-sm text-foreground/65">
+        <ol className="flex min-w-max items-center gap-2">
+          <li><Link href="/" className="hover:text-blue-700 hover:underline dark:hover:text-blue-300">Home</Link></li>
+          <li aria-hidden="true">/</li>
+          <li><Link href="/public/library" className="hover:text-blue-700 hover:underline dark:hover:text-blue-300">Public Library</Link></li>
+          <li aria-hidden="true">/</li>
+          <li><Link href={subjectPath} className="hover:text-blue-700 hover:underline dark:hover:text-blue-300">{subjectLabel}</Link></li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page" className="max-w-56 truncate text-foreground/85 sm:max-w-md">{title}</li>
+        </ol>
+      </nav>
       <PublicLibraryBackLink />
 
       <article className="space-y-6">
@@ -186,6 +209,12 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             </div>
           </div>
         </header>
+
+        <PublicNoteAuthorCard
+          ownerUserId={note.ownerUserId}
+          authorDisplayName={note.authorDisplayName}
+          authorUsername={note.authorUsername}
+        />
 
         {hasVisibleStudyPackPreviews ? (
           <aside className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-relaxed text-foreground/75">

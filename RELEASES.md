@@ -24,7 +24,10 @@ Anti-drift: no new backend entity, migration, or endpoint anywhere in this batch
 
 ### Shipped
 
-_(nothing yet)_
+- **Landing & Pricing polish (frontend).** Tightened mobile padding/spacing on the hero and pricing-preview sections; harmonized step language between the landing loop section and `/how-it-works` instead of duplicating it; retitled the "AI Critique" Learn guide to make clear it's part of Interview Practice, not a standalone feature; added a region note under the pricing display, reusing the existing single-currency-per-region resolver (no ambiguity bug — this was purely a missing note, not a broken currency display).
+- **Discovery & Library polish (frontend).** Unified "adopted" vocabulary on `Adopted` across Collections, Collection Detail, and Dashboard (dropping the redundant "In your library" chip); Dashboard's Matching Study Plan section now shows a guidance card prompting the user to set their courseProgram instead of silently rendering nothing; documented the in-app subject filter vs. subject-landing-page split as intentional; Course/Program now renders as plain metadata text instead of a badge on shared note cards (Subject badge unchanged); documented the "High Quality" badge's existing thresholds (≥5 copies and ≥10 views) rather than changing them.
+- **Public Note Detail polish (frontend).** Added a client-side author mini-card on public notes using the existing public-profile reads, with a name-only fallback for private or unavailable profiles; visible `Home → Public Library → Subject → Note` breadcrumbs plus `BreadcrumbList` JSON-LD; copy-note signup intent now reaches the auth interstitial and restates “save this note to your library”; and non-owner public profiles now close with a creator-filtered Public Library browse link. No new backend DTO, endpoint, or schema surface.
+- **Doc hygiene (docs only).** `seo.md` now documents subject landing pages' `CollectionPage` structured data; `public-library.md`'s More Filters modal order corrected to match the actual current filter set (added the existing `Study Pack Ready` toggle, removed the inaccurate `Learner Level` claim — Learner Level is not a Public Library filter); documented that filter mode has no pagination today (single page load of matching results).
 
 ## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing
 
