@@ -151,15 +151,20 @@ public class NoteCollectionService {
         if (collections.isEmpty()) {
             return List.of();
         }
-        Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
-        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collections);
+        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(collectionIds(collections));
+        List<NoteCollectionEntity> collectionsWithChildren = new ArrayList<>(collections);
+        collectionsWithChildren.addAll(children);
+        Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collectionsWithChildren);
+        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collectionsWithChildren);
+        Map<UUID, Integer> rolledUpItemCountsByCollectionId = rollUpCounts(collections, children, itemCountsByCollectionId);
+        Map<UUID, Integer> rolledUpReadyCountsByCollectionId = rollUpCounts(collections, children, readyCountsByCollectionId);
         Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         Map<UUID, Integer> practicedCountsByCollectionId = loadPracticedCounts(userId, collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
-                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
-                        readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        rolledUpItemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        rolledUpReadyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         practicedCountsByCollectionId.getOrDefault(collection.getId(), 0)
                 ))
@@ -178,14 +183,19 @@ public class NoteCollectionService {
         if (collections.isEmpty()) {
             return List.of();
         }
-        Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
-        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collections);
+        List<NoteCollectionEntity> children = collectionRepository.findByParentCollectionIdIn(collectionIds(collections));
+        List<NoteCollectionEntity> collectionsWithChildren = new ArrayList<>(collections);
+        collectionsWithChildren.addAll(children);
+        Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collectionsWithChildren);
+        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collectionsWithChildren);
+        Map<UUID, Integer> rolledUpItemCountsByCollectionId = rollUpCounts(collections, children, itemCountsByCollectionId);
+        Map<UUID, Integer> rolledUpReadyCountsByCollectionId = rollUpCounts(collections, children, readyCountsByCollectionId);
         Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
         return collections.stream()
                 .map(collection -> toSummaryResponse(
                         collection,
-                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
-                        readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        rolledUpItemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        rolledUpReadyCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         childCountsByCollectionId.getOrDefault(collection.getId(), 0),
                         0
                 ))
@@ -1404,6 +1414,32 @@ public class NoteCollectionService {
             countsByCollectionId.put(projection.getCollectionId(), Math.toIntExact(projection.getItemCount()));
         }
         return countsByCollectionId;
+    }
+
+    private Map<UUID, Integer> rollUpCounts(
+            List<NoteCollectionEntity> collections,
+            List<NoteCollectionEntity> children,
+            Map<UUID, Integer> countsByCollectionId
+    ) {
+        Map<UUID, Integer> rolledUpCountsByCollectionId = new HashMap<>();
+        for (NoteCollectionEntity collection : collections) {
+            rolledUpCountsByCollectionId.put(collection.getId(), countsByCollectionId.getOrDefault(collection.getId(), 0));
+        }
+        for (NoteCollectionEntity child : children) {
+            UUID parentCollectionId = child.getParentCollectionId();
+            if (parentCollectionId != null) {
+                rolledUpCountsByCollectionId.merge(
+                        parentCollectionId,
+                        countsByCollectionId.getOrDefault(child.getId(), 0),
+                        Integer::sum
+                );
+            }
+        }
+        return rolledUpCountsByCollectionId;
+    }
+
+    private List<UUID> collectionIds(List<NoteCollectionEntity> collections) {
+        return collections.stream().map(NoteCollectionEntity::getId).toList();
     }
 
     private Map<UUID, Integer> loadReadyCounts(List<NoteCollectionEntity> collections) {

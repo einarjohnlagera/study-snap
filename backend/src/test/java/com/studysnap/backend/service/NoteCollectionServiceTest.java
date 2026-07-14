@@ -320,6 +320,60 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void list_rollsUpGoalItemAndReadyCountsFromChildrenWhileKeepingLeafCountsDirect() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(UUID.randomUUID(), userId, "Goal", Instant.parse("2026-04-03T00:00:00Z"));
+        NoteCollectionEntity leaf = buildCollection(UUID.randomUUID(), userId, "Leaf", Instant.parse("2026-04-02T00:00:00Z"));
+        NoteCollectionEntity firstChild = buildCollection(UUID.randomUUID(), userId, "First Subject", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(UUID.randomUUID(), userId, "Second Subject", Instant.now());
+        firstChild.setParentCollectionId(goal.getId());
+        secondChild.setParentCollectionId(goal.getId());
+        UUID firstReadyNoteId = UUID.randomUUID();
+        UUID firstNotReadyNoteId = UUID.randomUUID();
+        UUID secondReadyNoteId = UUID.randomUUID();
+        UUID leafReadyNoteId = UUID.randomUUID();
+        List<NoteCollectionEntity> collections = List.of(goal, leaf);
+        List<NoteCollectionEntity> collectionsWithChildren = List.of(goal, leaf, firstChild, secondChild);
+        NoteEntity firstReadyNote = buildNote(firstReadyNoteId, userId, NOTE_TITLE_ONE);
+        NoteEntity firstNotReadyNote = buildNote(firstNotReadyNoteId, userId, NOTE_TITLE_TWO);
+        NoteEntity secondReadyNote = buildNote(secondReadyNoteId, userId, NOTE_TITLE_THREE);
+        NoteEntity leafReadyNote = buildNote(leafReadyNoteId, userId, "Leaf note");
+
+        when(collectionRepository.findByOwnerUserIdAndParentCollectionIdIsNullOrderByUpdatedAtDesc(userId))
+                .thenReturn(collections);
+        when(collectionRepository.findByParentCollectionIdIn(List.of(goal.getId(), leaf.getId())))
+                .thenReturn(List.of(firstChild, secondChild));
+        when(itemRepository.countItemsByCollectionIds(collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()))
+                .thenReturn(List.of(
+                        countProjection(firstChild.getId(), 2),
+                        countProjection(secondChild.getId(), 1),
+                        countProjection(leaf.getId(), 1)
+                ));
+        when(itemRepository.findNoteIdsByCollectionIds(collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()))
+                .thenReturn(List.of(
+                        noteProjection(firstChild.getId(), firstReadyNoteId),
+                        noteProjection(firstChild.getId(), firstNotReadyNoteId),
+                        noteProjection(secondChild.getId(), secondReadyNoteId),
+                        noteProjection(leaf.getId(), leafReadyNoteId)
+                ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(anyList()))
+                .thenReturn(asNoteProjections(firstReadyNote, firstNotReadyNote, secondReadyNote, leafReadyNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(anyList())).thenReturn(asProjections(
+                buildStudyPack(firstReadyNoteId),
+                buildStudyPack(secondReadyNoteId),
+                buildStudyPack(leafReadyNoteId)
+        ));
+        when(collectionRepository.countChildrenByCollectionIds(List.of(goal.getId(), leaf.getId())))
+                .thenReturn(List.of(childCountProjection(goal.getId(), 2)));
+
+        List<NoteCollectionSummaryResponse> result = service.list(userId);
+
+        assertThat(result).extracting(NoteCollectionSummaryResponse::itemCount).containsExactly(3, 1);
+        assertThat(result).extracting(NoteCollectionSummaryResponse::readyCount).containsExactly(2, 1);
+        verify(collectionRepository).findByParentCollectionIdIn(List.of(goal.getId(), leaf.getId()));
+    }
+
+    @Test
     void list_returnsPracticedCountsForStatusBoundariesFromOnePracticeLookup() {
         UUID userId = UUID.randomUUID();
         NoteCollectionEntity notStarted = buildCollection(UUID.randomUUID(), userId, "Not Started", Instant.parse("2026-04-04T00:00:00Z"));
@@ -2476,6 +2530,48 @@ class NoteCollectionServiceTest {
         List<NoteCollectionSummaryResponse> result = service.listPublic(null);
 
         assertThat(result).singleElement().extracting(NoteCollectionSummaryResponse::readyCount).isEqualTo(1);
+    }
+
+    @Test
+    void listPublic_rollsUpGoalItemAndReadyCountsFromCascadePublishedChildren() {
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        UUID firstReadyNoteId = UUID.randomUUID();
+        UUID secondNotReadyNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, UUID.randomUUID(), "Public Goal", Instant.now());
+        goal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, goal.getOwnerUserId(), "First Subject", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, goal.getOwnerUserId(), "Second Subject", Instant.now());
+        firstChild.setParentCollectionId(goalId);
+        secondChild.setParentCollectionId(goalId);
+        NoteEntity firstReadyNote = buildNote(firstReadyNoteId, goal.getOwnerUserId(), NOTE_TITLE_ONE);
+        NoteEntity secondNotReadyNote = buildNote(secondNotReadyNoteId, goal.getOwnerUserId(), NOTE_TITLE_TWO);
+        List<NoteCollectionEntity> collectionsWithChildren = List.of(goal, firstChild, secondChild);
+
+        when(collectionRepository.findByVisibilityAndParentCollectionIdIsNullOrderByUpdatedAtDesc(CollectionVisibility.PUBLIC))
+                .thenReturn(List.of(goal));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(goalId))).thenReturn(List.of(firstChild, secondChild));
+        when(itemRepository.countItemsByCollectionIds(collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()))
+                .thenReturn(List.of(countProjection(firstChildId, 1), countProjection(secondChildId, 1)));
+        when(itemRepository.findNoteIdsByCollectionIds(collectionsWithChildren.stream().map(NoteCollectionEntity::getId).toList()))
+                .thenReturn(List.of(
+                        noteProjection(firstChildId, firstReadyNoteId),
+                        noteProjection(secondChildId, secondNotReadyNoteId)
+                ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(anyList()))
+                .thenReturn(asNoteProjections(firstReadyNote, secondNotReadyNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(anyList())).thenReturn(asProjections(buildStudyPack(firstReadyNoteId)));
+        when(collectionRepository.countChildrenByCollectionIds(List.of(goalId)))
+                .thenReturn(List.of(childCountProjection(goalId, 2)));
+
+        List<NoteCollectionSummaryResponse> result = service.listPublic(null);
+
+        assertThat(result).singleElement().satisfies(summary -> {
+            assertThat(summary.itemCount()).isEqualTo(2);
+            assertThat(summary.readyCount()).isEqualTo(1);
+        });
+        verify(collectionRepository).findByParentCollectionIdIn(List.of(goalId));
     }
 
     @Test

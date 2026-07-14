@@ -8,7 +8,6 @@ Theme: fix three pre-existing collection/discovery defects surfaced during v0.45
 
 ### Planned Scope
 
-- **Goal-collection note-count/readyCount rollup fix (backend + frontend).** `NoteCollectionService.list()`/`listPublic()` only count items directly on top-level Goal collections; only child Subject Plan collections hold `note_collection_item` rows, so a Goal with children but no direct items always renders "0 notes." Fix: add a non-owner-scoped `findByParentCollectionIdIn(List<UUID>)` repository method (needed since `listPublic` is anonymous), fetch child collections for all top-level Goals in the result set in one query, union top-level + child IDs, run the existing `loadItemCounts`/`loadReadyCounts` once over the union (net +1 query, not N+1), then sum children into each parent's rollup — mirrors the already-correct pattern in `getGoal()`. Child-fetching for `listPublic` must stay visibility-agnostic (`parentCollectionId IN`, not gated on the child's own public flag), since `publishChildCollections` already cascades visibility from parent. Once shipped, remove the "hide the misleading zero" workaround in `dashboard-study-plan-section.tsx` (~lines 176-182) — backend first, then frontend removal. Pre-existing since v0.40.0, not a v0.45.0 regression.
 - **Published Plans backlink entry-point fix (frontend).** `frontend/app/collections/published/published-plans-page-client.tsx:121` hardcodes its `BackLink` to Dashboard or Public Library regardless of how the user actually arrived. Fix: reuse the existing `?ref=` allowlist pattern from `private-note-detail-page-client.tsx:352-355`, kept specific-prefix (`/library`, `/collections/`) to avoid an open-redirect via a bare `/` prefix. Wire the 4 sender call sites to append `?ref=<path>`: `dashboard/page.tsx:804,886`, `collections-page-client.tsx:370`, `dashboard-empty.tsx:88`.
 - **Persistent catalog-browse entry point (frontend).** Once a user has a primary study plan, `usingPrimary` gating in `dashboard-study-plan-section.tsx` correctly suppresses the Dashboard recommendation card's catalog link (intentional, documented in `docs/features/collections.md:124`) — but there is then no path anywhere in the app to `/collections/published`. Fix: add a new, primary-independent, persistent "Browse official plans" link in the `/collections` page header. Do not un-suppress the Dashboard card's link — that would contradict the documented suppression design.
 
@@ -16,7 +15,7 @@ Anti-drift: no new backend entities, migrations, pricing tiers, or quota changes
 
 ### Shipped
 
-_(nothing yet)_
+- **Goal-collection note-count/readyCount rollup fix (backend + frontend).** Added the anonymous-safe `NoteCollectionRepository.findByParentCollectionIdIn(List<UUID>)` lookup. `NoteCollectionService.list()` and `listPublic()` now fetch all direct children in one additional query, run their existing item/ready batch loaders once across the top-level-plus-child union, and sum each child's counts into its Goal without a child visibility filter. Dashboard now shows the returned Goal note total alongside its Subject Plan count instead of suppressing the formerly misleading zero.
 
 ---
 
