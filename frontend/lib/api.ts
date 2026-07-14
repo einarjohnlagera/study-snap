@@ -805,6 +805,7 @@ export type MeResponse = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
+  dueConceptsDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
   themePreference?: ThemePreference | null;
   emailVerifiedAt: string | null;
@@ -834,6 +835,7 @@ export type UpdateEmailPreferencesRequest = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
+  dueConceptsDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
 };
 

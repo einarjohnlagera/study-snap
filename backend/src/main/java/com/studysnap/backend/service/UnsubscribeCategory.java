@@ -4,7 +4,8 @@ public enum UnsubscribeCategory {
     MARKETING("Product news & tips"),
     WEEKLY_SUMMARY("Weekly summary"),
     STUDY_REMINDERS("Study reminders"),
-    WEAK_CONCEPT("Weak-concept nudges");
+    WEAK_CONCEPT("Weak-concept nudges"),
+    DUE_CONCEPTS_DIGEST("Due-concepts digest");
 
     private final String displayName;
 

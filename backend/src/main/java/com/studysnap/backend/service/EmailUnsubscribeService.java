@@ -25,6 +25,7 @@ public class EmailUnsubscribeService {
             case WEEKLY_SUMMARY -> user.setWeeklySummaryRemindersEnabled(false);
             case STUDY_REMINDERS -> user.setInactivityRemindersEnabled(false);
             case WEAK_CONCEPT -> user.setWeakConceptRemindersEnabled(false);
+            case DUE_CONCEPTS_DIGEST -> user.setDueConceptsDigestRemindersEnabled(false);
         }
     }
 

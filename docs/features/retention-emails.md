@@ -20,6 +20,11 @@ Current reminders include:
   - includes study packs created, quizzes taken, adaptive sessions, and average quiz score for the last `7` days
   - gated by `weeklySummaryRemindersEnabled` (default off until the user opts in)
   - cooldown: `7` days
+- `DUE_CONCEPTS_DIGEST`
+  - trigger: weekly run finds due concepts across the user's owned Study Packs through `ConceptHealthService`
+  - includes the total due-concept count and up to three Study Pack titles with the most due concepts, linking to Dashboard Today Focus
+  - gated by `dueConceptsDigestRemindersEnabled` (default off until the user opts in)
+  - cooldown: `7` days
 - `RE_ENGAGEMENT_2025`
   - trigger: admin-started re-engagement campaign for inactive verified users
   - gated by `marketingEmailsEnabled` (default off until the user opts in)
@@ -41,7 +46,7 @@ The log prevents same-type reminders from being sent again before cooldown expir
 `RetentionEmailScheduler` runs:
 
 - daily for inactivity and weak concept reminders
-- weekly for the weekly study summary
+- weekly for the weekly study summary and due-concepts digest
 
 Default cron:
 
@@ -69,7 +74,7 @@ The inactivity run computes `sentToday` from `email_log.sent_at >= start of the 
 
 Candidates skipped by this budget are not written to `email_log`; they remain eligible for a later daily run if cooldown and activity gating still allow it. Verification, password reset, billing, and other transactional paths send immediately and are never gated by this re-engagement budget.
 
-New signups default `inactivityRemindersEnabled` to `true`. `weakConceptRemindersEnabled`, `weeklySummaryRemindersEnabled`, and `marketingEmailsEnabled` remain default-off.
+New signups default `inactivityRemindersEnabled` to `true`. `weakConceptRemindersEnabled`, `weeklySummaryRemindersEnabled`, `dueConceptsDigestRemindersEnabled`, and `marketingEmailsEnabled` remain default-off.
 
 `ResendEmailService` retries on HTTP `429` (rate limit) — honoring the `Retry-After` header, otherwise exponential backoff (max 3 attempts, capped at 5s) — so transactional email isn't dropped during a send burst. IO and non-429 errors are not retried. The real capacity fix is operational (upgrade the Resend tier).
 
@@ -86,6 +91,7 @@ Unsubscribe categories map to the same Email Preferences flags:
 - `INACTIVITY` and `UNFINISHED_NOTE` -> `STUDY_REMINDERS` -> `inactivityRemindersEnabled`
 - `WEAK_CONCEPT` -> `WEAK_CONCEPT` -> `weakConceptRemindersEnabled`
 - `WEEKLY_SUMMARY` -> `WEEKLY_SUMMARY` -> `weeklySummaryRemindersEnabled`
+- `DUE_CONCEPTS_DIGEST` -> `DUE_CONCEPTS_DIGEST` -> `dueConceptsDigestRemindersEnabled`
 - `RE_ENGAGEMENT_2025` -> `MARKETING` -> `marketingEmailsEnabled`
 
 Transactional emails do not include unsubscribe links or one-click unsubscribe headers.

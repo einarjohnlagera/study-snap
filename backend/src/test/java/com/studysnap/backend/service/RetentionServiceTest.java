@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -62,6 +63,8 @@ class RetentionServiceTest {
     private EmailService emailService;
     @Mock
     private EmailUnsubscribeLinkService emailUnsubscribeLinkService;
+    @Mock
+    private ConceptHealthService conceptHealthService;
 
     private RetentionService retentionService;
 
@@ -83,7 +86,8 @@ class RetentionServiceTest {
                 emailLogRepository,
                 emailTemplateService,
                 emailService,
-                emailUnsubscribeLinkService
+                emailUnsubscribeLinkService,
+                conceptHealthService
         );
         lenient().when(emailUnsubscribeLinkService.buildContext(any(UUID.class), any(UnsubscribeCategory.class)))
                 .thenReturn(new EmailUnsubscribeLinkService.OptionalEmailUnsubscribeContext(
@@ -176,6 +180,87 @@ class RetentionServiceTest {
         assertThat(candidates.getFirst().weakConcepts()).containsExactly("DNA replication");
         assertThat(candidates.getFirst().adaptivePracticeUrl())
                 .isEqualTo("https://www.notelib.app/notes/" + challengeSession.getNoteId() + "/adaptive-practice");
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_sumsAcrossMultipleStudyPacksAndOmitsPacksWithNoDueConcepts() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                now.minusDays(7)
+        )).thenReturn(false);
+
+        UUID firstPackId = UUID.fromString("00000000-0000-0000-0000-000000000301");
+        UUID secondPackId = UUID.fromString("00000000-0000-0000-0000-000000000302");
+        UUID thirdPackId = UUID.fromString("00000000-0000-0000-0000-000000000303");
+        StudyPackEntity firstPack = studyPackWithConcepts(firstPackId, "Cell Biology", List.of("Mitosis", "Meiosis"));
+        StudyPackEntity secondPack = studyPackWithConcepts(secondPackId, "Anatomy", List.of("Skeletal System"));
+        StudyPackEntity thirdPack = studyPackWithConcepts(thirdPackId, "Nothing Due", List.of("Homeostasis"));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(user.getId(), Pageable.unpaged()))
+                .thenReturn(List.of(firstPack, secondPack, thirdPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(user.getId()), any(), eq(now)))
+                .thenReturn(Map.of(
+                        firstPackId, List.of("Mitosis", "Meiosis"),
+                        secondPackId, List.of("Skeletal System"),
+                        thirdPackId, List.of()
+                ));
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).hasSize(1);
+        RetentionService.DueConceptsDigestReminder candidate = candidates.getFirst();
+        assertThat(candidate.dueConceptCount()).isEqualTo(3);
+        assertThat(candidate.studyPackTitles()).containsExactly("Cell Biology", "Anatomy");
+        assertThat(candidate.dashboardUrl()).isEqualTo("https://www.notelib.app/dashboard");
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_excludesUserWithZeroDueConcepts() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                now.minusDays(7)
+        )).thenReturn(false);
+
+        UUID packId = UUID.fromString("00000000-0000-0000-0000-000000000301");
+        StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis"));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(user.getId(), Pageable.unpaged()))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(user.getId()), any(), eq(now)))
+                .thenReturn(Map.of(packId, List.of()));
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_respectsCooldown() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                now.minusDays(7)
+        )).thenReturn(true);
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).isEmpty();
+        verify(studyPackRepository, never()).findByOwnerUserIdOrderByCreatedAtDescIdDesc(any(), any());
     }
 
     @Test
@@ -277,7 +362,8 @@ class RetentionServiceTest {
                 emailLogRepository,
                 emailTemplateService,
                 emailService,
-                emailUnsubscribeLinkService
+                emailUnsubscribeLinkService,
+                conceptHealthService
         );
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
         UserEntity firstUser = verifiedUser(UUID.fromString("00000000-0000-0000-0000-000000000011"), "[email protected]");
@@ -373,7 +459,8 @@ class RetentionServiceTest {
                 emailLogRepository,
                 emailTemplateService,
                 emailService,
-                emailUnsubscribeLinkService
+                emailUnsubscribeLinkService,
+                conceptHealthService
         );
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T10:00:00Z");
 
@@ -476,6 +563,72 @@ class RetentionServiceTest {
         verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
     }
 
+    @Test
+    void sendDueConceptsDigestEmails_logsSentEmailWithDueConceptCount() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                now.minusDays(7)
+        )).thenReturn(false);
+
+        UUID packId = UUID.fromString("00000000-0000-0000-0000-000000000301");
+        StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis", "Meiosis"));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(user.getId(), Pageable.unpaged()))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(user.getId()), any(), eq(now)))
+                .thenReturn(Map.of(packId, List.of("Mitosis", "Meiosis")));
+        when(emailTemplateService.render(eq("retention-due-concepts-digest"), any()))
+                .thenReturn(new EmailTemplateService.RenderedEmailTemplate(
+                        "2 concepts are due for review",
+                        "<p>Body</p>",
+                        "Body"
+                ));
+
+        int sent = retentionService.sendDueConceptsDigestEmails(now);
+
+        assertThat(sent).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(eq("retention-due-concepts-digest"), paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue()).containsEntry("dueConceptCount", "2");
+        ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
+        verify(emailLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.DUE_CONCEPTS_DIGEST);
+    }
+
+    @Test
+    void sendDueConceptsDigestEmails_doesNotSendWhenSkippedByCooldown() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.DUE_CONCEPTS_DIGEST,
+                now.minusDays(7)
+        )).thenReturn(true);
+
+        int sent = retentionService.sendDueConceptsDigestEmails(now);
+
+        assertThat(sent).isZero();
+        verify(emailTemplateService, never()).render(eq("retention-due-concepts-digest"), any());
+        verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
+    }
+
+    private StudyPackEntity studyPackWithConcepts(UUID id, String title, List<String> keyConcepts) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(id);
+        studyPack.setTitle(title);
+        studyPack.setKeyConcepts(keyConcepts);
+        return studyPack;
+    }
+
     private UserEntity verifiedUser() {
         return verifiedUser(UUID.fromString("00000000-0000-0000-0000-000000000001"), "[email protected]");
     }
@@ -491,6 +644,7 @@ class RetentionServiceTest {
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(true);
         user.setWeeklySummaryRemindersEnabled(true);
+        user.setDueConceptsDigestRemindersEnabled(true);
         return user;
     }
 

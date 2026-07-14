@@ -8,14 +8,13 @@ Theme: deepen retention past v0.44.0's conversion-audit-driven fixes with two Fa
 
 ### Planned Scope
 
-- **Weekly Due-Concepts Email Digest (backend).** A new `DUE_CONCEPTS_DIGEST` email type on the existing `RetentionEmailScheduler`/`EmailService` system (alongside `INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`), triggered when a user's `ConceptHealthService` due/stale concept count crosses a threshold, deep-linking to TodayFocus. Reuses the existing `email_log` dedup/cooldown model and Email Preferences opt-in/opt-out flag pattern — no new scheduler, no new delivery integration. **Correction:** no email open/click `AnalyticsEventType` tracking exists today for retention emails (Fable's write-up overclaimed this); not building that infrastructure here, dispatch is durably recorded via `EmailLogRepository` as-is.
 - **Exam Date Countdown & Paced Review Plan (backend + frontend).** **Correction:** the exam-date field and a plain countdown sentence are pre-existing (`UserEntity.examDate`, `UpdateExamDateRequest`, BOARD_EXAM-only capture and display) — Fable's write-up wrongly claimed these as new infrastructure. What's actually new: a pacing-calculator service that spreads `ConceptHealthService`'s due concepts across the remaining days into a daily target, surfaced on the Dashboard (replacing/augmenting the plain sentence) and inside Review Set detail, scoped to BOARD_EXAM profile only this release. Schedules **owned content only** — no matching, no auto-assembly, no generation; if a subject has no owned content, the plan reports the gap rather than filling it (the line that keeps this out of Smart Review Planning's territory, which stays paused and unrelated).
 
 Anti-drift: no 6th quiz mode; no auto-assembled or gap-filling review plan (owned content only, explicitly not Smart Review Planning); no freetext exam identity; no per-learner runtime personalization beyond the existing PRO tier design; no pricing, paywall, or quota numbers introduced by this release (tier *direction* only, per Fable's own guardrails). Full source material and rejected alternatives in `docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`.
 
 ### Shipped
 
-_(nothing yet)_
+- **Weekly Due-Concepts Email Digest (backend + frontend).** Added `DUE_CONCEPTS_DIGEST` to the existing weekly retention pipeline. Opted-in users with due concepts across owned Study Packs receive a Dashboard Today Focus link, total due count, and up to three highest-count Study Pack titles; empty and cooldown-blocked candidates are skipped. The new preference defaults off, has a 7-day configurable cooldown, is editable in Settings, and uses the isolated `DUE_CONCEPTS_DIGEST` unsubscribe category.
 
 ---
 
