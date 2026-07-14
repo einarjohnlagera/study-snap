@@ -8,10 +8,7 @@ Theme: ship Tier 3 of the same 7-session conversion/retention UX audit that drov
 
 ### Planned Scope
 
-Grouped into 6 thematic PRs by surface:
-
-- **Pricing (frontend).** Outcome-framed plan bullets + "Best for" row on the comparison table, hesitant-buyer FAQ entries (pass-end, renewal, payment methods, refunds), duration/CTA verb alignment across surfaces, near-limit usage banner reframed as a milestone rather than just a warning.
-- **Public plan card (frontend).** Outcome microcopy under the adopt CTA, official-identity badge (no backend field needed — publish is already admin-only).
+All 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library) plus the two post-merge follow-ups have shipped — see Shipped below.
 
 Anti-drift: no new backend entities, migrations, endpoints, pricing tiers, or quota changes. All items route to direct Claude Code implementation per `CLAUDE.md`'s task-routing table.
 
