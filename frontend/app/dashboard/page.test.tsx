@@ -234,6 +234,42 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
   });
 
+  it("moves Quick Review below Usage / Progress after a completed session while preserving first-time order", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+    (listNotes as jest.Mock).mockResolvedValue(notes.map((note) => ({ ...note, quizCount: 0 })));
+
+    const firstTimeRender = render(<DashboardPage />);
+    const firstTimeQuickReview = await screen.findByText("Quick Review");
+    const firstTimeUsage = screen.getByText("Usage / Progress");
+
+    expect(firstTimeQuickReview.compareDocumentPosition(firstTimeUsage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    firstTimeRender.unmount();
+    (listNotes as jest.Mock).mockResolvedValue(notes);
+
+    render(<DashboardPage />);
+    const returningQuickReview = await screen.findByText("Quick Review");
+    const returningUsage = screen.getByText("Usage / Progress");
+
+    expect(returningUsage.compareDocumentPosition(returningQuickReview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows the personalization prompt after onboarding and routes to profile", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       firstName: "Note",

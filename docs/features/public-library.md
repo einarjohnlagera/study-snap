@@ -27,6 +27,12 @@ Shareable filter URLs:
 - the Public Library list page exposes `Share this list`, which copies the current canonical filtered URL instead of a stale local-only filter state
 - the list-share action is most useful on smaller screens; desktop may keep the page itself shareable without giving the button primary visual weight
 
+### Filter recovery and study readiness
+
+The generic filtered no-results state offers both `Clear filters` and `Remove last filter`. The latter removes only the most recently changed filter when known, falling back to clearing filters when there is no recoverable target.
+
+The More Filters sheet includes a `Study Pack Ready` boolean toggle. It filters the already-loaded public-note result set by the existing `studyPackStatus === STUDY_PACK_READY` value and can be switched off to restore the full list. This stays client-side because the current public-library request loads the full matching result set rather than paginated slices.
+
 ## Key Files
 
 **Backend**
@@ -91,6 +97,8 @@ Public Study Plan list and detail responses expose a live `readyCount` alongside
 ### Public Study Plan pre-adopt preview
 
 Every `PublicStudyPlanCard` includes an optional `Preview this plan` disclosure, available without authentication before the learner adopts. `/collections/published` is browseable to anonymous visitors for this purpose: they see the same previews and a `Sign in to adopt` CTA, while authenticated learners retain Start/Continue actions and their adopted-plan context. The disclosure loads the existing public collection detail endpoint only when opened and shows the actual available note titles, subjects, section labels, Course / Program, estimated study time, and the detail response's practice-ready ratio.
+
+Published-plan cards carry an `Official` identity badge because this public list is exclusively admin-published collections. Under the Start/Continue CTA, outcome microcopy explains that adoption creates a private, editable copy in the learner's library.
 
 The preview is read-only and does not change the Start/Continue adopt action. A failed or unavailable public detail response shows a clear retryable error while that action remains usable. A public plan with no available items says so plainly instead of rendering an empty note list.
 

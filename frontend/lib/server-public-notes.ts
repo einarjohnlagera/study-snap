@@ -112,6 +112,15 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
   return notes.filter((note) => getPublicSubjectSlug(note.subject) === subjectSlug);
 }
 
+export async function getServerPublicNotesBySubject(subject: string) {
+  const normalizedSubject = subject.trim();
+  if (!normalizedSubject) {
+    return [];
+  }
+
+  return fetchPublicNotes(`/notes/public?subject=${encodeURIComponent(normalizedSubject)}&size=4`);
+}
+
 export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
   const notes = await getServerPublicNotes();
   const normalizedCourseProgram = courseProgram.trim().toLowerCase();

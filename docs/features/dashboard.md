@@ -1,5 +1,7 @@
 # dashboard.md - NoteLib Feature Context
 
+Dashboard one-time guidance uses `pickActiveGuidance()` as a single-slot picker. Post-completion topic reminders, the Teacher introduction, and the returning-user spaced-review rhythm rule compete by priority so they never stack on one visit.
+
 ## Goal
 
 Dashboard is a guidance surface, not a management screen. It should help users decide what to do next in the note -> Study Pack -> quiz loop.
@@ -65,6 +67,8 @@ Dashboard should prioritize:
 - `Recent Notes`
 - `Quick Review`
 - `Usage / Progress`
+
+For a first-time Student or Professional (`hasCompletedSession === false`), Quick Review stays above Usage / Progress. Once the existing note-list session signal shows a completed session, the Dashboard keeps its Continue Studying and Focus Areas placement and moves the static Quick Review card below Usage / Progress, so returning users encounter their existing progress signals before a generic review entry point. This is composition only: it adds no cards or data requests.
 
 ### Board Taker
 

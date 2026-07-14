@@ -64,6 +64,7 @@ import {
 } from "@/lib/dashboard-personalization-prompt";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import {
   clearPendingLightweightProfileCompletion,
   hasPendingLightweightProfileCompletion,
@@ -576,6 +577,31 @@ export default function DashboardPage() {
     () => resolveDashboardProfileType(profile?.profileType),
     [profile?.profileType],
   );
+  const hasCompletedSession = items.some((note) => (note.quizCount ?? 0) > 0);
+  const latestCompletedTopic = recentReadyNotes.find((note) => (note.quizCount ?? 0) > 0)?.subject
+    ?? recentReadyNotes.find((note) => (note.quizCount ?? 0) > 0)?.title
+    ?? null;
+  const dashboardGuidanceRules: GuidanceRule[] = [
+    {
+      id: "dashboard-post-completion",
+      priority: 1,
+      condition: () => dashboardProfileType !== "TEACHER" && latestCompletedTopic !== null,
+      message: `Nice work with ${latestCompletedTopic}. Come back to review it again later — spaced review helps it stick.`,
+    },
+    {
+      id: "teacher-dashboard-intro",
+      priority: 2,
+      condition: () => dashboardProfileType === "TEACHER",
+      message: "NoteLib turns your lesson notes into ready-to-use quiz drafts. Start by creating a note with your lesson content.",
+    },
+    {
+      id: "dashboard-review-rhythm",
+      priority: 3,
+      condition: () => dashboardProfileType !== "TEACHER" && hasCompletedSession,
+      message: "A quick return visit matters: reviewing concepts over time makes recall stronger than one long study session.",
+    },
+  ];
+  const activeDashboardTip = pickActiveGuidance(dashboardGuidanceRules);
   const studentPrimaryHref = useMemo(
     () => resolveStudentPrimaryHref(continueStudying, recentNotes),
     [continueStudying, recentNotes],
@@ -615,6 +641,20 @@ export default function DashboardPage() {
         label: "Create Note",
         icon: "create" as const,
       };
+  const quickReviewCard = (
+    <DashboardActionCard
+      title="Quick Review"
+      description={dashboardProfileType === "PROFESSIONAL"
+        ? "Use Quick Review to reinforce your study material and keep applied knowledge fresh."
+        : "Use Quick Review to reinforce what you just studied and keep recall active."}
+      actionLabel="Start Quick Review"
+      actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
+      actionIcon="quickReview"
+      secondaryActionLabel="Review Recent Note"
+      secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
+      secondaryActionIcon="open"
+    />
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -693,6 +733,7 @@ export default function DashboardPage() {
               onComplete={completeLightweightProfilePrompt}
             />
           ) : null}
+          {activeDashboardTip ? <GuidanceTip tipId={activeDashboardTip.id} message={activeDashboardTip.message} /> : null}
           {dashboardProfileType !== "TEACHER" && todayFocus?.type === "DUE_CONCEPTS_REVIEW" ? (
             <TodayFocusCard
               focus={todayFocus}
@@ -768,19 +809,17 @@ export default function DashboardPage() {
                 viewerUserId={profile?.id ?? null}
               />
               <DashboardStrongestNotes />
-              <DashboardActionCard
-                title="Quick Review"
-                description={dashboardProfileType === "PROFESSIONAL"
-                  ? "Use Quick Review to reinforce your study material and keep applied knowledge fresh."
-                  : "Use Quick Review to reinforce what you just studied and keep recall active."}
-                actionLabel="Start Quick Review"
-                actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
-                actionIcon="quickReview"
-                secondaryActionLabel="Review Recent Note"
-                secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
-                secondaryActionIcon="open"
-              />
-              <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
+              {hasCompletedSession ? (
+                <>
+                  <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
+                  {quickReviewCard}
+                </>
+              ) : (
+                <>
+                  {quickReviewCard}
+                  <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
+                </>
+              )}
             </>
           ) : null}
 
@@ -857,10 +896,6 @@ export default function DashboardPage() {
 
           {dashboardProfileType === "TEACHER" ? (
             <>
-              <GuidanceTip
-                tipId="teacher-dashboard-intro"
-                message="NoteLib turns your lesson notes into ready-to-use quiz drafts. Start by creating a note with your lesson content."
-              />
               <DashboardActionCard
                 title="Create Teaching Material"
                 description="Create a note, generate a Study Pack, then review the generated quiz before exporting it for class use."

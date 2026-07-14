@@ -22,7 +22,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SITE_NAME } from "@/lib/site-metadata";
 import { getServerPublicNoteCount } from "@/lib/server-public-notes";
-import { buildWebsiteStructuredData } from "@/lib/structured-data";
+import { buildFaqPageStructuredData, buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
   "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.";
@@ -61,24 +61,19 @@ export const metadata: Metadata = {
 
 const differentiationRows = [
   {
-    label: "Built around your own notes",
-    generic: "Requires a fresh prompt every session.",
-    noteLib: "Your notes stay in one place and drive every study tool.",
+    label: "Your notes stay",
+    generic: "Gone when the chat resets.",
+    noteLib: "Saved in your library, reusable for every future review.",
   },
   {
-    label: "Designed for active recall",
-    generic: "Usually ends at a summary or single answer.",
-    noteLib: "Goes from note to study pack to quiz practice in one flow.",
+    label: "Weak areas remembered",
+    generic: "Starts fresh every session — it has no memory of what you missed.",
+    noteLib: "Tracked across quizzes over time, so review targets what you actually struggle with.",
   },
   {
-    label: "Helps you review faster before exams",
-    generic: "Rarely structured around your actual exam prep needs.",
-    noteLib: "Summaries, key concepts, and quizzes ready from one saved note.",
-  },
-  {
-    label: "Reuse notes anytime",
-    generic: "Previous outputs are easy to lose or start over.",
-    noteLib: "Notes stay reusable and ready for the next review cycle.",
+    label: "Exam-ready flow",
+    generic: "One answer, then it stops.",
+    noteLib: "Note → study pack → quiz → exam, all from the same saved note.",
   },
 ];
 
@@ -125,6 +120,29 @@ const landingScreenshots = {
     alt: "NoteLib Public Library preview showing note discovery cards and subject browsing",
   },
 } as const;
+
+const landingFaqs = [
+  {
+    question: "Is NoteLib free?",
+    answer:
+      "Yes. The Free plan lets you create notes, generate Study Packs, and practice with quizzes with no credit card required. Paid plans raise your monthly limits and unlock Board Exam Mode, Long Exam, and other Pro-only modes.",
+  },
+  {
+    question: "Do I need to upload files, or can I just paste text?",
+    answer:
+      "You can paste or type notes directly, upload a document, or use OCR to capture handwritten or photographed notes. All three paths turn into the same summary, key concepts, and quiz output.",
+  },
+  {
+    question: "Which board exams does NoteLib support?",
+    answer:
+      "NoteLib has dedicated Exam Hubs for ALE, PNLE, and LET, with public notes and study guides organized by exam. Any course or program can still be studied — the hubs highlight the largest reviewer communities.",
+  },
+  {
+    question: "What's the difference between Free, Plus, and Pro?",
+    answer:
+      "Free covers the core note-to-quiz loop at lighter monthly limits. Plus raises those limits for regular study. Pro adds Board Exam Mode, Long Exam, difficulty selection, and the highest limits for serious exam prep.",
+  },
+] as const;
 
 const valueSummaryCards = [
   {
@@ -189,6 +207,15 @@ function HeroSection() {
             <p className="text-sm text-foreground/65">
               Free to start · No credit card required
             </p>
+            <TrackedLink
+              href="/demo"
+              className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "hero_demo", destination: "/demo" }}
+            >
+              Try the demo — no signup
+              <ArrowRight className="h-4 w-4" />
+            </TrackedLink>
           </div>
         </div>
 
@@ -418,6 +445,29 @@ function PricingPreviewSection() {
   );
 }
 
+function FaqSection() {
+  return (
+    <section className="space-y-5">
+      <StructuredDataScript
+        id="landing-faq-structured-data"
+        data={buildFaqPageStructuredData(landingFaqs.map(({ question, answer }) => ({ question, answer })))}
+      />
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">FAQ</p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Frequently asked questions</h2>
+      </div>
+      <div className="space-y-3">
+        {landingFaqs.map((faq) => (
+          <Card key={faq.question} className="space-y-2 p-5">
+            <CardTitle className="text-base">{faq.question}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{faq.answer}</CardDescription>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function FinalCtaSection() {
   return (
     <section className="rounded-[2rem] border border-sky-500/20 bg-[linear-gradient(135deg,_rgba(224,242,254,0.78),_rgba(255,255,255,0.96))] p-6 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(12,74,110,0.36),_rgba(15,23,42,0.94))] sm:p-8">
@@ -465,6 +515,7 @@ export default async function Home() {
       <PublicLibrarySection />
       <DifferentiationSection />
       <PricingPreviewSection />
+      <FaqSection />
       <GuardianInterestSection />
       <FinalCtaSection />
       <PublicFooter />

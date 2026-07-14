@@ -8,13 +8,14 @@ import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mod
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
+import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
-import { buildPublicLibraryNotePathFromDetail, buildPublicLibraryNotePath } from "@/lib/public-note-path";
+import { buildPublicLibraryNotePathFromDetail, buildPublicLibraryNotePath, buildPublicLibrarySubjectPath } from "@/lib/public-note-path";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
-import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
+import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
 import { getExamSlugForCourseProgram, EXAM_HUBS } from "@/lib/exam-hub-config";
@@ -79,6 +80,11 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
   }
 
   const allSubjectNotes = await getServerPublicNotesBySubjectSlug(subject);
+  const moreInSubject = note.subject?.trim()
+    ? (await getServerPublicNotesBySubject(note.subject))
+        .filter((relatedNote) => relatedNote.id !== note.id)
+        .slice(0, 3)
+    : [];
   const relatedNotes = allSubjectNotes
     .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")
     .sort((a, b) => {
@@ -253,13 +259,6 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
               authModalTitle="Quiz yourself on this note"
               authModalBody="Create a free account or log in to quiz yourself on this note and keep practicing."
             />
-            <PublicSeoCopyCta
-              noteId={note.id}
-              label="Copy Study Pack"
-              redirectTarget="generate"
-              variant="outline"
-              includeStudyPack
-            />
           </div>
         </Card>
 
@@ -339,6 +338,59 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                 ))}
               </div>
             </div>
+          </section>
+        ) : null}
+
+        {moreInSubject.length >= 2 ? (
+          <section className="space-y-4" aria-labelledby="more-subject-heading">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="more-subject-heading" className="text-lg font-semibold sm:text-xl">
+                More in {note.subject}
+              </h2>
+              <Link
+                href={buildPublicLibrarySubjectPath(note.subject)}
+                className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+              >
+                See all in {note.subject} →
+              </Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {moreInSubject.map((relatedNote) => (
+                <Link
+                  key={relatedNote.id}
+                  href={buildPublicLibraryNotePath({ subject: relatedNote.subject, title: relatedNote.title })}
+                  className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <Card className="h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5">
+                    <SharedNoteCard
+                      title={relatedNote.title}
+                      courseProgram={relatedNote.courseProgram}
+                      subject={relatedNote.subject}
+                      tags={relatedNote.tags}
+                      contentPreview={relatedNote.contentPreview}
+                      summaryPreview={relatedNote.summaryPreview}
+                      copyCount={relatedNote.copyCount}
+                      viewCount={relatedNote.viewCount}
+                      tagDisplayLimit={3}
+                      notePreviewLines={2}
+                      summaryPreviewLines={2}
+                    />
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {note.authorDisplayName && note.authorUsername ? (
+          <section className="rounded-2xl border border-border bg-card px-4 py-4 sm:px-6" aria-labelledby="more-author-heading">
+            <h2 id="more-author-heading" className="text-lg font-semibold sm:text-xl">More from {note.authorDisplayName}</h2>
+            <Link
+              href={buildPublicLibraryUrl({ creator: note.authorUsername })}
+              className="mt-2 inline-flex text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+            >
+              Browse {note.authorDisplayName}&apos;s public notes →
+            </Link>
           </section>
         ) : null}
 

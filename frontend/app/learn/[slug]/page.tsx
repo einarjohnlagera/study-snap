@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicFooter } from "@/components/public/public-footer";
 import { LearnArticleLayout } from "@/components/public/learn-article-layout";
-import { getLearnGuideBySlug, learnGuides } from "@/lib/learn-guides";
-import { buildPageMetadata } from "@/lib/site-metadata";
+import { StructuredDataScript } from "@/components/seo/structured-data-script";
+import { getLearnGuideBySlug, learnGuideCategories, learnGuides } from "@/lib/learn-guides";
+import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
+import { buildArticleStructuredData } from "@/lib/structured-data";
 
 type LearnArticlePageProps = {
   params: Promise<{
@@ -44,8 +46,19 @@ export default async function LearnArticlePage({ params }: Readonly<LearnArticle
     notFound();
   }
 
+  const categoryTitle = learnGuideCategories.find((category) => category.key === guide.category)?.title;
+
   return (
     <>
+      <StructuredDataScript
+        id="learn-article-structured-data"
+        data={buildArticleStructuredData({
+          title: guide.title,
+          description: guide.description,
+          canonicalUrl: absoluteUrl(`/learn/${guide.slug}`),
+          subject: categoryTitle,
+        })}
+      />
       <LearnArticleLayout guide={guide} />
       <div className="mx-auto w-full max-w-4xl px-4 pb-10 sm:px-6 sm:pb-12">
         <PublicFooter />

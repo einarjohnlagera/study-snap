@@ -924,7 +924,9 @@ export default function OnboardingPage() {
           <div className="space-y-5">
             <section className="space-y-2">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Learner Level *</p>
+                <p className="text-sm font-medium text-foreground">
+                  Learner Level *{profileType === "TEACHER" ? " — default quiz difficulty" : ""}
+                </p>
                 <p className="text-xs text-foreground/60">
                   {profileType === "TEACHER"
                     ? "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz."

@@ -96,14 +96,11 @@ describe("PublicNoteOwnershipActions", () => {
 
     expect(screen.getByText(/Copy this note to your library and get the full Study Pack instantly/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add to Library" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy as editable draft" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy as editable draft" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
     expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
       expect.objectContaining({ label: "Add to Library", includeStudyPack: true }),
-    );
-    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Copy as editable draft", includeStudyPack: false }),
     );
   });
 

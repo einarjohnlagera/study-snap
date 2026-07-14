@@ -1,5 +1,7 @@
 # onboarding.md - NoteLib Feature Context
 
+Teacher Learner Level copy names the field's role directly: it is the default quiz difficulty for material they generate, while preserving the existing helper and per-quiz override behavior.
+
 ## Goal
 
 `/onboarding` is a short activation flow for verified users. Its job is to get the user to a real first Study Pack, not to collect every preference up front.

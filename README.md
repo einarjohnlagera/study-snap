@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.44.0 - Conversion & Retention Polish` (Released); previous: `v0.43.1 - Companion Mentor Tips`
+Current release baseline: `v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` (in progress); previous: `v0.44.0 - Conversion & Retention Polish`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

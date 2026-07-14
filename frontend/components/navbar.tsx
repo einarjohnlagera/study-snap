@@ -11,6 +11,7 @@ import { buttonVariants } from "./ui/button";
 const PUBLIC_NAV = [
   { href: "/", label: "Home" },
   { href: "/how-it-works", label: "How it Works" },
+  { href: "/demo", label: "Demo" },
   { href: "/public/library", label: "Public Library" },
   { href: "/exam", label: "Exam Hubs" },
   { href: "/learn", label: "Learn" },
