@@ -68,6 +68,8 @@ Dashboard should prioritize:
 - `Quick Review`
 - `Usage / Progress`
 
+For a first-time Student or Professional (`hasCompletedSession === false`), Quick Review stays above Usage / Progress. Once the existing note-list session signal shows a completed session, the Dashboard keeps its Continue Studying and Focus Areas placement and moves the static Quick Review card below Usage / Progress, so returning users encounter their existing progress signals before a generic review entry point. This is composition only: it adds no cards or data requests.
+
 ### Board Taker
 
 Dashboard should prioritize:
