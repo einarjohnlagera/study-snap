@@ -286,12 +286,20 @@ export function CollectionsPageClient() {
   }, [collections, primaryCollectionId]);
 
   const headerAction = (
-    <ResponsiveActionButton
-      action="create"
-      label={labels.newCtaLabel}
-      className="w-full sm:w-auto"
-      onClick={() => setCreateOpen(true)}
-    />
+    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+      <Link
+        href="/collections/published?ref=/collections"
+        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+      >
+        Browse official plans
+      </Link>
+      <ResponsiveActionButton
+        action="create"
+        label={labels.newCtaLabel}
+        className="w-full sm:w-auto"
+        onClick={() => setCreateOpen(true)}
+      />
+    </div>
   );
 
   return (
@@ -367,7 +375,7 @@ export function CollectionsPageClient() {
           courseProgram={courseProgram}
           profileType={profileType}
           primaryCollectionId={primaryCollectionId}
-          viewAllHref="/collections/published"
+          viewAllHref="/collections/published?ref=/collections"
           browseWhenEmpty
         />
       ) : null}

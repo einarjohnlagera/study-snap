@@ -38,7 +38,7 @@ describe("DashboardEmpty", () => {
       render(<DashboardEmpty profileType={profileType} />);
 
       expect(screen.getByRole("link", { name: /Or start from a ready-made .* instead/ }))
-        .toHaveAttribute("href", "/collections/published");
+        .toHaveAttribute("href", "/collections/published?ref=/dashboard");
     },
   );
 

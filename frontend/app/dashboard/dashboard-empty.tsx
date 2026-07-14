@@ -85,7 +85,7 @@ export function DashboardEmpty({ profileType }: Readonly<{ profileType: FirstRun
 
       {showPlanAdoptionLink ? (
         <Link
-          href="/collections/published"
+          href="/collections/published?ref=/dashboard"
           className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
         >
           Or start from a ready-made {labels.singular.toLowerCase()} instead
