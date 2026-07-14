@@ -115,6 +115,7 @@ const overview = {
     adaptiveSessions: 0,
     studyDays: 2,
   },
+  examPacingPlan: null,
 };
 
 const publicNotes = [
@@ -600,6 +601,39 @@ describe("DashboardPage profile variants", () => {
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Practice Weak Areas" })).toBeInTheDocument();
+  });
+
+  it("shows the pacing line instead of the plain countdown when the backend provides an exam pacing plan", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      examDate: "2099-05-15",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PRO",
+        limits: { studyPacksPerMonth: 100, challengeQuizzesPerMonth: 50, adaptivePracticePerMonth: 30 },
+        usage: { studyPacksUsed: 12, challengeQuizzesUsed: 8, adaptivePracticeUsed: 3 },
+      },
+    });
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      examPacingPlan: { dueConceptCount: 12, dailyConceptTarget: 2, daysRemaining: 41 },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Exam Countdown")).toBeInTheDocument();
+    expect(
+      screen.getByText("12 concepts due — study ~2/day to stay on track for your exam in 41 days."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/You have .* days until your exam\./)).not.toBeInTheDocument();
   });
 
   it("renders community notes for professional profiles", async () => {

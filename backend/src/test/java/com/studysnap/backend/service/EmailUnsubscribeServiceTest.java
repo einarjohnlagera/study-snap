@@ -66,6 +66,18 @@ class EmailUnsubscribeServiceTest {
     }
 
     @Test
+    void unsubscribe_disablesDueConceptsDigestWithoutChangingStudyReminders() {
+        UserEntity user = optedInUser();
+        user.setDueConceptsDigestRemindersEnabled(true);
+        stubVerifiedToken("token", user.getId(), UnsubscribeCategory.DUE_CONCEPTS_DIGEST, user);
+
+        service().unsubscribe("token");
+
+        assertThat(user.getDueConceptsDigestRemindersEnabled()).isFalse();
+        assertThat(user.getInactivityRemindersEnabled()).isTrue();
+    }
+
+    @Test
     void unsubscribe_isIdempotentWhenAlreadyDisabled() {
         UserEntity user = optedInUser();
         user.setMarketingEmailsEnabled(false);

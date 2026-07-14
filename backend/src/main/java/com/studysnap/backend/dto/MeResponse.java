@@ -35,6 +35,7 @@ public record MeResponse(
         boolean inactivityRemindersEnabled,
         boolean weakConceptRemindersEnabled,
         boolean weeklySummaryRemindersEnabled,
+        boolean dueConceptsDigestRemindersEnabled,
         boolean marketingEmailsEnabled,
         ThemePreference themePreference,
         OffsetDateTime emailVerifiedAt,

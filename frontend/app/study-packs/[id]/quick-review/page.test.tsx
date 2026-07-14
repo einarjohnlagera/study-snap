@@ -5,6 +5,8 @@ import {
   completeQuickReviewSession,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
+  getCollectionGoal,
+  getMe,
   getPostSessionNextStep,
   getNote,
   saveQuickReviewConfidence,
@@ -48,6 +50,7 @@ jest.mock("@/lib/api", () => ({
   completeQuickReviewSession: jest.fn(),
   forfeitQuickReviewSession: jest.fn(),
   generateQuickReviewStudyTip: jest.fn(),
+  getCollectionGoal: jest.fn(),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
   getPostSessionNextStep: jest.fn(),
@@ -210,6 +213,9 @@ describe("QuickReviewPage post-quiz UX", () => {
     (updateQuickReviewSessionProgress as jest.Mock).mockResolvedValue(undefined);
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
+    (getMe as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE" });
+    (getCollectionGoal as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
@@ -282,6 +288,34 @@ describe("QuickReviewPage post-quiz UX", () => {
       "/notes/note-1/adaptive-practice",
     );
     expect(getPostSessionNextStep).toHaveBeenCalledWith("study-pack-1");
+  });
+
+  it("echoes Weekly Countdown pacing when the learner has a primary Review Set with a target date", async () => {
+    setupCompleteState();
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({ weeksRemaining: 2 });
+
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByText(/That's another session toward this week's target/)).toBeInTheDocument();
+    expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
+  });
+
+  it("does not show a Weekly Countdown echo when the learner has no primary Review Set", async () => {
+    setupCompleteState();
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: null });
+
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(getCollectionGoal).not.toHaveBeenCalled();
+    expect(screen.queryByText(/That's another session toward this week's target/)).not.toBeInTheDocument();
   });
 
   it("loads Quick Review once and does not loop initialization calls", async () => {

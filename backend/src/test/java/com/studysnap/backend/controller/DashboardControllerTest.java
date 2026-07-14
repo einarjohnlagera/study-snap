@@ -40,7 +40,8 @@ class DashboardControllerTest {
         DashboardOverviewResponse expected = new DashboardOverviewResponse(
                 new DashboardPerformanceSummaryResponse(null, 0, 0, null, null),
                 new DashboardFocusAreasResponse(List.of(), null, false),
-                new DashboardWeeklyActivityResponse(0, 0, 0, 0)
+                new DashboardWeeklyActivityResponse(0, 0, 0, 0),
+                null
         );
         when(dashboardService.getOverview(userId)).thenReturn(expected);
 

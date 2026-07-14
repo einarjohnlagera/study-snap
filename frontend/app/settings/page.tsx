@@ -199,6 +199,7 @@ export default function SettingsPage() {
   const [inactivityRemindersEnabled, setInactivityRemindersEnabled] = useState(false);
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
   const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
+  const [dueConceptsDigestRemindersEnabled, setDueConceptsDigestRemindersEnabled] = useState(false);
   const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
   const [savingEmailPreferences, setSavingEmailPreferences] = useState(false);
   const [emailPreferencesMessage, setEmailPreferencesMessage] = useState<string | null>(null);
@@ -261,6 +262,7 @@ export default function SettingsPage() {
       setInactivityRemindersEnabled(me.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
+      setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
       setMarketingEmailsEnabled(me.marketingEmailsEnabled);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
@@ -326,6 +328,7 @@ export default function SettingsPage() {
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
+      setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
@@ -344,6 +347,7 @@ export default function SettingsPage() {
         inactivityRemindersEnabled,
         weakConceptRemindersEnabled,
         weeklySummaryRemindersEnabled,
+        dueConceptsDigestRemindersEnabled,
         marketingEmailsEnabled,
       });
       setProfile(updated);
@@ -351,6 +355,7 @@ export default function SettingsPage() {
       setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
+      setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEmailPreferencesMessage("Email preferences updated.");
     } catch (err) {
@@ -850,6 +855,20 @@ export default function SettingsPage() {
                   ariaLabel="Weekly summary"
                   checked={weeklySummaryRemindersEnabled}
                   onChange={setWeeklySummaryRemindersEnabled}
+                  disabled={savingEmailPreferences}
+                />
+              </div>
+              <div className="flex items-start justify-between gap-4 p-4">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Due-concepts digest</span>
+                  <span className="block text-xs text-foreground/60">
+                    A weekly reminder when concepts are due for review in your Study Packs.
+                  </span>
+                </span>
+                <Checkbox
+                  ariaLabel="Due-concepts digest"
+                  checked={dueConceptsDigestRemindersEnabled}
+                  onChange={setDueConceptsDigestRemindersEnabled}
                   disabled={savingEmailPreferences}
                 />
               </div>

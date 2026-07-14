@@ -16,6 +16,7 @@ import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
+import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -26,7 +27,9 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getCollectionGoal,
   getInProgressAdaptivePracticeSession,
+  getMe,
   getMyStudyPack,
   getNote,
   getPostSessionNextStep,
@@ -36,6 +39,7 @@ import {
   type PostSessionNextStepResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
 import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
 
@@ -78,6 +82,7 @@ export default function AdaptivePracticePage() {
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showLimitReachedState, setShowLimitReachedState] = useState(false);
   const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
+  const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
   const { usageSummary } = useBillingUsageSummary();
 
   const noteId = useMemo(() => {
@@ -279,6 +284,19 @@ export default function AdaptivePracticePage() {
     if (level === "Fair") return "Good effort. Keep reviewing these concepts to build confidence.";
     return "Keep going. These concepts need more practice — try again when ready.";
   }, [scorePercentage]);
+
+  useEffect(() => {
+    if (!isComplete) {
+      return;
+    }
+    void getMe().then((me) => {
+      if (me.primaryCollectionId) {
+        void getCollectionGoal(me.primaryCollectionId)
+          .then((goal) => setWeeklyPacingWeeksRemaining(goal.weeksRemaining))
+          .catch(() => undefined);
+      }
+    }).catch(() => undefined);
+  }, [isComplete]);
 
   useEffect(() => {
     if (adaptiveQuiz?.status !== "GENERATING" || !note) {
@@ -634,6 +652,10 @@ export default function AdaptivePracticePage() {
           {nextStepResponse?.goalNudge ? (
             <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
           ) : null}
+          <WeeklyPacingEchoCard
+            weeksRemaining={weeklyPacingWeeksRemaining}
+            goalLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).goalSingular}
+          />
           <div className="flex flex-col gap-2 sm:flex-row">
             {nextStepResponse === null ? (
               <Button

@@ -789,16 +789,18 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateEmailPreferences(
             userId,
-            new UpdateEmailPreferencesRequest(true, true, true, true)
+            new UpdateEmailPreferencesRequest(true, true, true, true, true)
         );
 
         assertThat(response.inactivityRemindersEnabled()).isTrue();
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
         assertThat(response.weeklySummaryRemindersEnabled()).isTrue();
+        assertThat(response.dueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(response.marketingEmailsEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
         assertThat(user.getWeeklySummaryRemindersEnabled()).isTrue();
+        assertThat(user.getDueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(user.getMarketingEmailsEnabled()).isTrue();
     }
 

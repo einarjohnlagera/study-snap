@@ -659,7 +659,7 @@ export function PublicProfilePageClient({
                       router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }));
                     }
                   }}
-                  className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
+                  className="motion-pressable flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
                 >
                   <SharedNoteCard
                     title={note.title}

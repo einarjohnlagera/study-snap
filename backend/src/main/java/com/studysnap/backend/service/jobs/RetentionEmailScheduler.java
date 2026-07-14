@@ -29,6 +29,7 @@ public class RetentionEmailScheduler {
     @Scheduled(cron = "${studysnap.retention.weekly-cron:0 0 18 * * SUN}")
     public void runWeekly() {
         RetentionService.WeeklyRetentionDispatchSummary summary = retentionService.sendWeeklySummaryEmails();
-        log.info("retention.email.scheduler.weekly sent weeklySummary={}", summary.weeklySummarySent());
+        int dueConceptsDigestSent = retentionService.sendDueConceptsDigestEmails();
+        log.info("retention.email.scheduler.weekly sent weeklySummary={} dueConceptsDigest={}", summary.weeklySummarySent(), dueConceptsDigestSent);
     }
 }

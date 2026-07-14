@@ -789,6 +789,7 @@ describe("Settings page cancellation flow", () => {
       inactivityRemindersEnabled: true,
       weakConceptRemindersEnabled: true,
       weeklySummaryRemindersEnabled: true,
+      dueConceptsDigestRemindersEnabled: true,
       marketingEmailsEnabled: true,
     });
 
@@ -801,6 +802,7 @@ describe("Settings page cancellation flow", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Study reminders/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Weak-concept nudges/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Weekly summary/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Due-concepts digest/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Product news & tips/i }));
     fireEvent.click(screen.getByRole("button", { name: "Save email preferences" }));
 
@@ -809,6 +811,7 @@ describe("Settings page cancellation flow", () => {
         inactivityRemindersEnabled: true,
         weakConceptRemindersEnabled: true,
         weeklySummaryRemindersEnabled: true,
+        dueConceptsDigestRemindersEnabled: true,
         marketingEmailsEnabled: true,
       });
     });

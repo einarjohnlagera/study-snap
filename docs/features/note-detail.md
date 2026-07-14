@@ -57,6 +57,9 @@ Recent Sessions:
 - Note Detail shows the actual completed quiz mode label for Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice.
 - multi-note Long Exam sessions appear on every participating note in the session source-note set.
 - when a Long Exam spans more than one note, show `Multi-note Long Exam · spans N notes` under its score line while preserving existing weak-concept context.
+- the session list collapses by default behind a "Show Sessions" / "Hide Sessions" toggle (v0.46.0), matching Companion's "View Full Guide" collapse pattern — reference material, not needed above the fold. The empty state ("No completed quiz sessions yet.") always renders uncollapsed since there's nothing to hide.
+
+Performance Overview also collapses by default (v0.46.0) once a note has real performance data to show, behind a "Show Performance" / "Hide Performance" toggle. The `GENERATING` / generation-failed / `DRAFT` guidance messages stay always-visible — only the actual stats grid collapses.
 
 ## Per-Note Readiness
 

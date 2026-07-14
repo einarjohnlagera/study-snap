@@ -173,7 +173,7 @@ export function DashboardCommunityNotesSection({
             href={buildPublicLibraryNotePath({ subject: note.subject, title: note.title })}
             className="block"
           >
-            <Card className="h-full space-y-3 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-5">
+            <Card className="motion-pressable h-full space-y-3 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-5">
               <SharedNoteCard
                 title={note.title}
                 courseProgram={normalizeCourseProgram(note.courseProgram)}
