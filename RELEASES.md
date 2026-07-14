@@ -2,7 +2,7 @@
 
 ## v0.45.1 - Study Plan Collection Fixes
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix three pre-existing collection/discovery defects surfaced during v0.45.0 pre-signoff review — a Goal-collection note-count rollup that always shows 0 when notes live only on child Subject Plans, a Published Plans backlink that ignores how the user actually arrived, and a dead end where users with a primary study plan have no path back to the full official-plan catalog.
 
