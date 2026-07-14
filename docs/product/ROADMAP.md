@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.47.0 - Conversion Audit Tier 4: Cleanup Batch` is in progress (on `releases/v0.47.0`, cut from `main` after v0.46.0 merged) — 16 low-impact, cheap-cleanup items from the conversion/retention UX audit backlog's Tier 4, grouped into 6 Codex-prompted PRs (Landing & Pricing, Public Note Detail, Discovery & Library, Onboarding copy, Doc hygiene, Learn signup-intent). Item 37 was initially dropped, then folded back in at a smaller scope once its original cookie-based mechanism proved a poor fit. No new backend entities, migrations, or endpoints. See `RELEASES.md`.
+`v0.47.0 - Conversion Audit Tier 4: Cleanup Batch` is the current released version (on `releases/v0.47.0`, cut from `main` after v0.46.0 merged) — 16 low-impact, cheap-cleanup items from the conversion/retention UX audit backlog's Tier 4, shipped across 6 Codex-prompted PRs (Landing & Pricing, Public Note Detail, Discovery & Library, Onboarding copy, Doc hygiene, Learn signup-intent). Item 37 was initially dropped, then folded back in at a smaller scope once its original cookie-based mechanism proved a poor fit. No new backend entities, migrations, or endpoints. See `RELEASES.md`.
 
 `v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing` is the previous released version (on `releases/v0.46.0`, cut from `main` **before** `v0.45.2` existed, now rebased onto latest `main`) — two Fable-sourced new-capability ideas (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`, Ideas 1 and 5): a weekly due-concepts email digest as a new type on the existing `RetentionEmailScheduler`, and an exam-date pacing plan scheduling the learner's owned content only (explicitly not Smart Review Planning). Scope broadened mid-release with a session-completion pacing echo and a 4-item app-feel polish batch (a 5th, a sticky search/filter toolbar, shipped then was reverted the same day after a user-reported mobile regression). See `RELEASES.md`.
 
@@ -28,9 +28,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
-## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch (in progress, base branch `releases/v0.47.0`)
+## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch (Released, base branch `releases/v0.47.0`)
 
-Origin: Tier 4 of `docs/claude-prompt/conversion-audit-prioritized-backlog.md` (items 37–55, "low impact, cheap cleanups," explicitly meant to be batched together). Item 52 already shipped in v0.46.0; items 37 (needs new cookie-consumption branching, no existing consumer) and 47 (already fixed in a prior release) were dropped during pre-scoping verification. Routes through Codex prompts per-item this release (token-budget choice), not the direct-Claude-Code lane the routing table would otherwise put every item in. Full scope in `RELEASES.md`.
+Origin: Tier 4 of `docs/claude-prompt/conversion-audit-prioritized-backlog.md` (items 37–55, "low impact, cheap cleanups," explicitly meant to be batched together). Item 52 already shipped in v0.46.0; items 47 and 50 (already fixed in prior releases) were dropped during pre-scoping verification. Item 37 was also initially dropped (its assumed cookie-consumption mechanism didn't fit Learn's category-keyed guides), then folded back in at a smaller scope once the rest of the release shipped, reusing item 43's query-param intent pattern instead. Routed through Codex prompts per-item this release (token-budget choice), not the direct-Claude-Code lane the routing table would otherwise put every item in. Full scope in `RELEASES.md`.
 
 ## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing (Released, base branch `releases/v0.46.0`)
 

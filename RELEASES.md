@@ -2,7 +2,7 @@
 
 ## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close out the conversion/retention UX audit backlog (`docs/claude-prompt/conversion-audit-prioritized-backlog.md`) with its Tier 4 items — low-impact, cheap cleanups explicitly meant to be batched together rather than shipped as standalone releases. Item 52 from this tier already shipped in v0.46.0.
 
@@ -12,9 +12,7 @@ Unlike prior releases, this batch routes through Codex prompts per-item rather t
 
 ### Planned Scope
 
-18 Tier 4 backlog items, minus items 47, 50, and 52 (see above), grouped into 6 Codex-prompted PRs (16 items total). 5 of 6 PRs have shipped — see Shipped below.
-
-- **Learn signup-intent polish (Codex).** Item 37, reframed — carry a `learn` intent from the Learn article's signup CTA through to the auth page, restating the intent-specific copy, reusing item 43's query-param pattern.
+All items have shipped — see Shipped below.
 
 Anti-drift: no new backend entity, migration, or endpoint anywhere in this batch — every item confirmed frontend/doc-only during pre-scoping verification; no pricing/quota changes; item 37's original cookie/goal-banner mechanism and item 54's "High Quality" threshold redefinition stay explicitly out of scope (documented, not changed).
 
