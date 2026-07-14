@@ -116,7 +116,7 @@ export function PublicStudyPlanCard({
       <div className="space-y-1.5">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="line-clamp-2">{plan.title}</CardTitle>
-          <span className="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+          <span className="shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
             Official
           </span>
         </div>
