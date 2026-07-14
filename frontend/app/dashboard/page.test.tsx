@@ -292,6 +292,7 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText("Too easy or too hard?")).toBeInTheDocument();
+    expect(screen.getByText("You can adjust your learner level anytime — quizzes will match your new study stage next time you practice.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Adjust level" }));
 
     expect(routerMock.push).toHaveBeenCalledWith("/profile?from=dashboard#learning-profile");

@@ -17,7 +17,7 @@ export function DashboardPersonalizationPrompt({
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold sm:text-xl">Too easy or too hard?</h2>
           <p className="text-sm text-foreground/75">
-            Set your learner level so future quizzes match your study stage.
+            You can adjust your learner level anytime — quizzes will match your new study stage next time you practice.
           </p>
         </div>
         <Button
