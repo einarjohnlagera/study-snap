@@ -135,6 +135,22 @@ describe("AuthPage", () => {
     expect(screen.getByText("Sign up to save this note to your library.")).toBeInTheDocument();
   });
 
+  it("restates the learning intent for Learn guide signup arrivals", () => {
+    window.history.replaceState({}, "", "/auth?mode=signup&intent=learn");
+
+    render(<AuthPage />);
+
+    expect(screen.getByText("Sign up to keep learning with more free study guides.")).toBeInTheDocument();
+  });
+
+  it("prioritizes the copy-note description when multiple signup intents are present", () => {
+    window.history.replaceState({}, "", "/auth?mode=signup&intent=learn&intent=copy-note");
+
+    render(<AuthPage />);
+
+    expect(screen.getByText("Sign up to save this note to your library.")).toBeInTheDocument();
+  });
+
   it("keeps the generic signup copy when no specific intent is present", () => {
     window.history.replaceState({}, "", "/auth?mode=signup");
 
