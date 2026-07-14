@@ -78,6 +78,10 @@ Dashboard should prioritize:
 - `Start Board Exam`
 - `Weak Areas`
 - `Adaptive Practice`
+
+### Board Exam pacing
+
+For BOARD_EXAM users with a future profile-level `examDate`, Dashboard extends the existing countdown with an owned-content pacing line when due concepts exist: the total due concepts across the learner's Study Packs, divided linearly across days remaining and rounded up to a daily target. The total reuses `ConceptHealthService.getDueConceptsByStudyPackIds` across all owned Study Packs; it does not match, generate, or fill missing content, and it is not Smart Review Planning. If the date is today/past, no concepts are due, or the additive calculation is unavailable, Dashboard keeps the existing plain countdown behavior. This Dashboard-only profile-date pacing is deliberately separate from Review Set/Goal detail's collection `targetCompletionDate` pacing; those surfaces must not be coupled.
 - `Usage / Progress`
 
 If Adaptive Practice quota is exhausted for the current plan, the CTA should open the shared upgrade flow with "upgrade for more sessions" framing instead of navigating to a dead-end route.

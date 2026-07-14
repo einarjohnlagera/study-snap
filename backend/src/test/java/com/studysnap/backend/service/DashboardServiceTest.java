@@ -42,6 +42,8 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -315,6 +317,132 @@ class DashboardServiceTest {
         DashboardOverviewResponse response = dashboardService.getOverview(userId);
 
         assertThat(response.focusAreas().adaptivePracticeAvailable()).isTrue();
+    }
+
+    @Test
+    void getOverview_sumsDueConceptsAcrossOwnedStudyPacksForBoardExamPacing() {
+        UUID userId = UUID.randomUUID();
+        UUID firstStudyPackId = UUID.randomUUID();
+        UUID secondStudyPackId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setProfileType(ProfileType.BOARD_EXAM);
+        user.setExamDate(LocalDate.now(ZoneOffset.UTC).plusDays(5));
+        StudyPackEntity firstStudyPack = buildStudyPack(userId, firstStudyPackId, "First reviewer");
+        StudyPackEntity secondStudyPack = buildStudyPack(userId, secondStudyPackId, "Second reviewer");
+        firstStudyPack.setKeyConcepts(List.of("A", "B"));
+        secondStudyPack.setKeyConcepts(List.of("C", "D", "E"));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged()))
+                .thenReturn(List.of(firstStudyPack, secondStudyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), any(), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(firstStudyPackId, List.of("A", "B"), secondStudyPackId, List.of("C", "D", "E")));
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
+                userId, QuickReviewSessionMode.QUICK_REVIEW, Pageable.unpaged())).thenReturn(List.of());
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+                userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(List.of());
+        when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(2L);
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(eq(userId), any(), any()))
+                .thenReturn(List.of());
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.examPacingPlan()).isNotNull();
+        assertThat(response.examPacingPlan().dueConceptCount()).isEqualTo(5);
+        assertThat(response.examPacingPlan().dailyConceptTarget()).isEqualTo(1);
+        assertThat(response.examPacingPlan().daysRemaining()).isEqualTo(5);
+    }
+
+    @Test
+    void getOverview_returnsNullExamPacingPlanForNonBoardExamProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setProfileType(ProfileType.STUDENT);
+        user.setExamDate(LocalDate.now(ZoneOffset.UTC).plusDays(5));
+        stubOverviewCollaborators(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.examPacingPlan()).isNull();
+    }
+
+    @Test
+    void getOverview_returnsNullExamPacingPlanWhenExamDateIsUnset() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setProfileType(ProfileType.BOARD_EXAM);
+        user.setExamDate(null);
+        stubOverviewCollaborators(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.examPacingPlan()).isNull();
+    }
+
+    @Test
+    void getOverview_returnsNullExamPacingPlanWhenExamDateHasPassed() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setProfileType(ProfileType.BOARD_EXAM);
+        user.setExamDate(LocalDate.now(ZoneOffset.UTC).minusDays(1));
+        stubOverviewCollaborators(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.examPacingPlan()).isNull();
+    }
+
+    @Test
+    void getOverview_returnsNullExamPacingPlanWhenExamIsToday() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setProfileType(ProfileType.BOARD_EXAM);
+        user.setExamDate(LocalDate.now(ZoneOffset.UTC));
+        stubOverviewCollaborators(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.examPacingPlan()).isNull();
+    }
+
+    @Test
+    void getOverview_returnsNullExamPacingPlanWhenNoConceptsAreDue() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setProfileType(ProfileType.BOARD_EXAM);
+        user.setExamDate(LocalDate.now(ZoneOffset.UTC).plusDays(5));
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Reviewer");
+        studyPack.setKeyConcepts(List.of("A"));
+        stubOverviewCollaborators(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged()))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), any(), any(OffsetDateTime.class)))
+                .thenReturn(Map.of(studyPackId, List.of()));
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.examPacingPlan()).isNull();
+    }
+
+    private void stubOverviewCollaborators(UUID userId) {
+        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
+                userId, QuickReviewSessionMode.QUICK_REVIEW, Pageable.unpaged())).thenReturn(List.of());
+        when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
+                userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(List.of());
+        when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(0L);
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(eq(userId), any(), any()))
+                .thenReturn(List.of());
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.studysnap.backend.dto;
 public record DashboardOverviewResponse(
         DashboardPerformanceSummaryResponse performanceSummary,
         DashboardFocusAreasResponse focusAreas,
-        DashboardWeeklyActivityResponse weeklyActivity
+        DashboardWeeklyActivityResponse weeklyActivity,
+        ExamPacingPlanResponse examPacingPlan
 ) {
 }
