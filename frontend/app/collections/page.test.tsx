@@ -62,6 +62,16 @@ describe("CollectionsPage", () => {
     expect(metadata).toMatchObject({ title: "Collections | NoteLib" });
   });
 
+  it("keeps a persistent official-plan catalog link in the header", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "goal-1" });
+
+    render(<CollectionsPageClient />);
+
+    expect(await screen.findByRole("link", { name: "Browse official plans" }))
+      .toHaveAttribute("href", "/collections/published?ref=/collections");
+  });
+
   it("renders collection cards returned by the API", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       {
