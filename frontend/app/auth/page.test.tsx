@@ -127,6 +127,22 @@ describe("AuthPage", () => {
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toBeInTheDocument();
   });
 
+  it("restates the save-note intent for copy-note signup arrivals", () => {
+    window.history.replaceState({}, "", "/auth?mode=signup&intent=copy-note");
+
+    render(<AuthPage />);
+
+    expect(screen.getByText("Sign up to save this note to your library.")).toBeInTheDocument();
+  });
+
+  it("keeps the generic signup copy when no specific intent is present", () => {
+    window.history.replaceState({}, "", "/auth?mode=signup");
+
+    render(<AuthPage />);
+
+    expect(screen.getByText("Sign up to generate and save Study Packs.")).toBeInTheDocument();
+  });
+
   it("renders the Google auth option without removing email/password login", () => {
     render(<AuthPage />);
 

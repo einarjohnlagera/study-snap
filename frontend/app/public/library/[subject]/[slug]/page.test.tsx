@@ -53,6 +53,12 @@ jest.mock("@/components/notes/public-note-ownership-actions", () => ({
   ),
 }));
 
+jest.mock("@/components/notes/public-note-author-card", () => ({
+  PublicNoteAuthorCard: ({ ownerUserId }: { ownerUserId?: string | null }) => (
+    ownerUserId ? <div>Author card for {ownerUserId}</div> : null
+  ),
+}));
+
 jest.mock("@/components/notes/public-mini-quiz-preview", () => ({
   PublicMiniQuizPreview: ({ quiz, noteId }: { quiz: { question: string }[]; noteId: string }) => (
     <div data-testid="mini-quiz-preview">
@@ -124,6 +130,7 @@ describe("PublicLibrarySeoPage", () => {
 
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
     expect(screen.getByText("Author line for user-2 / studybuddy / regular / other / Science")).toBeInTheDocument();
+    expect(screen.getByText("Author card for user-2")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getAllByText(/Cell structure is fundamental to biology/i).length).toBeGreaterThanOrEqual(1);
   });
@@ -514,6 +521,25 @@ describe("PublicLibrarySeoPage", () => {
     expect(structuredData?.textContent).toContain('"headline":"Cell Structure"');
     expect(structuredData?.textContent).toContain('"articleSection":"Science"');
     expect(structuredData?.textContent).toContain('"keywords":"biology, cells"');
+  });
+
+  it("renders the visible breadcrumb trail and matching BreadcrumbList structured data", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    const { container } = render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(breadcrumb).toHaveTextContent(/Home.*Public Library.*Science.*Cell Structure/);
+    expect(screen.getByRole("link", { name: "Science" })).toHaveAttribute("href", "/public/library/science");
+
+    const structuredData = container.querySelector("#public-note-breadcrumb-structured-data");
+    expect(structuredData?.textContent).toContain('"@type":"BreadcrumbList"');
+    expect(structuredData?.textContent).toContain('"item":"https://notelib.app/public/library/science"');
+    expect(structuredData?.textContent).toContain('"item":"https://notelib.app/public/library/science/cell-structure"');
   });
 
   it("returns SEO metadata for a public note", async () => {
