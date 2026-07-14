@@ -641,6 +641,20 @@ export default function DashboardPage() {
         label: "Create Note",
         icon: "create" as const,
       };
+  const quickReviewCard = (
+    <DashboardActionCard
+      title="Quick Review"
+      description={dashboardProfileType === "PROFESSIONAL"
+        ? "Use Quick Review to reinforce your study material and keep applied knowledge fresh."
+        : "Use Quick Review to reinforce what you just studied and keep recall active."}
+      actionLabel="Start Quick Review"
+      actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
+      actionIcon="quickReview"
+      secondaryActionLabel="Review Recent Note"
+      secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
+      secondaryActionIcon="open"
+    />
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -795,19 +809,17 @@ export default function DashboardPage() {
                 viewerUserId={profile?.id ?? null}
               />
               <DashboardStrongestNotes />
-              <DashboardActionCard
-                title="Quick Review"
-                description={dashboardProfileType === "PROFESSIONAL"
-                  ? "Use Quick Review to reinforce your study material and keep applied knowledge fresh."
-                  : "Use Quick Review to reinforce what you just studied and keep recall active."}
-                actionLabel="Start Quick Review"
-                actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
-                actionIcon="quickReview"
-                secondaryActionLabel="Review Recent Note"
-                secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
-                secondaryActionIcon="open"
-              />
-              <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
+              {hasCompletedSession ? (
+                <>
+                  <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
+                  {quickReviewCard}
+                </>
+              ) : (
+                <>
+                  {quickReviewCard}
+                  <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
+                </>
+              )}
             </>
           ) : null}
 
