@@ -17,6 +17,7 @@ import com.studysnap.backend.dto.GeneratedCompanionContentResponse;
 import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionDetailResponse;
+import com.studysnap.backend.dto.NoteCollectionItemResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.NoteResponse;
@@ -2587,7 +2588,8 @@ class NoteCollectionServiceTest {
         draftNote.setVisibility(NoteVisibility.PUBLIC);
         List<UUID> noteIds = List.of(readyNoteId, draftNoteId);
         when(collectionRepository.findByIdAndVisibility(collectionId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(collection));
-        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(
+        when(collectionRepository.findByParentCollectionIdIn(List.of(collectionId))).thenReturn(List.of());
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(List.of(collectionId))).thenReturn(List.of(
                 buildItem(collectionId, readyNoteId, 0, null),
                 buildItem(collectionId, draftNoteId, 1, null)
         ));
@@ -2599,6 +2601,45 @@ class NoteCollectionServiceTest {
 
         assertThat(result.readyCount()).isEqualTo(1);
         assertThat(result.progress().notesWithStudyPack()).isEqualTo(1);
+        assertThat(result.items()).hasSize(2);
+    }
+
+    @Test
+    void getPublic_rollsUpGoalPreviewItemsAndReadyCountFromChildren() {
+        UUID goalId = UUID.randomUUID();
+        UUID firstChildId = UUID.randomUUID();
+        UUID secondChildId = UUID.randomUUID();
+        UUID readyNoteId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, UUID.randomUUID(), "Public Goal", Instant.now());
+        goal.setVisibility(CollectionVisibility.PUBLIC);
+        NoteCollectionEntity firstChild = buildCollection(firstChildId, goal.getOwnerUserId(), "First Subject", Instant.now());
+        NoteCollectionEntity secondChild = buildCollection(secondChildId, goal.getOwnerUserId(), "Second Subject", Instant.now());
+        firstChild.setParentCollectionId(goalId);
+        secondChild.setParentCollectionId(goalId);
+        NoteEntity readyNote = buildNote(readyNoteId, goal.getOwnerUserId(), NOTE_TITLE_ONE);
+        NoteEntity draftNote = buildNote(draftNoteId, goal.getOwnerUserId(), NOTE_TITLE_TWO);
+        readyNote.setVisibility(NoteVisibility.PUBLIC);
+        draftNote.setVisibility(NoteVisibility.PUBLIC);
+        List<UUID> collectionIds = List.of(goalId, firstChildId, secondChildId);
+        List<UUID> noteIds = List.of(readyNoteId, draftNoteId);
+
+        when(collectionRepository.findByIdAndVisibility(goalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(goal));
+        when(collectionRepository.findByParentCollectionIdIn(List.of(goalId))).thenReturn(List.of(firstChild, secondChild));
+        when(itemRepository.findByCollectionIdInOrderByCollectionIdAscPositionAsc(collectionIds)).thenReturn(List.of(
+                buildItem(firstChildId, readyNoteId, 0, null),
+                buildItem(secondChildId, draftNoteId, 0, null)
+        ));
+        when(noteRepository.findCollectionNoteProjectionsByIdIn(noteIds)).thenReturn(asNoteProjections(readyNote, draftNote));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(noteIds)).thenReturn(asProjections(buildStudyPack(readyNoteId)));
+        when(collectionRepository.countByParentCollectionId(goalId)).thenReturn(2L);
+
+        NoteCollectionDetailResponse result = service.getPublic(goalId);
+
+        assertThat(result.items()).extracting(NoteCollectionItemResponse::noteId)
+                .containsExactly(readyNoteId, draftNoteId);
+        assertThat(result.readyCount()).isEqualTo(1);
+        assertThat(result.progress().totalNotes()).isEqualTo(2);
     }
 
     @Test

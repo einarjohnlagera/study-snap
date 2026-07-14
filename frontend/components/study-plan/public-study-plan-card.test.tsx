@@ -132,7 +132,7 @@ describe("PublicStudyPlanCard", () => {
 
     render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview this plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 3 notes" }));
 
     expect(await screen.findByText("Educational Psychology")).toBeInTheDocument();
     expect(screen.getByText("Assessment Basics")).toBeInTheDocument();
@@ -148,11 +148,64 @@ describe("PublicStudyPlanCard", () => {
 
     render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview this plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 3 notes" }));
 
     expect(await screen.findByText("Couldn’t load this plan preview. Please try again.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start this Collection" })).toBeEnabled();
+  });
+
+  it("caps the preview note list at 5 with a remaining-count line once a plan has 7 or more notes", async () => {
+    const items = Array.from({ length: 7 }, (_, index) => ({
+      noteId: `note-${index + 1}`,
+      title: `Note ${index + 1}`,
+      subject: "Professional Education",
+      label: null,
+      courseProgram: "LET",
+    }));
+    (getPublicStudyPlanDetail as jest.Mock).mockResolvedValue({
+      ...leafPlan,
+      itemCount: 7,
+      estimatedStudyHours: null,
+      readyCount: 3,
+      progress: { totalNotes: 7, notesWithStudyPack: 3, notesPracticed: 0 },
+      items,
+    });
+
+    render(<PublicStudyPlanCard plan={{ ...leafPlan, itemCount: 7 }} adoptedCollection={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 7 notes" }));
+
+    expect(await screen.findByText("Note 1")).toBeInTheDocument();
+    expect(screen.getByText("Note 5")).toBeInTheDocument();
+    expect(screen.queryByText("Note 6")).not.toBeInTheDocument();
+    expect(screen.queryByText("Note 7")).not.toBeInTheDocument();
+    expect(screen.getByText("+ 2 more notes")).toBeInTheDocument();
+  });
+
+  it("shows all notes with no remaining-count line when a plan has exactly 6 notes", async () => {
+    const items = Array.from({ length: 6 }, (_, index) => ({
+      noteId: `note-${index + 1}`,
+      title: `Note ${index + 1}`,
+      subject: "Professional Education",
+      label: null,
+      courseProgram: "LET",
+    }));
+    (getPublicStudyPlanDetail as jest.Mock).mockResolvedValue({
+      ...leafPlan,
+      itemCount: 6,
+      estimatedStudyHours: null,
+      readyCount: 2,
+      progress: { totalNotes: 6, notesWithStudyPack: 2, notesPracticed: 0 },
+      items,
+    });
+
+    render(<PublicStudyPlanCard plan={{ ...leafPlan, itemCount: 6 }} adoptedCollection={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 6 notes" }));
+
+    expect(await screen.findByText("Note 6")).toBeInTheDocument();
+    expect(screen.queryByText(/more notes/)).not.toBeInTheDocument();
   });
 
   it("states when the public preview has no available notes", async () => {
@@ -166,7 +219,7 @@ describe("PublicStudyPlanCard", () => {
 
     render(<PublicStudyPlanCard plan={leafPlan} adoptedCollection={null} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview this plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 3 notes" }));
 
     expect(await screen.findByText("This plan does not have any available notes yet.")).toBeInTheDocument();
     expect(screen.getByText("0 of 0 notes practice-ready")).toBeInTheDocument();
