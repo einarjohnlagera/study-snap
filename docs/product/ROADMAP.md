@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing` is in progress (on `releases/v0.46.0`, cut from `main` **before** `v0.45.2` existed, now rebased onto latest `main`) — two Fable-sourced new-capability ideas (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`, Ideas 1 and 5): a weekly due-concepts email digest as a new type on the existing `RetentionEmailScheduler`, and an exam-date pacing plan scheduling the learner's owned content only (explicitly not Smart Review Planning). See `RELEASES.md`.
+`v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing` is the current released version (on `releases/v0.46.0`, cut from `main` **before** `v0.45.2` existed, now rebased onto latest `main`) — two Fable-sourced new-capability ideas (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`, Ideas 1 and 5): a weekly due-concepts email digest as a new type on the existing `RetentionEmailScheduler`, and an exam-date pacing plan scheduling the learner's owned content only (explicitly not Smart Review Planning). Scope broadened mid-release with a session-completion pacing echo and a 4-item app-feel polish batch (a 5th, a sticky search/filter toolbar, shipped then was reverted the same day after a user-reported mobile regression). See `RELEASES.md`.
 
 `v0.45.2 - Public Plan Preview Rollup Fix` is the previous released version (on `releases/v0.45.2`) — a fix to the one remaining gap in v0.45.1's Goal-collection rollup fix: the plan-preview panel's `getPublic()` endpoint, a third code path v0.45.1 never touched, plus a note-list cap (the rollup fix now surfaces every note, and some production plans have 40-52) so the preview panel stays bounded. No new backend entities, migrations, or pricing/quota changes. See `RELEASES.md`.
 
@@ -26,7 +26,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
-## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing (in progress, base branch `releases/v0.46.0`)
+## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing (Released, base branch `releases/v0.46.0`)
 
 Origin: Ideas 1 and 5 from the "New Capability Ideation" Fable session (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`), the two ranked highest of three recommended for a real scoping pass. Both are retention-themed, continuing v0.44.0's data-driven thesis that retention (not top-of-funnel) is the proven constraint. Full scope in `RELEASES.md`.
 

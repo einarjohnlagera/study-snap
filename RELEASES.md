@@ -2,7 +2,7 @@
 
 ## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: deepen retention past v0.44.0's conversion-audit-driven fixes with two Fable-sourced new-capability ideas from the "New Capability Ideation" session (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`) — an out-of-app due-concepts email digest and an owned-content exam-date pacing plan. Both reuse existing infrastructure rather than build new pipelines.
 
