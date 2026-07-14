@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
-import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
+import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject } from "@/lib/server-public-notes";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -12,7 +12,14 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNoteBySeoPath: jest.fn(),
+  getServerPublicNotesBySubject: jest.fn().mockResolvedValue([]),
   getServerPublicNotesBySubjectSlug: jest.fn().mockResolvedValue([]),
+}));
+
+jest.mock("@/components/notes/shared-note-card", () => ({
+  SharedNoteCard: ({ title }: { title: string | null }) => (
+    <article data-testid="shared-note-card">{title}</article>
+  ),
 }));
 
 jest.mock("@/components/notes/public-note-ownership-actions", () => ({
@@ -92,6 +99,7 @@ const baseNote = {
     },
   ],
   authorDisplayName: "studybuddy",
+  authorUsername: "studybuddy",
   isOfficialAuthor: false,
   isCurrentUser: false,
   updatedAt: "2026-03-23T09:00:00Z",
@@ -101,6 +109,8 @@ describe("PublicLibrarySeoPage", () => {
   beforeEach(() => {
     notFoundMock.mockClear();
     (getServerPublicNoteBySeoPath as jest.Mock).mockReset();
+    (getServerPublicNotesBySubject as jest.Mock).mockReset();
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([]);
   });
 
   it("renders title, author, and summary without requiring any interaction", async () => {
@@ -350,6 +360,105 @@ describe("PublicLibrarySeoPage", () => {
     expect(summaryEl).toBeInTheDocument();
     // Ownership actions must not be inside the header element
     expect(headerEl?.contains(ownershipEl)).toBe(false);
+  });
+
+  it("renders up to three shared note cards for related subject notes, excluding the current note", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, contentPreview: "Current note preview", summaryPreview: "Current note summary" },
+      { ...baseNote, id: "note-2", title: "Plant Cells", contentPreview: "Plant cell preview", summaryPreview: "Plant cell summary" },
+      { ...baseNote, id: "note-3", title: "Animal Cells", contentPreview: "Animal cell preview", summaryPreview: "Animal cell summary" },
+      { ...baseNote, id: "note-4", title: "Cell Division", contentPreview: "Cell division preview", summaryPreview: "Cell division summary" },
+      { ...baseNote, id: "note-5", title: "DNA Basics", contentPreview: "DNA preview", summaryPreview: "DNA summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "More in Science" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("shared-note-card")).toHaveLength(3);
+    expect(screen.getByText("Plant Cells")).toBeInTheDocument();
+    expect(screen.getByText("Animal Cells")).toBeInTheDocument();
+    expect(screen.getByText("Cell Division")).toBeInTheDocument();
+    expect(screen.queryByText("Cell Structure", { selector: "article" })).not.toBeInTheDocument();
+    expect(getServerPublicNotesBySubject).toHaveBeenCalledWith("Science");
+  });
+
+  it("omits the subject section when no related subject notes are available", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: "More in Science" })).not.toBeInTheDocument();
+  });
+
+  it("omits the subject section when only one related note is available", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells", contentPreview: "Plant cell preview", summaryPreview: "Plant cell summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: "More in Science" })).not.toBeInTheDocument();
+  });
+
+  it("links the subject section to the canonical subject landing page", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells", contentPreview: "Plant cell preview", summaryPreview: "Plant cell summary" },
+      { ...baseNote, id: "note-3", title: "Animal Cells", contentPreview: "Animal cell preview", summaryPreview: "Animal cell summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "See all in Science →" })).toHaveAttribute("href", "/public/library/science");
+  });
+
+  it("renders the creator-filtered related-notes link when author fields are available", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Browse studybuddy's public notes →" })).toHaveAttribute(
+      "href",
+      "/public/library?creator=studybuddy",
+    );
+  });
+
+  it("omits the creator-filtered related-notes link when author fields are unavailable", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      authorDisplayName: null,
+      authorUsername: null,
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: /More from/i })).not.toBeInTheDocument();
   });
 
   it("derives the hook from note content before using the generic fallback", async () => {
