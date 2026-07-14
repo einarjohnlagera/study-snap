@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing
+
+**Status: In Progress**
+
+Theme: deepen retention past v0.44.0's conversion-audit-driven fixes with two Fable-sourced new-capability ideas from the "New Capability Ideation" session (`docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`) — an out-of-app due-concepts email digest and an owned-content exam-date pacing plan. Both reuse existing infrastructure rather than build new pipelines.
+
+### Planned Scope
+
+- **Weekly Due-Concepts Email Digest (backend).** A new `DUE_CONCEPTS_DIGEST` email type on the existing `RetentionEmailScheduler`/`EmailService` system (alongside `INACTIVITY`, `WEAK_CONCEPT`, `WEEKLY_SUMMARY`), triggered when a user's `ConceptHealthService` due/stale concept count crosses a threshold, deep-linking to TodayFocus. Reuses the existing `email_log` dedup/cooldown model and Email Preferences opt-in/opt-out flag pattern — no new scheduler, no new delivery integration. New `AnalyticsEventType` values for open/click tracking, added before firing per convention.
+- **Exam Date Countdown & Paced Review Plan (backend + frontend).** Learner sets a target exam date via the existing courseProgram config-map combobox (never freetext) plus a date picker. A new pacing-calculator service spreads `ConceptHealthService`'s due/stale concepts across remaining days, surfaced as a countdown + daily pacing target on the Dashboard and inside Review Set detail. Schedules **owned content only** — no matching, no auto-assembly, no generation; if a subject has no owned content, the plan reports the gap rather than filling it (the line that keeps this out of Smart Review Planning's territory, which stays paused and unrelated). New infrastructure: a target-exam-date field (profile-level) and the pacing-calculator service — no new content pipeline, no LLM calls.
+
+Anti-drift: no 6th quiz mode; no auto-assembled or gap-filling review plan (owned content only, explicitly not Smart Review Planning); no freetext exam identity — config-map combobox only; no per-learner runtime personalization beyond the existing PRO tier design; no pricing, paywall, or quota numbers introduced by this release (tier *direction* only, per Fable's own guardrails). Full source material and rejected alternatives in `docs/claude-prompt/new-capability-out/01-new-capability-ideation.md`.
+
+### Shipped
+
+_(nothing yet)_
+
+---
+
 ## v0.45.2 - Public Plan Preview Rollup Fix
 
 **Status: Released**
