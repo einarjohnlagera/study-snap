@@ -89,7 +89,7 @@ When a visitor completes the visible Quick Check, the page shows an inline outco
 
 Post-copy landing must match the CTA's verb. `Quiz yourself on this note` (a quiz promise) auto-launches Quick Review on the copy (`redirectTarget="quick-review"` → `?copied=1&generate=1&startQuickReview=1`). `Add to Library` is the copy-promise secondary: it lands on the **copied note's detail page** with the available Study Pack rather than dropping the viewer straight into a quiz. Do not route copy-verb CTAs to `quick-review`.
 
-Related discovery stays supplementary: the public detail page shows subject-related notes when the existing subject query returns enough notes, links onward to the subject landing page, and offers a `More from {Display Name}` link using the existing creator-filtered Public Library URL. Missing subject or creator results are simply omitted.
+Related discovery stays supplementary: the public detail page offers a `More from {Display Name}` link using the existing creator-filtered Public Library URL, omitted when author fields are unavailable. A same-subject "More in {Subject}" card module (reusing the existing subject query and shared note-card component, linking onward to the subject landing page) is planned but not yet shipped — do not describe it as live until it exists.
 
 Copy-first generation rule:
 

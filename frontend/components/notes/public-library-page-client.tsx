@@ -2070,6 +2070,7 @@ export function PublicLibraryPageClient() {
               onClick={() => {
                 setSelectedTags(tagDraft);
                 setTagsFilterDraft(tagDraft);
+                setLastChangedFilter("tags");
                 if (tagDraft.length > 0) {
                   setRecentTags((previous) => updateRecentValues(previous, [...tagDraft].reverse()));
                 }

@@ -122,7 +122,7 @@ Rules:
 
 ## Public Note Detail
 
-Public note detail is a separate public/read-only surface. For non-owners, it keeps one quiz-first primary CTA (`Quiz yourself on this note`) plus the secondary `Add to Library` and `Share this note` actions; it does not present editable-draft copying as a competing button. Related discovery is supplementary: same-subject notes link onward to the subject landing page and the author link uses the canonical creator-filtered Public Library URL; unavailable subsections are omitted silently.
+Public note detail is a separate public/read-only surface. For non-owners, it keeps one quiz-first primary CTA (`Quiz yourself on this note`) plus the secondary `Add to Library` and `Share this note` actions; it does not present editable-draft copying as a competing button. Related discovery today is a `More from {Display Name}` link using the canonical creator-filtered Public Library URL, omitted when author fields are unavailable — a same-subject "More in {Subject}" card module is planned but not yet shipped; do not describe it as live until it exists.
 
 - canonical route: `/public/library/{subject}/{slug}`
 - public note detail should keep the same reading flow emphasis (`Summary` / `Key Concepts` / `Quick Check` / `Full Notes`) without turning the page into a quiz-first screen

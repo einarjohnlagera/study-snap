@@ -926,7 +926,9 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    expect(await screen.findByText("You have 1 Study Pack left this month on the Free plan.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("You’re making progress this month — 1 Study Pack still ready to use on the Free plan."),
+    ).toBeInTheDocument();
   });
 
   it("saves a draft note before starting checkout from the Study Pack paywall", async () => {

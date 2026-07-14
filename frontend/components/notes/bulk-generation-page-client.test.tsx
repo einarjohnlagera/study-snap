@@ -241,7 +241,9 @@ describe("BulkGenerationPageClient", () => {
     await waitFor(() => expect(getMe).toHaveBeenCalled());
 
     // Near-limit (<= 2) shows the amber note-generation banner.
-    expect(await screen.findByText(/You have 2 note generations left this month/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/2 note generations still ready to use/i),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });
     fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
