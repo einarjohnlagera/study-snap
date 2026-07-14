@@ -10,6 +10,8 @@ export type LearnGuidePracticeQuestion = {
 
 export type LearnGuideCategory = "students" | "board-exams" | "teachers" | "professionals" | "study-tips";
 
+export const LEARN_GUIDE_AUTH_INTENT = "learn";
+
 export type LearnGuide = {
   slug: string;
   category: LearnGuideCategory;

@@ -37,6 +37,7 @@ import {
   getCopyIntentCookie,
   PUBLIC_NOTE_COPY_AUTH_INTENT,
 } from "@/lib/public-note-copy";
+import { LEARN_GUIDE_AUTH_INTENT } from "@/lib/learn-guides";
 import { setPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
@@ -83,9 +84,14 @@ function AuthPageContent() {
     if (mode === "login") {
       return "Continue to your study workspace.";
     }
-    return searchParams.get("intent") === PUBLIC_NOTE_COPY_AUTH_INTENT
-      ? "Sign up to save this note to your library."
-      : "Sign up to generate and save Study Packs.";
+    const authIntents = searchParams.getAll("intent");
+    if (authIntents.includes(PUBLIC_NOTE_COPY_AUTH_INTENT)) {
+      return "Sign up to save this note to your library.";
+    }
+    if (authIntents.includes(LEARN_GUIDE_AUTH_INTENT)) {
+      return "Sign up to keep learning with more free study guides.";
+    }
+    return "Sign up to generate and save Study Packs.";
   }, [mode, searchParams]);
   const authNotice = useMemo(() => {
     switch (loginReason) {

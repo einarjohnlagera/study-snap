@@ -21,6 +21,6 @@ describe("LearnArticleLayout", () => {
     expect(screen.getByText("Why should one note focus on one lesson or topic?")).toBeInTheDocument();
     expect(screen.getAllByText("Sample answer")).toHaveLength(3);
     expect(screen.getByText("Want to turn your own notes into summaries and quizzes?")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Create Free Account" })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: "Create Free Account" })).toHaveAttribute("href", "/signup?intent=learn");
   });
 });
