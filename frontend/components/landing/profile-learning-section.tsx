@@ -244,6 +244,13 @@ export function ProfileLearningSection() {
               </div>
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium">
                 <Link
+                  href="/how-it-works"
+                  className="inline-flex items-center gap-1.5 text-sky-700 transition hover:text-sky-800 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
+                >
+                  See the full walkthrough
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
                   href={buildLearnCategoryPath(selectedProfile.learnCategory)}
                   className="inline-flex items-center gap-1.5 text-sky-700 transition hover:text-sky-800 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
                 >

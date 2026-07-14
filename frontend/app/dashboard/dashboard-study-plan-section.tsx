@@ -130,8 +130,25 @@ export function DashboardStudyPlanSection({
   const usingPrimary = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch !== null;
   const courseProgramPending = !usingPrimary && (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram);
 
-  if (primaryPending || courseProgramPending) {
+  if (primaryPending || (courseProgramPending && normalizedCourseProgram !== null)) {
     return null;
+  }
+
+  if (!usingPrimary && normalizedCourseProgram === null) {
+    return (
+      <section className="space-y-3 sm:space-y-4">
+        <h2 className="text-lg font-semibold sm:text-xl">Recommended {labels.singular}</h2>
+        <Card className="space-y-3 border-dashed p-4 sm:p-6">
+          <CardTitle>Set your course or program to find official {labels.plural.toLowerCase()}</CardTitle>
+          <CardDescription>
+            We use your course or program to match curated plans to your current track.
+          </CardDescription>
+          <Link href="/profile#learning-profile" className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400">
+            Set course or program
+          </Link>
+        </Card>
+      </section>
+    );
   }
 
   const displayPlan = usingPrimary ? primaryMatch : plan;
@@ -216,8 +233,8 @@ export function DashboardStudyPlanSection({
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>{displayPlan.title}</CardTitle>
             {continuePlan ? (
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                In your library
+              <span className="rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground/65">
+                Adopted
               </span>
             ) : null}
           </div>

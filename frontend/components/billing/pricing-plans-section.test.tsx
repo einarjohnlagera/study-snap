@@ -40,9 +40,10 @@ describe("PricingPlansSection", () => {
       },
     });
 
-    render(<PricingPlansSection showHeading={false} />);
+    render(<PricingPlansSection />);
 
     expect(screen.getByText("₱599 / 3 months")).toBeInTheDocument();
+    expect(screen.getByText("Prices shown for your detected region (Philippines).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get Pro — ₱599 / 3 months" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get Plus" })).toHaveAttribute("data-source", "pricing_plans_section_plus_monthly");
     expect(screen.getByRole("button", { name: "Get Pro — ₱599 / 3 months" })).toHaveAttribute("data-source", "pricing_plans_section_pro_exam_cycle");
@@ -71,9 +72,10 @@ describe("PricingPlansSection", () => {
       },
     });
 
-    render(<PricingPlansSection showHeading={false} />);
+    render(<PricingPlansSection />);
 
     expect(screen.queryByRole("button", { name: /\/ 3 months/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/3 months/)).not.toBeInTheDocument();
+    expect(screen.getByText("Prices shown for your detected region (all other regions).")).toBeInTheDocument();
   });
 });
