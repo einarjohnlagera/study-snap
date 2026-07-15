@@ -53,7 +53,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Parent Readiness Digest (Idea 4) | same | Conditional | H1 read positive + explicit product decision (email-only vs. dashboard shape) | 2026-07-15 |
 | Offline Study Pack access (Idea 9) | same | Held — one leg down | heavy mobile (✅ confirmed 2026-07-15, ~75%) AND (~~PDF export volume~~ ruled out, essentially unused, 1 export ever OR offline-fallback hit rate, not instrumented OR interview signal, not yet run) | 2026-07-15 |
 | Unified Next-Step Resolver | `app-shape-session-plan.md` | Merged into H5 | ships only alongside H5, not standalone | 2026-07-15 |
-| Mobile bottom tab bar | same | **Kicked off — v0.50.0, in progress** | device-mix pull shows heavy mobile usage — confirmed, ~75% mobile by distinct users | 2026-07-15 |
+| Mobile bottom tab bar | same | **Shipped — v0.50.0** | device-mix pull shows heavy mobile usage — confirmed, ~75% mobile by distinct users | 2026-07-15 |
 | App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
 | App Shape Polish stragglers (sticky toolbar re-attempt, Result-Screen Companion Bridge, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
 | Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |

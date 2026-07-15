@@ -8,13 +8,15 @@ Theme: add a persistent mobile bottom tab bar (Dashboard / Library / Review Sets
 
 ### Planned Scope
 
-- **Mobile bottom tab bar (frontend).** Exactly 4 tabs (Dashboard, Library, Review Sets, Public Library), shown only below the `md` breakpoint, icon + text per the Mobile Button Rule. Coordinates with `AddToHomeScreenNudge` and the floating "Send Feedback" launcher (both real, currently-shipped bottom-of-viewport elements), and is hidden everywhere `isExamFocusActive` or `StickyAssessmentFooter` currently claim the bottom of the viewport, so no two fixed-bottom elements ever stack.
+- **Mobile bottom tab bar (frontend).** Exactly 4 tabs (Dashboard, Library, Review Sets, Public Library), shown only below the `md` breakpoint, icon + text per the Mobile Button Rule. Coordinates with `AddToHomeScreenNudge`; the feedback control is mounted as a header icon rather than a floating launcher. The tab bar is hidden whenever exam focus or an active assessment claims the bottom of the viewport, so no two fixed-bottom elements stack.
 
 Anti-drift: no change to desktop sidebar or mobile hamburger drawer contents/behavior; no 5th tab (Progress stays drawer/sidebar-only); no new global safe-area CSS variable (inline Tailwind arbitrary values only, matching existing usage); no coordination work for the "sticky Continue bar" from the original Fable proposal — it never shipped and isn't real code.
 
 ### Shipped
 
-_(nothing yet)_
+- **Persistent mobile bottom navigation (frontend).** Authenticated mobile users now have icon-and-text tabs for Dashboard, Library, profile-aware collection navigation, and Public Library; desktop sidebar and the mobile hamburger drawer remain unchanged. The bar is suppressed for exam-focus and active assessment/review screens, while the home-screen-install nudge moves above its safe-area-aware height. The live feedback control was confirmed to be header-mounted, not a floating bottom launcher.
+
+Known limitations: `AddToHomeScreenNudge` (mounted outside `ExamFocusProvider` in the root layout) applies its raised offset unconditionally rather than only when the tab bar is actually rendered — on routes without the tab bar (public/marketing pages, active quiz sessions) it floats with a small unnecessary gap. Cosmetic only, no overlap. `docs/testing/mobile-ui.md` still describes a "floating Send Feedback launcher" that this audit confirmed is actually a header-mounted icon — pre-existing drift, not introduced here, left for a follow-up doc pass.
 
 ## v0.49.0 - Progress Page: Private Library Links
 

@@ -18,6 +18,7 @@ import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -939,6 +940,7 @@ export default function QuickReviewPage() {
   }, [router]);
 
   const quizSessionActive = Boolean(note && currentSessionId && !isComplete && totalQuestions > 0 && !error);
+  useBottomViewportClaim(quizSessionActive);
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: quizSessionActive,
     fallbackHref: noteDetailHref,
