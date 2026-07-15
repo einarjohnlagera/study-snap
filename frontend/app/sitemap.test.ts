@@ -94,6 +94,26 @@ describe("sitemap metadata route", () => {
         priority: 0.9,
       },
       {
+        url: "https://notelib.app/exam",
+        changeFrequency: "weekly",
+        priority: 0.9,
+      },
+      {
+        url: "https://notelib.app/exam/ale",
+        changeFrequency: "daily",
+        priority: 0.9,
+      },
+      {
+        url: "https://notelib.app/exam/pnle",
+        changeFrequency: "daily",
+        priority: 0.9,
+      },
+      {
+        url: "https://notelib.app/exam/let",
+        changeFrequency: "daily",
+        priority: 0.9,
+      },
+      {
         url: "https://notelib.app/public/library/accounting",
         lastModified: "2026-03-22T08:30:00Z",
         changeFrequency: "daily",
