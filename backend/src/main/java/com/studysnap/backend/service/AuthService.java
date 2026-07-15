@@ -145,6 +145,15 @@ public class AuthService {
         user.setUsername(generateAvailableUsername(user.getDisplayName(), user.getFirstName(), email));
         user.setPublicProfileVisible(true);
         user.setCountryCode(null);
+        applyFirstTouchAttribution(
+                user,
+                request.utmSource(),
+                request.utmMedium(),
+                request.utmCampaign(),
+                request.utmContent(),
+                request.utmTerm(),
+                request.referrer()
+        );
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(true);
@@ -213,7 +222,7 @@ public class AuthService {
                     provider.setUpdatedAt(now);
                     return findUserOrThrow(provider.getUserId());
                 })
-                .orElseGet(() -> findOrCreateGoogleUser(googleIdentity, now));
+                .orElseGet(() -> findOrCreateGoogleUser(googleIdentity, now, request));
 
         if (user.getStatus() == UserStatus.PENDING_DELETION) {
             throw new AccountPendingDeletionException();
@@ -807,11 +816,12 @@ public class AuthService {
 
     private UserEntity findOrCreateGoogleUser(
             GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity,
-            OffsetDateTime now
+            OffsetDateTime now,
+            GoogleAuthRequest request
     ) {
         return userRepository.findByEmailIgnoreCase(googleIdentity.email())
                 .map(existing -> linkGoogleProvider(existing, googleIdentity, now, false))
-                .orElseGet(() -> createGoogleUser(googleIdentity, now));
+                .orElseGet(() -> createGoogleUser(googleIdentity, now, request));
     }
 
     private UserEntity resolveExistingGoogleUser(
@@ -869,7 +879,11 @@ public class AuthService {
         return user;
     }
 
-    private UserEntity createGoogleUser(GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity, OffsetDateTime now) {
+    private UserEntity createGoogleUser(
+            GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity,
+            OffsetDateTime now,
+            GoogleAuthRequest request
+    ) {
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setEmail(googleIdentity.email());
@@ -880,6 +894,15 @@ public class AuthService {
         user.setUsername(generateAvailableUsername(user.getDisplayName(), user.getFirstName(), googleIdentity.email()));
         user.setPublicProfileVisible(true);
         user.setCountryCode(null);
+        applyFirstTouchAttribution(
+                user,
+                request.utmSource(),
+                request.utmMedium(),
+                request.utmCampaign(),
+                request.utmContent(),
+                request.utmTerm(),
+                request.referrer()
+        );
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(true);
@@ -921,6 +944,23 @@ public class AuthService {
             return name.split("\\s+", 2)[0];
         }
         return googleIdentity.email().split("@", 2)[0];
+    }
+
+    private void applyFirstTouchAttribution(
+            UserEntity user,
+            String utmSource,
+            String utmMedium,
+            String utmCampaign,
+            String utmContent,
+            String utmTerm,
+            String referrer
+    ) {
+        user.setUtmSource(normalizeOptionalText(utmSource));
+        user.setUtmMedium(normalizeOptionalText(utmMedium));
+        user.setUtmCampaign(normalizeOptionalText(utmCampaign));
+        user.setUtmContent(normalizeOptionalText(utmContent));
+        user.setUtmTerm(normalizeOptionalText(utmTerm));
+        user.setReferrer(normalizeOptionalText(referrer));
     }
 
     private SignInMethodsResponse buildSignInMethodsResponse(UserEntity user) {

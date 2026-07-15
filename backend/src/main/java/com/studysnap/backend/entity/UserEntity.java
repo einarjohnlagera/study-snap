@@ -73,6 +73,24 @@ public class UserEntity {
     @Column(name = "country_code", length = 8)
     private String countryCode;
 
+    @Column(name = "utm_source", length = 255)
+    private String utmSource;
+
+    @Column(name = "utm_medium", length = 255)
+    private String utmMedium;
+
+    @Column(name = "utm_campaign", length = 255)
+    private String utmCampaign;
+
+    @Column(name = "utm_content", length = 255)
+    private String utmContent;
+
+    @Column(name = "utm_term", length = 255)
+    private String utmTerm;
+
+    @Column(name = "referrer", length = 2048)
+    private String referrer;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "profile_type")
     private ProfileType profileType;

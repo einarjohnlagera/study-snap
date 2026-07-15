@@ -18,6 +18,7 @@ Anti-drift: no change to desktop sidebar or mobile hamburger drawer contents/beh
 ### Shipped
 
 - **Persistent mobile bottom navigation (frontend).** Authenticated mobile users now have icon-and-text tabs for Dashboard, Library, profile-aware collection navigation, and Public Library; desktop sidebar and the mobile hamburger drawer remain unchanged. The bar is suppressed for exam-focus and active assessment/review screens, while the home-screen-install nudge moves above its safe-area-aware height. The live feedback control was confirmed to be header-mounted, not a floating bottom launcher.
+- **Retention-diagnosis collection points (backend + frontend).** New users now retain first-touch UTM/referrer fields from either signup path without later-login overwrites; the service-worker fallback records a best-effort anonymous `OFFLINE_FALLBACK_SERVED` event; and `/collections/published` emits `PUBLISHED_PLANS_VIEWED` once per view. These events are collection-only and have no new reporting surface yet.
 
 Known limitations: `AddToHomeScreenNudge` (mounted outside `ExamFocusProvider` in the root layout) applies its raised offset unconditionally rather than only when the tab bar is actually rendered — on routes without the tab bar (public/marketing pages, active quiz sessions) it floats with a small unnecessary gap. Cosmetic only, no overlap. `docs/testing/mobile-ui.md` still describes a "floating Send Feedback launcher" that this audit confirmed is actually a header-mounted icon — pre-existing drift, not introduced here, left for a follow-up doc pass.
 

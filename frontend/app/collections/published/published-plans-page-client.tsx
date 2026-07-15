@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { BackLink } from "@/components/ui/back-link";
+import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { PublicStudyPlanCard } from "@/components/study-plan/public-study-plan-card";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
@@ -135,6 +136,7 @@ export function PublishedPlansPageClient() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AnalyticsPageViewTracker eventType="PUBLISHED_PLANS_VIEWED" />
       <BackLink href={backLink.href} label={backLink.label} />
 
       <PageHeader

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
-import { ApiRequestError, copyNoteOnSignup, getMyPlan, login, loginWithGoogle, reactivateAccount } from "@/lib/api";
+import { ApiRequestError, copyNoteOnSignup, getMyPlan, login, loginWithGoogle, reactivateAccount, signup } from "@/lib/api";
 import { hasPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 
 const routerMock = {
@@ -8,6 +8,7 @@ const routerMock = {
   replace: jest.fn(),
   refresh: jest.fn(),
 };
+const GOOGLE_CLIENT_ID_ENV_KEY = "NEXT_PUBLIC_GOOGLE_CLIENT_ID";
 
 let currentAuthUser: Record<string, unknown> | null = null;
 const setAuthUserMock = jest.fn((user: Record<string, unknown>) => {
@@ -37,7 +38,7 @@ jest.mock("@/components/auth/google-auth-button", () => ({
   }) => (
     <button
       type="button"
-      disabled={disabled || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      disabled={disabled || !process.env[GOOGLE_CLIENT_ID_ENV_KEY]}
       onClick={() => void onCredential("google-code-1")}
     >
       {label}
@@ -102,6 +103,7 @@ describe("AuthPage", () => {
     routerMock.replace.mockReset();
     routerMock.refresh.mockReset();
     (login as jest.Mock).mockReset();
+    (signup as jest.Mock).mockReset();
     (loginWithGoogle as jest.Mock).mockReset();
     (reactivateAccount as jest.Mock).mockReset();
     (copyNoteOnSignup as jest.Mock).mockReset();
@@ -167,6 +169,64 @@ describe("AuthPage", () => {
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
   });
 
+  it("includes captured first-touch attribution in an email/password signup", async () => {
+    window.sessionStorage.setItem("notelib-first-touch-attribution", JSON.stringify({
+      utmSource: "instagram",
+      utmMedium: "paid",
+      utmCampaign: "board-review",
+      referrer: "https://example.com/campaign",
+    }));
+    (signup as jest.Mock).mockResolvedValue(verifiedAuthUser);
+
+    const { container } = render(<AuthPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+    fireEvent.change(screen.getByLabelText("First Name"), { target: { value: "Note" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "note@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(signup).toHaveBeenCalledWith(expect.objectContaining({
+        utmSource: "instagram",
+        utmMedium: "paid",
+        utmCampaign: "board-review",
+        referrer: "https://example.com/campaign",
+      }));
+    });
+  });
+
+  it("includes captured first-touch attribution in a Google signup", async () => {
+    const originalClientId = process.env[GOOGLE_CLIENT_ID_ENV_KEY];
+    process.env[GOOGLE_CLIENT_ID_ENV_KEY] = "test-google-client-id";
+    window.sessionStorage.setItem("notelib-first-touch-attribution", JSON.stringify({
+      utmSource: "instagram",
+      utmCampaign: "board-review",
+      referrer: "https://example.com/campaign",
+    }));
+    (loginWithGoogle as jest.Mock).mockResolvedValue(verifiedAuthUser);
+
+    try {
+      render(<AuthPage />);
+      fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+      await waitFor(() => {
+        expect(loginWithGoogle).toHaveBeenCalledWith({
+          code: "google-code-1",
+          keepSignedIn: false,
+          utmSource: "instagram",
+          utmCampaign: "board-review",
+          referrer: "https://example.com/campaign",
+        });
+      });
+    } finally {
+      if (originalClientId === undefined) {
+        delete process.env[GOOGLE_CLIENT_ID_ENV_KEY];
+      } else {
+        process.env[GOOGLE_CLIENT_ID_ENV_KEY] = originalClientId;
+      }
+    }
+  });
+
   it("persists exam intent from the auth query for signup continuation", async () => {
     window.history.replaceState({}, "", "/auth?mode=signup&intent=exam&exam=ale");
 
@@ -209,8 +269,8 @@ describe("AuthPage", () => {
   });
 
   it("copies the intended public note after Google signup and marks lightweight profile completion as pending", async () => {
-    const originalClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = "test-google-client-id";
+    const originalClientId = process.env[GOOGLE_CLIENT_ID_ENV_KEY];
+    process.env[GOOGLE_CLIENT_ID_ENV_KEY] = "test-google-client-id";
     try {
       document.cookie = "notelib-copy-intent=public-note-1; path=/; max-age=1800; SameSite=Strict";
       (loginWithGoogle as jest.Mock).mockResolvedValue({
@@ -231,7 +291,11 @@ describe("AuthPage", () => {
       expect(hasPendingLightweightProfileCompletion("user-google-1")).toBe(true);
       expect(document.cookie).not.toContain("notelib-copy-intent=");
     } finally {
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = originalClientId;
+      if (originalClientId === undefined) {
+        delete process.env[GOOGLE_CLIENT_ID_ENV_KEY];
+      } else {
+        process.env[GOOGLE_CLIENT_ID_ENV_KEY] = originalClientId;
+      }
     }
   });
 

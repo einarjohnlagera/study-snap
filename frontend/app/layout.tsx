@@ -6,6 +6,7 @@ import { ThemePreferenceSync } from "@/components/theme-preference-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
 import { AppShellTitleProvider } from "@/components/app-shell-title-context";
+import { FirstTouchAttributionCapture } from "@/components/analytics/first-touch-attribution-capture";
 import { ExamFocusProvider } from "@/components/exam-mode/exam-focus-context";
 import { RouteProgressProvider } from "@/components/navigation/route-progress-provider";
 import { AddToHomeScreenNudge } from "@/components/pwa/add-to-home-screen-nudge";
@@ -73,6 +74,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >
         <ServiceWorkerRegistration />
+        <FirstTouchAttributionCapture />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -42,6 +42,7 @@ import { setPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
 import { suggestEmailCorrection } from "@/lib/email-typo-suggestion";
+import { getFirstTouchAttribution } from "@/lib/first-touch-attribution";
 
 type Mode = "login" | "signup";
 type PendingDeletionCredential = { kind: "password" } | { kind: "google"; code: string };
@@ -230,6 +231,7 @@ function AuthPageContent() {
               email,
               password,
               displayName: displayName.trim().length > 0 ? displayName : undefined,
+              ...getFirstTouchAttribution(),
             })
           : await login({ email, password, keepSignedIn });
       await completeAuth(authUser, { clearCopyIntent: mode === "login" });
@@ -252,7 +254,7 @@ function AuthPageContent() {
     setPendingDeletionCredential(null);
     try {
       suppressAuthenticatedRedirectRef.current = true;
-      const authUser = await loginWithGoogle({ code, keepSignedIn });
+      const authUser = await loginWithGoogle({ code, keepSignedIn, ...getFirstTouchAttribution() });
       const nextAuthUser = await hydrateAuthUser(authUser);
       const copyIntentNoteId = getCopyIntentCookie();
       const isNewGoogleSignup = nextAuthUser.onboardingCompletedAt === null;
