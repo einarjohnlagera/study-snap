@@ -9,6 +9,7 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -44,6 +45,7 @@ class QuickReviewConceptHealthIntegrationTest {
 
     private QuickReviewSessionRepository quickReviewSessionRepository;
     private StudyPackRepository studyPackRepository;
+    private ActivityEventRepository activityEventRepository;
     private SubscriptionService subscriptionService;
     private QuickReviewSessionService quickReviewSessionService;
     private ConceptHealthService conceptHealthService;
@@ -68,6 +70,7 @@ class QuickReviewConceptHealthIntegrationTest {
 
         quickReviewSessionRepository = mock(QuickReviewSessionRepository.class);
         studyPackRepository = mock(StudyPackRepository.class);
+        activityEventRepository = mock(ActivityEventRepository.class);
         ActivityTrackingService activityTrackingService = mock(ActivityTrackingService.class);
         AnalyticsService analyticsService = mock(AnalyticsService.class);
         subscriptionService = mock(SubscriptionService.class);
@@ -81,6 +84,7 @@ class QuickReviewConceptHealthIntegrationTest {
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
+                activityEventRepository,
                 activityTrackingService,
                 analyticsService,
                 subscriptionService,

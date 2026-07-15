@@ -51,6 +51,8 @@ Quick Review uses its own session model:
 
 Current Quick Review result behavior is intentionally simplified around one server-resolved next step.
 
+For a learner's first-ever completed quiz — Quick Review or Challenge Quiz, determined from activity history — an incomplete concept set uses an open-loop header instead of `Your results`: `N of M concepts secured`, followed by `The rest are best reviewed tomorrow — you're not done yet.` The standard framing remains for perfect first scores, sessions without tagged concepts, and all later completions. This changes only the result framing: scores, concept-health behavior, and next-step CTAs stay unchanged.
+
 Primary CTA rules:
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`

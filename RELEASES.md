@@ -17,7 +17,7 @@ Anti-drift: no new backend entity; reuses the existing `DUE_CONCEPTS_DIGEST` ret
 
 ### Shipped
 
-_(nothing yet)_
+- **Open-loop first-quiz ending (backend + frontend).** A learner whose first completed Quick Review or Challenge Quiz has missed tagged concepts now sees an `N of M concepts secured` header and a tomorrow-review prompt in Quick Review; perfect first scores, untagged quizzes, and returning learners retain `Your results`. The secured count is derived from the ungated client-side answer state so it stays plan-independent, while `QUICK_REVIEW_OPEN_LOOP_SHOWN` records only the rendered experiment exposure.
 
 ## v0.47.1 - V82 Migration Collision Hotfix
 
