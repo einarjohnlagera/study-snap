@@ -44,6 +44,19 @@ Examples of actions that should keep text on mobile:
 - `Log in`
 - `Sign up`
 
+## Authenticated Mobile Bottom Tab Bar
+
+Below the `md` breakpoint, the authenticated app shell provides a persistent four-tab bar for:
+
+- Dashboard
+- Library
+- profile-aware collection navigation (`getCollectionLabels(profileType).navLabel`, such as Review Sets, Study Plans, or Lesson Plans)
+- Public Library
+
+Each tab keeps its icon and text label. Desktop continues to use the existing sidebar, while the mobile hamburger drawer remains available for Progress and account-area navigation.
+
+The tab bar is hidden while exam focus is active and whenever an active assessment or answer review owns a fixed bottom footer, so mobile quiz controls never stack with navigation. `AddToHomeScreenNudge` renders above the tab bar with the same safe-area-aware offset, keeping the install prompt visible without overlap.
+
 ## Allowed Icon-Only Exceptions
 
 These may stay icon-only when space is genuinely constrained:

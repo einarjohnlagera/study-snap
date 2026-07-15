@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
+import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { QuizIdentificationInput } from "@/components/study-pack/quiz-identification-input";
 import { QuizEnumerationInput } from "@/components/study-pack/quiz-enumeration-input";
@@ -58,6 +59,7 @@ export function QuizAnswerReview({
   stickyNav = false,
   planType = null,
 }: Readonly<QuizAnswerReviewProps>) {
+  useBottomViewportClaim(stickyNav);
   const [mode, setMode] = useState<ReviewMode>(initialMode);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [expandedExplanations, setExpandedExplanations] = useState<Record<number, boolean>>(() =>

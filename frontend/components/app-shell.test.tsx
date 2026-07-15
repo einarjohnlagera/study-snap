@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AppShell } from "./app-shell";
-import { ExamFocusProvider, useExamFocusMode } from "./exam-mode/exam-focus-context";
+import { ExamFocusProvider, useBottomViewportClaim, useExamFocusMode } from "./exam-mode/exam-focus-context";
 import { getMe, getMyPlan, logout } from "@/lib/api";
 import { needsOnboarding } from "@/lib/auth";
 import {
@@ -246,7 +246,7 @@ describe("AppShell", () => {
     );
 
     expect(await screen.findByRole("img", { name: "NoteLib" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Library" })).toBeInTheDocument();
+    expect((await screen.findAllByRole("link", { name: "Library" }))[0]).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "My Library" })).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByLabelText("Open user menu"));
@@ -296,7 +296,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    expect(await screen.findByRole("link", { name: "Lesson Plans" })).toHaveAttribute("href", "/collections");
+    expect((await screen.findAllByRole("link", { name: "Lesson Plans" }))[0]).toHaveAttribute("href", "/collections");
   });
 
   it("uses the header feedback icon on note editor routes", async () => {
@@ -391,5 +391,28 @@ describe("AppShell", () => {
     expect(screen.queryByLabelText("Open navigation menu")).not.toBeInTheDocument();
     expect(screen.queryByText("Public Navbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Note" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
+  });
+
+  it("hides mobile tabs while a Quick Review session owns the bottom viewport", async () => {
+    currentPathname = "/study-packs/pack-1/quick-review";
+    window.history.replaceState({}, "", currentPathname);
+
+    function QuickReviewActivator() {
+      useBottomViewportClaim(true);
+      return <div>Quick Review in session</div>;
+    }
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <QuickReviewActivator />
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Quick Review in session")).toBeInTheDocument();
+    expect(screen.getByLabelText("Open user menu")).toBeInTheDocument();
+    expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
   });
 });
