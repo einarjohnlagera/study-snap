@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.49.0 (released) - 2026-07-15
+> Last updated: v0.50.0 (released) - 2026-07-15
 
 ---
 
@@ -20,7 +20,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** `v0.49.0 - Progress Page: Private Library Links` is the most recently released version. No version is currently in progress. The product is mid-way through a retention-experiment cycle — see the dedicated section below before proposing new roadmap work; it explains why recent releases look small and isolated rather than feature-driven.
+**Current baseline:** `v0.50.0 - Mobile Bottom Tab Bar` is the most recently released version. No version is currently in progress. The product is mid-way through a retention-experiment cycle — see the dedicated section below before proposing new roadmap work; it explains why recent releases look small and isolated rather than feature-driven. v0.50.0 is the first real UI-shape change in that cycle (navigation, not a retention experiment) — see the Current Release section and the new Navigation note under Core Feature Surfaces.
 
 ---
 
@@ -38,7 +38,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **An open, unresolved question worth knowing about before writing anything exam-date-related:** exam-dated users (in theory the most motivated segment — they have a real deadline) actually retained *worse* under the status quo (0/35) than users with no exam date set (3/94, small sample). The comfortable explanation is "nothing currently acts on that field, so it has no behavioral effect either way." The uncomfortable explanation, not yet ruled out, is that even highly-motivated users didn't find the product worth a second visit — a **value** problem, not just a missing-trigger problem. Real user interviews (both retained and churned users) are queued to resolve this but have not been conducted yet as of this update.
 
-**What's next, and the pre-committed decision rule:** any positive-or-ambiguous signal on the v0.48.0 read triggers a combined follow-up release (working name `v0.50.0`) shipping a commitment device (ask the user to commit to a concrete return plan at peak motivation, right after their first quiz) together with a pre-decided return action (so "what do I even do when I come back" is answered in advance) — as one release, not sequential experiments, because the cohort size here is too small to cleanly attribute single-variable tests one at a time.
+**What's next, and the pre-committed decision rule:** any positive-or-ambiguous signal on the v0.48.0 read triggers a combined follow-up release shipping a commitment device (ask the user to commit to a concrete return plan at peak motivation, right after their first quiz) together with a pre-decided return action (so "what do I even do when I come back" is answered in advance) — as one release, not sequential experiments, because the cohort size here is too small to cleanly attribute single-variable tests one at a time. (Note: this was earlier referred to under the working name `v0.50.0` before that version number was used for the unrelated Mobile Bottom Tab Bar release — the H1+H5 release is still unscoped and will get the next available version number, not v0.50.0.)
 
 **Full backlog, current status, and exactly what un-parks each item lives in `docs/product/ROADMAP.md`'s Backlog Index table — check it before proposing or resurfacing anything.** It exists specifically because a large, fully-designed exploration ("Smart Review Planning," a curriculum-driven Review Set curation system) sat forgotten across several release cycles before this table existed. Do not propose roadmap items from partial memory of past sessions; the index is the current source of truth for what's held, what's conditional, and why.
 
@@ -223,15 +223,20 @@ Upgrade CTA rule:
 
 ---
 
-## Current Release: v0.49.0 - Progress Page: Private Library Links (plus v0.48.0's in-flight experiments)
+## Current Release: v0.50.0 - Mobile Bottom Tab Bar (plus v0.48.0's in-flight experiments)
 
-**Status: Released.** No version is currently in progress. See the "Retention Is the Proven Constraint" section above for the strategic context — recent releases are small and isolated on purpose.
+**Status: Released.** No version is currently in progress. See the "Retention Is the Proven Constraint" section above for the strategic context — recent releases are small and isolated on purpose. v0.50.0 is the first exception: a real UI-shape change, explicitly navigation work rather than a retention experiment, gated on real device-mix data rather than routed around the experiment cycle.
+
+**`v0.50.0` (2026-07-15) — new UI, plus retention-diagnosis groundwork and a search fix.**
+- **Persistent mobile bottom tab bar** — the headline UI change. Four icon+text tabs (Dashboard, Library, Review Sets — profile-aware collection navigation — and Public Library), shown only below the `md` breakpoint. Gated on real data: a production device-mix pull found ~75% mobile vs. 25% desktop by distinct users, meeting the bar originally set by a Fable App Shape proposal. Desktop sidebar and the mobile hamburger drawer are completely unchanged — this is additive, not a replacement (see the new Navigation note under Core Feature Surfaces). The bar auto-hides during exam focus and active assessment/review screens so it never stacks with another fixed-bottom element, and coordinates with the home-screen-install nudge (which now sits above the tab bar's safe-area height instead of overlapping it).
+- **Retention-diagnosis instrumentation (mid-release scope addition, collection-only).** Three previously-held measurement gaps were closed after an explicit decision to instrument: first-touch UTM/referral capture at signup (both email and Google OAuth paths, never overwritten by a later login), a best-effort anonymous event when the offline-fallback page actually serves, and a page-view event on the official Study Plan catalog. No new dashboard or report reads any of this yet — purely groundwork for a future analytics pass, and none of it is user-visible or confounds the concurrently-accruing v0.48.0 cohort read.
+- **Sitemap fix.** The three Exam Hub pages (`/exam/ale`, `/exam/pnle`, `/exam/let` — built specifically for exam-named search queries like "PNLE") were fully built and already emitting search-friendly structured data, but were entirely missing from `sitemap.ts`, invisible to the sitemap Google actually crawls. Found while scoping a broader SEO strategy question (a Fable brief for that is queued in the Backlog Index, not yet run); fixed immediately since it was same-day, isolated, and zero-risk.
 
 **`v0.49.0` (2026-07-15).** A small, deliberately non-retention-flavored fix filling the interim window while the v0.48.0 experiment cohort accrues data: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's own private Library instead of Public Library, with copy corrected to match ("Study X in your Library" instead of "Browse X notes in the community").
 
-**`v0.48.0` (2026-07-15) — the strategically significant one.** Two isolated retention experiments — see the dedicated section above for full detail. Both unproven, cohort data accruing, a read expected roughly two weeks out.
+**`v0.48.0` (2026-07-15) — the strategically significant one, still the real gate.** Two isolated retention experiments — see the dedicated section above for full detail. Both unproven, cohort data still accruing.
 
-**Next real decision point:** whatever the v0.48.0 read shows. See `docs/product/ROADMAP.md`'s Backlog Index for the full current state of everything queued behind it.
+**Next real decision point:** whatever the v0.48.0 read shows — the pre-committed rule is any positive-or-ambiguous signal ships a commitment device (H1) together with a pre-decided return action (H5) as one combined release, not sequential experiments. Also still outstanding and repeatedly displaced by codeable work: the retained/churned user interview script has not been run yet — it's the one open item that can't happen from a keyboard. See `docs/product/ROADMAP.md`'s Backlog Index for the full current state of everything queued behind both.
 
 ---
 
@@ -290,6 +295,16 @@ Upgrade CTA rule:
 ---
 
 ## Core Feature Surfaces
+
+### Navigation (App Shell) — updated v0.50.0
+
+The authenticated app shell has three coexisting navigation surfaces, not one:
+
+- **Desktop sidebar** — full nav, unchanged by v0.50.0.
+- **Mobile hamburger drawer** — full nav on mobile, unchanged by v0.50.0.
+- **Mobile bottom tab bar (new, v0.50.0)** — a persistent, always-visible subset (Dashboard, Library, Review Sets, Public Library), icon+text, shown only below the `md` breakpoint. Additive, not a replacement for the drawer — the drawer still exists and still holds everything else (Progress stays drawer/sidebar-only, deliberately not a 5th tab). Auto-hides whenever exam focus or an active assessment/review screen claims the bottom of the viewport, so it never stacks with the home-screen-install nudge or another fixed-bottom UI element.
+
+Do not add a 5th tab or otherwise expand the tab bar's scope without checking `RELEASES.md` v0.50.0's anti-drift notes first — the 4-tab set and the drawer/sidebar split were deliberate.
 
 ### Landing / Public
 

@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.50.1 - Mobile UI Polish
+
+**Status: In Progress**
+
+Theme: fast-follow polish batch, mostly refining the v0.50.0 tab bar itself plus two small unrelated pre-existing UI issues surfaced by direct user report. Not retention-flavored, not a new feature — a patch release, same pattern as v0.45.1's batched pre-existing-bug fixes.
+
+### Planned Scope
+
+- **Tab bar refinements (frontend + backend).** Three related changes to the mobile bottom tab bar shipped in v0.50.0: (1) an icon-only rendering variant on Quiz Result and Note Detail — pages the user experiences as focus/review moments even though they were never covered by the existing `useBottomViewportClaim` footer-conflict mechanism; (2) the Library/Public Library tab links restore the last filtered view when a filter context exists, reusing the existing `?ref=` pattern (private) and `notelib_public_library_return_url` sessionStorage key (public) instead of always linking to the bare path; (3) a backend-persisted user preference to hide the tab bar entirely, composing with (1) — preference OFF means the bar never renders on any page, ON (default) keeps today's per-page behavior.
+- **Review Set description truncation (frontend).** The Goal detail header description (`line-clamp-3`, no expand affordance) and the matching child Subject Plan card truncation (`line-clamp-2`) get a "Read more" expand/collapse, so a long curated description isn't silently cut off with no way to read the rest.
+- **Progress page milestone empty state (frontend).** At zero progress, `GoalMilestonesCard` renders every milestone as an identical gray dot and a 0%-width progress bar with no differentiation visible without scrolling to the one ring-highlighted "next" milestone — reads as broken rather than as a real empty state. Add a legible "Next: {milestone label}" summary line so the state is self-explanatory without relying on subtle ring styling.
+
+Anti-drift: no change to `useBottomViewportClaim`'s existing footer-conflict behavior on quiz-*taking* screens (Challenge Quiz, Quick Review, Long Exam) — the new icon-only mode is a distinct, additive "focus" reason, not a repurposing of that mechanism; no new sessionStorage-based filter store for Private Library (the locked rule is URL-params-only) — the fix reads the existing `?ref=` pattern, it doesn't introduce a new one; no change to Public Library's existing `sessionStorage` return-key mechanism, only a new reader of it; no change to the Mobile Button Rule's icon+text default for the tab bar's normal (non-focus-page) state.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.50.0 - Mobile Bottom Tab Bar
 
 **Status: Released**
