@@ -16,7 +16,7 @@ Anti-drift: no change to `useBottomViewportClaim`'s existing footer-conflict beh
 
 ### Shipped
 
-_(nothing yet)_
+- **Progress milestone next-state summary (frontend).** Goal Milestones now states the next checkpoint in text above the existing marker grid (or `All milestones reached` at completion), making zero-progress states legible without changing the dots or progress bar.
 
 ## v0.50.0 - Mobile Bottom Tab Bar
 
