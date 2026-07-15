@@ -245,6 +245,22 @@ class RetentionServiceTest {
     }
 
     @Test
+    void findDueConceptsDigestUsers_excludesExistingUserWhosePersistedDigestPreferenceIsDisabled() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity existingUser = verifiedUser();
+        existingUser.setDueConceptsDigestRemindersEnabled(false);
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(existingUser.getDueConceptsDigestRemindersEnabled()).isFalse();
+        assertThat(candidates).isEmpty();
+        verify(studyPackRepository, never()).findByOwnerUserIdOrderByCreatedAtDescIdDesc(any(), any());
+    }
+
+    @Test
     void findDueConceptsDigestUsers_respectsCooldown() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
         UserEntity user = verifiedUser();
