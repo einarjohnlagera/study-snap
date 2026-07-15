@@ -43,18 +43,20 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Item | Source | Status | Gate (what un-parks it) | Last reviewed |
 |---|---|---|---|---|
 | Retention H1 + H5 (commitment device + pre-decided return action) | `retention-diagnosis-session-plan.md` | Conditional — next up | v0.48.0 cohort read positive-or-ambiguous (~late July 2026) | 2026-07-15 |
-| User interviews + analytics pass (UTM, device mix, PDF export volume, offline-fallback hit rate, exam-content-gap probe, browse-without-adopt rate, manual coverage audit) | `retention-diagnosis-session-plan.md` "Strategy checkpoint" | Active — do now | none | 2026-07-15 |
+| User interviews (retained + churned exam-dated, script written) + 3 zero-code analytics pulls (device mix, PDF export volume, Official Review Set coverage audit) | `retention-diagnosis-out/04-interim-window-queries.sql`, `05-interview-script.md` | Active — do now, ready to run | none | 2026-07-15 |
+| 3 pulls needing real instrumentation first (UTM/referral tracking, offline-fallback hit rate, catalog "browse" tracking for the browse-without-adopt metric) | `retention-diagnosis-session-plan.md` "Strategy checkpoint" | Held — small implementation tasks, not queries | explicit decision to instrument (each is a real, if small, code change) | 2026-07-15 |
 | **Smart Review Planning (Internal Curator, 7 docs)** | `docs/claude-prompt/fable-out/01–07` | Parked | interviews confirm content-gap churn AND manual coverage sprint proves lift AND hand-curation saturates | 2026-07-15 |
 | Manual Official-coverage sprint (hand-curate ALE/PNLE/LET) | this checkpoint (2026-07-15) | Conditional | interviews surface "no content for my exam" as a churn reason | 2026-07-15 |
 | Photo Capture of handwritten notes (Idea 6) | `new-capability-out/01-new-capability-ideation.md` | Held | retention loop proven (W1→W2 lift confirmed) | 2026-07-15 |
 | Parent Readiness Digest (Idea 4) | same | Conditional | H1 read positive + explicit product decision (email-only vs. dashboard shape) | 2026-07-15 |
-| Offline Study Pack access (Idea 9) | same | Held | heavy mobile share AND (PDF export volume OR offline-fallback hit rate OR interview signal) | 2026-07-15 |
+| Offline Study Pack access (Idea 9) | same | Held — one leg down | heavy mobile (✅ confirmed 2026-07-15, ~75%) AND (~~PDF export volume~~ ruled out, essentially unused, 1 export ever OR offline-fallback hit rate, not instrumented OR interview signal, not yet run) | 2026-07-15 |
 | Unified Next-Step Resolver | `app-shape-session-plan.md` | Merged into H5 | ships only alongside H5, not standalone | 2026-07-15 |
-| Mobile bottom tab bar | same | Conditional | device-mix pull shows heavy mobile usage | 2026-07-15 |
+| Mobile bottom tab bar | same | **Gate met (2026-07-15) — awaiting a start decision** | device-mix pull shows heavy mobile usage — confirmed, ~75% mobile by distinct users | 2026-07-15 |
 | App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
 | App Shape Polish stragglers (sticky toolbar re-attempt, Result-Screen Companion Bridge, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
 | Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |
 | Listen Mode / Bilingual UI / Study Buddy (Ideas 7, 10, 11) | `new-capability-out/01-new-capability-ideation.md` | Low priority | interview language/social/loop signal | 2026-07-15 |
+| PDF export surfacing (near-zero usage — 1 export, ever) | `retention-diagnosis-session-plan.md` "Fourth Fable checkpoint" | Parked — do not build | retention funnel + interview signal on offline demand both resolve; value-vs-discovery is currently undeterminable (see checkpoint) | 2026-07-15 |
 | Conversion-audit deferred pair (adoption-count social proof, "Trending this week") | `conversion-audit-prioritized-backlog.md` | Held | windowed backend counts get built | pre-2026-07-15 |
 | AI-generated Review Sets / Runtime Companion (Ask Companion, Personalization) | `ROADMAP.md` §Future, gated | Parked | explicit product go-decision | pre-2026-07-15 |
 | Review-Set-Centric Navigation | `ROADMAP.md` §deferred | Parked | direction, not a scoped item — no gate stated | pre-2026-07-15 |
