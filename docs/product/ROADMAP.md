@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.49.0 - Progress Page: Private Library Links` is the current released version (on `releases/v0.49.0`, cut from `main` after v0.48.0 merged) — a small, deliberately non-retention-flavored fix: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's private Library instead of the public one. Scoped to fill the interim window while the v0.48.0 retention experiment cohort accrues enough data for a read, without confounding that read. See `RELEASES.md`.
+`v0.50.0 - Mobile Bottom Tab Bar` is the current in-progress version (on `releases/v0.50.0`, cut from `main` after v0.49.0 merged) — a persistent 4-tab mobile bottom navigation bar (Dashboard, Library, Review Sets, Public Library), gated on device-mix evidence from the App Shape Fable proposal and un-parked by a 2026-07-15 production pull showing ~75% mobile usage by distinct users. Navigation-shape work, not a retention experiment — orthogonal to the concurrently-accruing v0.48.0 cohort read. See `RELEASES.md`.
+
+`v0.49.0 - Progress Page: Private Library Links` is the previous released version (on `releases/v0.49.0`, cut from `main` after v0.48.0 merged) — a small, deliberately non-retention-flavored fix: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's private Library instead of the public one. Scoped to fill the interim window while the v0.48.0 retention experiment cohort accrues enough data for a read, without confounding that read. See `RELEASES.md`.
 
 `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger` is the previous released version (on `releases/v0.48.0`, cut from `main` after v0.47.1 merged) — two independent retention experiments testing the co-dominant causes from the retention root-cause diagnosis: an open-loop first-quiz ending (frontend) and a due-concepts digest default-ON trigger fix with CTA/content work (backend + frontend). Both are unproven experiments, not confirmed wins — lift is not yet measured. See `RELEASES.md`.
 
@@ -50,7 +52,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Parent Readiness Digest (Idea 4) | same | Conditional | H1 read positive + explicit product decision (email-only vs. dashboard shape) | 2026-07-15 |
 | Offline Study Pack access (Idea 9) | same | Held | heavy mobile share AND (PDF export volume OR offline-fallback hit rate OR interview signal) | 2026-07-15 |
 | Unified Next-Step Resolver | `app-shape-session-plan.md` | Merged into H5 | ships only alongside H5, not standalone | 2026-07-15 |
-| Mobile bottom tab bar | same | Conditional | device-mix pull shows heavy mobile usage | 2026-07-15 |
+| Mobile bottom tab bar | same | **Kicked off — v0.50.0, in progress** | gate met 2026-07-15 (~75% mobile by distinct users) | 2026-07-15 |
 | App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
 | App Shape Polish stragglers (sticky toolbar re-attempt, Result-Screen Companion Bridge, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
 | Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |
@@ -61,6 +63,10 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Deeper plan nesting (3+ level hierarchy) | `ROADMAP.md` §Deeper plan nesting | Parked, nice-to-have | no gate stated | pre-2026-07-15 |
 | Note Detail readiness as its own tab | `ROADMAP.md` §Note Detail readiness | Blocked | needs a mobile tab-overflow design pass | pre-2026-07-15 |
 | Legacy "Future Directions" block (exam-mode work, billing, teacher items pre-v0.20) | `ROADMAP.md` §Future Directions | Stale — needs a fresh audit, largely pre-dates current architecture | none stated | never (flag for cleanup) |
+
+## v0.50.0 - Mobile Bottom Tab Bar (In Progress, base branch `releases/v0.50.0`)
+
+Origin: Fable App Shape proposal (`docs/claude-prompt/app-shape-out/02-app-like-ui.md`), gated on device-mix evidence. Un-parked 2026-07-15 by a production pull showing ~75% mobile vs. 25% desktop by distinct users. Scoping confirmed the original proposal's coordination concern (a "sticky Continue bar") never shipped; two other real, currently-shipped bottom-of-viewport elements (`AddToHomeScreenNudge`, the floating "Send Feedback" launcher) need coordination instead. Full scope in `RELEASES.md`.
 
 ## v0.49.0 - Progress Page: Private Library Links (Released, base branch `releases/v0.49.0`)
 

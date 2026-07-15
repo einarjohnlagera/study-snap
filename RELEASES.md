@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.50.0 - Mobile Bottom Tab Bar
+
+**Status: In Progress**
+
+Theme: add a persistent mobile bottom tab bar (Dashboard / Library / Review Sets / Public Library) to the authenticated app shell. Originally gated by a Fable App Shape proposal on evidence of a mobile-majority user base; a 2026-07-15 production device-mix pull found ~75% mobile vs. 25% desktop by distinct users, meeting that gate. Navigation-shape work, not a retention experiment — orthogonal to the concurrently-accruing v0.48.0 cohort read.
+
+### Planned Scope
+
+- **Mobile bottom tab bar (frontend).** Exactly 4 tabs (Dashboard, Library, Review Sets, Public Library), shown only below the `md` breakpoint, icon + text per the Mobile Button Rule. Coordinates with `AddToHomeScreenNudge` and the floating "Send Feedback" launcher (both real, currently-shipped bottom-of-viewport elements), and is hidden everywhere `isExamFocusActive` or `StickyAssessmentFooter` currently claim the bottom of the viewport, so no two fixed-bottom elements ever stack.
+
+Anti-drift: no change to desktop sidebar or mobile hamburger drawer contents/behavior; no 5th tab (Progress stays drawer/sidebar-only); no new global safe-area CSS variable (inline Tailwind arbitrary values only, matching existing usage); no coordination work for the "sticky Continue bar" from the original Fable proposal — it never shipped and isn't real code.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.49.0 - Progress Page: Private Library Links
 
 **Status: Released**
