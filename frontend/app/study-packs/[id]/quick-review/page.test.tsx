@@ -25,6 +25,7 @@ const routerMock = {
 const searchParamsMock = {
   toString: () => "",
 };
+const useBottomViewportClaimMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -44,6 +45,10 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/hooks/use-billing-usage-summary", () => ({
   useBillingUsageSummary: jest.fn(),
+}));
+
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  useBottomViewportClaim: (active: boolean) => useBottomViewportClaimMock(active),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -116,6 +121,7 @@ describe("QuickReviewPage first-study onboarding", () => {
     (startQuickReviewSession as jest.Mock).mockReset();
     (updateQuickReviewSessionProgress as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    useBottomViewportClaimMock.mockReset();
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -406,6 +412,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(topBar).toHaveTextContent("1 / 1");
     expect(actionBar).toHaveClass("fixed");
     expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeInTheDocument();
+    expect(useBottomViewportClaimMock).toHaveBeenLastCalledWith(true);
   });
 
   it('result screen shows "Note" navigation link', async () => {

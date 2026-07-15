@@ -54,6 +54,16 @@ Landing page should publish:
 - Public Library subject landing pages (`/public/library/{subject}`) should also emit `CollectionPage` JSON-LD.
 - Canonical public note pages should emit `Article` JSON-LD using real note data only.
 - Learn articles should emit `Article` JSON-LD (title, description, canonical URL, category as `articleSection`) — Learn is the flagship SEO content surface and previously had no structured data at all.
+- Exam Hub pages (`/exam/{slug}`) should also emit `CollectionPage` JSON-LD.
+
+## Sitemap
+
+`frontend/app/sitemap.ts` must include every publicly indexable route with real search intent behind
+it: landing, Learn, Public Library (index, per-subject, per-note), and the Exam Hub index plus each
+`/exam/{slug}` page (`ale`, `pnle`, `let`). The Exam Hub pages were missing from the sitemap for a
+period despite being indexable and already emitting `CollectionPage` JSON-LD — when adding a new public
+route with search intent, add it here too; a page can be fully built and structured-data-correct and
+still be invisible to search if it isn't in the sitemap.
 
 ## Learn Content Marketing Pages
 

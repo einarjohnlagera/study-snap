@@ -21,6 +21,7 @@ import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
 import { useAppShellTitleContext } from "@/components/app-shell-title-context";
 import { useExamFocusContext } from "@/components/exam-mode/exam-focus-context";
+import { MobileBottomTabBar } from "@/components/mobile-bottom-tab-bar";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { hasPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
@@ -490,7 +491,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const pageTitle = titleOverride ?? getPageTitle(pathname || "");
   const showVerificationBanner = shouldUseShell && hasAuthUser && !user.emailVerifiedAt;
 
-  const { isExamFocusActive } = useExamFocusContext();
+  const { isBottomViewportClaimed, isExamFocusActive } = useExamFocusContext();
+  const shouldShowMobileBottomTabs = !isExamFocusActive && !isBottomViewportClaimed;
 
   if (!shouldUseShell) {
     return (
@@ -621,8 +623,12 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           </div>
         ) : null}
 
-        <main>{children}</main>
+        <main className={cn(shouldShowMobileBottomTabs && "pb-[5.5rem] md:pb-0")}>{children}</main>
       </div>
+
+      {shouldShowMobileBottomTabs ? (
+        <MobileBottomTabBar pathname={pathname || ""} profileType={user.profileType} />
+      ) : null}
 
       {!isExamFocusActive && drawerOpen ? (
         <>

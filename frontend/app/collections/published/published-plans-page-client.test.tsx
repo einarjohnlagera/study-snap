@@ -7,6 +7,7 @@ import {
   getPublicStudyPlanDetail,
   listCollections,
   listPublicStudyPlans,
+  trackAnalyticsEvent,
 } from "@/lib/api";
 
 const pushMock = jest.fn();
@@ -30,6 +31,7 @@ jest.mock("@/lib/api", () => ({
   getPublicStudyPlanDetail: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 const planOne = {
@@ -65,6 +67,7 @@ describe("PublishedPlansPage", () => {
     (getPublicStudyPlanDetail as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     searchParamsMock = new URLSearchParams();
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "LET", profileType: "STUDENT" });
     (listCollections as jest.Mock).mockResolvedValue([]);
@@ -79,6 +82,18 @@ describe("PublishedPlansPage", () => {
 
   it("exports page metadata", () => {
     expect(metadata).toMatchObject({ title: "Recommended Plans | NoteLib" });
+  });
+
+  it("tracks the published-plan catalog page view once", async () => {
+    const { rerender } = render(<PublishedPlansPage />);
+
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({ eventType: "PUBLISHED_PLANS_VIEWED", entityId: null, metadata: undefined });
+    });
+
+    rerender(<PublishedPlansPage />);
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledTimes(1);
   });
 
   it.each([

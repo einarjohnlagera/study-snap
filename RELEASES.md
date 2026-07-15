@@ -1,5 +1,28 @@
 # RELEASES.md - NoteLib
 
+## v0.50.0 - Mobile Bottom Tab Bar
+
+**Status: Released**
+
+Theme: add a persistent mobile bottom tab bar (Dashboard / Library / Review Sets / Public Library) to the authenticated app shell. Originally gated by a Fable App Shape proposal on evidence of a mobile-majority user base; a 2026-07-15 production device-mix pull found ~75% mobile vs. 25% desktop by distinct users, meeting that gate. Navigation-shape work, not a retention experiment — orthogonal to the concurrently-accruing v0.48.0 cohort read. Mid-release scope addition (2026-07-15): the 3 held instrumentation pulls from `retention-diagnosis-session-plan.md`'s Strategy checkpoint, folded in after an explicit decision to instrument rather than opened as their own version — analytics-collection only, no new UI surfaced from the data, so it doesn't confound the v0.48.0 cohort read either.
+
+### Planned Scope
+
+- **Mobile bottom tab bar (frontend).** Exactly 4 tabs (Dashboard, Library, Review Sets, Public Library), shown only below the `md` breakpoint, icon + text per the Mobile Button Rule. Coordinates with `AddToHomeScreenNudge`; the feedback control is mounted as a header icon rather than a floating launcher. The tab bar is hidden whenever exam focus or an active assessment claims the bottom of the viewport, so no two fixed-bottom elements stack.
+- **UTM/referral tracking (backend + frontend).** No column or table captures acquisition source anywhere today. Capture UTM params (and referrer, where present) at signup and persist them against the account, so the diagnosis's acquisition-source pull becomes answerable.
+- **Offline-fallback hit rate (frontend).** `frontend/public/sw.js` and `offline.html` already serve a fallback page on failed navigation but report nothing back. Fire an analytics event when the fallback actually serves, so real offline-usage volume becomes measurable (feeds Idea 9's evidence gate).
+- **Browse-without-adopt: browse-side tracking (frontend).** `published-plans-page-client.tsx` (the official-plan-catalog page) fires zero analytics events today. Add a new `AnalyticsEventType` for viewing this page — do not substitute `EXAM_HUB_VIEWED`, which tracks a different funnel step (public-note discovery, not the Review Set catalog). The adopt side already exists (`STUDY_PLAN_ADOPTED` / `source_plan_id`); this closes the browse side so "browsed and found nothing" becomes distinguishable from "didn't browse at all."
+
+Anti-drift: no change to desktop sidebar or mobile hamburger drawer contents/behavior; no 5th tab (Progress stays drawer/sidebar-only); no new global safe-area CSS variable (inline Tailwind arbitrary values only, matching existing usage); no coordination work for the "sticky Continue bar" from the original Fable proposal — it never shipped and isn't real code. Instrumentation additions are collection-only: no new dashboard, report, or admin view consumes this data in this release — that's the separate analytics-read work already queued. No behavior change to the existing `offline.html` fallback logic or the plan-adoption flow, only new events/columns.
+
+### Shipped
+
+- **Persistent mobile bottom navigation (frontend).** Authenticated mobile users now have icon-and-text tabs for Dashboard, Library, profile-aware collection navigation, and Public Library; desktop sidebar and the mobile hamburger drawer remain unchanged. The bar is suppressed for exam-focus and active assessment/review screens, while the home-screen-install nudge moves above its safe-area-aware height. The live feedback control was confirmed to be header-mounted, not a floating bottom launcher.
+- **Retention-diagnosis collection points (backend + frontend).** New users now retain first-touch UTM/referrer fields from either signup path without later-login overwrites; the service-worker fallback records a best-effort anonymous `OFFLINE_FALLBACK_SERVED` event; and `/collections/published` emits `PUBLISHED_PLANS_VIEWED` once per view. These events are collection-only and have no new reporting surface yet.
+- **Sitemap fix: Exam Hub pages now indexable (frontend).** `/exam`, `/exam/ale`, `/exam/pnle`, and `/exam/let` — the pages already built for exam-named search intent and already emitting `CollectionPage` structured data — were entirely missing from `sitemap.ts`, invisible to the sitemap Google actually crawls. Found while scoping an SEO strategy question; fixed directly since it's a same-day, isolated, zero-risk addition, independent of the broader SEO strategy work still pending a Fable session (see ROADMAP.md's Backlog Index).
+
+Known limitations: `AddToHomeScreenNudge` (mounted outside `ExamFocusProvider` in the root layout) applies its raised offset unconditionally rather than only when the tab bar is actually rendered — on routes without the tab bar (public/marketing pages, active quiz sessions) it floats with a small unnecessary gap. Cosmetic only, no overlap. `docs/testing/mobile-ui.md` still describes a "floating Send Feedback launcher" that this audit confirmed is actually a header-mounted icon — pre-existing drift, not introduced here, left for a follow-up doc pass.
+
 ## v0.49.0 - Progress Page: Private Library Links
 
 **Status: Released**

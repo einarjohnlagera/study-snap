@@ -124,7 +124,7 @@ export function AddToHomeScreenNudge() {
   const isAndroidPrompt = variant === "android";
 
   return (
-    <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-background/95 p-3 text-foreground shadow-lg backdrop-blur sm:hidden">
+    <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-background/95 p-3 text-foreground shadow-lg backdrop-blur sm:hidden">
       <Image
         src="/notelib-logo-monogram.png"
         alt=""

@@ -7,7 +7,7 @@ import { EyeOff, Hourglass, ListChecks, Maximize2 } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useAppShellTitleOverride } from "@/components/app-shell-title-context";
 import { ExamTopBar } from "@/components/exam-mode/exam-top-bar";
-import { useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
+import { useBottomViewportClaim, useExamFocusMode } from "@/components/exam-mode/exam-focus-context";
 import { QuestionNavigator } from "@/components/exam-mode/question-navigator";
 import { ScoreReveal } from "@/components/exam-mode/score-reveal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
@@ -1232,6 +1232,7 @@ export default function ChallengeQuizPage() {
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
+  useBottomViewportClaim(challengeQuizActive);
   useExamFocusMode(isBoardExamMode && phase === "running");
 
   useEffect(() => {

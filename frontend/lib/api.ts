@@ -510,6 +510,8 @@ export type AnalyticsEventType =
   | "PUBLIC_PROFILE_SHARED"
   | "EXAM_HUB_VIEWED"
   | "EXAM_HUB_CTA_CLICKED"
+  | "PUBLISHED_PLANS_VIEWED"
+  | "OFFLINE_FALLBACK_SERVED"
   | "STUDY_GOAL_SET"
   | "STUDY_GOAL_DISMISSED"
   | "GOAL_NUDGE_SHOWN"
@@ -745,7 +747,16 @@ export type SubmitFeedbackRequest = {
   message: string;
 };
 
-export type SignupRequest = {
+export type FirstTouchAttribution = {
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  referrer?: string;
+};
+
+export type SignupRequest = FirstTouchAttribution & {
   email: string;
   password: string;
   firstName: string;
@@ -758,7 +769,7 @@ export type LoginRequest = {
   keepSignedIn?: boolean;
 };
 
-export type GoogleAuthRequest = {
+export type GoogleAuthRequest = FirstTouchAttribution & {
   code: string;
   keepSignedIn?: boolean;
 };
@@ -1649,7 +1660,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 export const OCR_DISABLED_ERROR_CODE = "OCR_DISABLED";
 
 function buildUrl(path: string) {

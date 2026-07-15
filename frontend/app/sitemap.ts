@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { buildPublicLibraryNotePath, buildPublicLibrarySubjectPath } from "@/lib/public-note-path";
+import { EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { learnGuides } from "@/lib/learn-guides";
 import { getPublicSubjectEntries, getServerPublicNotes } from "@/lib/server-public-notes";
 import { absoluteUrl } from "@/lib/site-metadata";
@@ -59,6 +60,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily" as const,
       priority: 0.9,
     },
+    {
+      url: absoluteUrl("/exam"),
+      changeFrequency: "weekly" as const,
+      priority: 0.9,
+    },
+    ...EXAM_HUB_SLUGS.map((slug) => ({
+      url: absoluteUrl(`/exam/${slug}`),
+      changeFrequency: "daily" as const,
+      priority: 0.9,
+    })),
     ...publicSubjects.map((subject) => ({
       url: absoluteUrl(buildPublicLibrarySubjectPath(subject.label)),
       lastModified: subject.lastModified ?? undefined,

@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.49.0 - Progress Page: Private Library Links` is the current released version (on `releases/v0.49.0`, cut from `main` after v0.48.0 merged) — a small, deliberately non-retention-flavored fix: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's private Library instead of the public one. Scoped to fill the interim window while the v0.48.0 retention experiment cohort accrues enough data for a read, without confounding that read. See `RELEASES.md`.
+`v0.50.0 - Mobile Bottom Tab Bar` is the current released version (on `releases/v0.50.0`, cut from `main` after v0.49.0 merged) — a persistent 4-tab mobile bottom navigation bar (Dashboard, Library, Review Sets, Public Library), gated on device-mix evidence from the App Shape Fable proposal and un-parked by a 2026-07-15 production pull showing ~75% mobile usage by distinct users. Navigation-shape work, not a retention experiment — orthogonal to the concurrently-accruing v0.48.0 cohort read. Mid-release scope addition: the 3 held instrumentation pulls (UTM/referral tracking, offline-fallback hit rate, browse-without-adopt tracking) folded in after an explicit 2026-07-15 decision to instrument — analytics-collection only, no new UI surfaced from the data yet, so it doesn't confound the concurrently-accruing v0.48.0 cohort read either. Also shipped a same-day sitemap fix (Exam Hub pages), found while scoping a separate SEO strategy question. See `RELEASES.md`.
+
+`v0.49.0 - Progress Page: Private Library Links` is the previous released version (on `releases/v0.49.0`, cut from `main` after v0.48.0 merged) — a small, deliberately non-retention-flavored fix: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's private Library instead of the public one. Scoped to fill the interim window while the v0.48.0 retention experiment cohort accrues enough data for a read, without confounding that read. See `RELEASES.md`.
 
 `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger` is the previous released version (on `releases/v0.48.0`, cut from `main` after v0.47.1 merged) — two independent retention experiments testing the co-dominant causes from the retention root-cause diagnosis: an open-loop first-quiz ending (frontend) and a due-concepts digest default-ON trigger fix with CTA/content work (backend + frontend). Both are unproven experiments, not confirmed wins — lift is not yet measured. See `RELEASES.md`.
 
@@ -43,24 +45,33 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Item | Source | Status | Gate (what un-parks it) | Last reviewed |
 |---|---|---|---|---|
 | Retention H1 + H5 (commitment device + pre-decided return action) | `retention-diagnosis-session-plan.md` | Conditional — next up | v0.48.0 cohort read positive-or-ambiguous (~late July 2026) | 2026-07-15 |
-| User interviews + analytics pass (UTM, device mix, PDF export volume, offline-fallback hit rate, exam-content-gap probe, browse-without-adopt rate, manual coverage audit) | `retention-diagnosis-session-plan.md` "Strategy checkpoint" | Active — do now | none | 2026-07-15 |
+| User interviews (retained + churned exam-dated, script written) + 3 zero-code analytics pulls (device mix, PDF export volume, Official Review Set coverage audit) | `retention-diagnosis-out/04-interim-window-queries.sql`, `05-interview-script.md` | Active — do now, ready to run | none | 2026-07-15 |
+| 3 pulls needing real instrumentation first (UTM/referral tracking, offline-fallback hit rate, catalog "browse" tracking for the browse-without-adopt metric) | `retention-diagnosis-session-plan.md` "Strategy checkpoint" | **Shipped — v0.50.0** | explicit decision to instrument — ✅ made 2026-07-15 | 2026-07-15 |
+| SEO / organic search strategy (why NoteLib doesn't surface for exam-named searches like "free PNLE notes"; sitemap/content/measurement plan) | `seo-strategy-session-plan.md`, `seo-strategy-prompts/01-seo-strategy.txt` | Not yet run | user runs the Fable session, output lands in `seo-strategy-out/` | 2026-07-15 |
 | **Smart Review Planning (Internal Curator, 7 docs)** | `docs/claude-prompt/fable-out/01–07` | Parked | interviews confirm content-gap churn AND manual coverage sprint proves lift AND hand-curation saturates | 2026-07-15 |
 | Manual Official-coverage sprint (hand-curate ALE/PNLE/LET) | this checkpoint (2026-07-15) | Conditional | interviews surface "no content for my exam" as a churn reason | 2026-07-15 |
 | Photo Capture of handwritten notes (Idea 6) | `new-capability-out/01-new-capability-ideation.md` | Held | retention loop proven (W1→W2 lift confirmed) | 2026-07-15 |
 | Parent Readiness Digest (Idea 4) | same | Conditional | H1 read positive + explicit product decision (email-only vs. dashboard shape) | 2026-07-15 |
-| Offline Study Pack access (Idea 9) | same | Held | heavy mobile share AND (PDF export volume OR offline-fallback hit rate OR interview signal) | 2026-07-15 |
+| Offline Study Pack access (Idea 9) | same | Held — one leg down | heavy mobile (✅ confirmed 2026-07-15, ~75%) AND (~~PDF export volume~~ ruled out, essentially unused, 1 export ever OR offline-fallback hit rate, not instrumented OR interview signal, not yet run) | 2026-07-15 |
 | Unified Next-Step Resolver | `app-shape-session-plan.md` | Merged into H5 | ships only alongside H5, not standalone | 2026-07-15 |
-| Mobile bottom tab bar | same | Conditional | device-mix pull shows heavy mobile usage | 2026-07-15 |
+| Mobile bottom tab bar | same | **Shipped — v0.50.0** | device-mix pull shows heavy mobile usage — confirmed, ~75% mobile by distinct users | 2026-07-15 |
 | App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
 | App Shape Polish stragglers (sticky toolbar re-attempt, Result-Screen Companion Bridge, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
 | Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |
 | Listen Mode / Bilingual UI / Study Buddy (Ideas 7, 10, 11) | `new-capability-out/01-new-capability-ideation.md` | Low priority | interview language/social/loop signal | 2026-07-15 |
+| PDF export surfacing (near-zero usage — 1 export, ever) | `retention-diagnosis-session-plan.md` "Fourth Fable checkpoint" | Parked — do not build | retention funnel + interview signal on offline demand both resolve; value-vs-discovery is currently undeterminable (see checkpoint) | 2026-07-15 |
 | Conversion-audit deferred pair (adoption-count social proof, "Trending this week") | `conversion-audit-prioritized-backlog.md` | Held | windowed backend counts get built | pre-2026-07-15 |
 | AI-generated Review Sets / Runtime Companion (Ask Companion, Personalization) | `ROADMAP.md` §Future, gated | Parked | explicit product go-decision | pre-2026-07-15 |
 | Review-Set-Centric Navigation | `ROADMAP.md` §deferred | Parked | direction, not a scoped item — no gate stated | pre-2026-07-15 |
 | Deeper plan nesting (3+ level hierarchy) | `ROADMAP.md` §Deeper plan nesting | Parked, nice-to-have | no gate stated | pre-2026-07-15 |
 | Note Detail readiness as its own tab | `ROADMAP.md` §Note Detail readiness | Blocked | needs a mobile tab-overflow design pass | pre-2026-07-15 |
 | Legacy "Future Directions" block (exam-mode work, billing, teacher items pre-v0.20) | `ROADMAP.md` §Future Directions | Stale — needs a fresh audit, largely pre-dates current architecture | none stated | never (flag for cleanup) |
+
+## v0.50.0 - Mobile Bottom Tab Bar (Released, base branch `releases/v0.50.0`)
+
+Origin: Fable App Shape proposal (`docs/claude-prompt/app-shape-out/02-app-like-ui.md`), gated on device-mix evidence. Un-parked 2026-07-15 by a production pull showing ~75% mobile vs. 25% desktop by distinct users. Scoping confirmed the original proposal's coordination concern (a "sticky Continue bar") never shipped; two other real, currently-shipped bottom-of-viewport elements (`AddToHomeScreenNudge`, the floating "Send Feedback" launcher) need coordination instead. Full scope in `RELEASES.md`.
+
+Mid-release addition (2026-07-15): the 3 held instrumentation pulls from `retention-diagnosis-session-plan.md`'s Strategy checkpoint (UTM/referral tracking, offline-fallback hit rate, browse-without-adopt tracking), folded in after an explicit decision to instrument rather than opened as their own version. See `RELEASES.md`.
 
 ## v0.49.0 - Progress Page: Private Library Links (Released, base branch `releases/v0.49.0`)
 

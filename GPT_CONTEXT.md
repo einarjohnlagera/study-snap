@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.43.1 (released) - 2026-07-10
+> Last updated: v0.49.0 (released) - 2026-07-15
 
 ---
 
@@ -20,7 +20,27 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** `v0.43.1 - Companion Mentor Tips` is the most recently released version. No version is currently in progress — the "AI-generated Review Sets" candidate is still under product/UX discussion and has not been scoped or kicked off (see `docs/product/ROADMAP.md`).
+**Current baseline:** `v0.49.0 - Progress Page: Private Library Links` is the most recently released version. No version is currently in progress. The product is mid-way through a retention-experiment cycle — see the dedicated section below before proposing new roadmap work; it explains why recent releases look small and isolated rather than feature-driven.
+
+---
+
+## Retention Is the Proven Constraint (read this before proposing anything)
+
+**The number:** W1→W2 retention is currently **2.4%** (production read, 2026-07-15; 3 of 127 eligible activated users returned in week 2). This has been the core strategic constraint since v0.32.2 first flagged it (was 5.6% then) — it has **not meaningfully improved** despite two intervening feature releases aimed at it (v0.44.0, v0.46.0). Free-tier quota is essentially never hit, so pricing has been independently ruled out as the current bottleneck.
+
+**The diagnosis (two independent Fable sessions, growth/retention lens + consumer-psychology lens, converged on the same read):** every content-rich retention trigger the product has (due-concepts digest, weak-concept nudge, weekly summary) shipped **default-OFF**, gated behind the exact engagement it's meant to create. Separately, the first study session ends in a psychologically "complete" feeling (a finished task, per the Zeigarnik effect) rather than an open loop that pulls the learner back — nothing in the first-session experience signals that spaced review exists or that forgetting is coming.
+
+**What just shipped to test this (`v0.48.0`, merged 2026-07-15, cohort data now accruing):**
+1. **Open-loop first-quiz ending.** A learner's first-ever completed quiz, if concepts were missed, now ends on "N of M concepts secured — the rest are best reviewed tomorrow" instead of a terminal score screen.
+2. **Due-concepts digest trigger fix.** New signups now default to the digest email being ON (previously opt-in-only, rarely turned on), with a strengthened CTA (styled button, not a bare link) after production data showed domain-wide email click-through under 1%.
+
+**Both are UNPROVEN.** Mechanism shipped, lift not yet measured — a meaningful cohort read needs roughly two more weeks from the merge date. **Do not describe these as retention wins in any external-facing copy** until a real read confirms it.
+
+**An open, unresolved question worth knowing about before writing anything exam-date-related:** exam-dated users (in theory the most motivated segment — they have a real deadline) actually retained *worse* under the status quo (0/35) than users with no exam date set (3/94, small sample). The comfortable explanation is "nothing currently acts on that field, so it has no behavioral effect either way." The uncomfortable explanation, not yet ruled out, is that even highly-motivated users didn't find the product worth a second visit — a **value** problem, not just a missing-trigger problem. Real user interviews (both retained and churned users) are queued to resolve this but have not been conducted yet as of this update.
+
+**What's next, and the pre-committed decision rule:** any positive-or-ambiguous signal on the v0.48.0 read triggers a combined follow-up release (working name `v0.50.0`) shipping a commitment device (ask the user to commit to a concrete return plan at peak motivation, right after their first quiz) together with a pre-decided return action (so "what do I even do when I come back" is answered in advance) — as one release, not sequential experiments, because the cohort size here is too small to cleanly attribute single-variable tests one at a time.
+
+**Full backlog, current status, and exactly what un-parks each item lives in `docs/product/ROADMAP.md`'s Backlog Index table — check it before proposing or resurfacing anything.** It exists specifically because a large, fully-designed exploration ("Smart Review Planning," a curriculum-driven Review Set curation system) sat forgotten across several release cycles before this table existed. Do not propose roadmap items from partial memory of past sessions; the index is the current source of truth for what's held, what's conditional, and why.
 
 ---
 
@@ -203,20 +223,35 @@ Upgrade CTA rule:
 
 ---
 
-## Current Release: v0.43.1 - Companion Mentor Tips
+## Current Release: v0.49.0 - Progress Page: Private Library Links (plus v0.48.0's in-flight experiments)
 
-**Status: Released.** No version is currently in progress. Let the *authored* Companion content participate in the Coach experience the way live signals already do — small, individually-surfaceable, action-linked Mentor Tips instead of an article to read start to finish. Full detail in the Learning Companion vision section above and in `RELEASES.md`.
+**Status: Released.** No version is currently in progress. See the "Retention Is the Proven Constraint" section above for the strategic context — recent releases are small and isolated on purpose.
 
-- **Content model.** New `mentorTips` array inside the existing `note_collections.companion` JSONB — no new table/migration/endpoint/persisted learner state/progress signal.
-- **Authoring + AI draft extension.** ADMIN authoring modal add/edit/remove tips with a fixed linked action and optional deterministic surfacing condition; per-section Companion generation now supports `MENTOR_TIPS` (draft title/body only, curator still configures action/condition and saves).
-- **Deterministic Coach surfacing + permanent escape hatch.** Collection detail surfaces at most one eligible tip near `TodaysFocusCard`; `CompanionDisplayCard`'s "View Full Guide" lists all authored tips as a sixth section regardless of eligibility.
-- **Fixes shipped alongside:** Pro-only paywalls (Board Exam, Long Exam, Difficulty Selection, Interview Practice) no longer let a user select/pay for a dead-end Plus checkout; a dedicated Plus-primary upsell for the Free review-timing row; Help Center coverage for Companion/Coach/Mentor Tips/Primary Review Set; a stale "This Week" doc reference (removed by v0.43.0) corrected in Help copy and `docs/features/collections.md`.
+**`v0.49.0` (2026-07-15).** A small, deliberately non-retention-flavored fix filling the interim window while the v0.48.0 experiment cohort accrues data: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's own private Library instead of Public Library, with copy corrected to match ("Study X in your Library" instead of "Browse X notes in the community").
 
-**Next candidate under discussion (not scoped/kicked off):** "AI-generated Review Sets" — a curator pipeline (public notes → suggest Subject Plans → generate Companion → human review → publish), gated on the v0.42.0 authoring-assist pipeline proving out. See `docs/product/ROADMAP.md`.
+**`v0.48.0` (2026-07-15) — the strategically significant one.** Two isolated retention experiments — see the dedicated section above for full detail. Both unproven, cohort data accruing, a read expected roughly two weeks out.
+
+**Next real decision point:** whatever the v0.48.0 read shows. See `docs/product/ROADMAP.md`'s Backlog Index for the full current state of everything queued behind it.
 
 ---
 
-## Previous Releases: v0.40.0 → v0.43.0 (condensed — see `RELEASES.md` for full detail)
+## Previous Releases: v0.44.0 → v0.47.1 (condensed — see `RELEASES.md` for full detail)
+
+**v0.47.1 - V82 Migration Collision Hotfix.** A single-file Flyway migration renumber fixing a duplicate-version collision that had blocked every production deploy since `v0.46.0` merged (a rebase artifact — two migrations independently claimed version 82). No schema or behavior change.
+
+**v0.47.0 - Conversion Audit Tier 4: Cleanup Batch.** 16 low-impact, cheap-cleanup items from the conversion/retention UX audit backlog's Tier 4 (landing/pricing polish, public note detail, discovery/library polish, onboarding copy, doc hygiene, Learn signup-intent), shipped across 6 PRs. No new backend entities, migrations, or endpoints.
+
+**v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing.** The release that introduced the two capabilities v0.48.0 later tuned: a weekly due-concepts email digest (shipped default-OFF — the choice v0.48.0 revisited) and an exam-date pacing plan scheduling the learner's owned content only (explicitly not auto-generated curriculum). Scope broadened mid-release with a session-completion pacing echo and an app-feel polish batch.
+
+**v0.45.0 / v0.45.1 / v0.45.2 - Conversion Audit Tier 3 + collection fixes.** Tier 3 of the same conversion/retention UX audit (18 items — landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library), plus two fast-follow releases fixing pre-existing collection/discovery defects (Goal-collection note-count rollup, published-plan backlinks, a plan-preview panel gap).
+
+**v0.44.0 - Conversion & Retention Polish.** The release that established retention (not top-of-funnel or conversion) as the proven constraint, shipping Tier 1 and Tier 2 of a 7-session conversion/retention UX audit plus a verified backend fix for Quick Review's missing ConceptHealth tracking. This is the audit whose Tier 3/4 later became v0.45.0 and v0.47.0.
+
+---
+
+## Previous Releases: v0.40.0 → v0.43.1 (condensed — see `RELEASES.md` for full detail)
+
+**v0.43.1 - Companion Mentor Tips.** Small, individually-surfaceable, action-linked Mentor Tips living inside the existing `note_collections.companion` JSONB (no new table), replacing the "read start to finish" article framing with atomic coach-surfaced moments. Shipped alongside a real trust-bug fix: Pro-only paywalls no longer let a user pay for a dead-end Plus checkout.
 
 **v0.43.0 - Companion Coach Experience.** Frontend-only: coach-voice heading map over `CompanionDisplayCard` (order-preserving, no reordering — "Curation, never generation" unaffected); `TodaysFocusCard` merges former countdown/primary-action/coach-intro surfaces into one top-of-page Coach card; `CompanionDisplayCard` collapses by default behind "View Full Guide" on every viewport. Mid-release philosophy refinement formalized the Coach (dynamic)/Companion (timeless) split — see Learning Companion vision above.
 
@@ -344,6 +379,8 @@ See the dedicated vision section above for the full narrative. Quick reference:
 - Do not reorder the five authored Companion sections (Overview/Study Strategy/Common Mistakes/FAQ/Resources) or infer a Mentor Tip's linked action at render time — action-linking is curator-tagged at authoring time only.
 - Do not make Mentor Tip/Companion surfacing adaptive or learning-pattern/LLM-driven — deterministic date/progress rules only; that tier is reserved for the gated, not-yet-scoped PRO Personalization candidate.
 - Do not let a surfacing condition permanently hide a Mentor Tip — "View Full Guide" must always list every authored tip regardless of current eligibility.
+- Do not backfill a reminder-email preference default change onto existing users — new-signup defaults (e.g. the due-concepts digest, default-ON since v0.48.0) apply only at account creation; existing users keep whatever they already had.
+- Do not propose or re-surface roadmap candidates without checking `docs/product/ROADMAP.md`'s Backlog Index first — it is the single source of truth for what's held, what's conditional, and why; treat any idea not found there as possibly already decided against.
 - Use `globalThis`, not `window`, in frontend code.
 - Backend exceptions should be named `AppException` subclasses, not inline raw `new AppException(...)`.
 - Repeated logic-bearing strings should be constants.
@@ -437,7 +474,7 @@ Prompt rules:
 - `AGENTS.md` - implementation rules and anti-drift constraints
 - `CLAUDE.md` - Claude Code routing, commands, and commit rules
 - `RELEASES.md` - current and historical release state
-- `docs/product/ROADMAP.md` - current release sequencing and future scope
+- `docs/product/ROADMAP.md` - current release sequencing and future scope; its Backlog Index table is the authoritative list of every open candidate, its status, and its gate condition
 - `docs/product/SPEC.md` - canonical product behavior
 - `docs/product/EXAM_MODES.md` - locked quiz mode hierarchy, question formats, and non-engine review surfaces
 - `docs/product/PLANS.md` - plan tiers and quotas

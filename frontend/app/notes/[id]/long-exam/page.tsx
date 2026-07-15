@@ -8,7 +8,7 @@ import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {ExamTopBar} from "@/components/exam-mode/exam-top-bar";
-import {useExamFocusMode} from "@/components/exam-mode/exam-focus-context";
+import {useBottomViewportClaim, useExamFocusMode} from "@/components/exam-mode/exam-focus-context";
 import {QuestionNavigator} from "@/components/exam-mode/question-navigator";
 import {ScoreReveal} from "@/components/exam-mode/score-reveal";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
@@ -222,6 +222,7 @@ export default function LongExamPage() {
     const timerState = resolveBoardExamTimerState(remainingSeconds);
     const longExamActive = phase === "running" && Boolean(sessionId);
     const isLastQuestion = (currentMatchingGroup?.endIndex ?? currentQuestionIndex) === totalQuestions - 1;
+    useBottomViewportClaim(longExamActive);
     useExamFocusMode(phase === "running");
 
     const showToast = useCallback((message: string, tone: ToastState["tone"] = "info") => {
