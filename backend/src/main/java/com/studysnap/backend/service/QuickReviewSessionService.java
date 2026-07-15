@@ -22,6 +22,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
+import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
@@ -41,6 +42,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -56,6 +58,7 @@ public class QuickReviewSessionService {
 
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
+    private final ActivityEventRepository activityEventRepository;
     private final ActivityTrackingService activityTrackingService;
     private final AnalyticsService analyticsService;
     private final SubscriptionService subscriptionService;
@@ -212,9 +215,13 @@ public class QuickReviewSessionService {
             conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
         }
 
+        boolean isFirstCompletedQuiz = !activityEventRepository.existsByUserIdAndActivityTypeIn(
+                userId,
+                Set.of(ActivityType.COMPLETED_QUICK_REVIEW, ActivityType.COMPLETED_CHALLENGE_QUIZ)
+        );
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
-        return toResponse(saved, planType);
+        return toResponse(saved, planType, isFirstCompletedQuiz);
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
@@ -375,6 +382,14 @@ public class QuickReviewSessionService {
     }
 
     private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session, PlanType planType) {
+        return toResponse(session, planType, false);
+    }
+
+    private QuickReviewSessionResponse toResponse(
+            QuickReviewSessionEntity session,
+            PlanType planType,
+            boolean isFirstCompletedQuiz
+    ) {
         return new QuickReviewSessionResponse(
                 session.getId().toString(),
                 session.getStudyPackId().toString(),
@@ -390,7 +405,8 @@ public class QuickReviewSessionService {
                 featureGateService.hasFeatureAccess(planType, Feature.WEAK_CONCEPT_DETECTION) ? extractWeakConcepts(session) : List.of(),
                 session.getSessionState(),
                 session.getCreatedAt(),
-                session.getCompletedAt()
+                session.getCompletedAt(),
+                isFirstCompletedQuiz
         );
     }
 

@@ -482,6 +482,7 @@ export type AnalyticsEventType =
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"
+  | "QUICK_REVIEW_OPEN_LOOP_SHOWN"
   | "CHALLENGE_QUIZ_STARTED"
   | "CHALLENGE_QUIZ_COMPLETED"
   | "BOARD_EXAM_STARTED"
@@ -972,6 +973,7 @@ export type QuickReviewSessionSummaryResponse = {
   sessionState?: Record<string, unknown> | null;
   createdAt: string;
   completedAt: string | null;
+  isFirstCompletedQuiz?: boolean;
 };
 
 export type QuickReviewPerformanceSummaryResponse = {
