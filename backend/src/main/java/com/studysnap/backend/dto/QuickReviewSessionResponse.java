@@ -24,6 +24,7 @@ public record QuickReviewSessionResponse(
         List<String> weakConcepts,
         Map<String, Object> sessionState,
         OffsetDateTime createdAt,
-        OffsetDateTime completedAt
+        OffsetDateTime completedAt,
+        boolean isFirstCompletedQuiz
 ) {
 }

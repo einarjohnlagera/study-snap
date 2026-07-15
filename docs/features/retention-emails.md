@@ -23,7 +23,7 @@ Current reminders include:
 - `DUE_CONCEPTS_DIGEST`
   - trigger: weekly run finds due concepts across the user's owned Study Packs through `ConceptHealthService`
   - includes the total due-concept count and up to three Study Pack titles with the most due concepts, linking to Dashboard Today Focus
-  - gated by `dueConceptsDigestRemindersEnabled` (default off until the user opts in)
+  - gated by `dueConceptsDigestRemindersEnabled` (default on for new signups; existing users retain their previously persisted preference)
   - cooldown: `7` days
 - `RE_ENGAGEMENT_2025`
   - trigger: admin-started re-engagement campaign for inactive verified users
@@ -74,7 +74,7 @@ The inactivity run computes `sentToday` from `email_log.sent_at >= start of the 
 
 Candidates skipped by this budget are not written to `email_log`; they remain eligible for a later daily run if cooldown and activity gating still allow it. Verification, password reset, billing, and other transactional paths send immediately and are never gated by this re-engagement budget.
 
-New signups default `inactivityRemindersEnabled` to `true`. `weakConceptRemindersEnabled`, `weeklySummaryRemindersEnabled`, `dueConceptsDigestRemindersEnabled`, and `marketingEmailsEnabled` remain default-off.
+New signups default `inactivityRemindersEnabled` and `dueConceptsDigestRemindersEnabled` to `true`. `weakConceptRemindersEnabled`, `weeklySummaryRemindersEnabled`, and `marketingEmailsEnabled` remain default-off.
 
 `ResendEmailService` retries on HTTP `429` (rate limit) — honoring the `Retry-After` header, otherwise exponential backoff (max 3 attempts, capped at 5s) — so transactional email isn't dropped during a send burst. IO and non-429 errors are not retried. The real capacity fix is operational (upgrade the Resend tier).
 

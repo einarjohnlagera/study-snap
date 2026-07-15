@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.47.1 - V82 Migration Collision Hotfix` is the current released version (on `releases/v0.47.1`, cut from `main` after v0.47.0 merged) — a single-file fix for a duplicate Flyway migration version that has blocked every production deploy since `v0.46.0` merged. No schema or behavior change, renumbers a never-applied migration only. See `RELEASES.md`.
+`v0.48.0 - Retention Experiment: Open Loop & Digest Trigger` is the current released version (on `releases/v0.48.0`, cut from `main` after v0.47.1 merged) — two independent retention experiments testing the co-dominant causes from the retention root-cause diagnosis: an open-loop first-quiz ending (frontend) and a due-concepts digest default-ON trigger fix with CTA/content work (backend + frontend). Both are unproven experiments, not confirmed wins — lift is not yet measured. See `RELEASES.md`.
+
+`v0.47.1 - V82 Migration Collision Hotfix` is the previous released version (on `releases/v0.47.1`, cut from `main` after v0.47.0 merged) — a single-file fix for a duplicate Flyway migration version that had blocked every production deploy since `v0.46.0` merged. No schema or behavior change, renumbers a never-applied migration only. See `RELEASES.md`.
 
 `v0.47.0 - Conversion Audit Tier 4: Cleanup Batch` is the previous released version (on `releases/v0.47.0`, cut from `main` after v0.46.0 merged) — 16 low-impact, cheap-cleanup items from the conversion/retention UX audit backlog's Tier 4, shipped across 6 Codex-prompted PRs (Landing & Pricing, Public Note Detail, Discovery & Library, Onboarding copy, Doc hygiene, Learn signup-intent). Item 37 was initially dropped, then folded back in at a smaller scope once its original cookie-based mechanism proved a poor fit. No new backend entities, migrations, or endpoints. See `RELEASES.md`.
 
@@ -29,6 +31,10 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 `v0.41.1 - Review Set Detail Page: This-Set Study Dashboard` is the previous released version (on `releases/v0.41.1`).
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
+
+## v0.48.0 - Retention Experiment: Open Loop & Digest Trigger (Released, base branch `releases/v0.48.0`)
+
+Origin: `docs/claude-prompt/retention-diagnosis-session-plan.md`'s "Recommended v0.48.0 scope" — two Fable sessions (growth/retention diagnosis + consumer psychology) converged on dead trigger infrastructure and no open loop at first-session end as co-dominant retention causes, sharpened by real production data pulls (week-1 depth ≈ W2 retention magnitude; exam-dated users retained *worse* under status quo, since nothing currently acts on the field). A pre-kickoff Resend open/click check (domain-wide, not `INACTIVITY`-specific — no per-type tagging exists to decompose it) found sub-1% click-through, which didn't kill either experiment but reweighted the digest trigger fix to include CTA/content work rather than a bare default flip. Full scope in `RELEASES.md`.
 
 ## v0.47.1 - V82 Migration Collision Hotfix (Released, base branch `releases/v0.47.1`)
 

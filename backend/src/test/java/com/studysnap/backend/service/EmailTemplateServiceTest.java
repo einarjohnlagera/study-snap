@@ -71,6 +71,30 @@ class EmailTemplateServiceTest {
     }
 
     @Test
+    void render_dueConceptsDigestTemplateUsesActionButtonAndFallbackLink() {
+        EmailTemplateService.RenderedEmailTemplate rendered = service.render(
+                "retention-due-concepts-digest",
+                Map.of(
+                        "firstName", "Note",
+                        "dueConceptCount", "3",
+                        "studyPackList", "Cell Biology\nAnatomy",
+                        "dashboardUrl", "https://notelib.test/dashboard",
+                        "unsubscribeFooterHtml", "<p>Unsubscribe</p>",
+                        "unsubscribeFooterText", "Unsubscribe: https://notelib.test/unsubscribe?token=abc"
+                )
+        );
+
+        assertThat(rendered.subject()).isEqualTo("3 concepts are due for review");
+        assertThat(rendered.htmlBody()).contains(
+                "style=\"display:inline-block;padding:10px 16px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;\"",
+                "Open Today Focus",
+                "If the button does not work, use this link:",
+                "<a href=\"https://notelib.test/dashboard\">https://notelib.test/dashboard</a>"
+        );
+        assertThat(rendered.textBody()).contains("Open Today Focus:", "https://notelib.test/dashboard");
+    }
+
+    @Test
     void render_throwsWhenTemplateParameterIsMissing() {
         assertThatThrownBy(() -> service.render(
                 "verification-email",

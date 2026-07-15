@@ -137,6 +137,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getInactivityRemindersEnabled()).isTrue();
         assertThat(savedUser.getValue().getWeakConceptRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
+        assertThat(savedUser.getValue().getDueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
@@ -236,6 +237,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getInactivityRemindersEnabled()).isTrue();
         assertThat(savedUser.getValue().getWeakConceptRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
+        assertThat(savedUser.getValue().getDueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));

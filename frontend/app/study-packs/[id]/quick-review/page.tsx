@@ -205,6 +205,7 @@ export default function QuickReviewPage() {
   const { usageSummary } = useBillingUsageSummary();
   const loadedNoteIdRef = useRef<string | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
+  const openLoopTrackedSessionIdRef = useRef<string | null>(null);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -395,6 +396,17 @@ export default function QuickReviewPage() {
       .filter((concept): concept is string => concept !== null);
     return Array.from(new Set(concepts));
   }, [quiz, selectedChoices, selectedMultiChoices]);
+  const totalConcepts = useMemo(() => {
+    const concepts = quiz
+      .map((item) => item.concept?.trim())
+      .filter((concept): concept is string => Boolean(concept));
+    return new Set(concepts).size;
+  }, [quiz]);
+  const securedCount = totalConcepts - weakConcepts.length;
+  const shouldShowOpenLoop = isComplete
+    && persistedResult?.isFirstCompletedQuiz === true
+    && totalConcepts > 0
+    && securedCount < totalConcepts;
   const displayedWeakConcepts = useMemo(() => {
     const persistedWeakConcepts = persistedResult?.weakConcepts?.filter((concept) => concept.trim().length > 0) ?? [];
     if (persistedWeakConcepts.length > 0) {
@@ -649,6 +661,19 @@ export default function QuickReviewPage() {
       });
     }
   }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
+
+  useEffect(() => {
+    if (!shouldShowOpenLoop || !persistedResult || openLoopTrackedSessionIdRef.current === persistedResult.id) {
+      return;
+    }
+
+    openLoopTrackedSessionIdRef.current = persistedResult.id;
+    void trackAnalyticsEvent({
+      eventType: "QUICK_REVIEW_OPEN_LOOP_SHOWN",
+      entityId: persistedResult.id,
+      metadata: { securedCount, totalConcepts },
+    });
+  }, [persistedResult, securedCount, shouldShowOpenLoop, totalConcepts]);
 
   useEffect(() => {
     if (!isComplete || !note) {
@@ -996,8 +1021,14 @@ export default function QuickReviewPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Complete
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Your results</h1>
-          <p className="text-sm text-foreground/75">Review your results, then choose your next study step.</p>
+          <h1 className="text-xl font-semibold sm:text-2xl">
+            {shouldShowOpenLoop ? `${securedCount} of ${totalConcepts} ${totalConcepts === 1 ? "concept" : "concepts"} secured` : "Your results"}
+          </h1>
+          <p className="text-sm text-foreground/75">
+            {shouldShowOpenLoop
+              ? "The rest are best reviewed tomorrow — you're not done yet."
+              : "Review your results, then choose your next study step."}
+          </p>
 
           {/* Section 1: Score summary */}
           <div className="space-y-2 text-sm text-foreground/75">

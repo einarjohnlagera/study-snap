@@ -17,6 +17,7 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
@@ -36,6 +37,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +59,8 @@ class QuickReviewSessionServiceTest {
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
+    private ActivityEventRepository activityEventRepository;
+    @Mock
     private ActivityTrackingService activityTrackingService;
     @Mock
     private AnalyticsService analyticsService;
@@ -73,6 +77,7 @@ class QuickReviewSessionServiceTest {
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
+                activityEventRepository,
                 activityTrackingService,
                 analyticsService,
                 subscriptionService,
@@ -127,6 +132,7 @@ class QuickReviewSessionServiceTest {
                         invocation.getArgument(1)
                 ));
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
+        lenient().when(activityEventRepository.existsByUserIdAndActivityTypeIn(any(UUID.class), any())).thenReturn(false);
     }
 
     @Test
@@ -152,6 +158,50 @@ class QuickReviewSessionServiceTest {
         assertThat(response.scorePercentage()).isEqualByComparingTo("60.00");
         assertThat(response.retryCount()).isEqualTo(1);
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+    }
+
+    @Test
+    void completeSession_marksFirstCompletedQuizWhenNoPriorQuickReviewOrChallengeActivityExists() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(
+                userId,
+                Set.of(ActivityType.COMPLETED_QUICK_REVIEW, ActivityType.COMPLETED_CHALLENGE_QUIZ)
+        )).thenReturn(false);
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null)
+        );
+
+        assertThat(response.isFirstCompletedQuiz()).isTrue();
+    }
+
+    @Test
+    void completeSession_marksReturningLearnerWhenPriorChallengeQuizActivityExists() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(
+                userId,
+                Set.of(ActivityType.COMPLETED_QUICK_REVIEW, ActivityType.COMPLETED_CHALLENGE_QUIZ)
+        )).thenReturn(true);
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null)
+        );
+
+        assertThat(response.isFirstCompletedQuiz()).isFalse();
     }
 
     @Test

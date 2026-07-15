@@ -11,6 +11,7 @@ import {
   getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
+  trackAnalyticsEvent,
   updateQuickReviewSessionProgress,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -114,6 +115,7 @@ describe("QuickReviewPage first-study onboarding", () => {
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (updateQuickReviewSessionProgress as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -210,6 +212,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (saveQuickReviewConfidence as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateQuickReviewSessionProgress as jest.Mock).mockResolvedValue(undefined);
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
@@ -250,6 +253,65 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     const noteButton = screen.queryByRole("button", { name: /^Note$/ });
     expect(noteButton).not.toBeInTheDocument();
+  });
+
+  it("shows the open loop for a first incomplete quiz and tracks it once", async () => {
+    setupCompleteState();
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      isFirstCompletedQuiz: true,
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+
+    expect(await screen.findByRole("heading", { name: "0 of 1 concept secured" })).toBeInTheDocument();
+    expect(screen.getByText("The rest are best reviewed tomorrow — you're not done yet.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "QUICK_REVIEW_OPEN_LOOP_SHOWN",
+        entityId: "session-1",
+        metadata: { securedCount: 0, totalConcepts: 1 },
+      });
+    });
+    expect(trackAnalyticsEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the standard header for a returning learner", async () => {
+    setupCompleteState();
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      isFirstCompletedQuiz: false,
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+
+    expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
+    expect(screen.queryByText(/concept secured/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the standard header for a perfect first quiz", async () => {
+    setupCompleteState();
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      weakConcepts: [],
+      isFirstCompletedQuiz: true,
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "QUICK_REVIEW_COMPLETED" }));
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({ eventType: "QUICK_REVIEW_OPEN_LOOP_SHOWN" }));
   });
 
   it("fetches and renders the server-resolved next step after completion", async () => {
