@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.47.1 - V82 Migration Collision Hotfix` is in progress (on `releases/v0.47.1`, cut from `main` after v0.47.0 merged) — a single-file fix for a duplicate Flyway migration version that has blocked every production deploy since `v0.46.0` merged. No schema or behavior change, renumbers a never-applied migration only. See `RELEASES.md`.
+`v0.47.1 - V82 Migration Collision Hotfix` is the current released version (on `releases/v0.47.1`, cut from `main` after v0.47.0 merged) — a single-file fix for a duplicate Flyway migration version that has blocked every production deploy since `v0.46.0` merged. No schema or behavior change, renumbers a never-applied migration only. See `RELEASES.md`.
 
 `v0.47.0 - Conversion Audit Tier 4: Cleanup Batch` is the previous released version (on `releases/v0.47.0`, cut from `main` after v0.46.0 merged) — 16 low-impact, cheap-cleanup items from the conversion/retention UX audit backlog's Tier 4, shipped across 6 Codex-prompted PRs (Landing & Pricing, Public Note Detail, Discovery & Library, Onboarding copy, Doc hygiene, Learn signup-intent). Item 37 was initially dropped, then folded back in at a smaller scope once its original cookie-based mechanism proved a poor fit. No new backend entities, migrations, or endpoints. See `RELEASES.md`.
 
@@ -30,7 +30,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
-## v0.47.1 - V82 Migration Collision Hotfix (in progress, base branch `releases/v0.47.1`)
+## v0.47.1 - V82 Migration Collision Hotfix (Released, base branch `releases/v0.47.1`)
 
 Origin: production deploy has failed since `v0.46.0` merged with `Found more than one migration with version 82`. Root cause: a rebase artifact — `releases/v0.46.0` was cut from `main` before `v0.45.2` existed and later rebased onto latest `main`, but the due-concepts-digest migration kept its version number from the older base instead of picking up the number the newer `main` had already taken. Full scope in `RELEASES.md`.
 

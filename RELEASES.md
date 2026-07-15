@@ -2,7 +2,7 @@
 
 ## v0.47.1 - V82 Migration Collision Hotfix
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: unblock production deploy, which has been failing since `v0.46.0` merged.
 
@@ -14,7 +14,7 @@ Anti-drift: no schema/behavior change — this renumbers a migration file only, 
 
 ### Shipped
 
-_(nothing yet)_
+- **Renumbered the never-applied due-concepts-digest migration from `V82` to `V92` (backend).** Resolves the Flyway startup collision that has blocked every production deploy since `v0.46.0` merged. Verified against the local dev DB's `flyway_schema_history` (ground truth, not assumption) that `V82__email_budget_and_suppression.sql` is the one already applied everywhere and the digest migration had never run anywhere — so the rename carries zero schema risk in either direction. Verified via a full backend test suite run and a real Spring Boot application-context startup against a persistent local DB (the same startup path Flyway validates against in production, which a mocked-DB test suite would not exercise). **Deploy note:** if a prior deploy attempt left a stale build artifact (`target/classes`) with the old duplicate-version `V82` file baked in, do a clean build (`./mvnw clean install`) before deploying — a non-clean build can still surface the old collision even after this fix.
 
 ## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch
 

@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.47.1 - V82 Migration Collision Hotfix` (in progress); previous: `v0.47.0 - Conversion Audit Tier 4: Cleanup Batch`
+- `v0.47.1 - V82 Migration Collision Hotfix` (Released); previous: `v0.47.0 - Conversion Audit Tier 4: Cleanup Batch`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
