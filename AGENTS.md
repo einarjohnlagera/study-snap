@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger` (in progress); previous: `v0.47.1 - V82 Migration Collision Hotfix`
+- `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger` (Released); previous: `v0.47.1 - V82 Migration Collision Hotfix`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 

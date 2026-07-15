@@ -2,7 +2,7 @@
 
 ## v0.48.0 - Retention Experiment: Open Loop & Digest Trigger
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: test the two co-dominant causes identified in the retention root-cause diagnosis (`docs/claude-prompt/retention-diagnosis-session-plan.md`) — dead trigger infrastructure and no open loop at first-session end — with two independently cheap, independently measurable experiments against the same cohort methodology used in the diagnosis.
 
