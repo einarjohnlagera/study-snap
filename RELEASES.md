@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.47.1 - V82 Migration Collision Hotfix
+
+**Status: Released**
+
+Theme: unblock production deploy, which has been failing since `v0.46.0` merged.
+
+### Planned Scope
+
+- **Fix duplicate Flyway migration version (backend).** `V82__email_budget_and_suppression.sql` (merged to `main` 2026-06-24, already applied in every real environment including prod) and `V82__user_due_concepts_digest_reminder_preference.sql` (introduced by the due-concepts-digest feature, `releases/v0.46.0`) both claimed version 82 — a rebase artifact: the `v0.46.0` branch was cut from `main` before `v0.45.2` existed and later rebased onto latest `main`, but the digest migration kept its version number from the older base instead of picking up the number already taken by the newer merge. Flyway refuses to start when it finds two migrations at the same version, which has blocked every deploy attempt since. Fix: renumber the never-applied digest migration to `V92` (the next free version after the existing highest, `V91`) — zero schema dependency either direction, confirmed via the local dev DB's actual `flyway_schema_history` (V82 = `email_budget_and_suppression` already recorded there; the digest migration has never successfully run anywhere, including locally).
+
+Anti-drift: no schema/behavior change — this renumbers a migration file only, content unchanged.
+
+### Shipped
+
+- **Renumbered the never-applied due-concepts-digest migration from `V82` to `V92` (backend).** Resolves the Flyway startup collision that has blocked every production deploy since `v0.46.0` merged. Verified against the local dev DB's `flyway_schema_history` (ground truth, not assumption) that `V82__email_budget_and_suppression.sql` is the one already applied everywhere and the digest migration had never run anywhere — so the rename carries zero schema risk in either direction. Verified via a full backend test suite run and a real Spring Boot application-context startup against a persistent local DB (the same startup path Flyway validates against in production, which a mocked-DB test suite would not exercise). **Deploy note:** if a prior deploy attempt left a stale build artifact (`target/classes`) with the old duplicate-version `V82` file baked in, do a clean build (`./mvnw clean install`) before deploying — a non-clean build can still surface the old collision even after this fix.
+
 ## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch
 
 **Status: Released**
