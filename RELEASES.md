@@ -2,7 +2,7 @@
 
 ## v0.50.0 - Mobile Bottom Tab Bar
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: add a persistent mobile bottom tab bar (Dashboard / Library / Review Sets / Public Library) to the authenticated app shell. Originally gated by a Fable App Shape proposal on evidence of a mobile-majority user base; a 2026-07-15 production device-mix pull found ~75% mobile vs. 25% desktop by distinct users, meeting that gate. Navigation-shape work, not a retention experiment — orthogonal to the concurrently-accruing v0.48.0 cohort read. Mid-release scope addition (2026-07-15): the 3 held instrumentation pulls from `retention-diagnosis-session-plan.md`'s Strategy checkpoint, folded in after an explicit decision to instrument rather than opened as their own version — analytics-collection only, no new UI surfaced from the data, so it doesn't confound the v0.48.0 cohort read either.
 
