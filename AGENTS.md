@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.49.0 - Progress Page: Private Library Links` (in progress); previous: `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger`
+- `v0.49.0 - Progress Page: Private Library Links` (Released); previous: `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 

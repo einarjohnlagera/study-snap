@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.49.0 — Progress Page: Private Library Links** (in progress, base branch `releases/v0.49.0`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.49.0 — Progress Page: Private Library Links** (Released, base branch `releases/v0.49.0`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -212,3 +212,4 @@ When closing a release (marking it Released), commit the closure directly on the
 5. Update documentation baseline and version reference in `AGENTS.md`.
 6. Update release baseline line in `README.md`.
 7. Write release notes to `docs/releases/v{X.Y.Z}.md` for the version just closed.
+8. Scan `ROADMAP.md`'s Backlog Index: bump `Last reviewed`, check whether any `Gate` condition became true, and verify every `docs/claude-prompt/*-out/` planning directory still has a row — this is the only enforced checkpoint against a large planning effort (a multi-document Fable session, a paused exploration) silently going unindexed across release cycles.

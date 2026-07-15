@@ -2,7 +2,7 @@
 
 ## v0.49.0 - Progress Page: Private Library Links
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix Progress page navigation to point at the learner's own private Library instead of the public one, for actions that are inherently personal ("study this next"). Orthogonal to the v0.48.0 retention experiments — deliberately not retention-flavored, so it doesn't confound the cohort read currently accruing on those two changes.
 

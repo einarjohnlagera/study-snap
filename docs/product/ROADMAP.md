@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.49.0 - Progress Page: Private Library Links` is in progress (on `releases/v0.49.0`, cut from `main` after v0.48.0 merged) — a small, deliberately non-retention-flavored fix: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's private Library instead of the public one. Scoped to fill the interim window while the v0.48.0 retention experiment cohort accrues enough data for a read, without confounding that read. See `RELEASES.md`.
+`v0.49.0 - Progress Page: Private Library Links` is the current released version (on `releases/v0.49.0`, cut from `main` after v0.48.0 merged) — a small, deliberately non-retention-flavored fix: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's private Library instead of the public one. Scoped to fill the interim window while the v0.48.0 retention experiment cohort accrues enough data for a read, without confounding that read. See `RELEASES.md`.
 
 `v0.48.0 - Retention Experiment: Open Loop & Digest Trigger` is the previous released version (on `releases/v0.48.0`, cut from `main` after v0.47.1 merged) — two independent retention experiments testing the co-dominant causes from the retention root-cause diagnosis: an open-loop first-quiz ending (frontend) and a due-concepts digest default-ON trigger fix with CTA/content work (backend + frontend). Both are unproven experiments, not confirmed wins — lift is not yet measured. See `RELEASES.md`.
 
@@ -22,7 +22,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.45.0 - Conversion Audit Tier 3 — Landing, Pricing & Discovery Polish` is the previous released version before that (on `releases/v0.45.0`) — 18 medium-impact, lower-urgency items (#19–36) from the same 7-session conversion/retention UX audit that drove v0.44.0, shipped across 6 thematic PRs (landing, pricing, note detail, public plan card, onboarding/Dashboard guidance, Public Library) plus two post-merge follow-ups and one regression-fix bundle. See `RELEASES.md`.
 
-`v0.44.0 - Conversion & Retention Polish` is the previous released version before that (on `releases/v0.44.0`) — Tier 1 findings from the same audit shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either.
+`v0.44.0 - Conversion & Retention Polish` is the previous released version before that (on `releases/v0.44.0`) — Tier 1 findings from the same audit shipped in full, plus a verified backend fix for Quick Review's missing ConceptHealth tracking and a mid-release copy-on-signup onboarding-intercept fix (both pressure-tested and closed), plus Tier 2 of the same audit backlog (7 items, folded in as a second slice rather than opening a new version). A whole-release pre-signoff pressure test found no functional defects; three items are logged as known, unfixed limitations rather than blockers — see `RELEASES.md`. The "AI-generated Review Sets" candidate (see "Future, gated — AI-generated Review Sets" below) remains under product/UX discussion and has not been scoped or kicked off; a much larger, separate "Smart Review Planning" exploration exists as paused planning material in `docs/claude-prompt/fable-out/` and is not yet scoped to any release either — see the Backlog Index above for its current gate condition.
 
 `v0.43.1 - Companion Mentor Tips` is the previous released version before that (on `releases/v0.43.1`).
 
@@ -34,7 +34,35 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarized in `docs/archive/ROADMAP_ARCHIVE.md`'s index and in full in `RELEASES.md` / `docs/archive/RELEASES_ARCHIVE.md` / `docs/releases/vX.Y.Z.md`.
 
-## v0.49.0 - Progress Page: Private Library Links (in progress, base branch `releases/v0.49.0`)
+## Backlog Index (read this before deciding what's next — do not scan prose to find candidates)
+
+**Invariant: no `docs/claude-prompt/*-out/` directory or session-plan file may exist without a row here.** A Fable session that writes planning output adds its row in the same commit. This rule exists because Smart Review Planning (7 fully-architected documents in `docs/claude-prompt/fable-out/`) sat undiscovered for ~5 release cycles, found only by chance when the user asked about it directly — a prose mention buried in a released-version paragraph is not an index entry.
+
+**Review ritual:** every `/kickoff`, scan this table — bump `Last reviewed`, check whether any `Gate` condition became true, verify every `docs/claude-prompt/` planning directory still has a row (see kickoff checklist step 8 in `CLAUDE.md`).
+
+| Item | Source | Status | Gate (what un-parks it) | Last reviewed |
+|---|---|---|---|---|
+| Retention H1 + H5 (commitment device + pre-decided return action) | `retention-diagnosis-session-plan.md` | Conditional — next up | v0.48.0 cohort read positive-or-ambiguous (~late July 2026) | 2026-07-15 |
+| User interviews + analytics pass (UTM, device mix, PDF export volume, offline-fallback hit rate, exam-content-gap probe, browse-without-adopt rate, manual coverage audit) | `retention-diagnosis-session-plan.md` "Strategy checkpoint" | Active — do now | none | 2026-07-15 |
+| **Smart Review Planning (Internal Curator, 7 docs)** | `docs/claude-prompt/fable-out/01–07` | Parked | interviews confirm content-gap churn AND manual coverage sprint proves lift AND hand-curation saturates | 2026-07-15 |
+| Manual Official-coverage sprint (hand-curate ALE/PNLE/LET) | this checkpoint (2026-07-15) | Conditional | interviews surface "no content for my exam" as a churn reason | 2026-07-15 |
+| Photo Capture of handwritten notes (Idea 6) | `new-capability-out/01-new-capability-ideation.md` | Held | retention loop proven (W1→W2 lift confirmed) | 2026-07-15 |
+| Parent Readiness Digest (Idea 4) | same | Conditional | H1 read positive + explicit product decision (email-only vs. dashboard shape) | 2026-07-15 |
+| Offline Study Pack access (Idea 9) | same | Held | heavy mobile share AND (PDF export volume OR offline-fallback hit rate OR interview signal) | 2026-07-15 |
+| Unified Next-Step Resolver | `app-shape-session-plan.md` | Merged into H5 | ships only alongside H5, not standalone | 2026-07-15 |
+| Mobile bottom tab bar | same | Conditional | device-mix pull shows heavy mobile usage | 2026-07-15 |
+| App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
+| App Shape Polish stragglers (sticky toolbar re-attempt, Result-Screen Companion Bridge, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
+| Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |
+| Listen Mode / Bilingual UI / Study Buddy (Ideas 7, 10, 11) | `new-capability-out/01-new-capability-ideation.md` | Low priority | interview language/social/loop signal | 2026-07-15 |
+| Conversion-audit deferred pair (adoption-count social proof, "Trending this week") | `conversion-audit-prioritized-backlog.md` | Held | windowed backend counts get built | pre-2026-07-15 |
+| AI-generated Review Sets / Runtime Companion (Ask Companion, Personalization) | `ROADMAP.md` §Future, gated | Parked | explicit product go-decision | pre-2026-07-15 |
+| Review-Set-Centric Navigation | `ROADMAP.md` §deferred | Parked | direction, not a scoped item — no gate stated | pre-2026-07-15 |
+| Deeper plan nesting (3+ level hierarchy) | `ROADMAP.md` §Deeper plan nesting | Parked, nice-to-have | no gate stated | pre-2026-07-15 |
+| Note Detail readiness as its own tab | `ROADMAP.md` §Note Detail readiness | Blocked | needs a mobile tab-overflow design pass | pre-2026-07-15 |
+| Legacy "Future Directions" block (exam-mode work, billing, teacher items pre-v0.20) | `ROADMAP.md` §Future Directions | Stale — needs a fresh audit, largely pre-dates current architecture | none stated | never (flag for cleanup) |
+
+## v0.49.0 - Progress Page: Private Library Links (Released, base branch `releases/v0.49.0`)
 
 Origin: surfaced during the v0.49.0 scoping pass as one of two candidates from the "Post-v0.40.0 Polish Backlog" for a small orthogonal release to fill the interim window while v0.48.0's retention experiments accrue cohort data. The other candidate (Adopted badge on Review Sets) turned out to already be shipped in v0.40.1 — that roadmap entry was stale and has been corrected above. Full scope in `RELEASES.md`.
 
@@ -72,7 +100,7 @@ Origin: a 7-session conversion/retention UX audit (`docs/claude-prompt/conversio
 
 Two things surfaced by the same audit are explicitly **not** in this release's scope:
 - **The `adaptivePracticeProOnly` pricing-copy-vs-runtime-gate divergence — resolved, no code change needed.** `StudySnapProperties.resolveMonthlyAdaptivePracticeLimit` has an `adaptivePracticeProOnly` kill-switch that, if `true`, would zero Free/Plus regardless of their configured 3/10 limits; it defaults `false` in both `application.yaml` and `application-prod.yaml`, and the owner confirmed production also runs with it unset/`false`. Marketing copy (3/10/30 across Free/Plus/Pro) was correct all along — `subscriptions-and-usage-limits.md`'s stale "Adaptive Practice unavailable"/"currently unavailable in runtime" lines and its "Pricing-surface note" mismatch disclaimer were corrected to match. No release scope required.
-- **"Smart Review Planning."** A much larger, separate initiative (curriculum-driven Review Set auto-assembly) exists as paused planning material in `docs/claude-prompt/fable-out/` — architecture, matching/coverage, admin workflow, student UX, monetization recommendation, terminology audit, and a phased technical roadmap are all drafted but nothing is scoped or kicked off. Unrelated to this release; mentioned here only so it isn't confused with the conversion-audit work.
+- **"Smart Review Planning."** A much larger, separate initiative (curriculum-driven Review Set auto-assembly) exists as paused planning material in `docs/claude-prompt/fable-out/` — architecture, matching/coverage, admin workflow, student UX, monetization recommendation, terminology audit, and a phased technical roadmap are all drafted but nothing is scoped or kicked off. Unrelated to this release; mentioned here only so it isn't confused with the conversion-audit work. **Current status and gate condition: see the Backlog Index above** — this sat unindexed for ~5 release cycles until a 2026-07-15 checkpoint surfaced it; don't let this historical mention be the only place it's tracked again.
 
 ## Retention Root-Cause Diagnosis (candidate, not yet scoped — diagnosis only, no implementation)
 
