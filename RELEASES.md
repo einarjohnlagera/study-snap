@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.47.1 - V82 Migration Collision Hotfix
+
+**Status: In Progress**
+
+Theme: unblock production deploy, which has been failing since `v0.46.0` merged.
+
+### Planned Scope
+
+- **Fix duplicate Flyway migration version (backend).** `V82__email_budget_and_suppression.sql` (merged to `main` 2026-06-24, already applied in every real environment including prod) and `V82__user_due_concepts_digest_reminder_preference.sql` (introduced by the due-concepts-digest feature, `releases/v0.46.0`) both claimed version 82 — a rebase artifact: the `v0.46.0` branch was cut from `main` before `v0.45.2` existed and later rebased onto latest `main`, but the digest migration kept its version number from the older base instead of picking up the number already taken by the newer merge. Flyway refuses to start when it finds two migrations at the same version, which has blocked every deploy attempt since. Fix: renumber the never-applied digest migration to `V92` (the next free version after the existing highest, `V91`) — zero schema dependency either direction, confirmed via the local dev DB's actual `flyway_schema_history` (V82 = `email_budget_and_suppression` already recorded there; the digest migration has never successfully run anywhere, including locally).
+
+Anti-drift: no schema/behavior change — this renumbers a migration file only, content unchanged.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch
 
 **Status: Released**
