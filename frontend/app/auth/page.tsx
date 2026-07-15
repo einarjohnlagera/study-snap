@@ -35,7 +35,9 @@ import {
   buildCopiedNotePath,
   clearCopyIntentCookie,
   getCopyIntentCookie,
+  PUBLIC_NOTE_COPY_AUTH_INTENT,
 } from "@/lib/public-note-copy";
+import { LEARN_GUIDE_AUTH_INTENT } from "@/lib/learn-guides";
 import { setPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
 import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
@@ -78,6 +80,19 @@ function AuthPageContent() {
   const searchKey = searchParams.toString();
   const searchMode = searchParams.get("mode");
   const loginReason = searchParams.get(LOGIN_REASON_QUERY_KEY);
+  const authDescription = useMemo(() => {
+    if (mode === "login") {
+      return "Continue to your study workspace.";
+    }
+    const authIntents = searchParams.getAll("intent");
+    if (authIntents.includes(PUBLIC_NOTE_COPY_AUTH_INTENT)) {
+      return "Sign up to save this note to your library.";
+    }
+    if (authIntents.includes(LEARN_GUIDE_AUTH_INTENT)) {
+      return "Sign up to keep learning with more free study guides.";
+    }
+    return "Sign up to generate and save Study Packs.";
+  }, [mode, searchParams]);
   const authNotice = useMemo(() => {
     switch (loginReason) {
       case LOGIN_REASON_SESSION_EXPIRED:
@@ -312,11 +327,7 @@ function AuthPageContent() {
         </div>
         <div className="space-y-2">
           <CardTitle>{mode === "login" ? "Log in to NoteLib" : "Create your NoteLib account"}</CardTitle>
-          <CardDescription>
-            {mode === "login"
-              ? "Continue to your study workspace."
-              : "Sign up to generate and save Study Packs."}
-          </CardDescription>
+          <CardDescription>{authDescription}</CardDescription>
           {authNotice ? (
             <p className={authNotice.className}>
               {authNotice.message}

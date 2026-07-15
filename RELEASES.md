@@ -1,5 +1,30 @@
 # RELEASES.md - NoteLib
 
+## v0.47.0 - Conversion Audit Tier 4: Cleanup Batch
+
+**Status: Released**
+
+Theme: close out the conversion/retention UX audit backlog (`docs/claude-prompt/conversion-audit-prioritized-backlog.md`) with its Tier 4 items — low-impact, cheap cleanups explicitly meant to be batched together rather than shipped as standalone releases. Item 52 from this tier already shipped in v0.46.0.
+
+Pre-scoping verification (2026-07-14, two passes) found the backlog's original routing needed three corrections: item 47 (Goal card sub-line label check) and item 50 (teacher-conditional Learner Level label qualifier) were both already fixed in prior releases (item 50 shipped in v0.45.0 — `frontend/app/onboarding/page.tsx:928` already has the qualifier) — both dropped, nothing to ship. Item 37 (carry Learn-article intent into signup) was initially dropped too — its originally-assumed mechanism (the exam-intent cookie + `goal-prompt-banner.tsx`'s exam-slug matching) doesn't fit, since Learn guides are category-keyed, not exam-slug-keyed. **Folded back in (2026-07-14) at a smaller scope** once all other items shipped: instead of the cookie/banner mechanism, it reuses the query-param intent pattern already shipped in this same release for item 43 (copy-note signup) — no cookie, no `goal-prompt-banner.tsx` changes. Full verification detail in the scoping conversation; source backlog unaffected. Also noted: item 48's onboarding-adopt-card component (`dashboard-study-plan-section.tsx`) is shared across 4 call sites (onboarding, Dashboard x2, Collections) — its "supplementary" reframing must be scoped to the onboarding context only (e.g. a context prop), not a blanket copy edit across all four.
+
+Unlike prior releases, this batch routes through Codex prompts per-item rather than direct Claude Code implementation, despite every item being individually small enough for direct implementation under `CLAUDE.md`'s routing table — a deliberate token-budget choice for this release, not a routing-rule change.
+
+### Planned Scope
+
+All items have shipped — see Shipped below.
+
+Anti-drift: no new backend entity, migration, or endpoint anywhere in this batch — every item confirmed frontend/doc-only during pre-scoping verification; no pricing/quota changes; item 37's original cookie/goal-banner mechanism and item 54's "High Quality" threshold redefinition stay explicitly out of scope (documented, not changed).
+
+### Shipped
+
+- **Learn signup-intent polish (frontend).** Learn article signup CTAs now carry a `learn` query intent through the existing signup/auth handoff, so the auth interstitial restates the visitor's reason for joining with free-study-guide copy. The existing public-note `copy-note` intent keeps priority, while unrecognized or absent intents retain the generic signup copy; no cookie or goal-banner logic changed.
+- **Landing & Pricing polish (frontend).** Tightened mobile padding/spacing on the hero and pricing-preview sections; harmonized step language between the landing loop section and `/how-it-works` instead of duplicating it; retitled the "AI Critique" Learn guide to make clear it's part of Interview Practice, not a standalone feature; added a region note under the pricing display, reusing the existing single-currency-per-region resolver (no ambiguity bug — this was purely a missing note, not a broken currency display).
+- **Discovery & Library polish (frontend).** Unified "adopted" vocabulary on `Adopted` across Collections, Collection Detail, and Dashboard (dropping the redundant "In your library" chip); Dashboard's Matching Study Plan section now shows a guidance card prompting the user to set their courseProgram instead of silently rendering nothing; documented the in-app subject filter vs. subject-landing-page split as intentional; Course/Program now renders as plain metadata text instead of a badge on shared note cards (Subject badge unchanged); documented the "High Quality" badge's existing thresholds (≥5 copies and ≥10 views) rather than changing them.
+- **Public Note Detail polish (frontend).** Added a client-side author mini-card on public notes using the existing public-profile reads, with a name-only fallback for private or unavailable profiles; visible `Home → Public Library → Subject → Note` breadcrumbs plus `BreadcrumbList` JSON-LD; copy-note signup intent now reaches the auth interstitial and restates “save this note to your library”; and non-owner public profiles now close with a creator-filtered Public Library browse link. No new backend DTO, endpoint, or schema surface.
+- **Onboarding copy polish (frontend).** The shared plan-adopt card now receives onboarding-only supplementary framing through an explicit `context="onboarding"` prop, leaving Dashboard and Collections copy unchanged. The Dashboard learner-level prompt now invites adjustments instead of implying a required value is missing, and Step 4 confirms the newly generated Study Pack is saved to the learner’s library alongside its existing back-navigation notice.
+- **Doc hygiene (docs only).** `seo.md` now documents subject landing pages' `CollectionPage` structured data; `public-library.md`'s More Filters modal order corrected to match the actual current filter set (added the existing `Study Pack Ready` toggle, removed the inaccurate `Learner Level` claim — Learner Level is not a Public Library filter); documented that filter mode has no pagination today (single page load of matching results).
+
 ## v0.46.0 - Retention Depth: Due-Concepts Digest & Exam Pacing
 
 **Status: Released**

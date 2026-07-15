@@ -695,6 +695,17 @@ export function PublicProfilePageClient({
         )}
       </section>
 
+      {!isOwner ? (
+        <p className="text-center text-sm text-foreground/70">
+          <Link
+            href={profile.username ? buildPublicLibraryUrl({ creator: profile.username }) : "/public/library"}
+            className="font-medium text-blue-700 transition-colors hover:underline dark:text-blue-300"
+          >
+            {profile.username ? `Browse more notes from ${profile.displayName}` : "Browse more notes in the Public Library"} →
+          </Link>
+        </p>
+      ) : null}
+
       <AppModal
         isOpen={showSharePrivateConfirm}
         title="This profile is private"

@@ -73,7 +73,7 @@ describe("PublicSeoCopyCta", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
 
     expect(pushMock).toHaveBeenCalledWith(
-      "/signup?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dgenerate",
+      "/signup?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dgenerate&intent=copy-note",
     );
     expect(document.cookie).toContain("notelib-copy-intent=note-1");
     expect(copyNote).not.toHaveBeenCalled();

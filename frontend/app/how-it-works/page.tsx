@@ -23,18 +23,18 @@ const howItWorksDescription =
 
 const steps = [
   {
-    title: "Add notes",
+    title: "Build your notes library",
     description: "Paste class notes, upload reviewers, or write directly into your workspace.",
     icon: FileText,
   },
   {
-    title: "Generate study pack",
+    title: "Generate a Study Pack",
     description: "Turn one saved note into a summary, key concepts, and quiz material when review starts.",
     icon: Sparkles,
   },
   {
-    title: "Test yourself",
-    description: "Use Challenge Quiz and Board Exam Mode to practice active recall instead of passive rereading.",
+    title: "Practice and improve",
+    description: "Use Quick Review, Challenge Quiz, or Board Exam Mode, then return to the concepts that need more review.",
     icon: Trophy,
   },
 ] as const;

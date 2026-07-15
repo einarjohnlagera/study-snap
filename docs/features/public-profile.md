@@ -99,6 +99,7 @@ Non-owners:
 - must not see `Edit Profile`
 - must not see the visibility toggle
 - may see `Share Profile` when the profile is public
+- see a closing `Browse more notes from {Display Name} →` link at the bottom of the page, linking to the creator-filtered Public Library view (`?creator={username}`); falls back to a generic `Browse more notes in the Public Library →` link when the profile has no username. Owners never see this affordance on their own profile.
 
 Navigation:
 

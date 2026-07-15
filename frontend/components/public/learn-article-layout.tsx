@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { BackLink } from "@/components/ui/back-link";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import type { LearnGuide } from "@/lib/learn-guides";
+import { LEARN_GUIDE_AUTH_INTENT, type LearnGuide } from "@/lib/learn-guides";
 
 type LearnArticleLayoutProps = {
   guide: LearnGuide;
@@ -104,7 +104,7 @@ export function LearnArticleLayout({ guide }: Readonly<LearnArticleLayoutProps>)
             Try NoteLib for free
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </p>
-          <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+          <Link href={`/signup?intent=${LEARN_GUIDE_AUTH_INTENT}`} className={buttonVariants({ className: "w-full sm:w-auto" })}>
             Create Free Account
           </Link>
         </div>

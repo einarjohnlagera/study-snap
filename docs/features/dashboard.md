@@ -34,7 +34,7 @@ After onboarding completes, Dashboard may show a lightweight learner-level promp
 Current prompt copy:
 
 - title: `Too easy or too hard?`
-- body: `Set your learner level so future quizzes match your study stage.`
+- body: `You can adjust your learner level anytime — quizzes will match your new study stage next time you practice.`
 - CTA: `Adjust level`
 
 Behavior:

@@ -51,6 +51,7 @@ Landing page should publish:
 - Landing page should emit `WebSite` JSON-LD.
 - Landing page should also emit `FAQPage` JSON-LD for its FAQ section, built from the same array that renders the visible Q&A cards (`buildFaqPageStructuredData` in `lib/structured-data.ts`) so copy and markup can't drift.
 - Public Library index should emit `CollectionPage` JSON-LD.
+- Public Library subject landing pages (`/public/library/{subject}`) should also emit `CollectionPage` JSON-LD.
 - Canonical public note pages should emit `Article` JSON-LD using real note data only.
 - Learn articles should emit `Article` JSON-LD (title, description, canonical URL, category as `articleSection`) — Learn is the flagship SEO content surface and previously had no structured data at all.
 
