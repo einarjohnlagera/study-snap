@@ -194,6 +194,7 @@ describe("ProgressPage", () => {
     expect(screen.queryByText(/due for review/)).not.toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Pharmacology readiness" })).toHaveAttribute("aria-valuenow", "70");
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: /Pharmacology[\s\S]*concepts tracked/ })).toHaveAttribute("href", "/library?subject=Pharmacology");
   });
 
   it("renders the empty state when there are no subjects", async () => {
@@ -313,7 +314,7 @@ describe("ProgressPage", () => {
 
     render(<ProgressReportClient />);
 
-    expect(await screen.findByText("Browse community LET notes to build your knowledge.")).toBeInTheDocument();
+    expect(await screen.findByText("Browse your LET notes to build your knowledge.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse LET notes →" })).toHaveAttribute("href", "/exam/let");
   });
 
@@ -335,9 +336,9 @@ describe("ProgressPage", () => {
 
     render(<ProgressReportClient />);
 
-    expect(await screen.findByText("Browse community Medical Surgical Nursing notes to build your knowledge.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Browse Medical Surgical Nursing notes in the community →" }))
-      .toHaveAttribute("href", "/public/library?courseProgram=Medical%20Surgical%20Nursing");
+    expect(await screen.findByText("Browse your Medical Surgical Nursing notes to build your knowledge.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Study Medical Surgical Nursing notes in your Library →" }))
+      .toHaveAttribute("href", "/library?cp=Medical%20Surgical%20Nursing");
   });
 
   it("renders an actionable study-focus card when no goal summary is set but subjects exist", async () => {
@@ -393,8 +394,8 @@ describe("ProgressPage", () => {
     expect(await screen.findByText("Focus on Medical Surgical Nursing — you have concepts left to practice.")).toBeInTheDocument();
     expect(screen.getByText("Study Focus")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Edit in Profile" })).toHaveAttribute("href", "/profile#study-focus");
-    expect(screen.getByRole("link", { name: "Browse Medical Surgical Nursing notes in the community →" }))
-      .toHaveAttribute("href", "/public/library?subject=Medical%20Surgical%20Nursing");
+    expect(screen.getByRole("link", { name: "Study Medical Surgical Nursing in your Library →" }))
+      .toHaveAttribute("href", "/library?subject=Medical%20Surgical%20Nursing");
   });
 
   it("does not fetch when the route guard redirects", async () => {
