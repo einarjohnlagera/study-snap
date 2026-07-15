@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.49.0 - Progress Page: Private Library Links
+
+**Status: In Progress**
+
+Theme: fix Progress page navigation to point at the learner's own private Library instead of the public one, for actions that are inherently personal ("study this next"). Orthogonal to the v0.48.0 retention experiments — deliberately not retention-flavored, so it doesn't confound the cohort read currently accruing on those two changes.
+
+### Planned Scope
+
+- **Per-subject Concept Mastery rows become links (frontend).** `progress-report-client.tsx`'s per-subject `ReadinessBar` rows are currently plain, non-interactive cards. Wrap them to link to `/library?subject={subject}` (private Library, filtered), scoped locally to this call site — not a change to the shared `ReadinessBar`/`ReadinessSummary` component's default behavior, since it's reused elsewhere (Collection Detail, Note Detail) without a link today.
+- **"Weakest subject" CTA reconciled to the private Library (frontend).** `NextStudyCard`'s both branches currently link to `/public/library` for what's meant to be a personal "study this next" action: the `SUBJECT_FOCUS` branch (`?subject=`) and the course-program fallback branch (`?courseProgram=`). Both corrected to their private-Library equivalents (`/library?subject=`, `/library?cp=`).
+
+Anti-drift: no backend change — both fixes reuse data and URL params Private Library already supports; no change to Public Library, which remains the correct destination for discovery-oriented flows elsewhere in the app.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.48.0 - Retention Experiment: Open Loop & Digest Trigger
 
 **Status: Released**
