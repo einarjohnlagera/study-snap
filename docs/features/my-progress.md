@@ -163,7 +163,7 @@ Milestones render in this order:
 5. `70% mastered` — `masteryPercentage >= 70`
 6. `All concepts mastered` — `masteryPercentage >= 100`
 
-The first unreached milestone is the active next target. Completed milestones use a filled marker, the next target uses an outlined marker with a ring highlight, and future milestones use muted styling. The milestone progress bar fills by reached checkpoint count out of the six fixed milestones.
+The first unreached milestone is the active next target. A `Next: {milestone label}` summary appears above the marker grid so zero-progress states remain legible without relying on the ring highlight; after every milestone is reached, it reads `All milestones reached`. Completed milestones use a filled marker, the next target uses an outlined marker with a ring highlight, and future milestones use muted styling. The milestone progress bar fills by reached checkpoint count out of the six fixed milestones.
 
 ## Subject Focus Goals
 

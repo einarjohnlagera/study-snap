@@ -143,6 +143,9 @@ function GoalMilestonesCard({ goalSummary }: Readonly<{ goalSummary: GoalSummary
   const nextMilestoneIndex = milestoneStates.findIndex((milestone) => !milestone.reached);
   const reachedCount = milestoneStates.filter((milestone) => milestone.reached).length;
   const progressWidth = (reachedCount / MILESTONES.length) * 100;
+  const milestoneSummary = nextMilestoneIndex === -1
+    ? "All milestones reached"
+    : `Next: ${milestoneStates[nextMilestoneIndex].label}`;
 
   return (
     <Card className="space-y-5 p-4 sm:p-6">
@@ -156,6 +159,8 @@ function GoalMilestonesCard({ goalSummary }: Readonly<{ goalSummary: GoalSummary
         </div>
         <HelpLink guideId="progress-focus" label="How milestones work" className="mt-1 shrink-0" />
       </div>
+
+      <p className="text-sm font-medium text-foreground">{milestoneSummary}</p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {milestoneStates.map((milestone, index) => {

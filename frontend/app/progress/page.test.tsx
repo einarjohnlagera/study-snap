@@ -272,6 +272,34 @@ describe("ProgressPage", () => {
     expect(screen.getByRole("heading", { name: "Goal Milestones" })).toBeInTheDocument();
   });
 
+  it("shows the next milestone summary at zero progress", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [],
+      goalSummary: goalSummary({ totalConcepts: 4, notPracticedConcepts: 4 }),
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByText("Next: First concept mastered")).toBeInTheDocument();
+  });
+
+  it("shows a completion summary when every milestone is reached", async () => {
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [],
+      goalSummary: goalSummary({
+        masteredConcepts: 4,
+        totalConcepts: 4,
+        notPracticedConcepts: 0,
+        masteryPercentage: 100,
+      }),
+    });
+
+    render(<ProgressReportClient />);
+
+    expect(await screen.findByText("All milestones reached")).toBeInTheDocument();
+    expect(screen.queryByText("Next: undefined")).not.toBeInTheDocument();
+  });
+
   it("renders a next-study card with the weakest goal subject", async () => {
     (getProgressReport as jest.Mock).mockResolvedValue({
       subjects: [],
