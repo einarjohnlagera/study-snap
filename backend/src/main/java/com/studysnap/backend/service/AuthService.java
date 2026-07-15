@@ -150,7 +150,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
-        user.setDueConceptsDigestRemindersEnabled(false);
+        user.setDueConceptsDigestRemindersEnabled(true);
         user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
@@ -885,7 +885,7 @@ public class AuthService {
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(false);
         user.setWeeklySummaryRemindersEnabled(false);
-        user.setDueConceptsDigestRemindersEnabled(false);
+        user.setDueConceptsDigestRemindersEnabled(true);
         user.setMarketingEmailsEnabled(false);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);

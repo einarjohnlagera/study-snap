@@ -410,6 +410,7 @@ Use these skills before writing prompts, before starting new features, and after
 - `WEAK_CONCEPT` should honor `weakConceptRemindersEnabled`.
 - `WEEKLY_SUMMARY` should honor `weeklySummaryRemindersEnabled`, which defaults off until the user opts in.
 - `RE_ENGAGEMENT_2025` should honor `marketingEmailsEnabled`, which defaults off until the user opts in.
+- `DUE_CONCEPTS_DIGEST` is enabled by default for new email/password and Google signups only; `AuthService` owns those explicit signup defaults while the database default remains false, and existing users' persisted preferences must never be backfilled or changed implicitly.
 - Transactional account and billing emails are never gated by optional email preferences.
 - Transactional email is never gated by the re-engagement daily budget; the budget only caps optional retention dispatch.
 - Resend bounce/complaint suppressions apply to all email sends; suppressed addresses are skipped instead of retried.

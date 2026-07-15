@@ -18,6 +18,7 @@ Anti-drift: no new backend entity; reuses the existing `DUE_CONCEPTS_DIGEST` ret
 ### Shipped
 
 - **Open-loop first-quiz ending (backend + frontend).** A learner whose first completed Quick Review or Challenge Quiz has missed tagged concepts now sees an `N of M concepts secured` header and a tomorrow-review prompt in Quick Review; perfect first scores, untagged quizzes, and returning learners retain `Your results`. The secured count is derived from the ungated client-side answer state so it stays plan-independent, while `QUICK_REVIEW_OPEN_LOOP_SHOWN` records only the rendered experiment exposure.
+- **Due-concepts digest trigger and CTA (backend).** New email/password and Google signups now begin with the existing digest preference enabled, while every existing persisted preference stays unchanged and the weekly eligibility/cooldown rules remain intact. The digest now uses an action-oriented Dashboard button with a raw-link fallback; it still reaches only learners who have later accrued due concepts (`dueConceptCount > 0`), so it cannot move week-one return for someone who bounces after session one — that remains the open-loop experiment's job.
 
 ## v0.47.1 - V82 Migration Collision Hotfix
 
