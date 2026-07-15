@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.48.0 - Retention Experiment: Open Loop & Digest Trigger
+
+**Status: In Progress**
+
+Theme: test the two co-dominant causes identified in the retention root-cause diagnosis (`docs/claude-prompt/retention-diagnosis-session-plan.md`) — dead trigger infrastructure and no open loop at first-session end — with two independently cheap, independently measurable experiments against the same cohort methodology used in the diagnosis.
+
+Pre-kickoff data check (2026-07-17): pulled Resend's domain-wide open/click rates (`mail.notelib.app`, 639 emails, ~Jul 1–17) as a cheap sanity check before committing scope — 22.22% open, 0.94% click. This is domain-wide, not `INACTIVITY`-specific (no per-email-type tagging exists in `ResendEmailService` to decompose it, and the blend likely includes high-open transactional mail like verification/reset), so it does not answer the original gate question precisely. The `INACTIVITY` email's subject line is static and un-personalized ("Continue your study pack 📚"), so the exact number remains cheaply obtainable later via Resend's email log if needed — not pursued further here. What the domain-wide number does establish reliably even blended: sub-1% click-through is weak by any reasonable read, which is a real risk to the email-dependent experiment and the reason it's scoped to include CTA/content work below rather than a bare default-flip.
+
+### Planned Scope
+
+- **Open-loop session ending (frontend).** Lead experiment — channel-independent, so unaffected by the email-engagement risk above. End the first quiz on an explicit incomplete state ("2 of 9 concepts secured — the rest are best reviewed tomorrow") instead of a terminal score, testing the completion/narrative-gap hypothesis from the consumer-psychology diagnosis (Zeigarnik effect) directly.
+- **Due-concepts digest trigger fix (backend + frontend).** Flip `due_concepts_digest_reminders_enabled` to default-ON for new signups only (existing users' explicit-FALSE state is untouched — no retroactive opt-in, no spam to a population that never chose this). Given the weak domain-wide click-through, this is scoped as more than a flag flip: review and strengthen the digest email's CTA/content as part of this work, not a bare default change.
+
+Anti-drift: no new backend entity; reuses the existing `DUE_CONCEPTS_DIGEST` retention email type and `due_concepts_digest_reminders_enabled` column from `v0.46.0` (no new migration expected — a `DEFAULT` value change, if needed, does not require a new schema column); no new quiz mode, mastery signal, or scoring change — the open-loop ending changes only how the *existing* result is framed, not how it's computed; no commitment-device or pre-decided-return-action work (H1/H5 from the diagnosis stay explicitly deferred pending these two results); no retroactive email-preference changes to existing users.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.47.1 - V82 Migration Collision Hotfix
 
 **Status: Released**
