@@ -415,6 +415,51 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
     expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
     expect(getPlanReadiness).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Read more" })).not.toBeInTheDocument();
+  });
+
+  it("expands clamped Goal and Subject Plan descriptions", async () => {
+    const longDescription = "A detailed curator description that gives learners useful context before they begin this section. ".repeat(8);
+    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    const originalScrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 20 });
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => 80 });
+
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collection({
+        title: "LET Mastery",
+        description: longDescription,
+        childCount: 2,
+        progress: { totalNotes: 0, notesWithStudyPack: 0, notesPracticed: 0 },
+        items: [],
+      }));
+      (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail({
+        children: [
+          { ...goalDetail().children[0], description: longDescription },
+          goalDetail().children[1],
+        ],
+      }));
+
+      render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+      const readMoreButtons = await screen.findAllByRole("button", { name: "Read more" });
+      expect(readMoreButtons).toHaveLength(2);
+
+      fireEvent.click(readMoreButtons[0]);
+
+      expect(screen.getByRole("button", { name: "Show less" })).toBeInTheDocument();
+    } finally {
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
+      } else {
+        delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      }
+      if (originalScrollHeight) {
+        Object.defineProperty(HTMLElement.prototype, "scrollHeight", originalScrollHeight);
+      } else {
+        delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+      }
+    }
   });
 
   it("resolves the Goal view's Primary Action CTA to the first child when there is no continue or next-note action", async () => {

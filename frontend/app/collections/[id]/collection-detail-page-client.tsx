@@ -361,6 +361,71 @@ function SectionCardHeader({
   );
 }
 
+function ExpandableDescription({
+  description,
+  collapsedClassName,
+  className,
+}: Readonly<{
+  description: string;
+  collapsedClassName: string;
+  className?: string;
+}>) {
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
+  const [isClamped, setIsClamped] = useState(false);
+  const isExpanded = expandedDescription === description;
+
+  useEffect(() => {
+    if (isExpanded || !descriptionRef.current) {
+      return;
+    }
+
+    const updateClampedState = () => {
+      const element = descriptionRef.current;
+      if (element) {
+        setIsClamped(element.scrollHeight > element.clientHeight);
+      }
+    };
+
+    updateClampedState();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(updateClampedState);
+    resizeObserver.observe(descriptionRef.current);
+    return () => resizeObserver.disconnect();
+  }, [description, isExpanded]);
+
+  return (
+    <div className="space-y-1">
+      <p
+        ref={descriptionRef}
+        className={cn(
+          "text-base leading-relaxed text-foreground/75",
+          !isExpanded && collapsedClassName,
+          className,
+        )}
+      >
+        {description}
+      </p>
+      {isClamped || isExpanded ? (
+        <button
+          type="button"
+          className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setExpandedDescription((expanded) => (expanded === description ? null : description));
+          }}
+        >
+          {isExpanded ? "Show less" : "Read more"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function PlanHeroCard({
   collection,
   eyebrowLabel,
@@ -403,7 +468,11 @@ function PlanHeroCard({
               </p>
             ) : null}
             {collection.description ? (
-              <CardDescription className="line-clamp-3 text-sm sm:text-base">{collection.description}</CardDescription>
+              <ExpandableDescription
+                description={collection.description}
+                collapsedClassName="line-clamp-3"
+                className="text-sm sm:text-base"
+              />
             ) : null}
             {metadataLine ? (
               <p className="text-sm text-foreground/60">{metadataLine}</p>
@@ -1121,7 +1190,11 @@ function GoalDetailView({
                 <div className="space-y-1">
                   <CardTitle className="line-clamp-2 text-base">{child.title}</CardTitle>
                   {child.description ? (
-                    <CardDescription className="line-clamp-2 text-sm">{child.description}</CardDescription>
+                    <ExpandableDescription
+                      description={child.description}
+                      collapsedClassName="line-clamp-2"
+                      className="text-sm"
+                    />
                   ) : (
                     <p className="text-sm text-foreground/55">No description yet.</p>
                   )}
