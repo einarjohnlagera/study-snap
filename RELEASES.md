@@ -15,7 +15,7 @@ Anti-drift: no backend change — both fixes reuse data and URL params Private L
 
 ### Shipped
 
-_(nothing yet)_
+- **Progress page now links to the private Library (frontend).** Per-subject Concept Mastery rows are now links to `/library?subject={subject}`, wrapped locally without changing the shared `ReadinessBar` component's default (unlinked) behavior anywhere else it's used. `NextStudyCard`'s "study this next" CTA (both the `SUBJECT_FOCUS` and course-program-fallback branches) now points at `/library` instead of `/public/library`, with copy corrected to match ("Study {subject} in your Library" instead of "Browse {subject} notes in the community") — the original copy and destination were a discovery-surface mismatch for what's meant to be a personal action.
 
 ## v0.48.0 - Retention Experiment: Open Loop & Digest Trigger
 

@@ -195,14 +195,14 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
   if (goalSummary.goalType === "SUBJECT_FOCUS") {
     const weakestGoalSubject = goalSummary.weakestGoalSubject;
     const href = weakestGoalSubject
-      ? `/public/library?subject=${encodeURIComponent(weakestGoalSubject)}`
-      : "/public/library";
+      ? `/library?subject=${encodeURIComponent(weakestGoalSubject)}`
+      : "/library";
     const message = weakestGoalSubject
       ? `Focus on ${weakestGoalSubject} — you have concepts left to practice.`
-      : "Browse community notes to build your knowledge.";
+      : "Browse your notes to build your knowledge.";
     const linkLabel = weakestGoalSubject
-      ? `Browse ${weakestGoalSubject} notes in the community`
-      : "Browse notes in the community";
+      ? `Study ${weakestGoalSubject} in your Library`
+      : "Go to your Library";
 
     return (
       <Card className="space-y-3 p-4 sm:p-6">
@@ -222,13 +222,13 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
     : getExamSlugForCourseProgram(goalSummary.studyGoal);
   const href = examSlug
     ? `/exam/${examSlug}`
-    : `/public/library?courseProgram=${encodeURIComponent(goalSummary.studyGoal)}`;
+    : `/library?cp=${encodeURIComponent(goalSummary.studyGoal)}`;
   const message = goalSummary.weakestGoalSubject
     ? `Focus on ${goalSummary.weakestGoalSubject} — you have concepts left to practice.`
-    : `Browse community ${goalSummary.goalName} notes to build your knowledge.`;
+    : `Browse your ${goalSummary.goalName} notes to build your knowledge.`;
   const linkLabel = examSlug
     ? `Browse ${goalSummary.goalName} notes`
-    : `Browse ${goalSummary.goalName} notes in the community`;
+    : `Study ${goalSummary.goalName} notes in your Library`;
 
   return (
     <Card className="space-y-3 p-4 sm:p-6">
@@ -384,7 +384,13 @@ function ProgressContent({
           </div>
           <div className="grid gap-4">
             {subjects.map((entry) => (
-              <ReadinessBar key={entry.subject} entry={entry} />
+              <Link
+                key={entry.subject}
+                href={`/library?subject=${encodeURIComponent(entry.subject)}`}
+                className="block transition-opacity hover:opacity-80"
+              >
+                <ReadinessBar entry={entry} />
+              </Link>
             ))}
           </div>
         </section>
