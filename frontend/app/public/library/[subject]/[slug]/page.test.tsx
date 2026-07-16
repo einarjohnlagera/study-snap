@@ -423,11 +423,34 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("heading", { name: "More Business Administration notes" })).toBeInTheDocument();
     expect(screen.getByText("Marketing Basics")).toBeInTheDocument();
     expect(screen.getByText("Business Law")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View all →" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "See all in Business Administration →" })).toHaveAttribute(
       "href",
       "/public/library?courseProgram=business-administration",
     );
     expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Business Administration");
+  });
+
+  it("links the course/program section to the exam hub when the course/program maps to one", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Nursing" },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Vital Signs", courseProgram: "Nursing", contentPreview: "Vital signs preview", summaryPreview: "Vital signs summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
+    const hubLinks = screen.getAllByRole("link", { name: "Browse PNLE hub →" });
+    expect(hubLinks.length).toBeGreaterThan(0);
+    hubLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/exam/pnle");
+    });
   });
 
   it("omits the course/program section when the current note has no course/program", async () => {
