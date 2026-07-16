@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { HelpLink } from "@/components/ui/help-link";
 import { PageHeader } from "@/components/page-header";
+import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import {
   ApiRequestError,
   getCollectionGoal,
@@ -27,7 +29,14 @@ import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { getExamSlugForCourseProgram } from "@/lib/exam-hub-config";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
-import { ReadinessBar, ReadinessSummary } from "@/components/readiness/readiness-summary";
+import { cn } from "@/lib/utils";
+import {
+  ReadinessSummary,
+  getReadinessBarTone,
+  getReadinessStatusLabel,
+  getReadinessTextColor,
+  isReadinessNotStarted,
+} from "@/components/readiness/readiness-summary";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 
@@ -248,6 +257,41 @@ function NextStudyCard({ goalSummary }: Readonly<{ goalSummary: GoalSummaryRespo
   );
 }
 
+function SubjectMasteryRow({ entry }: Readonly<{ entry: SubjectProgressEntry }>) {
+  const fillWidth = isReadinessNotStarted(entry) ? 0 : entry.masteryPercentage;
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="min-w-0 truncate text-sm font-semibold text-foreground">{entry.subject}</h3>
+        <div className="flex shrink-0 items-center gap-1">
+          <p className={cn("text-sm font-semibold", getReadinessTextColor(entry))}>
+            {getReadinessStatusLabel(entry)}
+          </p>
+          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-foreground/40" />
+        </div>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={`${entry.subject} readiness`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={entry.masteryPercentage}
+        data-state={isReadinessNotStarted(entry) ? "not-started" : "ready"}
+        className="h-2 overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className={cn("h-full rounded-full transition-all", getReadinessBarTone(entry))}
+          style={{ width: `${fillWidth}%` }}
+        />
+      </div>
+      <p className="truncate text-xs text-foreground/60">
+        {entry.totalConcepts} concepts tracked &middot; {entry.masteredConcepts} mastered &middot; {entry.dueConcepts} due &middot; {entry.notPracticedConcepts} not started
+      </p>
+    </>
+  );
+}
+
 function SetStudyFocusCard({ subjects }: Readonly<{ subjects: SubjectProgressEntry[] }>) {
   const focusSubjects = subjects.slice(0, 5);
 
@@ -387,14 +431,14 @@ function ProgressContent({
             </h2>
             <span className="text-xs text-foreground/50">{subjects.length} {subjects.length === 1 ? "subject" : "subjects"}</span>
           </div>
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             {subjects.map((entry) => (
               <Link
                 key={entry.subject}
                 href={`/library?subject=${encodeURIComponent(entry.subject)}`}
-                className="block transition-opacity hover:opacity-80"
+                className={getBrowsingCardClassName("block min-w-0 space-y-2 p-4")}
               >
-                <ReadinessBar entry={entry} />
+                <SubjectMasteryRow entry={entry} />
               </Link>
             ))}
           </div>

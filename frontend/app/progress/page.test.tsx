@@ -195,6 +195,41 @@ describe("ProgressPage", () => {
     expect(screen.getByRole("progressbar", { name: "Pharmacology readiness" })).toHaveAttribute("aria-valuenow", "70");
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
     expect(screen.getByRole("link", { name: /Pharmacology[\s\S]*concepts tracked/ })).toHaveAttribute("href", "/library?subject=Pharmacology");
+
+    const subjectHeading = screen.getByRole("heading", { name: "Pharmacology" });
+    expect(subjectHeading).toHaveClass("min-w-0", "truncate");
+    const subjectLink = subjectHeading.closest("a");
+    expect(subjectLink).toHaveClass("min-w-0", "cursor-pointer", "bg-background");
+    const chevron = subjectLink?.querySelector("svg");
+    expect(chevron).toBeInTheDocument();
+    // The status label and chevron must share an immediate parent, not just the header row —
+    // a 3-child `justify-between` row floats the middle child instead of pinning it to the chevron.
+    const statusLabel = screen.getByText("70% ready");
+    expect(statusLabel.parentElement).toBe(chevron?.parentElement);
+    expect(statusLabel.parentElement).not.toHaveClass("justify-between");
+  });
+
+  it("truncates a very long subject name instead of forcing the row wider than its container", async () => {
+    const longSubject = "A".repeat(200);
+    (getProgressReport as jest.Mock).mockResolvedValue({
+      subjects: [
+        {
+          subject: longSubject,
+          totalConcepts: 3,
+          masteredConcepts: 0,
+          dueConcepts: 0,
+          notPracticedConcepts: 3,
+          masteryPercentage: 0,
+        },
+      ],
+      goalSummary: null,
+    });
+
+    render(await ProgressPage({ searchParams: Promise.resolve({}) }));
+
+    const subjectHeading = await screen.findByRole("heading", { name: longSubject });
+    expect(subjectHeading).toHaveClass("min-w-0", "truncate");
+    expect(subjectHeading.closest("a")).toHaveClass("min-w-0");
   });
 
   it("renders the empty state when there are no subjects", async () => {
