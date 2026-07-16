@@ -37,6 +37,7 @@ public record MeResponse(
         boolean weeklySummaryRemindersEnabled,
         boolean dueConceptsDigestRemindersEnabled,
         boolean marketingEmailsEnabled,
+        boolean mobileTabBarEnabled,
         ThemePreference themePreference,
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,

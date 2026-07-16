@@ -826,6 +826,7 @@ export type MeResponse = {
   weeklySummaryRemindersEnabled: boolean;
   dueConceptsDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
+  mobileTabBarEnabled: boolean;
   themePreference?: ThemePreference | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
@@ -856,6 +857,10 @@ export type UpdateEmailPreferencesRequest = {
   weeklySummaryRemindersEnabled: boolean;
   dueConceptsDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
+};
+
+export type UpdateMobileTabBarPreferenceRequest = {
+  mobileTabBarEnabled: boolean;
 };
 
 export type UpdateThemePreferenceRequest = {
@@ -1784,6 +1789,7 @@ function syncStoredAuthUserFromMe(me: MeResponse): void {
     onboardingCompletedAt: me.onboardingCompletedAt,
     productOnboardingCompletedAt: me.productOnboardingCompletedAt,
     themePreference: me.themePreference,
+    mobileTabBarEnabled: me.mobileTabBarEnabled,
   });
 }
 
@@ -2433,6 +2439,21 @@ export async function updateEmailPreferences(request: UpdateEmailPreferencesRequ
     true,
   );
   const me = await parseApiResponse<MeResponse>(response, "Could not update email preferences. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function updateMobileTabBarPreference(request: UpdateMobileTabBarPreferenceRequest): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/auth/preferences/mobile-tab-bar",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update mobile navigation preference. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

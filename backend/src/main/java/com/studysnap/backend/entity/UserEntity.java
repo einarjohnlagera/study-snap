@@ -117,6 +117,9 @@ public class UserEntity {
     @Column(name = "marketing_emails_enabled", nullable = false)
     private Boolean marketingEmailsEnabled;
 
+    @Column(name = "mobile_tab_bar_enabled")
+    private Boolean mobileTabBarEnabled = true;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "theme_preference", nullable = false, length = 16)
     private ThemePreference themePreference;
