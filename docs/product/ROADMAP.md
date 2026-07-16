@@ -6,9 +6,11 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.50.2 - Note Card Content Consistency` is the current in-progress version (on `releases/v0.50.2`, cut from `main` after v0.50.1 merged) — see its section below.
+No version is currently in progress — `v0.50.2 - Note Card Content Consistency` (on `releases/v0.50.2`, cut from `main` after v0.50.1 merged) just closed; see its section below. Nothing is drafted as next yet.
 
-`v0.50.1 - Mobile UI Polish` is the previous released version (on `releases/v0.50.1`, cut from `main` after v0.50.0 merged) — a fast-follow patch batch: tab bar refinements (filter-retaining Library/Public Library links, a backend-persisted show/hide preference — the icon-only variant was implemented then reverted after a consumer-psychology review) plus two small unrelated pre-existing UI issues (Review Set description truncation, Progress page milestone empty state/Concept Mastery subject-row rework) surfaced by direct user report. Not retention-flavored. See `RELEASES.md`.
+`v0.50.2 - Note Card Content Consistency` is the most recently released version — see its section below.
+
+`v0.50.1 - Mobile UI Polish` is the version before that (on `releases/v0.50.1`, cut from `main` after v0.50.0 merged) — a fast-follow patch batch: tab bar refinements (filter-retaining Library/Public Library links, a backend-persisted show/hide preference — the icon-only variant was implemented then reverted after a consumer-psychology review) plus two small unrelated pre-existing UI issues (Review Set description truncation, Progress page milestone empty state/Concept Mastery subject-row rework) surfaced by direct user report. Not retention-flavored. See `RELEASES.md`.
 
 `v0.50.0 - Mobile Bottom Tab Bar` is the version before that (on `releases/v0.50.0`, cut from `main` after v0.49.0 merged) — a persistent 4-tab mobile bottom navigation bar (Dashboard, Library, Review Sets, Public Library), gated on device-mix evidence from the App Shape Fable proposal and un-parked by a 2026-07-15 production pull showing ~75% mobile usage by distinct users. Navigation-shape work, not a retention experiment — orthogonal to the concurrently-accruing v0.48.0 cohort read. Mid-release scope addition: the 3 held instrumentation pulls (UTM/referral tracking, offline-fallback hit rate, browse-without-adopt tracking) folded in after an explicit 2026-07-15 decision to instrument — analytics-collection only, no new UI surfaced from the data yet, so it doesn't confound the concurrently-accruing v0.48.0 cohort read either. Also shipped a same-day sitemap fix (Exam Hub pages), found while scoping a separate SEO strategy question. See `RELEASES.md`.
 
@@ -76,7 +78,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Note Detail readiness as its own tab | `ROADMAP.md` §Note Detail readiness | Blocked | needs a mobile tab-overflow design pass | pre-2026-07-15 |
 | Legacy "Future Directions" block (exam-mode work, billing, teacher items pre-v0.20) | `ROADMAP.md` §Future Directions | Stale — needs a fresh audit, largely pre-dates current architecture | none stated | never (flag for cleanup) |
 
-## v0.50.2 - Note Card Content Consistency (In Progress, base branch `releases/v0.50.2`)
+## v0.50.2 - Note Card Content Consistency (Released, base branch `releases/v0.50.2`)
 
 Origin: direct user report that the public note detail page's two related-notes sections ("More {Course/Program} notes" vs. "More in {Subject}") render inconsistently — traced to shipping drift (built six weeks apart, never reconciled) rather than a deliberate design choice. Broadened into a Fable card-content-strategy session (`docs/claude-prompt/note-preview-vs-summary-out/01-card-content-strategy.md`) after the user questioned whether the standing "prioritize note preview over summary" rule still holds now that a growing share of notes are AI-authored via `Generate Note` rather than user-written.
 

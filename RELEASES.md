@@ -2,7 +2,7 @@
 
 ## v0.50.2 - Note Card Content Consistency
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: reconcile inconsistent note-card content across four surfaces (public note detail's two related-notes sections, Public Library grid, private Library grid) into one rule, following a Fable card-content-strategy session (`docs/claude-prompt/note-preview-vs-summary-out/01-card-content-strategy.md`) prompted by a direct user report that two related-notes sections on the public note detail page render differently for no real reason. Patch release, not minor — a consistency/polish fix to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1 patch precedent.
 
