@@ -21,7 +21,7 @@ type SharedNoteCardProps = {
   previewLines?: 2 | 3;
 };
 
-type CardExcerpt =
+export type CardExcerpt =
   | { kind: "note"; text: string }
   | { kind: "summary"; text: string }
   | { kind: "none" };
@@ -41,8 +41,9 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
 /**
  * The note is the source object; the summary is a fallback preview of a derivative.
  * One excerpt per card, never both — see docs/features/public-library.md.
+ * Exported so any surface previewing a note (not just SharedNoteCard itself) resolves the same way.
  */
-function resolveCardExcerpt(contentPreview: string, summaryPreview?: string | null): CardExcerpt {
+export function resolveCardExcerpt(contentPreview: string | null | undefined, summaryPreview?: string | null): CardExcerpt {
   const trimmedNote = (contentPreview ?? "").trim().replace(/\s+/g, " ");
   if (trimmedNote.length >= MIN_NOTE_PREVIEW_LENGTH) {
     return { kind: "note", text: trimmedNote };
