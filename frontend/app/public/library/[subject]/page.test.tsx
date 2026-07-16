@@ -131,6 +131,38 @@ describe("SubjectLandingPage", () => {
     expect(screen.getAllByText("Photosynthesis Notes")).toHaveLength(1);
   });
 
+  it("shows one excerpt per card, note preview first, summary as a labeled fallback", async () => {
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      buildNote({
+        id: "featured-1",
+        title: "Cell Structure",
+        slug: "cell-structure",
+        contentPreview: "A concise public note preview about biology.",
+        summaryPreview: "A study-ready summary preview for biology learners.",
+        createdAt: "2026-03-25T00:00:00Z",
+      }),
+      buildNote({
+        id: "popular-1",
+        title: "Genetics Basics",
+        slug: "genetics-basics",
+        contentPreview: "Too short",
+        summaryPreview: "A study-ready summary preview for genetics learners.",
+        copyCount: 9,
+        createdAt: "2026-03-24T00:00:00Z",
+      }),
+    ]);
+
+    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+
+    // Note preview wins when it clears the minimum length — the summary never shows alongside it.
+    expect(screen.getByText("A concise public note preview about biology.")).toBeInTheDocument();
+    expect(screen.queryByText("A study-ready summary preview for biology learners.")).not.toBeInTheDocument();
+
+    // A too-short note body falls back to the labeled summary excerpt instead.
+    expect(screen.getByText("A study-ready summary preview for genetics learners.")).toBeInTheDocument();
+    expect(screen.getByText("Summary")).toBeInTheDocument();
+  });
+
   it("renders an empty state when no notes match the subject slug", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
 
