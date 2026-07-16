@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.50.2 - Note Card Content Consistency` is next, drafted but not yet kicked off — see its section below. Follows `v0.50.1`'s signoff.
+`v0.50.2 - Note Card Content Consistency` is the current in-progress version (on `releases/v0.50.2`, cut from `main` after v0.50.1 merged) — see its section below.
 
 `v0.50.1 - Mobile UI Polish` is the previous released version (on `releases/v0.50.1`, cut from `main` after v0.50.0 merged) — a fast-follow patch batch: tab bar refinements (filter-retaining Library/Public Library links, a backend-persisted show/hide preference — the icon-only variant was implemented then reverted after a consumer-psychology review) plus two small unrelated pre-existing UI issues (Review Set description truncation, Progress page milestone empty state/Concept Mastery subject-row rework) surfaced by direct user report. Not retention-flavored. See `RELEASES.md`.
 
@@ -54,8 +54,8 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | SEO / organic search strategy (why NoteLib doesn't surface for exam-named searches like "free PNLE notes"; sitemap/content/measurement plan) | `seo-strategy-session-plan.md`, `seo-strategy-prompts/01-seo-strategy.txt` | Not yet run | user runs the Fable session, output lands in `seo-strategy-out/` | 2026-07-15 |
 | Icon-only mobile tab bar on Note Detail / Challenge Quiz result (v0.50.1, unpushed) — consumer-psychology sanity check after second-guessing the shipped decision | `tab-bar-icon-labels-out/01-consumer-psychology.md` | **Resolved — revert to full labels** | none, decision made | 2026-07-16 |
 | Progress page subject row clickability (v0.50.1, unpushed) — UX affordance check after the Concept Mastery redesign's accent-border removal made rows look flat/non-clickable | `progress-subject-row-clickability-out/01-affordance-review.md` | **Resolved — reuse `getBrowsingCardClassName()` + trailing chevron** | none, decision made | 2026-07-16 |
-| Note preview vs. Study Pack summary card content strategy (public note detail's two related-notes sections, Public Library grid, private Library grid) | `note-preview-vs-summary-out/01-card-content-strategy.md` | **Slated for v0.50.2 (Phase 1 only — see draft section below)** | Phase 1: drafted, kicks off once v0.50.1 signs off. Phase 2 (origin tracking): stays parked, needs an explicit product go-decision on whether the measurement/Featured-integrity value is worth the migration+instrumentation cost — not part of v0.50.2 | 2026-07-16 |
-| **Smart Review Planning (Internal Curator, 7 docs)** | `docs/claude-prompt/fable-out/01–07` | Parked | interviews confirm content-gap churn AND manual coverage sprint proves lift AND hand-curation saturates | 2026-07-15 |
+| Note preview vs. Study Pack summary card content strategy (public note detail's two related-notes sections, Public Library grid, private Library grid) | `note-preview-vs-summary-out/01-card-content-strategy.md` | **In Progress — v0.50.2 (Phase 1)** | Phase 1: kicked off, see `RELEASES.md` v0.50.2. Phase 2 (origin tracking): stays parked, needs an explicit product go-decision on whether the measurement/Featured-integrity value is worth the migration+instrumentation cost — not part of v0.50.2 | 2026-07-16 |
+| **Smart Review Planning (Internal Curator, 7 docs)** | `docs/claude-prompt/fable-out/01–07`, sourced from `fable-smart-review-audit-session-plan.md` (the S1–S7 prompt sequence) and the original unscoped brief `smart-review-planning-and-product-language.txt` | Parked | interviews confirm content-gap churn AND manual coverage sprint proves lift AND hand-curation saturates | 2026-07-16 |
 | Manual Official-coverage sprint (hand-curate ALE/PNLE/LET) | this checkpoint (2026-07-15) | Conditional | interviews surface "no content for my exam" as a churn reason | 2026-07-15 |
 | Photo Capture of handwritten notes (Idea 6) | `new-capability-out/01-new-capability-ideation.md` | Held | retention loop proven (W1→W2 lift confirmed) | 2026-07-15 |
 | Parent Readiness Digest (Idea 4) | same | Conditional | H1 read positive + explicit product decision (email-only vs. dashboard shape) | 2026-07-15 |
@@ -74,7 +74,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Note Detail readiness as its own tab | `ROADMAP.md` §Note Detail readiness | Blocked | needs a mobile tab-overflow design pass | pre-2026-07-15 |
 | Legacy "Future Directions" block (exam-mode work, billing, teacher items pre-v0.20) | `ROADMAP.md` §Future Directions | Stale — needs a fresh audit, largely pre-dates current architecture | none stated | never (flag for cleanup) |
 
-## v0.50.2 - Note Card Content Consistency (Drafted, not yet kicked off — follows v0.50.1 signoff)
+## v0.50.2 - Note Card Content Consistency (In Progress, base branch `releases/v0.50.2`)
 
 Origin: direct user report that the public note detail page's two related-notes sections ("More {Course/Program} notes" vs. "More in {Subject}") render inconsistently — traced to shipping drift (built six weeks apart, never reconciled) rather than a deliberate design choice. Broadened into a Fable card-content-strategy session (`docs/claude-prompt/note-preview-vs-summary-out/01-card-content-strategy.md`) after the user questioned whether the standing "prioritize note preview over summary" rule still holds now that a growing share of notes are AI-authored via `Generate Note` rather than user-written.
 

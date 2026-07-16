@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.50.2 - Note Card Content Consistency
+
+**Status: In Progress**
+
+Theme: reconcile inconsistent note-card content across four surfaces (public note detail's two related-notes sections, Public Library grid, private Library grid) into one rule, following a Fable card-content-strategy session (`docs/claude-prompt/note-preview-vs-summary-out/01-card-content-strategy.md`) prompted by a direct user report that two related-notes sections on the public note detail page render differently for no real reason. Patch release, not minor — a consistency/polish fix to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1 patch precedent.
+
+### Planned Scope
+
+- **Single-excerpt card cascade (frontend).** Every note card across the four surfaces shows exactly one preview excerpt instead of the current inconsistent mix: note preview if the note body is non-empty and clears a minimum length, else a labeled "Summary" fallback (Study Pack summary excerpt), else no excerpt block at all. Removes the stacked "NOTE PREVIEW" / "SUMMARY PREVIEW" dual-section layout currently shown on `SharedNoteCard` (private Library grid, Public Library grid, public note detail's "More in {Subject}" section).
+- **Migrate the bespoke "More {Course/Program} notes" card (frontend).** The public note detail page's older, hand-rolled related-notes card (shipped 2026-06-02, before `SharedNoteCard` matured) is replaced with the shared component, using identical card content to "More in {Subject}" — the two sections may still differ in query/count, never in template.
+- **Rewrite the documented card-content rule (docs).** `docs/features/public-library.md`'s "prioritize original note preview over generated summary" rule is rewritten from a human-authorship rationale (no longer verifiable — a growing share of notes are AI-authored via the shipped `Generate Note` feature) to a source-object rationale: the note is the source, the summary is a fallback preview of a derivative. The priority (note preview first) is unchanged; only the reasoning behind it is corrected.
+
+Anti-drift: no origin-aware card rendering — the Fable session explicitly rejected this even if origin tracking existed, since a `Generate Note` draft gets edited and creation-time provenance isn't current-authorship truth; no new database column, migration, or analytics event (Phase 2 origin tracking stays parked, gated on a separate explicit product go-decision, not part of this release); no change to Featured-ranking eligibility criteria (the "non-empty note preview" gate is untouched); no change to note visibility, ownership, or copy/adopt rules; no change to `Generate Note` itself — it remains a shipped, sanctioned feature.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.50.1 - Mobile UI Polish
 
 **Status: Released**
