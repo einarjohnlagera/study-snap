@@ -6,9 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-No version is currently in progress — `v0.50.2 - Note Card Content Consistency` (on `releases/v0.50.2`, cut from `main` after v0.50.1 merged) just closed; see its section below. Nothing is drafted as next yet.
+`v0.50.3 - Public Note Copy Flow & Related-Notes Consistency` is the current in-progress version (on `releases/v0.50.3`, cut from `main` after v0.50.2 merged) — see its section below.
 
-`v0.50.2 - Note Card Content Consistency` is the most recently released version — see its section below.
+`v0.50.2 - Note Card Content Consistency` is the previous released version — see its section below.
 
 `v0.50.1 - Mobile UI Polish` is the version before that (on `releases/v0.50.1`, cut from `main` after v0.50.0 merged) — a fast-follow patch batch: tab bar refinements (filter-retaining Library/Public Library links, a backend-persisted show/hide preference — the icon-only variant was implemented then reverted after a consumer-psychology review) plus two small unrelated pre-existing UI issues (Review Set description truncation, Progress page milestone empty state/Concept Mastery subject-row rework) surfaced by direct user report. Not retention-flavored. See `RELEASES.md`.
 
@@ -59,6 +59,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Note preview vs. Study Pack summary card content strategy (public note detail's two related-notes sections, Public Library grid, private Library grid) | `note-preview-vs-summary-out/01-card-content-strategy.md` | **In Progress — v0.50.2 (Phase 1)** | Phase 1: kicked off, see `RELEASES.md` v0.50.2. Phase 2 (origin tracking): stays parked, needs an explicit product go-decision on whether the measurement/Featured-integrity value is worth the migration+instrumentation cost — not part of v0.50.2 | 2026-07-16 |
 | Exam Hub page card inconsistency (`/exam/{slug}`) — `ExamNoteCard` was a near-identical copy of the subject-landing page's pre-fix bespoke card | `RELEASES.md` v0.50.2 | **Shipped — v0.50.2** | migrated to `SharedNoteCard`'s single-excerpt cascade alongside the subject-landing page fix — all six note-card surfaces now share one content rule | 2026-07-16 |
 | Duplicate "Browse {Hub} hub →" link on public note detail — when the note's course/program maps to an Exam Hub, the page shows a callout banner ("Preparing for the PNLE? ... Browse PNLE hub →") directly above the "More {Course/Program} notes" section, whose own link repeats the identical label pointing at the same URL | `RELEASES.md` v0.50.2 "Consistent related-notes section link labels" | Not yet scoped | needs a product decision — collapse to one link, or keep both but differentiate the wording/placement | 2026-07-16 |
+| Public note copy/quiz flow + related-notes link consistency | `public-note-copy-and-related-links-out/01-copy-flow-and-link-consistency.md` | **Resolved — copy-as-is + "See all →" + 2-col grid** | none, decision made, slated for v0.50.3 | 2026-07-17 |
 | **Smart Review Planning (Internal Curator, 7 docs)** | `docs/claude-prompt/fable-out/01–07`, sourced from `fable-smart-review-audit-session-plan.md` (the S1–S7 prompt sequence) and the original unscoped brief `smart-review-planning-and-product-language.txt` | Parked | interviews confirm content-gap churn AND manual coverage sprint proves lift AND hand-curation saturates | 2026-07-16 |
 | Manual Official-coverage sprint (hand-curate ALE/PNLE/LET) | this checkpoint (2026-07-15) | Conditional | interviews surface "no content for my exam" as a churn reason | 2026-07-15 |
 | Photo Capture of handwritten notes (Idea 6) | `new-capability-out/01-new-capability-ideation.md` | Held | retention loop proven (W1→W2 lift confirmed) | 2026-07-15 |
@@ -77,6 +78,16 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Deeper plan nesting (3+ level hierarchy) | `ROADMAP.md` §Deeper plan nesting | Parked, nice-to-have | no gate stated | pre-2026-07-15 |
 | Note Detail readiness as its own tab | `ROADMAP.md` §Note Detail readiness | Blocked | needs a mobile tab-overflow design pass | pre-2026-07-15 |
 | Legacy "Future Directions" block (exam-mode work, billing, teacher items pre-v0.20) | `ROADMAP.md` §Future Directions | Stale — needs a fresh audit, largely pre-dates current architecture | none stated | never (flag for cleanup) |
+
+## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency (In Progress, base branch `releases/v0.50.3`)
+
+Origin: direct user testing of the public note detail page surfaced two findings, bundled into one Fable session (`docs/claude-prompt/public-note-copy-and-related-links-out/01-copy-flow-and-link-consistency.md`) since both live on the same page. (1) "Quiz yourself on this note" sometimes forces a full Study Pack regeneration whose AI-suggestion modal gets cut off by a real race condition — investigation confirmed the bug and found the backend already supports a free, synchronous copy-as-is path that should be the only behavior for this CTA; Fable confirmed copy-as-is over regeneration as the right default and recommended skipping the modal on this flow entirely rather than just fixing its timing. (2) The two related-notes sections' "see all" links wrap on mobile for longer subject/course names and use inconsistent grid column counts on desktop, both flagged directly from user screenshots.
+
+**Scope:**
+- Part A (Codex): copy-as-is only for the "Quiz yourself" CTA, skip the AI-suggestion modal on this flow, gate the CTA server-side on the source having a ready Study Pack, fix the navigation-vs-modal race as an ordering guarantee.
+- Part B (Claude Code direct): shorten both related-notes "see all" links to `See all →` (with `aria-label`s), collapse the subject section's grid to match the course/program section's 2 columns.
+
+Anti-drift: no new personalization/regeneration capability (the existing copied-pack regenerate hint already covers it); `Browse {Hub} hub →` stays untouched. Full scope in `RELEASES.md`.
 
 ## v0.50.2 - Note Card Content Consistency (Released, base branch `releases/v0.50.2`)
 

@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency
+
+**Status: In Progress**
+
+Theme: fix a real race-condition bug and a product-design mismatch in the public note "Quiz yourself on this note" copy flow, plus two small consistency fixes on the same page's related-notes sections — all surfaced by direct user testing, following a Fable session (`docs/claude-prompt/public-note-copy-and-related-links-out/01-copy-flow-and-link-consistency.md`) that confirmed the diagnosis and recommended the fix shape. Patch release, not minor — bug fixes and consistency polish to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1/v0.50.2 patch precedent.
+
+### Planned Scope
+
+- **Public note "Quiz yourself" copy-as-is flow (backend + frontend, routed through Codex).** Make copy-as-is (the existing synchronous, zero-LLM Study Pack deep-copy) the *only* behavior for this CTA — never set `generate=1` on the quick-review redirect when the copy already returned a ready Study Pack. Skip the AI-suggested-metadata modal entirely on this flow (nothing gets regenerated, so there's nothing to reconcile — title/subject/tags already carry over verbatim, same as every other copy action). Gate the CTA server-side on the source note actually having a ready Study Pack, so the rare fallback (source lacks one) becomes a genuine edge case rather than a silent auto-generation path — if still reached, land the copier on their new note's normal not-yet-generated state with the standard explicit Generate CTA, never auto-generate. Fix the underlying race condition (two effects both reacting to "Study Pack ready" — one navigates synchronously, the other needs an extra network round-trip before it can open the modal) as an ordering guarantee, not a timing patch. No new personalization mechanism — the existing copied-pack "regenerate for your level" hint already covers that need without blocking the first quiz question.
+- **Related-notes link wording and grid consistency (frontend).** Public note detail's two related-notes sections ("More {Course/Program} notes", "More in {Subject}") both get their generic "see all" link shortened to `See all →` (sentence case, same wording on mobile and desktop, with a full `aria-label` added since the shortened text becomes screen-reader-identical between the two sections) — fixes mobile wrapping on longer subject/course names. `Browse {Hub} hub →` (the Exam Hub case) stays untouched — a deliberately different, more curated destination. The subject section's grid collapses from `sm:grid-cols-2 lg:grid-cols-3` to `sm:grid-cols-2`, matching the course/program section — same shared card, same page, no reason for two column counts.
+
+Anti-drift: no new quiz modes, no touching the locked five-mode `EXAM_MODES.md` contract; no new personalization/regeneration capability built (the existing regenerate hint already covers it); no change to note visibility, ownership, or copy/adopt data model beyond the generation-skip described above; `Browse {Hub} hub →` wording and destination stay untouched.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.50.2 - Note Card Content Consistency
 
 **Status: Released**
