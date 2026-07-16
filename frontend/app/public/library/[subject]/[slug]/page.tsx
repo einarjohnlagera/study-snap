@@ -342,7 +342,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                   href={examSlug ? `/exam/${examSlug}` : buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
                   className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
                 >
-                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : "View all →"}
+                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : `See all in ${courseProgram} →`}
                 </Link>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
