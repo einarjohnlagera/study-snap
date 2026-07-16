@@ -30,6 +30,7 @@ import {
   trackAnalyticsEvent,
   updateEngagementMode,
   updateEmailPreferences,
+  updateMobileTabBarPreference,
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
@@ -201,6 +202,9 @@ export default function SettingsPage() {
   const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
   const [dueConceptsDigestRemindersEnabled, setDueConceptsDigestRemindersEnabled] = useState(false);
   const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
+  const [mobileTabBarEnabled, setMobileTabBarEnabled] = useState(true);
+  const [savingMobileTabBarPreference, setSavingMobileTabBarPreference] = useState(false);
+  const [mobileTabBarPreferenceMessage, setMobileTabBarPreferenceMessage] = useState<string | null>(null);
   const [savingEmailPreferences, setSavingEmailPreferences] = useState(false);
   const [emailPreferencesMessage, setEmailPreferencesMessage] = useState<string | null>(null);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
@@ -247,6 +251,7 @@ export default function SettingsPage() {
     setError(null);
     setEngagementModeMessage(null);
     setEmailPreferencesMessage(null);
+    setMobileTabBarPreferenceMessage(null);
     try {
       const [me, usage, history, pricing] = await Promise.all([
         getMe(),
@@ -264,6 +269,7 @@ export default function SettingsPage() {
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
       setMarketingEmailsEnabled(me.marketingEmailsEnabled);
+      setMobileTabBarEnabled(me.mobileTabBarEnabled !== false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
@@ -363,6 +369,25 @@ export default function SettingsPage() {
       setEmailPreferencesMessage(message);
     } finally {
       setSavingEmailPreferences(false);
+    }
+  };
+
+  const handleMobileTabBarPreference = async () => {
+    if (savingMobileTabBarPreference) {
+      return;
+    }
+    setSavingMobileTabBarPreference(true);
+    setMobileTabBarPreferenceMessage(null);
+    try {
+      const updated = await updateMobileTabBarPreference({ mobileTabBarEnabled: !mobileTabBarEnabled });
+      setProfile(updated);
+      setMobileTabBarEnabled(updated.mobileTabBarEnabled !== false);
+      setMobileTabBarPreferenceMessage("Mobile navigation preference updated.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update mobile navigation preference.";
+      setMobileTabBarPreferenceMessage(message);
+    } finally {
+      setSavingMobileTabBarPreference(false);
     }
   };
 
@@ -738,6 +763,25 @@ export default function SettingsPage() {
                 </p>
               </div>
               <ThemeSelector />
+            </div>
+            <div className="space-y-3 rounded-md border border-border bg-background p-4">
+              <div className="flex items-start justify-between gap-4">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Show mobile navigation bar</span>
+                  <span className="block text-xs text-foreground/60">
+                    Keep Dashboard, Library, Review Sets, and Public Library one tap away on mobile.
+                  </span>
+                </span>
+                <Checkbox
+                  ariaLabel="Show mobile navigation bar"
+                  checked={mobileTabBarEnabled}
+                  onChange={() => void handleMobileTabBarPreference()}
+                  disabled={savingMobileTabBarPreference}
+                />
+              </div>
+              {mobileTabBarPreferenceMessage ? (
+                <p className="text-xs text-foreground/60">{mobileTabBarPreferenceMessage}</p>
+              ) : null}
             </div>
             <div className="space-y-3 rounded-md border border-border bg-background p-4">
               <div className="space-y-1">

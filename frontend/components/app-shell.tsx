@@ -40,6 +40,7 @@ type ShellUser = {
   email: string | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
+  mobileTabBarEnabled: boolean;
   role: "USER" | "ADMIN" | null;
   profileType: ProfileType | null;
 };
@@ -233,6 +234,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     email: null,
     emailVerifiedAt: null,
     onboardingCompletedAt: null,
+    mobileTabBarEnabled: true,
     role: null,
     profileType: null,
   });
@@ -254,6 +256,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           email: null,
           emailVerifiedAt: null,
           onboardingCompletedAt: null,
+          mobileTabBarEnabled: true,
           role: null,
           profileType: null,
         });
@@ -267,6 +270,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         email: authUser.email ?? previous.email,
         emailVerifiedAt: authUser.emailVerifiedAt,
         onboardingCompletedAt: authUser.onboardingCompletedAt ?? previous.onboardingCompletedAt,
+        mobileTabBarEnabled: authUser.mobileTabBarEnabled !== false,
         role: authUser.role,
         profileType: authUser.profileType ?? previous.profileType,
       }));
@@ -337,6 +341,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       email: authUser?.email ?? null,
       emailVerifiedAt: authUser?.emailVerifiedAt ?? null,
       onboardingCompletedAt: authUser?.onboardingCompletedAt ?? null,
+      mobileTabBarEnabled: authUser?.mobileTabBarEnabled !== false,
       role: authUser?.role ?? null,
       profileType: authUser?.profileType ?? null,
     });
@@ -363,6 +368,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           email: me.email,
           emailVerifiedAt: me.emailVerifiedAt,
           onboardingCompletedAt: me.onboardingCompletedAt,
+          mobileTabBarEnabled: me.mobileTabBarEnabled !== false,
           role: me.role,
           profileType: me.profileType,
         });
@@ -492,7 +498,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const showVerificationBanner = shouldUseShell && hasAuthUser && !user.emailVerifiedAt;
 
   const { isBottomViewportClaimed, isExamFocusActive } = useExamFocusContext();
-  const shouldShowMobileBottomTabs = !isExamFocusActive && !isBottomViewportClaimed;
+  const shouldShowMobileBottomTabs = user.mobileTabBarEnabled && !isExamFocusActive && !isBottomViewportClaimed;
 
   if (!shouldUseShell) {
     return (

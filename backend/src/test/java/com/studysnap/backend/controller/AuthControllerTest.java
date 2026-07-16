@@ -4,11 +4,14 @@ import com.studysnap.backend.dto.DataExportResponse;
 import com.studysnap.backend.dto.DeleteAccountRequest;
 import com.studysnap.backend.dto.ReactivateAccountRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
+import com.studysnap.backend.dto.UpdateMobileTabBarPreferenceRequest;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthRateLimitService;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AccountDataExportService;
 import com.studysnap.backend.service.AuthService;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,6 +66,35 @@ class AuthControllerTest {
         controller.updateEmailPreferences(user, request);
 
         verify(authService).updateEmailPreferences(userId, request);
+    }
+
+    @Test
+    void updateMobileTabBarPreference_usesDedicatedRouteAndDelegatesToAuthService() throws NoSuchMethodException {
+        Method method = AuthController.class.getDeclaredMethod(
+                "updateMobileTabBarPreference",
+                AuthenticatedUser.class,
+                UpdateMobileTabBarPreferenceRequest.class
+        );
+        PostMapping annotation = method.getAnnotation(PostMapping.class);
+        AuthController controller = controller();
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdateMobileTabBarPreferenceRequest request = new UpdateMobileTabBarPreferenceRequest(false);
+
+        controller.updateMobileTabBarPreference(user, request);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).containsExactly("/preferences/mobile-tab-bar");
+        verify(authService).updateMobileTabBarPreference(userId, request);
+    }
+
+    @Test
+    void updateMobileTabBarPreferenceRequest_rejectsMissingValue() {
+        UpdateMobileTabBarPreferenceRequest request = new UpdateMobileTabBarPreferenceRequest(null);
+
+        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            assertThat(validatorFactory.getValidator().validate(request)).isNotEmpty();
+        }
     }
 
     @Test

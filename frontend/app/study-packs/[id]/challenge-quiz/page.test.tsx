@@ -14,6 +14,14 @@ import {
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
+const useBottomViewportClaimMock = jest.fn();
+const useExamFocusModeMock = jest.fn();
+
+jest.mock("@/components/exam-mode/exam-focus-context", () => ({
+  useBottomViewportClaim: (active: boolean) => useBottomViewportClaimMock(active),
+  useExamFocusMode: (active: boolean) => useExamFocusModeMock(active),
+}));
+
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
 const routerMock = {
@@ -113,6 +121,8 @@ describe("ChallengeQuizPage", () => {
     (getPostSessionNextStep as jest.Mock).mockReset();
     (getPostSessionNextStep as jest.Mock).mockRejectedValue(new Error("next-step unavailable"));
     (useBillingUsageSummary as jest.Mock).mockReset();
+    useBottomViewportClaimMock.mockReset();
+    useExamFocusModeMock.mockReset();
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
         plan: "PRO",

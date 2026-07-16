@@ -25,6 +25,7 @@ import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
+import com.studysnap.backend.dto.UpdateMobileTabBarPreferenceRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.config.ExamGoalConfig;
@@ -422,6 +423,15 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse updateMobileTabBarPreference(UUID userId, UpdateMobileTabBarPreferenceRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+
+        user.setMobileTabBarEnabled(request.mobileTabBarEnabled());
+        user.setUpdatedAt(OffsetDateTime.now());
+
+        return toMeResponse(user);
+    }
+
     public MeResponse updateEmailPreferences(UUID userId, UpdateEmailPreferencesRequest request) {
         UserEntity user = findUserOrThrow(userId);
 
@@ -553,6 +563,7 @@ public class AuthService {
                 Boolean.TRUE.equals(user.getWeeklySummaryRemindersEnabled()),
                 Boolean.TRUE.equals(user.getDueConceptsDigestRemindersEnabled()),
                 Boolean.TRUE.equals(user.getMarketingEmailsEnabled()),
+                !Boolean.FALSE.equals(user.getMobileTabBarEnabled()),
                 resolveThemePreference(user),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),

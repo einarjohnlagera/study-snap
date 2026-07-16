@@ -21,6 +21,7 @@ import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
+import com.studysnap.backend.dto.UpdateMobileTabBarPreferenceRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
@@ -223,6 +224,15 @@ public class AuthController {
             @Valid @RequestBody UpdateEngagementModeRequest request
     ) {
         return authService.updateEngagementMode(user.userId(), request);
+    }
+
+    @PostMapping("/preferences/mobile-tab-bar")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateMobileTabBarPreference(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody UpdateMobileTabBarPreferenceRequest request
+    ) {
+        return authService.updateMobileTabBarPreference(user.userId(), request);
     }
 
     @PostMapping("/preferences/email-preferences")

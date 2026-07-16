@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ResponsiveActionContent, type ActionIconName } from "@/components/ui/action-button";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { cn } from "@/lib/utils";
@@ -13,24 +14,42 @@ type MobileBottomTabBarProps = {
 
 type MobileTab = {
   href: string;
+  activeHref: string;
   label: string;
   action: ActionIconName;
 };
 
-function isTabActive(pathname: string, href: string): boolean {
-  if (href === "/library") {
-    return pathname === href;
+const LIBRARY_PATH = "/library";
+const PUBLIC_LIBRARY_PATH = "/public/library";
+const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
+
+function isTabActive(pathname: string, activeHref: string): boolean {
+  if (activeHref === LIBRARY_PATH) {
+    return pathname === activeHref;
   }
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return pathname === activeHref || pathname.startsWith(`${activeHref}/`);
+}
+
+function getPublicLibraryReturnHref(): string {
+  try {
+    const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_KEY);
+    return saved?.startsWith(PUBLIC_LIBRARY_PATH) ? saved : PUBLIC_LIBRARY_PATH;
+  } catch {
+    return PUBLIC_LIBRARY_PATH;
+  }
 }
 
 export function MobileBottomTabBar({ pathname, profileType }: Readonly<MobileBottomTabBarProps>) {
+  const searchParams = useSearchParams();
   const collectionLabels = getCollectionLabels(profileType);
+  const privateLibraryRef = searchParams.get("ref");
+  const libraryHref = privateLibraryRef?.startsWith(LIBRARY_PATH) ? privateLibraryRef : LIBRARY_PATH;
+  const publicLibraryHref = getPublicLibraryReturnHref();
   const tabs: MobileTab[] = [
-    { href: "/dashboard", label: "Dashboard", action: "dashboard" },
-    { href: "/library", label: "Library", action: "library" },
-    { href: "/collections", label: collectionLabels.navLabel, action: "collections" },
-    { href: "/public/library", label: "Public Library", action: "publicLibrary" },
+    { href: "/dashboard", activeHref: "/dashboard", label: "Dashboard", action: "dashboard" },
+    { href: libraryHref, activeHref: LIBRARY_PATH, label: "Library", action: "library" },
+    { href: "/collections", activeHref: "/collections", label: collectionLabels.navLabel, action: "collections" },
+    { href: publicLibraryHref, activeHref: PUBLIC_LIBRARY_PATH, label: "Public Library", action: "publicLibrary" },
   ];
 
   return (
@@ -41,7 +60,7 @@ export function MobileBottomTabBar({ pathname, profileType }: Readonly<MobileBot
     >
       <div className="flex min-h-[4.5rem] items-stretch px-1 pb-[env(safe-area-inset-bottom,0px)] pt-1">
         {tabs.map((tab) => {
-          const active = isTabActive(pathname, tab.href);
+          const active = isTabActive(pathname, tab.activeHref);
           return (
             <Link
               key={tab.href}

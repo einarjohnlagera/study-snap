@@ -20,6 +20,7 @@ export type AuthUser = {
   role: "USER" | "ADMIN";
   planType: "FREE" | "PLUS" | "PRO";
   themePreference?: ThemePreference | null;
+  mobileTabBarEnabled?: boolean | null;
   accessToken: string;
   refreshToken: string;
   accessTokenExpiresAt: string;
