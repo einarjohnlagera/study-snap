@@ -46,6 +46,7 @@ import {
   parsePublicLibraryFilters,
   resolvePublicLibraryValueBySlug,
   resolvePublicLibraryValuesBySlug,
+  savePublicLibraryReturnUrl,
   slugifyPublicLibraryFilterValue,
   type PublicLibraryDiscoveryView,
   type PublicLibraryUrlFilters,
@@ -78,7 +79,6 @@ const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
 const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
 const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 250;
-const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
 const PUBLISHED_STUDY_PLANS_PATH = "/collections/published";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
@@ -1424,7 +1424,7 @@ export function PublicLibraryPageClient() {
     [parsedUrlFilters, searchParamsKey],
   );
   const handleNoteNavigate = useCallback((path: string) => {
-    globalThis.sessionStorage?.setItem(PUBLIC_LIBRARY_RETURN_KEY, currentPublicLibraryPath);
+    savePublicLibraryReturnUrl(currentPublicLibraryPath);
     startRouteProgress();
     router.push(path);
   }, [currentPublicLibraryPath, router, startRouteProgress]);

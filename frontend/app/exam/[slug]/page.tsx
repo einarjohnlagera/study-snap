@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { ExamHubCta } from "@/components/exam-hub/exam-hub-cta";
+import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import {
   getPopularNotes,
   getRecentNotes,
 } from "@/lib/public-library-discovery";
+import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicLibraryNotePathFromSlug, getPublicTitleSlug } from "@/lib/public-note-path";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
@@ -66,9 +68,10 @@ function ExamNoteCard({ note }: Readonly<{ note: ExamHubNote }>) {
     subject: note.subject,
     slug: getNoteSlug(note),
   });
+  const returnUrl = buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(note.courseProgram) });
 
   return (
-    <Link href={href} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+    <PublicLibraryReturnLink href={href} returnUrl={returnUrl} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
       <Card className="motion-pressable h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 sm:p-5">
         <SharedNoteCard
           title={note.title}
@@ -92,7 +95,7 @@ function ExamNoteCard({ note }: Readonly<{ note: ExamHubNote }>) {
           )}
         />
       </Card>
-    </Link>
+    </PublicLibraryReturnLink>
   );
 }
 

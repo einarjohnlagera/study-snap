@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import SubjectLandingPage, { generateMetadata, generateStaticParams } from "./page";
 import { getServerPublicNotesBySubjectSlug, getServerPublicSubjects } from "@/lib/server-public-notes";
+import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import type { NoteListItemResponse } from "@/lib/api";
 
 jest.mock("@/lib/server-public-notes", () => ({
@@ -74,6 +75,7 @@ describe("SubjectLandingPage", () => {
   beforeEach(() => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
     (getServerPublicSubjects as jest.Mock).mockReset();
+    window.sessionStorage.clear();
   });
 
   it("generates static params from public subject slugs", async () => {
@@ -119,6 +121,16 @@ describe("SubjectLandingPage", () => {
       "href",
       "/public/library/biology/genetics-basics",
     );
+  });
+
+  it("saves this subject-landing page as the Public Library return URL when a note card is clicked", async () => {
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
+
+    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: /Cell Structure/ }));
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe("/public/library/biology");
   });
 
   it("does not repeat notes across sections", async () => {

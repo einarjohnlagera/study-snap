@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
 import {
   getServerPublicNoteBySeoPath,
@@ -6,6 +6,7 @@ import {
   getServerPublicNotesBySubject,
   getServerPublicNotesBySubjectSlug,
 } from "@/lib/server-public-notes";
+import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -127,6 +128,7 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
     (getServerPublicNotesByCourseProgram as jest.Mock).mockReset();
     (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([]);
+    window.sessionStorage.clear();
   });
 
   it("renders title, author, and summary without requiring any interaction", async () => {
@@ -404,6 +406,24 @@ describe("PublicLibrarySeoPage", () => {
     expect(getServerPublicNotesBySubject).toHaveBeenCalledWith("Science");
   });
 
+  it("saves the subject-landing page as the Public Library return URL when a related-subject note is clicked", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells", contentPreview: "Plant cell preview", summaryPreview: "Plant cell summary" },
+      { ...baseNote, id: "note-3", title: "Animal Cells", contentPreview: "Animal cell preview", summaryPreview: "Animal cell summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
+    fireEvent.click(screen.getByText("Plant Cells").closest("a") as HTMLElement);
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe("/public/library/science");
+  });
+
   it("renders shared note cards for related course/program notes, excluding the current note", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
@@ -430,6 +450,27 @@ describe("PublicLibrarySeoPage", () => {
     expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Business Administration");
   });
 
+  it("saves the course/program-filtered Public Library URL as the return URL when a related-course/program note is clicked", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Business Administration" },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "Marketing basics preview", summaryPreview: "Marketing basics summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    fireEvent.click(screen.getByText("Marketing Basics").closest("a") as HTMLElement);
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
+      "/public/library?courseProgram=business-administration",
+    );
+  });
+
   it("links the course/program section to the exam hub when the course/program maps to one", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
@@ -451,6 +492,13 @@ describe("PublicLibrarySeoPage", () => {
     hubLinks.forEach((link) => {
       expect(link).toHaveAttribute("href", "/exam/pnle");
     });
+
+    // The card's own back-link context always returns to Public Library, never the Exam Hub,
+    // even though the section's visible "See all" link points there.
+    fireEvent.click(screen.getByText("Vital Signs").closest("a") as HTMLElement);
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
+      "/public/library?courseProgram=nursing",
+    );
   });
 
   it("omits the course/program section when the current note has no course/program", async () => {
