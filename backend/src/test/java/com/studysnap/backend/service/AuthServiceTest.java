@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
+import com.studysnap.backend.dto.UpdateMobileTabBarPreferenceRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
@@ -804,6 +805,41 @@ class AuthServiceTest {
         assertThat(user.getWeeklySummaryRemindersEnabled()).isTrue();
         assertThat(user.getDueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(user.getMarketingEmailsEnabled()).isTrue();
+    }
+
+    @Test
+    void updateMobileTabBarPreference_persistsPreferenceAndDefaultsUnsetUsersToEnabled() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("note@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEngagementMode(EngagementMode.FOCUSED);
+        user.setMobileTabBarEnabled(null);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse unsetPreferenceResponse = authService.getMe(userId);
+        MeResponse updatedResponse = authService.updateMobileTabBarPreference(
+            userId,
+            new UpdateMobileTabBarPreferenceRequest(false)
+        );
+
+        assertThat(unsetPreferenceResponse.mobileTabBarEnabled()).isTrue();
+        assertThat(updatedResponse.mobileTabBarEnabled()).isFalse();
+        assertThat(user.getMobileTabBarEnabled()).isFalse();
     }
 
     @Test

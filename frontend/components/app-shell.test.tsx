@@ -25,6 +25,7 @@ const sendFeedbackWidgetMock = jest.fn((_props: unknown) => {
 jest.mock("next/navigation", () => ({
   usePathname: () => currentPathname,
   useRouter: () => routerMock,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 jest.mock("next/image", () => ({
@@ -414,5 +415,39 @@ describe("AppShell", () => {
     expect(await screen.findByText("Quick Review in session")).toBeInTheDocument();
     expect(screen.getByLabelText("Open user menu")).toBeInTheDocument();
     expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
+  });
+
+  it("hides mobile tabs when the persisted preference is disabled", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...meResponse, mobileTabBarEnabled: false });
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <div>Focused note detail</div>
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Focused note detail")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows mobile tabs by default for accounts whose response omits the preference", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...meResponse, mobileTabBarEnabled: undefined });
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <div>Dashboard content</div>
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Dashboard content")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("mobile-bottom-tab-bar")).toBeInTheDocument();
+    });
   });
 });

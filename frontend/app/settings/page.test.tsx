@@ -13,6 +13,7 @@ import {
   trackAnalyticsEvent,
   updateEngagementMode,
   updateEmailPreferences,
+  updateMobileTabBarPreference,
 } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { clearAuthUser } from "@/lib/auth";
@@ -77,6 +78,7 @@ jest.mock("@/lib/api", () => ({
   trackAnalyticsEvent: jest.fn(),
   updateEngagementMode: jest.fn(),
   updateEmailPreferences: jest.fn(),
+  updateMobileTabBarPreference: jest.fn(),
 }));
 
 const proProfile = {
@@ -93,6 +95,7 @@ const proProfile = {
   weakConceptRemindersEnabled: false,
   weeklySummaryRemindersEnabled: false,
   marketingEmailsEnabled: false,
+  mobileTabBarEnabled: true,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
   onboardingCompletedAt: "2026-03-20T00:05:00Z",
   productOnboardingCompletedAt: null,
@@ -223,6 +226,7 @@ describe("Settings page cancellation flow", () => {
     (clearAuthUser as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
     (updateEmailPreferences as jest.Mock).mockReset();
+    (updateMobileTabBarPreference as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(proProfile);
@@ -816,5 +820,37 @@ describe("Settings page cancellation flow", () => {
       });
     });
     expect(await screen.findByText("Email preferences updated.")).toBeInTheDocument();
+  });
+
+  it("persists the mobile navigation preference without optimistically changing the toggle", async () => {
+    (updateMobileTabBarPreference as jest.Mock).mockResolvedValue({
+      ...proProfile,
+      mobileTabBarEnabled: false,
+    });
+
+    render(<SettingsPage />);
+
+    const toggle = await screen.findByRole("checkbox", { name: "Show mobile navigation bar" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+
+    expect(toggle).toBeChecked();
+    await waitFor(() => {
+      expect(updateMobileTabBarPreference).toHaveBeenCalledWith({ mobileTabBarEnabled: false });
+    });
+    expect(await screen.findByText("Mobile navigation preference updated.")).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("keeps the mobile navigation toggle unchanged when saving fails", async () => {
+    (updateMobileTabBarPreference as jest.Mock).mockRejectedValue(new Error("Could not save preference."));
+
+    render(<SettingsPage />);
+
+    const toggle = await screen.findByRole("checkbox", { name: "Show mobile navigation bar" });
+    fireEvent.click(toggle);
+
+    expect(await screen.findByText("Could not save preference.")).toBeInTheDocument();
+    expect(toggle).toBeChecked();
   });
 });
