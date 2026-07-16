@@ -355,8 +355,7 @@ Public Library note cards reuse the shared note-card layout:
 - Title
 - Study Pack Ready badge (green) — below title when applicable
 - Quality badges (High Quality, Well liked, Popular) — below title alongside state badge
-- `Note Preview` (compact, line-clamped)
-- `Summary Preview` (compact, line-clamped)
+- a single preview excerpt (compact, line-clamped) — note preview if it clears the minimum length, else a labeled `Summary` fallback, else no excerpt at all; never both stacked — see the single-excerpt cascade rule under Discovery guidance below
 - limited Tags (`3-4` visible plus overflow count)
 - subtle metrics row for `views`, `copies`, and `likes`, with the heart control staying visually secondary
 - featured content should remain visually special through stronger section framing instead of being flattened into a plain list
