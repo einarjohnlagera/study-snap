@@ -433,4 +433,21 @@ describe("AppShell", () => {
       expect(screen.queryByTestId("mobile-bottom-tab-bar")).not.toBeInTheDocument();
     });
   });
+
+  it("shows mobile tabs by default for accounts whose response omits the preference", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ ...meResponse, mobileTabBarEnabled: undefined });
+
+    render(
+      <ExamFocusProvider>
+        <AppShell>
+          <div>Dashboard content</div>
+        </AppShell>
+      </ExamFocusProvider>,
+    );
+
+    expect(await screen.findByText("Dashboard content")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("mobile-bottom-tab-bar")).toBeInTheDocument();
+    });
+  });
 });
