@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
+import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { Card } from "@/components/ui/card";
 import type { NoteListItemResponse } from "@/lib/api";
@@ -36,6 +37,7 @@ type SubjectSectionProps = {
   title: string;
   description: string;
   notes: SubjectNote[];
+  subjectPath: string;
 };
 
 function formatSubjectFallback(subjectSlug: string) {
@@ -65,14 +67,14 @@ function getSectionedNotes(notes: SubjectNote[]) {
   return { featured, popular, recent };
 }
 
-function SubjectNoteCard({ note }: Readonly<{ note: SubjectNote }>) {
+function SubjectNoteCard({ note, subjectPath }: Readonly<{ note: SubjectNote; subjectPath: string }>) {
   const href = buildPublicLibraryNotePathFromSlug({
     subject: note.subject,
     slug: getNoteSlug(note),
   });
 
   return (
-    <Link href={href} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+    <PublicLibraryReturnLink href={href} returnUrl={subjectPath} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
       <Card className="motion-pressable h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 sm:p-5">
         <SharedNoteCard
           title={note.title}
@@ -96,11 +98,11 @@ function SubjectNoteCard({ note }: Readonly<{ note: SubjectNote }>) {
           )}
         />
       </Card>
-    </Link>
+    </PublicLibraryReturnLink>
   );
 }
 
-function SubjectSection({ title, description, notes }: Readonly<SubjectSectionProps>) {
+function SubjectSection({ title, description, notes, subjectPath }: Readonly<SubjectSectionProps>) {
   if (notes.length === 0) {
     return null;
   }
@@ -115,7 +117,7 @@ function SubjectSection({ title, description, notes }: Readonly<SubjectSectionPr
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {notes.map((note) => (
-          <SubjectNoteCard key={note.id} note={note} />
+          <SubjectNoteCard key={note.id} note={note} subjectPath={subjectPath} />
         ))}
       </div>
     </section>
@@ -185,16 +187,19 @@ export default async function SubjectLandingPage({ params }: Readonly<SubjectLan
             title="Featured Notes"
             description="Quality public notes ranked by engagement and freshness."
             notes={featured}
+            subjectPath={subjectPath}
           />
           <SubjectSection
             title="Most Popular"
             description="Subject notes with the strongest copy and view signals."
             notes={popular}
+            subjectPath={subjectPath}
           />
           <SubjectSection
             title="Recently Added"
             description="Newest public notes for this subject."
             notes={recent}
+            subjectPath={subjectPath}
           />
         </div>
       ) : (

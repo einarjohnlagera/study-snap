@@ -3,15 +3,13 @@
 import { useEffect, useState } from "react";
 import { BackLink } from "@/components/ui/back-link";
 import { getAuthUser } from "@/lib/auth";
-
-const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
-const PUBLIC_LIBRARY_DEFAULT_HREF = "/public/library";
+import { PUBLIC_LIBRARY_PATH, PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 
 export function PublicLibraryBackLink() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [returnHref] = useState(() => {
-    const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_KEY);
-    return saved && saved.startsWith("/public/library") ? saved : PUBLIC_LIBRARY_DEFAULT_HREF;
+    const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY);
+    return saved && saved.startsWith(PUBLIC_LIBRARY_PATH) ? saved : PUBLIC_LIBRARY_PATH;
   });
 
   useEffect(() => {

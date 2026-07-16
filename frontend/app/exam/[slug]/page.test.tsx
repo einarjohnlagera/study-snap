@@ -4,6 +4,7 @@ import { EXAM_HUBS, EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { getAuthUser } from "@/lib/auth";
 import { trackAnalyticsEvent, type NoteListItemResponse } from "@/lib/api";
+import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -71,6 +72,7 @@ describe("ExamHubPage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    window.sessionStorage.clear();
   });
 
   it("defines exactly the wave-1 exam hubs and course program aliases", () => {
@@ -124,6 +126,20 @@ describe("ExamHubPage", () => {
     // A too-short note body falls back to the labeled summary excerpt instead.
     expect(screen.getByText("A study-ready summary preview for utilities reviewers.")).toBeInTheDocument();
     expect(screen.getByText("Summary")).toBeInTheDocument();
+  });
+
+  it("saves the note's own course/program-filtered Public Library URL as the return URL when a card is clicked", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue([
+      buildNote({ id: "featured-1", title: "ALE Structures", slug: "ale-structures", courseProgram: "Architecture", copyCount: 12, viewCount: 120 }),
+    ]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: /ALE Structures/ }));
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
+      "/public/library?courseProgram=architecture",
+    );
   });
 
   it.each([
