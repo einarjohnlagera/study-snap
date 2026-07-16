@@ -6,6 +6,7 @@ import { PublicMiniQuizPreview } from "@/components/notes/public-mini-quiz-previ
 import { PublicFlashcardsPreview } from "@/components/notes/public-flashcards-preview";
 import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mode-teaser";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
+import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { PublicNoteAuthorCard } from "@/components/notes/public-note-author-card";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
@@ -342,28 +343,32 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                   href={examSlug ? `/exam/${examSlug}` : buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
                   className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
                 >
-                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : "View all →"}
+                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : `See all in ${courseProgram} →`}
                 </Link>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {moreByCourseProgram.map((n) => (
-                  <Link
+                  <PublicLibraryReturnLink
                     key={n.id}
                     href={buildPublicLibraryNotePath({ subject: n.subject, title: n.title })}
-                    className="group block rounded-2xl border border-border bg-card p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5"
+                    returnUrl={buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
+                    className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    <p className="line-clamp-2 font-medium text-foreground group-hover:text-blue-700 dark:group-hover:text-blue-300">
-                      {normalizePublicNoteText(n.title) || "Untitled note"}
-                    </p>
-                    {n.subject ? (
-                      <p className="mt-1 text-xs text-foreground/55">{n.subject}</p>
-                    ) : null}
-                    {n.summaryPreview ? (
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-foreground/70">
-                        {n.summaryPreview}
-                      </p>
-                    ) : null}
-                  </Link>
+                    <Card className="motion-pressable h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5">
+                      <SharedNoteCard
+                        title={n.title}
+                        courseProgram={n.courseProgram}
+                        subject={n.subject}
+                        tags={n.tags}
+                        contentPreview={n.contentPreview}
+                        summaryPreview={n.summaryPreview}
+                        copyCount={n.copyCount}
+                        viewCount={n.viewCount}
+                        tagDisplayLimit={3}
+                        previewLines={2}
+                      />
+                    </Card>
+                  </PublicLibraryReturnLink>
                 ))}
               </div>
             </div>
@@ -385,9 +390,10 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {moreInSubject.map((relatedNote) => (
-                <Link
+                <PublicLibraryReturnLink
                   key={relatedNote.id}
                   href={buildPublicLibraryNotePath({ subject: relatedNote.subject, title: relatedNote.title })}
+                  returnUrl={buildPublicLibrarySubjectPath(note.subject)}
                   className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   <Card className="motion-pressable h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5">
@@ -401,11 +407,10 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                       copyCount={relatedNote.copyCount}
                       viewCount={relatedNote.viewCount}
                       tagDisplayLimit={3}
-                      notePreviewLines={2}
-                      summaryPreviewLines={2}
+                      previewLines={2}
                     />
                   </Card>
-                </Link>
+                </PublicLibraryReturnLink>
               ))}
             </div>
           </section>

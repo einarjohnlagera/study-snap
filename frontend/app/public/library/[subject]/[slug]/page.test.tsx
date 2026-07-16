@@ -1,6 +1,12 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
-import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject } from "@/lib/server-public-notes";
+import {
+  getServerPublicNoteBySeoPath,
+  getServerPublicNotesByCourseProgram,
+  getServerPublicNotesBySubject,
+  getServerPublicNotesBySubjectSlug,
+} from "@/lib/server-public-notes";
+import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -14,6 +20,7 @@ jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNoteBySeoPath: jest.fn(),
   getServerPublicNotesBySubject: jest.fn().mockResolvedValue([]),
   getServerPublicNotesBySubjectSlug: jest.fn().mockResolvedValue([]),
+  getServerPublicNotesByCourseProgram: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock("@/components/notes/shared-note-card", () => ({
@@ -117,6 +124,11 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockReset();
     (getServerPublicNotesBySubject as jest.Mock).mockReset();
     (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([]);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockReset();
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([]);
+    window.sessionStorage.clear();
   });
 
   it("renders title, author, and summary without requiring any interaction", async () => {
@@ -392,6 +404,117 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText("Cell Division")).toBeInTheDocument();
     expect(screen.queryByText("Cell Structure", { selector: "article" })).not.toBeInTheDocument();
     expect(getServerPublicNotesBySubject).toHaveBeenCalledWith("Science");
+  });
+
+  it("saves the subject-landing page as the Public Library return URL when a related-subject note is clicked", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Plant Cells", contentPreview: "Plant cell preview", summaryPreview: "Plant cell summary" },
+      { ...baseNote, id: "note-3", title: "Animal Cells", contentPreview: "Animal cell preview", summaryPreview: "Animal cell summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
+    fireEvent.click(screen.getByText("Plant Cells").closest("a") as HTMLElement);
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe("/public/library/science");
+  });
+
+  it("renders shared note cards for related course/program notes, excluding the current note", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Business Administration" },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "Marketing basics preview", summaryPreview: "Marketing basics summary" },
+      { ...baseNote, id: "note-3", title: "Business Law", courseProgram: "Business Administration", contentPreview: "Business law preview", summaryPreview: "Business law summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "More Business Administration notes" })).toBeInTheDocument();
+    expect(screen.getByText("Marketing Basics")).toBeInTheDocument();
+    expect(screen.getByText("Business Law")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See all in Business Administration →" })).toHaveAttribute(
+      "href",
+      "/public/library?courseProgram=business-administration",
+    );
+    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Business Administration");
+  });
+
+  it("saves the course/program-filtered Public Library URL as the return URL when a related-course/program note is clicked", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Business Administration" },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "Marketing basics preview", summaryPreview: "Marketing basics summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    fireEvent.click(screen.getByText("Marketing Basics").closest("a") as HTMLElement);
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
+      "/public/library?courseProgram=business-administration",
+    );
+  });
+
+  it("links the course/program section to the exam hub when the course/program maps to one", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Nursing" },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Vital Signs", courseProgram: "Nursing", contentPreview: "Vital signs preview", summaryPreview: "Vital signs summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
+    const hubLinks = screen.getAllByRole("link", { name: "Browse PNLE hub →" });
+    expect(hubLinks.length).toBeGreaterThan(0);
+    hubLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/exam/pnle");
+    });
+
+    // The card's own back-link context always returns to Public Library, never the Exam Hub,
+    // even though the section's visible "See all" link points there.
+    fireEvent.click(screen.getByText("Vital Signs").closest("a") as HTMLElement);
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
+      "/public/library?courseProgram=nursing",
+    );
+  });
+
+  it("omits the course/program section when the current note has no course/program", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: null },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: /More .* notes/ })).not.toBeInTheDocument();
+    expect(getServerPublicNotesByCourseProgram).not.toHaveBeenCalled();
   });
 
   it("omits the subject section when no related subject notes are available", async () => {

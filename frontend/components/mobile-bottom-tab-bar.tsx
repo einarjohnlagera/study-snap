@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ResponsiveActionContent, type ActionIconName } from "@/components/ui/action-button";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { PUBLIC_LIBRARY_PATH, PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import { cn } from "@/lib/utils";
 import type { ProfileType } from "@/lib/api";
 
@@ -20,8 +21,6 @@ type MobileTab = {
 };
 
 const LIBRARY_PATH = "/library";
-const PUBLIC_LIBRARY_PATH = "/public/library";
-const PUBLIC_LIBRARY_RETURN_KEY = "notelib_public_library_return_url";
 
 function isTabActive(pathname: string, activeHref: string): boolean {
   if (activeHref === LIBRARY_PATH) {
@@ -32,7 +31,7 @@ function isTabActive(pathname: string, activeHref: string): boolean {
 
 function getPublicLibraryReturnHref(): string {
   try {
-    const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_KEY);
+    const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY);
     return saved?.startsWith(PUBLIC_LIBRARY_PATH) ? saved : PUBLIC_LIBRARY_PATH;
   } catch {
     return PUBLIC_LIBRARY_PATH;

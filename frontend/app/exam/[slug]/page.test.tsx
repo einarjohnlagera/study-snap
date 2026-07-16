@@ -4,6 +4,7 @@ import { EXAM_HUBS, EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { getAuthUser } from "@/lib/auth";
 import { trackAnalyticsEvent, type NoteListItemResponse } from "@/lib/api";
+import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -71,6 +72,7 @@ describe("ExamHubPage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    window.sessionStorage.clear();
   });
 
   it("defines exactly the wave-1 exam hubs and course program aliases", () => {
@@ -94,6 +96,50 @@ describe("ExamHubPage", () => {
     expect(screen.getByText(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].description, { exact: false })).toBeInTheDocument();
     expect(screen.getAllByText(firstCourseProgram).length).toBeGreaterThanOrEqual(1);
     expect(getServerPublicNotesByCoursePrograms).toHaveBeenCalledWith(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].coursePrograms);
+  });
+
+  it("shows one excerpt per card, note preview first, summary as a labeled fallback", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue([
+      buildNote({
+        id: "featured-1",
+        title: "ALE Structures",
+        slug: "ale-structures",
+        contentPreview: "A concise public note preview for board exam reviewers.",
+        summaryPreview: "A study-ready summary preview for board exam reviewers.",
+      }),
+      buildNote({
+        id: "popular-1",
+        title: "Building Utilities",
+        slug: "building-utilities",
+        contentPreview: "Too short",
+        summaryPreview: "A study-ready summary preview for utilities reviewers.",
+        copyCount: 9,
+      }),
+    ]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    // Note preview wins when it clears the minimum length — the summary never shows alongside it.
+    expect(screen.getByText("A concise public note preview for board exam reviewers.")).toBeInTheDocument();
+    expect(screen.queryByText("A study-ready summary preview for board exam reviewers.")).not.toBeInTheDocument();
+
+    // A too-short note body falls back to the labeled summary excerpt instead.
+    expect(screen.getByText("A study-ready summary preview for utilities reviewers.")).toBeInTheDocument();
+    expect(screen.getByText("Summary")).toBeInTheDocument();
+  });
+
+  it("saves the note's own course/program-filtered Public Library URL as the return URL when a card is clicked", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue([
+      buildNote({ id: "featured-1", title: "ALE Structures", slug: "ale-structures", courseProgram: "Architecture", copyCount: 12, viewCount: 120 }),
+    ]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: /ALE Structures/ }));
+    expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
+      "/public/library?courseProgram=architecture",
+    );
   });
 
   it.each([

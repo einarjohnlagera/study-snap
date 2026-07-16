@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
+import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
+import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { Card } from "@/components/ui/card";
 import type { NoteListItemResponse } from "@/lib/api";
 import {
@@ -15,7 +17,6 @@ import {
   buildPublicLibrarySubjectPath,
   getPublicTitleSlug,
 } from "@/lib/public-note-path";
-import { stripMarkdownForPreview } from "@/lib/public-note-text";
 import { getServerPublicNotesBySubjectSlug, getServerPublicSubjects } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
@@ -36,6 +37,7 @@ type SubjectSectionProps = {
   title: string;
   description: string;
   notes: SubjectNote[];
+  subjectPath: string;
 };
 
 function formatSubjectFallback(subjectSlug: string) {
@@ -65,56 +67,42 @@ function getSectionedNotes(notes: SubjectNote[]) {
   return { featured, popular, recent };
 }
 
-function SubjectNoteCard({ note }: Readonly<{ note: SubjectNote }>) {
-  const title = note.title?.trim() || "Untitled note";
-  const summary = stripMarkdownForPreview(note.summaryPreview?.trim() || note.contentPreview?.trim()) || "No preview available yet.";
+function SubjectNoteCard({ note, subjectPath }: Readonly<{ note: SubjectNote; subjectPath: string }>) {
   const href = buildPublicLibraryNotePathFromSlug({
     subject: note.subject,
     slug: getNoteSlug(note),
   });
-  const hasMetrics = typeof note.viewCount === "number" || typeof note.copyCount === "number";
 
   return (
-    <Link href={href} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-      <Card className="flex h-full flex-col justify-between gap-4 p-4 transition-colors hover:border-blue-300/80 hover:bg-blue-50/35 dark:hover:border-blue-700/70 dark:hover:bg-blue-950/15 sm:p-5">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
-              {note.subject?.trim() || "General"}
-            </span>
-            {note.courseProgram?.trim() ? (
-              <span className="rounded-full border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground/70">
-                {note.courseProgram.trim()}
-              </span>
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <h2 className="line-clamp-2 text-base font-semibold text-foreground sm:text-lg">{title}</h2>
-            <p className="line-clamp-3 text-sm leading-relaxed text-foreground/70">{summary}</p>
-          </div>
-        </div>
-        <div className="space-y-3 text-xs text-foreground/60">
-          <div className="flex flex-wrap items-center gap-2">
-            <span>By {note.authorDisplayName || "NoteLib learner"}</span>
-            {note.isOfficialAuthor ? (
-              <span className="rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
-                Official
-              </span>
-            ) : null}
-          </div>
-          {hasMetrics ? (
-            <div className="flex flex-wrap gap-3">
-              {typeof note.viewCount === "number" ? <span>{note.viewCount.toLocaleString()} {note.viewCount === 1 ? "view" : "views"}</span> : null}
-              {typeof note.copyCount === "number" ? <span>{note.copyCount.toLocaleString()} {note.copyCount === 1 ? "copy" : "copies"}</span> : null}
+    <PublicLibraryReturnLink href={href} returnUrl={subjectPath} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+      <Card className="motion-pressable h-full p-4 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 sm:p-5">
+        <SharedNoteCard
+          title={note.title}
+          courseProgram={note.courseProgram}
+          subject={note.subject}
+          tags={note.tags}
+          contentPreview={note.contentPreview}
+          summaryPreview={note.summaryPreview}
+          copyCount={typeof note.copyCount === "number" && note.copyCount > 0 ? note.copyCount : null}
+          viewCount={typeof note.viewCount === "number" && note.viewCount > 0 ? note.viewCount : null}
+          tagDisplayLimit={3}
+          footer={(
+            <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
+              <span>By {note.authorDisplayName || "NoteLib learner"}</span>
+              {note.isOfficialAuthor ? (
+                <span className="rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                  Official
+                </span>
+              ) : null}
             </div>
-          ) : null}
-        </div>
+          )}
+        />
       </Card>
-    </Link>
+    </PublicLibraryReturnLink>
   );
 }
 
-function SubjectSection({ title, description, notes }: Readonly<SubjectSectionProps>) {
+function SubjectSection({ title, description, notes, subjectPath }: Readonly<SubjectSectionProps>) {
   if (notes.length === 0) {
     return null;
   }
@@ -129,7 +117,7 @@ function SubjectSection({ title, description, notes }: Readonly<SubjectSectionPr
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {notes.map((note) => (
-          <SubjectNoteCard key={note.id} note={note} />
+          <SubjectNoteCard key={note.id} note={note} subjectPath={subjectPath} />
         ))}
       </div>
     </section>
@@ -199,16 +187,19 @@ export default async function SubjectLandingPage({ params }: Readonly<SubjectLan
             title="Featured Notes"
             description="Quality public notes ranked by engagement and freshness."
             notes={featured}
+            subjectPath={subjectPath}
           />
           <SubjectSection
             title="Most Popular"
             description="Subject notes with the strongest copy and view signals."
             notes={popular}
+            subjectPath={subjectPath}
           />
           <SubjectSection
             title="Recently Added"
             description="Newest public notes for this subject."
             notes={recent}
+            subjectPath={subjectPath}
           />
         </div>
       ) : (

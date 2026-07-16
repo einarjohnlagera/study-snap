@@ -51,7 +51,7 @@ The More Filters sheet includes a `Study Pack Ready` boolean toggle. It filters 
 
 ## Anti-drift Notes
 
-- Public Library back-navigation to a filtered state uses `sessionStorage` (key: `notelib_public_library_return_url`) — not `?ref=` — because public note URLs are canonical SEO slugs that must not be polluted with navigation state
+- Public Library back-navigation to a filtered state uses `sessionStorage` (key: `notelib_public_library_return_url`, exported as `PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY` from `frontend/lib/public-library-url.ts`) — not `?ref=` — because public note URLs are canonical SEO slugs that must not be polluted with navigation state. Any surface that navigates a visitor into a note from an inherently filtered context must call `savePublicLibraryReturnUrl()` (same file) before navigating, so `PublicLibraryBackLink` doesn't discard that context — this covers the main Public Library grid (`handleNoteNavigate`), public note detail's two related-notes sections, and the subject-landing (`/public/library/{subject}`) and Exam Hub (`/exam/{slug}`) pages' own note grids, all via the shared `frontend/components/notes/public-library-return-link.tsx` client wrapper (required because all four of the latter pages are Server Components). Course/program-scoped cards always save a `courseProgram`-filtered *Public Library* URL, never an Exam Hub URL even when one exists for that course/program — the back-link is labeled "Public Library" and must not silently land somewhere else. On the Exam Hub page specifically, the return URL is built from each note's own `courseProgram`, not the hub's aggregate list, since one hub can span more than one course/program (e.g. PNLE covers both "Nursing" and "Medical – Surgical Nursing").
 - Discovery mode and filter mode are **mutually exclusive** — any active filter/search/sort switches to filter mode and hides the Featured / Popular / Recent sections
 - Audience filter uses `note.targetProfileType`, never the creator's `user.profileType`
 - The `creator` filter (v0.21.0) uses `username`, not `userId` or `displayName`
@@ -355,8 +355,7 @@ Public Library note cards reuse the shared note-card layout:
 - Title
 - Study Pack Ready badge (green) — below title when applicable
 - Quality badges (High Quality, Well liked, Popular) — below title alongside state badge
-- `Note Preview` (compact, line-clamped)
-- `Summary Preview` (compact, line-clamped)
+- a single preview excerpt (compact, line-clamped) — note preview if it clears the minimum length, else a labeled `Summary` fallback, else no excerpt at all; never both stacked — see the single-excerpt cascade rule under Discovery guidance below
 - limited Tags (`3-4` visible plus overflow count)
 - subtle metrics row for `views`, `copies`, and `likes`, with the heart control staying visually secondary
 - featured content should remain visually special through stronger section framing instead of being flattened into a plain list
@@ -413,7 +412,7 @@ Public Library is becoming an acquisition and sharing surface, so creator identi
 
 Discovery guidance:
 
-- prioritize original note preview over generated summary when scanning cards
+- **Card content rule (v0.50.2): one excerpt per card, never both.** Every note card (`SharedNoteCard`, used across Public Library, private Library, and the public note detail related-notes sections) shows exactly one preview excerpt via a cascade: the note's own body preview if it's non-empty and clears a minimum length (currently 40 characters after whitespace collapse — below that it's a stub, not a preview), else the Study Pack summary preview labeled "Summary" so it's never passed off as note text, else no excerpt block at all. **Rationale: the note is the source object; a card previews the destination's primary content, and the summary is a fallback preview of a derivative — not human authorship.** The rule used to be justified as "a note means a real person wrote this," but that's no longer verifiable now that a growing share of notes are AI-authored via the shipped `Generate Note` feature; the note is still the right thing to preview first because it's still what the visitor lands on, regardless of who or what wrote it. Do not reintroduce a stacked dual-preview layout ("NOTE PREVIEW" / "SUMMARY PREVIEW" sections) — it was retired for being redundant (near-duplicate excerpts of the same material) and for roughly doubling card height on scanning surfaces where density is the job. Do not build origin-aware card rendering (note vs. AI-generated shown differently) even if note-origin tracking is added later — origin is creation-time provenance, not current-authorship truth (a `Generate Note` first draft gets edited), and it would create a visible two-class library that disadvantages a sanctioned feature. Full reasoning: `docs/claude-prompt/note-preview-vs-summary-out/01-card-content-strategy.md`.
 - keep `views`, `copies`, and `likes` subtle so they help note selection without turning into badge clutter
 - use `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` as student-friendly discovery labels
 - preserve card richness while improving scalability: limit the number of cards shown per section first, then offer `View More`

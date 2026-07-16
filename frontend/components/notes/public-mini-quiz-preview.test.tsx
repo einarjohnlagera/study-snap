@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PublicMiniQuizPreview } from "./public-mini-quiz-preview";
+import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 
 let currentAuthUser: { id: string } | null = null;
 
@@ -33,7 +34,15 @@ describe("PublicMiniQuizPreview", () => {
   beforeEach(() => {
     currentAuthUser = null;
     publicSeoCopyCtaMock.mockClear();
+    window.sessionStorage.clear();
   });
+
+  function completeSingleQuestionQuiz(relatedNotes?: Parameters<typeof PublicMiniQuizPreview>[0]["relatedNotes"]) {
+    render(<PublicMiniQuizPreview quiz={singleQuiz} noteId="note-1" relatedNotes={relatedNotes} />);
+    fireEvent.click(screen.getByRole("button", { name: /Choice A/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Check Answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "See Results" }));
+  }
 
   it("renders nothing when quiz is empty", () => {
     const { container } = render(<PublicMiniQuizPreview quiz={[]} noteId="note-1" />);
@@ -182,5 +191,83 @@ describe("PublicMiniQuizPreview", () => {
     expect(
       screen.getByText(/You completed all 3 preview questions/i),
     ).toBeInTheDocument();
+  });
+
+  describe("More from {subject} related notes", () => {
+    it("prefers the note preview when it clears the minimum length", () => {
+      completeSingleQuestionQuiz([
+        {
+          id: "note-2",
+          title: "Cell Membranes",
+          subject: "Biology",
+          contentPreview: "The cell membrane controls what enters and exits the cell.",
+          summaryPreview: "A short summary.",
+        },
+      ]);
+
+      expect(screen.getByText("Cell Membranes")).toBeInTheDocument();
+      expect(
+        screen.getByText("The cell membrane controls what enters and exits the cell."),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("A short summary.")).not.toBeInTheDocument();
+    });
+
+    it("falls back to the summary when the note preview is an empty string, not just null/undefined", () => {
+      completeSingleQuestionQuiz([
+        {
+          id: "note-2",
+          title: "Cell Membranes",
+          subject: "Biology",
+          contentPreview: "",
+          summaryPreview: "A study-ready summary of cell membranes.",
+        },
+      ]);
+
+      expect(screen.getByText("A study-ready summary of cell membranes.")).toBeInTheDocument();
+    });
+
+    it("falls back to the summary when the note preview is too short to be a real preview", () => {
+      completeSingleQuestionQuiz([
+        {
+          id: "note-2",
+          title: "Cell Membranes",
+          subject: "Biology",
+          contentPreview: "Too short",
+          summaryPreview: "A study-ready summary of cell membranes.",
+        },
+      ]);
+
+      expect(screen.getByText("A study-ready summary of cell membranes.")).toBeInTheDocument();
+    });
+
+    it("renders no preview line when both the note and summary are empty", () => {
+      completeSingleQuestionQuiz([
+        { id: "note-2", title: "Cell Membranes", subject: "Biology", contentPreview: "", summaryPreview: "" },
+      ]);
+
+      const card = screen.getByText("Cell Membranes").closest("a");
+      expect(card?.querySelector("p:nth-of-type(2)")).toBeNull();
+    });
+
+    it("saves the related note's subject-landing page as the Public Library return URL on click", () => {
+      completeSingleQuestionQuiz([
+        {
+          id: "note-2",
+          title: "Cell Membranes",
+          subject: "Biology",
+          contentPreview: "The cell membrane controls what enters and exits the cell.",
+          summaryPreview: "A short summary.",
+        },
+      ]);
+
+      expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
+      fireEvent.click(screen.getByText("Cell Membranes").closest("a") as HTMLElement);
+      expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe("/public/library/biology");
+    });
+
+    it("does not render the related-notes section when there are none", () => {
+      completeSingleQuestionQuiz([]);
+      expect(screen.queryByText(/More from/)).not.toBeInTheDocument();
+    });
   });
 });
