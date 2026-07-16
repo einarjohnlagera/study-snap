@@ -16,7 +16,11 @@ Anti-drift: no origin-aware card rendering — the Fable session explicitly reje
 
 ### Shipped
 
-_(nothing yet)_
+- **Single-excerpt card cascade (frontend).** `SharedNoteCard` now resolves one preview excerpt via a cascade (note preview if ≥40 chars trimmed, else a "Summary"-labeled fallback, else no excerpt block) instead of always stacking both a "NOTE PREVIEW" and "SUMMARY PREVIEW" section. Replaced the `notePreviewLines`/`summaryPreviewLines`/`showPreviewLabels` props with a single `previewLines` prop; all five consumers (private Library, Dashboard community notes, public note detail's "More in {Subject}", public profile notes, Public Library grid) updated accordingly.
+- **Migrated the bespoke "More {Course/Program} notes" card (frontend).** Public note detail's older hand-rolled related-notes card now renders via `SharedNoteCard`, matching "More in {Subject}"'s content exactly; the two sections differ only in query/count. This section had zero prior test coverage — added tests covering the rendered cards and the no-course/program omission case, plus fixed a missing `getServerPublicNotesByCourseProgram`/`getServerPublicNotesBySubjectSlug` mock reset that would have let state leak between tests.
+- **Rewrote the documented card-content rule (docs).** `docs/features/public-library.md`'s "prioritize original note preview" rule now states the source-object rationale instead of the no-longer-verifiable human-authorship one; explicitly documents the minimum-length threshold and warns against reintroducing either the dual-preview layout or origin-aware rendering.
+
+**Known, explicitly out of scope:** `docs/features/notes.md` and the public-note-detail related-notes work didn't touch `/public/library/{subject}` (the subject-landing page) — discovered mid-implementation to have its own, third, independent bespoke card implementation (`summaryPreview || contentPreview` fallback, the *opposite* priority order from the documented rule) that predates and isn't covered by the Fable session's four named surfaces. Not fixed here to avoid silent scope creep; flagged in the Backlog Index for a follow-up pass.
 
 ## v0.50.1 - Mobile UI Polish
 

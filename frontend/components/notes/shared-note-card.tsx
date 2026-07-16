@@ -18,10 +18,16 @@ type SharedNoteCardProps = {
   metricsTrailing?: ReactNode;
   footer?: ReactNode;
   tagDisplayLimit?: number;
-  notePreviewLines?: 2 | 3;
-  summaryPreviewLines?: 2 | 3;
-  showPreviewLabels?: boolean;
+  previewLines?: 2 | 3;
 };
+
+type CardExcerpt =
+  | { kind: "note"; text: string }
+  | { kind: "summary"; text: string }
+  | { kind: "none" };
+
+// Below this, the note body is a stub, not a real preview — fall back to the summary instead.
+const MIN_NOTE_PREVIEW_LENGTH = 40;
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -32,14 +38,20 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
 }
 
-function resolveNotePreview(contentPreview: string) {
-  const trimmed = contentPreview.trim();
-  return trimmed.length > 0 ? trimmed : "No note preview available yet.";
-}
-
-function resolveSummaryPreview(summaryPreview?: string | null) {
-  const trimmed = summaryPreview?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : "No summary available yet.";
+/**
+ * The note is the source object; the summary is a fallback preview of a derivative.
+ * One excerpt per card, never both — see docs/features/public-library.md.
+ */
+function resolveCardExcerpt(contentPreview: string, summaryPreview?: string | null): CardExcerpt {
+  const trimmedNote = (contentPreview ?? "").trim().replace(/\s+/g, " ");
+  if (trimmedNote.length >= MIN_NOTE_PREVIEW_LENGTH) {
+    return { kind: "note", text: trimmedNote };
+  }
+  const trimmedSummary = (summaryPreview ?? "").trim().replace(/\s+/g, " ");
+  if (trimmedSummary.length > 0) {
+    return { kind: "summary", text: trimmedSummary };
+  }
+  return { kind: "none" };
 }
 
 export function SharedNoteCard({
@@ -57,9 +69,7 @@ export function SharedNoteCard({
   metricsTrailing,
   footer,
   tagDisplayLimit,
-  notePreviewLines = 3,
-  summaryPreviewLines = 2,
-  showPreviewLabels = true,
+  previewLines = 3,
 }: Readonly<SharedNoteCardProps>) {
   const normalizedTags = normalizeTags(tags);
   const normalizedCourseProgram = courseProgram?.trim() || null;
@@ -67,6 +77,7 @@ export function SharedNoteCard({
   const hasMetricsRow = hasDiscoveryMetrics || Boolean(metricsTrailing);
   const visibleTags = tagDisplayLimit ? normalizedTags.slice(0, tagDisplayLimit) : normalizedTags;
   const hiddenTagCount = Math.max(0, normalizedTags.length - visibleTags.length);
+  const excerpt = resolveCardExcerpt(contentPreview, summaryPreview);
 
   return (
     <div className="flex h-full min-w-0 flex-col justify-between gap-4">
@@ -101,35 +112,21 @@ export function SharedNoteCard({
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            <div className={showPreviewLabels ? "space-y-1" : "space-y-0"}>
-              {showPreviewLabels ? (
+          {excerpt.kind !== "none" ? (
+            <div className="space-y-1">
+              {excerpt.kind === "summary" ? (
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                  Note Preview
+                  Summary
                 </p>
               ) : null}
               <p className={cn(
                 "text-sm leading-relaxed text-foreground/85",
-                notePreviewLines === 2 ? "line-clamp-2" : "line-clamp-3",
+                previewLines === 2 ? "line-clamp-2" : "line-clamp-3",
               )}>
-                {resolveNotePreview(contentPreview)}
+                {excerpt.text}
               </p>
             </div>
-
-            <div className={showPreviewLabels ? "space-y-1" : "space-y-0"}>
-              {showPreviewLabels ? (
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                  Summary Preview
-                </p>
-              ) : null}
-              <p className={cn(
-                "text-sm leading-relaxed text-foreground/65",
-                summaryPreviewLines === 3 ? "line-clamp-3" : "line-clamp-2",
-              )}>
-                {resolveSummaryPreview(summaryPreview)}
-              </p>
-            </div>
-          </div>
+          ) : null}
         </div>
       </div>
 

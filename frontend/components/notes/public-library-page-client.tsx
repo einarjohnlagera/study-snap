@@ -362,9 +362,7 @@ function PublicNoteCard({
           />
         )}
         tagDisplayLimit={4}
-        notePreviewLines={2}
-        summaryPreviewLines={2}
-        showPreviewLabels={false}
+        previewLines={2}
         footer={(
           <div className="flex flex-wrap items-start justify-between gap-3 text-xs text-foreground/65">
             <div className="flex min-w-0 flex-wrap items-center gap-2">

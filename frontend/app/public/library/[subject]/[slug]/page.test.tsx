@@ -1,6 +1,11 @@
 import { act, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
-import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject } from "@/lib/server-public-notes";
+import {
+  getServerPublicNoteBySeoPath,
+  getServerPublicNotesByCourseProgram,
+  getServerPublicNotesBySubject,
+  getServerPublicNotesBySubjectSlug,
+} from "@/lib/server-public-notes";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -14,6 +19,7 @@ jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNoteBySeoPath: jest.fn(),
   getServerPublicNotesBySubject: jest.fn().mockResolvedValue([]),
   getServerPublicNotesBySubjectSlug: jest.fn().mockResolvedValue([]),
+  getServerPublicNotesByCourseProgram: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock("@/components/notes/shared-note-card", () => ({
@@ -117,6 +123,10 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockReset();
     (getServerPublicNotesBySubject as jest.Mock).mockReset();
     (getServerPublicNotesBySubject as jest.Mock).mockResolvedValue([]);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockReset();
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([]);
   });
 
   it("renders title, author, and summary without requiring any interaction", async () => {
@@ -392,6 +402,48 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText("Cell Division")).toBeInTheDocument();
     expect(screen.queryByText("Cell Structure", { selector: "article" })).not.toBeInTheDocument();
     expect(getServerPublicNotesBySubject).toHaveBeenCalledWith("Science");
+  });
+
+  it("renders shared note cards for related course/program notes, excluding the current note", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Business Administration" },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Marketing Basics", courseProgram: "Business Administration", contentPreview: "Marketing basics preview", summaryPreview: "Marketing basics summary" },
+      { ...baseNote, id: "note-3", title: "Business Law", courseProgram: "Business Administration", contentPreview: "Business law preview", summaryPreview: "Business law summary" },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "More Business Administration notes" })).toBeInTheDocument();
+    expect(screen.getByText("Marketing Basics")).toBeInTheDocument();
+    expect(screen.getByText("Business Law")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View all →" })).toHaveAttribute(
+      "href",
+      "/public/library?courseProgram=business-administration",
+    );
+    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Business Administration");
+  });
+
+  it("omits the course/program section when the current note has no course/program", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: null },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: /More .* notes/ })).not.toBeInTheDocument();
+    expect(getServerPublicNotesByCourseProgram).not.toHaveBeenCalled();
   });
 
   it("omits the subject section when no related subject notes are available", async () => {

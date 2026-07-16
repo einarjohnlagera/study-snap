@@ -109,8 +109,7 @@ describe("PublicProfilePage", () => {
     expect(screen.getAllByText("5 copies")).not.toHaveLength(0);
     expect(screen.getAllByText("12 views")).not.toHaveLength(0);
     expect(screen.getAllByText("Plant cells contain chloroplasts and cell walls.")).not.toHaveLength(0);
-    expect(screen.getAllByText("Plant cells use chloroplasts for photosynthesis.")).not.toHaveLength(0);
-    expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
+    expect(screen.getAllByText("Atoms share and transfer electrons to form bonds.")).not.toHaveLength(0);
     fireEvent.click(screen.getAllByText("Plant Cells")[0].closest("[role='link']") as HTMLElement);
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/public/library/biology/plant-cells");
