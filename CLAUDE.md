@@ -16,7 +16,7 @@ Current version: **v0.50.3 — Public Note Copy Flow & Related-Notes Consistency
 - `docs/product/EXAM_MODES.md` — quiz mode hierarchy (locked contract; exactly 5 modes)
 - `docs/features/<feature>.md` — per-feature behavior rules (48 files; **read before changing any feature, update after shipping any behavioral change** — updating `RELEASES.md` alone is not enough)
 - `RELEASES.md` — every completed and in-progress change; always update when shipping work
-- `GPT_CONTEXT.md` — version-stamped snapshot of the full product state; useful to understand where things stand
+- `docs/gpt-contexts/GPT_CONTEXT.md` — version-stamped snapshot of the full product state; useful to understand where things stand
 
 ## Task routing
 
