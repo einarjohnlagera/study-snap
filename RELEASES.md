@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.51.0 - Read-Path Performance Pass II
+
+**Status: In Progress**
+
+Theme: fix production slowness on Private Library, Public Library, Note Collection detail, and the Dashboard — unbounded backend queries and sequential frontend waterfalls diagnosed via direct codebase investigation and a Fable planning session (`docs/claude-prompt/production-performance-audit-out/01-production-performance-audit.md`), following the same discipline as `v0.38.0 - Read-Path Optimization Pass`.
+
+### Planned Scope
+
+- **F1 — Dashboard-overview lean projections + bounding (backend).** Two of `DashboardService.getDashboardOverview`'s history scans (`Pageable.unpaged()` over every completed quiz session ever, and — Board-Exam profiles only — every Study Pack ever as full entities) get lean JPQL projections and SQL-side bounds, mirroring v0.38.0's own playbook. Byte-identical response. Zero-decision, ships first.
+- **F2 — `NoteService.listMine` lean projection + optional `limit` param (backend + one-line frontend).** Drops the full `content` column from every note-list response (shipped on every Library load and poll tick today); adds an optional `limit` param that Dashboard's Stage-1 call can pass, while `/library` keeps calling unbounded for now. Byte-identical by construction — decouples the transparent fix from the pagination UX decision (F7).
+- **F4 — Private Library poller narrowing (frontend-only).** The background poller that re-runs the full unbounded note fetch on a timer whenever any note is `GENERATING` is narrowed to poll only that note's own status, re-running the full list fetch only on an actual status transition. Byte-identical, no API change.
+- **F5 — Collection detail waterfall flattening (frontend-only).** Collapses the 3-wave sequential request waterfall on `/collections/{id}` (get-collection + list-notes → goal → 3 independent post-hydration effects) into 1 wave (or 1 + one conditional) by hoisting Wave 3's effects into Wave 1's parallel batch. Includes two verification tasks carried from the audit, not assumed bugs: confirm whether the second `listNotes()` call site (`loadNoteVisibility`) is a genuine duplicate, and confirm the v0.38.0 per-child readiness batching still holds under the 3 features that now ride along (Companion, weekly countdown, Mentor Tips).
+- **F6 — Dashboard Stage 2 batched fan-out (backend + frontend).** Replaces Stage 2's up-to-8 (Teacher) / up-to-4 (Student/Board-Exam/Professional) individual per-note fetches with one new batched ids-in endpoint. Zero user-visible change; does not widen the existing Stage-1 DTO.
+- **F7 — Real backend pagination for Private Library `/library` (backend + frontend).** Genuine UX/architecture change: `/library` moves from "load everything once, slice client-side" to true backend pagination, so a filter change re-queries the server instead of re-slicing a local array.
+- **F8 — Server-side filtering + full pagination UX for Public Library (backend + frontend).** Chosen directly over the audit's F3 stopgap (cap + "Load more"). Fixes the single most severe finding in the audit: the frontend never sends the backend's existing `size` param, so every visit loads, enriches, and ships every public note in the database with no limit ever applied. Real server-side filtering + pagination, not a stopgap.
+
+F9 (lightweight client-side caching) and F10 (denormalized engagement counts) are intentionally **not** in this release — parked in the Backlog Index pending production evidence after F1-F8 ship (do bounded/parallelized pages still show refetch pain? does slow-query logging still flag the enrichment queries?).
+
+Anti-drift: read-path performance only, not a feature or business-logic change — byte-identical API responses wherever the fix is a projection/bounding change (F1, F2, F4, F5, F6); F7 and F8 are explicit, named UX/architecture changes, not disguised as backend-only swaps. No new caching infrastructure (Redis, CDN edge caching) — none of the simpler fixes here were judged insufficient. No changes to quiz-session data model, mastery/readiness computation semantics, or profile-type branching logic — bound, batch, and parallelize the reads; don't change what they mean. Same verification bar as v0.38.0: real-Hibernate/integration tests over mocks, byte-identical responses verified, not assumed.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.50.4 - Exam Hub Discovery Polish
 
 **Status: Released**

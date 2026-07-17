@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.50.4 - Exam Hub Discovery Polish` is the current released version (on `releases/v0.50.4`, cut from `main` after v0.50.3 merged) — see its section below. No version is currently in progress.
+`v0.51.0 - Read-Path Performance Pass II` is the current in-progress version (on `releases/v0.51.0`, cut from `main` after v0.50.4 merged) — see its section below.
+
+`v0.50.4 - Exam Hub Discovery Polish` is the previous released version — see its section below.
 
 `v0.50.3 - Public Note Copy Flow & Related-Notes Consistency` is the previous released version — see its section below.
 
@@ -87,6 +89,21 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Public-note copy idempotency guard never backfills a stale copy | investigated during v0.50.3 signoff follow-up, no session doc | Low-priority, self-inflicted-by-timing edge case | `NoteService.copyNote()`'s existing-copy branch returns a prior copy as-is even if it predates the source's Study Pack becoming ready — a user re-copying after their first copy landed draft keeps getting the stale draft forever. Only reachable if a user copies before the source pack exists, then retries later. Candidate fix (not scoped): if the existing copy has no pack and the source now has a ready one, backfill it instead of returning as-is | 2026-07-17 |
 | Production performance audit (Private Library, Public Library, Note Collection detail, Dashboard reported slow) | `production-performance-audit-out/01-production-performance-audit.md` | **In Progress — v0.51.0.** F1, F2, F4, F5, F6, F7, F8 scoped in full (F8 — real server-side Public Library pagination — chosen directly over F3's stopgap). F9 (client caching) and F10 (denormalized counts) intentionally parked below | F9/F10: gated on post-v0.51.0 production evidence (slow-query logs, whether refetch pain persists once queries are bounded) — not before | 2026-07-17 |
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
+
+## v0.51.0 - Read-Path Performance Pass II (In Progress, base branch `releases/v0.51.0`)
+
+Origin: user-reported production slowness on Private Library, Public Library, Note Collection detail, and the Dashboard. Diagnosed via 4 parallel direct-codebase investigations (one per page) plus a Fable planning session (`docs/claude-prompt/production-performance-audit-out/01-production-performance-audit.md`), grounded against the prior `v0.38.0 - Read-Path Optimization Pass` precedent. Scoped in full via explicit user decision: F9/F10 left parked rather than included; F8 (real server-side Public Library pagination) built directly rather than F3's cap-and-load-more stopgap.
+
+**Scope:**
+- F1 — Dashboard-overview lean projections + bounding (Codex).
+- F2 — `NoteService.listMine` lean projection + optional `limit` param (Codex).
+- F4 — Private Library poller narrowing (Claude Code direct).
+- F5 — Collection detail waterfall flattening + 2 verification tasks (Codex, likely crosses the ~50 LOC threshold).
+- F6 — Dashboard Stage 2 batched fan-out endpoint (Codex).
+- F7 — Real backend pagination for Private Library (Codex).
+- F8 — Server-side filtering + full pagination UX for Public Library (Codex).
+
+Anti-drift: read-path performance only; byte-identical responses for F1/F2/F4/F5/F6; F7/F8 are explicit UX/architecture changes, not disguised backend swaps; no new caching infrastructure; no quiz-session/mastery/readiness/profile-branching changes. Full scope in `RELEASES.md`.
 
 ## v0.50.4 - Exam Hub Discovery Polish (Released, base branch `releases/v0.50.4`)
 
