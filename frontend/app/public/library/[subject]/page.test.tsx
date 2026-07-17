@@ -98,7 +98,7 @@ describe("SubjectLandingPage", () => {
       params: Promise.resolve({ subject: "biology" }),
     });
 
-    expect(metadata.title).toBe("NoteLib – Biology Study Notes, Summaries, and Quizzes");
+    expect(metadata.title).toBe("Free Biology Reviewer Notes & Practice Quizzes | NoteLib");
     expect(metadata.description).toContain("Biology");
     expect(metadata.alternates?.canonical).toBe("https://notelib.app/public/library/biology");
   });
