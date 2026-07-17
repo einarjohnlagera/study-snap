@@ -107,6 +107,46 @@ describe("PublicSeoCopyCta", () => {
     });
   });
 
+  it("copies a ready Study Pack as-is and starts Quick Review for authenticated visitors", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackStatus: "STUDY_PACK_READY" });
+
+    render(<PublicSeoCopyCta noteId="note-1" label="Quiz yourself on this note" redirectTarget="quick-review" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Quiz yourself on this note" }));
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
+      expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
+    });
+  });
+
+  it("leaves an unready copied note on its detail page without generation or Quick Review", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackStatus: "DRAFT" });
+
+    render(<PublicSeoCopyCta noteId="note-1" label="Quiz yourself on this note" redirectTarget="quick-review" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Quiz yourself on this note" }));
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
+      expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1");
+    });
+  });
+
+  it("shows the existing copy error after an authenticated Quick Review copy fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockRejectedValue(new Error("Copy failed"));
+
+    render(<PublicSeoCopyCta noteId="note-1" label="Quiz yourself on this note" redirectTarget="quick-review" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Quiz yourself on this note" }));
+
+    expect(await screen.findByText("Copy failed")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it("auto-copies after login when the copy query flag is present", async () => {
     searchParamsMock = new URLSearchParams("copy=1");
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
@@ -144,5 +184,29 @@ describe("PublicSeoCopyCta", () => {
       expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
       expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&startQuickReview=1");
     });
+  });
+
+  it("leaves an unready copied note on its detail page after login", async () => {
+    searchParamsMock = new URLSearchParams("copy=1&intent=quick-review");
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1", studyPackStatus: "FAILED" });
+
+    render(<PublicSeoCopyCta noteId="note-1" redirectTarget="quick-review" />);
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-1", { includeStudyPack: true });
+      expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1");
+    });
+  });
+
+  it("shows the existing copy error after an automatic post-login copy fails", async () => {
+    searchParamsMock = new URLSearchParams("copy=1&intent=quick-review");
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockRejectedValue(new Error("Copy failed"));
+
+    render(<PublicSeoCopyCta noteId="note-1" redirectTarget="quick-review" />);
+
+    expect(await screen.findByText("Copy failed")).toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 });

@@ -1448,6 +1448,38 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quick-review?sessionId=qr-1");
   });
 
+  it("resolves generated metadata suggestions before an automatic Quick Review redirect", async () => {
+    searchParamValues = { generate: "1", startQuickReview: "1" };
+    window.sessionStorage.setItem("notelib-awaiting-suggestion:note-1", "1");
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+    });
+    (getMyStudyPack as jest.Mock).mockResolvedValue({
+      id: "sp-1",
+      noteId: "note-1",
+      title: "Suggested title",
+      subject: "Biology",
+      tags: ["cells"],
+    });
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({ sessionId: "qr-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    expect(startQuickReviewSession).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => {
+      expect(startQuickReviewSession).toHaveBeenCalledWith("note-1");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quick-review?sessionId=qr-1");
+    });
+  });
+
   it("shows copied Study Pack regeneration guidance only for copied ready notes", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({

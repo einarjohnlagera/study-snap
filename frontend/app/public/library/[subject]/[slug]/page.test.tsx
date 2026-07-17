@@ -232,6 +232,7 @@ describe("PublicLibrarySeoPage", () => {
     );
 
     expect(screen.queryByTestId("mini-quiz-preview")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ready to quiz yourself?" })).not.toBeInTheDocument();
   });
 
   it("does not render the mini quiz preview when the note has no quiz", async () => {
@@ -247,6 +248,7 @@ describe("PublicLibrarySeoPage", () => {
     );
 
     expect(screen.queryByTestId("mini-quiz-preview")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ready to quiz yourself?" })).not.toBeInTheDocument();
   });
 
   it("renders the flashcards preview for a study-pack-ready note with quiz and key concepts", async () => {
