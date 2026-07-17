@@ -15,10 +15,10 @@ export function buildCopiedNotePath(
 ) {
   const next = new URLSearchParams({ [COPIED_QUERY_PARAM]: "1" });
 
-  if (!options?.skipGenerate && (redirectTarget === "generate" || redirectTarget === "quick-review")) {
+  if (!options?.skipGenerate && redirectTarget === "generate") {
     next.set(GENERATE_QUERY_PARAM, "1");
   }
-  if (redirectTarget === "quick-review") {
+  if (redirectTarget === "quick-review" && options?.skipGenerate) {
     next.set(START_QUICK_REVIEW_QUERY_PARAM, "1");
   }
 

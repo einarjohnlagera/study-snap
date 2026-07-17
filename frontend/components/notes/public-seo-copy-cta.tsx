@@ -17,6 +17,7 @@ import {
 
 const DEFAULT_AUTH_MODAL_TITLE = "Save this note";
 const DEFAULT_AUTH_MODAL_BODY = "Create a free account or log in to copy this note to your library.";
+const STUDY_PACK_READY_STATUS = "STUDY_PACK_READY";
 
 type PublicSeoCopyCtaProps = {
   noteId: string;
@@ -29,6 +30,16 @@ type PublicSeoCopyCtaProps = {
   variant?: "primary" | "outline";
   includeStudyPack?: boolean;
 };
+
+function buildCopiedNoteRedirectPath(
+  noteId: string,
+  redirectTarget: PublicCopyRedirectTarget,
+  studyPackStatus: string | null | undefined,
+) {
+  return buildCopiedNotePath(noteId, redirectTarget, {
+    skipGenerate: studyPackStatus === STUDY_PACK_READY_STATUS,
+  });
+}
 
 export function PublicSeoCopyCta({
   noteId,
@@ -77,9 +88,7 @@ export function PublicSeoCopyCta({
       try {
         const copied = await copyNote(noteId, { includeStudyPack });
         if (!cancelled) {
-          router.replace(buildCopiedNotePath(copied.id, requestedRedirectTarget, {
-            skipGenerate: copied.studyPackStatus === "STUDY_PACK_READY",
-          }));
+          router.replace(buildCopiedNoteRedirectPath(copied.id, requestedRedirectTarget, copied.studyPackStatus));
         }
       } catch (error) {
         if (!cancelled) {
@@ -116,9 +125,7 @@ export function PublicSeoCopyCta({
     setCopyError(null);
     try {
       const copied = await copyNote(noteId, { includeStudyPack });
-      router.push(buildCopiedNotePath(copied.id, redirectTarget, {
-        skipGenerate: copied.studyPackStatus === "STUDY_PACK_READY",
-      }));
+      router.push(buildCopiedNoteRedirectPath(copied.id, redirectTarget, copied.studyPackStatus));
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : "Could not copy note.");
       setCopying(false);
