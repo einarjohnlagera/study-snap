@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.50.4 - Exam Hub Discovery Polish` is the current in-progress version (on `releases/v0.50.4`, cut from `main` after v0.50.3 merged) — see its section below.
+`v0.50.4 - Exam Hub Discovery Polish` is the current released version (on `releases/v0.50.4`, cut from `main` after v0.50.3 merged) — see its section below. No version is currently in progress.
 
 `v0.50.3 - Public Note Copy Flow & Related-Notes Consistency` is the previous released version — see its section below.
 
@@ -88,15 +88,17 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Production performance audit (Private Library, Public Library, Note Collection detail, Dashboard reported slow) | `production-performance-audit-out/01-production-performance-audit.md` | **In Progress — v0.51.0.** F1, F2, F4, F5, F6, F7, F8 scoped in full (F8 — real server-side Public Library pagination — chosen directly over F3's stopgap). F9 (client caching) and F10 (denormalized counts) intentionally parked below | F9/F10: gated on post-v0.51.0 production evidence (slow-query logs, whether refetch pain persists once queries are bounded) — not before | 2026-07-17 |
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
 
-## v0.50.4 - Exam Hub Discovery Polish (In Progress, base branch `releases/v0.50.4`)
+## v0.50.4 - Exam Hub Discovery Polish (Released, base branch `releases/v0.50.4`)
 
-Origin: direct user production testing of the "Quiz yourself"/"Add to Library" copy-as-is fix (confirmed working correctly on a fresh account — the apparent regression was stale test-account data hitting the copy idempotency guard, not a code bug) surfaced the duplicate Exam Hub link as a separate, real finding; bundled with P2 (vocabulary pass) from the SEO strategy Fable session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`) run the same day.
+Origin: direct user production testing of the "Quiz yourself"/"Add to Library" copy-as-is fix (confirmed working correctly on a fresh account — the apparent regression was stale test-account data hitting the copy idempotency guard, not a code bug) surfaced the duplicate Exam Hub link as a separate, real finding; bundled with P2 (vocabulary pass) from the SEO strategy Fable session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`) run the same day. Mid-release scope addition: after direct production testing showed NoteLib not surfacing for exam-adjacent searches, the vocabulary pass was extended to every Public Library subject page (not just Exam Hub), paired with a defensive subject-page indexation gate (`SUBJECT_PAGE_INDEX_THRESHOLD = 6`) informed by a production content-depth inventory.
 
-**Scope:**
-- Collapse the duplicate "Browse {Hub} hub →" link on public note detail (Claude Code direct).
+**Scope (shipped):**
+- Collapsed the duplicate "Browse {Hub} hub →" link on public note detail (Claude Code direct).
 - "Free reviewer" vocabulary pass on Exam Hub pages — SEO candidate P2 (Claude Code direct).
+- Extended the same vocabulary pass to all Public Library subject pages (Claude Code direct).
+- Subject-page indexation gate — sitemap + `robots: noindex` below the depth threshold, so thin subject pages stop being served to search engines while staying fully reachable in-app (Claude Code direct).
 
-Anti-drift: no mass-generated AI content; no pricing/paywall/quota changes; no Wave 2 Exam Hub expansion. Full scope in `RELEASES.md`.
+Anti-drift: no mass-generated AI content; no pricing/paywall/quota changes; no Wave 2 Exam Hub expansion; the indexation gate changes search-engine visibility only, never page reachability or access. Full scope in `RELEASES.md`.
 
 ## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency (Released, base branch `releases/v0.50.3`)
 

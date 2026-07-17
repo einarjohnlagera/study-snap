@@ -2,7 +2,7 @@
 
 ## v0.50.4 - Exam Hub Discovery Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: two small discovery/SEO fixes on the public Exam Hub surface — a duplicated link and a vocabulary mismatch against how Filipino board-exam takers actually search — surfaced by direct user testing and a Fable SEO strategy session. Patch release, not minor — polish to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1/v0.50.2/v0.50.3 patch precedent.
 
