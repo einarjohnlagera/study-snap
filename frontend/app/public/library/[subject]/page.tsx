@@ -17,7 +17,11 @@ import {
   buildPublicLibrarySubjectPath,
   getPublicTitleSlug,
 } from "@/lib/public-note-path";
-import { getServerPublicNotesBySubjectSlug, getServerPublicSubjects } from "@/lib/server-public-notes";
+import {
+  getServerPublicNotesBySubjectSlug,
+  getServerPublicSubjects,
+  SUBJECT_PAGE_INDEX_THRESHOLD,
+} from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
@@ -144,6 +148,7 @@ export async function generateMetadata({ params }: SubjectLandingPageProps): Pro
     title: `Free ${subjectLabel} Reviewer Notes & Practice Quizzes | NoteLib`,
     description,
     path: buildPublicLibrarySubjectPath(subject),
+    noIndex: notes.length < SUBJECT_PAGE_INDEX_THRESHOLD,
   });
 }
 

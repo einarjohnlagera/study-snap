@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { buildPublicLibraryNotePath, buildPublicLibrarySubjectPath } from "@/lib/public-note-path";
 import { EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { learnGuides } from "@/lib/learn-guides";
-import { getPublicSubjectEntries, getServerPublicNotes } from "@/lib/server-public-notes";
+import { getPublicSubjectEntries, getServerPublicNotes, SUBJECT_PAGE_INDEX_THRESHOLD } from "@/lib/server-public-notes";
 import { absoluteUrl } from "@/lib/site-metadata";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -70,12 +70,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily" as const,
       priority: 0.9,
     })),
-    ...publicSubjects.map((subject) => ({
-      url: absoluteUrl(buildPublicLibrarySubjectPath(subject.label)),
-      lastModified: subject.lastModified ?? undefined,
-      changeFrequency: "daily" as const,
-      priority: 0.8,
-    })),
+    ...publicSubjects
+      .filter((subject) => subject.noteCount >= SUBJECT_PAGE_INDEX_THRESHOLD)
+      .map((subject) => ({
+        url: absoluteUrl(buildPublicLibrarySubjectPath(subject.label)),
+        lastModified: subject.lastModified ?? undefined,
+        changeFrequency: "daily" as const,
+        priority: 0.8,
+      })),
     ...publicNotes.map((note) => ({
       url: absoluteUrl(buildPublicLibraryNotePath({ subject: note.subject, title: note.title })),
       lastModified: note.updatedAt ?? undefined,
