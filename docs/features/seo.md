@@ -65,6 +65,16 @@ period despite being indexable and already emitting `CollectionPage` JSON-LD —
 route with search intent, add it here too; a page can be fully built and structured-data-correct and
 still be invisible to search if it isn't in the sitemap.
 
+Public Library **subject** pages (`/public/library/{subject}`) are excluded from the exception above:
+unlike the curated Exam Hubs, any subject page is indexable the moment a single public note carries that
+subject string, with no curation or depth gate. A 2026-07-17 production inventory found 92 of 130 subject
+pages had fewer than 6 notes — real thin-content risk. `SUBJECT_PAGE_INDEX_THRESHOLD` (currently 6,
+`frontend/lib/server-public-notes.ts`) is applied in two places that must agree: the sitemap filters
+subject entries below it, and the subject page's own `generateMetadata` sets `robots: { index: false,
+follow: true }` below it. The page itself stays reachable and renders normally either way — this is an
+indexation gate, not a visibility or access change. Individual note pages are never gated by this
+threshold; a single good note is a legitimate long-tail asset regardless of its subject's overall depth.
+
 ## Learn Content Marketing Pages
 
 - Learn hub and Learn article pages are public SEO surfaces.

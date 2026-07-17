@@ -5,6 +5,7 @@ import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url"
 import type { NoteListItemResponse } from "@/lib/api";
 
 jest.mock("@/lib/server-public-notes", () => ({
+  ...jest.requireActual("@/lib/server-public-notes"),
   getServerPublicNotesBySubjectSlug: jest.fn(),
   getServerPublicSubjects: jest.fn(),
 }));
@@ -101,6 +102,31 @@ describe("SubjectLandingPage", () => {
     expect(metadata.title).toBe("Free Biology Reviewer Notes & Practice Quizzes | NoteLib");
     expect(metadata.description).toContain("Biology");
     expect(metadata.alternates?.canonical).toBe("https://notelib.app/public/library/biology");
+  });
+
+  it("marks a thin subject page noindex when it has fewer notes than the depth threshold", async () => {
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes); // 3 notes < threshold
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ subject: "biology" }),
+    });
+
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+  });
+
+  it("does not noindex a subject page once it meets the depth threshold", async () => {
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      ...subjectNotes,
+      buildNote({ id: "extra-1", title: "Mitosis", slug: "mitosis" }),
+      buildNote({ id: "extra-2", title: "Meiosis", slug: "meiosis" }),
+      buildNote({ id: "extra-3", title: "DNA Replication", slug: "dna-replication" }),
+    ]); // 6 notes total, meets threshold
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ subject: "biology" }),
+    });
+
+    expect(metadata.robots).toBeUndefined();
   });
 
   it("renders ranked subject sections and canonical note links", async () => {
