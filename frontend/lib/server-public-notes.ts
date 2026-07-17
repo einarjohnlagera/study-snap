@@ -76,7 +76,16 @@ export type PublicSubjectEntry = {
   slug: string;
   label: string;
   lastModified: string | null;
+  noteCount: number;
 };
+
+// A subject page below this note count reads as thin to both visitors (its Featured section, capped at
+// DISCOVERY_SECTION_LIMIT, can't even fill) and search engines. Below it, the page stays reachable and
+// visible but is excluded from the sitemap and marked noindex — see SUBJECT_PAGE_INDEX_THRESHOLD usage
+// in app/public/library/[subject]/page.tsx and app/sitemap.ts. Set from a 2026-07-17 production depth
+// inventory (docs/claude-prompt/public-library-seo-expansion-out/02-subject-depth-inventory.sql): of 130
+// distinct subject pages, only 38 had >= 6 notes.
+export const SUBJECT_PAGE_INDEX_THRESHOLD = 6;
 
 export function getPublicSubjectEntries(notes: NoteListItemResponse[]): PublicSubjectEntry[] {
   const subjects = new Map<string, PublicSubjectEntry>();
@@ -91,10 +100,12 @@ export function getPublicSubjectEntries(notes: NoteListItemResponse[]): PublicSu
         slug,
         label,
         lastModified: note.updatedAt ?? null,
+        noteCount: 1,
       });
       return;
     }
 
+    existing.noteCount += 1;
     if (note.updatedAt && (!existing.lastModified || note.updatedAt > existing.lastModified)) {
       existing.lastModified = note.updatedAt;
     }

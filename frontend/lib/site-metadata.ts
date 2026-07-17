@@ -10,6 +10,7 @@ type PageMetadataInput = {
   description: string;
   path: string;
   type?: "website" | "article";
+  noIndex?: boolean;
 };
 
 export function absoluteUrl(path: string) {
@@ -30,6 +31,7 @@ export function buildPageMetadata({
   description,
   path,
   type = "website",
+  noIndex = false,
 }: PageMetadataInput): Metadata {
   const url = absoluteUrl(path);
 
@@ -39,6 +41,7 @@ export function buildPageMetadata({
     alternates: {
       canonical: url,
     },
+    ...(noIndex ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title,
       description,
