@@ -341,9 +341,10 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                 </h2>
                 <Link
                   href={examSlug ? `/exam/${examSlug}` : buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(courseProgram) })}
+                  aria-label={examSlug ? undefined : `See all in ${courseProgram}`}
                   className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
                 >
-                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : `See all in ${courseProgram} →`}
+                  {examSlug ? `Browse ${EXAM_HUBS[examSlug].shortName} hub →` : "See all →"}
                 </Link>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -383,12 +384,13 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
               </h2>
               <Link
                 href={buildPublicLibrarySubjectPath(note.subject)}
+                aria-label={`See all in ${note.subject}`}
                 className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
               >
-                See all in {note.subject} →
+                See all →
               </Link>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               {moreInSubject.map((relatedNote) => (
                 <PublicLibraryReturnLink
                   key={relatedNote.id}
