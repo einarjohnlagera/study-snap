@@ -404,6 +404,13 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText("Cell Division")).toBeInTheDocument();
     expect(screen.queryByText("Cell Structure", { selector: "article" })).not.toBeInTheDocument();
     expect(getServerPublicNotesBySubject).toHaveBeenCalledWith("Science");
+
+    // Matches the course/program section's grid exactly — both sections use the same shared card,
+    // so they must use the same column count (previously 3-col here vs. 2-col there).
+    const subjectCard = screen.getAllByTestId("shared-note-card")[0];
+    const subjectGrid = subjectCard.closest("a")?.parentElement;
+    expect(subjectGrid).toHaveClass("grid", "gap-4", "sm:grid-cols-2");
+    expect(subjectGrid).not.toHaveClass("lg:grid-cols-3");
   });
 
   it("saves the subject-landing page as the Public Library return URL when a related-subject note is clicked", async () => {
@@ -443,7 +450,7 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("heading", { name: "More Business Administration notes" })).toBeInTheDocument();
     expect(screen.getByText("Marketing Basics")).toBeInTheDocument();
     expect(screen.getByText("Business Law")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "See all in Business Administration →" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "See all in Business Administration" })).toHaveAttribute(
       "href",
       "/public/library?courseProgram=business-administration",
     );
@@ -557,7 +564,7 @@ describe("PublicLibrarySeoPage", () => {
       }),
     );
 
-    expect(screen.getByRole("link", { name: "See all in Science →" })).toHaveAttribute("href", "/public/library/science");
+    expect(screen.getByRole("link", { name: "See all in Science" })).toHaveAttribute("href", "/public/library/science");
   });
 
   it("renders the creator-filtered related-notes link when author fields are available", async () => {

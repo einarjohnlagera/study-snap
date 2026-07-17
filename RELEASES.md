@@ -15,7 +15,7 @@ Anti-drift: no new quiz modes, no touching the locked five-mode `EXAM_MODES.md` 
 
 ### Shipped
 
-_(nothing yet)_
+- **Related-notes link wording and grid consistency (frontend).** Both related-notes sections on public note detail now share the `See all →` link label (with a full `aria-label` for accessibility, since the visible text is now identical between them), and the subject section's grid collapses to `sm:grid-cols-2` to match the course/program section. `Browse {Hub} hub →` is untouched.
 
 ## v0.50.2 - Note Card Content Consistency
 
