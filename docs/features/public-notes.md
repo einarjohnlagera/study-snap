@@ -126,8 +126,8 @@ New-user signup behavior:
 
 - Google signup users are verified immediately, so the auth page consumes the cookie after Google auth succeeds.
 - Email/password signup users are routed to `/verify-email`; the cookie persists through the verification round trip and is consumed after successful verification.
-- Consuming the cookie calls `POST /api/notes/copy-on-signup`, which copies the public note into the new user's private Library and starts Study Pack generation on the copied note.
-- After the copy starts, the user is sent to `/notes/{copiedNoteId}?copied=1&generate=1&startQuickReview=1`.
+- Consuming the cookie calls `POST /api/notes/copy-on-signup`, which copies the public note into the new user's private Library. If the public source already had a ready Study Pack, the copy includes it as-is (no generation); otherwise the backend starts Study Pack generation on the copied note directly, server-side.
+- After the copy starts, the user is sent to `/notes/{copiedNoteId}?copied=1&startQuickReview=1` — the redirect never carries `generate=1`, since any needed generation is already running server-side, not frontend-triggered. Quick Review auto-starts once the note's Study Pack is ready, using the same readiness gate as the public-note-detail copy flow.
 
 This path exempts successful copies from the immediate onboarding redirect so public-note visitors first land in the note-to-summary-to-quiz review loop they came for. A per-user lightweight-profile-completion marker carries that exemption until the user later completes Profile Type, Learner Level, Course / Program, and optional Board Exam date through the non-blocking Dashboard prompt. If the copy-on-signup API fails, the cookie is cleared and the user falls back to the normal authenticated home/onboarding destination.
 
