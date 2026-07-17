@@ -50,7 +50,7 @@ function resolveSubjectLabel(subjectSlug: string, notes: SubjectNote[]) {
 }
 
 function buildSubjectDescription(subjectLabel: string) {
-  return `Explore public study notes and practice quizzes for ${subjectLabel}. Browse community-contributed notes, summaries, and quiz sets.`;
+  return `Free ${subjectLabel} reviewer notes and practice quizzes shared by real students. Browse community-contributed notes, summaries, and quiz sets.`;
 }
 
 function getNoteSlug(note: SubjectNote) {
@@ -141,7 +141,7 @@ export async function generateMetadata({ params }: SubjectLandingPageProps): Pro
   const description = buildSubjectDescription(subjectLabel);
 
   return buildPageMetadata({
-    title: `NoteLib – ${subjectLabel} Study Notes, Summaries, and Quizzes`,
+    title: `Free ${subjectLabel} Reviewer Notes & Practice Quizzes | NoteLib`,
     description,
     path: buildPublicLibrarySubjectPath(subject),
   });
@@ -176,7 +176,7 @@ export default async function SubjectLandingPage({ params }: Readonly<SubjectLan
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{subjectLabel}</h1>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/70 sm:text-base">
-            Explore community study notes and practice quizzes.
+            Explore free, community-made reviewer notes and practice quizzes for {subjectLabel}.
           </p>
         </div>
       </header>
