@@ -154,7 +154,7 @@ Edit mode for Study Pack Ready notes:
 
 ## AI metadata suggestions
 
-After Study Pack generation, the shared AI suggestion modal should let users decide field by field:
+After a user explicitly generates or regenerates a Study Pack, the shared AI suggestion modal should let them decide field by field. Copied public Study Packs that launch Quick Review are not regenerated and must not open this modal. If any future generated flow also requests an immediate next action, that action must wait until the metadata suggestion is resolved so a real generation's reconciliation choice is never skipped.
 
 - `Title` -> `Keep My Title` or `Use AI Title`
 - `Subject` -> `Keep My Subject` or `Use AI Subject`

@@ -390,6 +390,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
+  const [resolvingGeneratedMetadataSuggestion, setResolvingGeneratedMetadataSuggestion] = useState(false);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [generatingTeacherQuiz, setGeneratingTeacherQuiz] = useState(false);
@@ -450,6 +451,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     suggestedStudyPackIdRef.current = loadedNote.studyPackId;
     awaitingGeneratedMetadataSuggestionRef.current = false;
     globalThis.sessionStorage?.removeItem(sessionKey);
+    setResolvingGeneratedMetadataSuggestion(true);
     try {
       const generated = await getMyStudyPack(loadedNote.studyPackId);
       setPendingSuggestion({
@@ -460,6 +462,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       });
     } catch {
       setToast("Study Pack generated successfully.");
+    } finally {
+      setResolvingGeneratedMetadataSuggestion(false);
     }
   }, []);
 
@@ -1358,6 +1362,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       || !note
       || !isStudyPackReady
       || !note.quickReviewAvailable
+      || resolvingGeneratedMetadataSuggestion
+      || pendingSuggestion
     ) {
       return;
     }
@@ -1368,7 +1374,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate);
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
     void handleStartQuickReview();
-  }, [handleStartQuickReview, isStudyPackReady, isTeacherMode, note, pathname, router, searchParams]);
+  }, [handleStartQuickReview, isStudyPackReady, isTeacherMode, note, pathname, pendingSuggestion, resolvingGeneratedMetadataSuggestion, router, searchParams]);
 
   const dismissFirstStudyGuide = useCallback(async () => {
     const authUser = getAuthUser();

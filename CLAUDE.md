@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.50.2 — Note Card Content Consistency** (In Progress, base branch `releases/v0.50.2`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.50.3 — Public Note Copy Flow & Related-Notes Consistency** (In Progress, base branch `releases/v0.50.3`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -16,7 +16,7 @@ Current version: **v0.50.2 — Note Card Content Consistency** (In Progress, bas
 - `docs/product/EXAM_MODES.md` — quiz mode hierarchy (locked contract; exactly 5 modes)
 - `docs/features/<feature>.md` — per-feature behavior rules (48 files; **read before changing any feature, update after shipping any behavioral change** — updating `RELEASES.md` alone is not enough)
 - `RELEASES.md` — every completed and in-progress change; always update when shipping work
-- `GPT_CONTEXT.md` — version-stamped snapshot of the full product state; useful to understand where things stand
+- `docs/gpt-contexts/GPT_CONTEXT.md` — version-stamped snapshot of the full product state; useful to understand where things stand
 
 ## Task routing
 
