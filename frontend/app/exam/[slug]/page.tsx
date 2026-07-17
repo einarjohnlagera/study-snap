@@ -135,7 +135,7 @@ export async function generateMetadata({ params }: ExamHubPageProps): Promise<Me
   }
 
   return buildPageMetadata({
-    title: `${exam.fullName} Notes and Practice Quizzes | NoteLib`,
+    title: `Free ${exam.shortName} Reviewer Notes & Practice Quizzes — ${exam.fullName} | NoteLib`,
     description: buildExamMetadataDescription(exam),
     path: buildExamPath(exam.slug),
   });
@@ -204,8 +204,9 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
       </header>
 
       <p className="text-sm leading-relaxed text-foreground/70">
-        NoteLib turns {exam.shortName} notes into summaries, key concepts, and quiz practice — so you can track the
-        weak areas that need review before exam day, not just read through material once.
+        NoteLib turns {exam.shortName} notes into a free, interactive reviewer — summaries, key concepts, and quiz
+        practice — so you can track the weak areas that need review before exam day, not just read through material
+        once.
       </p>
 
       {hasAnyNotes ? (

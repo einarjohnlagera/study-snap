@@ -15,7 +15,8 @@ Anti-drift: no new quiz modes; no pricing/paywall/quota/conversion-funnel change
 
 ### Shipped
 
-_(nothing yet)_
+- **Collapse duplicate "Browse {Hub} hub →" link (frontend).** The "More {Course/Program} notes" section header on public note detail now links to the plain course/program-filtered Public Library view (matching the non-Exam-Hub case), with `aria-label="See all in {courseProgram}"`, instead of duplicating the callout banner's hub link.
+- **"Free reviewer" vocabulary pass on Exam Hub pages (frontend).** Exam hub `description` (used across page title, meta description, and H1 subline), the page `<title>`, and the intro paragraph now lead with "Free {ALE/PNLE/LET} reviewer notes" / "a free, interactive reviewer" instead of only "notes," targeting how Filipino board-exam takers actually search.
 
 ## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency
 

@@ -143,9 +143,9 @@ describe("ExamHubPage", () => {
   });
 
   it.each([
-    ["ale", "Architect Licensure Examination (ALE) Notes and Practice Quizzes | NoteLib"],
-    ["pnle", "Philippine Nurse Licensure Examination (PNLE) Notes and Practice Quizzes | NoteLib"],
-    ["let", "Licensure Examination for Teachers (LET) Notes and Practice Quizzes | NoteLib"],
+    ["ale", "Free ALE Reviewer Notes & Practice Quizzes — Architect Licensure Examination (ALE) | NoteLib"],
+    ["pnle", "Free PNLE Reviewer Notes & Practice Quizzes — Philippine Nurse Licensure Examination (PNLE) | NoteLib"],
+    ["let", "Free LET Reviewer Notes & Practice Quizzes — Licensure Examination for Teachers (LET) | NoteLib"],
   ])("generates metadata for /exam/%s", async (slug, title) => {
     const metadata = await generateMetadata({ params: Promise.resolve({ slug }) });
 
@@ -164,7 +164,7 @@ describe("ExamHubPage", () => {
 
     render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
 
-    expect(screen.getByText(/NoteLib turns ALE notes into summaries, key concepts, and quiz practice/)).toBeInTheDocument();
+    expect(screen.getByText(/NoteLib turns ALE notes into a free, interactive reviewer/)).toBeInTheDocument();
     expect(screen.getByText("No Architect Licensure Examination (ALE) notes have been shared yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse the Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByRole("link", { name: "Read Board Exam study guides" })).toHaveAttribute("href", "/learn#board-exams");

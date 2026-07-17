@@ -480,7 +480,7 @@ describe("PublicLibrarySeoPage", () => {
     );
   });
 
-  it("links the course/program section to the exam hub when the course/program maps to one", async () => {
+  it("shows the exam hub callout banner exactly once, and keeps the course/program section pointed at the filtered library view, when the course/program maps to a hub", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
       { ...baseNote, courseProgram: "Nursing" },
@@ -496,14 +496,16 @@ describe("PublicLibrarySeoPage", () => {
     );
 
     expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
-    const hubLinks = screen.getAllByRole("link", { name: "Browse PNLE hub →" });
-    expect(hubLinks.length).toBeGreaterThan(0);
-    hubLinks.forEach((link) => {
-      expect(link).toHaveAttribute("href", "/exam/pnle");
-    });
 
-    // The card's own back-link context always returns to Public Library, never the Exam Hub,
-    // even though the section's visible "See all" link points there.
+    // The callout banner is the only "Browse {Hub} hub" link on the page — the section header
+    // no longer duplicates it.
+    const hubLinks = screen.getAllByRole("link", { name: "Browse PNLE hub →" });
+    expect(hubLinks).toHaveLength(1);
+    expect(hubLinks[0]).toHaveAttribute("href", "/exam/pnle");
+
+    const sectionLink = screen.getByRole("link", { name: "See all in Nursing" });
+    expect(sectionLink).toHaveAttribute("href", "/public/library?courseProgram=nursing");
+
     fireEvent.click(screen.getByText("Vital Signs").closest("a") as HTMLElement);
     expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBe(
       "/public/library?courseProgram=nursing",
