@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.50.4 - Exam Hub Discovery Polish
+
+**Status: In Progress**
+
+Theme: two small discovery/SEO fixes on the public Exam Hub surface — a duplicated link and a vocabulary mismatch against how Filipino board-exam takers actually search — surfaced by direct user testing and a Fable SEO strategy session. Patch release, not minor — polish to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1/v0.50.2/v0.50.3 patch precedent.
+
+### Planned Scope
+
+- **Collapse duplicate "Browse {Hub} hub →" link (frontend).** When a public note's course/program maps to an Exam Hub, the page shows both a callout banner ("Preparing for the PNLE? ... Browse PNLE hub →") and the "More {Course/Program} notes" section header linking to the identical `/exam/{slug}` destination with identical wording. The section header link is repointed to the plain course/program-filtered Public Library view (the same behavior it already has when no Exam Hub applies) instead of duplicating the hub link — the callout banner stays the only hub link, and the section link becomes a distinct "See all in this course/program" destination, restoring consistent `See all →` wording.
+- **"Free reviewer" vocabulary pass on Exam Hub pages (frontend).** Exam hub titles, meta descriptions, H1 subline, and value-strip copy are rewritten to include "free" and "reviewer" — the terms Filipino board-exam takers actually search ("free PNLE reviewer") — instead of only "notes," while staying inside the notes-library identity (no "AI tool" framing). Sourced from a Fable SEO strategy session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`, candidate P2) that diagnosed this vocabulary mismatch as the largest fixable gap in why NoteLib doesn't surface for exam-named searches. Confined to `exam-hub-config.ts` + `app/exam/[slug]/page.tsx` copy — no new page, no new architecture.
+
+Anti-drift: no new quiz modes; no pricing/paywall/quota/conversion-funnel changes; no mass-generated AI landing-page content ("curation, never generation" stays locked); no Wave 2 Exam Hub expansion (explicitly deferred, see Backlog Index); public note visibility/ownership rules untouched.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency
 
 **Status: Released**
