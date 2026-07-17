@@ -2,7 +2,7 @@
 
 ## v0.50.3 - Public Note Copy Flow & Related-Notes Consistency
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix a real race-condition bug and a product-design mismatch in the public note "Quiz yourself on this note" copy flow, plus two small consistency fixes on the same page's related-notes sections — all surfaced by direct user testing, following a Fable session (`docs/claude-prompt/public-note-copy-and-related-links-out/01-copy-flow-and-link-consistency.md`) that confirmed the diagnosis and recommended the fix shape. Patch release, not minor — bug fixes and consistency polish to something that already exists, not new planned feature work, matching the v0.45.1/v0.45.2/v0.50.1/v0.50.2 patch precedent.
 
@@ -17,6 +17,7 @@ Anti-drift: no new quiz modes, no touching the locked five-mode `EXAM_MODES.md` 
 
 - **Public-note Quiz Yourself copy-as-is flow (frontend).** The ready-only Quiz Yourself CTAs now deep-copy the public source Study Pack and enter Quick Review with `?copied=1&startQuickReview=1`, never an LLM regeneration or metadata-reconciliation modal. If a source pack disappears before the copy completes, the copied note safely opens in its ordinary not-yet-generated state with the existing manual Generate action and no dangling auto-redirect. The underlying generated-metadata/automatic-navigation race is also ordered correctly: a real generated Study Pack's metadata decision resolves before any immediate next action can navigate away.
 - **Related-notes link wording and grid consistency (frontend).** Both related-notes sections on public note detail now share the `See all →` link label (with a full `aria-label` for accessibility, since the visible text is now identical between them), and the subject section's grid collapses to `sm:grid-cols-2` to match the course/program section. `Browse {Hub} hub →` is untouched.
+- **Consolidated GPT context handoff docs (repo organization, not user-facing).** Moved `GPT_CONTEXT.md` from the repo root into `docs/gpt-contexts/`, alongside the existing marketing/social GPT context docs, and added a new `NOTES_AND_COLLECTIONS_CONTEXT.md` structural handoff (Note fields, subject/courseProgram taxonomy, Bulk Generate metadata, Note Collections vs. query-filtered groupings) to the same directory, with a `README.md` index.
 
 ## v0.50.2 - Note Card Content Consistency
 
