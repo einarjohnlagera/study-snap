@@ -183,6 +183,21 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     );
 
     @Query("""
+            select new com.studysnap.backend.repository.QuickReviewSessionScoreAggregate(
+                count(q),
+                sum(coalesce(q.scorePercentage, 0))
+            )
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode in :sessionModes
+              and q.completedAt is not null
+            """)
+    QuickReviewSessionScoreAggregate getCompletedQuizSessionScoreAggregate(
+            @Param("userId") UUID userId,
+            @Param("sessionModes") Collection<QuickReviewSessionMode> sessionModes
+    );
+
+    @Query("""
             select """ + SESSION_SUMMARY_PROJECTION + """
             from QuickReviewSessionEntity q
             where q.userId = :userId
