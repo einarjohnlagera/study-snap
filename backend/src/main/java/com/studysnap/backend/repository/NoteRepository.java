@@ -3,9 +3,11 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.model.NoteListItemProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
@@ -30,6 +32,31 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
+
+    @Query("""
+            select n.id as id,
+                   n.ownerUserId as ownerUserId,
+                   n.title as title,
+                   n.courseProgram as courseProgram,
+                   n.targetProfileType as targetProfileType,
+                   n.subject as subject,
+                   n.tags as tags,
+                   substring(n.content, 1, 2000) as content,
+                   n.status as status,
+                   n.visibility as visibility,
+                   n.createdAt as createdAt,
+                   n.updatedAt as updatedAt,
+                   n.copiedFromNoteId as copiedFromNoteId,
+                   n.copiedFromPublic as copiedFromPublic
+            from NoteEntity n
+            where n.ownerUserId = :ownerUserId
+            order by n.updatedAt desc
+            """)
+    List<NoteListItemProjection> findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(
+            @Param("ownerUserId") UUID ownerUserId,
+            Pageable pageable
+    );
+
     List<NoteEntity> findByOwnerUserIdAndIdIn(UUID ownerUserId, List<UUID> ids);
     List<NoteEntity> findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(UUID ownerUserId, NoteVisibility visibility);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);

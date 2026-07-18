@@ -3829,9 +3829,10 @@ export async function exportCombinedGeneratedQuizDocx(
   return { filename };
 }
 
-export async function listNotes(): Promise<NoteListItemResponse[]> {
+export async function listNotes(limit?: number): Promise<NoteListItemResponse[]> {
+  const query = typeof limit === "number" ? `?limit=${encodeURIComponent(String(limit))}` : "";
   const response = await fetchWithAuth(
-    "/notes",
+    `/notes${query}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
