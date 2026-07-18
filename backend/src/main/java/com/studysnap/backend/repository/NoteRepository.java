@@ -57,6 +57,20 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
             Pageable pageable
     );
 
+    @Query("""
+            select new com.studysnap.backend.repository.NoteStatusProjection(
+                n.id,
+                n.status,
+                n.updatedAt
+            )
+            from NoteEntity n
+            where n.ownerUserId = :ownerUserId
+            order by n.updatedAt desc
+            """)
+    List<NoteStatusProjection> findStatusProjectionsByOwnerUserIdOrderByUpdatedAtDesc(
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
     List<NoteEntity> findByOwnerUserIdAndIdIn(UUID ownerUserId, List<UUID> ids);
     List<NoteEntity> findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(UUID ownerUserId, NoteVisibility visibility);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);

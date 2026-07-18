@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -40,9 +41,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
@@ -55,6 +62,10 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
 class NoteControllerTest {
@@ -63,6 +74,7 @@ class NoteControllerTest {
     private static final String USER_ADMIN_ROLE_GATE = "hasAnyRole('USER','ADMIN')";
     private static final String MULTIPART_FIELD_NAME = "files";
     private static final String TEXT_PLAIN_CONTENT_TYPE = "text/plain";
+    private static final String STUDY_PACK_STATUS_GENERATING = "GENERATING";
 
     @Mock
     private AuthService authService;
@@ -147,6 +159,41 @@ class NoteControllerTest {
 
         assertThat(response).isEmpty();
         verify(noteService).listMine(userId, 1);
+    }
+
+    @Test
+    void statusRoute_resolvesToStatusListHandlerInsteadOfNoteIdHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = standaloneSetup(noteController)
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return routeUser;
+                    }
+                })
+                .build();
+        UUID noteId = UUID.randomUUID();
+        when(noteService.listMineStatuses(routeUser.userId())).thenReturn(List.of(
+                new NoteStatusResponse(noteId.toString(), STUDY_PACK_STATUS_GENERATING)
+        ));
+
+        mockMvc.perform(get("/notes/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(noteId.toString()))
+                .andExpect(jsonPath("$[0].studyPackStatus").value(STUDY_PACK_STATUS_GENERATING));
+
+        verify(noteService).listMineStatuses(routeUser.userId());
+        verify(noteService, never()).getById("status", routeUser.userId());
     }
 
     @Test

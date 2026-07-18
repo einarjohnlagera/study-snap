@@ -1453,6 +1453,11 @@ export type NoteListItemResponse = {
   likedByCurrentUser: boolean;
 };
 
+export type NoteStatusResponse = {
+  id: string;
+  studyPackStatus: string;
+};
+
 export type PublicNoteListResponse = {
   items: NoteListItemResponse[];
   total: number;
@@ -3840,6 +3845,18 @@ export async function listNotes(limit?: number): Promise<NoteListItemResponse[]>
     true,
   );
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
+}
+
+export async function listNoteStatuses(): Promise<NoteStatusResponse[]> {
+  const response = await fetchWithAuth(
+    "/notes/status",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteStatusResponse[]>(response, "Could not load note statuses.");
 }
 
 export async function getSavedLibraryFilters(): Promise<SavedLibraryFilterResponse[]> {

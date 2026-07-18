@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -442,6 +443,12 @@ public class NoteController {
                 userId,
                 limit == null ? null : Math.clamp(limit, PRIVATE_NOTES_MIN_LIMIT, PRIVATE_NOTES_MAX_LIMIT)
         );
+    }
+
+    @GetMapping("/status")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<NoteStatusResponse> listMineStatuses(@AuthenticationPrincipal AuthenticatedUser user) {
+        return noteService.listMineStatuses(user.userId());
     }
 
     @GetMapping("/public")

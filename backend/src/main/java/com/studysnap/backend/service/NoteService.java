@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -20,14 +21,16 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
-import com.studysnap.backend.model.NoteListItemView;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
-import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.model.NoteListItemView;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
@@ -58,7 +61,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -343,6 +348,33 @@ public class NoteService {
         List<? extends NoteListItemView> notes = noteRepository
                 .findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId, pageable);
         return toListItems(notes, ownerUserId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteStatusResponse> listMineStatuses(UUID ownerUserId) {
+        List<NoteStatusProjection> notes = noteRepository
+                .findStatusProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        if (notes.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> noteIds = notes.stream()
+                .map(NoteStatusProjection::id)
+                .toList();
+        Set<UUID> noteIdsWithStudyPacks = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
+                .map(StudyPackProgressProjection::getNoteId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        return notes.stream()
+                .map(note -> new NoteStatusResponse(
+                        note.id().toString(),
+                        NoteStudyPackStatusResolver.resolve(
+                                note.status(),
+                                noteIdsWithStudyPacks.contains(note.id())
+                        )
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
