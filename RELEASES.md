@@ -22,7 +22,7 @@ Anti-drift: read-path performance only, not a feature or business-logic change â
 
 ### Shipped
 
-_(nothing yet)_
+- **F1 â€” Dashboard-overview lean projections + score aggregate (backend).** Board-Exam pacing now reuses the existing Study Pack progress projection instead of loading full Study Pack entities, and dashboard quiz score/count values now come from one exact SQL `COUNT` + null-safe `SUM` aggregate with the existing Java HALF_UP division retained. The full CHALLENGE concept-breakdown projection remains deliberately unbounded because strongest/weakest concept insights are defined across its complete JSONB history.
 
 ## v0.50.4 - Exam Hub Discovery Polish
 

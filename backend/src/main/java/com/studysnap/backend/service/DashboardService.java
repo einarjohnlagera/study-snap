@@ -29,10 +29,12 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
-import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionScoreAggregate;
 import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -70,6 +72,10 @@ public class DashboardService {
             QuickReviewSessionStatus.IN_PROGRESS,
             QuickReviewSessionStatus.COMPLETED,
             QuickReviewSessionStatus.FORFEITED
+    );
+    private static final List<QuickReviewSessionMode> DASHBOARD_QUIZ_SESSION_MODES = List.of(
+            QuickReviewSessionMode.QUICK_REVIEW,
+            QuickReviewSessionMode.CHALLENGE
     );
 
     private final UserRepository userRepository;
@@ -243,24 +249,16 @@ public class DashboardService {
 
     public DashboardOverviewResponse getOverview(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
-        List<QuickReviewSessionSummaryProjection> completedQuickReviewSessions = quickReviewSessionRepository
-                .findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
-                        userId,
-                        QuickReviewSessionMode.QUICK_REVIEW,
-                        Pageable.unpaged()
-                );
+        QuickReviewSessionScoreAggregate quizSessionScoreAggregate = quickReviewSessionRepository
+                .getCompletedQuizSessionScoreAggregate(userId, DASHBOARD_QUIZ_SESSION_MODES);
         List<QuickReviewSessionMetadataProjection> completedChallengeSessions = quickReviewSessionRepository
                 .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                         userId,
                         QuickReviewSessionMode.CHALLENGE
                 );
-        List<QuickReviewSessionSummaryProjection> completedQuizSessions = new ArrayList<>(completedQuickReviewSessions);
-        completedChallengeSessions.stream()
-                .map(this::toSummaryProjection)
-                .forEach(completedQuizSessions::add);
 
         DashboardPerformanceSummaryResponse performanceSummary = buildPerformanceSummary(
-                completedQuizSessions,
+                quizSessionScoreAggregate,
                 completedChallengeSessions,
                 studyPackRepository.countByOwnerUserId(userId)
         );
@@ -287,10 +285,9 @@ public class DashboardService {
                 return null;
             }
 
-            List<StudyPackEntity> studyPacks = studyPackRepository
-                    .findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged());
+            List<StudyPackProgressProjection> studyPacks = studyPackRepository.findProgressViewsByOwnerUserId(userId);
             Map<UUID, List<String>> conceptsByStudyPackId = new LinkedHashMap<>();
-            for (StudyPackEntity studyPack : studyPacks) {
+            for (StudyPackProgressProjection studyPack : studyPacks) {
                 if (studyPack.getId() != null && studyPack.getKeyConcepts() != null && !studyPack.getKeyConcepts().isEmpty()) {
                     conceptsByStudyPackId.put(studyPack.getId(), studyPack.getKeyConcepts());
                 }
@@ -628,24 +625,6 @@ public class DashboardService {
         return session.scorePercentage() == null ? BigDecimal.ZERO : session.scorePercentage();
     }
 
-    private QuickReviewSessionSummaryProjection toSummaryProjection(QuickReviewSessionMetadataProjection session) {
-        return new QuickReviewSessionSummaryProjection(
-                session.id(),
-                session.userId(),
-                session.studyPackId(),
-                session.noteId(),
-                session.sessionMode(),
-                session.status(),
-                session.totalQuestions(),
-                session.correctAnswers(),
-                session.scorePercentage(),
-                session.retryCount(),
-                session.durationSeconds(),
-                session.createdAt(),
-                session.completedAt()
-        );
-    }
-
     private Optional<ContinueStudyingResponse> resolveSuggestedChallengeRecommendation(UUID userId) {
         ProfileType profileType = userRepository.findById(userId)
                 .map(UserEntity::getProfileType)
@@ -728,17 +707,15 @@ public class DashboardService {
     }
 
     private DashboardPerformanceSummaryResponse buildPerformanceSummary(
-            List<QuickReviewSessionSummaryProjection> completedQuizSessions,
+            QuickReviewSessionScoreAggregate quizSessionScoreAggregate,
             List<QuickReviewSessionMetadataProjection> completedChallengeSessions,
             long studyPacksCreated
     ) {
         BigDecimal averageQuizScore = null;
-        if (!completedQuizSessions.isEmpty()) {
-            BigDecimal totalScore = completedQuizSessions.stream()
-                    .map(this::scorePercentageOrZero)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            averageQuizScore = totalScore
-                    .divide(BigDecimal.valueOf(completedQuizSessions.size()), 2, RoundingMode.HALF_UP);
+        long completedQuizSessionCount = quizSessionScoreAggregate.count();
+        if (completedQuizSessionCount > 0) {
+            averageQuizScore = quizSessionScoreAggregate.totalScore()
+                    .divide(BigDecimal.valueOf(completedQuizSessionCount), 2, RoundingMode.HALF_UP);
         }
 
         Map<String, ConceptPerformanceAccumulator> conceptPerformance = aggregateConceptPerformance(completedChallengeSessions);
@@ -764,7 +741,7 @@ public class DashboardService {
 
         return new DashboardPerformanceSummaryResponse(
                 averageQuizScore,
-                completedQuizSessions.size(),
+                Math.toIntExact(completedQuizSessionCount),
                 studyPacksCreated,
                 strongestConcept,
                 weakestConcept
