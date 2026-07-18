@@ -75,6 +75,8 @@ public class NoteController {
     private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
     private static final int PUBLIC_NOTES_MIN_SIZE = 1;
     private static final int PUBLIC_NOTES_MAX_SIZE = 50;
+    private static final int PRIVATE_NOTES_MIN_LIMIT = 1;
+    private static final int PRIVATE_NOTES_MAX_LIMIT = 50;
 
     private final AuthService authService;
     private final BulkGenerationResultService bulkGenerationResultService;
@@ -432,10 +434,14 @@ public class NoteController {
     @GetMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<NoteListItemResponse> listMine(
+            @RequestParam(value = "limit", required = false) Integer limit,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        return noteService.listMine(userId);
+        return noteService.listMine(
+                userId,
+                limit == null ? null : Math.clamp(limit, PRIVATE_NOTES_MIN_LIMIT, PRIVATE_NOTES_MAX_LIMIT)
+        );
     }
 
     @GetMapping("/public")

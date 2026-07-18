@@ -138,6 +138,18 @@ class NoteControllerTest {
     }
 
     @Test
+    void listMine_clampsProvidedLimitBeforeDelegating() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(noteService.listMine(userId, 1)).thenReturn(List.of());
+
+        List<NoteListItemResponse> response = noteController.listMine(0, user);
+
+        assertThat(response).isEmpty();
+        verify(noteService).listMine(userId, 1);
+    }
+
+    @Test
     void bulkGenerate_delegatesWithUserQuotaEnforcement() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);

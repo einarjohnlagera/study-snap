@@ -23,6 +23,7 @@ Anti-drift: read-path performance only, not a feature or business-logic change �
 ### Shipped
 
 - **F1 — Dashboard-overview lean projections + score aggregate (backend).** Board-Exam pacing now reuses the existing Study Pack progress projection instead of loading full Study Pack entities, and dashboard quiz score/count values now come from one exact SQL `COUNT` + null-safe `SUM` aggregate with the existing Java HALF_UP division retained. The full CHALLENGE concept-breakdown projection remains deliberately unbounded because strongest/weakest concept insights are defined across its complete JSONB history.
+- **F2 — Private-note list lean projection + deferred limit plumbing (backend).** `GET /notes` now projects list-item fields and only a 2,000-character content prefix before building the existing preview; its optional, clamped `limit` capability is backend-ready but intentionally unused. Dashboard Stage-1 wiring remains deferred because its current `totalNotes`, `hasCompletedSession`, and Challenge-CTA resolution depend on the complete note array.
 
 ## v0.50.4 - Exam Hub Discovery Polish
 

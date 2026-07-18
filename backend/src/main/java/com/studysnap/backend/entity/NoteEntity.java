@@ -1,5 +1,6 @@
 package com.studysnap.backend.entity;
 
+import com.studysnap.backend.model.NoteListItemView;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -20,7 +21,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
-public class NoteEntity {
+public class NoteEntity implements NoteListItemView {
 
     @Id
     private UUID id;

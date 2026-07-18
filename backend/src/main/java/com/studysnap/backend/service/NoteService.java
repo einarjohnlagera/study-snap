@@ -20,6 +20,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.model.NoteListItemView;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -40,6 +41,8 @@ import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -331,7 +334,14 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
-        List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        return listMine(ownerUserId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteListItemResponse> listMine(UUID ownerUserId, Integer limit) {
+        Pageable pageable = limit == null ? Pageable.unpaged() : PageRequest.of(0, limit);
+        List<? extends NoteListItemView> notes = noteRepository
+                .findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId, pageable);
         return toListItems(notes, ownerUserId, true);
     }
 
@@ -557,14 +567,18 @@ public class NoteService {
         return mapToPublicDetail(matched, linkedStudyPack, viewerUserId);
     }
 
-    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes, UUID viewerUserId, boolean includeOwnerUserId) {
+    private List<NoteListItemResponse> toListItems(
+            List<? extends NoteListItemView> notes,
+            UUID viewerUserId,
+            boolean includeOwnerUserId
+    ) {
         if (notes.isEmpty()) {
             return List.of();
         }
 
-        List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
+        List<UUID> noteIds = notes.stream().map(NoteListItemView::getId).toList();
         List<UUID> ownerIds = notes.stream()
-                .map(NoteEntity::getOwnerUserId)
+                .map(NoteListItemView::getOwnerUserId)
                 .distinct()
                 .toList();
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(noteIds);
@@ -757,7 +771,7 @@ public class NoteService {
         return NoteTargetProfileType.STUDENT;
     }
 
-    private NoteTargetProfileType resolveTargetProfileType(NoteEntity note) {
+    private NoteTargetProfileType resolveTargetProfileType(NoteListItemView note) {
         return note.getTargetProfileType() == null ? NoteTargetProfileType.STUDENT : note.getTargetProfileType();
     }
 
@@ -811,7 +825,7 @@ public class NoteService {
     }
 
     private NoteListItemResponse mapToListItemResponse(
-            NoteEntity note,
+            NoteListItemView note,
             StudyPackEntity studyPack,
             long copyCount,
             long likeCount,
@@ -837,7 +851,7 @@ public class NoteService {
                 studyPack == null ? "" : SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), SUMMARY_PREVIEW_MAX_LENGTH),
                 resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                NoteStudyPackStatusResolver.resolve(note, studyPack),
+                NoteStudyPackStatusResolver.resolve(note.getStatus(), studyPack != null),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
                 copyCount,
                 likeCount,
@@ -995,7 +1009,7 @@ public class NoteService {
         }
     }
 
-    private NoteVisibility resolveVisibility(NoteEntity note) {
+    private NoteVisibility resolveVisibility(NoteListItemView note) {
         return note.getVisibility() == null ? NoteVisibility.PRIVATE : note.getVisibility();
     }
 
