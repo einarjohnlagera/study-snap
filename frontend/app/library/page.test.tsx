@@ -9,6 +9,7 @@ import {
   getBulkGenerationResult,
   getSavedLibraryFilters,
   listCollections,
+  listNoteStatuses,
   listNotes,
   listSubjects,
 } from "@/lib/api";
@@ -52,6 +53,7 @@ jest.mock("@/lib/api", () => ({
   getBulkGenerationResult: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
   listCollections: jest.fn(),
+  listNoteStatuses: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -167,6 +169,9 @@ describe("Library page", () => {
     (deleteSavedLibraryFilter as jest.Mock).mockResolvedValue(undefined);
     (getBulkGenerationResult as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
+    (listNoteStatuses as jest.Mock).mockReset();
+    (listNoteStatuses as jest.Mock).mockResolvedValue([]);
+    (listNotes as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -285,6 +290,9 @@ describe("Library page", () => {
         updatedAt: "2026-03-21T10:00:00Z",
       },
     ]);
+    (listNoteStatuses as jest.Mock).mockResolvedValue([
+      { id: "note-bulk-1", studyPackStatus: "GENERATING" },
+    ]);
 
     render(<LibraryPage />);
 
@@ -300,6 +308,69 @@ describe("Library page", () => {
       { timeout: 5000 },
     );
   }, 10000);
+
+  it("skips the enriched note fetch when a status tick has no changes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    const generatingNote = buildNote("note-generating", { studyPackStatus: "GENERATING" });
+    (listNotes as jest.Mock).mockResolvedValue([generatingNote]);
+    (listNoteStatuses as jest.Mock)
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "GENERATING" }])
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "GENERATING" }])
+      .mockRejectedValue(new Error("stop polling after the assertion tick"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText(generatingNote.title);
+    await waitFor(() => expect((listNoteStatuses as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(listNotes).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes the enriched note list when a new row appears without a generating status", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    const visibleGeneratingNote = buildNote("note-visible", { studyPackStatus: "GENERATING" });
+    (listNotes as jest.Mock).mockResolvedValue([visibleGeneratingNote]);
+    (listNoteStatuses as jest.Mock)
+      .mockResolvedValueOnce([{ id: visibleGeneratingNote.id, studyPackStatus: "DRAFT" }])
+      .mockResolvedValueOnce([
+        { id: visibleGeneratingNote.id, studyPackStatus: "DRAFT" },
+        { id: "note-new-row", studyPackStatus: "DRAFT" },
+      ])
+      .mockRejectedValue(new Error("stop polling after the growth tick"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText(visibleGeneratingNote.title);
+    await waitFor(() => expect((listNoteStatuses as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(listNotes).toHaveBeenCalledTimes(3);
+  });
+
+  it("refreshes the enriched note list when a generating status resolves", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    const generatingNote = buildNote("note-resolving", { studyPackStatus: "GENERATING" });
+    (listNotes as jest.Mock).mockResolvedValue([generatingNote]);
+    (listNoteStatuses as jest.Mock)
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "GENERATING" }])
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "STUDY_PACK_READY" }])
+      .mockRejectedValue(new Error("stop polling after the resolution tick"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText(generatingNote.title);
+    await waitFor(() => expect(listNoteStatuses).toHaveBeenCalledTimes(2));
+    expect(listNotes).toHaveBeenCalledTimes(3);
+  });
 
   it("renders subject stats when the library has enough notes across multiple subjects", async () => {
     (listNotes as jest.Mock).mockResolvedValue(

@@ -39,10 +39,12 @@ import {
   deleteSavedLibraryFilter,
   getBulkGenerationResult,
   getSavedLibraryFilters,
+  listNoteStatuses,
   listNotes,
   listSubjects,
   type BulkGenerationResultResponse,
   type NoteListItemResponse,
+  type NoteStatusResponse,
   type SavedLibraryFilterResponse,
   type SavedLibraryFilterState,
   type NoteVisibility,
@@ -515,6 +517,7 @@ export default function LibraryPage() {
   const initialLoadStartedRef = useRef(false);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const bulkGraceUntilRef = useRef(0);
+  const generatingNoteIdsRef = useRef<Set<string>>(new Set());
   // Tracks note ids already shown so rows that arrive later (via the generation
   // poller) can animate in. null until the first load seeds it, so the initial
   // list does not animate wholesale.
@@ -741,6 +744,7 @@ export default function LibraryPage() {
     // Seed below zero so the first appearance of any row registers as growth.
     let highWatermark = -1;
     const graceUntil = bulkGraceUntilRef.current;
+    generatingNoteIdsRef.current = new Set();
 
     const tick = async () => {
       if (!active || inFlight) {
@@ -749,14 +753,39 @@ export default function LibraryPage() {
       inFlight = true;
       totalTicks += 1;
       try {
-        const notes = await fetchNotesSilently();
-        if (!active || notes === null) {
+        let statuses: NoteStatusResponse[];
+        try {
+          statuses = await listNoteStatuses();
+        } catch {
           return;
         }
-        const anyGenerating = notes.some((item) => item.studyPackStatus === "GENERATING");
-        const grew = notes.length > highWatermark;
-        highWatermark = Math.max(highWatermark, notes.length);
+        if (!active) {
+          return;
+        }
+
+        const statusById = new Map(statuses.map((note) => [note.id, note.studyPackStatus]));
+        const resolved = [...generatingNoteIdsRef.current].some(
+          (noteId) => statusById.get(noteId) !== "GENERATING",
+        );
+        const nextGeneratingNoteIds = new Set(
+          statuses
+            .filter((note) => note.studyPackStatus === "GENERATING")
+            .map((note) => note.id),
+        );
+        generatingNoteIdsRef.current = nextGeneratingNoteIds;
+
+        const anyGenerating = nextGeneratingNoteIds.size > 0;
+        const grew = statuses.length > highWatermark;
+        highWatermark = Math.max(highWatermark, statuses.length);
         const withinGrace = Date.now() < graceUntil;
+
+        if (grew || resolved || withinGrace) {
+          const notes = await fetchNotesSilently();
+          if (!active || notes === null) {
+            return;
+          }
+        }
+
         if (anyGenerating || grew || withinGrace) {
           quietTicks = 0;
         } else {

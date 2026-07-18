@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
@@ -23,10 +24,12 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
@@ -554,6 +557,51 @@ class NoteServiceTest {
         List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
 
         assertThat(coursePrograms).containsExactly("Nursing", "Senior High – STEM");
+    }
+
+    @Test
+    void listMineStatuses_resolvesAllNoteAndStudyPackStatusCombinations() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        UUID generatingNoteId = UUID.randomUUID();
+        UUID failedNoteId = UUID.randomUUID();
+        UUID generatedNoteId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        when(noteRepository.findStatusProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId))
+                .thenReturn(List.of(
+                        new NoteStatusProjection(draftNoteId, NoteStatus.DRAFT, now),
+                        new NoteStatusProjection(generatingNoteId, NoteStatus.GENERATING, now.minusMinutes(1)),
+                        new NoteStatusProjection(failedNoteId, NoteStatus.FAILED, now.minusMinutes(2)),
+                        new NoteStatusProjection(generatedNoteId, NoteStatus.GENERATED, now.minusMinutes(3))
+                ));
+        StudyPackProgressProjection generatedPack = mock(StudyPackProgressProjection.class);
+        when(generatedPack.getNoteId()).thenReturn(generatedNoteId);
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(
+                draftNoteId,
+                generatingNoteId,
+                failedNoteId,
+                generatedNoteId
+        ))).thenReturn(List.of(generatedPack));
+
+        List<NoteStatusResponse> statuses = noteService.listMineStatuses(ownerUserId);
+
+        assertThat(statuses).containsExactly(
+                new NoteStatusResponse(draftNoteId.toString(), NoteStudyPackStatusResolver.DRAFT),
+                new NoteStatusResponse(generatingNoteId.toString(), NoteStudyPackStatusResolver.GENERATING),
+                new NoteStatusResponse(failedNoteId.toString(), NoteStudyPackStatusResolver.FAILED),
+                new NoteStatusResponse(generatedNoteId.toString(), NoteStudyPackStatusResolver.STUDY_PACK_READY)
+        );
+    }
+
+    @Test
+    void listMineStatuses_skipsStudyPackLookupForEmptyLibrary() {
+        UUID ownerUserId = UUID.randomUUID();
+        when(noteRepository.findStatusProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId))
+                .thenReturn(List.of());
+
+        assertThat(noteService.listMineStatuses(ownerUserId)).isEmpty();
+
+        verify(studyPackRepository, never()).findProgressViewsByNoteIdIn(any());
     }
 
     @Test
