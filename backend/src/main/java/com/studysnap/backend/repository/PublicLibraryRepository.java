@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface PublicLibraryRepository {
+    List<String> findDistinctPublicTags();
+
     List<NoteListItemProjection> findPublicLibraryPage(
             PublicLibraryFilterCriteria criteria,
             PublicLibrarySort sort,

@@ -157,6 +157,20 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     }
 
     @Test
+    void publicTagFacetFallbackExcludesNonPublicNotes() {
+        UUID ownerId = insertUser("tagfacetowner", UserRole.USER);
+        saveNote(ownerId, "Public tags", "Biology", null, new String[]{"Visible", "Chemistry"},
+                NoteStatus.DRAFT, NoteVisibility.PUBLIC, NoteTargetProfileType.STUDENT, 1);
+        saveNote(ownerId, "Private tags", "Biology", null, new String[]{"Hidden", "Owner only"},
+                NoteStatus.DRAFT, NoteVisibility.PRIVATE, NoteTargetProfileType.STUDENT, 2);
+        flushAndClear();
+
+        List<String> tags = noteService.listPublicTags();
+
+        assertThat(tags).containsExactly("Chemistry", "Visible");
+    }
+
+    @Test
     void additiveReadyAndSourceFiltersWorkInLegacyAndPaginatedModes() {
         UUID viewerId = insertUser("viewer", UserRole.USER);
         UUID officialId = insertUser("official", UserRole.ADMIN);

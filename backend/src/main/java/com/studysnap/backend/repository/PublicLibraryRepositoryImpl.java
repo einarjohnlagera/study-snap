@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Repository
@@ -75,6 +76,33 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
 
     public PublicLibraryRepositoryImpl(EntityManager entityManager) {
         this.entityManager = entityManager;
+    }
+
+    @Override
+    public List<String> findDistinctPublicTags() {
+        if (isPostgres()) {
+            @SuppressWarnings("unchecked")
+            List<Object> values = entityManager.createNativeQuery("""
+                    select distinct public_tag.value
+                    from notes n
+                    cross join lateral unnest(n.tags) as public_tag(value)
+                    where n.visibility = 'PUBLIC'
+                    """).getResultList();
+            return values.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .toList();
+        }
+
+        @SuppressWarnings("unchecked")
+        List<Object> tagArrays = entityManager.createNativeQuery("""
+                select n.tags
+                from notes n
+                where n.visibility = 'PUBLIC'
+                """).getResultList();
+        return tagArrays.stream()
+                .flatMap(value -> java.util.Arrays.stream(stringArray(value)))
+                .toList();
     }
 
     @Override

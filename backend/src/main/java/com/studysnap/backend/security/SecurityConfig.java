@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/billing/pricing").permitAll()
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/notes/public/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/tags").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/collections/public/**").permitAll()
                         .requestMatchers("/share/**").permitAll()
                         .requestMatchers("/p/**").permitAll()
