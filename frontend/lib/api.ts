@@ -1463,6 +1463,57 @@ export type NoteStatusResponse = {
   studyPackStatus: string;
 };
 
+export type LibraryFilterParams = {
+  search?: string;
+  readiness?: string;
+  courseProgram?: string;
+  subject?: string;
+  tags?: string[];
+  visibility?: string;
+};
+
+export type LibraryPageParams = LibraryFilterParams & {
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type NotesLibraryPageResponse = {
+  items: NoteListItemResponse[];
+  page: number;
+  pageSize: number;
+  totalMatching: number;
+  hasMore: boolean;
+};
+
+export type NotesLibraryIdsResponse = {
+  noteIds: string[];
+  totalMatching: number;
+  truncated: boolean;
+};
+
+export type SubjectFacetCount = {
+  subject: string;
+  count: number;
+};
+
+export type SubjectStatsResponse = {
+  topSubjects: SubjectFacetCount[];
+  otherSubjectsCount: number;
+  total: number;
+};
+
+export type FacetCount = {
+  value: string;
+  count: number;
+};
+
+export type NotesLibraryFilterOptionsResponse = {
+  subjects: FacetCount[];
+  coursePrograms: FacetCount[];
+  tags: FacetCount[];
+};
+
 export type PublicNoteListResponse = {
   items: NoteListItemResponse[];
   total: number;
@@ -3869,6 +3920,73 @@ export async function listNotes(limit?: number): Promise<NoteListItemResponse[]>
     true,
   );
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
+}
+
+function buildLibraryFilterSearchParams(params: LibraryFilterParams): URLSearchParams {
+  const searchParams = new URLSearchParams();
+  if (params.search) searchParams.set("search", params.search);
+  if (params.readiness) searchParams.set("readiness", params.readiness);
+  if (params.courseProgram) searchParams.set("courseProgram", params.courseProgram);
+  if (params.subject) searchParams.set("subject", params.subject);
+  params.tags?.forEach((tag) => searchParams.append("tag", tag));
+  if (params.visibility) searchParams.set("visibility", params.visibility);
+  return searchParams;
+}
+
+export async function listLibraryPage(params: LibraryPageParams): Promise<NotesLibraryPageResponse> {
+  const searchParams = buildLibraryFilterSearchParams(params);
+  if (params.sort) searchParams.set("sort", params.sort);
+  if (typeof params.page === "number") searchParams.set("page", String(params.page));
+  if (typeof params.pageSize === "number") searchParams.set("pageSize", String(params.pageSize));
+  const response = await fetchWithAuth(
+    `/notes/library?${searchParams.toString()}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NotesLibraryPageResponse>(response, "Could not load notes.");
+}
+
+export async function listLibraryMatchingIds(params: LibraryFilterParams): Promise<NotesLibraryIdsResponse> {
+  const searchParams = buildLibraryFilterSearchParams(params);
+  const response = await fetchWithAuth(
+    `/notes/library/ids?${searchParams.toString()}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NotesLibraryIdsResponse>(response, "Could not select matching notes.");
+}
+
+export async function getLibrarySubjectStats(
+  params: Omit<LibraryFilterParams, "subject">,
+): Promise<SubjectStatsResponse> {
+  const searchParams = buildLibraryFilterSearchParams(params);
+  const response = await fetchWithAuth(
+    `/notes/library/subject-stats?${searchParams.toString()}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SubjectStatsResponse>(response, "Could not load subject statistics.");
+}
+
+export async function getLibraryFilterOptions(): Promise<NotesLibraryFilterOptionsResponse> {
+  const response = await fetchWithAuth(
+    "/notes/library/filter-options",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NotesLibraryFilterOptionsResponse>(response, "Could not load library filters.");
 }
 
 export async function listNoteStatuses(): Promise<NoteStatusResponse[]> {
