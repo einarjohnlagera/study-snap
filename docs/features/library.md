@@ -61,7 +61,7 @@ Interaction:
 - note actions belong in Note Detail
 - Teacher/Admin Library adds a teacher-only `Select` mode instead of changing default card behavior:
   - each note shows a checkbox while selection mode is active
-  - the selection toolbar (shared by plan creation and teacher exam selection) has a `Select all` / `Deselect all` toggle scoped to the active filters — it selects all filter-matching notes (including those beyond the first display page, since the filtered set is computed client-side); deselect-all clears only the currently-filtered set (v0.33.0)
+  - the selection toolbar (shared by plan creation and teacher exam selection) has a `Select all` / `Deselect all` toggle scoped to the active filters — it selects all filter-matching notes; the backend now supports this across paginated results through `GET /notes/library/ids` (stable id order, capped at 1,000 with an explicit `truncated` flag), while the frontend remains on its existing full-array implementation until the F7 UI migration; deselect-all clears only the currently-filtered set (v0.33.0)
   - only notes with a stored `generatedQuiz` can be selected for exam export
   - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
   - selected notes open `Exam Builder`, where teachers can:
@@ -131,7 +131,7 @@ Private Library sorting:
 
 The private Library shows a compact subject stats strip inside the filter card, between the filter controls and the note list.
 
-The strip is **faceted**: counts are computed **client-side** from the already-loaded note list (`listNotes()` returns the full library), over the notes matching every active filter **except** subject. So the chips always reflect the current view — when a Course/Program, tag, search, or readiness filter is active, only the subjects present in that filtered set appear, with counts for those notes. With no filters active, it shows the whole-library subject breakdown. There is no dedicated stats endpoint.
+The strip is **faceted** over notes matching every active filter **except** subject. The backend now exposes this contract through `GET /notes/library/subject-stats`, returning the top 6 subjects, the summed remainder, and the filtered total. Its subject buckets use the same normalized subject → course/program → `General` fallback as the Library filter. The current frontend still computes the strip from its already-loaded `listNotes()` array until the F7 frontend migration; the dedicated endpoint is ready so that migration does not need a full note-list scan.
 
 Behavior:
 

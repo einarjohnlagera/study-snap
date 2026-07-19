@@ -4,6 +4,9 @@ import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteQuickReviewLastReviewedResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
+import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
+import com.studysnap.backend.dto.NotesLibraryIdsResponse;
+import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
@@ -23,6 +26,7 @@ import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
+import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
@@ -83,6 +87,23 @@ public class NoteController {
     private static final int PUBLIC_NOTES_MAX_SIZE = 50;
     private static final int PRIVATE_NOTES_MIN_LIMIT = 1;
     private static final int PRIVATE_NOTES_MAX_LIMIT = 50;
+    private static final int LIBRARY_MIN_PAGE = 0;
+    private static final int LIBRARY_MAX_PAGE = Integer.MAX_VALUE;
+    private static final int LIBRARY_MIN_PAGE_SIZE = 1;
+    private static final int LIBRARY_MAX_PAGE_SIZE = 100;
+    private static final String LIBRARY_DEFAULT_PAGE = "0";
+    private static final String LIBRARY_DEFAULT_PAGE_SIZE = "20";
+    private static final String LIBRARY_DEFAULT_FILTER = "ALL";
+    private static final String LIBRARY_DEFAULT_SORT = "RECENTLY_UPDATED";
+    private static final String SEARCH_REQUEST_PARAM = "search";
+    private static final String READINESS_REQUEST_PARAM = "readiness";
+    private static final String COURSE_PROGRAM_REQUEST_PARAM = "courseProgram";
+    private static final String SUBJECT_REQUEST_PARAM = "subject";
+    private static final String TAG_REQUEST_PARAM = "tag";
+    private static final String VISIBILITY_REQUEST_PARAM = "visibility";
+    private static final String SORT_REQUEST_PARAM = "sort";
+    private static final String PAGE_REQUEST_PARAM = "page";
+    private static final String PAGE_SIZE_REQUEST_PARAM = "pageSize";
 
     private final AuthService authService;
     private final BulkGenerationResultService bulkGenerationResultService;
@@ -473,6 +494,73 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<NoteStatusResponse> listMineStatuses(@AuthenticationPrincipal AuthenticatedUser user) {
         return noteService.listMineStatuses(user.userId());
+    }
+
+    @GetMapping("/library")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NotesLibraryPageResponse listLibraryPage(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
+            @RequestParam(value = READINESS_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String readiness,
+            @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
+            @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
+            @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
+            @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = SORT_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_SORT) String sort,
+            @RequestParam(value = PAGE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE) Integer page,
+            @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE_SIZE) Integer pageSize,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.listLibraryPage(
+                user.userId(),
+                search,
+                readiness,
+                courseProgram,
+                subject,
+                tags,
+                visibility,
+                sort,
+                Math.clamp(page, LIBRARY_MIN_PAGE, LIBRARY_MAX_PAGE),
+                Math.clamp(pageSize, LIBRARY_MIN_PAGE_SIZE, LIBRARY_MAX_PAGE_SIZE)
+        );
+    }
+
+    @GetMapping("/library/ids")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NotesLibraryIdsResponse listLibraryMatchingIds(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
+            @RequestParam(value = READINESS_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String readiness,
+            @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
+            @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
+            @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
+            @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.listLibraryMatchingIds(
+                user.userId(), search, readiness, courseProgram, subject, tags, visibility
+        );
+    }
+
+    @GetMapping("/library/subject-stats")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public SubjectStatsResponse getLibrarySubjectStats(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
+            @RequestParam(value = READINESS_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String readiness,
+            @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
+            @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
+            @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getLibrarySubjectStats(
+                user.userId(), search, readiness, courseProgram, tags, visibility
+        );
+    }
+
+    @GetMapping("/library/filter-options")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NotesLibraryFilterOptionsResponse getLibraryFilterOptions(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getLibraryFilterOptions(user.userId());
     }
 
     @GetMapping("/public")
