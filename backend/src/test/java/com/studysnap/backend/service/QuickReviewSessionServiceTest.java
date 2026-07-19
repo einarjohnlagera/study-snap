@@ -17,8 +17,10 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.StudyPackLatestCompletionProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
@@ -42,9 +44,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -887,6 +891,85 @@ class QuickReviewSessionServiceTest {
         quickReviewSessionService.listRecentSessions(studyPackId.toString(), userId, 5);
 
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+    }
+
+    @Test
+    void getLastReviewedAtByNoteIdsReturnsOnlyOwnedQuickReviewCompletions() {
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UUID quickReviewNoteId = UUID.randomUUID();
+        UUID challengeOnlyNoteId = UUID.randomUUID();
+        UUID packlessNoteId = UUID.randomUUID();
+        UUID otherUserNoteId = UUID.randomUUID();
+        UUID quickReviewStudyPackId = UUID.randomUUID();
+        UUID challengeOnlyStudyPackId = UUID.randomUUID();
+        UUID otherUserStudyPackId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-07-18T09:30:00Z");
+        StudyPackProgressProjection quickReviewStudyPack = studyPackProgressProjection(
+                quickReviewStudyPackId, quickReviewNoteId, userId
+        );
+        StudyPackProgressProjection challengeOnlyStudyPack = studyPackProgressProjection(
+                challengeOnlyStudyPackId, challengeOnlyNoteId, userId
+        );
+        StudyPackProgressProjection otherUserStudyPack = studyPackProgressProjection(
+                otherUserStudyPackId, otherUserNoteId, otherUserId
+        );
+        List<UUID> requestedNoteIds = List.of(
+                quickReviewNoteId, challengeOnlyNoteId, packlessNoteId, otherUserNoteId
+        );
+        when(studyPackRepository.findProgressViewsByNoteIdIn(requestedNoteIds))
+                .thenReturn(List.of(quickReviewStudyPack, challengeOnlyStudyPack, otherUserStudyPack));
+        when(quickReviewSessionRepository.findLatestCompletedAtByUserIdAndStudyPackIdInAndSessionMode(
+                eq(userId),
+                eq(QuickReviewSessionStatus.COMPLETED),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                argThat(studyPackIds -> studyPackIds.size() == 2
+                        && studyPackIds.contains(quickReviewStudyPackId)
+                        && studyPackIds.contains(challengeOnlyStudyPackId)
+                        && !studyPackIds.contains(otherUserStudyPackId))
+        )).thenReturn(List.of(new StudyPackLatestCompletionProjection(quickReviewStudyPackId, completedAt)));
+
+        Map<UUID, OffsetDateTime> result = quickReviewSessionService
+                .getLastReviewedAtByNoteIds(requestedNoteIds, userId);
+
+        assertThat(result).containsExactly(Map.entry(quickReviewNoteId, completedAt));
+    }
+
+    @Test
+    void getLastReviewedAtByNoteIdsSkipsCompletionQueryWhenNoOwnedStudyPacksExist() {
+        UUID userId = UUID.randomUUID();
+        List<UUID> requestedNoteIds = List.of(UUID.randomUUID());
+        when(studyPackRepository.findProgressViewsByNoteIdIn(requestedNoteIds)).thenReturn(List.of());
+
+        Map<UUID, OffsetDateTime> result = quickReviewSessionService
+                .getLastReviewedAtByNoteIds(requestedNoteIds, userId);
+
+        assertThat(result).isEmpty();
+        verify(quickReviewSessionRepository, never())
+                .findLatestCompletedAtByUserIdAndStudyPackIdInAndSessionMode(any(), any(), any(), any());
+    }
+
+    @Test
+    void getLastReviewedAtByNoteIdsSkipsAllQueriesForEmptyInput() {
+        Map<UUID, OffsetDateTime> result = quickReviewSessionService
+                .getLastReviewedAtByNoteIds(List.of(), UUID.randomUUID());
+
+        assertThat(result).isEmpty();
+        verify(studyPackRepository, never()).findProgressViewsByNoteIdIn(any());
+        verify(quickReviewSessionRepository, never())
+                .findLatestCompletedAtByUserIdAndStudyPackIdInAndSessionMode(any(), any(), any(), any());
+    }
+
+    private StudyPackProgressProjection studyPackProgressProjection(
+            UUID studyPackId,
+            UUID noteId,
+            UUID ownerUserId
+    ) {
+        StudyPackProgressProjection projection = mock(StudyPackProgressProjection.class);
+        lenient().when(projection.getId()).thenReturn(studyPackId);
+        lenient().when(projection.getNoteId()).thenReturn(noteId);
+        lenient().when(projection.getOwnerUserId()).thenReturn(ownerUserId);
+        return projection;
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId, int quizCount) {

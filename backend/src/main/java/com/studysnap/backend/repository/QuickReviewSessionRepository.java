@@ -58,6 +58,12 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
                 max(q.completedAt)
             )
             """;
+    String STUDY_PACK_LATEST_COMPLETION_PROJECTION = """
+             new com.studysnap.backend.repository.StudyPackLatestCompletionProjection(
+                q.studyPackId,
+                max(q.completedAt)
+            )
+            """;
 
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
@@ -132,6 +138,23 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             @Param("userId") UUID userId,
             @Param("status") QuickReviewSessionStatus status,
             @Param("noteIds") Collection<UUID> noteIds
+    );
+
+    @Query("""
+            select """ + STUDY_PACK_LATEST_COMPLETION_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.status = :status
+              and q.completedAt is not null
+              and q.sessionMode = :sessionMode
+              and q.studyPackId in :studyPackIds
+            group by q.studyPackId
+            """)
+    List<StudyPackLatestCompletionProjection> findLatestCompletedAtByUserIdAndStudyPackIdInAndSessionMode(
+            @Param("userId") UUID userId,
+            @Param("status") QuickReviewSessionStatus status,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            @Param("studyPackIds") Collection<UUID> studyPackIds
     );
 
     @Query("""

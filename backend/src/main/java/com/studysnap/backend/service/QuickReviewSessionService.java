@@ -22,8 +22,10 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.StudyPackLatestCompletionProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
@@ -39,6 +41,8 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -379,6 +383,45 @@ public class QuickReviewSessionService {
                 latest == null ? null : latest.getScorePercentage(),
                 latest == null ? null : latest.getCompletedAt()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, OffsetDateTime> getLastReviewedAtByNoteIds(Collection<UUID> noteIds, UUID userId) {
+        if (noteIds == null || noteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<StudyPackProgressProjection> ownedStudyPacks = studyPackRepository
+                .findProgressViewsByNoteIdIn(noteIds)
+                .stream()
+                .filter(studyPack -> userId.equals(studyPack.getOwnerUserId()))
+                .toList();
+        if (ownedStudyPacks.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, UUID> noteIdByStudyPackId = new HashMap<>();
+        for (StudyPackProgressProjection studyPack : ownedStudyPacks) {
+            noteIdByStudyPackId.put(studyPack.getId(), studyPack.getNoteId());
+        }
+
+        List<StudyPackLatestCompletionProjection> completions = quickReviewSessionRepository
+                .findLatestCompletedAtByUserIdAndStudyPackIdInAndSessionMode(
+                        userId,
+                        QuickReviewSessionStatus.COMPLETED,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        noteIdByStudyPackId.keySet()
+                );
+
+        Map<UUID, OffsetDateTime> lastReviewedAtByNoteId = new HashMap<>();
+        for (StudyPackLatestCompletionProjection completion : completions) {
+            UUID noteId = noteIdByStudyPackId.get(completion.studyPackId());
+            if (noteId != null && completion.completedAt() != null) {
+                lastReviewedAtByNoteId.merge(noteId, completion.completedAt(),
+                        (current, candidate) -> current.isAfter(candidate) ? current : candidate);
+            }
+        }
+        return Map.copyOf(lastReviewedAtByNoteId);
     }
 
     private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session, PlanType planType) {

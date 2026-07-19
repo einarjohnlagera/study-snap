@@ -999,6 +999,11 @@ export type QuickReviewPerformanceSummaryResponse = {
   lastReviewedAt: string | null;
 };
 
+export type NoteQuickReviewLastReviewedResponse = {
+  noteId: string;
+  lastReviewedAt: string | null;
+};
+
 export type QuickReviewIncorrectQuestionInput = {
   question: string;
   correctAnswer: string;
@@ -3037,6 +3042,25 @@ export async function getQuickReviewPerformanceSummary(
   return parseApiResponse<QuickReviewPerformanceSummaryResponse>(
     response,
     "Could not load Quick Review performance summary.",
+  );
+}
+
+export async function getQuickReviewLastReviewedBatch(
+  noteIds: string[],
+): Promise<NoteQuickReviewLastReviewedResponse[]> {
+  const searchParams = new URLSearchParams();
+  noteIds.forEach((noteId) => searchParams.append("noteIds", noteId));
+  const response = await fetchWithAuth(
+    `/notes/quick-review/last-reviewed?${searchParams.toString()}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteQuickReviewLastReviewedResponse[]>(
+    response,
+    "Could not load Quick Review history.",
   );
 }
 
