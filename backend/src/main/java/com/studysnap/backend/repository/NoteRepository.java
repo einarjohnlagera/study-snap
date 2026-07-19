@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLibraryRepository {
+public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLibraryRepository, PublicLibraryRepository {
     String COLLECTION_NOTE_PROJECTION = """
              new com.studysnap.backend.repository.NoteCollectionNoteProjection(
                 n.id,

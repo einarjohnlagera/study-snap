@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
 import com.studysnap.backend.dto.NotesLibraryIdsResponse;
 import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.BulkGenerationResultResponse;
@@ -104,6 +105,12 @@ public class NoteController {
     private static final String SORT_REQUEST_PARAM = "sort";
     private static final String PAGE_REQUEST_PARAM = "page";
     private static final String PAGE_SIZE_REQUEST_PARAM = "pageSize";
+    private static final String READY_ONLY_REQUEST_PARAM = "readyOnly";
+    private static final String SOURCE_REQUEST_PARAM = "source";
+    private static final String AUDIENCE_REQUEST_PARAM = "audience";
+    private static final String TARGET_PROFILE_TYPE_REQUEST_PARAM = "targetProfileType";
+    private static final int PUBLIC_LIBRARY_DEFAULT_PAGE = 0;
+    private static final int PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE = 20;
 
     private final AuthService authService;
     private final BulkGenerationResultService bulkGenerationResultService;
@@ -571,12 +578,17 @@ public class NoteController {
             @RequestParam(value = "tag", required = false) List<String> tags,
             @RequestParam(value = "courseProgram", required = false) String courseProgram,
             @RequestParam(value = "creator", required = false) String creator,
-            @RequestParam(value = "audience", required = false) String audience,
-            @RequestParam(value = "targetProfileType", required = false) NoteTargetProfileType targetProfileType,
+            @RequestParam(value = AUDIENCE_REQUEST_PARAM, required = false) String audience,
+            @RequestParam(value = TARGET_PROFILE_TYPE_REQUEST_PARAM, required = false) NoteTargetProfileType targetProfileType,
             @RequestParam(value = "size", required = false) Integer size,
+            @RequestParam(value = PAGE_REQUEST_PARAM, required = false) Integer page,
+            @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, required = false) Integer pageSize,
+            @RequestParam(value = READY_ONLY_REQUEST_PARAM, defaultValue = "false") boolean readyOnly,
+            @RequestParam(value = SOURCE_REQUEST_PARAM, required = false) List<String> sources,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
+        boolean paginated = page != null || pageSize != null;
         return noteService.listPublic(
                 viewerUserId,
                 search,
@@ -586,7 +598,35 @@ public class NoteController {
                 courseProgram,
                 creator,
                 resolvePublicAudienceFilter(audience, targetProfileType),
-                size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE)
+                size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE),
+                paginated
+                        ? Math.clamp(
+                                page == null ? PUBLIC_LIBRARY_DEFAULT_PAGE : page,
+                                LIBRARY_MIN_PAGE,
+                                LIBRARY_MAX_PAGE
+                        )
+                        : null,
+                paginated
+                        ? Math.clamp(
+                                pageSize == null ? PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE : pageSize,
+                                PUBLIC_NOTES_MIN_SIZE,
+                                PUBLIC_NOTES_MAX_SIZE
+                        )
+                        : null,
+                readyOnly,
+                sources
+        );
+    }
+
+    @GetMapping("/public/discovery-sections")
+    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(
+            @RequestParam(value = AUDIENCE_REQUEST_PARAM, required = false) String audience,
+            @RequestParam(value = TARGET_PROFILE_TYPE_REQUEST_PARAM, required = false) NoteTargetProfileType targetProfileType,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getPublicLibraryDiscoverySections(
+                user == null ? null : user.userId(),
+                resolvePublicAudienceFilter(audience, targetProfileType)
         );
     }
 

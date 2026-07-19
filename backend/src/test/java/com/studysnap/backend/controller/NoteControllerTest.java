@@ -14,6 +14,7 @@ import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
 import com.studysnap.backend.dto.NotesLibraryIdsResponse;
 import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
@@ -482,7 +483,7 @@ class NoteControllerTest {
     void listPublic_mapsAudienceQueryToTargetProfileFilter() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4))
+        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
         PublicNoteListResponse response = noteController.listPublic(
@@ -495,6 +496,10 @@ class NoteControllerTest {
                 "student",
                 null,
                 4,
+                null,
+                null,
+                false,
+                null,
                 user
         );
 
@@ -507,7 +512,11 @@ class NoteControllerTest {
                 "nursing",
                 CREATOR_USERNAME,
                 NoteTargetProfileType.STUDENT,
-                4
+                4,
+                null,
+                null,
+                false,
+                null
         );
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
@@ -517,7 +526,7 @@ class NoteControllerTest {
     void listPublic_clampsLargeSizeBeforeDelegating() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50))
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
         PublicNoteListResponse response = noteController.listPublic(
@@ -530,12 +539,132 @@ class NoteControllerTest {
                 null,
                 null,
                 200,
+                null,
+                null,
+                false,
+                null,
                 user
         );
 
-        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50);
+        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50, null, null, false, null);
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
+    }
+
+    @Test
+    void publicLibraryPaginatedRouteClampsBoundsAndPassesNewFilters() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        PublicNoteListResponse expected = new PublicNoteListResponse(List.of(), 0, 0, 50, 0L, false);
+        when(noteService.listPublic(
+                routeUser.userId(),
+                null,
+                "most_copied",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                50,
+                true,
+                List.of("BY_YOU", "OFFICIAL")
+        )).thenReturn(expected);
+
+        mockMvc.perform(get("/notes/public")
+                        .param("sort", "most_copied")
+                        .param("page", "-4")
+                        .param("pageSize", "500")
+                        .param("readyOnly", "true")
+                        .param("source", "BY_YOU", "OFFICIAL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.pageSize").value(50))
+                .andExpect(jsonPath("$.totalMatching").value(0))
+                .andExpect(jsonPath("$.hasMore").value(false));
+
+        verify(noteService).listPublic(
+                routeUser.userId(),
+                null,
+                "most_copied",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                50,
+                true,
+                List.of("BY_YOU", "OFFICIAL")
+        );
+    }
+
+    @Test
+    void publicLibraryLegacyRouteOmitsPaginationFieldsWhenPagingParamsAreAbsent() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listPublic(
+                routeUser.userId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
+        )).thenReturn(new PublicNoteListResponse(List.of(), 0));
+
+        mockMvc.perform(get("/notes/public"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.total").value(0))
+                .andExpect(jsonPath("$.page").doesNotExist())
+                .andExpect(jsonPath("$.pageSize").doesNotExist())
+                .andExpect(jsonPath("$.totalMatching").doesNotExist())
+                .andExpect(jsonPath("$.hasMore").doesNotExist());
+
+        verify(noteService).listPublic(
+                routeUser.userId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
+        );
+    }
+
+    @Test
+    void publicDiscoverySectionsRouteResolvesToLiteralHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.getPublicLibraryDiscoverySections(
+                routeUser.userId(), NoteTargetProfileType.BOARD_TAKER
+        )).thenReturn(new PublicLibraryDiscoverySectionsResponse(List.of(), List.of(), List.of()));
+
+        mockMvc.perform(get("/notes/public/discovery-sections").param("audience", "board-taker"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featured").isArray())
+                .andExpect(jsonPath("$.popular").isArray())
+                .andExpect(jsonPath("$.recent").isArray());
+
+        verify(noteService).getPublicLibraryDiscoverySections(
+                routeUser.userId(), NoteTargetProfileType.BOARD_TAKER
+        );
+        verify(noteService, never()).getPublicById("discovery-sections", routeUser.userId());
     }
 
     @Test
@@ -741,14 +870,18 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null))
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(expected, expected.size()));
 
-        PublicNoteListResponse response = noteController.listPublic(null, null, null, null, null, null, null, null, null, user);
+        PublicNoteListResponse response = noteController.listPublic(
+                null, null, null, null, null, null, null, null, null, null, null, false, null, user
+        );
 
         assertThat(response.items()).isEqualTo(expected);
         assertThat(response.total()).isEqualTo(expected.size());
-        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, null);
+        verify(noteService).listPublic(
+                userId, null, null, null, null, null, null, null, null, null, null, false, null
+        );
     }
 
     @Test

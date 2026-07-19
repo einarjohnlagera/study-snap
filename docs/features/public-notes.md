@@ -45,6 +45,15 @@ Growth behavior:
   - `Most Viewed`
 - Discovery sorting should use real copy/share/view signals when available.
 
+Backend browsing contract (F8 backend half):
+
+- `GET /notes/public` keeps its legacy response when `page`/`pageSize` are absent, preserving sitemap and SSR callers.
+- Supplying either pagination parameter enables SQL-pushed filtering plus an enriched 1-50-note page with `page`, `pageSize`, `totalMatching`, and `hasMore`.
+- Paginated sorting supports `recent`, `title`, gated `featured`, gated `popular`/`copied`, ungated `views`, ungated `most_copied`, and ungated decay-ranked `recommended`.
+- `readyOnly=true` limits results to notes resolving to `STUDY_PACK_READY`; repeatable `source=BY_YOU|OFFICIAL|COMMUNITY` values filter author origin.
+- `GET /notes/public/discovery-sections` returns mutually exclusive Featured, Popular, and Recent sections, each capped at six and optionally audience-scoped.
+- The public browsing UI remains on its legacy full-array implementation until the F8 frontend follow-up consumes these contracts.
+
 Canonical note/detail routes:
 
 - `/public/library/{subject}`
