@@ -2584,6 +2584,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   // target date, so `goalDetail` is fetched for it too (see loadCollection below), but it renders as
   // the leaf view, not the Goal view — this flag is the single source of truth for that branch choice.
   const isGoalView = Boolean(goalDetail) && (collection?.childCount ?? 0) > 0;
+  const expectsGoalView = collection !== null
+    && collection.parentCollectionId === null
+    && (collection.childCount ?? 0) > 0;
+  const collectionLoaded = collection !== null;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationKind, setMutationKind] = useState<MutationKind>(null);
@@ -2652,20 +2656,22 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       }
       if (notesResult.status === "fulfilled") {
         setNoteListItems(notesResult.value);
+        setNoteVisibility(new Map(notesResult.value.map((note) => [note.id, note.visibility])));
       } else {
         setNoteListItems([]);
+        setNoteVisibility(new Map());
         setNoteListLoadFailed(true);
       }
       const collectionResult = result.value;
+      setCollection(collectionResult);
+      setItems(sortCollectionItemsByPosition(collectionResult.items));
       // Fetch the Goal endpoint for any top-level collection, not just ones with children today — a
       // childless top-level ("leaf") collection can still carry a target completion date, and the
       // countdown fields it needs are surfaced in the leaf view below (see isGoalView).
       const goalResult = collectionResult.parentCollectionId === null
         ? await getCollectionGoal(collectionId)
         : null;
-      setCollection(collectionResult);
       setGoalDetail(goalResult);
-      setItems(sortCollectionItemsByPosition(collectionResult.items));
       setLoadState("ready");
       if (collectionResult.parentCollectionId) {
         getCollection(collectionResult.parentCollectionId)
@@ -2723,7 +2729,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   }, [collectionId]);
 
   useEffect(() => {
-    if (loadState !== "ready" || isGoalView || items.length === 0) {
+    if (!collectionLoaded || expectsGoalView || items.length === 0) {
       setSectionCounts(null);
       return;
     }
@@ -2742,10 +2748,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     return () => {
       mounted = false;
     };
-  }, [collectionId, isGoalView, items, loadState]);
+  }, [collectionId, collectionLoaded, expectsGoalView, items]);
 
   useEffect(() => {
-    if (loadState !== "ready" || isGoalView) {
+    if (!collectionLoaded || expectsGoalView) {
       setPlanReadiness(null);
       setPlanReadinessLoadState("idle");
       return;
@@ -2768,7 +2774,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     return () => {
       mounted = false;
     };
-  }, [collectionId, isGoalView, loadState]);
+  }, [collectionId, collectionLoaded, expectsGoalView]);
 
   const loadNoteVisibility = useCallback(async () => {
     try {
@@ -2778,13 +2784,6 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       // Visibility badges are admin-only progressive enhancement; ignore failures.
     }
   }, []);
-
-  useEffect(() => {
-    if (!isAdmin) {
-      return;
-    }
-    void loadNoteVisibility();
-  }, [isAdmin, loadNoteVisibility]);
 
   const refetchAfterFailure = async (message: string) => {
     setMutationError(message);
