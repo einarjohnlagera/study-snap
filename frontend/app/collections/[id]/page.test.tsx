@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   aggregateSectionReadiness,
   CollectionDetailPageClient,
@@ -305,6 +305,7 @@ describe("CollectionDetailPageClient", () => {
     (clearCompanion as jest.Mock).mockResolvedValue(collection({ companion: null }));
     (setPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
     (clearPrimaryCollection as jest.Mock).mockResolvedValue(undefined);
+    (updateCollection as jest.Mock).mockResolvedValue(collection());
     (generateCompanion as jest.Mock).mockResolvedValue({
       overview: "Generated overview",
       studyStrategy: "Generated strategy",
@@ -415,7 +416,74 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.queryByRole("heading", { name: "Notes" })).not.toBeInTheDocument();
     expect(screen.getByText("2 Subject Plans")).toBeInTheDocument();
     expect(getPlanReadiness).not.toHaveBeenCalled();
+    expect(getNoteConceptCounts).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Read more" })).not.toBeInTheDocument();
+  });
+
+  it("does not start leaf readiness requests while Goal detail is still pending", async () => {
+    let resolveGoal!: (value: ReturnType<typeof goalDetail>) => void;
+    const pendingGoal = new Promise<ReturnType<typeof goalDetail>>((resolve) => {
+      resolveGoal = resolve;
+    });
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      progress: { totalNotes: 0, notesWithStudyPack: 0, notesPracticed: 0 },
+      items: [],
+    }));
+    (getCollectionGoal as jest.Mock).mockReturnValue(pendingGoal);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await waitFor(() => expect(getCollectionGoal).toHaveBeenCalledWith("collection-1"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("heading", { name: "Loading..." })).toBeInTheDocument();
+    expect(getNoteConceptCounts).not.toHaveBeenCalled();
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveGoal(goalDetail());
+    });
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(getNoteConceptCounts).not.toHaveBeenCalled();
+    expect(getPlanReadiness).not.toHaveBeenCalled();
+  });
+
+  it("starts leaf readiness requests while childless Goal detail is still pending", async () => {
+    let resolveGoal!: (value: ReturnType<typeof goalDetail>) => void;
+    const pendingGoal = new Promise<ReturnType<typeof goalDetail>>((resolve) => {
+      resolveGoal = resolve;
+    });
+    (getCollectionGoal as jest.Mock).mockReturnValue(pendingGoal);
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await waitFor(() => {
+      expect(getNoteConceptCounts).toHaveBeenCalledWith("collection-1");
+      expect(getPlanReadiness).toHaveBeenCalledWith("collection-1");
+    });
+    expect(screen.getByRole("heading", { name: "Loading..." })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveGoal(goalDetail({ childCount: 0, children: [] }));
+    });
+
+    expect(await screen.findByRole("heading", { name: "Midterm Study Plan" })).toBeInTheDocument();
+  });
+
+  it("starts nested-plan readiness without requesting Goal detail", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ parentCollectionId: "goal-1" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await waitFor(() => {
+      expect(getNoteConceptCounts).toHaveBeenCalledWith("collection-1");
+      expect(getPlanReadiness).toHaveBeenCalledWith("collection-1");
+    });
+    expect(getCollectionGoal).not.toHaveBeenCalled();
   });
 
   it("expands clamped Goal and Subject Plan descriptions", async () => {
@@ -2495,14 +2563,23 @@ describe("CollectionDetailPageClient", () => {
   it("makes private plan notes public from the publish modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE", role: "ADMIN" });
     (getCollection as jest.Mock).mockResolvedValue(collection({ courseProgram: "LET" }));
-    (listNotes as jest.Mock).mockResolvedValue([
-      { ...note("note-1", "Cell Respiration"), visibility: "PRIVATE" },
-      { ...note("note-2", "Dosage Calculations"), visibility: "PUBLIC" },
-    ]);
+    (listNotes as jest.Mock)
+      .mockResolvedValueOnce([
+        { ...note("note-1", "Cell Respiration"), visibility: "PRIVATE" },
+        { ...note("note-2", "Dosage Calculations"), visibility: "PUBLIC" },
+      ])
+      .mockResolvedValue([
+        { ...note("note-1", "Cell Respiration"), visibility: "PUBLIC" },
+        { ...note("note-2", "Dosage Calculations"), visibility: "PUBLIC" },
+      ]);
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    expect(listNotes).toHaveBeenCalledTimes(1);
+    const cellRespirationRow = screen.getByRole("heading", { level: 2, name: "Cell Respiration" }).closest("li");
+    expect(cellRespirationRow).not.toBeNull();
+    expect(within(cellRespirationRow as HTMLElement).getByText("Private")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
 
     const makePublicButton = await screen.findByRole("button", { name: "Make 1 public" });
@@ -2514,6 +2591,8 @@ describe("CollectionDetailPageClient", () => {
       expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
     });
     expect(updateNoteVisibility).not.toHaveBeenCalledWith("note-2", "PUBLIC");
+    await waitFor(() => expect(listNotes).toHaveBeenCalledTimes(2));
+    expect(within(cellRespirationRow as HTMLElement).queryByText("Private")).not.toBeInTheDocument();
   });
 
   it("offers a standalone Save action so course/program persists when publishing is blocked", async () => {
