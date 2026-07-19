@@ -78,9 +78,9 @@ Landing page should visually reinforce Public Library as a real discovery surfac
 Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
-- 🔥 Featured Notes — top 3 study-ready notes by quality + engagement
-- 📈 Most Popular — top 5 notes meeting the social-proof threshold, ordered by copies then views (excluding Featured notes)
-- 🆕 Recently Added — top 5 by createdAt (excluding Featured and Popular)
+- 🔥 Featured Notes — top 6 study-ready notes by quality + engagement
+- 📈 Most Popular — top 6 notes meeting the social-proof threshold, ordered by copies then views (excluding Featured notes)
+- 🆕 Recently Added — top 6 by createdAt (excluding Featured and Popular)
 - each section includes `View More`, which opens a focused section view on the same page (`?view=featured|popular|recent`)
 - subjects and popular tags remain available in the always-visible top browsing rails instead of a separate discovery block
 
@@ -149,7 +149,7 @@ score = viewCount + (copyCount * 3) + (likeCount * 2)
   - `copyCount DESC`
   - `viewCount DESC`
   - `createdAt DESC`
-- Discovery-home limit: 3 notes in `Featured Notes`
+- Discovery-home limit: 6 notes in `Featured Notes`
 
 ## Most Popular Ranking
 
@@ -189,9 +189,9 @@ Recent remains intentionally simple:
 ## Deduplication Across Sections
 
 Sections never repeat the same note:
-- Featured: top 3 eligible notes by score from all public notes
-- Most Popular: top 5 threshold-qualified notes from notes NOT in Featured
-- Recently Added: top 5 by createdAt from notes NOT in Featured or Popular
+- Featured: top 6 eligible notes by score from all public notes
+- Most Popular: top 6 threshold-qualified notes from notes NOT in Featured
+- Recently Added: top 6 by createdAt from notes NOT in Featured or Popular
 
 ## Layout
 
@@ -239,6 +239,7 @@ Public Library filters:
 - `By You`
 - `Official`
 - `Community`
+- `Study Pack Ready`
 
 Learner Level is not a current Public Library filter; it remains owner/profile metadata rather than a More Filters control.
 
@@ -278,17 +279,27 @@ Public Library browsing rails:
 
 `GET /notes/public` is the backend filter source for shareable Public Library URLs.
 
+The backend exposes two compatible modes:
+
+- Legacy mode is selected when both `page` and `pageSize` are absent. It preserves the existing unbounded mapping/filtering flow and the historical pre-search-filter meaning of `total`, so sitemap, subject-index, note-count, and related-note server callers remain unchanged.
+- Paginated mode is selected when either `page` or `pageSize` is present. It applies filters before pagination, returns only one fully enriched page, and adds `page`, `pageSize`, `totalMatching`, and `hasMore`. `page` is clamped to zero or greater and `pageSize` to 1-50. The Public Library client does not consume this mode until the F8 frontend follow-up.
+
 Response shape:
 
 ```json
 {
   "items": [],
-  "total": 0
+  "total": 0,
+  "page": 0,
+  "pageSize": 20,
+  "totalMatching": 0,
+  "hasMore": false
 }
 ```
 
-- `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp.
-- `total` is captured after public-note list mapping and before in-memory filters such as `search`, `subject`, `tag`, and `courseProgram`; DB-level creator and audience pre-filters still apply before this baseline is captured.
+- The four pagination fields are nullable and omitted from legacy JSON responses.
+- In legacy mode, `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp; `total` is captured after public-note list mapping and before in-memory `search`, `subject`, `tag`, and `courseProgram` filters. DB-level creator and audience pre-filters still apply before this baseline.
+- In paginated mode, `items` is the requested enriched page and `totalMatching` is the post-filter count. `total` mirrors that count for response compatibility.
 - Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
 
 Supported query params:
@@ -300,7 +311,14 @@ Supported query params:
 - `courseProgram`
 - `creator` (username — filters to a single creator's public notes)
 - `size` (optional integer, clamped to 1-50 when present — limits result count; omitted means uncapped)
-- `sort`
+- `sort` (`recent`, `title`, `featured`, `popular`/`copied`, `views`, `most_copied`, or `recommended` in paginated mode)
+- `readyOnly` (optional boolean; requires the existing resolved `STUDY_PACK_READY` state)
+- `source` (repeatable `BY_YOU`, `OFFICIAL`, or `COMMUNITY`; values are OR-combined)
+- `page` / `pageSize` (optional; either one opts into real backend pagination)
+
+`most_copied` sorts every matching note by copies then creation time without the Popular eligibility gate. `recommended` applies the existing decay-adjusted engagement score to every matching note without the Featured eligibility gate. The gated `featured` and `popular`/`copied` keys remain available for focused discovery-section views.
+
+`GET /notes/public/discovery-sections` accepts only the optional audience/target-profile filter. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. Its candidate scan is lean and candidate-set engagement counts are batch-loaded; full list-item enrichment runs only for the final union of at most 18 notes. The frontend continues computing its homepage sections locally until the F8 UI migration consumes this endpoint.
 
 Behavior:
 
