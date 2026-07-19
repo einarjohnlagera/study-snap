@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
+import com.studysnap.backend.dto.NoteQuickReviewLastReviewedResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
@@ -33,6 +34,7 @@ import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BulkGenerationResultService;
@@ -48,6 +50,7 @@ import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
 import com.studysnap.backend.service.QuizSessionHistoryService;
 import com.studysnap.backend.service.StudyPackService;
+import com.studysnap.backend.util.UuidParsingUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -65,7 +68,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -270,6 +275,25 @@ public class NoteController {
         UUID userId = user.userId();
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return quickReviewSessionService.getPerformanceSummary(studyPackId, userId);
+    }
+
+    @GetMapping("/quick-review/last-reviewed")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<NoteQuickReviewLastReviewedResponse> getQuickReviewLastReviewedBatch(
+            @RequestParam(value = "noteIds") List<String> noteIds,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        List<UUID> parsedNoteIds = noteIds.stream()
+                .map(noteId -> UuidParsingUtils.parseUuidOrThrow(noteId, NoteNotFoundException::new))
+                .toList();
+        Map<UUID, OffsetDateTime> lastReviewedAtByNoteId = quickReviewSessionService
+                .getLastReviewedAtByNoteIds(parsedNoteIds, user.userId());
+        return parsedNoteIds.stream()
+                .map(noteId -> new NoteQuickReviewLastReviewedResponse(
+                        noteId.toString(),
+                        lastReviewedAtByNoteId.get(noteId)
+                ))
+                .toList();
     }
 
     @GetMapping("/{id}/quick-review/sessions/{sessionId}")

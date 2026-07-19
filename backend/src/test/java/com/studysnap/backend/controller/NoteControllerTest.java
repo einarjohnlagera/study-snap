@@ -54,10 +54,12 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -164,24 +166,7 @@ class NoteControllerTest {
     @Test
     void statusRoute_resolvesToStatusListHandlerInsteadOfNoteIdHandler() throws Exception {
         AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
-        MockMvc mockMvc = standaloneSetup(noteController)
-                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
-                    @Override
-                    public boolean supportsParameter(MethodParameter parameter) {
-                        return parameter.getParameterType() == AuthenticatedUser.class;
-                    }
-
-                    @Override
-                    public Object resolveArgument(
-                            MethodParameter parameter,
-                            ModelAndViewContainer mavContainer,
-                            NativeWebRequest webRequest,
-                            WebDataBinderFactory binderFactory
-                    ) {
-                        return routeUser;
-                    }
-                })
-                .build();
+        MockMvc mockMvc = buildMockMvc(routeUser);
         UUID noteId = UUID.randomUUID();
         when(noteService.listMineStatuses(routeUser.userId())).thenReturn(List.of(
                 new NoteStatusResponse(noteId.toString(), STUDY_PACK_STATUS_GENERATING)
@@ -194,6 +179,28 @@ class NoteControllerTest {
 
         verify(noteService).listMineStatuses(routeUser.userId());
         verify(noteService, never()).getById("status", routeUser.userId());
+    }
+
+    @Test
+    void quickReviewLastReviewedRouteReturnsRequestedNotesInOrderWithNullForMissingCompletion() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        UUID reviewedNoteId = UUID.randomUUID();
+        UUID neverReviewedNoteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-07-18T10:15:00Z");
+        List<UUID> requestedNoteIds = List.of(reviewedNoteId, neverReviewedNoteId);
+        when(quickReviewSessionService.getLastReviewedAtByNoteIds(requestedNoteIds, routeUser.userId()))
+                .thenReturn(Map.of(reviewedNoteId, completedAt));
+
+        mockMvc.perform(get("/notes/quick-review/last-reviewed")
+                        .queryParam("noteIds", reviewedNoteId.toString(), neverReviewedNoteId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].noteId").value(reviewedNoteId.toString()))
+                .andExpect(jsonPath("$[0].lastReviewedAt").value("2026-07-18T10:15:00Z"))
+                .andExpect(jsonPath("$[1].noteId").value(neverReviewedNoteId.toString()))
+                .andExpect(jsonPath("$[1].lastReviewedAt").value(nullValue()));
+
+        verify(quickReviewSessionService).getLastReviewedAtByNoteIds(requestedNoteIds, routeUser.userId());
     }
 
     @Test
@@ -742,5 +749,26 @@ class NoteControllerTest {
                 false,
                 false
         );
+    }
+
+    private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
+        return standaloneSetup(noteController)
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return routeUser;
+                    }
+                })
+                .build();
     }
 }

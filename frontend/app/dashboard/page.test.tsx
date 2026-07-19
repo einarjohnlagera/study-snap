@@ -8,6 +8,7 @@ import {
   getGoalSummary,
   getMe,
   getNote,
+  getQuickReviewLastReviewedBatch,
   getQuickReviewPerformanceSummary,
   getTodayFocus,
   listNotes,
@@ -53,6 +54,7 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
+  getQuickReviewLastReviewedBatch: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   getTodayFocus: jest.fn(),
   listCollections: jest.fn(),
@@ -157,6 +159,7 @@ describe("DashboardPage profile variants", () => {
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
+    (getQuickReviewLastReviewedBatch as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (getTodayFocus as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
@@ -194,6 +197,7 @@ describe("DashboardPage profile variants", () => {
       adaptivePracticeAvailable: false,
     });
     (getGoalSummary as jest.Mock).mockResolvedValue(null);
+    (getQuickReviewLastReviewedBatch as jest.Mock).mockResolvedValue([]);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
@@ -233,6 +237,63 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
+  });
+
+  it("batches Quick Review timestamps once for all eligible recent notes", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 5,
+      profileType: "STUDENT",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    const eligibleNotes = Array.from({ length: 5 }, (_, index) => ({
+      ...notes[0],
+      id: `ready-note-${index + 1}`,
+      studyPackId: `pack-${index + 1}`,
+      updatedAt: `2026-03-${25 - index}T00:00:00Z`,
+    }));
+    (listNotes as jest.Mock).mockResolvedValue(eligibleNotes);
+    (getQuickReviewLastReviewedBatch as jest.Mock).mockResolvedValue([
+      { noteId: "ready-note-1", lastReviewedAt: "2026-03-25T12:00:00Z" },
+    ]);
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(getQuickReviewLastReviewedBatch).toHaveBeenCalledTimes(1);
+    });
+    expect(getQuickReviewLastReviewedBatch).toHaveBeenCalledWith([
+      "ready-note-1",
+      "ready-note-2",
+      "ready-note-3",
+      "ready-note-4",
+    ]);
+    expect(getQuickReviewPerformanceSummary).not.toHaveBeenCalled();
+  });
+
+  it("keeps Stage 1 Dashboard content visible when the Quick Review batch fails", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    (getQuickReviewLastReviewedBatch as jest.Mock).mockRejectedValue(new Error("history unavailable"));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Recent Notes")).toBeInTheDocument();
+    expect(screen.getAllByText("Biology Review")).not.toHaveLength(0);
+    expect(screen.queryByRole("heading", { name: "We could not load your notes" })).not.toBeInTheDocument();
+    expect(getQuickReviewPerformanceSummary).not.toHaveBeenCalled();
   });
 
   it("moves Quick Review below Usage / Progress after a completed session while preserving first-time order", async () => {
@@ -679,45 +740,12 @@ describe("DashboardPage profile variants", () => {
         usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
       },
     });
-    (getNote as jest.Mock).mockImplementation(async (noteId: string) => ({
-      id: noteId,
-      title: noteId === "note-1" ? "Biology Review" : "History Draft",
-      subject: noteId === "note-1" ? "Biology" : "History",
-      tags: noteId === "note-1" ? ["Cells"] : [],
-      content: "content",
-      visibility: "PRIVATE",
-      createdAt: "2026-03-21T10:00:00Z",
-      updatedAt: noteId === "note-1" ? "2026-03-24T00:00:00Z" : "2026-03-23T00:00:00Z",
-      copiedFromNoteId: null,
-      copiedFromUserId: null,
-      copiedFromTitle: null,
-      copiedFromPublic: false,
-      copiedAt: null,
-      studyPackId: noteId === "note-1" ? "pack-1" : null,
-      studyPackStatus: noteId === "note-1" ? "STUDY_PACK_READY" : "DRAFT",
-      summary: "Summary",
-      keyConcepts: [],
-      quiz: [],
-      generatedQuiz: noteId === "note-1"
-        ? {
-            noteId,
-            generatedAt: "2026-03-24T00:00:00Z",
-            questions: [
-              {
-                question: "What is a cell?",
-                choices: ["A", "B", "C", "D"],
-                correctIndex: 0,
-                explanation: "Because it is.",
-              },
-            ],
-          }
-        : null,
-      quizCount: 1,
-      quickReviewAvailable: true,
-      challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
-    }));
+    (listNotes as jest.Mock).mockResolvedValue(notes.map((note) => ({
+      ...note,
+      generatedQuizId: note.id === "note-1" ? "generated-quiz-1" : null,
+      generatedQuizGeneratedAt: note.id === "note-1" ? "2026-03-24T00:00:00Z" : null,
+      generatedQuizQuestionCount: note.id === "note-1" ? 1 : null,
+    })));
 
     render(<DashboardPage />);
 
@@ -733,6 +761,39 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Continue Studying")).not.toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Usage / Progress")).not.toBeInTheDocument();
+    expect(getNote).not.toHaveBeenCalled();
+  });
+
+  it("preserves the teacher updated-time slice before filtering generated quizzes", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Teach",
+      displayName: "Teach",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 10,
+      profileType: "TEACHER",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    const teacherNotes = Array.from({ length: 10 }, (_, index) => ({
+      ...notes[0],
+      id: `teacher-note-${index + 1}`,
+      title: index === 0 ? "Quiz inside recent window" : index === 8 ? "Quiz outside recent window" : `Note ${index + 1}`,
+      updatedAt: `2026-03-${25 - index}T00:00:00Z`,
+      generatedQuizId: index === 0 || index === 8 ? `quiz-${index + 1}` : null,
+      generatedQuizGeneratedAt: index === 0
+        ? "2026-04-10T00:00:00Z"
+        : index === 8 ? "2026-04-02T00:00:00Z" : null,
+      generatedQuizQuestionCount: index === 0 || index === 8 ? 3 : null,
+    }));
+    (listNotes as jest.Mock).mockResolvedValue(teacherNotes);
+
+    render(<DashboardPage />);
+
+    expect(await screen.findAllByText("Quiz inside recent window")).not.toHaveLength(0);
+    expect(screen.queryByText("Quiz outside recent window")).not.toBeInTheDocument();
+    expect(screen.getByText("1 quiz previews")).toBeInTheDocument();
+    expect(getNote).not.toHaveBeenCalled();
   });
 
   it("gives teachers a recent-ready-note CTA when no generated quizzes exist yet", async () => {
@@ -752,32 +813,12 @@ describe("DashboardPage profile variants", () => {
         usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
       },
     });
-    (getNote as jest.Mock).mockImplementation(async (noteId: string) => ({
-      id: noteId,
-      title: noteId === "note-1" ? "Biology Review" : "History Draft",
-      subject: noteId === "note-1" ? "Biology" : "History",
-      tags: noteId === "note-1" ? ["Cells"] : [],
-      content: "content",
-      visibility: "PRIVATE",
-      createdAt: "2026-03-21T10:00:00Z",
-      updatedAt: noteId === "note-1" ? "2026-03-24T00:00:00Z" : "2026-03-23T00:00:00Z",
-      copiedFromNoteId: null,
-      copiedFromUserId: null,
-      copiedFromTitle: null,
-      copiedFromPublic: false,
-      copiedAt: null,
-      studyPackId: noteId === "note-1" ? "pack-1" : null,
-      studyPackStatus: noteId === "note-1" ? "STUDY_PACK_READY" : "DRAFT",
-      summary: "Summary",
-      keyConcepts: [],
-      quiz: [],
-      generatedQuiz: null,
-      quizCount: 0,
-      quickReviewAvailable: true,
-      challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
-    }));
+    (listNotes as jest.Mock).mockResolvedValue(notes.map((note) => ({
+      ...note,
+      generatedQuizId: null,
+      generatedQuizGeneratedAt: null,
+      generatedQuizQuestionCount: null,
+    })));
 
     render(<DashboardPage />);
 
