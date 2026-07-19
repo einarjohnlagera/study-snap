@@ -22,7 +22,7 @@ const PUBLIC_LIBRARY_FILTER_QUERY_PARAMS = [
 ] as const;
 
 export type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
-export type PublicLibrarySortQuery = "popular" | "recent" | "title" | "views" | "copied";
+export type PublicLibrarySortQuery = "popular" | "recent" | "title" | "views" | "copied" | "most_copied" | "recommended";
 
 export type PublicLibraryUrlFilters = {
   audience?: NoteTargetProfileType | "ALL" | null;
@@ -156,6 +156,7 @@ export function parsePublicLibraryFilters(searchParams?: SearchParamsInput): Req
     creator: normalizeFilterValue(params.get(PUBLIC_LIBRARY_CREATOR_QUERY_PARAM)),
     search: normalizeFilterValue(params.get(PUBLIC_LIBRARY_SEARCH_QUERY_PARAM)),
     sort: sort === "popular" || sort === "recent" || sort === "title" || sort === "views" || sort === "copied"
+      || sort === "most_copied" || sort === "recommended"
       ? sort
       : null,
     subject: normalizeFilterValue(params.get(PUBLIC_LIBRARY_SUBJECT_QUERY_PARAM)),

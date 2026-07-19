@@ -1517,6 +1517,16 @@ export type NotesLibraryFilterOptionsResponse = {
 export type PublicNoteListResponse = {
   items: NoteListItemResponse[];
   total: number;
+  page?: number | null;
+  pageSize?: number | null;
+  totalMatching?: number | null;
+  hasMore?: boolean | null;
+};
+
+export type PublicLibraryDiscoverySectionsResponse = {
+  featured: NoteListItemResponse[];
+  popular: NoteListItemResponse[];
+  recent: NoteListItemResponse[];
 };
 
 export type SavedLibraryFilterState = {
@@ -4374,9 +4384,13 @@ export async function listPublicNotes(params?: {
   audience?: NoteTargetProfileType;
   courseProgram?: string;
   creator?: string | null;
+  page?: number;
+  pageSize?: number;
+  readyOnly?: boolean;
   search?: string;
   size?: number;
-  sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
+  sort?: "copied" | "featured" | "most_copied" | "popular" | "recent" | "recommended" | "title" | "views";
+  source?: Array<"by_you" | "official" | "community">;
   subject?: string;
   tags?: string[];
 }): Promise<PublicNoteListResponse> {
@@ -4390,6 +4404,15 @@ export async function listPublicNotes(params?: {
   if (params?.creator) {
     searchParams.set("creator", params.creator);
   }
+  if (typeof params?.page === "number") {
+    searchParams.set("page", String(params.page));
+  }
+  if (typeof params?.pageSize === "number") {
+    searchParams.set("pageSize", String(params.pageSize));
+  }
+  if (params?.readyOnly) {
+    searchParams.set("readyOnly", "true");
+  }
   if (params?.search) {
     searchParams.set("search", params.search);
   }
@@ -4399,6 +4422,7 @@ export async function listPublicNotes(params?: {
   if (params?.sort) {
     searchParams.set("sort", params.sort);
   }
+  (params?.source ?? []).forEach((source) => searchParams.append("source", source));
   if (params?.subject) {
     searchParams.set("subject", params.subject);
   }
@@ -4409,6 +4433,24 @@ export async function listPublicNotes(params?: {
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<PublicNoteListResponse>(response, "Could not load public notes.");
+}
+
+export async function listPublicLibraryDiscoverySections(params?: {
+  audience?: NoteTargetProfileType;
+}): Promise<PublicLibraryDiscoverySectionsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.audience) {
+    searchParams.set("audience", params.audience);
+  }
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+  const response = await fetch(buildUrl(`/notes/public/discovery-sections${query}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicLibraryDiscoverySectionsResponse>(
+    response,
+    "Could not load public library discovery sections.",
+  );
 }
 
 export async function togglePublicNoteLike(noteId: string): Promise<PublicNoteLikeResponse> {
@@ -4457,6 +4499,14 @@ export async function listCoursePrograms(scope: CourseProgramSuggestionScope = "
         headers: buildAuthHeaders(),
       });
   return parseApiResponse<string[]>(response, "Could not load course/program suggestions.");
+}
+
+export async function listTags(scope: "public" = "public"): Promise<string[]> {
+  const response = await fetch(buildUrl(`/tags?scope=${scope}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<string[]>(response, "Could not load tags.");
 }
 
 export async function getPublicNote(noteId: string): Promise<PublicNoteDetailResponse> {
