@@ -320,6 +320,14 @@ Supported query params:
 
 `GET /notes/public/discovery-sections` accepts only the optional audience/target-profile filter. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. Its candidate scan is lean and candidate-set engagement counts are batch-loaded; full list-item enrichment runs only for the final union of at most 18 notes. The frontend continues computing its homepage sections locally until the F8 UI migration consumes this endpoint.
 
+Whole-library Public Library facet values have dedicated anonymous endpoints, independent of the currently loaded result page:
+
+- `GET /subjects?scope=public`
+- `GET /course-programs?scope=public`
+- `GET /tags?scope=public` — distinct tags from `PUBLIC` notes only, trimmed, case-insensitively deduplicated with first-seen casing retained, and sorted alphabetically
+
+Private Library tags continue to come from `/notes/library/filter-options`; `/tags` intentionally has no `mine` scope.
+
 Behavior:
 
 - frontend filter state must hydrate from the URL query params on first render

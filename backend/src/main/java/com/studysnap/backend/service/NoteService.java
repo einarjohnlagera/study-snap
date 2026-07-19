@@ -1068,6 +1068,13 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> listPublicTags() {
+        return normalizeTags(noteRepository.findDistinctPublicTags()).stream()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public PublicNoteDetailResponse getPublicById(String id, UUID viewerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)

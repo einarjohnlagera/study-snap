@@ -858,6 +858,17 @@ class NoteServiceTest {
         assertThat(subjects).containsExactly("Biology – Cell Division", "History", "Physics");
     }
 
+    @Test
+    void listPublicTags_returnsTrimmedCaseDeduplicatedTagsSortedAlphabetically() {
+        when(noteRepository.findDistinctPublicTags())
+                .thenReturn(java.util.Arrays.asList("Biology", "biology", "Chemistry", " algebra ", "", null));
+
+        List<String> tags = noteService.listPublicTags();
+
+        assertThat(tags).containsExactly("algebra", "Biology", "Chemistry");
+        verify(noteRepository).findDistinctPublicTags();
+    }
+
     // --- listPublic sort tests ---
 
     @Test
