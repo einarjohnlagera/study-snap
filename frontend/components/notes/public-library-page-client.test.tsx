@@ -1,6 +1,16 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
-import { copyNote, listNotes, listPublicNotes, listPublicStudyPlans, listSubjects, togglePublicNoteLike } from "@/lib/api";
+import {
+  copyNote,
+  listCoursePrograms,
+  listNotes,
+  listPublicLibraryDiscoverySections,
+  listPublicNotes,
+  listPublicStudyPlans,
+  listSubjects,
+  listTags,
+  togglePublicNoteLike,
+} from "@/lib/api";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -24,10 +34,13 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   copyNote: jest.fn(),
+  listCoursePrograms: jest.fn(),
   listNotes: jest.fn(),
+  listPublicLibraryDiscoverySections: jest.fn(),
   listPublicNotes: jest.fn(),
   listPublicStudyPlans: jest.fn(),
   listSubjects: jest.fn(),
+  listTags: jest.fn(),
   togglePublicNoteLike: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -63,7 +76,29 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
 }
 
 function publicNoteListResponse(items: ReturnType<typeof createPublicNote>[], total = items.length) {
-  return { items, total };
+  (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({
+    featured: [],
+    popular: [],
+    recent: items,
+  });
+  return {
+    items,
+    total,
+    page: 0,
+    pageSize: 20,
+    totalMatching: total,
+    hasMore: false,
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
 }
 
 describe("PublicLibraryPageClient", () => {
@@ -94,10 +129,13 @@ describe("PublicLibraryPageClient", () => {
     pathnameMock.mockReturnValue("/public/library");
     window.localStorage.clear();
     (copyNote as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
+    (listPublicLibraryDiscoverySections as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
+    (listTags as jest.Mock).mockReset();
     (togglePublicNoteLike as jest.Mock).mockReset();
     currentAuthUser = { id: "user-1" };
     currentSearch = "";
@@ -106,6 +144,13 @@ describe("PublicLibraryPageClient", () => {
     (listNotes as jest.Mock).mockResolvedValue([]);
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
+    (listCoursePrograms as jest.Mock).mockResolvedValue([
+      "Engineering",
+      "Licensure Examination for Teachers",
+      "PNLE",
+    ]);
+    (listTags as jest.Mock).mockResolvedValue(["cells", "history", "motion"]);
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [], popular: [], recent: [] });
   });
 
   it("shows viewer-relative author metadata and subtle save actions on non-owner cards", async () => {
@@ -209,7 +254,7 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("hydrates the public library filters from the URL query params", async () => {
-    currentSearch = "?search=cinco&subject=history&tag=mexican-history&courseProgram=latin-american-studies&sort=views";
+    currentSearch = "?search=cinco&subject=history&tag=mexican-history&courseProgram=latin-american-studies&creator=studybuddy&sort=views";
     (listSubjects as jest.Mock).mockResolvedValue(["History"]);
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
@@ -226,8 +271,13 @@ describe("PublicLibraryPageClient", () => {
     expect(await screen.findByDisplayValue("cinco")).toBeInTheDocument();
     expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({
       courseProgram: "latin-american-studies",
+      creator: "studybuddy",
+      page: 0,
+      pageSize: 20,
+      readyOnly: false,
       search: "cinco",
       sort: "views",
+      source: [],
       subject: "history",
       tags: ["mexican-history"],
     }));
@@ -236,7 +286,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 1 notes");
   });
 
-  it("shows top course/program chips from real note counts and applies the canonical filter URL", async () => {
+  it("shows course/program chips from server facets and applies the canonical filter URL", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({ id: "pnle-1", courseProgram: "PNLE" }),
       createPublicNote({ id: "pnle-2", courseProgram: "PNLE" }),
@@ -532,7 +582,7 @@ describe("PublicLibraryPageClient", () => {
     expect(handle?.parentElement?.className).toContain("mb-4");
   });
 
-  it("sorts public notes by most viewed from the shared sort sheet", async () => {
+  it("requests Most Viewed ordering from the shared sort sheet", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
@@ -564,7 +614,7 @@ describe("PublicLibraryPageClient", () => {
     expect(titles.slice(0, 2)).toEqual(["Most Viewed", "Most Copied"]);
   });
 
-  it("defaults filtered results to Recommended discovery-score ordering without a sort query", async () => {
+  it("requests Recommended ordering for filtered results without an explicit sort query", async () => {
     currentSearch = "?search=note";
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
@@ -588,9 +638,9 @@ describe("PublicLibraryPageClient", () => {
     render(<PublicLibraryPageClient />);
 
     await screen.findByText("Recommended Note");
-    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ search: "note", sort: undefined }));
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ search: "note", sort: "recommended" }));
     const titles = screen.getAllByRole("heading", { level: 3 }).map((element) => element.textContent);
-    expect(titles.slice(0, 2)).toEqual(["Recommended Note", "Newest Note"]);
+    expect(titles.slice(0, 2)).toEqual(["Newest Note", "Recommended Note"]);
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
     expect(screen.getByRole("button", { name: "Recommended" })).toHaveClass("border-blue-600");
   });
@@ -611,7 +661,7 @@ describe("PublicLibraryPageClient", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
     fireEvent.click(screen.getByRole("button", { name: "Most Copied" }));
-    expect(replaceMock).toHaveBeenCalledWith("/public/library?search=note&sort=copied", { scroll: false });
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?search=note&sort=most_copied", { scroll: false });
 
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
     fireEvent.click(screen.getByRole("button", { name: "Title A-Z" }));
@@ -654,7 +704,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.queryByRole("link", { name: "Browse official plans →" })).not.toBeInTheDocument();
   });
 
-  it("filters public notes from the advanced filter sheet", async () => {
+  it("forwards source and course/program filters from the advanced filter sheet", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
@@ -699,12 +749,13 @@ describe("PublicLibraryPageClient", () => {
     fireEvent.click(modal.getByLabelText("Community"));
     fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
-    expect(screen.queryByText("Mine")).not.toBeInTheDocument();
-    expect(screen.queryByText("Official Example")).not.toBeInTheDocument();
-    expect(screen.getByText("Community Physics")).toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?courseProgram=engineering", { scroll: false });
+    await waitFor(() => {
+      expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ source: ["community"] }));
+    });
   });
 
-  it("filters to Study Pack Ready notes and restores the full list when cleared", async () => {
+  it("forwards Study Pack Ready filtering and restores the unfiltered request when cleared", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({ id: "ready-note", title: "Ready note", studyPackStatus: "STUDY_PACK_READY" }),
       createPublicNote({ id: "draft-note", title: "Draft note", studyPackStatus: "DRAFT" }),
@@ -717,11 +768,14 @@ describe("PublicLibraryPageClient", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Study Pack Ready" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    expect(screen.getByText("Ready note")).toBeInTheDocument();
-    expect(screen.queryByText("Draft note")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ readyOnly: true }));
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
-    expect(screen.getByText("Draft note")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ readyOnly: false }));
+    });
   });
 
   it("applies a subject filter from the filter sheet", async () => {
@@ -805,7 +859,7 @@ describe("PublicLibraryPageClient", () => {
     expect(replaceMock).toHaveBeenCalledWith("/public/library?subject=anatomy", { scroll: false });
   });
 
-  it("applies OR logic for multiple tag selections from the tag selector", async () => {
+  it("sends multiple selected tags as an OR-filter request", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({
         id: "note-1",
@@ -853,9 +907,7 @@ describe("PublicLibraryPageClient", () => {
     fireEvent.click(modal.getByRole("button", { name: "cells" }));
     fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
-    expect(screen.getByText("Biology Cells")).toBeInTheDocument();
-    expect(screen.getByText("Physics Motion")).toBeInTheDocument();
-    expect(screen.queryByText("History Essay")).not.toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?tag=motion&tag=cells", { scroll: false });
   });
 
   it("keeps tag browsing accessible even when only a few popular tags are visible", async () => {
@@ -879,21 +931,219 @@ describe("PublicLibraryPageClient", () => {
   });
 
   it("shows curated discovery sections without the old browse-by-subject block", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
-      createPublicNote({
-        id: "note-1",
-        title: "High Engagement Note",
-        subject: "Biology",
-        tags: ["cells"],
-        viewCount: 15,
-        copyCount: 8,
-      }),
-    ]));
+    const featuredNote = createPublicNote({
+      id: "note-1",
+      title: "High Engagement Note",
+      subject: "Biology",
+      tags: ["cells"],
+      viewCount: 15,
+      copyCount: 8,
+    });
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([featuredNote]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({
+      featured: [featuredNote],
+      popular: [],
+      recent: [],
+    });
 
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("⭐ Featured Notes")).toBeInTheDocument();
     expect(screen.queryByText("📚 Browse by Subject")).not.toBeInTheDocument();
+  });
+
+  it("appends paginated browse results without duplicating or reordering loaded notes", async () => {
+    currentSearch = "?search=biology";
+    (listPublicNotes as jest.Mock)
+      .mockResolvedValueOnce({
+        items: [createPublicNote({ id: "note-page-1", title: "First page" })],
+        total: 3,
+        page: 0,
+        pageSize: 20,
+        totalMatching: 3,
+        hasMore: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          createPublicNote({ id: "note-page-1", title: "First page duplicate" }),
+          createPublicNote({ id: "note-page-2", title: "Second page" }),
+        ],
+        total: 3,
+        page: 1,
+        pageSize: 20,
+        totalMatching: 3,
+        hasMore: false,
+      });
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("First page")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Second page")).toBeInTheDocument();
+    expect(screen.queryByText("First page duplicate")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent).slice(0, 2))
+      .toEqual(["First page", "Second page"]);
+    expect(listPublicNotes).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, pageSize: 20 }));
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("does not let an older filter response overwrite a newer result", async () => {
+    const olderResponse = deferred<ReturnType<typeof publicNoteListResponse>>();
+    (listPublicNotes as jest.Mock).mockResolvedValueOnce(publicNoteListResponse([
+      createPublicNote({ id: "initial-note", title: "Initial result" }),
+    ]));
+
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Initial result")).toBeInTheDocument();
+
+    (listPublicNotes as jest.Mock).mockReturnValueOnce(olderResponse.promise);
+    currentSearch = "?search=older";
+    rerender(<PublicLibraryPageClient />);
+    await waitFor(() => {
+      expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ search: "older" }));
+    });
+
+    (listPublicNotes as jest.Mock).mockResolvedValueOnce(publicNoteListResponse([
+      createPublicNote({ id: "newer-note", title: "Newer result" }),
+    ]));
+    currentSearch = "?search=newer";
+    rerender(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Newer result")).toBeInTheDocument();
+
+    await act(async () => {
+      olderResponse.resolve({
+        items: [createPublicNote({ id: "older-note", title: "Older stale result" })],
+        total: 1,
+        page: 0,
+        pageSize: 20,
+        totalMatching: 1,
+        hasMore: false,
+      });
+      await olderResponse.promise;
+    });
+
+    expect(screen.getByText("Newer result")).toBeInTheDocument();
+    expect(screen.queryByText("Older stale result")).not.toBeInTheDocument();
+  });
+
+  it("renders server-ranked discovery sections at the existing 3/5/5 display limits", async () => {
+    const featured = Array.from({ length: 6 }, (_, index) => createPublicNote({
+      id: `featured-${index}`,
+      title: `Featured ${index}`,
+    }));
+    const popular = Array.from({ length: 6 }, (_, index) => createPublicNote({
+      id: `popular-${index}`,
+      title: `Popular ${index}`,
+    }));
+    const recent = Array.from({ length: 6 }, (_, index) => createPublicNote({
+      id: `recent-${index}`,
+      title: `Recent ${index}`,
+    }));
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([...featured, ...popular, ...recent], 18));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured, popular, recent });
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Featured 2")).toBeInTheDocument();
+    expect(screen.queryByText("Featured 3")).not.toBeInTheDocument();
+    expect(screen.getByText("Popular 4")).toBeInTheDocument();
+    expect(screen.queryByText("Popular 5")).not.toBeInTheDocument();
+    expect(screen.getByText("Recent 4")).toBeInTheDocument();
+    expect(screen.queryByText("Recent 5")).not.toBeInTheDocument();
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledWith({ audience: undefined });
+  });
+
+  it.each([
+    ["featured", "featured"],
+    ["popular", "popular"],
+    ["recent", "recent"],
+  ] as const)("paginates the %s discovery section through the backend sort", async (view, sort) => {
+    currentSearch = `?view=${view}`;
+    (listPublicNotes as jest.Mock).mockResolvedValue({
+      items: [createPublicNote({ id: `${view}-note`, title: `${view} section note` })],
+      total: 2,
+      page: 0,
+      pageSize: 20,
+      totalMatching: 2,
+      hasMore: true,
+    });
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText(`${view} section note`)).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ page: 0, pageSize: 20, sort }));
+    expect(listPublicLibraryDiscoverySections).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => {
+      expect(listPublicNotes).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, pageSize: 20, sort }));
+    });
+  });
+
+  it("sources facet choices from the dedicated endpoints and prioritizes a recently chosen course", async () => {
+    (listSubjects as jest.Mock).mockResolvedValue(["Server Subject"]);
+    (listCoursePrograms as jest.Mock).mockResolvedValue([
+      "Accounting",
+      "Algebra",
+      "Biology",
+      "Chemistry",
+      "Engineering",
+      "Medicine",
+      "Zoology",
+    ]);
+    (listTags as jest.Mock).mockResolvedValue(["server-tag"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "facet-note", title: "Facet note", subject: "Client-only subject", tags: ["client-only-tag"] }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Facet note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Zoology" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const dialog = await screen.findByRole("dialog", { name: "More Filters" });
+    const modal = within(dialog);
+    fireEvent.focus(modal.getByLabelText("Subject"));
+    expect(modal.getByRole("button", { name: "Server Subject" })).toBeInTheDocument();
+    expect(modal.queryByRole("button", { name: "Client-only subject" })).not.toBeInTheDocument();
+    expect(modal.getByRole("button", { name: "server-tag" })).toBeInTheDocument();
+    expect(modal.queryByRole("button", { name: "client-only-tag" })).not.toBeInTheDocument();
+
+    const courseInput = modal.getByLabelText("Course / Program");
+    fireEvent.focus(courseInput);
+    fireEvent.change(courseInput, { target: { value: "Zoology" } });
+    fireEvent.mouseDown(modal.getByRole("button", { name: "Zoology" }));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByRole("button", { name: "Zoology" })).toBeInTheDocument();
+  });
+
+  it("shows retry controls when discovery or load-more requests fail", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "discovery-note", title: "Discovery note" }),
+    ]));
+    (listPublicLibraryDiscoverySections as jest.Mock).mockRejectedValue(new Error("Discovery unavailable"));
+
+    const { rerender } = render(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Could not load discovery sections")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+
+    currentSearch = "?search=page";
+    (listPublicNotes as jest.Mock)
+      .mockResolvedValueOnce({
+        items: [createPublicNote({ id: "page-note", title: "Page note" })],
+        total: 2,
+        page: 0,
+        pageSize: 20,
+        totalMatching: 2,
+        hasMore: true,
+      })
+      .mockRejectedValueOnce(new Error("Next page unavailable"));
+    rerender(<PublicLibraryPageClient />);
+    expect(await screen.findByText("Page note")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("Next page unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry load more" })).toBeInTheDocument();
   });
 
   it("opens public note detail when a card is clicked", async () => {

@@ -13,4 +13,9 @@ describe("public-library-url creator filter", () => {
       creator: "einarjohn",
     });
   });
+
+  it.each(["most_copied", "recommended"] as const)("preserves the %s backend sort key", (sort) => {
+    expect(parsePublicLibraryFilters(`?sort=${sort}`)).toMatchObject({ sort });
+    expect(buildPublicLibraryUrl({ sort })).toBe(`/public/library?sort=${sort}`);
+  });
 });

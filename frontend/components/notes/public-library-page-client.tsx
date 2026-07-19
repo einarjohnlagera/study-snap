@@ -21,25 +21,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import {
+  listCoursePrograms,
   listNotes,
+  listPublicLibraryDiscoverySections,
   listPublicNotes,
   listPublicStudyPlans,
   listSubjects,
+  listTags,
   type NoteCollectionSummary,
   type NoteListItemResponse,
+  type PublicLibraryDiscoverySectionsResponse,
 } from "@/lib/api";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
-import { normalizeSubject } from "@/lib/subjects";
 import { getBrowsingCardClassName } from "@/lib/clickable-card";
-import {
-  excludeById,
-  getFeaturedNotes,
-  getPopularNotes,
-  getRecentNotes,
-  getRecommendedNotes,
-} from "@/lib/public-library-discovery";
 import { buildCopiedNotePath } from "@/lib/public-note-copy";
 import {
   buildPublicLibraryUrl,
@@ -66,6 +62,7 @@ const PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD = 10;
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
+const PUBLIC_LIBRARY_PAGE_SIZE = 20;
 const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
 const COURSE_PROGRAM_CHIP_LIMIT = 6;
@@ -82,6 +79,7 @@ const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 250;
 const PUBLISHED_STUDY_PLANS_PATH = "/collections/published";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
+const EMPTY_FACET_COUNTS = new Map<string, number>();
 
 type PublicLibrarySortOption =
   | "RECOMMENDED"
@@ -151,6 +149,9 @@ function resolveSortOption(
   defaultsToRecommended: boolean,
 ): PublicLibrarySortOption {
   switch (sort) {
+    case "recommended":
+      return "RECOMMENDED";
+    case "most_copied":
     case "copied":
       return "MOST_COPIED";
     case "title":
@@ -169,9 +170,9 @@ function resolveSortOption(
 function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery | null {
   switch (sort) {
     case "RECOMMENDED":
-      return null;
+      return "recommended";
     case "MOST_COPIED":
-      return "copied";
+      return "most_copied";
     case "MOST_VIEWED":
       return "views";
     case "TITLE_ASC":
@@ -477,13 +478,19 @@ export function PublicLibraryPageClient() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(() => getAuthUser()?.username ?? null);
   const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
-  const [total, setTotal] = useState<number>(0);
+  const [totalMatching, setTotalMatching] = useState<number>(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
   const [courseProgramDraft, setCourseProgramDraft] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
-  const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>("NEWEST");
+  const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>(() => (
+    resolveSortOption(parsedUrlFilters.sort, hasUrlFilterCriteria(parsedUrlFilters))
+  ));
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<PublicLibrarySourceFilter[]>([]);
@@ -495,6 +502,15 @@ export function PublicLibraryPageClient() {
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
   const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
+  const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [discoverySections, setDiscoverySections] = useState<PublicLibraryDiscoverySectionsResponse>({
+    featured: [],
+    popular: [],
+    recent: [],
+  });
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
@@ -505,6 +521,8 @@ export function PublicLibraryPageClient() {
   // URL -> input hydration effect can ignore the echo of our own debounced
   // write and never clobber characters typed after the debounce fired.
   const lastSyncedSearchRef = useRef<string | null>(null);
+  const listRequestTokenRef = useRef(0);
+  const discoveryRequestTokenRef = useRef(0);
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [recentCoursePrograms, setRecentCoursePrograms] = useState<string[]>([]);
@@ -538,40 +556,132 @@ export function PublicLibraryPageClient() {
     return NOTE_TARGET_PROFILE_ALL;
   }, [parsedUrlFilters.audience]);
 
+  const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
+  const effectiveSelectedSort = selectedSort === "NEWEST"
+    && parsedUrlFilters.sort === null
+    && (hasUrlFilterCriteria(parsedUrlFilters) || selectedSourceFilters.length > 0 || studyPackReadyOnly)
+    ? "RECOMMENDED"
+    : selectedSort;
+  const isDiscoveryMode = !hasUrlFilterCriteria(parsedUrlFilters)
+    && selectedSourceFilters.length === 0
+    && !studyPackReadyOnly
+    && effectiveSelectedSort === "NEWEST";
+  const isSectionView = isDiscoveryMode && activeDiscoveryView !== null;
+
+  const buildPageRequest = useCallback((page: number) => ({
+    audience: effectiveAudience !== NOTE_TARGET_PROFILE_ALL ? effectiveAudience : undefined,
+    courseProgram: parsedUrlFilters.courseProgram ?? undefined,
+    creator: parsedUrlFilters.creator ?? undefined,
+    page,
+    pageSize: PUBLIC_LIBRARY_PAGE_SIZE,
+    readyOnly: studyPackReadyOnly,
+    search: parsedUrlFilters.search ?? undefined,
+    sort: activeDiscoveryView ?? resolveSortQuery(effectiveSelectedSort) ?? undefined,
+    source: selectedSourceFilters.map((filter) => filter.toLowerCase() as "by_you" | "official" | "community"),
+    subject: parsedUrlFilters.subject ?? undefined,
+    tags: parsedUrlFilters.tags,
+  }), [activeDiscoveryView, effectiveAudience, effectiveSelectedSort, parsedUrlFilters.courseProgram, parsedUrlFilters.creator, parsedUrlFilters.search, parsedUrlFilters.subject, parsedUrlFilters.tags, selectedSourceFilters, studyPackReadyOnly]);
+
   const loadNotes = useCallback(async () => {
+    const requestToken = ++listRequestTokenRef.current;
     setLoading(true);
     setError(null);
+    setLoadMoreError(null);
     try {
-      const [notesResult, subjectsResult] = await Promise.allSettled([
-        listPublicNotes({
-          audience: effectiveAudience !== NOTE_TARGET_PROFILE_ALL ? effectiveAudience : undefined,
-          courseProgram: parsedUrlFilters.courseProgram ?? undefined,
-          creator: parsedUrlFilters.creator ?? undefined,
-          search: parsedUrlFilters.search ?? undefined,
-          sort: parsedUrlFilters.sort ?? undefined,
-          subject: parsedUrlFilters.subject ?? undefined,
-          tags: parsedUrlFilters.tags,
-        }),
+      const [notesResult, subjectsResult, courseProgramsResult, tagsResult] = await Promise.allSettled([
+        listPublicNotes(buildPageRequest(0)),
         listSubjects("public"),
+        listCoursePrograms("public"),
+        listTags("public"),
       ]);
+      if (requestToken !== listRequestTokenRef.current) {
+        return;
+      }
       if (notesResult.status !== "fulfilled") {
         throw notesResult.reason;
       }
       setItems(notesResult.value.items);
-      setTotal(notesResult.value.total);
+      setTotalMatching(notesResult.value.totalMatching ?? notesResult.value.total);
+      setHasMore(notesResult.value.hasMore ?? false);
+      setCurrentPage(notesResult.value.page ?? 0);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
+      setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+      setTagSuggestions(tagsResult.status === "fulfilled" ? tagsResult.value : []);
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
-      setError(message);
+      if (requestToken === listRequestTokenRef.current) {
+        const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
+        setError(message);
+      }
     } finally {
-      setLoading(false);
-      setHasLoadedOnce(true);
+      if (requestToken === listRequestTokenRef.current) {
+        setLoading(false);
+        setHasLoadedOnce(true);
+      }
     }
-  }, [effectiveAudience, parsedUrlFilters.courseProgram, parsedUrlFilters.creator, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
+  }, [buildPageRequest]);
 
   useEffect(() => {
     void loadNotes();
   }, [loadNotes]);
+
+  const loadDiscoverySections = useCallback(async () => {
+    const requestToken = ++discoveryRequestTokenRef.current;
+    setDiscoveryLoading(true);
+    setDiscoveryError(null);
+    try {
+      const response = await listPublicLibraryDiscoverySections({
+        audience: effectiveAudience !== NOTE_TARGET_PROFILE_ALL ? effectiveAudience : undefined,
+      });
+      if (requestToken === discoveryRequestTokenRef.current) {
+        setDiscoverySections(response);
+      }
+    } catch (loadError) {
+      if (requestToken === discoveryRequestTokenRef.current) {
+        setDiscoverySections({ featured: [], popular: [], recent: [] });
+        setDiscoveryError(loadError instanceof Error ? loadError.message : "Could not load discovery sections.");
+      }
+    } finally {
+      if (requestToken === discoveryRequestTokenRef.current) {
+        setDiscoveryLoading(false);
+      }
+    }
+  }, [effectiveAudience]);
+
+  useEffect(() => {
+    if (isDiscoveryMode && activeDiscoveryView === null) {
+      void loadDiscoverySections();
+      return;
+    }
+    discoveryRequestTokenRef.current += 1;
+  }, [activeDiscoveryView, isDiscoveryMode, loadDiscoverySections]);
+
+  const handleLoadMore = useCallback(async () => {
+    const requestToken = ++listRequestTokenRef.current;
+    const nextPage = currentPage + 1;
+    setLoadMoreLoading(true);
+    setLoadMoreError(null);
+    try {
+      const response = await listPublicNotes(buildPageRequest(nextPage));
+      if (requestToken !== listRequestTokenRef.current) {
+        return;
+      }
+      setItems((previous) => {
+        const existingIds = new Set(previous.map((item) => item.id));
+        return [...previous, ...response.items.filter((item) => !existingIds.has(item.id))];
+      });
+      setTotalMatching(response.totalMatching ?? response.total);
+      setHasMore(response.hasMore ?? false);
+      setCurrentPage(response.page ?? nextPage);
+    } catch (loadError) {
+      if (requestToken === listRequestTokenRef.current) {
+        setLoadMoreError(loadError instanceof Error ? loadError.message : "Could not load more public notes.");
+      }
+    } finally {
+      if (requestToken === listRequestTokenRef.current) {
+        setLoadMoreLoading(false);
+      }
+    }
+  }, [buildPageRequest, currentPage]);
 
   useEffect(() => {
     const syncAuth = () => {
@@ -640,7 +750,7 @@ export function PublicLibraryPageClient() {
   }, []);
 
   const handleLikeSuccess = useCallback((payload: { noteId: string; liked: boolean; likeCount: number }) => {
-    setItems((previous) => previous.map((item) => (
+    const updateItem = (item: NoteListItemResponse) => (
       item.id === payload.noteId
         ? {
             ...item,
@@ -648,7 +758,15 @@ export function PublicLibraryPageClient() {
             likedByCurrentUser: payload.liked,
           }
         : item
+    );
+    setItems((previous) => previous.map((item) => (
+      updateItem(item)
     )));
+    setDiscoverySections((previous) => ({
+      featured: previous.featured.map(updateItem),
+      popular: previous.popular.map(updateItem),
+      recent: previous.recent.map(updateItem),
+    }));
   }, []);
 
   const replacePublicLibraryFilters = useCallback((nextFilters: PublicLibraryUrlFilters) => {
@@ -659,77 +777,9 @@ export function PublicLibraryPageClient() {
     }
   }, [parsedUrlFilters, router, searchParamsKey]);
 
-  const derivedSubjects = useMemo(() => {
-    const subjectSet = new Set<string>();
-    for (const item of items) {
-      const subject = normalizeSubject(item.subject);
-      if (subject) {
-        subjectSet.add(subject);
-      }
-    }
-    return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
-  }, [items]);
-
-  const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
-
-  const courseProgramCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      const courseProgram = normalizeCourseProgram(item.courseProgram);
-      if (courseProgram) {
-        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [items]);
-
-  const availableCoursePrograms = useMemo(() => {
-    return Array.from(courseProgramCounts.keys()).sort((left, right) => {
-      const countDiff = (courseProgramCounts.get(right) ?? 0) - (courseProgramCounts.get(left) ?? 0);
-      return countDiff !== 0 ? countDiff : left.localeCompare(right);
-    });
-  }, [courseProgramCounts]);
-
-  const topCoursePrograms = useMemo(
-    () => availableCoursePrograms.slice(0, COURSE_PROGRAM_CHIP_LIMIT),
-    [availableCoursePrograms],
-  );
-
-  const availableTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const item of items) {
-      for (const tag of normalizeTags(item.tags)) {
-        tagSet.add(tag);
-      }
-    }
-    return Array.from(tagSet).sort((left, right) => left.localeCompare(right));
-  }, [items]);
-
-  const subjectsForCourseProgram = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const item of items) {
-      const cp = normalizeCourseProgram(item.courseProgram);
-      const subject = normalizeSubject(item.subject);
-      if (cp && subject) {
-        if (!map.has(cp)) map.set(cp, new Set());
-        map.get(cp)!.add(subject);
-      }
-    }
-    return map;
-  }, [items]);
-
-  const tagsForCourseProgram = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const item of items) {
-      const cp = normalizeCourseProgram(item.courseProgram);
-      if (!cp) continue;
-      for (const tag of normalizeTags(item.tags)) {
-        if (!map.has(cp)) map.set(cp, new Set());
-        map.get(cp)!.add(tag);
-      }
-    }
-    return map;
-  }, [items]);
+  const availableSubjects = subjectSuggestions;
+  const availableCoursePrograms = courseProgramSuggestions;
+  const availableTags = tagSuggestions;
 
   useEffect(() => {
     setSelectedTargetProfile(effectiveAudience);
@@ -805,27 +855,6 @@ export function PublicLibraryPageClient() {
     setSearchQuery(parsedUrlFilters.search ?? "");
   }, [parsedUrlFilters.search]);
 
-  const subjectCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      const subject = normalizeSubject(item.subject);
-      if (subject) {
-        counts.set(subject, (counts.get(subject) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [items]);
-
-  const tagCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      for (const tag of normalizeTags(item.tags)) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [items]);
-
   useEffect(() => {
     if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
@@ -866,18 +895,6 @@ export function PublicLibraryPageClient() {
       setCourseProgramComboOpen(false);
     }
   }, [filterSheetOpen, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile, studyPackReadyOnly]);
-
-  useEffect(() => {
-    if (courseProgramDraft === ALL_COURSE_PROGRAMS) return;
-    const programSubjects = subjectsForCourseProgram.get(courseProgramDraft);
-    if (programSubjects && subjectFilterDraft !== ALL_SUBJECTS && !programSubjects.has(subjectFilterDraft)) {
-      setSubjectFilterDraft(ALL_SUBJECTS);
-    }
-    const programTags = tagsForCourseProgram.get(courseProgramDraft);
-    if (programTags) {
-      setTagsFilterDraft((previous) => previous.filter((tag) => programTags.has(tag)));
-    }
-  }, [courseProgramDraft, subjectFilterDraft, subjectsForCourseProgram, tagsForCourseProgram]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -1071,16 +1088,16 @@ export function PublicLibraryPageClient() {
   }, [audienceDraft, courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, selectedCourseProgram, selectedSubject, selectedTags, selectedTargetProfile, studyPackReadyDraft, studyPackReadyOnly, subjectFilterDraft, tagsFilterDraft]);
 
   const subjectPriorityComparator = useMemo(
-    () => buildPriorityComparator(recentSubjects, subjectCounts),
-    [recentSubjects, subjectCounts],
+    () => buildPriorityComparator(recentSubjects, EMPTY_FACET_COUNTS),
+    [recentSubjects],
   );
   const courseProgramPriorityComparator = useMemo(
-    () => buildPriorityComparator(recentCoursePrograms, courseProgramCounts),
-    [courseProgramCounts, recentCoursePrograms],
+    () => buildPriorityComparator(recentCoursePrograms, EMPTY_FACET_COUNTS),
+    [recentCoursePrograms],
   );
   const tagPriorityComparator = useMemo(
-    () => buildPriorityComparator(recentTags, tagCounts),
-    [recentTags, tagCounts],
+    () => buildPriorityComparator(recentTags, EMPTY_FACET_COUNTS),
+    [recentTags],
   );
 
   const displayedSubjects = useMemo(() => {
@@ -1089,18 +1106,19 @@ export function PublicLibraryPageClient() {
 
   const filteredModalSubjects = useMemo(() => {
     const query = subjectComboTyped ? subjectSearchQuery.trim().toLowerCase() : "";
-    const programSubjects = courseProgramDraft !== ALL_COURSE_PROGRAMS
-      ? subjectsForCourseProgram.get(courseProgramDraft)
-      : null;
     return displayedSubjects.filter((subject) => (
-      (programSubjects === null || programSubjects === undefined || programSubjects.has(subject))
-      && (query.length === 0 || subject.toLowerCase().includes(query))
+      query.length === 0 || subject.toLowerCase().includes(query)
     ));
-  }, [courseProgramDraft, displayedSubjects, subjectComboTyped, subjectSearchQuery, subjectsForCourseProgram]);
+  }, [displayedSubjects, subjectComboTyped, subjectSearchQuery]);
 
   const displayedCoursePrograms = useMemo(() => {
     return [...availableCoursePrograms].sort(courseProgramPriorityComparator);
   }, [availableCoursePrograms, courseProgramPriorityComparator]);
+
+  const topCoursePrograms = useMemo(
+    () => displayedCoursePrograms.slice(0, COURSE_PROGRAM_CHIP_LIMIT),
+    [displayedCoursePrograms],
+  );
 
   const filteredModalCoursePrograms = useMemo(() => {
     const query = courseProgramComboTyped ? courseProgramSearchQuery.trim().toLowerCase() : "";
@@ -1125,18 +1143,12 @@ export function PublicLibraryPageClient() {
     : POPULAR_TAG_LIMIT_DESKTOP;
 
   const visiblePopularTags = useMemo(() => {
-    const programTags = courseProgramDraft !== ALL_COURSE_PROGRAMS
-      ? tagsForCourseProgram.get(courseProgramDraft)
-      : null;
-    const sourceTags = programTags
-      ? displayedTags.filter((tag) => programTags.has(tag))
-      : displayedTags;
     const ordered = [
-      ...tagsFilterDraft.filter((tag) => sourceTags.includes(tag)),
-      ...sourceTags.filter((tag) => !tagsFilterDraft.includes(tag)),
+      ...tagsFilterDraft.filter((tag) => displayedTags.includes(tag)),
+      ...displayedTags.filter((tag) => !tagsFilterDraft.includes(tag)),
     ];
     return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, tagsFilterDraft.length));
-  }, [courseProgramDraft, displayedTags, tagsFilterDraft, tagsForCourseProgram, visibleTagLimit]);
+  }, [displayedTags, tagsFilterDraft, visibleTagLimit]);
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL
@@ -1151,127 +1163,22 @@ export function PublicLibraryPageClient() {
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || parsedUrlFilters.creator !== null
     || selectedSubject !== ALL_SUBJECTS
-    || selectedTags.length > 0;
-  const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
-  const effectiveSelectedSort = selectedSort === "NEWEST" && parsedUrlFilters.sort === null && hasActiveFilters
-    ? "RECOMMENDED"
-    : selectedSort;
+    || selectedTags.length > 0
+    || selectedSourceFilters.length > 0
+    || studyPackReadyOnly;
 
-  // Discovery mode: no active search/filter and default sort → show discovery sections
-  const isDiscoveryMode = !hasActiveFilters && effectiveSelectedSort === "NEWEST";
-  const isSectionView = isDiscoveryMode && activeDiscoveryView !== null;
-
-  const featuredRankedNotes = useMemo(
-    () => getFeaturedNotes(items, items.length),
-    [items],
-  );
   const featuredNotes = useMemo(
-    () => featuredRankedNotes.slice(0, FEATURED_NOTES_LIMIT),
-    [featuredRankedNotes],
+    () => discoverySections.featured.slice(0, FEATURED_NOTES_LIMIT),
+    [discoverySections.featured],
   );
-  const popularRankedNotes = useMemo(() => {
-    const featuredIds = new Set(featuredNotes.map((n) => n.id));
-    return getPopularNotes(excludeById(items, featuredIds), items.length);
-  }, [items, featuredNotes]);
   const popularNotes = useMemo(
-    () => popularRankedNotes.slice(0, POPULAR_NOTES_LIMIT),
-    [popularRankedNotes],
+    () => discoverySections.popular.slice(0, POPULAR_NOTES_LIMIT),
+    [discoverySections.popular],
   );
-  const recentRankedNotes = useMemo(() => {
-    const usedIds = new Set([...featuredNotes, ...popularNotes].map((n) => n.id));
-    return getRecentNotes(excludeById(items, usedIds), items.length);
-  }, [items, featuredNotes, popularNotes]);
   const recentNotes = useMemo(
-    () => recentRankedNotes.slice(0, RECENT_NOTES_LIMIT),
-    [recentRankedNotes],
+    () => discoverySections.recent.slice(0, RECENT_NOTES_LIMIT),
+    [discoverySections.recent],
   );
-  const sectionViewItems = useMemo(() => {
-    switch (activeDiscoveryView) {
-      case "featured":
-        return featuredRankedNotes;
-      case "popular":
-        return popularRankedNotes;
-      case "recent":
-        return recentRankedNotes;
-      default:
-        return [];
-    }
-  }, [activeDiscoveryView, featuredRankedNotes, popularRankedNotes, recentRankedNotes]);
-
-  const filteredItems = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const selectedCourseProgramLookup = selectedCourseProgram === ALL_COURSE_PROGRAMS
-      ? null
-      : normalizeCourseProgram(selectedCourseProgram)?.toLowerCase() ?? null;
-    return items.filter((item) => {
-      const title = item.title?.trim() || "Untitled note";
-      const tags = normalizeTags(item.tags);
-      const courseProgram = normalizeCourseProgram(item.courseProgram);
-      const courseProgramLookup = courseProgram?.toLowerCase() ?? null;
-      const normalizedSubject = normalizeSubject(item.subject);
-      const titleMatch = query.length === 0
-        || title.toLowerCase().includes(query)
-        || (courseProgram?.toLowerCase().includes(query) ?? false)
-        || (normalizedSubject?.toLowerCase().includes(query) ?? false)
-        || item.contentPreview.toLowerCase().includes(query)
-        || tags.some((tag) => tag.toLowerCase().includes(query));
-      const courseProgramMatch = selectedCourseProgramLookup === null
-        || courseProgramLookup === selectedCourseProgramLookup;
-      const subjectMatch = selectedSubject === ALL_SUBJECTS
-        || normalizedSubject === selectedSubject;
-      const studyPackReadyMatch = !studyPackReadyOnly || item.studyPackStatus === "STUDY_PACK_READY";
-      const tagMatch = selectedTags.length === 0
-        || selectedTags.some((selectedTag) => tags.includes(selectedTag));
-      const sourceMatch = selectedSourceFilters.length === 0
-        || selectedSourceFilters.some((filter) => (
-          filter === "BY_YOU"
-            ? isViewerAuthor(item, currentUserId, currentUsername)
-            : filter === "OFFICIAL"
-              ? item.isOfficialAuthor
-              : !(isViewerAuthor(item, currentUserId, currentUsername) || item.isOfficialAuthor)
-        ));
-
-      return titleMatch && courseProgramMatch && subjectMatch && studyPackReadyMatch && tagMatch && sourceMatch;
-    });
-  }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedSourceFilters, selectedSubject, selectedTags, studyPackReadyOnly]);
-
-  const sortedItems = useMemo(() => {
-    if (effectiveSelectedSort === "RECOMMENDED") {
-      return getRecommendedNotes(filteredItems);
-    }
-
-    const byNewest = (left: NoteListItemResponse, right: NoteListItemResponse) => (
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-    );
-    const metricValue = (
-      item: NoteListItemResponse,
-      key: "copyCount" | "viewCount",
-    ) => item[key] ?? 0;
-
-    return [...filteredItems].sort((left, right) => {
-      switch (effectiveSelectedSort) {
-        case "TITLE_ASC":
-          return (left.title ?? "Untitled note").localeCompare(right.title ?? "Untitled note");
-        case "MOST_COPIED": {
-          const primaryDelta = metricValue(right, "copyCount") - metricValue(left, "copyCount");
-          if (primaryDelta !== 0) {
-            return primaryDelta;
-          }
-          return byNewest(left, right);
-        }
-        case "MOST_VIEWED": {
-          const primaryDelta = metricValue(right, "viewCount") - metricValue(left, "viewCount");
-          if (primaryDelta !== 0) {
-            return primaryDelta;
-          }
-          return byNewest(left, right);
-        }
-        case "NEWEST":
-        default:
-          return byNewest(left, right);
-      }
-    });
-  }, [effectiveSelectedSort, filteredItems]);
 
   const clearCreatorFilter = useCallback(() => {
     replacePublicLibraryFilters({
@@ -1554,8 +1461,8 @@ export function PublicLibraryPageClient() {
                 <div className="flex items-center gap-2">
                   <p data-testid="note-count-pill" className="text-sm text-foreground/50">
                     {hasActiveUrlFilters
-                      ? `${items.length} of ${total} notes`
-                      : `${total} notes`}
+                      ? `${items.length} of ${totalMatching} notes`
+                      : `${totalMatching} notes`}
                   </p>
                   {loading ? (
                     <span
@@ -1621,7 +1528,7 @@ export function PublicLibraryPageClient() {
             </Card>
           ) : null}
 
-          {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && items.length > 0 && items.length < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
+          {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL && totalMatching > 0 && totalMatching < PUBLIC_LIBRARY_SPARSE_AUDIENCE_THRESHOLD ? (
             <Card className="flex flex-col gap-3 border-amber-500/20 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <p className="text-sm text-foreground/75">
                 Only a few{" "}
@@ -1672,24 +1579,44 @@ export function PublicLibraryPageClient() {
                 </div>
               </Card>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                {sectionViewItems.map((item) => (
-                  <PublicNoteCard
-                    key={item.id}
-                    item={item}
-                    currentUserId={currentUserId}
-                    currentUsername={currentUsername}
-                    onNavigate={handleNoteNavigate}
-                    existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
-                    onCopySuccess={handleCopySuccess}
-                    onLikeSuccess={handleLikeSuccess}
-                  />
-                ))}
-              </div>
+              {items.length === 0 ? (
+                <Card className="space-y-3 p-4 sm:p-6">
+                  <h2 className="text-base font-semibold sm:text-lg">No notes are available in this section yet.</h2>
+                  <p className="text-sm text-foreground/75">Return to Discovery to browse the other public-note sections.</p>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {items.map((item) => (
+                    <PublicNoteCard
+                      key={item.id}
+                      item={item}
+                      currentUserId={currentUserId}
+                      currentUsername={currentUsername}
+                      onNavigate={handleNoteNavigate}
+                      existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
+                      onCopySuccess={handleCopySuccess}
+                      onLikeSuccess={handleLikeSuccess}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : isDiscoveryMode ? (
             <div className="space-y-10">
-              {items.length === 0 ? (
+              {discoveryError ? (
+                <Card className="space-y-3 p-4 sm:p-6">
+                  <h2 className="text-base font-semibold sm:text-lg">Could not load discovery sections</h2>
+                  <p className="text-sm text-foreground/75">{discoveryError}</p>
+                  <Button type="button" variant="outline" onClick={() => void loadDiscoverySections()}>
+                    Retry
+                  </Button>
+                </Card>
+              ) : discoveryLoading && featuredNotes.length === 0 && popularNotes.length === 0 && recentNotes.length === 0 ? (
+                <Card className="flex items-center gap-2 p-4 text-sm text-foreground/65 sm:p-6">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Loading discovery sections…
+                </Card>
+              ) : totalMatching === 0 ? (
                 <Card className="space-y-3 p-4 sm:p-6">
                   <h2 className="text-base font-semibold sm:text-lg">
                     {selectedTargetProfile === NOTE_TARGET_PROFILE_ALL
@@ -1764,7 +1691,7 @@ export function PublicLibraryPageClient() {
                 />
               ) : null}
             </div>
-          ) : sortedItems.length === 0 ? (
+          ) : items.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
               {searchQuery.trim().length === 0
                 && !hasActiveFilters
@@ -1814,7 +1741,7 @@ export function PublicLibraryPageClient() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {sortedItems.map((item) => (
+              {items.map((item) => (
                 <PublicNoteCard
                   key={item.id}
                   item={item}
@@ -1828,6 +1755,27 @@ export function PublicLibraryPageClient() {
               ))}
             </div>
           )}
+
+          {(!isDiscoveryMode || isSectionView) && (hasMore || loadMoreError) ? (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              {loadMoreError ? (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">{loadMoreError}</p>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleLoadMore()}
+                disabled={loadMoreLoading}
+              >
+                {loadMoreLoading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Loading…
+                  </span>
+                ) : loadMoreError ? "Retry load more" : "Load more"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 
